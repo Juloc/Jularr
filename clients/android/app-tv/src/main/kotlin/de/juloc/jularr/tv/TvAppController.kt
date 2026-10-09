@@ -12,6 +12,8 @@ import de.juloc.jularr.core.model.DevicePairingPollResult
 import de.juloc.jularr.core.model.DevicePairingSession
 import de.juloc.jularr.core.model.PlaybackHistoryItem
 import de.juloc.jularr.core.model.WatchlistItem
+import de.juloc.jularr.core.model.ClientPlaybackPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate
 
 data class TvEpisodeNeighbors(
     val previous: EpisodeSummary? = null,
@@ -32,6 +34,9 @@ data class TvAppSnapshot(
      */
     val activityUsesContinueWatchingFallback: Boolean = false,
     val watchlist: List<WatchlistItem> = emptyList(),
+    val searchQuery: String = "",
+    val searchCategory: TvContentFilter = TvContentFilter.ALL,
+    val playbackPreferences: ClientPlaybackPreferences? = null,
     val anime: AnimeDetail? = null,
     val episodePage: TvEpisodePageData? = null,
     val episode: TvEpisodeBundle? = null,
@@ -100,6 +105,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
+                playbackPreferences = null,
                 storageDecision = null,
                 error = null,
             )
@@ -150,6 +156,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
+                playbackPreferences = null,
                 storageDecision = null,
                 error = null,
             )
@@ -197,8 +204,21 @@ class TvAppController(
             )
         }
 
-    suspend fun selectSavedSession(session: TvSavedSession): TvAppSnapshot =
-        runBusy {
+    suspend fun selectSavedSession(session: TvSavedSession): TvAppSnapshot {
+        snapshot = snapshot.copy(
+            account = null,
+            library = null,
+            continueWatching = emptyList(),
+            watchlist = emptyList(),
+            playbackPreferences = null,
+            activity = emptyList(),
+            activityUsesContinueWatchingFallback = false,
+            anime = null,
+            episodePage = null,
+            episode = null,
+            storageDecision = null,
+        )
+        return runBusy {
             sessionStore?.setActiveSessionId(session.id)
             cookiesStore?.loadCookies(session.cookies)
             settings.origin = session.serverOrigin
@@ -212,13 +232,34 @@ class TvAppController(
                 account = signedIn.account,
                 library = signedIn.library,
                 continueWatching = signedIn.continueWatching,
-                error = null,
+                watchlist = emptyList(),
+                playbackPreferences = null,
+                activity = emptyList(),
+                activityUsesContinueWatchingFallback = false,
+                anime = null,
+                episodePage = null,
+                episode = null,
+                storageDecision = null,
+                error = if (route == TvRoute.Settings) withContent.error else null,
             )
         }
 
+    suspend fun changePlaybackPreferences(update: ClientPlaybackPreferencesUpdate): TvAppSnapshot =
+        runBusy {
+            copy(
+                playbackPreferences = flow.updatePlaybackPreferences(update),
+                error = null,
+            )
+        }
+    }
+
     fun openProfileSelect(): TvAppSnapshot {
         snapshot = snapshot.copy(
-            navigation = TvNavigationState(TvRoute.ProfileSelect),
+            navigation = if (snapshot.account != null) {
+                TvNavigation.openProfileSelect(snapshot.navigation)
+            } else {
+                TvNavigationState(TvRoute.ProfileSelect)
+            },
             error = null,
         )
         return snapshot
@@ -242,18 +283,22 @@ class TvAppController(
                     },
                 )
 
-                TvRoute.Activity -> if (capabilities?.features?.playbackHistory == true) {
+                TvRoute.Settings -> {
+                    val preferences = runCatching { flow.loadPlaybackPreferences() }
                     copy(
-                        activity = flow.loadPlaybackHistory(),
-                        activityUsesContinueWatchingFallback = false,
+                        playbackPreferences = preferences.getOrNull(),
+                        error = preferences.exceptionOrNull()?.message,
                     )
-                } else {
-                    copy(activityUsesContinueWatchingFallback = true)
                 }
 
                 TvRoute.Watchlist -> copy(
                     watchlist = if (capabilities?.features?.watchlist == true) {
                         flow.loadWatchlist()
+                    } else {
+                        emptyList()
+                    },
+                    continueWatching = if (capabilities?.features?.continueWatching == true) {
+                        flow.loadContinueWatching()
                     } else {
                         emptyList()
                     },
@@ -271,6 +316,16 @@ class TvAppController(
                 error = null,
             )
         }
+
+    fun updateSearchQuery(query: String): TvAppSnapshot {
+        snapshot = snapshot.copy(searchQuery = query)
+        return snapshot
+    }
+
+    fun updateSearchCategory(category: TvContentFilter): TvAppSnapshot {
+        snapshot = snapshot.copy(searchCategory = category)
+        return snapshot
+    }
 
     fun openSearch(): TvAppSnapshot {
         snapshot = snapshot.copy(
@@ -478,6 +533,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
+                playbackPreferences = null,
                 anime = null,
                 episodePage = null,
                 episode = null,
