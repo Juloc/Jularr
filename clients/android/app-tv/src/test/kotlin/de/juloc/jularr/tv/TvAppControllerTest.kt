@@ -169,6 +169,16 @@ class TvAppControllerTest {
     }
 
     @Test
+    fun progressWritesRemainBoundToTheOriginalEpisode() {
+        val api = FakeApi()
+        val controller = TvAppController(FakeOriginStore("https://jularr.example")) { api }
+        runSuspend { controller.restoreConnection() }
+
+        runSuspend { controller.saveProgress(TvProgressWrite(20_000, 100_000, false), "first") }
+        assertEquals("first", api.lastSavedEpisodeId)
+    }
+
+    @Test
     fun adjacentEpisodesUseServerSeasonOrderAndDoNotSkipMissingMedia() {
         val controller = TvAppController(FakeOriginStore("https://jularr.example")) { FakeApi() }
         runSuspend { controller.restoreConnection() }
@@ -215,6 +225,8 @@ class TvAppControllerTest {
         private val advertisePlaybackHistory: Boolean = true,
         private val advertiseWatchlist: Boolean = true,
     ) : JularrClientApi {
+        var lastSavedEpisodeId: String? = null
+
         override suspend fun getCapabilities() = ClientCapabilities(
             apiVersion = 2,
             minimumSupportedApiVersion = 2,
@@ -376,7 +388,16 @@ class TvAppControllerTest {
         override suspend fun setProgress(
             episodeId: String,
             update: EpisodeProgressUpdate,
-        ): EpisodeProgress = error("unused")
+        ): EpisodeProgress {
+            lastSavedEpisodeId = episodeId
+            return EpisodeProgress(
+                positionMs = update.positionMs,
+                durationMs = update.durationMs,
+                percent = 20,
+                isCompleted = update.completed,
+                updatedAtUtc = null,
+            )
+        }
         override suspend fun getPlayer(episodeId: String): PlayerBootstrap = error("unused")
         override suspend fun getCues(
             episodeId: String,
