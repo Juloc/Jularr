@@ -326,6 +326,62 @@ public sealed class PlayerControlsTests
     // ---- Cue timing at playback speed ---------------------------------------------
 
     [TestMethod]
+    public void DualSubtitlesRenderIndependentTextTracksOnTheSameClock()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var stage = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "Pages", "Library", "_VideoPlayerStage.cshtml"));
+        StringAssert.Contains(stage, "data-secondary-subtitle-track");
+        StringAssert.Contains(stage, "data-secondary-playback-subtitle");
+        StringAssert.Contains(stage, "track.IsSelectable && !track.IsImage");
+
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    let playbackCues = [];");
+            const end = source.indexOf("    const updateRepeatAvailability = () => {", start);
+            if (start < 0 || end < 0) throw new Error("subtitle owner not found");
+            (async () => {
+                const design = { activeCuesAt: (items, ms) => items.filter(c => c.startMs <= ms && ms <= c.endMs) };
+                const cues = [];
+                let subtitleChoice = "stream:2";
+                let secondarySubtitleChoice = "stream:3";
+                const subtitleSelect = { selectedOptions: [{ dataset: {} }] };
+                const burnInSubtitleTrackId = () => null;
+                const playbackSubtitle = { textContent: "", hidden: true };
+                const secondaryPlaybackSubtitle = { textContent: "", hidden: true };
+                const controlsData = { subtitleCuesUrlTemplate: "/cues/__track__" };
+                const text = {};
+                const showPlayerError = () => {};
+                const urls = [];
+                const fetch = async url => {
+                    urls.push(url);
+                    return { ok: true, json: async () => ({
+                        cues: [{ startMs: 1000, endMs: 2000, text: url.endsWith("stream%3A2") ? "Original" : "Translation" }]
+                    }) };
+                };
+                const result = await eval(source.slice(start, end) + `
+                    (async () => {
+                        playbackCues = await loadSubtitleCues("stream:2");
+                        secondaryPlaybackCues = await loadSubtitleCues("stream:3");
+                        renderPlaybackSubtitle(1500);
+                        const shown = playbackSubtitle.textContent + "|" + secondaryPlaybackSubtitle.textContent;
+                        renderPlaybackSubtitle(3000);
+                        const hidden = playbackSubtitle.hidden && secondaryPlaybackSubtitle.hidden;
+                        secondarySubtitleChoice = subtitleChoice;
+                        const duplicateBlocked = secondaryTrackId() === null;
+                        await loadSubtitleCues("stream:2");
+                        return [shown, hidden, duplicateBlocked].join("|");
+                    })()
+                `);
+                console.log(result + "|" + urls.length);
+            })().catch(error => { console.error(error); process.exitCode = 1; });
+            """;
+
+        Assert.AreEqual("Original|Translation|true|true|2", RunNode(script, player));
+    }
+
+    [TestMethod]
     public void WebCueLookupFollowsTheMediaClockAtEveryPlaybackSpeed()
     {
         var root = RepositoryRoot();
@@ -333,7 +389,7 @@ public sealed class PlayerControlsTests
 
         StringAssert.Contains(player, "video.defaultPlaybackRate = playbackSpeed;", "A source restart must keep the speed.");
         StringAssert.Contains(player, "design.cueIndexAt(cues, nowMs)");
-        StringAssert.Contains(player, "design.activeCuesAt(playbackCues, timeMs)");
+        StringAssert.Contains(player, "design.activeCuesAt(trackCues, timeMs)");
         StringAssert.Contains(player, "const nowMs = Math.floor(absoluteCurrentTime() * 1000);");
         Assert.IsFalse(player.Contains("Date.now() - playbackStarted", StringComparison.Ordinal));
 

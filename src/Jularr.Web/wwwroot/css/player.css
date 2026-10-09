@@ -67,6 +67,11 @@
     text-shadow: 0 2px 4px #000;
 }
 
+.playback-subtitle-overlay[data-subtitle-layer="secondary"] {
+    font-size: clamp(14px, 2vw, 20px);
+    font-weight: 600;
+}
+
 .playback-subtitle-overlay[hidden] {
     display: none;
 }

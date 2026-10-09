@@ -79,9 +79,11 @@
     const autoplayDelaySeconds = 10;
 
     const playbackSubtitle = root.querySelector("[data-playback-subtitle]");
+    const secondaryPlaybackSubtitle = root.querySelector("[data-secondary-playback-subtitle]");
     const speedSelect = root.querySelector("[data-playback-speed]");
     const audioSelect = root.querySelector("[data-audio-track]");
     const subtitleSelect = root.querySelector("[data-subtitle-track]");
+    const secondarySubtitleSelect = root.querySelector("[data-secondary-subtitle-track]");
     const qualitySelect = root.querySelector("[data-quality-cap]");
     const qualityHint = root.querySelector("[data-quality-hint]");
     const saveDefaults = root.querySelector("[data-save-playback-defaults]");
@@ -146,7 +148,8 @@
     let selectedAudioTrackId = audioSelect?.value || controlsData.initialAudioTrackId || null;
     let qualityPreset = readQualityPreset();
     let playbackSpeed = Number(speedSelect?.value) > 0 ? Number(speedSelect.value) : 1;
-    let subtitleChoice = subtitleSelect?.value || "learning";
+    let subtitleChoice = subtitleSelect?.value || "off";
+    let secondarySubtitleChoice = secondarySubtitleSelect?.value || "off";
     if (qualitySelect) {
         qualitySelect.value = qualityPreset || "auto";
     }
@@ -1350,11 +1353,12 @@
     // It is independent of the learning overlay: when it differs from the
     // learning text, both stay visible.
     let playbackCues = [];
+    let secondaryPlaybackCues = [];
     let playbackCueKey = "";
+    let secondaryCueKey = "";
+    let subtitleRenderGeneration = 0;
     const playbackCueCache = new Map();
 
-    // The learning overlay belongs to the "learning" choice (or the embedded stream
-    // that is the learning source); any other track is a plain subtitle.
     const learningOverlayVisible = () =>
         cues.length > 0 && (subtitleChoice === "learning" || selectedSubtitleIsLearningSource());
 
@@ -1362,60 +1366,57 @@
         return subtitleSelect?.selectedOptions[0]?.dataset.learningSource === "true";
     }
 
-    // Text tracks become cues drawn here; picture tracks are burned in by the server instead.
     const playbackTrackId = () =>
         subtitleChoice.startsWith("stream:") && !selectedSubtitleIsLearningSource() && !burnInSubtitleTrackId()
             ? subtitleChoice
             : null;
 
-    const renderPlaybackSubtitle = (timeMs) => {
-        if (!playbackSubtitle) {
-            return;
-        }
+    const secondaryTrackId = () =>
+        secondarySubtitleChoice.startsWith("stream:") && secondarySubtitleChoice !== subtitleChoice
+            ? secondarySubtitleChoice
+            : null;
 
-        const lines = playbackTrackId()
-            ? design.activeCuesAt(playbackCues, timeMs).map(cue => cue.text)
-            : [];
-        const key = lines.join("\n");
-        if (key === playbackCueKey) {
-            return;
-        }
+    const renderPlaybackSubtitle = timeMs => {
+        const render = (element, trackId, trackCues, cachedKey) => {
+            if (!element) return cachedKey;
+            const lines = trackId
+                ? design.activeCuesAt(trackCues, timeMs).map(cue => cue.text)
+                : [];
+            const key = lines.join("\n");
+            if (key !== cachedKey) {
+                element.textContent = key;
+                element.hidden = key.length === 0;
+            }
+            return key;
+        };
 
-        playbackCueKey = key;
-        playbackSubtitle.textContent = key;
-        playbackSubtitle.hidden = key.length === 0;
+        playbackCueKey = render(playbackSubtitle, playbackTrackId(), playbackCues, playbackCueKey);
+        secondaryCueKey = render(secondaryPlaybackSubtitle, secondaryTrackId(), secondaryPlaybackCues, secondaryCueKey);
     };
 
-    const loadPlaybackCues = async (trackId) => {
-        if (!trackId) {
-            playbackCues = [];
-            return;
+    const loadSubtitleCues = async trackId => {
+        if (!trackId) return [];
+
+        if (!playbackCueCache.has(trackId)) {
+            const template = controlsData.subtitleCuesUrlTemplate || "";
+            const loading = (async () => {
+                const response = await fetch(template.replace("__track__", encodeURIComponent(trackId)), {
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json" }
+                });
+                if (!response.ok) throw new Error("Subtitle track unavailable.");
+                const payload = await response.json();
+                return (payload.cues || []).slice().sort((a, b) => a.startMs - b.startMs);
+            })();
+            playbackCueCache.set(trackId, loading);
         }
 
-        if (playbackCueCache.has(trackId)) {
-            playbackCues = playbackCueCache.get(trackId);
-            return;
-        }
-
-        const template = controlsData.subtitleCuesUrlTemplate || "";
         try {
-            const response = await fetch(template.replace("__track__", encodeURIComponent(trackId)), {
-                credentials: "same-origin",
-                headers: { "Accept": "application/json" }
-            });
-            if (!response.ok) {
-                throw new Error("Subtitle track unavailable.");
-            }
-
-            const payload = await response.json();
-            const loaded = (payload.cues || []).slice().sort((a, b) => a.startMs - b.startMs);
-            playbackCueCache.set(trackId, loaded);
-            if (playbackTrackId() === trackId) {
-                playbackCues = loaded;
-            }
+            return await playbackCueCache.get(trackId);
         } catch {
-            playbackCues = [];
+            playbackCueCache.delete(trackId);
             showPlayerError(text["playback.subtitle.loadFailed"] || "");
+            return [];
         }
     };
 
@@ -1639,17 +1640,41 @@
     };
 
     const applySubtitleChoice = async () => {
+        const generation = ++subtitleRenderGeneration;
         activeIndex = -2;
         playbackCueKey = null;
-        await loadPlaybackCues(playbackTrackId());
+        secondaryCueKey = null;
+        playbackCues = [];
+        secondaryPlaybackCues = [];
         updateRepeatAvailability();
         sync();
+        const [primary, secondary] = await Promise.all([
+            loadSubtitleCues(playbackTrackId()),
+            loadSubtitleCues(secondaryTrackId())
+        ]);
+        if (generation !== subtitleRenderGeneration) return;
+        playbackCues = primary;
+        secondaryPlaybackCues = secondary;
+        updateRepeatAvailability();
+        sync();
+    };
+
+    const resolveSecondarySelection = () => {
+        if (!secondarySubtitleSelect) return;
+        for (const option of secondarySubtitleSelect.options) {
+            option.disabled = option.value !== "off" && option.value === subtitleChoice;
+        }
+        if (secondarySubtitleChoice === subtitleChoice) {
+            secondarySubtitleChoice = "off";
+            secondarySubtitleSelect.value = "off";
+        }
     };
 
     // The first plan already carries a picture subtitle chosen before playback.
     let plannedBurnIn = burnInSubtitleTrackId();
     subtitleSelect?.addEventListener("change", () => {
         subtitleChoice = subtitleSelect.value;
+        resolveSecondarySelection();
         showPlayerError(null);
         void applySubtitleChoice();
         // Picture subtitles change the stream itself, so they need a new plan.
@@ -1659,6 +1684,14 @@
         }
         renderSubtitleHint();
     });
+
+    secondarySubtitleSelect?.addEventListener("change", () => {
+        secondarySubtitleChoice = secondarySubtitleSelect.value;
+        resolveSecondarySelection();
+        showPlayerError(null);
+        void applySubtitleChoice();
+    });
+    resolveSecondarySelection();
 
     speedSelect?.addEventListener("change", () => {
         const requested = Number(speedSelect.value);
