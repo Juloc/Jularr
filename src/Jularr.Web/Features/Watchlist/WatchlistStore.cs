@@ -103,6 +103,81 @@ public sealed class WatchlistStore(AppDbContext db)
         }, cancellationToken);
     }
 
+    public async Task<IReadOnlySet<string>> GetHiddenKeysForIdentitiesAsync(
+        CurrentAccountContext account,
+        IReadOnlyCollection<WatchlistIdentity> identities,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(identities);
+        var profileId = account.ProfileId;
+        ValidateProfile(profileId);
+
+        var keys = identities
+            .Select(identity => identity.Key)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (keys.Length == 0)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        return await WithConnectionAsync<IReadOnlySet<string>>(async connection =>
+        {
+            var hidden = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var batch in keys.Chunk(PageRequest.MaximumPageSize))
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    SELECT
+                        "ProfileWatchlistPreferences"."MediaType",
+                        "ProfileWatchlistPreferences"."Provider",
+                        "ProfileWatchlistPreferences"."ExternalId"
+                    FROM
+                        "ProfileWatchlistPreferences"
+                    WHERE
+                        "ProfileWatchlistPreferences"."ProfileId" = @ProfileId
+                        AND "ProfileWatchlistPreferences"."FollowState" = 'ignore'
+                        AND (
+                            "ProfileWatchlistPreferences"."MediaType" || ':' ||
+                            "ProfileWatchlistPreferences"."Provider" || ':' ||
+                            "ProfileWatchlistPreferences"."ExternalId"
+                        ) = ANY(@Keys)
+                    ORDER BY
+                        "ProfileWatchlistPreferences"."MediaType" ASC,
+                        "ProfileWatchlistPreferences"."Provider" ASC,
+                        "ProfileWatchlistPreferences"."ExternalId" ASC
+                    LIMIT
+                        @MaxResults
+                    """;
+                foreach (var parameter in SqlParams.Create()
+                    .Add("ProfileId", profileId)
+                    .Add("Keys", batch, NpgsqlDbType.Array | NpgsqlDbType.Text)
+                    .Add("MaxResults", batch.Length)
+                    .ToArray())
+                {
+                    command.Parameters.Add(parameter);
+                }
+
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var type = WatchlistMediaTypeNames.Parse(reader.GetString(0));
+                    if (type is not null)
+                    {
+                        hidden.Add(new WatchlistIdentity(
+                            type.Value,
+                            reader.GetString(1),
+                            reader.GetString(2)).Key);
+                    }
+                }
+            }
+
+            return hidden;
+        }, cancellationToken);
+    }
+
     private Task DeletePreferenceAsync(string profileId, WatchlistIdentity identity, CancellationToken cancellationToken) =>
         WithConnectionAsync(async connection =>
         {
