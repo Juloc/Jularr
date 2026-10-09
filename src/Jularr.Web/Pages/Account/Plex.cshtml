@@ -3,7 +3,7 @@
 @inject Jularr.Web.Data.AppDbContext LocalizationDb
 @{
     var ui = await Jularr.Web.Features.Localization.UiRequestLocalization.GetBundleAsync(
-        Context, LocalizationDb);
+        Model.HttpContext, LocalizationDb);
     var linking = User.Identity?.IsAuthenticated == true;
     var linked = linking && Model.PlexLinked && !Model.HasVerifiedIdentity;
     var verified = Model.HasVerifiedIdentity;
