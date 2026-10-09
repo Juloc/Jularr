@@ -43,8 +43,8 @@ import de.juloc.jularr.core.model.SubtitleCue
 import de.juloc.jularr.core.model.TermDetail
 import de.juloc.jularr.core.model.TermStateResult
 import de.juloc.jularr.core.model.TtsPreferences
-import de.juloc.jularr.core.model.TvPlaybackPreferences
-import de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate
+import de.juloc.jularr.core.model.ClientPlaybackPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate
 import de.juloc.jularr.core.model.TtsPreferencesUpdate
 import de.juloc.jularr.core.model.WatchlistItem
 import kotlinx.coroutines.Dispatchers
@@ -250,10 +250,10 @@ class HttpJularrClientApi(
     override suspend fun wakeRoot(rootId: String): RootAvailability =
         requestJson("POST", ClientApiRoutes.wakeRoot(rootId)).toRootAvailability()
 
-    override suspend fun getPlaybackPreferences(): TvPlaybackPreferences =
-        requestJson("GET", ClientApiRoutes.PlaybackPreferences).toTvPlaybackPreferences()
+    override suspend fun getPlaybackPreferences(): ClientPlaybackPreferences =
+        requestJson("GET", ClientApiRoutes.PlaybackPreferences).toClientPlaybackPreferences()
 
-    override suspend fun updatePlaybackPreferences(update: TvPlaybackPreferencesUpdate): TvPlaybackPreferences =
+    override suspend fun updatePlaybackPreferences(update: ClientPlaybackPreferencesUpdate): ClientPlaybackPreferences =
         requestJson(
             "PUT",
             ClientApiRoutes.PlaybackPreferences,
@@ -263,9 +263,9 @@ class HttpJularrClientApi(
                 update.preferredSubtitleLanguage?.let { put("preferredSubtitleLanguage", it) }
                 update.defaultPlaybackSpeed?.let { put("defaultPlaybackSpeed", it) }
             },
-        ).toTvPlaybackPreferences()
+        ).toClientPlaybackPreferences()
 
-    private fun JSONObject.toTvPlaybackPreferences() = TvPlaybackPreferences(
+    private fun JSONObject.toClientPlaybackPreferences() = ClientPlaybackPreferences(
         autoplayNext = getBoolean("autoplayNext"),
         preferredAudioLanguage = stringOrNull("preferredAudioLanguage"),
         preferredSubtitleLanguage = stringOrNull("preferredSubtitleLanguage"),
