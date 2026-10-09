@@ -77,6 +77,44 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task WanUploadBudget_IsDisabledUntilConfiguredAndSurvivesRestart()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        try
+        {
+            Assert.AreEqual(0, PlaybackTranscodingSettings.Default.WanUploadBudgetKbps);
+            var cachePath = Path.Combine(kit.DataRoot, "hls");
+            var saved = await kit.Settings.SaveAsync(
+                PlaybackTranscodingSettings.Default with
+                {
+                    HlsCachePath = cachePath,
+                    WanUploadBudgetKbps = 10_000
+                });
+            Assert.IsTrue(saved.Succeeded);
+            Assert.AreEqual(10_000, kit.Capabilities.WanUploadBudgetKbps);
+
+            var restarted = new PlaybackTranscodingSettingsStore(kit.DataRoot);
+            Assert.AreEqual(10_000, (await restarted.LoadAsync()).WanUploadBudgetKbps);
+
+            var invalid = await kit.Settings.SaveAsync(
+                kit.Settings.Current with
+                {
+                    WanUploadBudgetKbps = PlaybackTranscodingSettings.MaxWanUploadBudgetKbps + 1
+                });
+            Assert.IsFalse(invalid.Succeeded);
+            Assert.AreEqual(PlaybackSettingsIssueCode.WanUploadBudgetInvalid, invalid.Issues.Single().Code);
+            Assert.AreEqual(10_000, kit.Settings.Current.WanUploadBudgetKbps);
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task TheBufferPresetDefaultsToNormalSurvivesARestartAndReachesTheServerCapabilities()
     {
         var kit = PlaybackServerTestKit.Create();
