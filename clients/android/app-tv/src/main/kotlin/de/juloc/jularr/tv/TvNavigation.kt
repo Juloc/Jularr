@@ -95,6 +95,19 @@ object TvNavigation {
     ): TvNavigationState =
         state.push(TvRoute.Player(episodeId, animeId))
 
+    fun nextPlayer(
+        state: TvNavigationState,
+        episodeId: String,
+        animeId: String,
+    ): TvNavigationState {
+        val previous = if (state.previous.lastOrNull() is TvRoute.Episode) {
+            state.previous.dropLast(1) + TvRoute.Episode(episodeId, animeId)
+        } else {
+            state.previous
+        }
+        return TvNavigationState(TvRoute.Player(episodeId, animeId), previous)
+    }
+
     fun signOut(state: TvNavigationState): TvNavigationState =
         TvNavigationState(TvRoute.Login)
 
