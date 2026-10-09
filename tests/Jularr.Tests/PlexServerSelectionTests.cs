@@ -137,6 +137,76 @@ public sealed class PlexServerSelectionTests
         }
     }
 
+    [TestMethod]
+    public async Task GrantCannotBeReadAfterDataProtectionKeysAreLost()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(), $"jularr-plex-lost-keys-{Guid.NewGuid():N}");
+        try
+        {
+            var keys = new EphemeralDataProtectionProvider();
+            var store = new PlexServerGrantStore(
+                keys, TimeProvider.System, root);
+            using var http = CreateClient();
+            var picker = new PlexServerSelectionService(
+                new PlexLibraryClient(http), store);
+
+            await picker.ApproveAsync(
+                Admin(), Candidate(), HttpsPlexServer, ["1"],
+                "jularr-client", CancellationToken.None);
+
+            var restored = new PlexServerGrantStore(
+                new EphemeralDataProtectionProvider(),
+                TimeProvider.System, root);
+
+            Assert.AreEqual(1, (await restored.ListAsync()).Count);
+            Assert.IsNull(await restored.GetGrantAsync("machine-123456"));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task RevocationRequiresAdminAndRemovesSelectedServer()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(), $"jularr-plex-revoke-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new PlexServerGrantStore(
+                new EphemeralDataProtectionProvider(), TimeProvider.System, root);
+            using var http = CreateClient();
+            var picker = new PlexServerSelectionService(
+                new PlexLibraryClient(http), store);
+            await picker.ApproveAsync(
+                Admin(), Candidate(), HttpsPlexServer, ["1"],
+                "jularr-client", CancellationToken.None);
+
+            await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() =>
+                picker.RevokeAsync(
+                    new ClaimsPrincipal(new ClaimsIdentity()),
+                    "machine-123456", CancellationToken.None));
+            Assert.AreEqual(1, (await store.ListAsync()).Count);
+
+            await picker.RevokeAsync(
+                Admin(), "machine-123456", CancellationToken.None);
+            Assert.AreEqual(0, (await store.ListAsync()).Count);
+            Assert.IsNull(await store.GetGrantAsync("machine-123456"));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static ClaimsPrincipal Admin() =>
         OwnerAuthService.CreatePrincipal(new OwnerAccount
         {
