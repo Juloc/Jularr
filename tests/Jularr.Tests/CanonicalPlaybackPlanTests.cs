@@ -220,6 +220,19 @@ public sealed class CanonicalPlaybackPlanTests
             CancellationToken.None))!;
         Assert.AreEqual(original.StoredFileId, staleSeek.MediaFileId,
             "A now revoked derivative cannot survive simply because an older session used it.");
+
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            recipeVersion = 2,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+        var unknownRecipe = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, unknownRecipe.MediaFileId,
+            "Future preparation recipes require explicit compatibility review before selecting their output.");
     }
 
     [DataTestMethod]
