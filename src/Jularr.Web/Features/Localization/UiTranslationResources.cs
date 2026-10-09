@@ -172,7 +172,7 @@ public static class UiTranslationResources
         M("account.plex.mediaDenied", "Confirm Plex media access before continuing.", "Account", "Plex media", "Mandatory consent validation", "clear copy", 59, null, ["Plex","Jularr"]),
         M("account.plex.mediaMismatch", "Plex media access could not be verified for this Jularr profile.", "Account", "Plex media", "Plex PIN session/account mismatch", "clear copy", 79, null, ["Plex","Jularr"]),
         M("account.plex.mediaPending", "Finish authentication with Plex, then return here to connect media.", "Account", "Plex media", "Plex media PIN pending", "clear copy", 82, null, ["Plex","Jularr"]),
-        M("library.external.plex.open", "Open in Plex", "Library", "External playback", "Secondary Plex media handoff button", "clear copy", 24, null, ["Plex"]),
+        M("library.external.plex.open", "Find in Plex", "Library", "External playback", "Starts an explicit user-scoped Plex lookup; availability is not implied", "clear copy", 24, null, ["Plex"]),
         M("library.external.plex.unavailable", "This title is not currently available in your connected Plex libraries.", "Library", "External playback", "Secure Plex lookup did not find an accessible matching title", "clear copy", 83, null, ["Plex"]),
         M("requests.detail.error.plexUnavailable", "Plex could not find this title in your accessible libraries.", "Requests", "External playback", "A user-triggered Plex request handoff failed safely.", "short notice", 115, null, ["Plex"]),
         M("admin.plex.title", "Plex servers", "Admin", "Plex", "Admin page title", "clear copy", 27, null, ["Plex", "Jularr"]),
