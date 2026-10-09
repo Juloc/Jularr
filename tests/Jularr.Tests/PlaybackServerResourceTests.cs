@@ -611,7 +611,12 @@ public sealed class PlaybackServerResourceTests
         var full = cache.Manager.GetPacingSnapshot(session.SessionId, "viewer-a");
         Assert.IsNotNull(full);
         Assert.IsTrue(full.IsPaused);
-        Assert.AreEqual(34 - HlsPlaybackSessionManager.SegmentSeconds, full.ProducedAheadSeconds);
+        Assert.AreEqual(34d, full.ProducedAheadSeconds,
+            "Nothing has been consumed yet; polling state must not simulate the first segment request.");
+        Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, session.EpisodeId, "viewer-a", "segment-00000.m4s"));
+        var consumed = cache.Manager.GetPacingSnapshot(session.SessionId, "viewer-a");
+        Assert.IsNotNull(consumed);
+        Assert.AreEqual(34 - HlsPlaybackSessionManager.SegmentSeconds, consumed.ProducedAheadSeconds);
 
         cache.Manager.Stop(session.SessionId, "viewer-a");
         Assert.IsNull(cache.Manager.GetPacingSnapshot(session.SessionId, "viewer-a"));
