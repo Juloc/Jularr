@@ -27,15 +27,16 @@ class TvWatchlistScreenTest {
             entry("anime", "Anime"),
             entry("tv", "Series", "tv"),
             entry("movie", "Movie", "movie"),
+            entry("anime-movie", "Anime Movie").copy(format = "MOVIE"),
             entry("book", "Book", "book"),
             entry("novel", "Light novel", "light-novel"),
             entry("manga", "Manga", "manga"),
         )
 
-        assertEquals(6, watchlistVisibleItems(entries, TvWatchlistCategory.ALL, TvWatchlistSort.NEWEST).size)
-        assertEquals(listOf("anime"), watchlistVisibleItems(entries, TvWatchlistCategory.ANIME, TvWatchlistSort.NEWEST).map { it.id })
+        assertEquals(7, watchlistVisibleItems(entries, TvWatchlistCategory.ALL, TvWatchlistSort.NEWEST).size)
+        assertEquals(setOf("anime", "anime-movie"), watchlistVisibleItems(entries, TvWatchlistCategory.ANIME, TvWatchlistSort.NEWEST).map { it.id }.toSet())
         assertEquals(listOf("tv"), watchlistVisibleItems(entries, TvWatchlistCategory.SERIES, TvWatchlistSort.NEWEST).map { it.id })
-        assertEquals(listOf("movie"), watchlistVisibleItems(entries, TvWatchlistCategory.MOVIES, TvWatchlistSort.NEWEST).map { it.id })
+        assertEquals(setOf("movie", "anime-movie"), watchlistVisibleItems(entries, TvWatchlistCategory.MOVIES, TvWatchlistSort.NEWEST).map { it.id }.toSet())
         assertEquals(setOf("book", "novel"), watchlistVisibleItems(entries, TvWatchlistCategory.BOOKS, TvWatchlistSort.NEWEST).map { it.id }.toSet())
     }
 
