@@ -18,7 +18,7 @@ namespace Jularr.Web.Pages.Account;
 public sealed class LoginModel(
     OwnerAuthService ownerAuth,
     SecurityEventLog securityEvents,
-    IConfiguration configuration) : PageModel
+    Jularr.Web.Features.Plex.PlexIdentitySettingsStore plexSettings) : PageModel
 {
     [BindProperty]
     [Required]
@@ -38,9 +38,7 @@ public sealed class LoginModel(
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
-    public bool PlexLoginEnabled =>
-        configuration.GetValue<bool>("Plex:LoginEnabled")
-        && !string.IsNullOrWhiteSpace(configuration["Plex:ClientIdentifier"]);
+    public bool PlexLoginEnabled { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(
         [FromServices] AppDbContext db,
@@ -59,6 +57,7 @@ public sealed class LoginModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        PlexLoginEnabled = (await plexSettings.GetAsync(cancellationToken)).CanLogin;
         return Page();
     }
 
@@ -74,6 +73,7 @@ public sealed class LoginModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        PlexLoginEnabled = (await plexSettings.GetAsync(cancellationToken)).CanLogin;
         if (!ModelState.IsValid)
         {
             AccountForm.LocalizeFieldErrors(ModelState, new Dictionary<string, string>
