@@ -291,13 +291,11 @@ fun TvWatchlistScreen(
                                 focusRequester = requester,
                                 onFocused = { focusMemory.remember("watchlist", "item:${entry.id}") },
                                 onClick = {
-                                    if (entry.mediaType.equals("anime", ignoreCase = true) &&
-                                        entry.localMediaId != null
-                                    ) {
-                                        onOpenAnime(entry.localMediaId)
-                                    } else {
-                                        infoEntry = entry
+                                    val playableId = entry.localMediaId?.takeIf {
+                                        entry.mediaType.equals("anime", ignoreCase = true)
                                     }
+                                    if (playableId != null) onOpenAnime(playableId)
+                                    else infoEntry = entry
                                 },
                             )
                         }
