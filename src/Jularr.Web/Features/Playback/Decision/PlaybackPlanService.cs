@@ -218,6 +218,14 @@ public sealed class PlaybackPlanService(
                 cancellationToken)
             : [];
 
+        // Never treat a prepared derivative as the source of truth if the real original
+        // is gone. A stale derivative must not silently become an independently playable cut.
+        if (candidates.Count > 0 &&
+            candidates[0].VersionSource == CanonicalMediaStorageService.PreparedVideoVersionSource)
+        {
+            return null;
+        }
+
         CanonicalPlayableFile? playable = candidates.Count > 0
             ? candidates[0]
             : canonicalStorage is null
@@ -574,7 +582,7 @@ public sealed class PlaybackPlanService(
 
 internal static class PlaybackPreparedRenditionEligibility
 {
-    public const string PreparedVersionSource = "jularr-prepared:v1";
+    public const string PreparedVersionSource = CanonicalMediaStorageService.PreparedVideoVersionSource;
 
     public static bool IsEligible(
         CanonicalPlayableFile original,
