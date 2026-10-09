@@ -169,6 +169,15 @@ class TvAppControllerTest {
     }
 
     @Test
+    fun nextEpisodeUsesServerSeasonOrderAndDoesNotSkipMissingMedia() {
+        val controller = TvAppController(FakeOriginStore("https://jularr.example")) { FakeApi() }
+
+        assertEquals("next", runSuspend { controller.nextEpisode("episode", "anime") }?.id)
+        assertNull(runSuspend { controller.nextEpisode("next", "anime") })
+        assertNull(runSuspend { controller.nextEpisode("unknown", "anime") })
+    }
+
+    @Test
     fun openingEpisodeShowsDetailRouteBeforePlayback() {
         val store = FakeOriginStore("https://jularr.example")
         val api = FakeApi()
@@ -309,7 +318,33 @@ class TvAppControllerTest {
             ),
         )
 
-        override suspend fun getAnime(animeId: String): AnimeDetail = error("unused")
+        override suspend fun getAnime(animeId: String) = AnimeDetail(
+            id = animeId,
+            title = "Anime",
+            localTitle = "Anime",
+            nativeTitle = null,
+            description = null,
+            coverImageUrl = null,
+            bannerImageUrl = null,
+            seasonYear = 2026,
+            format = "TV",
+            seasons = listOf(
+                de.juloc.jularr.core.model.Season(
+                    number = 1,
+                    episodes = listOf(
+                        de.juloc.jularr.core.model.EpisodeSummary("next", 1, 4, "Episode 4", true, false),
+                        de.juloc.jularr.core.model.EpisodeSummary("episode", 1, 3, "Episode 3", true, false),
+                    ),
+                ),
+                de.juloc.jularr.core.model.Season(
+                    number = 2,
+                    episodes = listOf(
+                        de.juloc.jularr.core.model.EpisodeSummary("missing", 2, 1, "Episode 1", false, false),
+                        de.juloc.jularr.core.model.EpisodeSummary("later", 2, 2, "Episode 2", true, false),
+                    ),
+                ),
+            ),
+        )
 
         override suspend fun getEpisode(episodeId: String) = EpisodeDetail(
             id = episodeId,
