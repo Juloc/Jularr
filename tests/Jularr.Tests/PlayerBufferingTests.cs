@@ -160,6 +160,25 @@ public sealed class PlayerBufferingTests
     }
 
     [TestMethod]
+    public void Reset_ClearsPreviousStreamRateBeforeSamplingAgain()
+    {
+        const string script = """
+            const estimator = buffering.createThroughputEstimator();
+            estimator.observe({ nowMs: 0, bufferedEndSeconds: 10, bitrateKbps: 8000, idle: false });
+            estimator.observe({ nowMs: 1000, bufferedEndSeconds: 12, bitrateKbps: 8000, idle: false });
+            const beforeReset = estimator.value(1000);
+            estimator.reset();
+            const afterReset = estimator.value(1000);
+            estimator.observe({ nowMs: 2000, bufferedEndSeconds: 20, bitrateKbps: 4000, idle: false });
+            const afterFirstSample = estimator.value(2000);
+            estimator.observe({ nowMs: 3000, bufferedEndSeconds: 22, bitrateKbps: 4000, idle: false });
+            return [beforeReset, afterReset, afterFirstSample, estimator.value(3000)];
+            """;
+
+        Assert.AreEqual("[16000,null,null,8000]", Json(script));
+    }
+
+    [TestMethod]
     public void ARateNobodyMeasuredForAMinuteIsNoLongerReported()
     {
         const string script = """
