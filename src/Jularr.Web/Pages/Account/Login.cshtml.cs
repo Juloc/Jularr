@@ -15,7 +15,10 @@ namespace Jularr.Web.Pages.Account;
 
 [AllowAnonymous]
 [EnableRateLimiting("login")]
-public sealed class LoginModel(OwnerAuthService ownerAuth, SecurityEventLog securityEvents) : PageModel
+public sealed class LoginModel(
+    OwnerAuthService ownerAuth,
+    SecurityEventLog securityEvents,
+    IConfiguration configuration) : PageModel
 {
     [BindProperty]
     [Required]
@@ -34,6 +37,10 @@ public sealed class LoginModel(OwnerAuthService ownerAuth, SecurityEventLog secu
     public string ReturnUrl { get; set; } = "/";
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
+
+    public bool PlexLoginEnabled =>
+        configuration.GetValue<bool>("Plex:LoginEnabled")
+        && !string.IsNullOrWhiteSpace(configuration["Plex:ClientIdentifier"]);
 
     public async Task<IActionResult> OnGetAsync(
         [FromServices] AppDbContext db,
