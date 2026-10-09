@@ -9,6 +9,26 @@ public sealed class SqlParams
 {
     private static readonly ConcurrentDictionary<(Type Type, string Name), PropertyInfo> Properties = new();
 
+    private static readonly IReadOnlyDictionary<Type, NpgsqlDbType> DefaultTypes =
+        new Dictionary<Type, NpgsqlDbType>
+        {
+            [typeof(long)] = NpgsqlDbType.Bigint,
+            [typeof(int)] = NpgsqlDbType.Integer,
+            [typeof(short)] = NpgsqlDbType.Smallint,
+            [typeof(byte)] = NpgsqlDbType.Smallint,
+            [typeof(string)] = NpgsqlDbType.Text,
+            [typeof(bool)] = NpgsqlDbType.Boolean,
+            [typeof(Guid)] = NpgsqlDbType.Uuid,
+            [typeof(decimal)] = NpgsqlDbType.Numeric,
+            [typeof(float)] = NpgsqlDbType.Real,
+            [typeof(double)] = NpgsqlDbType.Double,
+            [typeof(DateTime)] = NpgsqlDbType.TimestampTz,
+            [typeof(DateTimeOffset)] = NpgsqlDbType.TimestampTz,
+            [typeof(DateOnly)] = NpgsqlDbType.Date,
+            [typeof(TimeOnly)] = NpgsqlDbType.Time,
+            [typeof(byte[])] = NpgsqlDbType.Bytea
+        };
+
     private readonly object? source;
     private readonly HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(string Name, NpgsqlDbType Type, object Value)> entries = [];
@@ -133,19 +153,10 @@ public sealed class SqlParams
             throw new NotSupportedException("Only persisted byte-backed enums are supported.");
         }
 
-        if (type == typeof(long)) return NpgsqlDbType.Bigint;
-        if (type == typeof(int)) return NpgsqlDbType.Integer;
-        if (type == typeof(short) || type == typeof(byte)) return NpgsqlDbType.Smallint;
-        if (type == typeof(string)) return NpgsqlDbType.Text;
-        if (type == typeof(bool)) return NpgsqlDbType.Boolean;
-        if (type == typeof(Guid)) return NpgsqlDbType.Uuid;
-        if (type == typeof(decimal)) return NpgsqlDbType.Numeric;
-        if (type == typeof(float)) return NpgsqlDbType.Real;
-        if (type == typeof(double)) return NpgsqlDbType.Double;
-        if (type == typeof(DateTime) || type == typeof(DateTimeOffset)) return NpgsqlDbType.TimestampTz;
-        if (type == typeof(DateOnly)) return NpgsqlDbType.Date;
-        if (type == typeof(TimeOnly)) return NpgsqlDbType.Time;
-        if (type == typeof(byte[])) return NpgsqlDbType.Bytea;
+        if (DefaultTypes.TryGetValue(type, out var resolved))
+        {
+            return resolved;
+        }
 
         throw new NotSupportedException($"No PostgreSQL mapping is defined for {type.Name}.");
     }
@@ -154,10 +165,16 @@ public sealed class SqlParams
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        if (!(IsLetter(name[0]) || name[0] == '_')
-            || name.Skip(1).Any(character => !(IsLetter(character) || char.IsAsciiDigit(character) || character == '_')))
+        for (var i = 0; i < name.Length; i++)
         {
-            throw new ArgumentException("SQL parameter names must be simple ASCII identifiers.", nameof(name));
+            var character = name[i];
+            var valid = IsLetter(character) || character == '_'
+                || (i > 0 && char.IsAsciiDigit(character));
+
+            if (!valid)
+            {
+                throw new ArgumentException("SQL parameter names must be simple ASCII identifiers.", nameof(name));
+            }
         }
     }
 
