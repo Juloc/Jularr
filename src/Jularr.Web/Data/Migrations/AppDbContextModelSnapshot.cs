@@ -462,6 +462,12 @@ namespace Jularr.Web.Data.Migrations
                     b.Property<long>("PinId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasDefaultValue("login");
+
                     b.Property<string>("ReturnPath")
                         .IsRequired()
                         .HasMaxLength(512)
