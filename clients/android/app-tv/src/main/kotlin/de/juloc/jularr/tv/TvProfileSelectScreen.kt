@@ -45,6 +45,7 @@ import androidx.tv.material3.Text
 fun TvProfileSelectScreen(
     sessions: List<TvSavedSession>,
     activeSessionId: String?,
+    error: String?,
     onSelectSession: (TvSavedSession) -> Unit,
     onAddAccount: () -> Unit,
     onSignOut: () -> Unit,
@@ -74,6 +75,9 @@ fun TvProfileSelectScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                     style = MaterialTheme.typography.titleMedium,
                 )
+                if (error != null) {
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(174.dp),
                     modifier = Modifier.fillMaxWidth().weight(1f),
