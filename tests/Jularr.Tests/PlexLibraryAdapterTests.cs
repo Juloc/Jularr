@@ -74,6 +74,32 @@ public sealed class PlexLibraryAdapterTests
     }
 
     [TestMethod]
+    public async Task ExactItemReadsPlexSectionFromContainerWhenEntryOmitsIt()
+    {
+        using var client = new HttpClient(new Handler(request =>
+        {
+            Assert.AreEqual(
+                "/library/metadata/734",
+                request.RequestUri!.AbsolutePath);
+            return Json(
+                """
+                {"MediaContainer":{"librarySectionID":29,"Metadata":[
+                    {"ratingKey":"734","title":"Dune","type":"movie",
+                     "Guid":[{"id":"tmdb://438631"}]}
+                ]}}
+                """);
+        }));
+
+        var item = await new PlexLibraryClient(client).GetItemAsync(
+            Server, "profile-private-token", "instance-123", "734",
+            CancellationToken.None);
+
+        Assert.IsNotNull(item);
+        Assert.AreEqual("29", item.LibrarySectionId);
+        Assert.AreEqual("tmdb", item.ExternalIds.Single().Provider);
+    }
+
+    [TestMethod]
     public async Task RejectsUnsafePathsAndCredentialsBeforeNetwork()
     {
         var calls = 0;
