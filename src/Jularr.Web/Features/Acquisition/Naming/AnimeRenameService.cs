@@ -8,6 +8,7 @@ using Jularr.Web.Features.Acquisition.Sabnzbd;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Metadata;
+using Jularr.Web.Features.Naming;
 using Jularr.Web.Features.Operations;
 using Jularr.Web.Features.Sonarr;
 using Jularr.Web.Features.Subtitles;
@@ -969,9 +970,9 @@ public sealed class AnimeRenameService(
                 return "The naming profile renders an empty folder or file name for this episode.";
             }
 
-            if (AnimeNamingFormatter.ExceedsNameLimit(name))
+            if (NamingTemplateEngine.ExceedsNameLimit(name))
             {
-                return $"'{name}' is longer than {AnimeNamingFormatter.MaxNameBytes} bytes; shorten the naming template.";
+                return $"'{name}' is longer than {NamingTemplateEngine.MaxNameBytes} bytes; shorten the naming template.";
             }
         }
 

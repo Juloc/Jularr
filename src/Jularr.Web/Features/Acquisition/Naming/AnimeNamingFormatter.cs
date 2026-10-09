@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using Jularr.Web.Features.Naming;
 
 namespace Jularr.Web.Features.Acquisition.Naming;
 
@@ -16,10 +17,7 @@ public enum AnimeNamingScope
 // FileNameBuilder; docs/ANIME_NAMING.md documents every rule this class implements.
 public static partial class AnimeNamingFormatter
 {
-    public const int MaxNameBytes = 255;
     public const string MultiEpisodeTitleSeparator = " + ";
-
-    private const string IllegalLiteralCharacters = "\\/:*?\"<>|";
 
     // Sonarr's illegal-character table: \ / < > ? * | " become + + (removed) (removed) ! - (removed) (removed).
     private static readonly (string Bad, string Good)[] IllegalCharacterReplacements =
@@ -33,11 +31,6 @@ public static partial class AnimeNamingFormatter
         ("|", ""),
         ("\"", "")
     ];
-
-    [GeneratedRegex(
-        @"\{(?<prefix>[- ._\[(]*)(?<token>[a-z0-9]+(?:(?<separator>[- ._]+)[a-z0-9]+)?)(?::(?<customFormat>[ ,a-z0-9+-]+(?<![- ])))?(?<suffix>[- ._)\]]*)\}",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex TokenRegex();
 
     [GeneratedRegex(
         @"(?<prefix>s?)\{season(?::(?<seasonPad>0+))?\}(?<episodeSeparator>[- ._]?[ex])\{episode(?::(?<episodePad>0+))?\}",
@@ -55,15 +48,6 @@ public static partial class AnimeNamingFormatter
 
     [GeneratedRegex(@"\{air[- ._]date\}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex AirDateTokenRegex();
-
-    [GeneratedRegex(@"([- ._])\1+", RegexOptions.CultureInvariant)]
-    private static partial Regex RepeatedSeparatorRegex();
-
-    [GeneratedRegex(@"[- ._]+$", RegexOptions.CultureInvariant)]
-    private static partial Regex TrailingSeparatorRegex();
-
-    [GeneratedRegex(@"^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex ReservedDeviceNameRegex();
 
     [GeneratedRegex(@"[\x00-\x1F]", RegexOptions.CultureInvariant)]
     private static partial Regex ControlCharacterRegex();
@@ -170,9 +154,6 @@ public static partial class AnimeNamingFormatter
         };
     }
 
-    public static bool ExceedsNameLimit(string name) =>
-        Encoding.UTF8.GetByteCount(name) > MaxNameBytes;
-
     public static IReadOnlyList<string> Validate(AnimeNamingProfile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -234,7 +215,7 @@ public static partial class AnimeNamingFormatter
 
         if (profile.ColonReplacement == AnimeColonReplacement.Custom &&
             (profile.CustomColonReplacement ?? "").Any(character =>
-                IllegalLiteralCharacters.Contains(character) || char.IsControl(character)))
+                NamingTemplateEngine.IllegalLiteralCharacters.Contains(character) || char.IsControl(character)))
         {
             errors.Add("Custom colon replacement must not contain illegal file name characters.");
         }
@@ -363,14 +344,7 @@ public static partial class AnimeNamingFormatter
                 match => RenderSeasonEpisode(match, source, episodes, profile.MultiEpisodeStyle));
         }
 
-        result = TokenRegex().Replace(
-            result,
-            match => RenderToken(match, scope, profile, request, episodes, errors));
-
-        result = RepeatedSeparatorRegex().Replace(result, "$1");
-        result = TrailingSeparatorRegex().Replace(result, "");
-        result = result.TrimStart(' ', '.');
-        return ReservedDeviceNameRegex().Replace(result, match => $"{match.Groups[1].Value}_");
+        return NamingTemplateEngine.Render(result, token => RenderToken(token, scope, profile, request, episodes, errors), leadingTrim: " .");
     }
 
     private static void ValidateTemplate(
@@ -381,31 +355,10 @@ public static partial class AnimeNamingFormatter
         AnimeNamingRequest sample,
         List<string> errors)
     {
-        if (string.IsNullOrWhiteSpace(template))
+        errors.AddRange(NamingTemplateEngine.ValidateLiteral(label, template));
+        if (string.IsNullOrWhiteSpace(template) || template.Length > 500)
         {
-            errors.Add($"{label} is required.");
             return;
-        }
-
-        if (template.Length > 500)
-        {
-            errors.Add($"{label} must be at most 500 characters.");
-            return;
-        }
-
-        var literal = TokenRegex().Replace(template, "");
-        if (literal.Contains('{') || literal.Contains('}'))
-        {
-            errors.Add($"{label} contains an unclosed or malformed {{token}}.");
-        }
-
-        var illegal = literal
-            .Where(character => IllegalLiteralCharacters.Contains(character) || char.IsControl(character))
-            .Distinct()
-            .ToArray();
-        if (illegal.Length > 0)
-        {
-            errors.Add($"{label} contains characters that are illegal in file names: {string.Join(" ", illegal)}");
         }
 
         var tokenErrors = new List<string>();
@@ -435,9 +388,9 @@ public static partial class AnimeNamingFormatter
         var episodePad = match.Groups["episodePad"].Value.Length;
 
         string Pair(AnimeNamingEpisode episode) =>
-            prefix + Pad(episode.SeasonNumber, seasonPad) + separator + Pad(episode.EpisodeNumber, episodePad);
+            prefix + NamingTemplateEngine.Pad(episode.SeasonNumber, seasonPad) + separator + NamingTemplateEngine.Pad(episode.EpisodeNumber, episodePad);
 
-        string Number(AnimeNamingEpisode episode) => Pad(episode.EpisodeNumber, episodePad);
+        string Number(AnimeNamingEpisode episode) => NamingTemplateEngine.Pad(episode.EpisodeNumber, episodePad);
 
         var first = episodes[0];
         if (episodes.Count == 1)
@@ -471,18 +424,16 @@ public static partial class AnimeNamingFormatter
     }
 
     private static string RenderToken(
-        Match match,
+        NamingToken token,
         AnimeNamingScope scope,
         AnimeNamingProfile profile,
         AnimeNamingRequest request,
         IReadOnlyList<AnimeNamingEpisode> episodes,
         List<string>? errors)
     {
-        var rawToken = match.Groups["token"].Value;
-        var separator = match.Groups["separator"].Value;
-        var customFormat = match.Groups["customFormat"].Value;
-        var key = (separator.Length == 0 ? rawToken : rawToken.Replace(separator, " ", StringComparison.Ordinal))
-            .ToLowerInvariant();
+        var rawToken = token.RawToken;
+        var key = token.Key;
+        var customFormat = token.Format;
 
         var numeric = key is "season" or "episode" or "absolute";
         if (!numeric && customFormat.Length > 0)
@@ -513,31 +464,14 @@ public static partial class AnimeNamingFormatter
 
         if (!numeric)
         {
-            if (separator.Length > 0 && separator != " ")
-            {
-                value = value.Replace(" ", separator, StringComparison.Ordinal);
-            }
-
-            if (rawToken.Any(char.IsLetter))
-            {
-                if (rawToken.Where(char.IsLetter).All(char.IsLower))
-                {
-                    value = value.ToLowerInvariant();
-                }
-                else if (rawToken.Where(char.IsLetter).All(char.IsUpper))
-                {
-                    value = value.ToUpperInvariant();
-                }
-            }
-
-            value = CleanFileName(value, profile);
+            value = CleanFileName(NamingTemplateEngine.ApplyCasing(token, value), profile);
             if (value.Length == 0)
             {
                 return "";
             }
         }
 
-        return match.Groups["prefix"].Value + value + match.Groups["suffix"].Value;
+        return token.Prefix + value + token.Suffix;
     }
 
     private static readonly HashSet<string> SeriesTokens = new(StringComparer.Ordinal)
@@ -579,7 +513,7 @@ public static partial class AnimeNamingFormatter
         {
             return scope == AnimeNamingScope.SeriesFolder || episodes.Count == 0
                 ? null
-                : Pad(episodes[0].SeasonNumber, pad);
+                : NamingTemplateEngine.Pad(episodes[0].SeasonNumber, pad);
         }
 
         if (scope != AnimeNamingScope.EpisodeFile || !EpisodeTokens.Contains(key) || episodes.Count == 0)
@@ -662,12 +596,12 @@ public static partial class AnimeNamingFormatter
         var values = numbers.Select(number => number!.Value).ToArray();
         if (values.Length == 1)
         {
-            return Pad(values[0], pad);
+            return NamingTemplateEngine.Pad(values[0], pad);
         }
 
         return style is AnimeMultiEpisodeStyle.Range or AnimeMultiEpisodeStyle.PrefixedRange
-            ? $"{Pad(values[0], pad)}-{Pad(values[^1], pad)}"
-            : string.Join("-", values.Select(value => Pad(value, pad)));
+            ? $"{NamingTemplateEngine.Pad(values[0], pad)}-{NamingTemplateEngine.Pad(values[^1], pad)}"
+            : string.Join("-", values.Select(value => NamingTemplateEngine.Pad(value, pad)));
     }
 
     private static string EpisodeTitle(IReadOnlyList<AnimeNamingEpisode> episodes)
@@ -770,6 +704,4 @@ public static partial class AnimeNamingFormatter
         return $"[{string.Join("+", codes)}]";
     }
 
-    private static string Pad(int value, int zeros) =>
-        value.ToString(zeros > 0 ? $"D{zeros}" : "D", CultureInfo.InvariantCulture);
 }

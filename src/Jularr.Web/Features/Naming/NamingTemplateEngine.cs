@@ -4,37 +4,34 @@ using System.Text.RegularExpressions;
 
 namespace Jularr.Web.Features.Naming;
 
+/// <summary>One <c>{prefix Token:format suffix}</c> of a template; the key is lower case with the token's own separator read as a space.</summary>
+public readonly record struct NamingToken(string Prefix, string RawToken, string Separator, string Format, string Suffix)
+{
+    public string Key => (Separator.Length == 0 ? RawToken : RawToken.Replace(Separator, " ", StringComparison.Ordinal)).ToLowerInvariant();
+
+    internal static NamingToken From(Match match) =>
+        new(match.Groups["prefix"].Value, match.Groups["token"].Value, match.Groups["separator"].Value, match.Groups["format"].Value, match.Groups["suffix"].Value);
+}
+
 /// <summary>
-/// Small generic <c>{token}</c> template renderer: word-separator substitution, case-by-token-
-/// casing, zero-padding for numeric tokens, illegal-character replacement, repeated-separator
-/// collapsing and reserved device-name suffixing. Token *values* are resolved by the caller
-/// (<see cref="TokenResolver"/>); this class only owns the generic template grammar and filename-
-/// safety rules.
-///
-/// Extracted for the reading naming profiles (#529, Books/Manga/Light Novels). It is not a
-/// generic-ized version of <c>Features/Acquisition/Naming/AnimeNamingFormatter</c>: that
-/// formatter is tightly coupled to Sonarr-style season/episode/quality/media-info concepts (and
-/// Sonarr's per-character illegal-character table and colon-replacement strategies) and is not a
-/// reusable engine on its own. Rather than duplicate its token grammar and safety rules wholesale,
-/// this factors out the part that genuinely is generic; illegal characters are replaced with "_"
-/// here (matching the blanket sanitizing <c>MangaLibraryPlacement.SafeName</c>/
-/// <c>ReadingLibraryPlacement</c> already did before naming profiles existed) rather than
-/// reproducing Sonarr's table, so the built-in default profile renders byte-identical folder/file
-/// names to Jularr's pre-#529 placement. It is not retrofitted into the anime formatter here to
-/// stay out of that file's own claimed scope.
+/// The one <c>{token}</c> template grammar and the filename-safety rules around it: word-separator substitution, case-by-token-casing, zero-padding for numeric
+/// tokens, optional prefix/suffix that vanish with an empty value, repeated-separator collapsing and reserved device-name suffixing. Token values are resolved by
+/// the caller. The Anime formatter (Sonarr-compatible tokens, per-token illegal-character table and colon strategies) owns its values and value cleaning and renders
+/// through <see cref="Render(string, Func{NamingToken, string}, string)"/>; the other media types use the resolver overload, which replaces illegal characters
+/// with "_".
 /// </summary>
 public static partial class NamingTemplateEngine
 {
     public const int MaxNameBytes = 255;
 
-    private const string IllegalLiteralCharacters = "\\/:*?\"<>|";
+    public const string IllegalLiteralCharacters = "\\/:*?\"<>|";
 
     private static readonly HashSet<char> InvalidNameCharacters = Path.GetInvalidFileNameChars()
         .Concat(['/', '\\', ':', '*', '?', '"', '<', '>', '|'])
         .ToHashSet();
 
     [GeneratedRegex(
-        @"\{(?<token>[a-z0-9]+(?:(?<separator>[- ._]+)[a-z0-9]+)?)(?::(?<pad>0+))?\}",
+        @"\{(?<prefix>[- ._\[(]*)(?<token>[a-z0-9]+(?:(?<separator>[- ._]+)[a-z0-9]+)?)(?::(?<format>[ ,a-z0-9+-]+(?<![- ])))?(?<suffix>[- ._)\]]*)\}",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TokenRegex();
 
@@ -61,17 +58,47 @@ public static partial class NamingTemplateEngine
         List<string>? errors = null)
     {
         ArgumentNullException.ThrowIfNull(resolveToken);
+        return Render(template, token => RenderToken(token, resolveToken, errors));
+    }
 
-        var result = TokenRegex().Replace(
-            template ?? "",
-            match => RenderToken(match, resolveToken, errors));
+    /// <summary>
+    /// Renders every <c>{token}</c> with <paramref name="renderToken"/>, then collapses repeated and trailing separators, trims <paramref name="leadingTrim"/>
+    /// from the start and suffixes a reserved device name.
+    /// </summary>
+    public static string Render(string template, Func<NamingToken, string> renderToken, string leadingTrim = " ._")
+    {
+        ArgumentNullException.ThrowIfNull(renderToken);
 
+        var result = TokenRegex().Replace(template ?? "", match => renderToken(NamingToken.From(match)));
         result = RepeatedSeparatorRegex().Replace(result, "$1");
         result = TrailingSeparatorRegex().Replace(result, "");
-        result = result.Trim(' ', '.', '_');
+        result = result.TrimStart(leadingTrim.ToCharArray());
         return result.Length == 0
             ? result
             : ReservedDeviceNameRegex().Replace(result, match => $"{match.Groups[1].Value}_");
+    }
+
+    /// <summary>The token's own separator replaces the spaces of a multi-word value, and its letter case (all lower or all upper) decides the value's case.</summary>
+    public static string ApplyCasing(NamingToken token, string value)
+    {
+        if (token.Separator.Length > 0 && token.Separator != " ")
+        {
+            value = value.Replace(" ", token.Separator, StringComparison.Ordinal);
+        }
+
+        if (token.RawToken.Any(char.IsLetter))
+        {
+            if (token.RawToken.Where(char.IsLetter).All(char.IsLower))
+            {
+                value = value.ToLowerInvariant();
+            }
+            else if (token.RawToken.Where(char.IsLetter).All(char.IsUpper))
+            {
+                value = value.ToUpperInvariant();
+            }
+        }
+
+        return value;
     }
 
     // Blanket-sanitizes characters that are illegal (or merely risky on some filesystems/SMB
@@ -135,40 +162,15 @@ public static partial class NamingTemplateEngine
             : wholeText + fraction.ToString("0.#", CultureInfo.InvariantCulture)[1..];
     }
 
-    private static string RenderToken(
-        Match match,
-        TokenResolver resolveToken,
-        List<string>? errors)
+    private static string RenderToken(NamingToken token, TokenResolver resolveToken, List<string>? errors)
     {
-        var rawToken = match.Groups["token"].Value;
-        var separator = match.Groups["separator"].Value;
-        var pad = match.Groups["pad"].Value;
-        var key = (separator.Length == 0 ? rawToken : rawToken.Replace(separator, " ", StringComparison.Ordinal))
-            .ToLowerInvariant();
-
-        var value = resolveToken(key, pad.Length, errors);
-        if (string.IsNullOrEmpty(value))
+        if (token.Format.Any(character => character != '0'))
         {
+            errors?.Add($"{{{token.RawToken}}} only accepts zero padding such as :00.");
             return "";
         }
 
-        if (separator.Length > 0 && separator != " ")
-        {
-            value = value.Replace(" ", separator, StringComparison.Ordinal);
-        }
-
-        if (rawToken.Any(char.IsLetter))
-        {
-            if (rawToken.Where(char.IsLetter).All(char.IsLower))
-            {
-                value = value.ToLowerInvariant();
-            }
-            else if (rawToken.Where(char.IsLetter).All(char.IsUpper))
-            {
-                value = value.ToUpperInvariant();
-            }
-        }
-
-        return CleanFileName(value);
+        var value = resolveToken(token.Key, token.Format.Length, errors);
+        return string.IsNullOrEmpty(value) ? "" : token.Prefix + CleanFileName(ApplyCasing(token, value)) + token.Suffix;
     }
 }
