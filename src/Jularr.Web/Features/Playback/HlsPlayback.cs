@@ -132,7 +132,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         Func<string, IReadOnlyList<string>> buildArguments,
         IDisposable? lease,
         CancellationToken cancellationToken,
-        Action<PlaybackTranscodeSample>? onProgress = null)
+        Action<PlaybackTranscodeSample>? onProgress = null,
+        double? remainingDurationSeconds = null)
     {
         ArgumentNullException.ThrowIfNull(buildArguments);
         if (string.IsNullOrWhiteSpace(profileId))
@@ -187,7 +188,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
 
                 entry = new Entry(
                     sessionId, episodeId, profileId, directory, process, startSeconds,
-                    _time.GetUtcNow(), lease, _time, PlaybackBufferPolicy.For(policy.BufferPreset, PlaybackDeliveryMode.Transcode), onProgress);
+                    _time.GetUtcNow(), lease, _time, PlaybackBufferPolicy.For(policy.BufferPreset, PlaybackDeliveryMode.Transcode),
+                    onProgress, remainingDurationSeconds);
                 if (process is IFfmpegProgressSource progressSource)
                 {
                     progressSource.ProgressReported += entry.RecordProgress;
@@ -821,7 +823,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         IDisposable? lease,
         TimeProvider time,
         PlaybackBufferPolicy buffer,
-        Action<PlaybackTranscodeSample>? onProgress)
+        Action<PlaybackTranscodeSample>? onProgress,
+        double? remainingDurationSeconds)
     {
         private readonly object _pacingGate = new();
         private long _lastAccessTicks = createdAtUtc.UtcTicks;
@@ -885,7 +888,11 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                     _producedSeconds = produced;
                     _previousProgressAt = now;
                     _previousOutputSeconds = produced;
-                    if (!_paused && produced - (_lastRequestedSegment + 1) * SegmentSeconds >= buffer.TargetAheadSeconds &&
+                    // Without an accurate remaining duration a pause near EOF can prevent ffmpeg from
+                    // finalising EXT-X-ENDLIST. Never pause during the last buffer window.
+                    if (!_paused && remainingDurationSeconds is > 0 and var remaining &&
+                        double.IsFinite(remaining) && produced < remaining - buffer.TargetAheadSeconds &&
+                        produced - (_lastRequestedSegment + 1) * SegmentSeconds >= buffer.TargetAheadSeconds &&
                         pausable.TrySetPaused(true))
                     {
                         _paused = true;
