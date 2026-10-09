@@ -5,7 +5,7 @@ namespace Jularr.Web.Features.Acquisition.Wanted;
 
 // The SQL of the Wanted queue. Every value is a named parameter; nothing outside this fixed text is ever part of a statement.
 //
-// Shared parameters: @workId (one Work, or null for every Work), @now, @types (the media types that are reconciled) and @movie, @series, @anime, @book,
+// Shared parameters: @workId (one Work, or null for every Work), @now, @types (the media types that are reconciled) and @movie, @series, @book,
 // @lightNovel, @manga, @music (the media type numbers the installed-coverage rules distinguish).
 internal static class WantedSql
 {
@@ -97,7 +97,7 @@ internal static class WantedSql
             SELECT work."Id" AS "WorkId", work."MediaType", 0::smallint AS "TargetKind", work."Id" AS "TargetId", {{WorkInstalled}} AS "Installed"
             FROM "Works" work
             LEFT JOIN "WorkMonitoring" decision ON decision."TargetId" = work."Id"
-            WHERE work."MediaType" NOT IN (@series, @anime) AND work."MediaType" = ANY(@types)
+            WHERE work."MediaType" <> @series AND work."MediaType" = ANY(@types)
               AND (@workId::uuid IS NULL OR work."Id" = @workId)
               AND NOT EXISTS (SELECT 1 FROM unit_works unit WHERE unit."WorkId" = work."Id")
               AND (COALESCE(decision."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = work."Id"))
@@ -109,7 +109,7 @@ internal static class WantedSql
         intended_episodes AS (
             SELECT episode."WorkId", work."MediaType", 1::smallint AS "TargetKind", episode."Id" AS "TargetId", {{EpisodeInstalled}} AS "Installed"
             FROM "WorkEpisodes" episode
-            JOIN "Works" work ON work."Id" = episode."WorkId" AND work."MediaType" IN (@series, @anime)
+            JOIN "Works" work ON work."Id" = episode."WorkId" AND work."MediaType" = @series
             LEFT JOIN "WorkMonitoring" own ON own."TargetId" = episode."Id"
             LEFT JOIN "WorkMonitoring" season ON season."TargetId" = episode."SeasonId"
             LEFT JOIN "WorkMonitoring" whole ON whole."TargetId" = episode."WorkId"
@@ -235,7 +235,7 @@ internal static class WantedSql
         SELECT 1 FROM "AcquisitionRequests" request
         LEFT JOIN "WorkExternalIdentities" identity
                ON identity."WorkId" = work."Id" AND identity."Provider" = request."Provider" AND identity."ExternalId" = request."ExternalId"
-        WHERE request."Kind" = @kind
+        WHERE request."Kind" = ANY(@kinds)
           AND (request."WorkId" = work."Id"::text
                OR identity."WorkId" IS NOT NULL
                OR EXISTS (SELECT 1 FROM "MusicAlbums" album
@@ -248,7 +248,7 @@ internal static class WantedSql
         $$"""
         SELECT DISTINCT work."Id" AS "Value"
         FROM "WantedItems" item
-        JOIN "Works" work ON work."Id" = item."WorkId" AND work."MediaType" = @mediaType
+        JOIN "Works" work ON work."Id" = item."WorkId" AND work."MediaType" = @mediaType AND (@classification = 0 OR (@classification = 1) = ({{AnimeOwned}}))
         LEFT JOIN "WorkEpisodes" episode ON item."TargetKind" = 1 AND episode."Id" = item."TargetId"
         WHERE work."Id" > @after
           AND (item."TargetKind" = 4) = @editions
@@ -258,12 +258,21 @@ internal static class WantedSql
         LIMIT @limit
         """;
 
+    // A Series classified as Anime that the Anime library holds (it has an Anime record): the Anime kind carries it, never the Series kind.
+    private const string AnimeOwned =
+        """
+        work."IsAnime" AND EXISTS (SELECT 1 FROM "WorkSourceLinks" animeLink WHERE animeLink."WorkId" = work."Id" AND animeLink."SourceKind" = 0)
+        """;
+
     // The Works of one media type with something installed that Monitoring or a request wants, in id order: the ones an upgrade scan looks at.
     public const string HeldWorks =
         $$"""
         WITH {{Prerequisites}},
         {{Intended}}
-        SELECT DISTINCT "WorkId" AS "Value" FROM intended WHERE "Installed" AND "MediaType" = @mediaType AND "WorkId" > @after ORDER BY 1 LIMIT @limit
+        SELECT DISTINCT "WorkId" AS "Value" FROM intended
+        WHERE "Installed" AND "MediaType" = @mediaType AND "WorkId" > @after
+          AND (@classification = 0 OR EXISTS (SELECT 1 FROM "Works" work WHERE work."Id" = intended."WorkId" AND (@classification = 1) = ({{AnimeOwned}})))
+        ORDER BY 1 LIMIT @limit
         """;
 
     // The request that carried the Work last when it ended Completed, so a target that is wanted again continues it (its tried releases stay remembered).
@@ -276,7 +285,7 @@ internal static class WantedSql
             JOIN "Works" work ON work."Id" = @workId
             LEFT JOIN "WorkExternalIdentities" identity
                    ON identity."WorkId" = work."Id" AND identity."Provider" = request."Provider" AND identity."ExternalId" = request."ExternalId"
-            WHERE request."Kind" = @kind
+            WHERE request."Kind" = ANY(@kinds)
               AND (request."WorkId" = work."Id"::text
                    OR identity."WorkId" IS NOT NULL
                    OR EXISTS (SELECT 1 FROM "MusicAlbums" album

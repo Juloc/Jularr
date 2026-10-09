@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Providers;
 using Microsoft.EntityFrameworkCore;
@@ -26,13 +27,13 @@ public sealed class WantedReconcileState
 // media type's <see cref="IUpgradeAssessor"/>, only when one Work is reconciled or an upgrade scan reaches it).
 public sealed record UpgradePage(IReadOnlyList<Guid> Works, bool ReachedEnd);
 
-public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, WantedReconcileState? state = null, UpgradeAssessors? upgrades = null)
+public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, WantedReconcileState? state = null, UpgradeAssessors? upgrades = null, IInstanceModuleService? modules = null)
 {
     private static readonly (MediaAcquisitionKind Kind, WorkMediaType Type)[] Reconciled =
     [
         (MediaAcquisitionKind.Movie, WorkMediaType.Movie),
         (MediaAcquisitionKind.Tv, WorkMediaType.Series),
-        (MediaAcquisitionKind.Anime, WorkMediaType.Anime),
+        (MediaAcquisitionKind.Anime, WorkMediaType.Series),
         (MediaAcquisitionKind.Book, WorkMediaType.Book),
         (MediaAcquisitionKind.Audiobook, WorkMediaType.Book),
         (MediaAcquisitionKind.LightNovel, WorkMediaType.LightNovel),
@@ -42,6 +43,19 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
 
     public static WorkMediaType WorkTypeOf(MediaAcquisitionKind kind) =>
         Reconciled.Single(entry => entry.Kind == kind).Type;
+
+    // Anime is a classification of a Series: its kind handles only the classified Series, and the Series kind leaves them to it while the Anime module runs
+    // (0 any, 1 only classified, 2 only unclassified). With the module off the Series kind carries them like any other Series.
+    private async Task<int> ClassificationOfAsync(MediaAcquisitionKind kind, CancellationToken cancellationToken) =>
+        kind switch
+        {
+            MediaAcquisitionKind.Anime => 1,
+            MediaAcquisitionKind.Tv when await AnimeEnabledAsync(cancellationToken) => 2,
+            _ => 0
+        };
+
+    private async Task<bool> AnimeEnabledAsync(CancellationToken cancellationToken) =>
+        modules is null || await modules.IsEnabledAsync(InstanceModule.Anime, cancellationToken);
 
     // The full run every source of a pass asks for: only the first one in a while does the work.
     public async Task ReconcileAllIfDueAsync(CancellationToken cancellationToken)
@@ -72,7 +86,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
     public async Task<UpgradePage> ReconcileUpgradesAsync(MediaAcquisitionKind kind, Guid after, int limit, CancellationToken cancellationToken)
     {
         var works = await db.Database
-            .SqlQueryRaw<Guid>(WantedSql.HeldWorks, [.. CoverageParameters(null), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit)])
+            .SqlQueryRaw<Guid>(WantedSql.HeldWorks, [.. CoverageParameters(null), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("classification", await ClassificationOfAsync(kind, cancellationToken)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit)])
             .ToListAsync(cancellationToken);
         foreach (var workId in works)
         {
@@ -84,11 +98,14 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
 
     private async Task SyncUpgradesAsync(Guid workId, CancellationToken cancellationToken)
     {
-        var type = await db.Works.AsNoTracking().Where(work => work.Id == workId).Select(work => (WorkMediaType?)work.MediaType).FirstOrDefaultAsync(cancellationToken);
-        if (type is null || upgrades is null || !upgrades.Types.Contains(type.Value))
+        var work = await db.Works.AsNoTracking().Where(item => item.Id == workId).Select(item => new { item.MediaType, item.IsAnime }).FirstOrDefaultAsync(cancellationToken);
+        if (work is null || upgrades is null || !upgrades.Types.Contains(work.MediaType))
         {
             return;
         }
+
+        var type = work.MediaType;
+        var isAnime = work.IsAnime && await AnimeEnabledAsync(cancellationToken);
 
         var held = await db.Database.SqlQueryRaw<HeldTarget>(WantedSql.HeldTargets, CoverageParameters(workId)).ToListAsync(cancellationToken);
         if (held.Count == 0)
@@ -96,7 +113,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
             return;
         }
 
-        var upgradable = await upgrades.UpgradableAsync(type.Value, workId, held, cancellationToken);
+        var upgradable = await upgrades.UpgradableAsync(type, isAnime, workId, held, cancellationToken);
         await db.Database.ExecuteSqlRawAsync(
             WantedSql.SyncUpgrades,
             [
@@ -115,7 +132,6 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
         new NpgsqlParameter("types", Reconciled.Select(entry => (int)entry.Type).ToArray()),
         new NpgsqlParameter<int>("movie", (int)WorkMediaType.Movie),
         new NpgsqlParameter<int>("series", (int)WorkMediaType.Series),
-        new NpgsqlParameter<int>("anime", (int)WorkMediaType.Anime),
         new NpgsqlParameter<int>("book", (int)WorkMediaType.Book),
         new NpgsqlParameter<int>("lightNovel", (int)WorkMediaType.LightNovel),
         new NpgsqlParameter<int>("manga", (int)WorkMediaType.Manga),
@@ -137,7 +153,7 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
         await db.Database
             .SqlQueryRaw<Guid>(
                 WantedSql.WorksWithoutOpenRequest,
-                [.. CoverageParameters(null), .. RequestParameters(kind), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit), new NpgsqlParameter("editions", kind == MediaAcquisitionKind.Audiobook)])
+                [.. CoverageParameters(null), .. RequestParameters(kind), new NpgsqlParameter("mediaType", (int)WorkTypeOf(kind)), new NpgsqlParameter("classification", await ClassificationOfAsync(kind, cancellationToken)), new NpgsqlParameter("after", after), new NpgsqlParameter("limit", limit), new NpgsqlParameter("editions", kind == MediaAcquisitionKind.Audiobook)])
             .ToListAsync(cancellationToken);
 
     // The request of the Work that ended Completed as its latest one, or null.
@@ -146,7 +162,8 @@ public sealed class WantedReconciler(AppDbContext db, TimeProvider clock, Wanted
 
     private static NpgsqlParameter[] RequestParameters(MediaAcquisitionKind kind) =>
     [
-        new NpgsqlParameter("kind", AcquisitionAccessNames.Kind(kind)),
+        // The Series and Anime kinds carry the same Works, so a request of either counts as the Work's open request.
+        new NpgsqlParameter("kinds", (kind is MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime ? new[] { MediaAcquisitionKind.Tv, MediaAcquisitionKind.Anime } : [kind]).Select(AcquisitionAccessNames.Kind).ToArray()),
         new NpgsqlParameter("musicBrainz", ProviderKeys.MusicBrainz)
     ];
 }

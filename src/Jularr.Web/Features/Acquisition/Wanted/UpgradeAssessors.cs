@@ -32,10 +32,11 @@ public sealed class UpgradeAssessors(IEnumerable<IUpgradeAssessor> assessors)
     public IReadOnlyCollection<WorkMediaType> Types => [.. all.Select(assessor => WantedReconciler.WorkTypeOf(assessor.Kind)).Distinct()];
 
     // The held targets of a Work that its profiles still want better versions of: every assessor of the Work's type judges its own kind of target.
-    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(WorkMediaType type, Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<HeldTarget>> UpgradableAsync(WorkMediaType type, bool isAnime, Guid workId, IReadOnlyList<HeldTarget> held, CancellationToken cancellationToken)
     {
         var upgradable = new List<HeldTarget>();
-        foreach (var assessor in all.Where(assessor => WantedReconciler.WorkTypeOf(assessor.Kind) == type))
+        // A Series is judged by the Anime assessor while it runs as Anime and by the Series assessor otherwise.
+        foreach (var assessor in all.Where(assessor => WantedReconciler.WorkTypeOf(assessor.Kind) == type && (assessor.Kind == MediaAcquisitionKind.Anime ? isAnime : assessor.Kind != MediaAcquisitionKind.Tv || !isAnime)))
         {
             var own = held.Where(target => target.TargetKind == (short)assessor.TargetKind).ToArray();
             if (own.Length > 0)

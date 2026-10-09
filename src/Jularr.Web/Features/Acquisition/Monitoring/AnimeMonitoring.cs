@@ -44,7 +44,7 @@ public sealed class AnimeMonitoring(AppDbContext db, MonitoringResolver monitori
         var after = Guid.Empty;
         while (true)
         {
-            var page = await monitoring.MonitoredWorkIdsAsync(WorkMediaType.Anime, after, 500, cancellationToken);
+            var page = await monitoring.MonitoredWorkIdsAsync(WorkMediaType.Series, after, 500, cancellationToken, animeOnly: true);
             workIds.AddRange(page);
             if (page.Count < 500)
             {

@@ -23,11 +23,16 @@ namespace Jularr.Web.Features.MediaCore;
 /// </summary>
 public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStructureService structure)
 {
+    /// <summary>The evidence of a library anime: its owner put it in the Anime library.</summary>
+    public const string AnimeLibrarySource = "anime-library";
+
     /// <summary>Ensures the work for an anime record (bridges by <c>Anime.Id</c>).</summary>
     public async Task<Guid> EnsureWorkForAnimeAsync(Anime anime, CancellationToken cancellationToken)
     {
+        // A library anime is an episodic Series classified as Anime; its AniList match is mirrored as an identity by the metadata match, not here.
         var workId = await EnsureWorkAsync(
-            WorkSourceKind.Anime, anime.Id, WorkMediaType.Anime, anime.Title, year: null, cancellationToken);
+            WorkSourceKind.Anime, anime.Id, WorkMediaType.Series, anime.Title, year: null, cancellationToken);
+        await works.SetAnimeClassificationAsync(workId, true, AnimeLibrarySource, null, isManualOverride: false, cancellationToken);
 
         await works.AddOrUpdateTitleAsync(
             workId, WorkTitleType.Primary, "und", anime.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);

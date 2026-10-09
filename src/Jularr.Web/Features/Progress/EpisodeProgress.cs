@@ -425,7 +425,7 @@ public sealed class EpisodeProgressService(
     public async Task<IReadOnlyList<PlaybackHistoryItem>> GetHistoryAsync(
         CancellationToken cancellationToken = default)
     {
-        var entries = (await videoProgress.GetHistoryAsync(currentAccount.ProfileId, cancellationToken))
+        var entries = (await videoProgress.GetHistoryAsync(currentAccount.ProfileId, [WorkMediaType.Anime], cancellationToken))
             .Where(x => x.WorkEpisodeId.HasValue && x.MediaType == WorkMediaType.Anime)
             .ToArray();
         var identities = await videoProgress.GetLegacyEpisodeIdentitiesAsync([.. entries.Select(x => x.WorkEpisodeId!.Value)], cancellationToken);

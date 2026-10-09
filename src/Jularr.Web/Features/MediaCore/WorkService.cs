@@ -45,6 +45,27 @@ public sealed class WorkService(AppDbContext db)
     }
 
     /// <summary>
+    /// Classifies a Movie or Series Work as Anime (or not). The evidence goes into the field provenance <c>classification.anime</c>, so a provider mapping never
+    /// overrides an owner's decision; returns false when a stronger source already decided. Only the classification changes, never the Work's identity or structure.
+    /// </summary>
+    public async Task<bool> SetAnimeClassificationAsync(Guid workId, bool isAnime, string source, string? providerExternalId, bool isManualOverride, CancellationToken cancellationToken)
+    {
+        var work = await db.Set<Work>().FirstOrDefaultAsync(item => item.Id == workId && (item.MediaType == WorkMediaType.Movie || item.MediaType == WorkMediaType.Series), cancellationToken)
+            ?? throw new InvalidOperationException("Only a Movie or Series Work can be classified as Anime.");
+        if (!await SetFieldProvenanceAsync(workId, AnimeClassificationField, source, providerExternalId, 1.0, isManualOverride, MappingProviders.AniList, cancellationToken))
+        {
+            return false;
+        }
+
+        work.IsAnime = isAnime;
+        work.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public const string AnimeClassificationField = "classification.anime";
+
+    /// <summary>
     /// Resolves the work a provider identity already points at, or creates a new work and links the
     /// identity. Idempotent: the same (media type, provider, external id) always returns the same work.
     /// </summary>

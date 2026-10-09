@@ -731,6 +731,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.MediaType).HasConversion<int>();
             entity.Property(x => x.CanonicalTitle).HasMaxLength(1000);
             entity.HasIndex(x => x.MediaType);
+            entity.HasIndex(x => x.IsAnime).HasFilter("\"IsAnime\"");
         });
 
         modelBuilder.Entity<WorkTitle>(entity =>

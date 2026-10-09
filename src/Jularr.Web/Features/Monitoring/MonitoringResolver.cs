@@ -77,16 +77,16 @@ public sealed class MonitoringResolver(AppDbContext db)
 
     /// <summary>
     /// The Works of one media type that have anything monitored, after <paramref name="after"/> in id order: a Work decided as monitored, a Work that has a
-    /// node switched on, or a Work with no decision that a monitored relation reaches.
+    /// node switched on, or a Work with no decision that a monitored relation reaches. <paramref name="animeOnly"/> keeps only the Works classified as Anime.
     /// </summary>
-    public async Task<IReadOnlyList<Guid>> MonitoredWorkIdsAsync(WorkMediaType mediaType, Guid after, int limit, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<Guid>> MonitoredWorkIdsAsync(WorkMediaType mediaType, Guid after, int limit, CancellationToken cancellationToken, bool animeOnly = false)
     {
         var type = (int)mediaType;
         return await db.Database
             .SqlQueryRaw<Guid>(
                 """
                 SELECT w."Id" AS "Value" FROM "Works" w
-                WHERE w."MediaType" = {0} AND w."Id" > {1}
+                WHERE w."MediaType" = {0} AND (NOT {3} OR w."IsAnime") AND w."Id" > {1}
                   AND (EXISTS (SELECT 1 FROM "WorkMonitoring" m WHERE m."WorkId" = w."Id" AND m."Monitored")
                        OR (NOT EXISTS (SELECT 1 FROM "WorkMonitoring" m WHERE m."TargetId" = w."Id")
                            AND EXISTS (SELECT 1 FROM (
@@ -96,7 +96,8 @@ public sealed class MonitoringResolver(AppDbContext db)
                 """,
                 type,
                 after,
-                limit)
+                limit,
+                animeOnly)
             .ToListAsync(cancellationToken);
     }
 

@@ -11,7 +11,14 @@ public sealed class Work
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    /// <summary>The technical type: a video Work is a Movie or a Series, never <see cref="WorkMediaType.Anime"/> (that value is historical).</summary>
     public WorkMediaType MediaType { get; set; }
+
+    /// <summary>
+    /// Whether the Work is classified as Anime: an independent classification of a Movie or Series, set from a trustworthy provider mapping or by the owner (see
+    /// <see cref="WorkService.SetAnimeClassificationAsync"/>), with its evidence in the field provenance <c>classification.anime</c>. It never changes the Work's identity or structure.
+    /// </summary>
+    public bool IsAnime { get; set; }
 
     /// <summary>
     /// Cached display title (the resolved primary <see cref="WorkTitle"/>). The authoritative,

@@ -314,6 +314,7 @@ public sealed class VideoProgressService(AppDbContext db)
         }
 
         var mediaTypeFilter = mediaTypes?.Select(type => (int)type).ToArray();
+        var animeVisible = mediaTypes is null || mediaTypes.Contains(WorkMediaType.Anime);
 
         var rows = await db.Database.SqlQueryRaw<ContinueWatchingDbRow>(
                 """
@@ -323,7 +324,7 @@ public sealed class VideoProgressService(AppDbContext db)
                        p."DurationMs",
                        p."IsCompleted",
                        p."UpdatedAt",
-                       w."MediaType",
+                       CASE WHEN w."IsAnime" AND w."MediaType" IN (0, 1) AND {3} THEN 2 ELSE w."MediaType" END AS "MediaType",
                        w."CanonicalTitle" AS "WorkTitle",
                        e."SeasonNumber",
                        e."EpisodeNumber",
@@ -333,7 +334,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 LEFT JOIN "WorkEpisodes" e ON e."Id" = p."WorkEpisodeId"
                 WHERE p."ProfileId" = {0}
                   AND (p."IsCompleted" = TRUE OR p."PositionMs" >= {1})
-                  AND ({2}::int[] IS NULL OR w."MediaType" = ANY({2}))
+                  AND ({2}::int[] IS NULL OR (CASE WHEN w."IsAnime" AND w."MediaType" IN (0, 1) AND {3} THEN 2 ELSE w."MediaType" END) = ANY({2}))
                   AND EXISTS (
                       SELECT 1
                       FROM "MediaAssets" a
@@ -350,7 +351,8 @@ public sealed class VideoProgressService(AppDbContext db)
                 """,
                 profileId,
                 MinimumResumeMs,
-                (object?)mediaTypeFilter ?? DBNull.Value)
+                (object?)mediaTypeFilter ?? DBNull.Value,
+                animeVisible)
             .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -454,9 +456,11 @@ public sealed class VideoProgressService(AppDbContext db)
 
     public async Task<IReadOnlyList<MediaPlaybackHistoryItem>> GetHistoryAsync(
         string profileId,
+        IReadOnlyCollection<WorkMediaType>? mediaTypes = null,
         CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
+        var animeVisible = mediaTypes is null || mediaTypes.Contains(WorkMediaType.Anime);
         var rows = await db.Database.SqlQueryRaw<HistoryDbRow>(
                 """
                 SELECT h."Id",
@@ -467,7 +471,7 @@ public sealed class VideoProgressService(AppDbContext db)
                        h."PositionMs",
                        h."DurationMs",
                        h."ReachedEnd",
-                       w."MediaType",
+                       CASE WHEN w."IsAnime" AND w."MediaType" IN (0, 1) AND {1} THEN 2 ELSE w."MediaType" END AS "MediaType",
                        w."CanonicalTitle" AS "WorkTitle",
                        e."SeasonNumber",
                        e."EpisodeNumber",
@@ -479,7 +483,8 @@ public sealed class VideoProgressService(AppDbContext db)
                 ORDER BY h."LastPlayedAt" DESC, h."StartedAt" DESC, h."Id"
                 LIMIT 50
                 """,
-                profileId)
+                profileId,
+                animeVisible)
             .ToListAsync(cancellationToken);
 
         return rows.Select(row => new MediaPlaybackHistoryItem(

@@ -11,6 +11,11 @@ public enum WorkMediaType
 {
     Movie,
     Series,
+
+    /// <summary>
+    /// Historical value (persisted numbers never change): Anime is a classification of a Movie or Series Work (<see cref="Work.IsAnime"/>), so no Work has this type any more.
+    /// It remains the provider namespace of AniList/MAL identities and the presentation category of the Anime section.
+    /// </summary>
     Anime,
     Book,
     Manga,
