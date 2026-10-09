@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +33,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -48,6 +48,7 @@ private val sidebarItems = listOf(
     TvSidebarItem(TvRoute.Home, R.string.tv_sidebar_home, Icons.Filled.Home),
     TvSidebarItem(TvRoute.Watchlist, R.string.tv_sidebar_watchlist, Icons.Filled.Bookmark),
     TvSidebarItem(TvRoute.Activity, R.string.tv_sidebar_activity, Icons.Filled.CalendarMonth),
+    TvSidebarItem(TvRoute.Profile, R.string.tv_sidebar_profile, Icons.Filled.Settings),
 )
 
 @Composable
@@ -62,8 +63,7 @@ fun TvSidebar(
     val width by animateDpAsState(if (expanded) 190.dp else 72.dp, label = "sidebar-width")
 
     val itemShape = RoundedCornerShape(14.dp)
-    val context = LocalContext.current
-    val selectedPurple = remember(context) { TvPlayerDesignLoader.load(context).accent }
+    val selectedPurple = Color(0xFF5B46F6)
     val idleBackground = Color(0xFF10121A)
 
     Column(
