@@ -103,9 +103,10 @@ public sealed class PlexModel(
                             server.Name, endpoint, libraries));
                     }
                 }
-                catch (HttpRequestException)
+                catch (Exception error)
+                    when (error is HttpRequestException or InvalidDataException or InvalidOperationException)
                 {
-                    // A disconnected PMS must not hide otherwise available servers.
+                    DiscoveryFailed = true;
                 }
             }
 
