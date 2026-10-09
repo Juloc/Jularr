@@ -1,0 +1,103 @@
+@page
+@model Jularr.Web.Pages.Account.PlexModel
+@inject Jularr.Web.Data.AppDbContext LocalizationDb
+@{
+    var ui = await Jularr.Web.Features.Localization.UiRequestLocalization.GetBundleAsync(
+        Model.HttpContext, LocalizationDb);
+    var linking = User.Identity?.IsAuthenticated == true;
+    var linked = linking && Model.PlexLinked && !Model.HasVerifiedIdentity;
+    var verified = Model.HasVerifiedIdentity;
+    var starting = !linked && !verified;
+    ViewData["Title"] = ui["account.plex.signIn"];
+}
+
+<section class="auth-card">
+    <div class="auth-brand">
+        <partial name="_AppBrandMark" />
+    </div>
+
+    @if (linked)
+    {
+        <h1>@ui["account.plex.linked"]</h1>
+        <p>@ui["account.plex.linkedDescription"]</p>
+        <form method="post" asp-page-handler="Unlink" class="form-stack">
+            <label asp-for="LocalPassword">
+                @ui["account.plex.confirmPassword"]
+                <input asp-for="LocalPassword" type="password" autocomplete="current-password" />
+            </label>
+            <button class="button button-secondary" type="submit">@ui["account.plex.remove"]</button>
+        </form>
+    }
+
+    @if (verified)
+    {
+        <h1>@ui["account.plex.verified"]</h1>
+        <p>@ui["account.plex.choose"]</p>
+        @if (linking)
+        {
+            <form method="post" asp-page-handler="Link" class="form-stack">
+                <input type="hidden" asp-for="Flow" />
+                <label asp-for="LocalPassword">
+                    @ui["account.plex.confirmPassword"]
+                    <input asp-for="LocalPassword" type="password" autocomplete="current-password" />
+                </label>
+                <button class="button button-primary" type="submit">@ui["account.plex.linkThis"]</button>
+            </form>
+        }
+        @if (!linking && Model.PlexLinkEnabled)
+        {
+            <p>
+                <a asp-page="/Account/Login"
+                   asp-route-returnUrl="@Url.Page("/Account/Plex", "Link", new { flow = Model.Flow })">
+                    @ui["account.plex.existing"]
+                </a>
+            </p>
+        }
+        @if (!linking && Model.AutoProvisionEnabled)
+        {
+            <form method="post" asp-page-handler="Create" class="form-stack">
+                <input type="hidden" asp-for="Flow" />
+                <label asp-for="UserName">
+                    @ui["account.plex.newName"]
+                    <input asp-for="UserName" maxlength="80" autocomplete="username" />
+                </label>
+                <button class="button button-primary" type="submit">@ui["account.plex.create"]</button>
+            </form>
+        }
+    }
+
+    @if (starting)
+    {
+        <h1>@(linking ? ui["account.plex.link"] : ui["account.plex.signIn"])</h1>
+        <p>@ui["account.plex.description"]</p>
+        <form method="post" asp-page-handler="Start" class="form-stack">
+            <input type="hidden" asp-for="ReturnUrl" />
+            @if (linking)
+            {
+                <label asp-for="LocalPassword">
+                    @ui["account.plex.confirmPassword"]
+                    <input asp-for="LocalPassword" type="password" autocomplete="current-password" />
+                </label>
+            }
+            <button class="button button-primary" type="submit">@ui["account.plex.continue"]</button>
+        </form>
+        @if (Model.Flow != Guid.Empty)
+        {
+            <p><a asp-page-handler="Finish" asp-route-flow="@Model.Flow">@ui["account.plex.check"]</a></p>
+        }
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.MessageKey))
+    {
+        <div role="status" class="validation">@ui[Model.MessageKey!]</div>
+    }
+
+    @if (linking)
+    {
+        <p><a asp-page="/Settings/Index">@ui["account.plex.backSettings"]</a></p>
+    }
+    @if (!linking)
+    {
+        <p><a asp-page="/Account/Login">@ui["account.plex.back"]</a></p>
+    }
+</section>

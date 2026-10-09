@@ -67,6 +67,19 @@
         <a class="button" asp-page="/Settings/AniList">@ui["settings.anilist.manage"]</a>
     </section>
 
+
+    @if (Model.PlexConnectionVisible)
+    {
+        <section class="panel">
+            <div class="panel-heading">
+                <h2>@ui["settings.connections.plexTitle"]</h2>
+                <span>@ui["settings.scope.personal"]</span>
+            </div>
+            <p class="muted">@(Model.PlexLoginLinked ? ui["settings.connections.plexLinked"] : ui["settings.connections.plexDescription"])</p>
+            <a class="button" asp-page="/Account/Plex">@ui["settings.connections.plexManage"]</a>
+        </section>
+    }
+
     <section class="panel">
         <div class="panel-heading">
             <h2>@ui["settings.books.title"]</h2>

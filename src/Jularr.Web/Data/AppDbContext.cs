@@ -98,6 +98,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<LearnerCourseProgress> LearnerCourseProgress => Set<LearnerCourseProgress>();
     public DbSet<AiSentenceExplanationCache> AiSentenceExplanationCache => Set<AiSentenceExplanationCache>();
     public DbSet<OwnerAccount> OwnerAccounts => Set<OwnerAccount>();
+    public DbSet<AccountLoginIdentity> AccountLoginIdentities => Set<AccountLoginIdentity>();
+    public DbSet<PlexLoginAttempt> PlexLoginAttempts => Set<PlexLoginAttempt>();
     public DbSet<EpisodeProgress> EpisodeProgress => Set<EpisodeProgress>();
     public DbSet<EpisodePlaybackHistoryEntry> EpisodePlaybackHistory => Set<EpisodePlaybackHistoryEntry>();
     public DbSet<ProfilePlaybackPreferences> ProfilePlaybackPreferences => Set<ProfilePlaybackPreferences>();
@@ -173,6 +175,34 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.PasswordHash).HasMaxLength(1024);
             entity.Property(x => x.Role).HasConversion<int>();
             entity.HasIndex(x => x.NormalizedUserName).IsUnique();
+        });
+
+        modelBuilder.Entity<AccountLoginIdentity>(entity =>
+        {
+            entity.HasKey(x => new { x.Provider, x.ExternalAccountId });
+            entity.Property(x => x.AccountId).HasMaxLength(32);
+            entity.Property(x => x.Provider).HasMaxLength(40);
+            entity.Property(x => x.ExternalAccountId).HasMaxLength(160);
+            entity.HasOne<OwnerAccount>()
+                .WithMany()
+                .HasForeignKey(x => x.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.AccountId, x.Provider }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlexLoginAttempt>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ClientIdentifier).HasMaxLength(120);
+            entity.Property(x => x.BrowserNonceHash).HasMaxLength(64);
+            entity.Property(x => x.StartedAccountId).HasMaxLength(32);
+            entity.Property(x => x.VerifiedPlexAccountId).HasMaxLength(160);
+            entity.Property(x => x.ReturnPath).HasMaxLength(512);
+            entity.HasOne<OwnerAccount>()
+                .WithMany()
+                .HasForeignKey(x => x.StartedAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => x.ExpiresAtUtc);
         });
 
         modelBuilder.Entity<LibraryRoot>(entity =>
