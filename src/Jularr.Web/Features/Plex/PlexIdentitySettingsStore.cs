@@ -11,8 +11,11 @@ public sealed record PlexIdentitySettings(
     bool RequireApproval,
     string ClientIdentifier)
 {
+    public bool MediaConnectionEnabled { get; init; }
     public bool CanLogin => Enabled && LoginEnabled && ClientIdentifier.Length > 0;
     public bool CanLink => Enabled && LinkEnabled && ClientIdentifier.Length > 0;
+    public bool CanConnectMedia =>
+        Enabled && MediaConnectionEnabled && ClientIdentifier.Length > 0;
 }
 
 public sealed class PlexIdentitySettingsStore(
@@ -37,13 +40,17 @@ public sealed class PlexIdentitySettingsStore(
         {
             var login = configuration.GetValue("Plex:LoginEnabled", false);
             var link = configuration.GetValue("Plex:LinkEnabled", false);
+            var media = configuration.GetValue("Plex:MediaConnectionEnabled", false);
             return new PlexIdentitySettings(
-                login || link,
+                login || link || media,
                 login,
                 link,
                 configuration.GetValue("Plex:AutoProvisionEnabled", false),
                 configuration.GetValue("Plex:RequireApproval", true),
-                configuration["Plex:ClientIdentifier"]?.Trim() ?? string.Empty);
+                configuration["Plex:ClientIdentifier"]?.Trim() ?? string.Empty)
+            {
+                MediaConnectionEnabled = media
+            };
         }
 
         await gate.WaitAsync(cancellationToken);
@@ -80,12 +87,23 @@ public sealed class PlexIdentitySettingsStore(
         }
     }
 
+    public Task SaveAsync(
+        bool enabled,
+        bool loginEnabled,
+        bool linkEnabled,
+        bool autoProvisionEnabled,
+        bool requireApproval,
+        CancellationToken cancellationToken) =>
+        SaveAsync(enabled, loginEnabled, linkEnabled, autoProvisionEnabled,
+            requireApproval, false, cancellationToken);
+
     public async Task SaveAsync(
         bool enabled,
         bool loginEnabled,
         bool linkEnabled,
         bool autoProvisionEnabled,
         bool requireApproval,
+        bool mediaConnectionEnabled,
         CancellationToken cancellationToken)
     {
         if (ExternallyManaged)
@@ -115,7 +133,10 @@ public sealed class PlexIdentitySettingsStore(
                 linkEnabled,
                 autoProvisionEnabled,
                 requireApproval,
-                identifier);
+                identifier)
+            {
+                MediaConnectionEnabled = mediaConnectionEnabled
+            };
 
             await ProviderCredentialFile.WriteAtomicAsync(
                 path,
