@@ -105,6 +105,15 @@ builder.Services.AddScoped<INotificationSink, InAppNotificationSink>();
 builder.Services.AddScoped<NotificationDispatcher>();
 builder.Services.AddScoped<IJularrEventPublisher, JularrEventPublisher>();
 builder.Services.AddScoped<OwnerAuthService>();
+builder.Services.AddHttpClient<Jularr.Web.Features.ExternalPlayback.Plex.PlexLibraryClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false
+});
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWorkMatcher>();
+
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
 // resolution/guard service consumed by the request experience (#597), permission-derived shell
 // (#598) and provider-driven discovery (#595).
