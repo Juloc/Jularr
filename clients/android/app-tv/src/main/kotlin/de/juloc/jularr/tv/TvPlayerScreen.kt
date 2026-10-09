@@ -51,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -129,6 +130,11 @@ fun TvPlayerScreen(
 ) {
     val context = LocalContext.current
     val design = remember { TvPlayerDesignLoader.load(context) }
+    val currentOnPositionChanged by rememberUpdatedState(onPositionChanged)
+    val currentOnSeeked by rememberUpdatedState(onSeeked)
+    val currentOnPlaybackEnded by rememberUpdatedState(onPlaybackEnded)
+    val currentOnPlaybackFailure by rememberUpdatedState(onPlaybackFailure)
+    val currentOnPlaybackSpeedChanged by rememberUpdatedState(onPlaybackSpeedChanged)
     var uiState by remember { mutableStateOf(TvPlayerUiState(controlsVisible = true)) }
     var controlsInteractionRevision by remember { mutableIntStateOf(0) }
     val playerFocus = remember { FocusRequester() }
@@ -160,12 +166,12 @@ fun TvPlayerScreen(
                 isPlaying = value
                 positionMs = player.player.currentPosition.coerceAtLeast(0)
                 durationMs = player.player.duration.takeIf { it > 0 } ?: durationMs
-                onPositionChanged(positionMs, durationMs, value)
+                currentOnPositionChanged(positionMs, durationMs, value)
             }
 
             override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
                 playbackSpeed = playbackParameters.speed
-                onPlaybackSpeedChanged()
+                currentOnPlaybackSpeedChanged()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -175,7 +181,7 @@ fun TvPlayerScreen(
                 if (playbackState == Player.STATE_ENDED) {
                     playbackEnded = true
                     uiState = uiState.copy(controlsVisible = true)
-                    onPlaybackEnded(positionMs, durationMs)
+                    currentOnPlaybackEnded(positionMs, durationMs)
                 } else if (playbackState == Player.STATE_READY) {
                     playbackEnded = false
                 }
@@ -188,11 +194,11 @@ fun TvPlayerScreen(
             ) {
                 positionMs = newPosition.positionMs.coerceAtLeast(0)
                 durationMs = player.player.duration.takeIf { it > 0 } ?: durationMs
-                onSeeked(positionMs, durationMs, player.player.isPlaying)
+                currentOnSeeked(positionMs, durationMs, player.player.isPlaying)
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                onPlaybackFailure(player.player.currentPosition.coerceAtLeast(0))
+                currentOnPlaybackFailure(player.player.currentPosition.coerceAtLeast(0))
             }
         }
         player.player.addListener(listener)
@@ -206,7 +212,7 @@ fun TvPlayerScreen(
             positionMs = current
             durationMs = duration
             bufferedPositionMs = player.player.bufferedPosition.coerceAtLeast(0L)
-            onPositionChanged(current, duration, true)
+            currentOnPositionChanged(current, duration, true)
             delay(500)
         }
     }
