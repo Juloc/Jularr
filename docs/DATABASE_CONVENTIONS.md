@@ -213,6 +213,24 @@ OFFSET
 
 An allowed alternate sort by creation date uses its own static SQL with `ORDER BY "CreatedAt" DESC, "Id" DESC`. Growing chapter, episode, release, history, job and media WorkCard lists receive the same Page/PageSize contract. Search/filter scopes are always applied in PostgreSQL **before** ORDER BY and LIMIT/OFFSET.
 
+### Implemented reusable pagination types
+
+The shared implementation lives in `src/Jularr.Web/Data/Pagination.cs` and is covered by `tests/Jularr.Tests/PaginationTests.cs`. Use it for new or intentionally updated list operations; older endpoints are **not yet automatically migrated** just because the helper exists.
+
+```csharp
+var paging = new PageRequest(page, pageSize);
+
+var rows = await db.Database
+    .SqlQueryRaw<AdminAccountV1>(
+        ReadUsersSql,
+        paging.ToSqlParameters())
+    .ToListAsync(cancellationToken);
+
+return PageResult<AdminAccountV1>.From(rows, paging);
+```
+
+The `ReadUsersSql` constant is the fixed, formatted `SELECT ... ORDER BY ... LIMIT @PageSize OFFSET @Offset` shown above; no interpolated SQL. `PageRequest` rejects invalid page numbers/sizes, calculates a 64-bit `Offset` and supplies two named typed `NpgsqlParameter` objects. HTTP/Razor callers must translate invalid input into a localized client error instead of letting an argument exception become HTTP 500. `PageResult<T>.From` accepts no more than `PageSize` items and does not guess `HasMore` or run an automatic `COUNT(*)`. When the same query also has filter parameters, add explicitly bound parameters alongside `paging.ToSqlParameters()`; never assemble SQL text or bind unrelated DTO fields by reflection. The helper does not implement DB queries, enforce caller authorization or paginate results after a full-table fetch.
+
 ### Other shared API / database correctness practices
 
 1. **Explicit outward DTOs and field allowlists.** Do not expose EF/domain entities, credentials, internal state or secret fields directly. User and Admin `ReadUserV1` may use **different SELECT projections** and access checks. Public `UpdateUserV1` accepts only permitted change fields; shared internal mutation owner performs read-for-update if required, verifies invariants and writes in one transaction.
