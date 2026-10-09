@@ -197,7 +197,6 @@ public sealed class VideoProgressService(AppDbContext db)
                 FROM "MediaProgress" p
                 WHERE p."WorkId" = ANY({0})
                   AND p."UpdatedAt" >= {1}
-                  AND p."IsCompleted" = FALSE
                   AND p."PositionMs" >= {2}
                   AND (p."DurationMs" IS NULL OR p."PositionMs" < p."DurationMs")
                 GROUP BY p."WorkId", p."WorkEpisodeId"
