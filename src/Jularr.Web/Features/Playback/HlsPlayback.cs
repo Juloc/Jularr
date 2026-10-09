@@ -133,7 +133,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         IDisposable? lease,
         CancellationToken cancellationToken,
         Action<PlaybackTranscodeSample>? onProgress = null,
-        double? remainingDurationSeconds = null)
+        double? remainingDurationSeconds = null,
+        PlaybackCostClass? costClass = null)
     {
         ArgumentNullException.ThrowIfNull(buildArguments);
         if (string.IsNullOrWhiteSpace(profileId))
@@ -189,7 +190,7 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 entry = new Entry(
                     sessionId, episodeId, profileId, directory, process, startSeconds,
                     _time.GetUtcNow(), lease, _time, PlaybackBufferPolicy.For(policy.BufferPreset, PlaybackDeliveryMode.Transcode),
-                    onProgress, remainingDurationSeconds);
+                    onProgress, remainingDurationSeconds, costClass);
                 if (process is IFfmpegProgressSource progressSource)
                 {
                     progressSource.ProgressReported += entry.RecordProgress;
@@ -335,6 +336,27 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             path,
             ContentType(fileName),
             fileName != "index.m3u8");
+    }
+
+    public bool ReclaimStalePaused(PlaybackCostClass costClass, string profileId, bool sameProfileOnly)
+    {
+        lock (_gate)
+        {
+            var now = _time.GetUtcNow();
+            var stale = _sessions.Values
+                .Where(entry =>
+                    (!sameProfileOnly || entry.ProfileId == profileId) &&
+                    entry.CanReclaim(costClass, now, BudgetPruneIdleAfter + TimeSpan.FromSeconds(30)))
+                .OrderBy(entry => entry.LastAccessUtc)
+                .FirstOrDefault();
+            if (stale is null || !_sessions.ContainsKey(stale.SessionId))
+            {
+                return false;
+            }
+
+            Remove(stale.SessionId, HlsSessionEndReason.Idle);
+            return true;
+        }
     }
 
     public int CleanupExpired()
@@ -824,7 +846,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         TimeProvider time,
         PlaybackBufferPolicy buffer,
         Action<PlaybackTranscodeSample>? onProgress,
-        double? remainingDurationSeconds)
+        double? remainingDurationSeconds,
+        PlaybackCostClass? costClass)
     {
         private readonly object _pacingGate = new();
         private long _lastAccessTicks = createdAtUtc.UtcTicks;
@@ -844,6 +867,18 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         public double StartSeconds { get; } = startSeconds;
         public DateTimeOffset CreatedAtUtc { get; } = createdAtUtc;
         public DateTimeOffset LastAccessUtc => new(Interlocked.Read(ref _lastAccessTicks), TimeSpan.Zero);
+
+        public bool CanReclaim(PlaybackCostClass requestedClass, DateTimeOffset now, TimeSpan minIdle)
+        {
+            lock (_pacingGate)
+            {
+                return costClass == requestedClass &&
+                       _lease is not null &&
+                       _paused &&
+                       !Process.HasExited &&
+                       now - LastAccessUtc >= minIdle;
+            }
+        }
 
         public void SegmentRequested(int requested, DateTimeOffset now)
         {
