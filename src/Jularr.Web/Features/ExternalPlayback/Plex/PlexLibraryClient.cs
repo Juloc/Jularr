@@ -14,6 +14,30 @@ public sealed class PlexLibraryClient(HttpClient client)
     public const int MaxPageSize = 200;
     private const int MaxResponseBytes = 8 * 1024 * 1024;
 
+    public async Task<string> GetServerIdentityAsync(
+        Uri server,
+        string accessToken,
+        string clientIdentifier,
+        CancellationToken cancellationToken)
+    {
+        using var json = await GetJsonAsync(
+            server, "identity", accessToken, clientIdentifier, cancellationToken);
+        if (!json.RootElement.TryGetProperty("MediaContainer", out var root))
+        {
+            throw new InvalidDataException("Plex returned no server identity.");
+        }
+
+        var machineId = GetString(root, "machineIdentifier");
+        if (machineId.Length is < 8 or > 160 ||
+            !machineId.All(c => char.IsAsciiLetterOrDigit(c) || c == '-'))
+        {
+            throw new InvalidDataException(
+                "Plex returned an invalid server machine identifier.");
+        }
+
+        return machineId;
+    }
+
     public async Task<IReadOnlyList<PlexLibrarySection>> GetSectionsAsync(
         Uri server,
         string accessToken,
