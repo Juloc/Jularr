@@ -45,6 +45,15 @@
     <string name="tv_settings_description">Adjust your TV experience.</string>
     <string name="tv_settings_section_account">Server &amp; Account</string>
     <string name="tv_settings_section_info">Information</string>
+    <string name="tv_settings_playback">Playback</string>
+    <string name="tv_settings_autoplay">Autoplay next episode</string>
+    <string name="tv_settings_on">On</string>
+    <string name="tv_settings_off">Off</string>
+    <string name="tv_settings_subtitles">Preferred subtitle language</string>
+    <string name="tv_settings_audio">Preferred audio language</string>
+    <string name="tv_settings_speed">Default playback speed</string>
+    <string name="tv_settings_saving">Saving…</string>
+    <string name="tv_settings_playback_unavailable">This server did not provide playback preferences.</string>
 
     <!-- Home -->
     <string name="tv_home_search_placeholder">Search Jularr</string>
