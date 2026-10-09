@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.design.PlayerSeekSteps
+import de.juloc.jularr.core.model.ClientMediaSegment
 
 enum class TvLearningLayer {
     CLOSED,
@@ -32,6 +33,9 @@ data class TvPlayerTransition(
 )
 
 object TvPlayerInteraction {
+    fun activeSkipSegment(segments: List<ClientMediaSegment>, positionMs: Long): ClientMediaSegment? =
+        segments.firstOrNull { it.canSkip && positionMs >= it.startMs && positionMs < it.endMs }
+
     fun mediaPlayPause(state: TvPlayerUiState): TvPlayerTransition =
         TvPlayerTransition(state, listOf(TvPlayerEffect.TogglePlayback))
 
