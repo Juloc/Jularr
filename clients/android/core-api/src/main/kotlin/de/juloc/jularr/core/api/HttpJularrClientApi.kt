@@ -442,6 +442,9 @@ class HttpJularrClientApi(
         availability = getString("availability"),
         detailsUrl = stringOrNull("detailsUrl"),
         addedAtUtc = stringOrNull("addedAtUtc"),
+        localMediaId = stringOrNull("localMediaId"),
+        status = stringOrNull("status"),
+        format = stringOrNull("format"),
     )
 
     private fun JSONObject.toAnimeDetail() = AnimeDetail(
