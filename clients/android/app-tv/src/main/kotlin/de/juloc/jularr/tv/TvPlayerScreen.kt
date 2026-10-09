@@ -398,7 +398,8 @@ fun TvPlayerScreen(
                     Key.Enter,
                     -> {
                         if (uiState.controlsVisible ||
-                            uiState.learningLayer != TvLearningLayer.CLOSED
+                            uiState.learningLayer != TvLearningLayer.CLOSED ||
+                            skipSegment != null
                         ) {
                             return@onPreviewKeyEvent false
                         }
