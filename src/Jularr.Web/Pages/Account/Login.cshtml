@@ -38,5 +38,16 @@
         <button class="button button-primary" type="submit">@ui["account.login.submit"]</button>
     </form>
 
+    @if (Model.PlexLoginEnabled)
+    {
+        <p>
+            <a class="button button-secondary"
+               asp-page="/Account/Plex"
+               asp-route-ReturnUrl="@Model.ReturnUrl">
+                Sign in with Plex
+            </a>
+        </p>
+    }
+
     <p><a asp-page="/Account/Register">@ui["account.login.requestAccount"]</a></p>
 </section>
