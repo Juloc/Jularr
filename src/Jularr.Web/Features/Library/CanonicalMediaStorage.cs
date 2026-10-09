@@ -444,6 +444,12 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         Guid workId,
         Guid? workEpisodeId,
         CancellationToken cancellationToken) =>
+        (await ResolveVideoCandidatesAsync(workId, workEpisodeId, cancellationToken)).FirstOrDefault();
+
+    public async Task<IReadOnlyList<CanonicalPlayableFile>> ResolveVideoCandidatesAsync(
+        Guid workId,
+        Guid? workEpisodeId,
+        CancellationToken cancellationToken) =>
         await (
             from asset in db.MediaAssets.AsNoTracking()
             join file in db.StoredFiles.AsNoTracking()
@@ -461,7 +467,8 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
                 file.Path,
                 file.SizeBytes,
                 file.LastWriteTimeUtc))
-        .FirstOrDefaultAsync(cancellationToken);
+        .Take(8)
+        .ToListAsync(cancellationToken);
 
     private static string BuildVersionKey(Guid storedFileId) =>
         $"{LocalVideoVersionPrefix}{storedFileId:N}";
