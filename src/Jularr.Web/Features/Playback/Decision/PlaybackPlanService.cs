@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Devices;
 using Jularr.Web.Features.Library;
@@ -215,7 +216,19 @@ public sealed class PlaybackPlanService(
                 ? await ResolveCanonicalVideoAsync(target, cancellationToken)
                 : null;
 
-        if (candidates.Count > 1 && input.AudioStreamIndex is null && input.SubtitleStreamIndex is null)
+        // Never exchange different cuts or their track numbers during a running session.
+        var current = input.ReplacesSessionId is { } replaced
+            ? sessions.Get(replaced, profileId)
+            : null;
+        if (current?.Target == target &&
+            candidates.FirstOrDefault(candidate => candidate.StoredFileId == current.MediaFileId) is { } selected)
+        {
+            playable = selected;
+        }
+        else if (candidates.Count > 1 &&
+                 input.AudioStreamIndex is null &&
+                 input.SubtitleStreamIndex is null &&
+                 input.Quality != PlaybackQualityPreset.Original)
         {
             var capabilities = input.Capabilities?.Normalize() ??
                                ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
@@ -229,6 +242,8 @@ public sealed class PlaybackPlanService(
             var server = serverCapabilities.Current();
             var analyses = await mediaInventory.GetManyAsync(
                 candidates.Select(candidate => candidate.StoredFileId).ToArray(), cancellationToken);
+            var source = candidates[0];
+            analyses.TryGetValue(source.StoredFileId, out var sourceAnalysis);
             var bestCost = int.MaxValue;
             var bestHeight = -1;
             var bestBitrate = -1;
@@ -236,7 +251,9 @@ public sealed class PlaybackPlanService(
             foreach (var candidate in candidates)
             {
                 if (!analyses.TryGetValue(candidate.StoredFileId, out var analysis) ||
-                    analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical })
+                    analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical } ||
+                    (candidate.StoredFileId != source.StoredFileId &&
+                     !PlaybackPreparedRenditionEligibility.IsEligible(source, sourceAnalysis, candidate, analysis)))
                 {
                     continue;
                 }
@@ -510,4 +527,88 @@ public sealed class PlaybackPlanService(
                     Values: values.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal))
             ],
             PlaybackCapabilitySupport.Unknown);
+}
+
+ 
+/// <summary>
+/// Verifies a preparation attestation against the current canonical source and both cached
+/// ffprobe results. The trusted preparation worker (not an importer or a page request) is
+/// the only component allowed to write this source marker. Until that worker exists, local
+/// releases cannot silently substitute for different editions of a Work.
+/// </summary>
+internal static class PlaybackPreparedRenditionEligibility
+{
+    public const string PreparedVersionSource = "jularr-prepared:v1";
+
+    public static bool IsEligible(
+        CanonicalPlayableFile original,
+        MediaInventoryEntry? originalAnalysis,
+        CanonicalPlayableFile candidate,
+        MediaInventoryEntry candidateAnalysis)
+    {
+        if (candidate.VersionSource != PreparedVersionSource ||
+            candidate.VersionNotes is not { Length: > 0 and <= 1000 } notes ||
+            originalAnalysis is not { Technical: { } sourceTechnical } ||
+            candidateAnalysis.Technical is not { } preparedTechnical ||
+            !IsFresh(original, originalAnalysis) || !IsFresh(candidate, candidateAnalysis) ||
+            originalAnalysis.SourceFingerprint is not { Length: 64 } fingerprint)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(notes);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("sourceStoredFileId", out var sourceId) ||
+                !Guid.TryParse(sourceId.GetString(), out var claimedSource) ||
+                claimedSource != original.StoredFileId ||
+                !root.TryGetProperty("sourceFingerprint", out var storedFingerprint) ||
+                !string.Equals(storedFingerprint.GetString(), fingerprint, StringComparison.Ordinal) ||
+                !root.TryGetProperty("recipeVersion", out var recipe) ||
+                !recipe.TryGetInt32(out var recipeVersion) || recipeVersion < 1 ||
+                !root.TryGetProperty("verifiedOutput", out var verified) ||
+                verified.ValueKind != JsonValueKind.True)
+            {
+                return false;
+            }
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
+        {
+            return false;
+        }
+
+        // Two cuts of the same film are not interchangeable: an absolute resume/seek position
+        // and existing default/forced subtitle choices must retain their meaning.
+        if (sourceTechnical.DurationSeconds is not { } sourceDuration || sourceDuration <= 0 ||
+            preparedTechnical.DurationSeconds is not { } preparedDuration || preparedDuration <= 0 ||
+            Math.Abs(sourceDuration - preparedDuration) > 0.25 ||
+            sourceTechnical.Video is not { } sourceVideo ||
+            preparedTechnical.Video is not { } preparedVideo ||
+            !string.Equals(sourceVideo.DynamicRange, preparedVideo.DynamicRange, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var sourceTracks = sourceTechnical.Streams.Where(track =>
+            track.Kind is MediaTrackKind.Audio or MediaTrackKind.Subtitle).ToArray();
+        var preparedTracks = preparedTechnical.Streams.Where(track =>
+            track.Kind is MediaTrackKind.Audio or MediaTrackKind.Subtitle).ToArray();
+        return sourceTracks.Length == preparedTracks.Length &&
+               sourceTracks.Zip(preparedTracks).All(pair =>
+                   pair.First.Kind == pair.Second.Kind &&
+                   pair.First.Index == pair.Second.Index &&
+                   string.Equals(pair.First.Language, pair.Second.Language, StringComparison.OrdinalIgnoreCase) &&
+                   pair.First.IsDefault == pair.Second.IsDefault &&
+                   pair.First.IsForced == pair.Second.IsForced &&
+                   pair.First.Channels == pair.Second.Channels);
+    }
+
+    private static bool IsFresh(CanonicalPlayableFile file, MediaInventoryEntry analysis) =>
+        analysis.Status == MediaAnalysisStatus.Succeeded &&
+        analysis.ProbeVersion == MediaInventoryService.CurrentProbeVersion &&
+        analysis.SourceSizeBytes == file.SizeBytes &&
+        analysis.SourceLastWriteTimeUtc == file.LastWriteTimeUtc &&
+        analysis.SourceFingerprint is { Length: 64 };
 }
