@@ -430,27 +430,23 @@ private fun TvSeekScenes(
     val rows = descriptor.rows?.takeIf { it > 0 } ?: return
     val intervalMs = descriptor.intervalMs?.takeIf { it > 0 } ?: return
     val count = descriptor.thumbnailCount?.takeIf { it > 0 } ?: return
-    if (descriptor.spriteUrls.isEmpty()) return
-
-    val sampleCount = minOf(count, 8)
-    val samples = remember(count, sampleCount) {
-        (0 until sampleCount).map { index ->
-            if (sampleCount == 1) 0 else index * (count - 1) / (sampleCount - 1)
-        }
-    }
+    val available = minOf(count, descriptor.spriteUrls.size * columns * rows)
+    val samples = remember(available) { tvSeekSceneIndices(available) }
+    if (samples.isEmpty()) return
     var selectedSample by remember { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-            if (selectedSample == null) stringResource(R.string.tv_player_scenes_down)
-            else stringResource(R.string.tv_player_scene_seek_to, formatTime(selectedSample!!.toLong() * intervalMs)),
-            color = Color.White.copy(alpha = 0.8f),
-            style = MaterialTheme.typography.labelMedium,
-        )
+        selectedSample?.let { sample ->
+            Text(
+                stringResource(R.string.tv_player_scene_seek_to, formatTime(sample.toLong() * intervalMs)),
+                color = Color.White.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(samples) { sample ->
                 val sheetSize = columns * rows
                 val spriteIndex = sample / sheetSize
-                val spriteUrl = descriptor.spriteUrls.getOrNull(spriteIndex)
+                val spriteUrl = descriptor.spriteUrls[spriteIndex]
                 val column = sample % columns
                 val row = (sample / columns) % rows
                 var focused by remember(sample) { mutableStateOf(false) }
@@ -469,8 +465,7 @@ private fun TvSeekScenes(
                             selectedSample = if (it) sample else if (selectedSample == sample) null else selectedSample
                         },
                 ) {
-                    if (spriteUrl != null) {
-                        TvArtwork(
+                    TvArtwork(
                             url = spriteUrl,
                             serverOrigin = serverOrigin,
                             requestHeaders = requestHeaders,
@@ -481,11 +476,18 @@ private fun TvSeekScenes(
                                 .requiredHeight((rows * 72).dp),
                             contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
                         )
-                    }
                 }
             }
         }
     }
+}
+
+internal fun tvSeekSceneIndices(availableCount: Int): List<Int> {
+    if (availableCount <= 0) return emptyList()
+    val shown = minOf(availableCount, 8)
+    return (0 until shown).map { index ->
+        if (shown == 1) 0 else index.toLong() * (availableCount - 1) / (shown - 1)
+    }.map(Long::toInt)
 }
 
 @Composable
