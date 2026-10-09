@@ -1,3 +1,5 @@
+using Jularr.Web.Data;
+using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Watchlist;
 
 namespace Jularr.Web.Features.Calendar;
@@ -28,62 +30,88 @@ public sealed class WatchlistReleaseEventSource(
             return [];
         }
 
-        var followed = (await watchlist.GetEffectiveAsync(query.ProfileId, cancellationToken))
-            .Where(item => item.Identity.ProviderKey == AniListReleaseNormalizer.Provider)
-            .Where(item => ToReleaseMediaType(item.Identity.MediaType) is { } type && query.Wants(type))
+        var visibleTypes = Enum.GetValues<WatchlistMediaType>()
+            .Where(type => ToReleaseMediaType(type) is { } mediaType && query.Wants(mediaType))
             .ToArray();
-        if (followed.Length == 0)
+        if (visibleTypes.Length == 0)
         {
             return [];
         }
 
-        var inLibrary = await library.ResolveAsync(followed.Select(item => item.Identity), cancellationToken);
-        var byExternalId = followed
-            .Where(item => !inLibrary.ContainsKey(item.Identity.Key))
-            .GroupBy(item => item.Identity.ExternalKey, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        if (byExternalId.Count == 0)
-        {
-            return [];
-        }
-
-        var releases = await cache.GetReleasesAsync(
-            AniListReleaseNormalizer.Provider,
-            query.Start.AddDays(-1),
-            query.End.AddDays(1),
-            query.IncludeUndated,
-            byExternalId.Keys.ToArray(),
-            cancellationToken);
-
+        var currentAccount = CurrentAccountContext.ForProfile(query.ProfileId);
+        var usedExternalIds = new HashSet<string>(StringComparer.Ordinal);
         var events = new List<ReleaseEvent>();
-        foreach (var release in releases)
+
+        // Read a bounded SQL page at a time, including franchise inheritance and ignores.
+        // Only release events, not every followed work, are kept in the result.
+        for (var pageNumber = 1; ; pageNumber++)
         {
-            if (!byExternalId.TryGetValue(release.ExternalId, out var item) ||
-                ToReleaseMediaType(item.Identity.MediaType) is not { } mediaType ||
-                !KindFits(mediaType, release.Kind) ||
-                !query.Includes(release.Date))
+            var page = await watchlist.GetEffectivePageAsync(
+                currentAccount,
+                new PageRequest(pageNumber, PageRequest.MaximumPageSize),
+                visibleTypes,
+                cancellationToken);
+
+            var followed = page.Items
+                .Where(item => item.Identity.ProviderKey == AniListReleaseNormalizer.Provider)
+                .ToArray();
+
+            if (followed.Length > 0)
             {
-                continue;
+                var inLibrary = await library.ResolveAsync(
+                    followed.Select(item => item.Identity), cancellationToken);
+                var byExternalId = followed
+                    .Where(item => !inLibrary.ContainsKey(item.Identity.Key))
+                    .GroupBy(item => item.Identity.ExternalKey, StringComparer.Ordinal)
+                    .Where(group => usedExternalIds.Add(group.Key))
+                    .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+                if (byExternalId.Count > 0)
+                {
+                    var releases = await cache.GetReleasesAsync(
+                        AniListReleaseNormalizer.Provider,
+                        query.Start.AddDays(-1),
+                        query.End.AddDays(1),
+                        query.IncludeUndated,
+                        byExternalId.Keys.ToArray(),
+                        cancellationToken);
+
+                    foreach (var release in releases)
+                    {
+                        if (!byExternalId.TryGetValue(release.ExternalId, out var item) ||
+                            ToReleaseMediaType(item.Identity.MediaType) is not { } mediaType ||
+                            !KindFits(mediaType, release.Kind) ||
+                            !query.Includes(release.Date))
+                        {
+                            continue;
+                        }
+
+                        var unit = release.Kind is ReleaseKind.Episode or ReleaseKind.SeasonPremiere or ReleaseKind.Chapter or ReleaseKind.Volume &&
+                                   release.UnitNumber > 0
+                            ? new ReleaseUnit(release.UnitNumber)
+                            : null;
+                        events.Add(new ReleaseEvent(
+                            ReleaseEvent.BuildId(mediaType, item.StableId, release.Kind, unit, release.Provider),
+                            mediaType,
+                            item.StableId,
+                            null,
+                            release.Kind,
+                            item.Title,
+                            unit,
+                            release.Date,
+                            release.Provider,
+                            release.ExternalId,
+                            ReleaseLocalStatus.Following,
+                            item.CoverImageUrl,
+                            DetailsUrl: item.Identity.WatchlistUrl));
+                    }
+                }
             }
 
-            var unit = release.Kind is ReleaseKind.Episode or ReleaseKind.SeasonPremiere or ReleaseKind.Chapter or ReleaseKind.Volume &&
-                       release.UnitNumber > 0
-                ? new ReleaseUnit(release.UnitNumber)
-                : null;
-            events.Add(new ReleaseEvent(
-                ReleaseEvent.BuildId(mediaType, item.StableId, release.Kind, unit, release.Provider),
-                mediaType,
-                item.StableId,
-                null,
-                release.Kind,
-                item.Title,
-                unit,
-                release.Date,
-                release.Provider,
-                release.ExternalId,
-                ReleaseLocalStatus.Following,
-                item.CoverImageUrl,
-                DetailsUrl: item.Identity.WatchlistUrl));
+            if (page.HasMore != true)
+            {
+                break;
+            }
         }
 
         return events;
