@@ -101,7 +101,7 @@ public sealed class PlexLibraryClient(HttpClient client)
         if (!root.TryGetProperty("Metadata", out var items) ||
             items.ValueKind != JsonValueKind.Array)
         {
-            return new PlexLibraryPage(total, []);
+            return new PlexLibraryPage(total, 0, []);
         }
 
         var entries = items.EnumerateArray()
@@ -110,7 +110,7 @@ public sealed class PlexLibraryClient(HttpClient client)
             .Cast<PlexLibraryItem>()
             .ToArray();
 
-        return new PlexLibraryPage(total, entries);
+        return new PlexLibraryPage(total, items.GetArrayLength(), entries);
     }
 
     private async Task<JsonDocument> GetJsonAsync(
@@ -240,4 +240,4 @@ public sealed record PlexLibraryItem(
     string Title,
     int? Year,
     IReadOnlyList<PlexExternalId> ExternalIds);
-public sealed record PlexLibraryPage(int TotalSize, IReadOnlyList<PlexLibraryItem> Items);
+public sealed record PlexLibraryPage(int TotalSize, int ReturnedSize, IReadOnlyList<PlexLibraryItem> Items);
