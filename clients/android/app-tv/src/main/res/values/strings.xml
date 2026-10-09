@@ -126,7 +126,6 @@
     <string name="tv_account_select_current">Current account</string>
     <string name="tv_account_select_other_account">Add account</string>
     <string name="tv_account_select_sign_out">Sign out</string>
-    <string name="tv_profile_select_add_account">Add Account</string>
 
     <!-- Shared actions / messages -->
     <string name="tv_action_back">Back</string>
@@ -192,10 +191,6 @@
     <string name="tv_watchlist_not_in_library">This title is not in your Jularr library yet.</string>
     <string name="tv_watchlist_unsupported_media">Opening this media type is not yet supported in the TV app.</string>
     <string name="tv_sidebar_settings">Settings</string>
-    <string name="tv_profile_select_description">Select an account to continue.</string>
-    <string name="tv_profile_select_current">Current account</string>
-    <string name="tv_profile_select_other_account">Other account</string>
-    <string name="tv_profile_select_sign_out">Sign out</string>
     <string name="tv_settings_description">Adjust your TV experience.</string>
     <string name="tv_settings_section_account">Server &amp; Account</string>
     <string name="tv_settings_section_info">Information</string>
