@@ -836,7 +836,9 @@ public static class ClientApiPlaybackPlanEndpoints
             request.Capabilities,
             kind,
             httpContext.Request.Headers.UserAgent.ToString(),
-            httpContext.Connection.RemoteIpAddress,
+            httpContext.Request.Headers.ContainsKey("X-Forwarded-For")
+                ? null
+                : httpContext.Connection.RemoteIpAddress,
             audio,
             subtitle,
             request.BurnInSubtitle,
