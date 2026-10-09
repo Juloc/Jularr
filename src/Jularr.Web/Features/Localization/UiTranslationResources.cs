@@ -174,6 +174,7 @@ public static class UiTranslationResources
         M("account.plex.mediaPending", "Finish authentication with Plex, then return here to connect media.", "Account", "Plex media", "Plex media PIN pending", "clear copy", 82, null, ["Plex","Jularr"]),
         M("library.external.plex.open", "Open in Plex", "Library", "External playback", "Secondary Plex media handoff button", "clear copy", 24, null, ["Plex"]),
         M("library.external.plex.unavailable", "This title is not currently available in your connected Plex libraries.", "Library", "External playback", "Secure Plex lookup did not find an accessible matching title", "clear copy", 83, null, ["Plex"]),
+        M("requests.detail.error.plexUnavailable", "Plex could not find this title in your accessible libraries.", "Requests", "External playback", "A user-triggered Plex request handoff failed safely.", "short notice", 115, null, ["Plex"]),
         M("account.plex.signIn", "Sign in with Plex", "Account", "Plex login", "Sign-in action on the login page", "clear concise copy", 48, null, ["Plex", "Jularr"]),
         M("account.plex.link", "Link Plex account", "Account", "Plex login", "Action to associate a verified Plex identity with the signed-in account", "clear concise copy", 48, null, ["Plex", "Jularr"]),
         M("account.plex.linked", "Plex login linked", "Account", "Plex login", "Title for a linked Plex account", "clear concise copy", 48, null, ["Plex", "Jularr"]),
