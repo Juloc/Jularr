@@ -108,6 +108,12 @@ public static partial class SubtitleParser
                 {
                     var fields = line["Style:".Length..].Split(',', styleFormat.Length, StringSplitOptions.TrimEntries);
                     var style = ReadFields(styleFormat, fields);
+                    if (section.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase) &&
+                        style.TryGetValue("Alignment", out var legacyValue) &&
+                        int.TryParse(legacyValue, CultureInfo.InvariantCulture, out var legacyAlignment))
+                    {
+                        style["Alignment"] = MapLegacyAlignment(legacyAlignment)?.ToString(CultureInfo.InvariantCulture) ?? "";
+                    }
                     if (style.TryGetValue("Name", out var name) && !string.IsNullOrWhiteSpace(name))
                     {
                         styles[name] = style;
@@ -152,10 +158,13 @@ public static partial class SubtitleParser
             fieldsByName.TryGetValue("Style", out var styleName);
             styles.TryGetValue(styleName ?? "", out var styleFields);
             var alignment = ReadInt(styleFields, "Alignment");
-            var overrideAlignment = Regex.Match(rawText, @"\\an([1-9])", RegexOptions.CultureInvariant);
-            if (overrideAlignment.Success)
+            var alignmentTags = Regex.Matches(rawText, @"\\an([1-9])|\\a(1[01]|[1-9])(?!\d)", RegexOptions.CultureInvariant);
+            if (alignmentTags.Count > 0)
             {
-                alignment = int.Parse(overrideAlignment.Groups[1].Value, CultureInfo.InvariantCulture);
+                var lastTag = alignmentTags[^1];
+                alignment = lastTag.Groups[1].Success
+                    ? int.Parse(lastTag.Groups[1].Value, CultureInfo.InvariantCulture)
+                    : MapLegacyAlignment(int.Parse(lastTag.Groups[2].Value, CultureInfo.InvariantCulture));
             }
             if (alignment is < 1 or > 9)
             {
@@ -226,6 +235,15 @@ public static partial class SubtitleParser
 
         return result;
     }
+
+    private static int? MapLegacyAlignment(int value) =>
+        value switch
+        {
+            1 or 2 or 3 => value,
+            5 or 6 or 7 => value + 2,
+            9 or 10 or 11 => value - 5,
+            _ => null
+        };
 
     private static Dictionary<string, string> ReadFields(string[] format, string[] values)
     {
