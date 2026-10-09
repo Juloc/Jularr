@@ -47,7 +47,7 @@ public sealed class SqlParamsPostgresTests
             .ToArray();
 
         await using var command = new NpgsqlCommand(sql, (NpgsqlConnection)db.Database.GetDbConnection());
-        command.Parameters.AddRange([.. parameters, .. new PageRequest(3, 25).ToSqlParameters()]);
+        command.Parameters.AddRange(parameters.Concat(new PageRequest(3, 25).ToSqlParameters()).ToArray());
 
         await using var reader = await command.ExecuteReaderAsync();
         Assert.IsTrue(await reader.ReadAsync());
