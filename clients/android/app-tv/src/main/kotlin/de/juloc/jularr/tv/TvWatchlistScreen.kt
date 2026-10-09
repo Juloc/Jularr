@@ -39,6 +39,9 @@ import de.juloc.jularr.core.model.WatchlistItem
 @Composable
 fun TvWatchlistScreen(
     entries: List<WatchlistItem>,
+    page: Int,
+    hasMore: Boolean,
+    onPageChange: (Int) -> Unit,
     supported: Boolean,
     serverOrigin: String,
     requestHeaders: Map<String, String>,
@@ -88,6 +91,23 @@ fun TvWatchlistScreen(
                                         }
                                     },
                                 )
+                            }
+                        }
+                    }
+                    if (page > 1 || hasMore) {
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                if (page > 1) {
+                                    Button(onClick = { onPageChange(page - 1) }) {
+                                        Text(stringResource(R.string.tv_watchlist_previous_page))
+                                    }
+                                }
+                                Text(stringResource(R.string.tv_watchlist_page, page))
+                                if (hasMore) {
+                                    Button(onClick = { onPageChange(page + 1) }) {
+                                        Text(stringResource(R.string.tv_watchlist_next_page))
+                                    }
+                                }
                             }
                         }
                     }
