@@ -1,18 +1,25 @@
 package de.juloc.jularr.tv
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,123 +28,131 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Button
 import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
-import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 
 @Composable
 fun TvProfileSelectScreen(
     sessions: List<TvSavedSession>,
+    activeSessionId: String?,
+    error: String?,
     onSelectSession: (TvSavedSession) -> Unit,
     onAddAccount: () -> Unit,
+    onSignOut: () -> Unit,
 ) {
-    val focusColor = rememberTvFocusColor()
-    val cardShape = RoundedCornerShape(16.dp)
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        colors = SurfaceDefaults.colors(
-            containerColor = Color(0xFF0B0D14),
-        ),
-    ) {
+    val context = LocalContext.current
+    val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
+    Surface(modifier = Modifier.fillMaxSize()) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(48.dp),
-            contentAlignment = Alignment.Center,
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.background),
+                ),
+            ),
         ) {
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(36.dp),
+                modifier = Modifier.fillMaxSize().padding(38.dp),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.tv_profile_select_title),
-                    style = TextStyle(
-                        color = Color.White,
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
+                    stringResource(R.string.tv_profile_select_title),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
                 )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(28.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Text(
+                    stringResource(R.string.tv_profile_select_description),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (error != null) {
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(174.dp),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    for (session in sessions) {
+                    items(sessions, key = { it.id }) { session ->
                         var focused by remember(session.id) { mutableStateOf(false) }
-
+                        val shape = RoundedCornerShape(16.dp)
+                        val current = activeSessionId == session.id
                         Column(
+                            modifier = Modifier
+                                .clip(shape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(
+                                    if (focused) 2.dp else 1.dp,
+                                    if (focused) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.27f),
+                                    shape,
+                                )
+                                .clickable { onSelectSession(session) }
+                                .reportFocus { focused = it }
+                                .padding(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .size(96.dp)
-                                    .clip(cardShape)
-                                    .background(Color(0xFF5B46F6))
-                                    .tvFocusIndication(focused, focusColor, cardShape)
-                                    .clickable { onSelectSession(session) }
-                                    .reportFocus { focused = it },
+                                modifier = Modifier.fillMaxWidth().height(155.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(accent.copy(alpha = 0.55f), accent.copy(alpha = 0.13f)),
+                                        ),
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Person,
-                                    contentDescription = session.userName,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(52.dp),
+                                Text(
+                                    session.userName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                    style = MaterialTheme.typography.displayLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
-
                             Text(
-                                text = session.userName,
-                                style = TextStyle(
-                                    color = Color.White,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Medium,
-                                ),
+                                session.userName,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.titleMedium,
                             )
+                            if (current) {
+                                Text(
+                                    stringResource(R.string.tv_profile_select_current),
+                                    color = accent,
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            } else {
+                                Spacer(Modifier.height(20.dp))
+                            }
                         }
                     }
-
-                    // Add Account Card
-                    var addFocused by remember { mutableStateOf(false) }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(96.dp)
-                                .clip(cardShape)
-                                .background(Color(0xFF1E2230))
-                                .tvFocusIndication(addFocused, focusColor, cardShape)
-                                .clickable(onClick = onAddAccount)
-                                .reportFocus { addFocused = it },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = stringResource(R.string.tv_profile_select_add_account),
-                                tint = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.size(48.dp),
-                            )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Button(onClick = onAddAccount) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Text(" " + stringResource(R.string.tv_profile_select_other_account))
+                    }
+                    Spacer(Modifier.size(18.dp))
+                    if (activeSessionId != null) {
+                        Button(onClick = onSignOut) {
+                            Icon(Icons.Filled.Logout, contentDescription = null)
+                            Text(" " + stringResource(R.string.tv_profile_select_sign_out))
                         }
-
-                        Text(
-                            text = stringResource(R.string.tv_profile_select_add_account),
-                            style = TextStyle(
-                                color = Color.White.copy(alpha = 0.8f),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                            ),
-                        )
                     }
                 }
             }
