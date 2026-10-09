@@ -103,14 +103,15 @@ fun TvAnimeScreen(
     val activeEpisode = resumeEpisode ?: firstPlayable
     val restoredEpisode = remember(anime.id) { focusMemory.recall("anime:${anime.id}") }
     val gridState = rememberLazyGridState()
+    var restoreConsumed by remember(anime.id) { mutableStateOf(false) }
     val restoreIndex = episodes.indexOfFirst { restoredEpisode == "episode:${it.id}" }
-    LaunchedEffect(anime.id, selectedSeason, restoreIndex) {
+    LaunchedEffect(anime.id) {
         if (restoreIndex >= 0) {
             gridState.scrollToItem(restoreIndex + 2)
         } else {
-            gridState.scrollToItem(0)
             withFrameNanos { }
             runCatching { heroFocus.requestFocus() }
+            restoreConsumed = true
         }
     }
 
@@ -396,10 +397,11 @@ fun TvAnimeScreen(
                         }
                     }
                 }
-                LaunchedEffect(restoredEpisode, episode.id, selectedSeason) {
-                    if (restoredEpisode == "episode:${episode.id}") {
+                LaunchedEffect(restoredEpisode, episode.id) {
+                    if (!restoreConsumed && restoredEpisode == "episode:${episode.id}") {
                         withFrameNanos { }
                         runCatching { focusRequester.requestFocus() }
+                        restoreConsumed = true
                     }
                 }
             }
