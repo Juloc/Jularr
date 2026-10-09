@@ -727,22 +727,38 @@ fun TvAppHost(
                     },
                 )
             } else {
-                TvAnimeScreen(
-                    anime = anime,
-                    serverOrigin = settings.origin.orEmpty(),
-                    requestHeaders = cookies.requestHeaders(),
-                    onEpisode = { episode ->
-                        launchSnapshot {
-                            controller.openEpisode(
-                                episodeId = episode.id,
-                                animeId = anime.id,
-                            )
-                        }
-                    },
-                    onBack = {
-                        controller.back()?.let { snapshot = it }
-                    },
-                )
+                Row(modifier = Modifier.fillMaxSize()) {
+                    TvSidebar(
+                        selected = TvRoute.Home,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                        },
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        TvAnimeScreen(
+                            anime = anime,
+                            continueWatching = snapshot.continueWatching,
+                            focusMemory = focusMemory,
+                            serverOrigin = settings.origin.orEmpty(),
+                            requestHeaders = cookies.requestHeaders(),
+                            onEpisode = { episode ->
+                                launchSnapshot {
+                                    controller.openEpisode(
+                                        episodeId = episode.id,
+                                        animeId = anime.id,
+                                    )
+                                }
+                            },
+                            onPlayEpisode = { episode ->
+                                launchSnapshot { controller.playEpisode(episode.id, anime.id) }
+                            },
+                            onBack = {
+                                controller.back()?.let { snapshot = it }
+                            },
+                        )
+                    }
+                }
             }
         }
 
