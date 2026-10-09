@@ -3,6 +3,9 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Books;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -206,6 +209,29 @@ public sealed class BookCoverArtworkTests
         var resolved = await fixture.Service.GetLocalCoverPathAsync(workId, null, CancellationToken.None);
         Assert.IsNotNull(resolved);
         StringAssert.StartsWith(resolved, fixture.CoversPath, "No NAS root configured: unchanged /data behavior.");
+    }
+
+    [TestMethod]
+    public async Task MissingCoverEndpointReturnsValidImageForFullAndThumbnailRequests()
+    {
+        await using var fixture = await Fixture.CreateAsync(withLibraryRoot: false);
+        var artworkCache = new BesideMediaArtworkCache(
+            new BesideMediaArtworkStore(fixture.Db),
+            Path.Combine(fixture.TempRoot, "thumbnails"));
+        var page = new Jularr.Web.Pages.Books.CoverModel(fixture.Service, artworkCache)
+        {
+            PageContext = new PageContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        foreach (var width in new int?[] { null, 320 })
+        {
+            var result = await page.OnGetAsync(Guid.NewGuid(), width, CancellationToken.None);
+            var image = result as ContentResult;
+            Assert.IsNotNull(image);
+            Assert.AreEqual("image/svg+xml", image.ContentType);
+            Assert.IsTrue(image.Content?.Contains("<svg", StringComparison.Ordinal) == true);
+            Assert.AreEqual("private,max-age=60", page.Response.Headers.CacheControl.ToString());
+        }
     }
 
     private static byte[] BuildEpubWithCover() =>
