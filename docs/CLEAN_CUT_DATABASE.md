@@ -270,3 +270,7 @@ Every hot-path query must have a documented expected cardinality, query inputs, 
 ### 8.6 Gate to next layer
 
 **Next design layer is the application/service contract** (Account/Profile auth, MediaCore/Game, Library/Inventory, Progress/Reader, Artwork/Detection, Acquisition/Operations, localized APIs). It can be planned using this approved model, while the physical SQL/EF baseline is finalized. **Do not start implementation as if the full physical schema were already built**; the exhaustive table/column DDL, FK target consistency and final measured index set are still cutover acceptance gates.
+
+### 8.7 SQL text and parameters — mandatory authoring rule
+
+The owner-approved SQL formatting, fully qualified multi-table column references and **absolute prohibition of SQL string interpolation** are documented with `SqlQueryRaw`, `ExecuteSqlRaw`, named `NpgsqlParameter` examples in [DATABASE_CONVENTIONS.md](DATABASE_CONVENTIONS.md), section "Mandatory SQL statement style". All clean-cut queries, data migrations, APIs, background services and future new features must comply. Never derive SQL syntax or identifier names from request input.
