@@ -290,6 +290,59 @@ public sealed class PlayerDesignTests
     }
 
     [TestMethod]
+    public void BasePlayerActions_KeepSeekingAndRepeatingWithoutLearning()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
+        var start = source.IndexOf("    root.addEventListener(design.actionEvent, event => {",
+            source.IndexOf("    const learningInspector =", StringComparison.Ordinal), StringComparison.Ordinal);
+        var end = source.IndexOf("    root.querySelectorAll(\"[data-player-controls]", start, StringComparison.Ordinal);
+        Assert.IsTrue(start >= 0 && end > start);
+
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(5)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-design.js")));
+        engine.Execute("""
+            var calls = [];
+            var listeners = {};
+            var root = {
+                addEventListener(type, listener) { listeners[type] = listener; },
+                emit(action, detail = {}) {
+                    listeners[window.JularrPlayerDesign.actionEvent]({ detail: { action, ...detail } });
+                }
+            };
+            var design = window.JularrPlayerDesign;
+            var learningInspector = null;
+            var currentLineStartMs = () => 1200;
+            var seekBase = () => 10;
+            var seekSeconds = { back: 10, forward: 30 };
+            var seekToAbsolute = (at) => calls.push(at);
+            """);
+        engine.Execute(source[start..end]);
+        Assert.AreEqual("1.2,0,40,7.5", engine.Evaluate("""
+            (() => {
+                root.emit("repeatCurrentCue");
+                root.emit("seekBack10");
+                root.emit("seekForward10");
+                root.emit("seekTo", { seconds: 7.5 });
+                root.emit("seekTo", { seconds: NaN });
+                return calls.join(",");
+            })()
+            """).ToString());
+        Assert.AreEqual("1.2,0,40,7.5,1.5", engine.Evaluate("""
+            (() => {
+                learningInspector = {
+                    isSheetOpen: () => true,
+                    selectedCueStartMs: () => 1500,
+                    close: () => {}
+                };
+                root.emit("repeatCurrentCue");
+                return calls.join(",");
+            })()
+            """).ToString());
+    }
+
+    [TestMethod]
     public void PlaybackSpeedsAndSeekIncrementsComeFromTheCanonicalTokens()
     {
         var root = FindRepositoryRoot();
