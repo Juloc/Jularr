@@ -75,6 +75,12 @@ public sealed class PlexServerSelectionTests
             var picker = new PlexServerSelectionService(
                 new PlexLibraryClient(http), store);
 
+            await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() =>
+                picker.ApproveAsync(
+                    new ClaimsPrincipal(new ClaimsIdentity()),
+                    Candidate(), HttpsPlexServer, ["1"],
+                    "jularr-client", CancellationToken.None));
+
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
                 picker.ApproveAsync(
                     Admin(), Candidate(), HttpsPlexServer, ["300"],
