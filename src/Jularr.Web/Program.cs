@@ -120,6 +120,11 @@ builder.Services.AddHttpClient<Jularr.Web.Features.ExternalPlayback.Plex.PlexRes
 {
     AllowAutoRedirect = false
 });
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.ExternalPlayback.Plex.PlexServerGrantStore(
+        services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+        services.GetRequiredService<TimeProvider>()));
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerSelectionService>();
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWorkMatcher>();
 
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
