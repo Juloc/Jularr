@@ -121,6 +121,10 @@
                         {
                             <div><dt>@ui["admin.usenet.indexer.capabilitiesRead"]</dt><dd>@capabilities.RefreshedAt.ToLocalTime().ToString("g")</dd></div>
                         }
+                        @if (verification is { Searches.Count: > 0 })
+                        {
+                            <div><dt>@ui["admin.usenet.indexer.functions"]</dt><dd>@string.Join(" · ", verification.Searches.Where(pair => pair.Key != IndexerSearchMode.Search).Select(pair => $"{ui["admin.usenet.indexer.function." + IndexerSetupMessages.Key(pair.Key)]}: {ui["admin.usenet.indexer.functionState." + IndexerSetupMessages.Key(pair.Value.State)]}").DefaultIfEmpty(ui["admin.usenet.indexer.functionsNone"]))</dd></div>
+                        }
                         <div><dt>@ui["admin.usenet.participation"]</dt><dd>@string.Join(" · ", new[] { card.Entry.Settings.AutomaticSearch ? ui["admin.usenet.participationAutomatic"] : null, card.Entry.Settings.InteractiveSearch ? ui["admin.usenet.participationManual"] : null }.OfType<string>().DefaultIfEmpty(ui["admin.usenet.participationNone"]))</dd></div>
                         @if (card.Health is not null)
                         {

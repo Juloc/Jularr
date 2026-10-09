@@ -41,6 +41,8 @@ public sealed class IndexerSetupService(IndexerStore store, IReadOnlyDictionary<
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(20);
     private static readonly IndexerSearchMode[] Functions = [IndexerSearchMode.Search, IndexerSearchMode.TvSearch, IndexerSearchMode.Movie, IndexerSearchMode.Book, IndexerSearchMode.Music];
     private const int MaximumCategoryProbes = 8;
+    private const string ProbeText = "test";
+    private static readonly string[] TextParameters = ["title", "artist", "album", "author"];
 
     private readonly TimeProvider time = clock ?? TimeProvider.System;
 
@@ -215,7 +217,11 @@ public sealed class IndexerSetupService(IndexerStore store, IReadOnlyDictionary<
         return new IndexerSetupResult(IndexerSetupOutcome.Checked, await store.GetAsync(id, cancellationToken), searches[IndexerSearchMode.Search].State, searches[IndexerSearchMode.Search].Message);
     }
 
-    /// <summary>One request per advertised search function (at most five), newest feed only; the first authentication, limit or availability problem ends the run.</summary>
+    /// <summary>
+    /// One request per advertised search function that can be asked safely (at most five); the first authentication, limit or availability problem ends
+    /// the run. A structured function is asked only with a text parameter it advertises: it needs no identifier, which Jularr never invents. A function
+    /// that advertises nothing but identifiers or numbers is left not checked, which says nothing against it.
+    /// </summary>
     private async Task<IReadOnlyDictionary<IndexerSearchMode, IndexerCheck>> ProbeFunctionsAsync(IIndexer indexer, IndexerEntry entry, IndexerCapabilities capabilities, CancellationToken cancellationToken)
     {
         var probe = entry with { Settings = entry.Settings with { Categories = [] } };
@@ -223,17 +229,18 @@ public sealed class IndexerSetupService(IndexerStore store, IReadOnlyDictionary<
         var stopped = false;
         foreach (var mode in Functions.Where(capabilities.Supports))
         {
-            if (stopped)
+            var query = ProbeQuery(mode, capabilities);
+            if (stopped || query is null)
             {
-                checks[mode] = new IndexerCheck(IndexerCheckState.NotChecked);
+                checks[mode] = new IndexerCheck(IndexerCheckState.NotChecked, query is null ? "It advertises no text parameter, and Jularr does not invent an identifier to test it." : null);
                 continue;
             }
 
-            var check = await ProbeAsync(indexer, probe, new IndexerSearchQuery(string.Empty, mode, null, 0, 1, Latest: true), cancellationToken);
+            var check = await ProbeAsync(indexer, probe, query, cancellationToken);
             if (mode == IndexerSearchMode.Search && check.State == IndexerCheckState.ParametersRejected)
             {
                 // A search that insists on text is still a working search: ask once with a word instead of the bare feed.
-                check = await ProbeAsync(indexer, probe, new IndexerSearchQuery("test", mode, null, 0, 1), cancellationToken);
+                check = await ProbeAsync(indexer, probe, new IndexerSearchQuery(ProbeText, mode, null, 0, 1), cancellationToken);
             }
 
             checks[mode] = check;
@@ -246,6 +253,24 @@ public sealed class IndexerSetupService(IndexerStore store, IReadOnlyDictionary<
         }
 
         return checks;
+    }
+
+    /// <summary>The smallest valid request for a function, or null when its advertised parameters cannot be filled without an identifier.</summary>
+    private static IndexerSearchQuery? ProbeQuery(IndexerSearchMode mode, IndexerCapabilities capabilities)
+    {
+        if (mode == IndexerSearchMode.Search)
+        {
+            return new IndexerSearchQuery(string.Empty, mode, null, 0, 1, Latest: true);
+        }
+
+        if (capabilities.Supports(mode, "q"))
+        {
+            return new IndexerSearchQuery(ProbeText, mode, null, 0, 1);
+        }
+
+        return TextParameters.FirstOrDefault(parameter => capabilities.Supports(mode, parameter)) is { } text
+            ? new IndexerSearchQuery(string.Empty, mode, [new(text, ProbeText)], 0, 1)
+            : null;
     }
 
     private static async Task<IndexerCheck> ProbeAsync(IIndexer indexer, IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken)

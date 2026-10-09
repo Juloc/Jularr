@@ -182,6 +182,75 @@ public sealed class NewznabSetupTests
         Assert.AreEqual(IndexerSetupOutcome.ConnectionFailed, explicitHttps.Outcome, "A scheme the owner typed is respected, not replaced.");
     }
 
+    private const string StructuredCaps = """
+        <caps>
+          <server title="Strict Indexer" />
+          <searching>
+            <search available="yes" supportedParams="q" />
+            <tv-search available="yes" supportedParams="q,tvdbid,season,ep" />
+            <movie-search available="yes" supportedParams="imdbid,tmdbid" />
+            <book-search available="yes" supportedParams="title,author" />
+            <audio-search available="yes" supportedParams="artist,album" />
+          </searching>
+          <categories><category id="2000" name="Movies" /></categories>
+        </caps>
+        """;
+
+    [TestMethod]
+    public async Task StructuredFunctionsAreProbedOnlyWithAnAdvertisedTextParameterAndNeverWithAnInventedIdentifier()
+    {
+        // Like a strict indexer: a structured request without any text parameter is refused, so a bare probe would have called a working function broken.
+        var server = new Server(uri => Server.Param(uri, "t") switch
+        {
+            "caps" => Xml(StructuredCaps),
+            "search" => Xml(Rss(Result)),
+            _ when Server.Param(uri, "q") is null && Server.Param(uri, "title") is null && Server.Param(uri, "artist") is null => Xml(Error(200, "Missing parameter")),
+            _ => Xml(Rss(Result))
+        });
+        using var world = new World(server);
+
+        var result = await world.Setup.AddAsync("https://indexer.example", ApiKey, null, CancellationToken.None);
+
+        var verification = result.Entry!.Settings.Verification!;
+        Assert.IsTrue(result.Entry.Enabled);
+        Assert.AreEqual(IndexerReadinessLevel.Ready, IndexerReadiness.Level(result.Entry));
+        Assert.IsTrue(verification.Answered(IndexerSearchMode.TvSearch));
+        Assert.IsTrue(verification.Answered(IndexerSearchMode.Book));
+        Assert.IsTrue(verification.Answered(IndexerSearchMode.Music));
+        var tv = server.Searches.Single(uri => Server.Param(uri, "t") == "tvsearch");
+        Assert.AreEqual("test", Server.Param(tv, "q"));
+        Assert.AreEqual("test", Server.Param(server.Searches.Single(uri => Server.Param(uri, "t") == "book"), "title"));
+        Assert.AreEqual("test", Server.Param(server.Searches.Single(uri => Server.Param(uri, "t") == "music"), "artist"));
+        Assert.IsTrue(server.Searches.All(uri => Server.Count(uri, "tvdbid") + Server.Count(uri, "imdbid") + Server.Count(uri, "tmdbid") + Server.Count(uri, "season") == 0), "No identifier or number is invented for a probe.");
+        Assert.IsEmpty(server.Searches.Where(uri => Server.Param(uri, "t") == "movie"), "A function that advertises only identifiers is not asked at all.");
+        Assert.AreEqual(IndexerCheckState.NotChecked, verification.Searches[IndexerSearchMode.Movie].State);
+        Assert.IsFalse(verification.Rejected(IndexerSearchMode.Movie), "Not checked is neither proven nor broken.");
+        StringAssert.Contains(verification.Searches[IndexerSearchMode.Movie].Message, "identifier");
+    }
+
+    [TestMethod]
+    public async Task AFunctionThatRefusesEvenItsMinimalValidProbeIsMarkedRejectedAndTheWorkingIndexerStaysOn()
+    {
+        var server = new Server(uri => Server.Param(uri, "t") switch
+        {
+            "caps" => Xml(StructuredCaps),
+            "tvsearch" => Xml(Error(200, "Missing parameter")),
+            _ => Xml(Rss(Result))
+        });
+        using var world = new World(server);
+
+        var result = await world.Setup.AddAsync("https://indexer.example", ApiKey, null, CancellationToken.None);
+
+        var verification = result.Entry!.Settings.Verification!;
+        Assert.IsTrue(verification.Rejected(IndexerSearchMode.TvSearch));
+        Assert.IsFalse(verification.Answered(IndexerSearchMode.TvSearch));
+        StringAssert.Contains(verification.Searches[IndexerSearchMode.TvSearch].Message, "t=tvsearch");
+        Assert.IsTrue(verification.Answered(IndexerSearchMode.Search));
+        Assert.IsTrue(result.Entry.Enabled, "A refused structured function never disables an indexer whose text search works.");
+        Assert.AreEqual(IndexerReadinessLevel.Ready, IndexerReadiness.Level(result.Entry));
+        Assert.AreEqual(IndexerCheckState.Valid, result.State);
+    }
+
     [TestMethod]
     public async Task AnIndexerAddedTwiceIsRecognizedByItsAddress()
     {
@@ -576,6 +645,8 @@ public sealed class NewznabSetupTests
         StringAssert.Contains(html, "Test search");
         StringAssert.Contains(html, "Refresh capabilities");
         StringAssert.Contains(html, "Not searched yet", "Categories were detected, but no search in them has run.");
+        StringAssert.Contains(html, "Structured searches");
+        StringAssert.Contains(html, "TV: works");
         Assert.IsFalse(html.Contains(ApiKey, StringComparison.Ordinal), "The key is never rendered.");
         var stored = (await host.Video.Get<IndexerStore>().LoadAllAsync()).Single(item => item.Settings.BaseUrl == "https://indexer.example");
         Assert.AreEqual("https://indexer.example", stored.Settings.BaseUrl);
