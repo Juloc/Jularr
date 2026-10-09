@@ -161,6 +161,10 @@ public sealed class CanonicalPlaybackPlanTests
         var sourceAnalysis = (await fixture.Inventory.GetManyAsync(
             [original.StoredFileId], CancellationToken.None))[original.StoredFileId];
         Assert.IsNotNull(sourceAnalysis.SourceFingerprint);
+        var externallySerialized = System.Text.Json.JsonSerializer.Serialize(sourceAnalysis);
+        Assert.IsFalse(externallySerialized.Contains("SourceFingerprint", StringComparison.Ordinal));
+        Assert.IsFalse(externallySerialized.Contains("SourceSizeBytes", StringComparison.Ordinal));
+        Assert.IsFalse(externallySerialized.Contains("SourceLastWriteTimeUtc", StringComparison.Ordinal));
         var version = await fixture.Db.WorkVersions.FindAsync(candidate.WorkVersionId);
         Assert.IsNotNull(version);
         version.Source = "jularr-prepared:v1";
