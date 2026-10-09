@@ -244,7 +244,7 @@ fun TvPlayerScreen(
             isPlaying
         ) {
             delay(design.controlsAutoHideMs)
-            apply(TvPlayerInteraction.autoHide(uiState, isPlaying, companionVisible))
+            apply(TvPlayerInteraction.autoHide(uiState, isPlaying, companionVisible, scrubbing))
         }
     }
 
