@@ -116,6 +116,9 @@ builder.Services.AddHttpClient<Jularr.Web.Features.Plex.PlexAuthClient>(client =
 {
     client.BaseAddress = new Uri("https://plex.tv/");
     client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false
 });
 
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
