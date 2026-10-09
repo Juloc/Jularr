@@ -350,6 +350,9 @@ public sealed class PlayerControlsTests
                 const burnInSubtitleTrackId = () => null;
                 const playbackSubtitle = { textContent: "", hidden: true };
                 const secondaryPlaybackSubtitle = { textContent: "", hidden: true };
+                const subtitleCanvas = null;
+                const primaryPositionedSubtitles = null;
+                const secondaryPositionedSubtitles = null;
                 const controlsData = { subtitleCuesUrlTemplate: "/cues/__track__" };
                 const text = {};
                 const showPlayerError = () => {};
@@ -379,6 +382,63 @@ public sealed class PlayerControlsTests
             """;
 
         Assert.AreEqual("Original|Translation|true|true|2", RunNode(script, player));
+    }
+
+    [TestMethod]
+    public void StyledSubtitlesKeepOverlappingSignAndDialogueIndependent()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    let playbackCues = [];");
+            const end = source.indexOf("    const updateRepeatAvailability = () => {", start);
+            if (start < 0 || end < 0) throw new Error("subtitle renderer missing");
+
+            const fake = () => ({
+                textContent: "", hidden: true, children: [], style: {},
+                replaceChildren(...children) { this.children = children; }
+            });
+            const document = { createElement: () => ({ style: {}, textContent: "" }) };
+            const design = { activeCuesAt: (items, ms) => items.filter(c => c.startMs <= ms && ms <= c.endMs) };
+            const cues = [];
+            const video = { videoWidth: 640, videoHeight: 360 };
+            const stage = { clientWidth: 640, clientHeight: 360 };
+            const subtitleCanvas = { style: {} };
+            const primaryPositionedSubtitles = fake();
+            const secondaryPositionedSubtitles = fake();
+            const playbackSubtitle = fake();
+            const secondaryPlaybackSubtitle = fake();
+            const subtitleSelect = { selectedOptions: [{ dataset: {} }] };
+            const burnInSubtitleTrackId = () => null;
+            const controlsData = {};
+            const showPlayerError = () => {};
+            const text = {};
+            const output = eval(source.slice(start, end) + `
+                (() => {
+                    playbackCues = [
+                        { startMs: 0, endMs: 2000, text: "駅前",
+                            presentation: { alignment: 7, xPercent: 25, yPercent: 10, layer: 3, color: "#0099FF" } },
+                        { startMs: 0, endMs: 2000, text: "Dialogue" }
+                    ];
+                    secondaryPlaybackCues = [{ startMs: 0, endMs: 2000, text: "Translation" }];
+                    renderPlaybackSubtitle(1500);
+                    return [
+                        primaryPositionedSubtitles.children.length,
+                        playbackSubtitle.children.length,
+                        secondaryPlaybackSubtitle.children.length,
+                        primaryPositionedSubtitles.children[0].style.left,
+                        primaryPositionedSubtitles.children[0].style.top,
+                        primaryPositionedSubtitles.children[0].style.color,
+                        playbackSubtitle.children[0].textContent,
+                        secondaryPlaybackSubtitle.children[0].textContent
+                    ].join("|");
+                })()
+            `);
+            console.log(output);
+            """;
+        Assert.AreEqual("1|1|1|25%|10%|#0099FF|Dialogue|Translation", RunNode(script, player));
     }
 
     [TestMethod]
