@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Admin;
@@ -38,6 +39,12 @@ public interface IHlsEncoderProcess : IDisposable
     string ErrorSummary { get; }
 
     void Kill();
+}
+
+/// <summary>Optional per-process pause/resume; unsupported platforms continue normal delivery.</summary>
+public interface IHlsPausableEncoderProcess
+{
+    bool TrySetPaused(bool paused);
 }
 
 public delegate IHlsEncoderProcess HlsProcessStarter(IReadOnlyList<string> arguments);
@@ -171,10 +178,6 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                 try
                 {
                     process = _startProcess(buildArguments(directory));
-                    if (onProgress is not null && process is IFfmpegProgressSource progressSource)
-                    {
-                        progressSource.ProgressReported += onProgress;
-                    }
                 }
                 catch
                 {
@@ -182,7 +185,14 @@ public sealed class HlsPlaybackSessionManager : IDisposable
                     throw;
                 }
 
-                entry = new Entry(sessionId, episodeId, profileId, directory, process, startSeconds, _time.GetUtcNow(), lease);
+                entry = new Entry(
+                    sessionId, episodeId, profileId, directory, process, startSeconds,
+                    _time.GetUtcNow(), lease, _time, PlaybackBufferPolicy.For(policy.BufferPreset, PlaybackDeliveryMode.Transcode), onProgress);
+                if (process is IFfmpegProgressSource progressSource)
+                {
+                    progressSource.ProgressReported += entry.RecordProgress;
+                }
+
                 _sessions[sessionId] = entry;
             }
         }
@@ -311,11 +321,12 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             return null;
         }
 
-        // Polling a playlist or init header does not prove the viewer is still consuming media.
-        // Only fetching a playable segment renews the encoder/cache lease.
+        // Polling a playlist or init header does not prove the viewer consumes media.
+        // Only a fetched segment renews the cache lifetime and advances producer demand.
         if (s_segmentPattern.IsMatch(fileName))
         {
-            entry.Touch(_time.GetUtcNow());
+            var requested = int.Parse(fileName.AsSpan(8, 5), NumberStyles.None, CultureInfo.InvariantCulture);
+            entry.SegmentRequested(requested, _time.GetUtcNow());
         }
 
         return new HlsPlaybackAsset(
@@ -806,11 +817,20 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         IHlsEncoderProcess process,
         double startSeconds,
         DateTimeOffset createdAtUtc,
-        IDisposable? lease)
+        IDisposable? lease,
+        TimeProvider time,
+        PlaybackBufferPolicy buffer,
+        Action<PlaybackTranscodeSample>? onProgress)
     {
+        private readonly object _pacingGate = new();
         private long _lastAccessTicks = createdAtUtc.UtcTicks;
-
         private IDisposable? _lease = lease;
+        private int _lastRequestedSegment = -1;
+        private double? _producedSeconds;
+        private bool _paused;
+        private bool _hasPaused;
+        private DateTimeOffset? _previousProgressAt;
+        private double? _previousOutputSeconds;
 
         public Guid SessionId { get; } = sessionId;
         public Guid EpisodeId { get; } = episodeId;
@@ -821,7 +841,62 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         public DateTimeOffset CreatedAtUtc { get; } = createdAtUtc;
         public DateTimeOffset LastAccessUtc => new(Interlocked.Read(ref _lastAccessTicks), TimeSpan.Zero);
 
+        public void SegmentRequested(int requested, DateTimeOffset now)
+        {
+            Interlocked.Exchange(ref _lastAccessTicks, now.UtcTicks);
+            lock (_pacingGate)
+            {
+                _lastRequestedSegment = Math.Max(_lastRequestedSegment, requested);
+                if (_paused && _producedSeconds is { } produced &&
+                    produced - (_lastRequestedSegment + 1) * SegmentSeconds <= buffer.LowWaterSeconds &&
+                    Process is IHlsPausableEncoderProcess pausable && pausable.TrySetPaused(false))
+                {
+                    _paused = false;
+                    // FFmpeg's cumulative speed includes time spent sleeping. Measure the
+                    // active output interval after a resume instead of treating this wait as an overloaded encoder.
+                    _previousProgressAt = null;
+                    _previousOutputSeconds = null;
+                }
+            }
+        }
+
         public void Touch(DateTimeOffset now) => Interlocked.Exchange(ref _lastAccessTicks, now.UtcTicks);
+
+        public void RecordProgress(PlaybackTranscodeSample sample)
+        {
+            var reading = sample;
+            lock (_pacingGate)
+            {
+                if (Process is IHlsPausableEncoderProcess pausable &&
+                    sample.OutputSeconds is { } produced && double.IsFinite(produced) && produced >= 0)
+                {
+                    var now = time.GetUtcNow();
+                    if (_hasPaused)
+                    {
+                        double? activeSpeed = _previousProgressAt is { } previousAt &&
+                                              _previousOutputSeconds is { } previousOutput &&
+                                              now > previousAt && produced >= previousOutput
+                            ? Math.Min(PlaybackTranscodeMeter.MaxSpeed, (produced - previousOutput) / (now - previousAt).TotalSeconds)
+                            : null;
+                        reading = sample with { Speed = activeSpeed };
+                    }
+
+                    _producedSeconds = produced;
+                    _previousProgressAt = now;
+                    _previousOutputSeconds = produced;
+                    if (!_paused && produced - (_lastRequestedSegment + 1) * SegmentSeconds >= buffer.TargetAheadSeconds &&
+                        pausable.TrySetPaused(true))
+                    {
+                        _paused = true;
+                        _hasPaused = true;
+                        _previousProgressAt = null;
+                        _previousOutputSeconds = null;
+                    }
+                }
+            }
+
+            onProgress?.Invoke(reading);
+        }
 
         /// <summary>Frees the encoder slot once; safe to call from any path that notices the encoder is gone.</summary>
         public void ReleaseLease() => Interlocked.Exchange(ref _lease, null)?.Dispose();
@@ -858,9 +933,10 @@ internal sealed class CacheUsage
 }
 
 /// <summary>The real ffmpeg of an HLS session. Arguments are passed as a list, never through a shell.</summary>
-public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
+public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IHlsPausableEncoderProcess, IFfmpegProgressSource
 {
     private readonly Process _process;
+    private readonly object _signalGate = new();
     private readonly FfmpegStderrReader _stderr = new();
 
     private FfmpegHlsProcess(Process process)
@@ -940,7 +1016,49 @@ public sealed class FfmpegHlsProcess : IHlsEncoderProcess, IFfmpegProgressSource
         return wrapper;
     }
 
-    public void Kill() => _process.Kill(entireProcessTree: true);
+    public bool TrySetPaused(bool paused)
+    {
+        // The Docker host is Linux. Other host platforms fall back to unpaced HLS.
+        // The lock serializes signals with Kill/Dispose, so a retired PID cannot be signalled by a late progress event.
+        if (!OperatingSystem.IsLinux() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+        {
+            return false;
+        }
 
-    public void Dispose() => _process.Dispose();
+        lock (_signalGate)
+        {
+            if (HasExited)
+            {
+                return false;
+            }
+
+            return UnixSignals.Kill(_process.Id, paused ? UnixSignals.Stop : UnixSignals.Continue) == 0;
+        }
+    }
+
+    public void Kill()
+    {
+        lock (_signalGate)
+        {
+            _process.Kill(entireProcessTree: true);
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_signalGate)
+        {
+            _process.Dispose();
+        }
+    }
+
+    private static class UnixSignals
+    {
+        public const int Stop = 19;
+        public const int Continue = 18;
+
+        [DllImport("libc", EntryPoint = "kill", SetLastError = true)]
+        public static extern int Kill(int pid, int signal);
+    }
 }
