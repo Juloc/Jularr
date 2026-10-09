@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Check
@@ -89,7 +91,9 @@ fun TvPlayerScreen(
     onPositionChanged: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onSeeked: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onPlaybackEnded: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
+    previousEpisodeTitle: String? = null,
     nextEpisodeTitle: String? = null,
+    onPreviousEpisode: () -> Unit = {},
     onNextEpisode: () -> Unit = {},
     onPlaybackFailure: (positionMs: Long) -> Unit = {},
     canOpenOnPhone: Boolean = false,
@@ -437,7 +441,9 @@ fun TvPlayerScreen(
                     episodeTitle = episodeTitle,
                     isPlaying = isPlaying,
                     playbackEnded = playbackEnded,
+                    previousEpisodeTitle = previousEpisodeTitle,
                     nextEpisodeTitle = nextEpisodeTitle,
+                    onPreviousEpisode = onPreviousEpisode,
                     onNextEpisode = onNextEpisode,
                     nextEpisodeFocus = nextEpisodeFocus,
                     canLearn = currentCue != null,
@@ -620,7 +626,9 @@ private fun PlayerControls(
     episodeTitle: String,
     isPlaying: Boolean,
     playbackEnded: Boolean,
+    previousEpisodeTitle: String?,
     nextEpisodeTitle: String?,
+    onPreviousEpisode: () -> Unit,
     onNextEpisode: () -> Unit,
     nextEpisodeFocus: FocusRequester,
     canLearn: Boolean,
@@ -719,6 +727,14 @@ private fun PlayerControls(
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
+            if (playbackEnded) {
+                Text(
+                    text = if (nextEpisodeTitle == null) "Episode finished" else "Episode finished · Next: $nextEpisodeTitle",
+                    color = design.subtitleText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -778,6 +794,27 @@ private fun PlayerControls(
             horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (previousEpisodeTitle != null) {
+                var previousFocused by remember { mutableStateOf(false) }
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (previousFocused) design.accent else design.sheet)
+                        .tvFocusIndication(previousFocused, focusColor, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onPreviousEpisode)
+                        .reportFocus { previousFocused = it },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipPrevious,
+                        contentDescription = "Previous: $previousEpisodeTitle",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            }
+
             var backTenFocused by remember { mutableStateOf(false) }
             Box(
                 modifier = Modifier
@@ -835,6 +872,28 @@ private fun PlayerControls(
                     modifier = Modifier.size(28.dp),
                 )
             }
+
+            if (nextEpisodeTitle != null) {
+                var nextFocused by remember { mutableStateOf(false) }
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (nextFocused) design.accent else design.sheet)
+                        .focusRequester(nextEpisodeFocus)
+                        .tvFocusIndication(nextFocused, focusColor, RoundedCornerShape(12.dp))
+                        .clickable(onClick = onNextEpisode)
+                        .reportFocus { nextFocused = it },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = "Next: $nextEpisodeTitle",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+            }
         }
 
 
@@ -854,15 +913,6 @@ private fun PlayerControls(
                     }
                     Button(onClick = onLearn) {
                         Text("Learn this line")
-                    }
-                }
-
-                if (playbackEnded && nextEpisodeTitle != null) {
-                    Button(
-                        onClick = onNextEpisode,
-                        modifier = Modifier.focusRequester(nextEpisodeFocus).widthIn(max = 280.dp),
-                    ) {
-                        Text("Next: $nextEpisodeTitle", maxLines = 1)
                     }
                 }
 
