@@ -19,11 +19,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,10 +94,18 @@ fun TvAnimeScreen(
         .firstOrNull { it.id == resume?.episodeId }
     val activeEpisode = resumeEpisode ?: firstPlayable
     val restoredEpisode = remember(anime.id) { focusMemory.recall("anime:${anime.id}") }
+    val gridState = rememberLazyGridState()
+    val restoreIndex = episodes.indexOfFirst { restoredEpisode == "episode:${it.id}" }
+    LaunchedEffect(anime.id, selectedSeason, restoreIndex) {
+        if (restoreIndex >= 0) {
+            gridState.scrollToItem(restoreIndex + 2)
+        }
+    }
 
     LazyVerticalGrid(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         columns = GridCells.Adaptive(minSize = 290.dp),
+        state = gridState,
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -330,8 +341,9 @@ fun TvAnimeScreen(
                         }
                     }
                 }
-                androidx.compose.runtime.LaunchedEffect(restoredEpisode, episode.id) {
+                LaunchedEffect(restoredEpisode, episode.id, selectedSeason) {
                     if (restoredEpisode == "episode:${episode.id}") {
+                        withFrameNanos { }
                         runCatching { focusRequester.requestFocus() }
                     }
                 }
