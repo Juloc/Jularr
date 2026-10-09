@@ -55,6 +55,12 @@
                  hidden></div>
             <div class="playback-subtitle-overlay"
                  data-playback-subtitle
+                 data-subtitle-layer="primary"
+                 aria-live="polite"
+                 hidden></div>
+            <div class="playback-subtitle-overlay"
+                 data-secondary-playback-subtitle
+                 data-subtitle-layer="secondary"
                  aria-live="polite"
                  hidden></div>
         </div>
@@ -279,6 +285,16 @@
                         </select>
                     </label>
                     <small class="player-setting-hint" data-setting-row="subtitles" data-subtitle-hint aria-live="polite"></small>
+                    <label class="player-setting" data-setting-row="secondarySubtitles">
+                        <span><partial name="_PlayerIcon" model="@("subtitles")" /> @ui["library.episode.subtitles"] · 2</span>
+                        <select data-secondary-subtitle-track>
+                            <option value="@PlayerControls.SubtitleOff" selected>@ui["library.episode.subtitlesOff"]</option>
+                            @foreach (var track in controls.SubtitleTracks.Where(track => track.IsSelectable && !track.IsImage))
+                            {
+                                <option value="@track.Id" data-language="@(track.Language ?? "")">@track.Label</option>
+                            }
+                        </select>
+                    </label>
 
                     @if (controls.AudioTracks.Count > 1)
                     {
