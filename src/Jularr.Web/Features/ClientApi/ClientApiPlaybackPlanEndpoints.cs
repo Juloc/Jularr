@@ -836,9 +836,7 @@ public static class ClientApiPlaybackPlanEndpoints
             request.Capabilities,
             kind,
             httpContext.Request.Headers.UserAgent.ToString(),
-            httpContext.Request.Headers.ContainsKey("X-Forwarded-For")
-                ? null
-                : httpContext.Connection.RemoteIpAddress,
+            httpContext.Connection.RemoteIpAddress,
             audio,
             subtitle,
             request.BurnInSubtitle,
@@ -848,7 +846,8 @@ public static class ClientApiPlaybackPlanEndpoints
             request.FailedModes is { Count: > 0 } failed ? failed.Take(4).ToHashSet() : null,
             request.ReplacesSessionId,
             request.Wake,
-            followedAdvice);
+            followedAdvice,
+            HasUntrustedForwardedFor: httpContext.Request.Headers.ContainsKey("X-Forwarded-For"));
         return true;
     }
 
