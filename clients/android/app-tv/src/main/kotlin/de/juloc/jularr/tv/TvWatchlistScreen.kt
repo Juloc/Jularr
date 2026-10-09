@@ -26,7 +26,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -164,7 +166,10 @@ fun TvWatchlistScreen(
         watchlistVisibleItems(entries, category, sort)
     }
     val progressByAnime = remember(continueWatching) {
-        continueWatching.distinctBy { it.animeId }.associateBy { it.animeId }
+        continueWatching
+            .filter { it.percent in 1..99 && it.resumePositionMs > 0 }
+            .groupBy { it.animeId }
+            .mapValues { (_, episodes) -> episodes.maxByOrNull { it.updatedAtUtc }!! }
     }
     val restoreIndex = visible.indexOfFirst { "item:${it.id}" == restoreId }
 
@@ -414,25 +419,32 @@ private fun TvWatchlistCard(
                 modifier = Modifier.fillMaxSize(),
             )
             if (status != null) {
-                Text(
-                    text = stringResource(status),
+                val (tint, symbol) = when (status) {
+                    R.string.tv_watchlist_status_airing -> Color(0xFF48E6AD) to Icons.Filled.RadioButtonChecked
+                    R.string.tv_watchlist_status_continuing -> Color(0xFF74B7FF) to Icons.Filled.Autorenew
+                    else -> Color(0xFFCED4E0) to Icons.Filled.Check
+                }
+                Row(
                     modifier = Modifier.align(Alignment.TopStart)
                         .padding(9.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(accent.copy(alpha = 0.93f))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                )
+                        .background(tint.copy(alpha = 0.13f))
+                        .border(1.dp, tint.copy(alpha = 0.77f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(symbol, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
+                    Text(
+                        text = stringResource(status),
+                        color = tint,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
             }
-            if (entry.availability == "in_library") {
-                Icon(
-                    Icons.Filled.CheckCircle,
-                    contentDescription = stringResource(R.string.tv_watchlist_in_library),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(9.dp).size(26.dp),
-                    tint = Color(0xFF1CCA8A),
-                )
-            }
+            // "in_library" means Jularr has matched the title; it does NOT prove that
+            // every episode is downloaded. Do not show the green complete icon until
+            // the server provides authoritative complete/partial/downloading state.
         }
 
         Column(
