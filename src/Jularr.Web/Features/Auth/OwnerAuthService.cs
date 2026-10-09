@@ -198,6 +198,12 @@ public sealed class OwnerAuthService(
         bool isEnabled,
         CancellationToken cancellationToken = default)
     {
+        if (!await HasOwnerAsync(cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "Jularr owner setup must be complete before external registration.");
+        }
+
         var (normalizedProvider, normalizedExternalId) = ValidateExternalIdentity(
             provider,
             externalAccountId);
