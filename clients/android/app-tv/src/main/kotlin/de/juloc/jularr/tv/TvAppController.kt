@@ -91,8 +91,6 @@ class TvAppController(
                     id = "${signedIn.account.userName.orEmpty()}@$origin",
                     serverOrigin = origin,
                     userName = signedIn.account.userName ?: userName,
-                    role = signedIn.account.role,
-                    profileId = signedIn.account.profileId,
                     cookies = cookiesStore?.getRawCookies() ?: emptyMap(),
                 ),
             )
@@ -145,8 +143,6 @@ class TvAppController(
                     id = "${signedIn.account.userName.orEmpty()}@$origin",
                     serverOrigin = origin,
                     userName = signedIn.account.userName ?: "TV User",
-                    role = signedIn.account.role,
-                    profileId = signedIn.account.profileId,
                     cookies = cookiesStore?.getRawCookies() ?: emptyMap(),
                 ),
             )
