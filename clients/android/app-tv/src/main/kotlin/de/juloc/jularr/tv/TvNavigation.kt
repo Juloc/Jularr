@@ -47,7 +47,7 @@ object TvNavigation {
         state.replace(TvRoute.Login)
 
     fun signedIn(state: TvNavigationState): TvNavigationState =
-        state.replace(TvRoute.Home)
+        TvNavigationState(TvRoute.Home)
 
     /** Sidebar navigation replaces peers rather than building an ever-growing stack. */
     fun openSidebarRoute(
