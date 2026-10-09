@@ -21,7 +21,7 @@
     @if (Model.Stage is { } stage)
     {
         <partial name="_VideoPlayerStage" model="stage" />
-        <partial name="_VideoPlayerScripts" />
+        <partial name="_VideoPlayerScripts" model="@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)" />
     }
     else if (Model.Unavailable is { } unavailable)
     {
