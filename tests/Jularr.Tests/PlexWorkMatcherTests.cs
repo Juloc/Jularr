@@ -76,6 +76,41 @@ public sealed class PlexWorkMatcherTests
         Assert.IsNull(id);
     }
 
+    [TestMethod]
+    public async Task PageMatching_ReturnsOneResultPerItemAndRejectsEpisodes()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var works = new WorkService(db);
+        var movie = await works.CreateWorkAsync(
+            WorkMediaType.Movie, "Dune", 2021, CancellationToken.None);
+        var show = await works.CreateWorkAsync(
+            WorkMediaType.Series, "The Series", null, CancellationToken.None);
+
+        await works.LinkExternalIdentityAsync(
+            movie.Id, WorkMediaType.Movie, "tmdb", "438631",
+            1.0, "confirmed", true, false,
+            MappingReviewState.Confirmed, CancellationToken.None);
+        await works.LinkExternalIdentityAsync(
+            show.Id, WorkMediaType.Series, "tvdb", "88",
+            1.0, "confirmed", true, false,
+            MappingReviewState.Confirmed, CancellationToken.None);
+
+        var matcher = new PlexWorkMatcher(db);
+        var result = await matcher.ResolvePageAsync(
+            [
+                Item("movie", new PlexExternalId("tmdb", "438631")),
+                Item("show", new PlexExternalId("tvdb", "88")),
+                Item("episode", new PlexExternalId("tvdb", "88")),
+                Item("movie", new PlexExternalId("tmdb", "missing"))
+            ], CancellationToken.None);
+
+        Assert.AreEqual(4, result.Count);
+        Assert.AreEqual(movie.Id, result[0].WorkId);
+        Assert.AreEqual(show.Id, result[1].WorkId);
+        Assert.IsNull(result[2].WorkId);
+        Assert.IsNull(result[3].WorkId);
+    }
+
     private static PlexLibraryItem Item(
         string type,
         params PlexExternalId[] identities) =>
