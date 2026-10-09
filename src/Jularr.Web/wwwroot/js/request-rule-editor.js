@@ -18,11 +18,13 @@
     const period = form.querySelector('[data-rre-period]');
     const approval = form.querySelector('[data-rre-approval]');
     const kinds = [...form.querySelectorAll('[data-rre-kind]')];
+    const qualityProfiles = [...form.querySelectorAll('[data-rre-quality]')];
     const fields = form.querySelector('[data-rre-fields]');
     const initialId = id.value;
     let base = profiles.find(profile => profile.id === (isUser ? assignment.value || editor.dataset.defaultId : id.value));
     let customFields = { ...originalFlags };
     let retainedKinds = (initialUser?.kinds || base?.values.kinds || []).filter(kind => !kinds.some(input => input.value === kind));
+    let retainedQuality = (initialUser?.qualityProfileIds || base?.values.qualityProfileIds || []).filter(id => !qualityProfiles.some(input => input.value === id));
     let dirty = false;
     let rendering = false;
     let leaving = false;
@@ -31,7 +33,8 @@
         limit: unlimited.checked ? null : Number(limit.value),
         periodDays: Number(period.value),
         approval: approval.value,
-        kinds: [...kinds.filter(input => input.checked).map(input => input.value), ...retainedKinds]
+        kinds: [...kinds.filter(input => input.checked).map(input => input.value), ...retainedKinds],
+        qualityProfileIds: [...qualityProfiles.filter(input => input.checked).map(input => input.value), ...retainedQuality]
     });
     const indicate = () => {
         if (!isUser) return;
@@ -51,6 +54,8 @@
         approval.dispatchEvent(new Event('change', { bubbles: true }));
         retainedKinds = values.kinds.filter(kind => !kinds.some(input => input.value === kind));
         for (const input of kinds) input.checked = values.kinds.includes(input.value);
+        retainedQuality = (values.qualityProfileIds || []).filter(id => !qualityProfiles.some(input => input.value === id));
+        for (const input of qualityProfiles) input.checked = (values.qualityProfileIds || []).includes(input.value);
         rendering = false;
         indicate();
     };
@@ -113,7 +118,7 @@
     });
     overrides?.addEventListener('change', () => {
         if (!overrides.checked) {
-            customFields = { limit: false, periodDays: false, approval: false, kinds: false };
+            customFields = { limit: false, periodDays: false, approval: false, kinds: false, qualityProfileIds: false };
             fillValues(base.values);
         }
         indicate();

@@ -45,6 +45,6 @@
     }
     @if (Model.SelectedUser is { } user)
     {
-        <partial name="/Pages/Admin/Requests/_RequestRuleEditor.cshtml" model="new RequestRuleEditorView(ui, Model.Editor, Model.RequestSettings, Model.EnabledKinds, Model.EditableKinds, user.UserName, user.Id)" />
+        <partial name="/Pages/Admin/Requests/_RequestRuleEditor.cshtml" model="new RequestRuleEditorView(ui, Model.Editor, Model.RequestSettings, Model.EnabledKinds, Model.EditableKinds, Model.QualityProfiles, user.UserName, user.Id)" />
     }
 </div>

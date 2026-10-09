@@ -87,7 +87,7 @@ public sealed partial class AcquisitionRequestService(
             throw new AcquisitionAccessDeniedException("You may not request this kind of media.");
         }
 
-        draft = await PrepareDraftAsync(draft, cancellationToken);
+        draft = PrepareDraft(draft, rule);
         if (await store.FindOpenAsync(draft.Kind, draft.Provider, draft.ExternalId, cancellationToken) is { } open)
         {
             return new AcquisitionSubmission(open, AlreadyRequested: true);
@@ -352,9 +352,7 @@ public sealed partial class AcquisitionRequestService(
     /// options (the other media types use the payload for their own state), and a requester without the
     /// media manager role may only pick a quality profile the owner opened to requests.
     /// </summary>
-    private async Task<AcquisitionRequestDraft> PrepareDraftAsync(
-        AcquisitionRequestDraft draft,
-        CancellationToken cancellationToken)
+    private AcquisitionRequestDraft PrepareDraft(AcquisitionRequestDraft draft, ResolvedRequestRule rule)
     {
         if (draft.Options is not { } chosen)
         {
@@ -369,8 +367,7 @@ public sealed partial class AcquisitionRequestService(
         var options = chosen.Validate();
         if (options.QualityProfileId is { } profileId && !account.Can(JularrPolicies.AdminMedia))
         {
-            var allowed = (await requestSettings.LoadAsync(cancellationToken)).RequesterQualityProfileIds;
-            if (!allowed.Contains(profileId, StringComparer.Ordinal))
+            if (!(rule.Values.QualityProfileIds ?? []).Contains(profileId, StringComparer.Ordinal))
             {
                 throw new AcquisitionAccessDeniedException("That quality profile is not open to requests.");
             }

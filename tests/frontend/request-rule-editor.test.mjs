@@ -25,8 +25,8 @@ class Target {
 
 function harness(isUser = true) {
     const profiles = [
-        { id: '1', name: 'Standard', description: '', values: { limit: 10, periodDays: 30, approval: 'Manual', kinds: ['book', 'movie'] } },
-        { id: '2', name: 'Trusted', description: '', values: { limit: 20, periodDays: 7, approval: 'Automatic', kinds: ['book'] } }
+        { id: '1', name: 'Standard', description: '', values: { limit: 10, periodDays: 30, approval: 'Manual', kinds: ['book', 'movie'], qualityProfileIds: ['1080p'] } },
+        { id: '2', name: 'Trusted', description: '', values: { limit: 20, periodDays: 7, approval: 'Automatic', kinds: ['book'], qualityProfileIds: ['4k'] } }
     ];
     const form = new Target();
     const fields = Object.fromEntries(['Id', 'RuleId', 'Name', 'Description', 'Revision'].map(name => [name, new Target()]));
@@ -34,7 +34,8 @@ function harness(isUser = true) {
     fields.Name.value = 'Standard';
     fields.Revision.value = '4';
     form.elements = { namedItem: name => fields[name.replace('Editor.', '')] };
-    const values = { limit: new Target(), periodDays: new Target(), approval: new Target(), kinds: ['book', 'movie'].map(kind => Object.assign(new Target(), { value: kind, checked: true })) };
+    const values = { limit: new Target(), periodDays: new Target(), approval: new Target(), kinds: ['book', 'movie'].map(kind => Object.assign(new Target(), { value: kind, checked: true })),
+        qualityProfileIds: ['1080p', '4k'].map(id => Object.assign(new Target(), { value: id, checked: id === '1080p' })) };
     values.limit.value = '10';
     values.periodDays.value = '30';
     values.approval.value = 'Manual';
@@ -48,7 +49,7 @@ function harness(isUser = true) {
     const controls = { '[data-rre-overrides]': overrides, '[data-rre-unlimited]': unlimited, '[data-rre-limit]': values.limit,
         '[data-rre-period]': values.periodDays, '[data-rre-approval]': values.approval, '[data-rre-fields]': fieldset, '[data-rre-name]': fields.Name };
     form.querySelector = selector => controls[selector] || null;
-    form.querySelectorAll = selector => selector === '[data-rre-kind]' ? values.kinds : selector === '[data-rre-inheritance]' ? indicators : [];
+    form.querySelectorAll = selector => selector === '[data-rre-kind]' ? values.kinds : selector === '[data-rre-quality]' ? values.qualityProfileIds : selector === '[data-rre-inheritance]' ? indicators : [];
     const select = new Target();
     select.dataset.rreSelect = '2';
     const add = new Target();
@@ -59,7 +60,7 @@ function harness(isUser = true) {
     editor.dataset = { user: String(isUser), defaultId: '1', revision: '4', based: 'Based on {name}', custom: 'Custom', inherited: 'Inherited', unsaved: 'Discard?' };
     editor.closest = () => workspace;
     const editorNodes = { '[data-rre-form]': form, '[data-rre-state]': state, '[data-rre-cancel]': cancel, '[data-rre-back]': back,
-        '[data-rre-profiles]': { textContent: JSON.stringify(profiles) }, '[data-rre-custom-fields]': { textContent: JSON.stringify({ limit: false, periodDays: false, approval: false, kinds: false }) },
+        '[data-rre-profiles]': { textContent: JSON.stringify(profiles) }, '[data-rre-custom-fields]': { textContent: JSON.stringify({ limit: false, periodDays: false, approval: false, kinds: false, qualityProfileIds: false }) },
         '[data-rre-new-values]': { textContent: JSON.stringify(profiles[0].values) },
         '[data-rre-initial]': isUser ? { textContent: JSON.stringify({ ruleId: '', ...profiles[0].values }) } : null };
     editor.querySelector = selector => editorNodes[selector] || null;
@@ -137,4 +138,21 @@ test('Rule switching protects unsaved edits and Add opens the same editor withou
     assert.equal(h.fields.Id.value, '');
     assert.equal(h.fields.Name.value, '');
     assert.equal(h.values.limit.value, '10');
+});
+
+test('Quality choices inherit on profile changes and a sparse override can explicitly clear them', () => {
+    const h = harness();
+    h.fields.RuleId.value = '2';
+    h.fields.RuleId.dispatchEvent({ type: 'change' });
+    assert.deepEqual(h.values.qualityProfileIds.map(input => input.checked), [false, true]);
+    h.overrides.checked = true;
+    h.overrides.dispatchEvent({ type: 'change' });
+    h.values.qualityProfileIds[1].checked = false;
+    h.input(h.values.qualityProfileIds[1]);
+    assert.equal(h.indicators[4].textContent, 'Custom');
+    h.fields.RuleId.value = '1';
+    h.fields.RuleId.dispatchEvent({ type: 'change' });
+    assert.deepEqual(h.values.qualityProfileIds.map(input => input.checked), [false, false]);
+    h.cancel.dispatchEvent({ type: 'click' });
+    assert.deepEqual(h.values.qualityProfileIds.map(input => input.checked), [true, false]);
 });

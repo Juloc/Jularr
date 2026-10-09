@@ -92,6 +92,10 @@ public static class UiTranslationResources
         M("requestRules.edit", "Edit", "Requests", "Button", "Select a real user's shared request editor.", "short action", 14),
         M("requestRules.searchUsers", "Search users", "Requests", "Placeholder", "Bounded search of actual account names.", "short label", 26),
         M("requestRules.noMatchingUsers", "No matching users.", "Requests", "Empty state", "The account search found no matching user, rather than an empty installation.", "clear empty state", 32),
+        M("requestRules.qualityHelp", "Choose which acquisition quality profiles requesters may select with this rule. "
+            + "No selection uses the normal acquisition defaults.", "Requests", "Help", "Per-rule requester choices, not separate quality definitions.", "clear explanation", 190),
+        M("requestRules.noQualityProfiles", "No acquisition quality profiles are configured.", "Requests", "Empty state", "The rule editor has no existing quality profiles to offer.", "clear empty state", 65),
+        M("requestRules.manageQualityProfiles", "Manage acquisition quality profiles", "Requests", "Link", "Opens the canonical quality-profile definitions from the shared rule editor.", "short action", 50),
         M("requestRules.userSettings", "User settings", "Requests", "Navigation", "Parent context of the same user request editor in Admin Users.", "short label", 26),
         M("requestRules.transition", "Existing auto-approval rules", "Requests", "Label", "Explicit upgrade transition for saved rules whose approval quotas differ from submission limits.", "short label", 44),
         M("requestRules.transitionHelp", "Existing approval rules still apply to users who inherit the default without overrides. They limit automatic approvals, not submissions. "

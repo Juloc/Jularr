@@ -6,7 +6,8 @@ public enum RequestApprovalMode
     Automatic
 }
 
-public sealed record RequestRuleValues(int? Limit, int PeriodDays, RequestApprovalMode Approval, IReadOnlyList<MediaAcquisitionKind> Kinds)
+// A missing quality list identifies older saved profiles; the settings owner upgrades it before validating to an explicit list.
+public sealed record RequestRuleValues(int? Limit, int PeriodDays, RequestApprovalMode Approval, IReadOnlyList<MediaAcquisitionKind> Kinds, IReadOnlyList<string>? QualityProfileIds = null)
 {
     public static RequestRuleValues Standard { get; } = new(10, 30, RequestApprovalMode.Manual, Enum.GetValues<MediaAcquisitionKind>());
 
@@ -17,7 +18,13 @@ public sealed record RequestRuleValues(int? Limit, int PeriodDays, RequestApprov
             throw new ArgumentException("Invalid request rule values.");
         }
 
-        return this with { Kinds = Kinds.Distinct().Order().ToArray() };
+        var qualityIds = QualityProfileIds ?? [];
+        if (qualityIds.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("Quality profile identities cannot be empty.");
+        }
+
+        return this with { Kinds = Kinds.Distinct().Order().ToArray(), QualityProfileIds = qualityIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray() };
     }
 }
 
@@ -36,18 +43,22 @@ public sealed record RequestRuleProfile(long Id, string Name, string? Descriptio
     }
 }
 
-// Limit's separate presence flag distinguishes an unlimited override from an inherited numeric limit.
-public sealed record RequestRuleOverrides(bool HasLimit = false, int? Limit = null, int? PeriodDays = null, RequestApprovalMode? Approval = null, IReadOnlyList<MediaAcquisitionKind>? Kinds = null)
+// Limit's presence flag distinguishes unlimited from inheritance. Null collections inherit; empty ones explicitly clear the choices.
+public sealed record RequestRuleOverrides(bool HasLimit = false, int? Limit = null, int? PeriodDays = null, RequestApprovalMode? Approval = null,
+    IReadOnlyList<MediaAcquisitionKind>? Kinds = null, IReadOnlyList<string>? QualityProfileIds = null)
 {
-    public bool HasChanges => HasLimit || PeriodDays is not null || Approval is not null || Kinds is not null;
+    public bool HasChanges => HasLimit || PeriodDays is not null || Approval is not null || Kinds is not null || QualityProfileIds is not null;
 
-    public RequestRuleValues Apply(RequestRuleValues inherited) => new(HasLimit ? Limit : inherited.Limit, PeriodDays ?? inherited.PeriodDays, Approval ?? inherited.Approval, Kinds ?? inherited.Kinds);
+    public RequestRuleValues Apply(RequestRuleValues inherited) => new(HasLimit ? Limit : inherited.Limit, PeriodDays ?? inherited.PeriodDays, Approval ?? inherited.Approval,
+        Kinds ?? inherited.Kinds, QualityProfileIds ?? inherited.QualityProfileIds);
 
     public static RequestRuleOverrides Difference(RequestRuleValues edited, RequestRuleValues inherited)
     {
         edited = edited.Validate();
+        inherited = inherited.Validate();
         return new(edited.Limit != inherited.Limit, edited.Limit == inherited.Limit ? null : edited.Limit, edited.PeriodDays == inherited.PeriodDays ? null : edited.PeriodDays,
-            edited.Approval == inherited.Approval ? null : edited.Approval, edited.Kinds.Order().SequenceEqual(inherited.Kinds.Order()) ? null : edited.Kinds);
+            edited.Approval == inherited.Approval ? null : edited.Approval, edited.Kinds.Order().SequenceEqual(inherited.Kinds.Order()) ? null : edited.Kinds,
+            edited.QualityProfileIds!.SequenceEqual(inherited.QualityProfileIds!, StringComparer.Ordinal) ? null : edited.QualityProfileIds);
     }
 }
 

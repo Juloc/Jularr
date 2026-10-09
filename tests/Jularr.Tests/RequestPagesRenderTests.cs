@@ -40,7 +40,7 @@ public sealed class RequestPagesRenderTests
         host.Db.OwnerAccounts.Add(new OwnerAccount { Id = "rule-user", UserName = "Rule User", NormalizedUserName = "RULE USER", PasswordHash = "test-only", Role = AccountRole.User });
         await host.Db.SaveChangesAsync();
         var settings = await host.Settings.LoadAsync();
-        settings = await host.Settings.SaveProfileAsync(null, "Trusted", "Reusable", new(20, 30, RequestApprovalMode.Automatic, [MediaAcquisitionKind.Book]), settings.Revision, CancellationToken.None);
+        settings = await host.Settings.SaveProfileAsync(null, "Trusted", "Reusable", new(20, 30, RequestApprovalMode.Automatic, [MediaAcquisitionKind.Book], [AnimeQualityProfiles.DefaultAnime1080pId]), settings.Revision, CancellationToken.None);
         var ruleId = settings.Rules.Profiles.Last().Id;
         var directoryPath = "/Admin/Requests/Users?userId=rule-user";
         var userPath = "/Admin/Users/rule-user/Settings/Requests";
@@ -48,6 +48,7 @@ public sealed class RequestPagesRenderTests
         var user = await host.GetHtmlAsync(userPath, true);
         StringAssert.Contains(directory, "data-rre-editor");
         StringAssert.Contains(user, "data-rre-editor");
+        StringAssert.Contains(user, "name=\"Editor.QualityProfileIds\"");
         StringAssert.Contains(user, "href=\"/Admin/User/rule-user\"");
         Assert.IsFalse(user.Contains("admin.requests.section.requests", StringComparison.Ordinal), "Deep-link labels and breadcrumbs must use existing localized navigation keys.");
         var sharedFields = "<fieldset class=\"rre-fields\"[\\s\\S]*?</fieldset>\\s*</fieldset>";
@@ -58,7 +59,8 @@ public sealed class RequestPagesRenderTests
         var values = new Dictionary<string, string>
         {
             ["userId"] = "rule-user", ["Editor.Name"] = "Trusted", ["Editor.RuleId"] = ruleId.ToString(), ["Editor.Revision"] = settings.Revision.ToString(),
-            ["Editor.UseOverrides"] = "true", ["Editor.Limit"] = "5", ["Editor.PeriodDays"] = "30", ["Editor.Approval"] = "Automatic", ["Editor.Kinds"] = "book"
+            ["Editor.UseOverrides"] = "true", ["Editor.Limit"] = "5", ["Editor.PeriodDays"] = "30", ["Editor.Approval"] = "Automatic", ["Editor.Kinds"] = "book",
+            ["Editor.QualityProfileIds"] = AnimeQualityProfiles.DefaultAnime1080pId
         };
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(directoryPath + "&handler=SaveUser", values));
         settings = await host.Settings.LoadAsync();
@@ -67,6 +69,7 @@ public sealed class RequestPagesRenderTests
         Assert.IsTrue(assignment.Overrides.HasLimit);
         Assert.IsNull(assignment.Overrides.Approval);
         Assert.IsNull(assignment.Overrides.Kinds);
+        Assert.IsNull(assignment.Overrides.QualityProfileIds, "Unchanged quality choices must keep inheriting the selected rule.");
         values["Editor.Revision"] = settings.Revision.ToString();
         values["Editor.PeriodDays"] = "0";
         Assert.AreEqual(HttpStatusCode.OK, await host.PostAsync(userPath + "?handler=SaveUser", values));
@@ -89,16 +92,21 @@ public sealed class RequestPagesRenderTests
         var values = new Dictionary<string, string>
         {
             ["Editor.Name"] = "Family", ["Editor.Revision"] = settings.Revision.ToString(), ["Editor.Unlimited"] = "true",
-            ["Editor.PeriodDays"] = "7", ["Editor.Approval"] = "Manual", ["Editor.Kinds"] = "book"
+            ["Editor.PeriodDays"] = "7", ["Editor.Approval"] = "Manual", ["Editor.Kinds"] = "book", ["Editor.QualityProfileIds"] = AnimeQualityProfiles.DefaultAnime1080pId
         };
         var path = "/Admin/Requests/Settings";
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(path + "?handler=SaveRule", values));
         settings = await host.Settings.LoadAsync();
         Assert.AreEqual(2, settings.Rules.Profiles.Count);
         Assert.IsNull(settings.Rules.Profiles.Last().Values.Limit);
+        Assert.AreEqual(AnimeQualityProfiles.DefaultAnime1080pId, settings.Rules.Profiles.Last().Values.QualityProfileIds!.Single());
         Assert.AreEqual(AnimeQualityProfiles.DefaultAnime1080pId, settings.RequesterQualityProfileIds.Single());
         Assert.AreEqual(HttpStatusCode.OK, await host.PostAsync(path + "?handler=SaveRule", values));
         Assert.AreEqual(2, (await host.Settings.LoadAsync()).Rules.Profiles.Count, "A stale form cannot create a second profile.");
+        values["Editor.Revision"] = settings.Revision.ToString();
+        values["Editor.QualityProfileIds"] = "unknown-quality";
+        Assert.AreEqual(HttpStatusCode.OK, await host.PostAsync(path + "?handler=SaveRule", values));
+        Assert.AreEqual(settings.Revision, (await host.Settings.LoadAsync()).Revision, "Unknown quality profiles must not mutate rules.");
         Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(path + "?handler=Delete", new Dictionary<string, string> { ["id"] = "1", ["revision"] = settings.Revision.ToString(), ["confirmReassignment"] = "true" }));
         Assert.AreEqual(1, (await host.Settings.LoadAsync()).Rules.DefaultId);
         Assert.AreEqual(HttpStatusCode.Forbidden, await host.PostAsync(path + "?handler=SaveRule", values, false));

@@ -32,11 +32,21 @@ public sealed class RequestRuleProfilesTests
             Assert.AreEqual(RequestApprovalMode.Manual, legacy.Rules.Profiles.Single().Values.Approval);
             Assert.AreEqual(1, legacy.Rules.Resolve("alice", legacy.AutoApprovalRules).TransitionRules.Count);
             Assert.AreEqual("existing-quality", legacy.RequesterQualityProfileIds.Single());
+            Assert.AreEqual("existing-quality", legacy.Rules.Resolve("alice", legacy.AutoApprovalRules).Values.QualityProfileIds!.Single());
             legacy = await store.FinishApprovalTransitionAsync(legacy.Revision, CancellationToken.None);
             Assert.AreEqual(0, legacy.Rules.Resolve("alice", legacy.AutoApprovalRules).TransitionRules.Count);
             Assert.AreEqual("trusted", legacy.AutoApprovalRules.Single().Id, "Retiring evaluation must preserve the saved legacy configuration.");
             var restored = await new AcquisitionRequestSettingsStore(directory.FullName).LoadAsync();
             Assert.IsFalse(restored.Rules.HasApprovalTransition);
+            await File.WriteAllTextAsync(file, """
+                {"requesterQualityProfileIds":["saved-quality"],"rules":{"defaultId":1,"nextId":3,"users":{},"profiles":[
+                  {"id":1,"name":"Standard","values":{"limit":10,"periodDays":30,"approval":0,"kinds":[0]}},
+                  {"id":2,"name":"Trusted","values":{"limit":20,"periodDays":7,"approval":0,"kinds":[0]}}
+                ]}}
+                """);
+            await store.InitializeAsync(CancellationToken.None);
+            var upgraded = await store.LoadAsync();
+            Assert.IsTrue(upgraded.Rules.Profiles.All(profile => profile.Values.QualityProfileIds!.SequenceEqual(["saved-quality"])), "Existing rule profiles must retain the previous global quality choices.");
             await File.WriteAllTextAsync(file, "null");
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() => store.LoadAsync());
         }
@@ -76,6 +86,11 @@ public sealed class RequestRuleProfilesTests
         Assert.ThrowsExactly<ArgumentException>(() => input.ReadValues([MediaAcquisitionKind.Book], []));
         Assert.ThrowsExactly<ArgumentException>(() => (RequestRuleValues.Standard with { PeriodDays = 0 }).Validate());
         Assert.ThrowsExactly<ArgumentException>(() => (RequestRuleValues.Standard with { Approval = (RequestApprovalMode)99 }).Validate());
+        input.Kinds = ["book"];
+        input.QualityProfileIds = ["unknown"];
+        Assert.ThrowsExactly<ArgumentException>(() => input.ReadValues([MediaAcquisitionKind.Book], [], ["known"]));
+        input.QualityProfileIds = ["known"];
+        CollectionAssert.AreEquivalent(new[] { "known", "retired" }, input.ReadValues([MediaAcquisitionKind.Book], [], ["known"], ["retired"]).QualityProfileIds!.ToArray());
     }
 
     [TestMethod]

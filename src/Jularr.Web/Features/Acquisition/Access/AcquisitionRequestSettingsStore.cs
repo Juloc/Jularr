@@ -62,11 +62,18 @@ public sealed partial class AcquisitionRequestSettingsStore
     public Task<AcquisitionRequestSettings> SetRuleEnabledAsync(string ruleId, bool enabled, CancellationToken cancellationToken = default) =>
         MutateAsync(settings => settings with { AutoApprovalRules = [.. settings.AutoApprovalRules.Select(rule => rule.Id == ruleId ? rule with { Enabled = enabled } : rule)] }, cancellationToken);
 
-    /// <summary>Replaces the quality profiles requesters may pick (none = requesters cannot pick one).</summary>
+    /// <summary>Compatibility for the former global setting: edits the default rule's quality choices. Evaluation uses only resolved rule values.</summary>
     public Task<AcquisitionRequestSettings> SetRequesterQualityProfilesAsync(IEnumerable<string> profileIds, CancellationToken cancellationToken = default)
     {
         string[] ids = [.. profileIds.Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id.Trim()).Distinct(StringComparer.Ordinal)];
-        return MutateAsync(settings => settings with { RequesterQualityProfileIds = ids }, cancellationToken);
+        return MutateAsync(settings => settings with
+        {
+            RequesterQualityProfileIds = ids,
+            Rules = settings.Rules with
+            {
+                Profiles = settings.Rules.Profiles.Select(profile => profile.Id == settings.Rules.DefaultId ? profile with { Values = profile.Values with { QualityProfileIds = ids } } : profile).ToArray()
+            }
+        }, cancellationToken);
     }
 
     private async Task<AcquisitionRequestSettings> MutateAsync(Func<AcquisitionRequestSettings, AcquisitionRequestSettings> mutate, CancellationToken cancellationToken)
@@ -136,13 +143,20 @@ public sealed partial class AcquisitionRequestSettingsStore
                     : null));
         }
 
+        var savedQualityIds = (persisted.RequesterQualityProfileIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
         // Legacy approval quotas cannot become submission limits without changing their meaning.
         var configuration = persisted.Rules ?? RequestRuleConfiguration.Standard with
         {
             Profiles = [new(1, "Standard", null, RequestRuleValues.Standard with { Limit = null })],
             HasApprovalTransition = rules.Count > 0
         };
-        return new AcquisitionRequestSettings(rules, [.. (persisted.RequesterQualityProfileIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id))])
+        configuration.Validate();
+        // Profiles written before per-rule quality choices inherit the saved global choices exactly once.
+        configuration = configuration with
+        {
+            Profiles = configuration.Profiles.Select(profile => profile with { Values = profile.Values with { QualityProfileIds = profile.Values.QualityProfileIds ?? savedQualityIds } }).ToArray()
+        };
+        return new AcquisitionRequestSettings(rules, savedQualityIds)
         {
             Rules = configuration.Validate(),
             Revision = persisted.Revision

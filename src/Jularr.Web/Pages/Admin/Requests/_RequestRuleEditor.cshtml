@@ -9,7 +9,7 @@
     var profileData = configuration.Profiles.Select(profile => new
     {
         id = profile.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), name = profile.Name, description = profile.Description,
-        values = new { limit = profile.Values.Limit, periodDays = profile.Values.PeriodDays, approval = profile.Values.Approval.ToString(), kinds = profile.Values.Kinds.Select(AcquisitionAccessNames.Kind) }
+        values = new { limit = profile.Values.Limit, periodDays = profile.Values.PeriodDays, approval = profile.Values.Approval.ToString(), kinds = profile.Values.Kinds.Select(AcquisitionAccessNames.Kind), qualityProfileIds = profile.Values.QualityProfileIds ?? [] }
     });
     var resolved = Model.UserId is { } userId ? configuration.Resolve(userId, Model.Settings.AutoApprovalRules) : null;
     var overrides = resolved?.Overrides;
@@ -61,15 +61,26 @@
                     }
                 </div>
             </fieldset>
+            <fieldset class="rre-media rre-field-wide"><legend>@ui["admin.requests.profilesHeading"] <span class="rre-inheritance" data-rre-inheritance="qualityProfileIds"></span></legend>
+                <p class="muted rre-quality-help">@ui["requestRules.qualityHelp"]</p>
+                @if (Model.QualityProfiles.Count == 0) { <p class="muted">@ui["requestRules.noQualityProfiles"]</p> }
+                <div class="rre-quality-options">
+                    @foreach (var profile in Model.QualityProfiles)
+                    {
+                        <label class="rre-check"><input type="checkbox" name="Editor.QualityProfileIds" value="@profile.Id" checked="@Model.Editor.QualityProfileIds.Contains(profile.Id)" data-rre-quality /> @profile.Name</label>
+                    }
+                </div>
+            </fieldset>
         </fieldset>
+        <a class="rre-quality-manage" href="/Admin/AcquisitionProfiles" data-rre-navigation>@ui["requestRules.manageQualityProfiles"]</a>
         <p class="muted rre-help">@ui["requestRules.help"]</p>
         <div class="rre-editor-actions"><button class="button button-primary" type="submit">@ui["common.save"]</button><button class="button button-secondary" type="button" data-rre-cancel>@ui["common.cancel"]</button></div>
     </form>
     <script type="application/json" data-rre-profiles>@Html.Raw(JsonSerializer.Serialize(profileData))</script>
-    <script type="application/json" data-rre-custom-fields>@Html.Raw(JsonSerializer.Serialize(new { limit = overrides?.HasLimit is true, periodDays = overrides?.PeriodDays is not null, approval = overrides?.Approval is not null, kinds = overrides?.Kinds is not null }))</script>
-    <script type="application/json" data-rre-new-values>@Html.Raw(JsonSerializer.Serialize(new { limit = RequestRuleValues.Standard.Limit, periodDays = RequestRuleValues.Standard.PeriodDays, approval = RequestRuleValues.Standard.Approval.ToString(), kinds = Model.EnabledKinds.Select(AcquisitionAccessNames.Kind) }))</script>
+    <script type="application/json" data-rre-custom-fields>@Html.Raw(JsonSerializer.Serialize(new { limit = overrides?.HasLimit is true, periodDays = overrides?.PeriodDays is not null, approval = overrides?.Approval is not null, kinds = overrides?.Kinds is not null, qualityProfileIds = overrides?.QualityProfileIds is not null }))</script>
+    <script type="application/json" data-rre-new-values>@Html.Raw(JsonSerializer.Serialize(new { limit = RequestRuleValues.Standard.Limit, periodDays = RequestRuleValues.Standard.PeriodDays, approval = RequestRuleValues.Standard.Approval.ToString(), kinds = Model.EnabledKinds.Select(AcquisitionAccessNames.Kind), qualityProfileIds = Array.Empty<string>() }))</script>
     @if (resolved is not null)
     {
-        <script type="application/json" data-rre-initial>@Html.Raw(JsonSerializer.Serialize(new { ruleId = resolved.InheritsDefault ? "" : resolved.Profile.Id.ToString(), limit = resolved.Values.Limit, periodDays = resolved.Values.PeriodDays, approval = resolved.Values.Approval.ToString(), kinds = resolved.Values.Kinds.Select(AcquisitionAccessNames.Kind) }))</script>
+        <script type="application/json" data-rre-initial>@Html.Raw(JsonSerializer.Serialize(new { ruleId = resolved.InheritsDefault ? "" : resolved.Profile.Id.ToString(), limit = resolved.Values.Limit, periodDays = resolved.Values.PeriodDays, approval = resolved.Values.Approval.ToString(), kinds = resolved.Values.Kinds.Select(AcquisitionAccessNames.Kind), qualityProfileIds = resolved.Values.QualityProfileIds ?? [] }))</script>
     }
 </section>

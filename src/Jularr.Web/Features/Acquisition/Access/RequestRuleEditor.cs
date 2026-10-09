@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.Acquisition.Quality;
 
 namespace Jularr.Web.Features.Acquisition.Access;
 
@@ -14,9 +15,10 @@ public sealed class RequestRuleEditorInput
     public int PeriodDays { get; set; } = 30;
     public RequestApprovalMode Approval { get; set; }
     public string[] Kinds { get; set; } = [];
+    public string[] QualityProfileIds { get; set; } = [];
     public bool UseOverrides { get; set; }
 
-    public RequestRuleValues ReadValues(IReadOnlyList<MediaAcquisitionKind> editableKinds, IReadOnlyList<MediaAcquisitionKind> preservedKinds)
+    public RequestRuleValues ReadValues(IReadOnlyList<MediaAcquisitionKind> editableKinds, IReadOnlyList<MediaAcquisitionKind> preservedKinds, IReadOnlyList<string>? qualityIds = null, IReadOnlyList<string>? retainedQualityIds = null)
     {
         var kinds = Kinds.Select(AcquisitionAccessNames.ParseKind).Distinct().ToArray();
         if (kinds.Any(kind => !editableKinds.Contains(kind)))
@@ -25,7 +27,13 @@ public sealed class RequestRuleEditorInput
         }
 
         var retained = preservedKinds.Where(kind => !editableKinds.Contains(kind));
-        return new RequestRuleValues(Unlimited ? null : Limit, PeriodDays, Approval, [.. kinds, .. retained]).Validate();
+        if (qualityIds is not null && QualityProfileIds.Any(id => !qualityIds.Contains(id, StringComparer.Ordinal)))
+        {
+            throw new ArgumentException("An unknown quality profile cannot be selected.");
+        }
+
+        var retainedQuality = (retainedQualityIds ?? []).Where(id => qualityIds is not null && !qualityIds.Contains(id, StringComparer.Ordinal));
+        return new RequestRuleValues(Unlimited ? null : Limit, PeriodDays, Approval, [.. kinds, .. retained], [.. QualityProfileIds, .. retainedQuality]).Validate();
     }
 
     public static RequestRuleEditorInput FromProfile(RequestRuleProfile profile, long revision, ResolvedRequestRule? user = null) => new()
@@ -40,9 +48,10 @@ public sealed class RequestRuleEditorInput
         PeriodDays = (user?.Values ?? profile.Values).PeriodDays,
         Approval = (user?.Values ?? profile.Values).Approval,
         Kinds = (user?.Values ?? profile.Values).Kinds.Select(AcquisitionAccessNames.Kind).ToArray(),
+        QualityProfileIds = [.. (user?.Values ?? profile.Values).QualityProfileIds ?? []],
         UseOverrides = user?.Overrides.HasChanges is true
     };
 }
 
 public sealed record RequestRuleEditorView(UiTextBundle Ui, RequestRuleEditorInput Editor, AcquisitionRequestSettings Settings,
-    IReadOnlyList<MediaAcquisitionKind> EnabledKinds, IReadOnlyList<MediaAcquisitionKind> EditableKinds, string? UserName = null, string? UserId = null);
+    IReadOnlyList<MediaAcquisitionKind> EnabledKinds, IReadOnlyList<MediaAcquisitionKind> EditableKinds, IReadOnlyList<QualityProfile> QualityProfiles, string? UserName = null, string? UserId = null);

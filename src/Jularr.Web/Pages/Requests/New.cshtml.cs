@@ -120,7 +120,9 @@ public sealed class NewModel(
             return BadRequest();
         }
 
-        var access = await requests.GetCapabilitiesAsync(MediaAcquisitionKind.Anime, cancellationToken);
+        var configuration = await settings.LoadAsync(cancellationToken);
+        var rule = configuration.Rules.Resolve(account.ProfileId, configuration.AutoApprovalRules);
+        var access = await requests.GetCapabilitiesAsync(MediaAcquisitionKind.Anime, cancellationToken, rule);
         if (!access.CanRequest)
         {
             return Forbid();
@@ -133,7 +135,7 @@ public sealed class NewModel(
         }
 
         var profiles = (await qualityProfiles.LoadAsync(cancellationToken)).Profiles;
-        var opened = (await settings.LoadAsync(cancellationToken)).RequesterQualityProfileIds;
+        var opened = rule.Values.QualityProfileIds ?? [];
         SelectableProfiles = account.Can(JularrPolicies.AdminMedia)
             ? profiles
             : [.. profiles.Where(profile => opened.Contains(profile.Id, StringComparer.Ordinal))];

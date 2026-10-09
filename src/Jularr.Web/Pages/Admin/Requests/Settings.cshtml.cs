@@ -43,7 +43,7 @@ public sealed class SettingsModel(AppDbContext db, AcquisitionRequestSettingsSto
             }
 
             var previous = RequestSettings.Rules.Profiles.SingleOrDefault(profile => profile.Id == Editor.Id);
-            var values = Editor.ReadValues(EnabledKinds, previous?.Values.Kinds ?? []);
+            var values = Editor.ReadValues(EnabledKinds, previous?.Values.Kinds ?? [], QualityProfiles.Select(profile => profile.Id).ToArray(), previous?.Values.QualityProfileIds);
             var saved = await settings.SaveProfileAsync(Editor.Id, Editor.Name, Editor.Description, values, Editor.Revision, cancellationToken);
             TempData["Status"] = Ui["requestRules.saved"];
             return RedirectToPage(new { id = Editor.Id ?? saved.Rules.NextId - 1 });

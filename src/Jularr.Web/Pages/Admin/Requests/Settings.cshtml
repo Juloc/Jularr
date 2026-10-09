@@ -25,32 +25,32 @@
             <article class="rre-profile @(rule.Id == Model.Editor.Id ? "is-selected" : "")" data-rre-profile="@rule.Id">
                 <button class="rre-profile-select" type="button" data-rre-select="@rule.Id" aria-pressed="@(rule.Id == Model.Editor.Id ? "true" : "false")">
                     <span class="rre-profile-name">@rule.Name @if (rule.Id == settings.Rules.DefaultId) { <span class="status-pill">@ui["requestRules.default"]</span> }</span>
-                    <span class="muted">@(rule.Values.Limit is { } limit ? ui.Format("requestRules.limitSummary", ("count", limit), ("days", rule.Values.PeriodDays)) : ui["requestRules.unlimited"])</span>
-                    <span class="muted">@ui[rule.Values.Approval == RequestApprovalMode.Manual ? "requestRules.manual" : "requestRules.automatic"]</span>
-                    <span class="rre-tags">@foreach (var kind in rule.Values.Kinds.Where(Model.EnabledKinds.Contains)) { <partial name="/Pages/Admin/_RequestTypeTag.cshtml" model="kind" /> }</span>
+                    <span class="rre-profile-summary"><span>@(rule.Values.Limit is { } limit ? ui.Format("requestRules.limitSummary", ("count", limit), ("days", rule.Values.PeriodDays)) : ui["requestRules.unlimited"])</span><span>@ui[rule.Values.Approval == RequestApprovalMode.Manual ? "requestRules.manual" : "requestRules.automatic"]</span></span>
+                    @{ var mediaSummary = string.Join(" · ", rule.Values.Kinds.Where(Model.EnabledKinds.Contains).Select(kind => ui["admin.requests.kind." + AcquisitionAccessNames.Kind(kind)])); }
+                    <span class="muted rre-profile-media" title="@mediaSummary">@mediaSummary</span>
                 </button>
                 <div class="rre-profile-actions">
                     <form method="post" asp-page-handler="Duplicate" data-rre-mutation>
                         <input type="hidden" name="id" value="@rule.Id" /><input type="hidden" name="revision" value="@settings.Revision" />
-                        <button class="button button-secondary" type="submit">@ui["requestRules.duplicate"]</button>
+                        <button class="button button-secondary" type="submit" aria-label="@ui["requestRules.duplicate"]" title="@ui["requestRules.duplicate"]"><partial name="_AppIcon" model="@("copy")" /></button>
                     </form>
                     @if (rule.Id != settings.Rules.DefaultId)
                     {
                         <form method="post" asp-page-handler="Default" data-rre-mutation>
                             <input type="hidden" name="id" value="@rule.Id" /><input type="hidden" name="revision" value="@settings.Revision" />
-                            <button class="button button-secondary" type="submit">@ui["requestRules.makeDefault"]</button>
+                            <button class="button button-secondary" type="submit" aria-label="@ui["requestRules.makeDefault"]" title="@ui["requestRules.makeDefault"]"><partial name="_AppIcon" model="@("default")" /></button>
                         </form>
                         <form method="post" asp-page-handler="Delete" data-rre-delete data-confirm="@ui["requestRules.deleteConfirm"]">
                             <input type="hidden" name="id" value="@rule.Id" /><input type="hidden" name="revision" value="@settings.Revision" />
                             <input type="hidden" name="confirmReassignment" value="true" />
-                            <button class="button button-secondary" type="submit">@ui["requestRules.delete"]</button>
+                            <button class="button button-secondary" type="submit" aria-label="@ui["requestRules.delete"]" title="@ui["requestRules.delete"]"><partial name="_AppIcon" model="@("delete")" /></button>
                         </form>
                     }
                 </div>
             </article>
         }
     </section>
-    <partial name="_RequestRuleEditor" model="new RequestRuleEditorView(ui, Model.Editor, settings, Model.EnabledKinds, Model.EnabledKinds)" />
+    <partial name="_RequestRuleEditor" model="new RequestRuleEditorView(ui, Model.Editor, settings, Model.EnabledKinds, Model.EnabledKinds, Model.QualityProfiles)" />
 </div>
 @if (settings.Rules.HasApprovalTransition)
 {
@@ -72,17 +72,4 @@
         </form>
     </section>
 }
-<details class="panel rre-quality">
-    <summary>@ui["admin.requests.profilesHeading"]</summary>
-    <p class="muted">@ui["admin.requests.profilesHelp"] <a href="/Admin/AcquisitionProfiles">@ui["admin.profiles.title"]</a></p>
-    <form method="post" asp-page-handler="Profiles" data-rre-mutation>
-        <div class="rre-tags">
-            @foreach (var profile in Model.QualityProfiles)
-            {
-                <label class="rre-check"><input type="checkbox" name="profiles" value="@profile.Id" checked="@settings.RequesterQualityProfileIds.Contains(profile.Id)" /> @profile.Name</label>
-            }
-        </div>
-        <button class="button button-secondary" type="submit">@ui["common.save"]</button>
-    </form>
-</details>
 <p class="muted rre-capabilities-link"><a href="/Admin/Capabilities/Manual">@ui["admin.requests.policiesHeading"]</a></p>
