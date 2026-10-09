@@ -108,6 +108,7 @@ fun TvPlayerScreen(
     var playbackEnded by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(player.player.currentPosition.coerceAtLeast(0)) }
     var durationMs by remember { mutableStateOf(player.player.duration.takeIf { it > 0 } ?: 0L) }
+    var bufferedPositionMs by remember { mutableStateOf(player.player.bufferedPosition.coerceAtLeast(0L)) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -121,6 +122,7 @@ fun TvPlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 positionMs = player.player.currentPosition.coerceAtLeast(0)
                 durationMs = player.player.duration.takeIf { it > 0 } ?: durationMs
+                bufferedPositionMs = player.player.bufferedPosition.coerceAtLeast(0L)
                 if (playbackState == Player.STATE_ENDED) {
                     playbackEnded = true
                     uiState = uiState.copy(controlsVisible = true)
@@ -154,6 +156,7 @@ fun TvPlayerScreen(
             val duration = player.player.duration.takeIf { it > 0 } ?: durationMs
             positionMs = current
             durationMs = duration
+            bufferedPositionMs = player.player.bufferedPosition.coerceAtLeast(0L)
             onPositionChanged(current, duration, true)
             delay(500)
         }
@@ -406,6 +409,7 @@ fun TvPlayerScreen(
                     canLearn = currentCue != null,
                     positionMs = positionMs,
                     durationMs = durationMs,
+                    bufferedPositionMs = bufferedPositionMs,
                     audioTracks = audioTracks,
                     subtitleTracks = subtitleTracks,
                     selectedAudioTrackId = selectedAudioTrackId,
@@ -548,6 +552,7 @@ private fun PlayerControls(
     canLearn: Boolean,
     positionMs: Long,
     durationMs: Long,
+    bufferedPositionMs: Long,
     audioTracks: List<MediaTrack>,
     subtitleTracks: List<MediaTrack>,
     selectedAudioTrackId: String?,
@@ -573,13 +578,17 @@ private fun PlayerControls(
     } else {
         0f
     }
+    val bufferedProgress = if (durationMs > 0) {
+        (bufferedPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     Box(
         modifier = modifier
             .background(design.overlay)
             .padding(horizontal = 48.dp, vertical = 32.dp),
     ) {
-        // Top Header: Back Arrow Button + Series/Episode Title + Time
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -592,7 +601,7 @@ private fun PlayerControls(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (backFocused) Color(0xFF5B46F6) else Color(0xFF1E2230))
+                    .background(if (backFocused) design.accent else design.sheet)
                     .tvFocusIndication(backFocused, focusColor, CircleShape)
                     .clickable(onClick = onExit)
                     .reportFocus { backFocused = it },
@@ -620,14 +629,12 @@ private fun PlayerControls(
             )
         }
 
-        // Bottom Controls: Scrub Bar + Track Selector Buttons
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Interactive Scrub Bar
             var scrubFocused by remember { mutableStateOf(false) }
             if (scrubPreviewMs != null) {
                 Text(
@@ -639,10 +646,10 @@ private fun PlayerControls(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(Color(0xFF1E2230))
-                    .tvFocusIndication(scrubFocused, focusColor, RoundedCornerShape(7.dp))
+                    .height(18.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(design.sheet)
+                    .tvFocusIndication(scrubFocused, focusColor, RoundedCornerShape(9.dp))
                     .clickable(enabled = durationMs > 0) {
                         if (scrubPreviewMs == null) {
                             scrubPreviewMs = positionMs.coerceIn(0L, durationMs)
@@ -679,6 +686,12 @@ private fun PlayerControls(
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
+                        .fillMaxWidth(bufferedProgress)
+                        .background(design.muted.copy(alpha = 0.55f)),
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
                         .fillMaxWidth(progress)
                         .background(design.accent),
                 )
@@ -694,7 +707,7 @@ private fun PlayerControls(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (backTenFocused) Color(0xFF5B46F6) else Color(0xFF1E2230))
+                    .background(if (backTenFocused) design.accent else design.sheet)
                     .tvFocusIndication(backTenFocused, focusColor, RoundedCornerShape(12.dp))
                     .clickable(onClick = onBackTen)
                     .reportFocus { backTenFocused = it },
@@ -713,7 +726,7 @@ private fun PlayerControls(
                 modifier = Modifier
                     .size(64.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(if (playFocused) Color(0xFF5B46F6) else Color(0xFF2E2270))
+                    .background(if (playFocused) design.accent else design.accent.copy(alpha = 0.55f))
                     .focusRequester(primaryControlFocus)
                     .tvFocusIndication(playFocused, focusColor, RoundedCornerShape(16.dp))
                     .clickable(onClick = onPlayPause)
@@ -733,7 +746,7 @@ private fun PlayerControls(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (forwardTenFocused) Color(0xFF5B46F6) else Color(0xFF1E2230))
+                    .background(if (forwardTenFocused) design.accent else design.sheet)
                     .tvFocusIndication(forwardTenFocused, focusColor, RoundedCornerShape(12.dp))
                     .clickable(onClick = onForwardTen)
                     .reportFocus { forwardTenFocused = it },
@@ -749,7 +762,6 @@ private fun PlayerControls(
         }
 
 
-            // Bottom Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
