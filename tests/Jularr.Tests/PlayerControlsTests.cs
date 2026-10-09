@@ -403,6 +403,8 @@ public sealed class PlayerControlsTests
             const document = { createElement: () => ({ style: {}, textContent: "" }) };
             const design = { activeCuesAt: (items, ms) => items.filter(c => c.startMs <= ms && ms <= c.endMs) };
             const cues = [];
+            let subtitleChoice = "stream:2";
+            let secondarySubtitleChoice = "stream:3";
             const video = { videoWidth: 640, videoHeight: 360 };
             const stage = { clientWidth: 640, clientHeight: 360 };
             const subtitleCanvas = { style: {} };
