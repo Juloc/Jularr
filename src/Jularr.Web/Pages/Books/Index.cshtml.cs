@@ -339,6 +339,9 @@ public sealed class IndexModel(
                     item.CoverImageUrl,
                     covers = item.CoverCandidates,
                     year = item.FirstPublishYear,
+                    language = item.Language,
+                    isbn = item.Isbns.FirstOrDefault(),
+                    identities = item.Identities,
                     summary = ShortSummary(item.Summary),
                     listState = ListStateKey(item.ExternalListState) is { } listStateKey
                         ? ui[listStateKey]
@@ -442,6 +445,10 @@ public sealed class IndexModel(
         string? title,
         string? author,
         string? coverImageUrl,
+        string? language,
+        string? isbn,
+        int? year,
+        string[]? identities,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(catalogId) || string.IsNullOrWhiteSpace(title))
@@ -459,7 +466,7 @@ public sealed class IndexModel(
                     title.Trim(),
                     string.IsNullOrWhiteSpace(author) ? null : author.Trim(),
                     string.IsNullOrWhiteSpace(coverImageUrl) ? null : coverImageUrl.Trim(),
-                    JsonSerializer.Serialize(new BookRequestPayload(catalogId.Trim(), title.Trim(), author?.Trim()), JsonSerializerOptions.Web)),
+                    JsonSerializer.Serialize(new BookRequestPayload(catalogId.Trim(), title.Trim(), author?.Trim(), string.IsNullOrWhiteSpace(language) ? null : language.Trim(), string.IsNullOrWhiteSpace(isbn) ? null : isbn.Trim(), year, [.. (identities ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id.Trim()).Distinct(StringComparer.Ordinal).Take(20)]), JsonSerializerOptions.Web)),
                 cancellationToken);
         }
         catch (AcquisitionAccessDeniedException)

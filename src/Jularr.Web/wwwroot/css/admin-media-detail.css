@@ -89,6 +89,8 @@ button.admmd-view-option { border: 0; background: transparent; font: inherit; fo
 .admmd-group + .admmd-group { border-top: 1px solid var(--border); }
 .admmd-group > summary,
 .admmd-ep > summary { list-style: none; cursor: pointer; }
+.admmd-edition-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; }
+.admmd-edition-row:hover, .admmd-ep[open] > .admmd-edition-row { background: var(--surface-2); }
 .admmd-group > summary::-webkit-details-marker,
 .admmd-ep > summary::-webkit-details-marker { display: none; }
 .admmd-group-head {

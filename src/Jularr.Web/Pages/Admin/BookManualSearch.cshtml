@@ -140,6 +140,7 @@
                     <table class="bms-table">
                         <thead>
                             <tr>
+                                <th>@ui["admin.manualSearch.col.rank"]</th>
                                 <th>Score</th>
                                 <th>Release</th>
                                 <th>Type</th>
@@ -157,6 +158,7 @@
                                 var candidateState = BookManualSearchModel.StatusName(result, candidate);
                                 var isSelected = Model.Selected?.Release.Identity == candidate.Release.Identity;
                                 <tr class="@(isSelected ? "is-selected" : "")">
+                                    <td class="bms-score">@(candidate.Rank?.ToString() ?? "–")</td>
                                     <td class="bms-score">@(candidate.Score == 0 ? "–" : candidate.Score.ToString())</td>
                                     <td><strong>@candidate.Release.Title</strong></td>
                                     <td><span class="bms-tag">@BookManualSearchModel.Format(candidate.Release)</span></td>
@@ -195,7 +197,7 @@
                             <article class="bms-card @(isSelected ? "is-selected" : "")">
                                 <div class="bms-card-head">
                                     <strong>@candidate.Release.Title</strong>
-                                    <span class="bms-score">@(candidate.Score == 0 ? "–" : candidate.Score.ToString())</span>
+                                    <span class="bms-score" title="@ui["admin.manualSearch.col.rank"]">#@(candidate.Rank?.ToString() ?? "–") · @(candidate.Score == 0 ? "–" : candidate.Score.ToString())</span>
                                 </div>
                                 <div class="bms-card-tags">
                                     <span class="bms-tag">@BookManualSearchModel.Format(candidate.Release)</span>
@@ -233,6 +235,7 @@
                             <span class="bms-tag bms-tag-@selectedState">@ui["admin.manualSearch.state." + selectedState]</span>
                         </div>
                         <dl class="bms-facts">
+                            <div><dt>@ui["admin.manualSearch.col.rank"]</dt><dd>@(chosen.Rank?.ToString() ?? "–")</dd></div>
                             <div><dt>Score</dt><dd>@chosen.Score</dd></div>
                             <div><dt>Size</dt><dd>@BookManualSearchModel.Size(chosen.Release.SizeBytes)</dd></div>
                             <div><dt>Age</dt><dd>@(chosen.Release.AgeDays is { } selectedAge ? $"{selectedAge} d" : "—")</dd></div>

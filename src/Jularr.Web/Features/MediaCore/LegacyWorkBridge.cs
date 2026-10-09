@@ -227,6 +227,15 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
                 isManualOverride: false, MappingReviewState.Confirmed, cancellationToken);
         }
 
+        // A Book's editions (and through them its files) belong to the same Work, so installed and upgrade state read from the Work see them.
+        if (mediaType == WorkMediaType.Book)
+        {
+            foreach (var edition in await db.Set<BookEdition>().AsNoTracking().Where(item => item.WorkId == novel.Id).OrderBy(item => item.CreatedAt).ToListAsync(cancellationToken))
+            {
+                await MirrorBookEditionAsync(workId, edition, cancellationToken);
+            }
+        }
+
         return workId;
     }
 
@@ -240,8 +249,12 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
             .FirstOrDefaultAsync(x => x.Id == edition.WorkId, cancellationToken)
             ?? throw new InvalidOperationException($"Book edition {edition.Id:D} has no parent novel work.");
 
-        var workId = await EnsureWorkForNovelAsync(novel, WorkMediaType.Book, cancellationToken);
+        // Bridging the novel mirrors every edition of the book, this one included.
+        return await EnsureWorkForNovelAsync(novel, WorkMediaType.Book, cancellationToken);
+    }
 
+    private async Task MirrorBookEditionAsync(long workId, BookEdition edition, CancellationToken cancellationToken)
+    {
         await structure.AddOrUpdateEditionAsync(
             workId,
             editionKey: edition.EditionKey,
@@ -263,8 +276,6 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
                 confidence: 1.0, evidence: "book ISBN-13", isPrimary: false,
                 isManualOverride: false, MappingReviewState.Confirmed, cancellationToken);
         }
-
-        return workId;
     }
 
     /// <summary>

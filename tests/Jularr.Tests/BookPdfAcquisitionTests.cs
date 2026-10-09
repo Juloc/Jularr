@@ -36,7 +36,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class BookPdfAcquisitionTests
 {
-    private const string CatalogId = "ol:OL17930368W";
+    internal const string CatalogId = "ol:OL17930368W";
 
     [TestMethod]
     public void PdfReaderReturnsPagesInOrderWithTheirTextAndTheInfoMetadata()
@@ -540,11 +540,11 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(0, await environment.Db.NovelWorks.CountAsync());
     }
 
-    private static AcquisitionCandidate Release(string title, string key) =>
+    internal static AcquisitionCandidate Release(string title, string key) =>
         new(title, "Test indexer", 1, "usenet", 4_000_000, null, null, DateTimeOffset.UtcNow, 1, 1, key, null,
             AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.example/{key}.nzb"), null);
 
-    private static SabnzbdHistorySnapshot History(string nzoId, string storagePath) =>
+    internal static SabnzbdHistorySnapshot History(string nzoId, string storagePath) =>
         new([new SabnzbdHistoryJob(nzoId, Path.GetFileName(storagePath), "Completed", "books", storagePath, null, SabnzbdFailureKind.None, DateTimeOffset.UtcNow)]);
 
     // Not a decodable picture; the reader only checks the JPEG start marker.
@@ -556,7 +556,7 @@ public sealed class BookPdfAcquisitionTests
     /// streams are Flate-compressed, the last page uses a two-byte font with a ToUnicode CMap,
     /// and page 1 draws a full-page JPEG.
     /// </summary>
-    private static byte[] TestPdf(
+    internal static byte[] TestPdf(
         int pages,
         string? title = null,
         string? author = null,
@@ -700,7 +700,7 @@ public sealed class BookPdfAcquisitionTests
     /// Prowlarr indexer and SABnzbd client, the real executor, request service and import.
     /// The free catalogs are unreachable, so every add goes to Usenet.
     /// </summary>
-    private sealed class BookAcquisitionEnvironment : IAsyncDisposable
+    internal sealed class BookAcquisitionEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider services;
 
@@ -719,7 +719,7 @@ public sealed class BookPdfAcquisitionTests
         public OperationStore Operations => new(Db);
         public string FilesPath => Books.FilesPath;
 
-        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null)
+        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null, HttpMessageHandler? newznab = null, bool canonicalWorks = false)
         {
             var root = Path.Combine(Path.GetTempPath(), $"jularr-books-{Guid.NewGuid():N}");
             var data = Directory.CreateDirectory(Path.Combine(root, "data"));
@@ -761,6 +761,18 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
             collection.AddSingleton<IHardLinkCreator, FileSystemHardLinkCreator>();
             collection.AddSingleton(new AcquisitionAccessStore(db));
+            if (canonicalWorks)
+            {
+                // The canonical Work every Book request binds to, as in Program.cs.
+                collection.AddSingleton<Jularr.Web.Features.MediaCore.WorkService>();
+                collection.AddSingleton<Jularr.Web.Features.MediaCore.WorkStructureService>();
+                collection.AddSingleton<Jularr.Web.Features.MediaCore.LegacyWorkBridge>();
+                collection.AddSingleton<RequestWorkBinder>();
+                collection.AddSingleton<RequestIntent>();
+                collection.AddSingleton<Jularr.Web.Features.Monitoring.MonitoringResolver>();
+                collection.AddSingleton<Jularr.Web.Features.Monitoring.MonitoringCommands>();
+            }
+
             collection.AddSingleton<FakeProwlarrClient>();
             collection.AddSingleton<IProwlarrClient>(provider => provider.GetRequiredService<FakeProwlarrClient>());
             collection.AddSingleton<FakeSabnzbdClient>();
@@ -772,8 +784,10 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(provider =>
                 new Dictionary<IndexerType, IIndexer>
                 {
-                    [IndexerType.Prowlarr] = new ProwlarrIndexer(provider.GetRequiredService<IProwlarrClient>())
+                    [IndexerType.Prowlarr] = new ProwlarrIndexer(provider.GetRequiredService<IProwlarrClient>()),
+                    [IndexerType.Newznab] = new NewznabIndexer(new HttpClient(newznab ?? new UnreachableHandler()), ProviderTestFactory.NewExecutor())
                 });
+            collection.AddSingleton<IndexerSetupService>();
             collection.AddSingleton<IDownloadClient>(provider => new SabnzbdDownloadClient(provider.GetRequiredService<ISabnzbdClient>()));
             collection.AddSingleton<IndexerSearchCoordinator>();
             collection.AddSingleton<IMediaAcquisitionRegistration, BookAcquisitionRegistration>();
@@ -795,6 +809,15 @@ public sealed class BookPdfAcquisitionTests
                 collection.AddSingleton(direct);
             }
 
+            if (canonicalWorks)
+            {
+                collection.AddSingleton<BookManualSearchService>();
+                // The upgrade part of the Wanted pass for Books, as Program.cs registers it.
+                collection.AddSingleton(provider => new WantedReconciler(db, TimeProvider.System, null, new UpgradeAssessors([new BookUpgradeAssessor(db, provider.GetRequiredService<QualityProfileStore>())])));
+                collection.AddSingleton<UpgradeScanState>();
+                collection.AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(MediaAcquisitionKind.Book, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<QualityProfileStore>(), provider.GetRequiredService<UpgradeScanState>()));
+            }
+
             collection.AddSingleton<IAcquisitionRequestExecutor, BookAcquisitionExecutor>();
             collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.Audiobooks.AudiobookAcquisitionRequestExecutor>();
             collection.AddSingleton<Jularr.Web.Features.Events.IJularrEventPublisher, RecordingEventPublisher>();
@@ -809,14 +832,17 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<CompletedDownloadImportService>();
             var services = collection.BuildServiceProvider();
 
-            await services.GetRequiredService<IndexerStore>().SaveAsync(new IndexerEntry(
-                Guid.NewGuid(),
-                "Prowlarr",
-                IndexerType.Prowlarr,
-                Enabled: true,
-                Priority: 1,
-                IndexerSettings.CreateDefault("http://prowlarr:9696", IndexerType.Prowlarr),
-                "prowlarr-key"));
+            if (newznab is null)
+            {
+                await services.GetRequiredService<IndexerStore>().SaveAsync(new IndexerEntry(
+                    Guid.NewGuid(),
+                    "Prowlarr",
+                    IndexerType.Prowlarr,
+                    Enabled: true,
+                    Priority: 1,
+                    IndexerSettings.CreateDefault("http://prowlarr:9696", IndexerType.Prowlarr),
+                    "prowlarr-key"));
+            }
             await services.GetRequiredService<DownloadClientStore>().SaveAsync(new DownloadClientEntry(
                 Guid.NewGuid(),
                 "SABnzbd",
@@ -848,6 +874,22 @@ public sealed class BookPdfAcquisitionTests
                         new BookRequestPayload(CatalogId, "Atomic Habits", "James Clear"),
                         System.Text.Json.JsonSerializerOptions.Web)),
                 CancellationToken.None);
+
+        public Task<AcquisitionRequest> AddAsync(string catalogId, string title, string author) =>
+            services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
+                new AcquisitionRequestDraft(
+                    MediaAcquisitionKind.Book,
+                    BookCatalogService.CatalogRequestProvider,
+                    catalogId,
+                    title,
+                    author,
+                    null,
+                    System.Text.Json.JsonSerializer.Serialize(new BookRequestPayload(catalogId, title, author), System.Text.Json.JsonSerializerOptions.Web)),
+                CancellationToken.None);
+
+        /// <summary>Adds the Newznab indexer the way the owner does: by address and API key, so caps and categories are detected.</summary>
+        public async Task<IndexerEntry> AddNewznabIndexerAsync(string key = "book-key") =>
+            (await services.GetRequiredService<IndexerSetupService>().AddAsync("https://indexer.example", key, null, CancellationToken.None)).Entry!;
 
         public Task<AcquisitionRequest> AddAudiobookAsync() =>
             services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(

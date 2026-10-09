@@ -47,6 +47,9 @@ public sealed class WorkMonitoringView(long workId, bool? workDecision, IReadOnl
 {
     public long WorkId { get; } = workId;
 
+    /// <summary>The Work's own decision; null while nobody decided, so a later default can still apply.</summary>
+    public bool? WorkDecision { get; } = workDecision;
+
     public bool IsRelationMonitored { get; } = relationMonitored;
 
     public bool IsWorkMonitored => workDecision ?? IsRelationMonitored;
