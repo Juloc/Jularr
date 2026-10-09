@@ -39,11 +39,11 @@ public sealed class PlexWorkMatcher(AppDbContext db)
 
         var candidates = page.Select(item =>
         {
-            var mediaType = item.Type switch
+            WorkMediaType[] mediaTypes = item.Type switch
             {
-                "movie" => WorkMediaType.Movie,
-                "show" => WorkMediaType.Series,
-                _ => (WorkMediaType?)null
+                "movie" => [WorkMediaType.Movie],
+                "show" => [WorkMediaType.Series, WorkMediaType.Anime],
+                _ => []
             };
 
             var pairs = item.ExternalIds.Count > 64
@@ -57,11 +57,10 @@ public sealed class PlexWorkMatcher(AppDbContext db)
                     .Distinct()
                     .ToArray();
 
-            return (Item: item, Type: mediaType, Pairs: pairs);
+            return (Item: item, Types: mediaTypes, Pairs: pairs);
         }).ToArray();
 
-        var allTypes = candidates.Where(x => x.Type is not null)
-            .Select(x => x.Type!.Value)
+        var allTypes = candidates.SelectMany(x => x.Types)
             .Distinct()
             .ToArray();
         var allPairs = candidates.SelectMany(x => x.Pairs).Distinct().ToArray();
@@ -95,16 +94,17 @@ public sealed class PlexWorkMatcher(AppDbContext db)
 
         return candidates.Select(candidate =>
         {
-            if (candidate.Type is not { } type || candidate.Pairs.Length == 0)
+            if (candidate.Types.Length == 0 || candidate.Pairs.Length == 0)
             {
                 return new PlexWorkMatch(candidate.Item, null);
             }
 
-            var ids = candidate.Pairs
-                .SelectMany(pair => index.TryGetValue(
-                    (type, pair.Provider, pair.ExternalId), out var workIds)
-                    ? workIds
-                    : [])
+            var ids = candidate.Types
+                .SelectMany(type => candidate.Pairs.SelectMany(pair =>
+                    index.TryGetValue(
+                        (type, pair.Provider, pair.ExternalId), out var workIds)
+                        ? workIds
+                        : []))
                 .Distinct()
                 .Take(2)
                 .ToArray();
