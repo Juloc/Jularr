@@ -82,6 +82,7 @@ public sealed record CanonicalPlayableFile(
 /// </summary>
 public sealed class CanonicalMediaStorageService(AppDbContext db)
 {
+    public const string PreparedVideoVersionSource = "jularr-prepared:v1";
     private const string LocalVideoVersionPrefix = "video-file:";
     private const string LocalAudioVersionPrefix = "audio-file:";
 
@@ -446,7 +447,8 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         long workId,
         Guid? workEpisodeId,
         CancellationToken cancellationToken) =>
-        (await ResolveVideoCandidatesAsync(workId, workEpisodeId, cancellationToken)).FirstOrDefault();
+        (await ResolveVideoCandidatesAsync(workId, workEpisodeId, cancellationToken))
+            .FirstOrDefault(candidate => candidate.VersionSource != PreparedVideoVersionSource);
 
     public async Task<IReadOnlyList<CanonicalPlayableFile>> ResolveVideoCandidatesAsync(
         long workId,
@@ -461,7 +463,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             where asset.Kind == MediaAssetKind.Video &&
                   asset.WorkId == workId &&
                   asset.WorkEpisodeId == workEpisodeId
-            orderby file.Path
+            orderby version.Source == PreparedVideoVersionSource, file.Path
             select new CanonicalPlayableFile(
                 asset.Id,
                 file.Id,
