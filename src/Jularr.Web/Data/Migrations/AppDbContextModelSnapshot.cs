@@ -3966,7 +3966,11 @@ namespace Jularr.Web.Data.Migrations
 
                     b.HasKey("ProfileId");
 
-                    b.ToTable("ProfilePlaybackPreferences");
+                    b.ToTable("ProfilePlaybackPreferences", t =>
+                        {
+                            t.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleSizePercent", "\"SubtitleSizePercent\" BETWEEN 75 AND 200");
+                            t.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleOffsetMs", "\"SubtitleOffsetMs\" BETWEEN -10000 AND 10000");
+                        });
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.ReaderPreferences.ReaderPreference", b =>
