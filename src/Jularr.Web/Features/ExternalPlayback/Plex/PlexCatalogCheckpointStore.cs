@@ -82,6 +82,31 @@ public sealed class PlexCatalogCheckpointStore(
                 path,
                 JsonSerializer.Serialize(started, JsonOptions),
                 cancellationToken);
+
+            // Do not accumulate stale snapshots after an administrator changes
+            // the server/library grant or deliberately restarts a scan.
+            if (previous is not null)
+            {
+                var oldPages = Path.Combine(
+                    Path.GetDirectoryName(path)!,
+                    previous.Generation.ToString("N"));
+                if (Directory.Exists(oldPages))
+                {
+                    try
+                    {
+                        Directory.Delete(oldPages, recursive: true);
+                    }
+                    catch (IOException)
+                    {
+                        // Cleanup is optional; new generation is already durable.
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        // Permissions are reported by the later periodic cleanup.
+                    }
+                }
+            }
+
             return started;
         }
         finally
@@ -182,8 +207,11 @@ public sealed class PlexCatalogCheckpointStore(
         {
             var latest = await ReadAsync(path, cancellationToken);
             if (latest?.Generation != checkpoint.Generation ||
+                latest.NextStart is { } next && start >= next ||
                 !File.Exists(pagePath))
             {
+                // Pages written before a failed checkpoint commit are not
+                // visible until that cursor has actually advanced.
                 return [];
             }
 
