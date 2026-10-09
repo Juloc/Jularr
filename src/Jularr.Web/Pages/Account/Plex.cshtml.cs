@@ -213,7 +213,10 @@ public sealed class PlexModel(
                 return Page();
             }
 
-            await ConsumeAttemptAsync(attempt, cancellationToken);
+            if (!await ConsumeAttemptAsync(attempt, cancellationToken))
+            {
+                return BadRequest();
+            }
             if (attempt.StartedAccountId is null)
             {
                 await SignInAsync(linkedAccount);
@@ -239,7 +242,10 @@ public sealed class PlexModel(
                 "plex",
                 attempt.VerifiedPlexAccountId,
                 cancellationToken);
-            await ConsumeAttemptAsync(attempt, cancellationToken);
+            if (!await ConsumeAttemptAsync(attempt, cancellationToken))
+            {
+                return BadRequest();
+            }
             return LocalRedirect(attempt.ReturnPath);
         }
 
