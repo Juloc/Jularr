@@ -25,3 +25,28 @@
 .admman-units .admmd-group-monitor form {
     margin: 0;
 }
+
+.admman-units > * {
+    min-width: 0;
+}
+
+/* The row carries up to three controls (search, reset, switch): on a narrow container they sit beside the name and state, never wider than the card. */
+@container admmd (max-width: 900px) {
+    .admman-units .admmd-ep-row {
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        grid-template-areas:
+            "number title monitor"
+            ". status monitor";
+    }
+
+    .admman-units .admmd-ep-monitor {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        align-self: center;
+    }
+
+    .admman-units .admmd-group-monitor {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
