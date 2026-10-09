@@ -1,5 +1,7 @@
 # Universal media core
 
+> **Clean-cut target:** [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md) supersedes older target-state references to Games outside Works, legacy bridges/backfills, media-type-specific progress and inconsistent FK naming. This file still describes relevant **current runtime** behavior until the separately approved cutover.
+
 Canonical design and decision record for Jularr's provider-independent media core
 (issue #592, the foundational child of epic #556 §1). It also absorbs the deferred
 identity issue #432 (canonical identity) and metadata-provenance issue #435.
