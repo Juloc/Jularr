@@ -455,7 +455,7 @@ public sealed class PlayerControlsTests
             const end = source.indexOf("    const renderPlaybackSubtitle = timeMs => {", start);
             if (start < 0 || end < 0) throw new Error("collision policy missing");
 
-            const box = (left, top, right, bottom) => ({ left, top, right, bottom });
+            const box = (left, top, right, bottom) => ({ left, top, right, bottom, height: bottom - top });
             const sourceSign = {
                 style: { transform: "translate(0%, 0%)" },
                 getBoundingClientRect: () => box(80, 60, 240, 102)
