@@ -79,6 +79,9 @@
     const autoplayDelaySeconds = 10;
 
     const playbackSubtitle = root.querySelector("[data-playback-subtitle]");
+    const subtitleCanvas = root.querySelector("[data-playback-subtitle-canvas]");
+    const primaryPositionedSubtitles = root.querySelector("[data-primary-positioned-subtitles]");
+    const secondaryPositionedSubtitles = root.querySelector("[data-secondary-positioned-subtitles]");
     const secondaryPlaybackSubtitle = root.querySelector("[data-secondary-playback-subtitle]");
     const speedSelect = root.querySelector("[data-playback-speed]");
     const audioSelect = root.querySelector("[data-audio-track]");
@@ -1376,22 +1379,86 @@
             ? secondarySubtitleChoice
             : null;
 
+    const sizeSubtitleCanvas = () => {
+        if (!subtitleCanvas || !stage.clientWidth || !stage.clientHeight ||
+            !video.videoWidth || !video.videoHeight) {
+            return;
+        }
+
+        const width = stage.clientWidth;
+        const height = stage.clientHeight;
+        const scale = Math.min(width / video.videoWidth, height / video.videoHeight);
+        const imageWidth = video.videoWidth * scale;
+        const imageHeight = video.videoHeight * scale;
+        subtitleCanvas.style.left = `${(width - imageWidth) / 2}px`;
+        subtitleCanvas.style.top = `${(height - imageHeight) / 2}px`;
+        subtitleCanvas.style.width = `${imageWidth}px`;
+        subtitleCanvas.style.height = `${imageHeight}px`;
+    };
+
     const renderPlaybackSubtitle = timeMs => {
-        const render = (element, trackId, trackCues, cachedKey) => {
+        sizeSubtitleCanvas();
+        const render = (element, positionedLayer, trackId, trackCues, cachedKey) => {
             if (!element) return cachedKey;
-            const lines = trackId
-                ? design.activeCuesAt(trackCues, timeMs).map(cue => cue.text)
+
+            const active = trackId
+                ? design.activeCuesAt(trackCues, timeMs)
                 : [];
-            const key = lines.join("\n");
-            if (key !== cachedKey) {
-                element.textContent = key;
-                element.hidden = key.length === 0;
+            const key = active.map(cue => `${cue.startMs}:${cue.endMs}:${cue.text}`).join("\u001f");
+            if (key === cachedKey) return key;
+
+            if (typeof element.replaceChildren !== "function") {
+                element.textContent = active.map(cue => cue.text).join("\n");
+                element.hidden = active.length === 0;
+                return key;
+            }
+
+            const regular = [];
+            const positioned = [];
+            for (const cue of active.slice().sort((a, b) =>
+                (a.presentation?.layer || 0) - (b.presentation?.layer || 0))) {
+                const layout = cue.presentation || {};
+                const alignment = Number.isInteger(layout.alignment) && layout.alignment >= 1 &&
+                    layout.alignment <= 9 ? layout.alignment : 2;
+                const explicitPosition = Number.isFinite(layout.xPercent) && Number.isFinite(layout.yPercent);
+                const isPositioned = positionedLayer && (explicitPosition || alignment >= 4);
+                const line = document.createElement("div");
+                line.className = isPositioned ? "player-subtitle-positioned-cue" : "playback-subtitle-cue";
+                line.textContent = cue.text;
+
+                if (layout.bold === true) line.style.fontWeight = "700";
+                if (layout.bold === false) line.style.fontWeight = "400";
+                if (layout.italic === true) line.style.fontStyle = "italic";
+                if (layout.fontFamily && layout.fontFamily.length <= 100) line.style.fontFamily = layout.fontFamily;
+                if (typeof layout.color === "string" && /^#[0-9a-f]{6}$/i.test(layout.color)) {
+                    line.style.color = layout.color;
+                }
+
+                if (isPositioned) {
+                    const column = (alignment - 1) % 3;
+                    const row = Math.floor((alignment - 1) / 3);
+                    line.style.left = `${explicitPosition ? layout.xPercent : [12, 50, 88][column]}%`;
+                    line.style.top = `${explicitPosition ? layout.yPercent : [87, 50, 10][row]}%`;
+                    line.style.transform = `translate(${[0, -50, -100][column]}%, ${[-100, -50, 0][row]}%)`;
+                    positioned.push(line);
+                } else {
+                    regular.push(line);
+                }
+            }
+
+            element.replaceChildren(...regular);
+            element.hidden = regular.length === 0;
+            if (positionedLayer) {
+                positionedLayer.replaceChildren(...positioned);
+                positionedLayer.hidden = positioned.length === 0;
             }
             return key;
         };
 
-        playbackCueKey = render(playbackSubtitle, playbackTrackId(), playbackCues, playbackCueKey);
-        secondaryCueKey = render(secondaryPlaybackSubtitle, secondaryTrackId(), secondaryPlaybackCues, secondaryCueKey);
+        playbackCueKey = render(playbackSubtitle, primaryPositionedSubtitles,
+            playbackTrackId(), playbackCues, playbackCueKey);
+        secondaryCueKey = render(secondaryPlaybackSubtitle, secondaryPositionedSubtitles,
+            secondaryTrackId(), secondaryPlaybackCues, secondaryCueKey);
     };
 
     const loadSubtitleCues = async trackId => {
