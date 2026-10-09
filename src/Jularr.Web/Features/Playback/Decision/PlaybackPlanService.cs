@@ -228,7 +228,8 @@ public sealed class PlaybackPlanService(
         else if (candidates.Count > 1 &&
                  input.AudioStreamIndex is null &&
                  input.SubtitleStreamIndex is null &&
-                 input.Quality != PlaybackQualityPreset.Original)
+                 (input.Quality ?? PlaybackQualityPresets.DefaultFor(
+                     PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network))) != PlaybackQualityPreset.Original)
         {
             var capabilities = input.Capabilities?.Normalize() ??
                                ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
