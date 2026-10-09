@@ -444,6 +444,56 @@ public sealed class PlayerControlsTests
     }
 
     [TestMethod]
+    public void SubtitleCollisionPolicyMovesSecondaryButKeepsAuthoredPrimaryPosition()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const resolveSubtitleCollisions = () => {");
+            const end = source.indexOf("    const renderPlaybackSubtitle = timeMs => {", start);
+            if (start < 0 || end < 0) throw new Error("collision policy missing");
+
+            const box = (left, top, right, bottom) => ({ left, top, right, bottom });
+            const sourceSign = {
+                style: { transform: "translate(0%, 0%)" },
+                getBoundingClientRect: () => box(80, 60, 240, 102)
+            };
+            const translatedSign = {
+                style: { transform: "translate(0%, 0%)" },
+                getBoundingClientRect: () => box(80, 60, 240, 102)
+            };
+            const primaryPositionedSubtitles = {
+                querySelectorAll: () => [sourceSign]
+            };
+            const secondaryPositionedSubtitles = {
+                querySelectorAll: () => [translatedSign]
+            };
+            const subtitleCanvas = { getBoundingClientRect: () => box(0, 0, 640, 360) };
+            const stage = {
+                getBoundingClientRect: () => ({ ...box(0, 0, 640, 360), height: 360 })
+            };
+            const subtitleStack = {
+                style: { bottom: "" },
+                getBoundingClientRect() {
+                    const bottom = Number.parseFloat(this.style.bottom) || 76;
+                    return box(120, 360 - bottom - 50, 520, 360 - bottom);
+                }
+            };
+            const resolve = eval(source.slice(start, end) + "resolveSubtitleCollisions");
+            resolve();
+            console.log([
+                sourceSign.style.transform,
+                translatedSign.style.transform,
+                subtitleStack.style.bottom
+            ].join("|"));
+            """;
+
+        Assert.AreEqual("translate(0%, 0%)|translate(0%, 0%) translateY(-48px)|", RunNode(script, player));
+    }
+
+    [TestMethod]
     public void WebCueLookupFollowsTheMediaClockAtEveryPlaybackSpeed()
     {
         var root = RepositoryRoot();
