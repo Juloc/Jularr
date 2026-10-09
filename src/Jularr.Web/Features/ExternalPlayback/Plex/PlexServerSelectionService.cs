@@ -11,7 +11,7 @@ public sealed class PlexServerSelectionService(
     PlexLibraryClient libraries,
     PlexServerGrantStore grants)
 {
-    public Task<IReadOnlyList<PlexLibrarySection>> GetAvailableLibrariesAsync(
+    public async Task<IReadOnlyList<PlexLibrarySection>> GetAvailableLibrariesAsync(
         ClaimsPrincipal admin,
         PlexServerCandidate discovered,
         Uri serverEndpoint,
@@ -20,7 +20,19 @@ public sealed class PlexServerSelectionService(
     {
         RequireAdmin(admin);
         ValidateDiscoveredEndpoint(discovered, serverEndpoint);
-        return libraries.GetSectionsAsync(
+
+        var actualMachineId = await libraries.GetServerIdentityAsync(
+            serverEndpoint, discovered.AccessToken, clientIdentifier,
+            cancellationToken);
+        if (!string.Equals(
+                actualMachineId, discovered.MachineIdentifier,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The connected Plex endpoint is not the discovered server.");
+        }
+
+        return await libraries.GetSectionsAsync(
             serverEndpoint, discovered.AccessToken, clientIdentifier,
             cancellationToken);
     }
