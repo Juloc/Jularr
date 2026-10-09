@@ -172,6 +172,8 @@ public static class UiTranslationResources
         M("account.plex.mediaDenied", "Confirm Plex media access before continuing.", "Account", "Plex media", "Mandatory consent validation", "clear copy", 59, null, ["Plex","Jularr"]),
         M("account.plex.mediaMismatch", "Plex media access could not be verified for this Jularr profile.", "Account", "Plex media", "Plex PIN session/account mismatch", "clear copy", 79, null, ["Plex","Jularr"]),
         M("account.plex.mediaPending", "Finish authentication with Plex, then return here to connect media.", "Account", "Plex media", "Plex media PIN pending", "clear copy", 82, null, ["Plex","Jularr"]),
+        M("library.external.plex.open", "Open in Plex", "Library", "External playback", "Secondary Plex media handoff button", "clear copy", 24, null, ["Plex"]),
+        M("library.external.plex.unavailable", "This title is not currently available in your connected Plex libraries.", "Library", "External playback", "Secure Plex lookup did not find an accessible matching title", "clear copy", 83, null, ["Plex"]),
         M("account.plex.signIn", "Sign in with Plex", "Account", "Plex login", "Sign-in action on the login page", "clear concise copy", 48, null, ["Plex", "Jularr"]),
         M("account.plex.link", "Link Plex account", "Account", "Plex login", "Action to associate a verified Plex identity with the signed-in account", "clear concise copy", 48, null, ["Plex", "Jularr"]),
         M("account.plex.linked", "Plex login linked", "Account", "Plex login", "Title for a linked Plex account", "clear concise copy", 48, null, ["Plex", "Jularr"]),
