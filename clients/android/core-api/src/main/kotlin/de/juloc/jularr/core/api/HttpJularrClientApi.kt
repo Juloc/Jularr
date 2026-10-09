@@ -47,6 +47,8 @@ import de.juloc.jularr.core.model.SubtitleCue
 import de.juloc.jularr.core.model.TermDetail
 import de.juloc.jularr.core.model.TermStateResult
 import de.juloc.jularr.core.model.TtsPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate
 import de.juloc.jularr.core.model.TtsPreferencesUpdate
 import de.juloc.jularr.core.model.WatchlistItem
 import kotlinx.coroutines.Dispatchers
@@ -252,6 +254,28 @@ class HttpJularrClientApi(
     override suspend fun wakeRoot(rootId: String): RootAvailability =
         requestJson("POST", ClientApiRoutes.wakeRoot(rootId)).toRootAvailability()
 
+    override suspend fun getPlaybackPreferences(): ClientPlaybackPreferences =
+        requestJson("GET", ClientApiRoutes.PlaybackPreferences).toClientPlaybackPreferences()
+
+    override suspend fun updatePlaybackPreferences(update: ClientPlaybackPreferencesUpdate): ClientPlaybackPreferences =
+        requestJson(
+            "PUT",
+            ClientApiRoutes.PlaybackPreferences,
+            JSONObject().apply {
+                update.autoplayNext?.let { put("autoplayNext", it) }
+                update.preferredAudioLanguage?.let { put("preferredAudioLanguage", it) }
+                update.preferredSubtitleLanguage?.let { put("preferredSubtitleLanguage", it) }
+                update.defaultPlaybackSpeed?.let { put("defaultPlaybackSpeed", it) }
+            },
+        ).toClientPlaybackPreferences()
+
+    private fun JSONObject.toClientPlaybackPreferences() = ClientPlaybackPreferences(
+        autoplayNext = getBoolean("autoplayNext"),
+        preferredAudioLanguage = stringOrNull("preferredAudioLanguage"),
+        preferredSubtitleLanguage = stringOrNull("preferredSubtitleLanguage"),
+        defaultPlaybackSpeed = getDouble("defaultPlaybackSpeed"),
+    )
+
     override suspend fun getTtsPreferences(): TtsPreferences =
         requestJson("GET", ClientApiRoutes.TtsPreferences).toTtsPreferences()
 
@@ -446,6 +470,9 @@ class HttpJularrClientApi(
         availability = getString("availability"),
         detailsUrl = stringOrNull("detailsUrl"),
         addedAtUtc = stringOrNull("addedAtUtc"),
+        localMediaId = stringOrNull("localMediaId"),
+        status = stringOrNull("status"),
+        format = stringOrNull("format"),
     )
 
     private fun JSONObject.toAnimeDetail() = AnimeDetail(
