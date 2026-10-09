@@ -103,7 +103,7 @@
     const seekSeconds = design.seekSeconds(root);
 
     if (!video || !stage || !placeholder || !playbackStatus ||
-        !playbackSummary || !playbackBadge || !overlay || !data ||
+        !playbackSummary || !playbackBadge ||
         !timeline || !timelineCurrent || !timelineDuration) {
         return;
     }
