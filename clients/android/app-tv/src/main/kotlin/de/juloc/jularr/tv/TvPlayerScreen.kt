@@ -65,6 +65,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -700,14 +701,16 @@ fun TvPlayerScreen(
                         .focusRequester(skipFocus),
                 ) {
                     Text(
-                        when (skipSegment.kind.lowercase()) {
-                            "intro" -> "Intro überspringen"
-                            "recap" -> "Rückblick überspringen"
-                            "outro" -> "Outro überspringen"
-                            "credits" -> "Abspann überspringen"
-                            "preview" -> "Vorschau überspringen"
-                            else -> "Abschnitt überspringen"
-                        },
+                        stringResource(
+                            when (skipSegment.kind.lowercase()) {
+                                "intro" -> R.string.tv_player_skip_intro
+                                "recap" -> R.string.tv_player_skip_recap
+                                "outro" -> R.string.tv_player_skip_outro
+                                "credits" -> R.string.tv_player_skip_credits
+                                "preview" -> R.string.tv_player_skip_preview
+                                else -> R.string.tv_player_skip_section
+                            },
+                        ),
                     )
                 }
             }
