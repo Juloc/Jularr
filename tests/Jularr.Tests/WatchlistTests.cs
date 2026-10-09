@@ -447,6 +447,63 @@ public sealed class WatchlistTests
         Assert.IsEmpty(empty);
     }
 
+    [TestMethod]
+    public async Task AniListReleaseSeeds_AcrossProfiles_ApplyOverridesAndAdvanceByUniqueKey()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var watchlist = new WatchlistStore(fixture.Db);
+        var franchises = new FranchiseStore(fixture.Db);
+        var seed = Draft("30001", "First");
+        var hidden = Draft("30002", "Ignored in profile A");
+        var franchiseId = await franchises.GetOrCreateBySeedAsync(
+            seed.Identity,
+            CancellationToken.None);
+        await franchises.UpsertMemberAsync(franchiseId, seed, null, true, CancellationToken.None);
+        await franchises.UpsertMemberAsync(franchiseId, hidden, "SEQUEL", false, CancellationToken.None);
+        await franchises.FollowAsync("profile-a", franchiseId, CancellationToken.None);
+
+        await watchlist.FollowAsync("profile-a", seed with { Status = "NOT_YET_RELEASED" }, CancellationToken.None);
+        await watchlist.UnfollowAsync("profile-a", hidden.Identity, CancellationToken.None);
+        await watchlist.FollowAsync("profile-b", seed with { Status = null }, CancellationToken.None);
+        await watchlist.FollowAsync("profile-b", hidden, CancellationToken.None);
+        await watchlist.FollowAsync("profile-a", Draft("30003", "Third"), CancellationToken.None);
+        await watchlist.FollowAsync("profile-b", Draft("30004", "Fourth"), CancellationToken.None);
+        await watchlist.FollowAsync("profile-b",
+            new WatchlistDraft(new WatchlistIdentity(WatchlistMediaType.Manga, "anilist", "30005"), "Manga", Status: "NOT_YET_RELEASED"),
+            CancellationToken.None);
+        await watchlist.FollowAsync("profile-b",
+            new WatchlistDraft(new WatchlistIdentity(WatchlistMediaType.Book, "anilist", "30006"), "Book"),
+            CancellationToken.None);
+        await watchlist.FollowAsync("profile-b",
+            new WatchlistDraft(new WatchlistIdentity(WatchlistMediaType.Anime, "tmdb", "30007"), "Other provider"),
+            CancellationToken.None);
+
+        var types = new[] { WatchlistMediaType.Anime, WatchlistMediaType.Manga, WatchlistMediaType.LightNovel };
+        var first = await watchlist.GetAniListReleaseSeedPageAsync(types, null, 2, CancellationToken.None);
+        var second = await watchlist.GetAniListReleaseSeedPageAsync(types, first[^1], 2, CancellationToken.None);
+        var third = await watchlist.GetAniListReleaseSeedPageAsync(types, second[^1], 2, CancellationToken.None);
+        var all = first.Concat(second).Concat(third).ToArray();
+
+        Assert.AreEqual(2, first.Count);
+        Assert.AreEqual(2, second.Count);
+        Assert.AreEqual(1, third.Count);
+        CollectionAssert.AreEqual(
+            new[] { "30001", "30002", "30003", "30004", "30005" },
+            all.Select(item => item.ExternalId).ToArray());
+        Assert.AreEqual("NOT_YET_RELEASED", all[0].Status);
+        Assert.AreEqual("RELEASING", all[1].Status);
+        Assert.AreEqual(WatchlistMediaType.Manga, all[^1].MediaType);
+        Assert.IsEmpty(await watchlist.GetAniListReleaseSeedPageAsync(types, third[^1], 2, CancellationToken.None));
+
+        var mangaOnly = await watchlist.GetAniListReleaseSeedPageAsync(
+            [WatchlistMediaType.Manga], null, 2, CancellationToken.None);
+        Assert.AreEqual("30005", Assert.ContainsSingle(mangaOnly).ExternalId);
+        Assert.IsEmpty(await watchlist.GetAniListReleaseSeedPageAsync(
+            [], null, 2, CancellationToken.None));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => new PageRequest(pageSize: PageRequest.MaximumPageSize + 1));
+    }
+
     private static WatchlistDraft Draft(string externalId, string title) =>
         new(
             new WatchlistIdentity(WatchlistMediaType.Anime, "anilist", externalId),
