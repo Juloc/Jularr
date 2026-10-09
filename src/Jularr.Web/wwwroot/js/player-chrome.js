@@ -319,6 +319,7 @@
     const settingRows = settings ? [...settings.querySelectorAll("[data-setting-row]")] : [];
     const settingSelects = {
         subtitles: subtitleSelect,
+        secondarySubtitles: stage.querySelector("[data-secondary-subtitle-track]"),
         audio: stage.querySelector("[data-audio-track]"),
         quality: stage.querySelector("[data-quality-cap]"),
         speed: stage.querySelector("[data-playback-speed]")
@@ -330,8 +331,14 @@
     const renderSettingValues = () => {
         for (const control of stage.querySelectorAll("[data-chrome-open-setting]")) {
             const value = control.querySelector("[data-chrome-setting-value]");
-            const option = settingSelects[control.dataset.chromeOpenSetting]?.selectedOptions[0];
-            if (value && option) value.textContent = optionLabel(option);
+            const selected = settingSelects[control.dataset.chromeOpenSetting]?.selectedOptions[0];
+            if (!value || !selected) continue;
+            const secondary = control.dataset.chromeOpenSetting === "subtitles"
+                ? settingSelects.secondarySubtitles?.selectedOptions[0]
+                : null;
+            value.textContent = secondary?.value && secondary.value !== "off"
+                ? `${optionLabel(selected)} + ${optionLabel(secondary)}`
+                : optionLabel(selected);
         }
     };
 
@@ -340,20 +347,40 @@
         optionList = null;
         const select = settingSelects[mode];
         if (!select) return;
+
         optionList = document.createElement("div");
-        optionList.className = "player-options";
-        optionList.setAttribute("role", "radiogroup");
-        optionList.setAttribute("aria-label", title);
-        for (const option of select.options) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "player-option";
-            button.setAttribute("role", "radio");
-            button.setAttribute("aria-checked", String(option.value === select.value));
-            if (option.disabled) button.setAttribute("aria-disabled", "true");
-            button.dataset.value = option.value;
-            button.textContent = optionLabel(option);
-            optionList.append(button);
+        optionList.className = "player-options-group";
+        const choices = mode === "subtitles"
+            ? ["subtitles", "secondarySubtitles"]
+            : [mode];
+        for (const choice of choices) {
+            const source = settingSelects[choice];
+            if (!source) continue;
+            const heading = settings.querySelector(`[data-setting-row="${choice}"] > span`)?.textContent?.trim()
+                || title;
+            const list = document.createElement("div");
+            list.className = "player-options";
+            list.setAttribute("role", "radiogroup");
+            list.setAttribute("aria-label", heading);
+            if (choices.length > 1) {
+                const label = document.createElement("strong");
+                label.className = "player-options-heading";
+                label.textContent = heading;
+                optionList.append(label);
+            }
+            for (const option of source.options) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "player-option";
+                button.setAttribute("role", "radio");
+                button.setAttribute("aria-checked", String(option.value === source.value));
+                if (option.disabled) button.setAttribute("aria-disabled", "true");
+                button.dataset.value = option.value;
+                button.dataset.settingMode = choice;
+                button.textContent = optionLabel(option);
+                list.append(button);
+            }
+            optionList.append(list);
         }
         settings.querySelector(".player-settings-header").after(optionList);
     };
@@ -409,11 +436,17 @@
     stage.querySelector("[data-chrome-settings-close]")?.addEventListener("click", () => setSettings(false));
     settings?.addEventListener("click", event => {
         const button = event.target.closest(".player-option");
-        const select = settingSelects[settings.dataset.settingsMode];
+        const select = settingSelects[button?.dataset.settingMode];
         if (!button || !select || button.getAttribute("aria-disabled") === "true") return;
         select.value = button.dataset.value;
         select.dispatchEvent(new Event("change", { bubbles: true }));
-        setSettings(false);
+        if (settings.dataset.settingsMode === "subtitles") {
+            renderOptions("subtitles", settingsTitle?.textContent || "");
+            optionList?.querySelector(`[data-setting-mode="${button.dataset.settingMode}"][aria-checked="true"]`)
+                ?.focus({ preventScroll: true });
+        } else {
+            setSettings(false);
+        }
     });
     settings?.addEventListener("keydown", event => {
         if (!optionList || (event.key !== "ArrowDown" && event.key !== "ArrowUp")) return;

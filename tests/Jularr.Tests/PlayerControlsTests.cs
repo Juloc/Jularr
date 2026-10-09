@@ -403,6 +403,8 @@ public sealed class PlayerControlsTests
             const document = { createElement: () => ({ style: {}, textContent: "" }) };
             const design = { activeCuesAt: (items, ms) => items.filter(c => c.startMs <= ms && ms <= c.endMs) };
             const cues = [];
+            let subtitleChoice = "stream:2";
+            let secondarySubtitleChoice = "stream:3";
             const video = { videoWidth: 640, videoHeight: 360 };
             const stage = { clientWidth: 640, clientHeight: 360 };
             const subtitleCanvas = { style: {} };
@@ -439,6 +441,118 @@ public sealed class PlayerControlsTests
             console.log(output);
             """;
         Assert.AreEqual("1|1|1|25%|10%|#0099FF|Dialogue|Translation", RunNode(script, player));
+    }
+
+    [TestMethod]
+    public void SubtitleCollisionPolicyMovesSecondaryButKeepsAuthoredPrimaryPosition()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const resolveSubtitleCollisions = () => {");
+            const end = source.indexOf("    const renderPlaybackSubtitle = timeMs => {", start);
+            if (start < 0 || end < 0) throw new Error("collision policy missing");
+
+            const box = (left, top, right, bottom) => ({ left, top, right, bottom, height: bottom - top });
+            const sourceSign = {
+                style: { transform: "translate(0%, 0%)" },
+                getBoundingClientRect: () => box(80, 60, 240, 102)
+            };
+            const translatedSign = {
+                style: { transform: "translate(0%, 0%)" },
+                getBoundingClientRect: () => box(80, 60, 240, 102)
+            };
+            const primaryPositionedSubtitles = {
+                querySelectorAll: () => [sourceSign]
+            };
+            const secondaryPositionedSubtitles = {
+                querySelectorAll: () => [translatedSign]
+            };
+            const subtitleCanvas = { getBoundingClientRect: () => box(0, 0, 640, 360) };
+            const stage = {
+                getBoundingClientRect: () => ({ ...box(0, 0, 640, 360), height: 360 })
+            };
+            const subtitleStack = {
+                style: { bottom: "" },
+                getBoundingClientRect() {
+                    const bottom = Number.parseFloat(this.style.bottom) || 76;
+                    return box(120, 360 - bottom - 50, 520, 360 - bottom);
+                }
+            };
+            const resolve = eval(source.slice(start, end) + "resolveSubtitleCollisions");
+            resolve();
+            const authored = sourceSign.style.transform;
+            const translated = translatedSign.style.transform;
+            primaryPositionedSubtitles.querySelectorAll = () => [{
+                getBoundingClientRect: () => box(140, 245, 500, 272)
+            }];
+            secondaryPositionedSubtitles.querySelectorAll = () => [];
+            resolve();
+            console.log([authored, translated, subtitleStack.style.bottom].join("|"));
+            """;
+
+        Assert.AreEqual("translate(0%, 0%)|translate(0%, 0%) translateY(-48px)|121px", RunNode(script, player));
+    }
+
+    [TestMethod]
+    public void SubtitleMenuRendersBothTrackSelectorsFromSharedOptions()
+    {
+        var root = RepositoryRoot();
+        var chrome = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-chrome.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const renderSettingValues = () => {");
+            const end = source.indexOf('    const setSettings = (open, mode = "all") => {', start);
+            if (start < 0 || end < 0) throw new Error("settings option owner missing");
+
+            const create = tag => ({
+                tag, children: [], attrs: {}, dataset: {},
+                append(...children) { this.children.push(...children); },
+                setAttribute(name, value) { this.attrs[name] = value; },
+                remove() {},
+                textContent: ""
+            });
+            const document = { createElement: create };
+            const primary = [
+                { value: "off", textContent: "Off" },
+                { value: "stream:2", textContent: "German" }
+            ];
+            const secondary = [
+                { value: "off", textContent: "Off" },
+                { value: "stream:3", textContent: "English" }
+            ];
+            const settingSelects = {
+                subtitles: { value: "stream:2", options: primary, selectedOptions: [primary[1]] },
+                secondarySubtitles: { value: "stream:3", options: secondary, selectedOptions: [secondary[1]] }
+            };
+            const settings = {
+                querySelector(query) {
+                    if (query === ".player-settings-header") return { after() {} };
+                    return { textContent: query.includes("secondarySubtitles") ? "Second" : "First" };
+                }
+            };
+            const stage = { querySelectorAll: () => [] };
+            const optionLabel = option => option.textContent.trim();
+            let optionList = null;
+            const result = eval(source.slice(start, end) + `
+                (() => {
+                    renderOptions("subtitles", "Subtitles");
+                    return optionList.children
+                        .filter(row => row.className === "player-options")
+                        .map(row => row.children.map(button =>
+                            button.dataset.settingMode + "=" + button.dataset.value).join(","))
+                        .join("|");
+                })()
+            `);
+            console.log(result);
+            """;
+
+        Assert.AreEqual(
+            "subtitles=off,subtitles=stream:2|secondarySubtitles=off,secondarySubtitles=stream:3",
+            RunNode(script, chrome));
     }
 
     [TestMethod]
