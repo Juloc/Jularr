@@ -1,8 +1,11 @@
 @page "/Settings/Indexers/Edit/{id:guid?}"
 @model Jularr.Web.Pages.Settings.Indexers.EditModel
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Acquisition.Indexers
 @{
     var ui = Model.Ui;
     ViewData["Title"] = Model.IsNew ? ui["settings.indexers.addTitle"] : ui["settings.indexers.editTitle"];
+    var detected = Model.Detected.ToDictionary(item => item.Kind);
 }
 @section Head {
     <link rel="stylesheet" href="~/css/acquisition.css" asp-append-version="true" />
@@ -21,62 +24,104 @@
 }
 
 <form method="post" class="panel usenet-form">
-    <label>
-        <span>@ui["settings.downloadClients.field.name"]</span>
-        <input asp-for="Name" required />
-    </label>
-    <label>
-        <span>@ui["settings.indexers.field.type"]</span>
-        <select asp-for="Type" asp-items="Html.GetEnumSelectList<Jularr.Web.Features.Acquisition.Indexers.IndexerType>()"></select>
-    </label>
+    @if (Model.IsNew)
+    {
+        <p class="is-wide muted">@ui["settings.indexers.setup.intro"]</p>
+    }
+    else
+    {
+        <label class="is-wide">
+            <span>@ui["settings.downloadClients.field.name"]</span>
+            <input asp-for="Name" required />
+        </label>
+    }
     <label class="is-wide">
         <span>@ui["settings.downloadClients.field.baseUrl"]</span>
-        <input asp-for="BaseUrl" required placeholder="https://indexer.example" />
+        <input asp-for="BaseUrl" required placeholder="https://indexer.example" inputmode="url" autocomplete="off" />
+        <small>@ui["settings.indexers.field.baseUrlHint"]</small>
     </label>
     <label class="is-wide">
         <span>@(Model.IsNew ? ui["settings.indexers.field.apiKey"] : ui["settings.indexers.field.apiKeyKeepCurrent"])</span>
         <input asp-for="ApiKey" type="password" autocomplete="new-password" />
     </label>
-    <label>
-        <span>@ui["settings.indexers.field.categories"]</span>
-        <input asp-for="Categories" placeholder="5000, 5070" />
-    </label>
-    <label>
-        <span>@ui["settings.indexers.field.bookCategories"]</span>
-        <input asp-for="BookCategories" placeholder="7020, 7000" />
-        <small>@ui["settings.indexers.field.bookCategoriesHint"]</small>
-    </label>
-    <label class="is-wide">
-        <span>@ui["settings.indexers.field.kindCategories"]</span>
-        <textarea asp-for="KindCategories" rows="4" placeholder="movie: 2000, 2040&#10;tv: 5000, 5040&#10;music: 3000, 3040"></textarea>
-        <small>@ui["settings.indexers.field.kindCategoriesHint"]</small>
-    </label>
-    <label>
-        <span>@ui["settings.indexers.field.indexerIds"]</span>
-        <input asp-for="IndexerIds" />
-    </label>
-    <label>
-        <span>@ui["settings.indexers.field.searchLimit"]</span>
-        <input asp-for="SearchLimit" type="number" min="1" max="1000" />
-    </label>
-    <label>
-        <span>@ui["settings.indexers.field.priority"]</span>
-        <input asp-for="Priority" type="number" min="1" />
-    </label>
-    <label class="usenet-form-check">
-        <input asp-for="Enabled" type="checkbox" />
-        <span>@ui["settings.connectionTable.enabled"]</span>
-    </label>
-    <label class="usenet-form-check">
-        <input asp-for="AutomaticSearch" type="checkbox" />
-        <span>@ui["settings.indexers.field.automaticSearch"]</span>
-    </label>
-    <label class="usenet-form-check">
-        <input asp-for="InteractiveSearch" type="checkbox" />
-        <span>@ui["settings.indexers.field.interactiveSearch"]</span>
-    </label>
+
+    <details class="usenet-advanced is-wide" open="@(!Model.IsNew || Model.Error is not null)">
+        <summary>@ui["settings.indexers.advanced"]</summary>
+        <div class="usenet-advanced-grid">
+            @if (Model.IsNew)
+            {
+                <label>
+                    <span>@ui["settings.indexers.field.nameOptional"]</span>
+                    <input asp-for="Name" />
+                </label>
+                <label>
+                    <span>@ui["settings.indexers.field.type"]</span>
+                    <select asp-for="Type" asp-items="Html.GetEnumSelectList<IndexerType>()"></select>
+                </label>
+            }
+            <label>
+                <span>@ui["settings.indexers.field.priority"]</span>
+                <input asp-for="Priority" type="number" min="1" />
+            </label>
+            <label>
+                <span>@ui["settings.indexers.field.searchLimit"]</span>
+                <input asp-for="SearchLimit" type="number" min="1" max="1000" />
+            </label>
+            @if (Model.Type == IndexerType.Prowlarr)
+            {
+                <label class="is-wide">
+                    <span>@ui["settings.indexers.field.indexerIds"]</span>
+                    <input asp-for="IndexerIds" />
+                </label>
+            }
+            <fieldset class="is-wide usenet-kinds">
+                <legend>@ui["settings.indexers.field.mediaKinds"]</legend>
+                <small>@ui["settings.indexers.field.mediaKindsHint"]</small>
+                <div class="usenet-kind-checks">
+                    @foreach (var kind in Model.Kinds)
+                    {
+                        var name = AcquisitionAccessNames.Kind(kind);
+                        <label class="usenet-form-check">
+                            <input type="checkbox" name="SearchedKinds" value="@name" checked="@Model.SearchedKinds.Contains(name)" />
+                            <span>@ui[$"admin.requests.kind.{name}"]</span>
+                        </label>
+                    }
+                </div>
+            </fieldset>
+            <fieldset class="is-wide usenet-kinds">
+                <legend>@ui["settings.indexers.field.kindOverrides"]</legend>
+                <small>@ui["settings.indexers.field.kindOverridesHint"]</small>
+                <div class="usenet-kind-overrides">
+                    @foreach (var kind in Model.Kinds)
+                    {
+                        var name = AcquisitionAccessNames.Kind(kind);
+                        var hint = detected.TryGetValue(kind, out var found)
+                            ? (found.Categories.IsAvailable ? ui.Format("settings.indexers.detected", ("categories", string.Join(", ", found.Categories.Categories))) : ui["settings.indexers.detectedNone"])
+                            : "";
+                        <label>
+                            <span>@ui[$"admin.requests.kind.{name}"]</span>
+                            <input name="KindOverrides[@name]" value="@(Model.KindOverrides.GetValueOrDefault(name))" placeholder="@hint" inputmode="numeric" autocomplete="off" />
+                        </label>
+                    }
+                </div>
+            </fieldset>
+            <label class="usenet-form-check">
+                <input asp-for="Enabled" type="checkbox" />
+                <span>@ui["settings.connectionTable.enabled"]</span>
+            </label>
+            <label class="usenet-form-check">
+                <input asp-for="AutomaticSearch" type="checkbox" />
+                <span>@ui["settings.indexers.field.automaticSearch"]</span>
+            </label>
+            <label class="usenet-form-check">
+                <input asp-for="InteractiveSearch" type="checkbox" />
+                <span>@ui["settings.indexers.field.interactiveSearch"]</span>
+            </label>
+        </div>
+    </details>
+
     <div class="usenet-form-actions is-wide">
-        <button class="button button-primary" type="submit">@ui["common.save"]</button>
+        <button class="button button-primary" type="submit">@(Model.IsNew ? ui["settings.indexers.setup.save"] : ui["common.save"])</button>
         <a class="button button-quiet" asp-page="/Admin/Usenet">@ui["common.cancel"]</a>
     </div>
 </form>

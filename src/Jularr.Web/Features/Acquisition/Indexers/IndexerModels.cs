@@ -16,6 +16,40 @@ public enum IndexerType
     Newznab
 }
 
+public enum IndexerCheckState
+{
+    NotChecked,
+    Valid,
+    NoResults,
+    ParametersRejected,
+    AuthenticationFailed,
+    RateLimited,
+    Unavailable,
+    InvalidResponse
+}
+
+/// <summary>The outcome of one bounded validation search of one search function.</summary>
+public sealed record IndexerCheck(IndexerCheckState State, string? Message = null);
+
+/// <summary>
+/// The proof gathered by setup and refresh, kept apart from the owner's settings: whether the connection and key work, which search functions
+/// answered a real request, and why the last refresh failed when it did. A failed refresh never replaces earlier capabilities or checks.
+/// </summary>
+public sealed record IndexerVerification(
+    DateTimeOffset CheckedAt,
+    bool Connected,
+    bool Authenticated,
+    IReadOnlyDictionary<IndexerSearchMode, IndexerCheck> Searches,
+    string? RefreshError = null,
+    DateTimeOffset? RefreshFailedAt = null,
+    IReadOnlyDictionary<MediaAcquisitionKind, IndexerCheck>? KindChecks = null)
+{
+    /// <summary>The functions that answered a request with a parsable result, empty or not.</summary>
+    public bool Answered(IndexerSearchMode mode) => Searches.TryGetValue(mode, out var check) && check.State is IndexerCheckState.Valid or IndexerCheckState.NoResults;
+
+    public bool Rejected(IndexerSearchMode mode) => Searches.TryGetValue(mode, out var check) && check.State == IndexerCheckState.ParametersRejected;
+}
+
 /// <summary>
 /// One canonical indexer connection's settings. <see cref="IndexerIds"/> is
 /// only meaningful for <see cref="IndexerType.Prowlarr"/> (Prowlarr's own
@@ -36,6 +70,9 @@ public sealed record IndexerSettings(
 
     /// <summary>What the indexer reported it can search with; null until its caps were read. Refreshed on test, never edited by hand.</summary>
     public IndexerCapabilities? Capabilities { get; init; }
+
+    /// <summary>What setup and the last refresh proved about the indexer; null for an entry that was never checked.</summary>
+    public IndexerVerification? Verification { get; init; }
 
     /// <summary>Whether Wanted/automatic search may use this indexer. A manual-only indexer is valid.</summary>
     public bool AutomaticSearch { get; init; } = true;
@@ -78,22 +115,29 @@ public sealed record IndexerEntry(
     IndexerSettings Settings,
     [property: JsonIgnore] string ApiKey);
 
+/// <summary>
+/// The answer of a connection test. <see cref="State"/> tells why a test failed, so the page can say whether the key, the address, the API or the
+/// indexer's availability is the problem; <see cref="Valid"/> means the caps document was read.
+/// </summary>
 public sealed record IndexerConnectionTestResult(
     bool Success,
     string? Version = null,
     string? Error = null,
-    IndexerCapabilities? Capabilities = null);
+    IndexerCapabilities? Capabilities = null,
+    IndexerCheckState State = IndexerCheckState.Valid);
 
 /// <summary>
 /// One query the planner decided on, as an indexer receives it: the Newznab function, the free text (empty for a pure ID search), the
-/// structured parameters that function accepts and the page to read.
+/// structured parameters that function accepts and the page to read. <paramref name="Latest"/> asks for the newest releases without any text
+/// or parameter; only validation uses it, to prove that a function answers.
 /// </summary>
 public sealed record IndexerSearchQuery(
     string Query,
     IndexerSearchMode Mode = IndexerSearchMode.Search,
     IReadOnlyList<KeyValuePair<string, string>>? Parameters = null,
     int Offset = 0,
-    int? Limit = null);
+    int? Limit = null,
+    bool Latest = false);
 
 public sealed record IndexerSearchWarning(
     string IndexerName,
@@ -121,6 +165,29 @@ public interface IIndexer
 
 public class IndexerException(string message, Exception? innerException = null)
     : Exception(message, innerException);
+
+public enum IndexerRejection
+{
+    MissingParameter,
+    IncorrectParameter,
+    UnsupportedFunction
+}
+
+/// <summary>
+/// The indexer answered, but refused the request shape (Newznab error 200-203, also delivered as HTTP 200). Searching again with the same function and
+/// parameters cannot succeed; <see cref="RequestShape"/> names what was sent without the API key.
+/// </summary>
+public sealed class IndexerRequestRejectedException(string message, IndexerRejection reason, IndexerSearchMode mode, string requestShape, string? providerMessage)
+    : IndexerException(message)
+{
+    public IndexerRejection Reason { get; } = reason;
+
+    public IndexerSearchMode Mode { get; } = mode;
+
+    public string RequestShape { get; } = requestShape;
+
+    public string? ProviderMessage { get; } = providerMessage;
+}
 
 /// <summary>The indexer rejected the credentials; searching it again cannot succeed until the owner fixes the key.</summary>
 public sealed class IndexerAuthenticationException(string message) : IndexerException(message);

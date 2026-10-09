@@ -48,7 +48,7 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
 
     public InstanceModuleStore Modules { get; }
 
-    public static async Task<VideoAdminPageHost> CreateAsync(VideoAcquisitionTestHost video)
+    public static async Task<VideoAdminPageHost> CreateAsync(VideoAcquisitionTestHost video, HttpMessageHandler? indexerHttp = null)
     {
         var dataRoot = video.Environment.Directory.FullName;
         var modules = new InstanceModuleStore(dataRoot);
@@ -104,6 +104,15 @@ internal sealed class VideoAdminPageHost : IAsyncDisposable
                     services.AddScoped<Jularr.Web.Features.Music.MusicManualSearchService>();
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Indexers.IndexerSearchCoordinator>());
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Indexers.IndexerStore>());
+                    services.AddSingleton(new Jularr.Web.Features.Acquisition.Health.AcquisitionHealthStore(video.Environment.Directory));
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.IDownloadClient>());
+                    services.AddSingleton<Jularr.Web.Features.Acquisition.Sabnzbd.ISabnzbdClient>(video.Environment.Client);
+                    services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.Import.AnimeImportSettingsStore>());
+                    services.AddSingleton<IReadOnlyDictionary<Jularr.Web.Features.Acquisition.Indexers.IndexerType, Jularr.Web.Features.Acquisition.Indexers.IIndexer>>(new Dictionary<Jularr.Web.Features.Acquisition.Indexers.IndexerType, Jularr.Web.Features.Acquisition.Indexers.IIndexer>
+                    {
+                        [Jularr.Web.Features.Acquisition.Indexers.IndexerType.Newznab] = new Jularr.Web.Features.Acquisition.Indexers.NewznabIndexer(new HttpClient(indexerHttp ?? new HttpClientHandler()), ProviderTestFactory.NewExecutor())
+                    });
+                    services.AddScoped<Jularr.Web.Features.Acquisition.Indexers.IndexerSetupService>();
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientStore>());
                     services.AddSingleton(video.Get<Jularr.Web.Features.Acquisition.DownloadClients.DownloadClientSubmissionService>());
                     services.AddSingleton(video.Get<ReleaseRequestTracker>());

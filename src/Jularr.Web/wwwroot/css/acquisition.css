@@ -254,6 +254,32 @@
 .usenet-form-actions { display: flex; gap: 8px; }
 @media (max-width: 640px) { .usenet-form { grid-template-columns: minmax(0, 1fr); } }
 
+/* Indexer setup: the advanced section, the per media type fields and the readiness of a card */
+.usenet-advanced > summary { cursor: pointer; font-size: 13px; font-weight: 700; padding: 4px 0; }
+.usenet-advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; margin-top: 12px; }
+.usenet-advanced-grid > label, .usenet-kind-overrides label { display: grid; gap: 6px; min-width: 0; }
+.usenet-advanced-grid > label > span, .usenet-kind-overrides label > span { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.usenet-form input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.usenet-kinds { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.usenet-kinds > legend { padding: 0; color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.usenet-kinds small { color: var(--muted); font-size: 11px; }
+.usenet-kind-checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.usenet-kind-checks .usenet-form-check { grid-column: auto; }
+.usenet-kind-overrides { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 12px; }
+.usenet-card-pills { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.usenet-kinds-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.usenet-kind-chip { display: grid; gap: 1px; min-width: 0; padding: 5px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 12px; }
+.usenet-kind-chip small { color: var(--muted); font-size: 11px; }
+.usenet-kind-chip.is-verified small { color: var(--success-text); }
+.usenet-kind-chip.is-failed small { color: var(--danger-text); }
+.usenet-kind-chip.is-shared small, .usenet-kind-chip.is-unverified small { color: var(--warning-text); }
+.usenet-kind-chip.is-unavailable { opacity: .65; }
+@media (max-width: 640px) {
+    .usenet-advanced-grid { grid-template-columns: minmax(0, 1fr); }
+    .usenet-card-head { flex-wrap: wrap; }
+    .usenet-card-pills { justify-content: flex-start; }
+}
+
 /* Settings → Acquisition: panels keep their own height instead of stretching to the tallest neighbour. */
 .acquisition-grid { align-items: start; }
 .acquisition-folder { display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }

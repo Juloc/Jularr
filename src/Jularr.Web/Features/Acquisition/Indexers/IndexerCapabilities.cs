@@ -22,7 +22,10 @@ public sealed record IndexerCapabilities(
     DateTimeOffset RefreshedAt,
     IReadOnlyDictionary<IndexerSearchMode, string[]> Modes,
     int? MaximumLimit = null,
-    int[]? Categories = null)
+    int[]? Categories = null,
+    IndexerCategory[]? CategoryTree = null,
+    string? ServerTitle = null,
+    int? DefaultLimit = null)
 {
     /// <summary>
     /// Whether the indexer offers a category, itself or through its parent or a sub category of the same parent (Newznab numbers a parent as a multiple
@@ -82,6 +85,9 @@ public sealed record IndexerCapabilities(
     }
 }
 
+/// <summary>One category the caps document lists, with the parent it was listed under; null for a top-level category.</summary>
+public sealed record IndexerCategory(int Id, string? Name, int? ParentId);
+
 /// <summary>Reads a Newznab <c>caps</c> document into <see cref="IndexerCapabilities"/>.</summary>
 public static class NewznabCapsParser
 {
@@ -120,14 +126,28 @@ public static class NewznabCapsParser
         }
 
         var limits = document.Root?.Elements().FirstOrDefault(element => element.Name.LocalName == "limits");
-        int? maximum = int.TryParse(limits?.Attribute("max")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : null;
-        var categories = document.Root?.Elements().FirstOrDefault(element => element.Name.LocalName == "categories")?.Descendants()
-            .Where(element => element.Name.LocalName is "category" or "subcat")
-            .Select(element => int.TryParse(element.Attribute("id")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : 0)
-            .Where(id => id > 0)
-            .Distinct()
-            .Order()
-            .ToArray();
-        return new IndexerCapabilities(now, modes, maximum, categories is { Length: > 0 } ? categories : null);
+        int? maximum = PositiveInt(limits?.Attribute("max")?.Value);
+        var tree = new List<IndexerCategory>();
+        foreach (var category in document.Root?.Elements().FirstOrDefault(element => element.Name.LocalName == "categories")?.Elements().Where(element => element.Name.LocalName == "category") ?? [])
+        {
+            if (PositiveInt(category.Attribute("id")?.Value) is not { } parent)
+            {
+                continue;
+            }
+
+            tree.Add(new IndexerCategory(parent, category.Attribute("name")?.Value, null));
+            tree.AddRange(category.Elements()
+                .Where(element => element.Name.LocalName == "subcat")
+                .Select(element => (Id: PositiveInt(element.Attribute("id")?.Value), element.Attribute("name")?.Value))
+                .Where(item => item.Id is not null)
+                .Select(item => new IndexerCategory(item.Id!.Value, item.Value, parent)));
+        }
+
+        var ids = tree.Select(category => category.Id).Distinct().Order().ToArray();
+        var title = document.Root?.Elements().FirstOrDefault(element => element.Name.LocalName == "server")?.Attribute("title")?.Value?.Trim();
+        return new IndexerCapabilities(now, modes, maximum, ids.Length > 0 ? ids : null, tree.Count > 0 ? [.. tree] : null, string.IsNullOrEmpty(title) ? null : title, PositiveInt(limits?.Attribute("default")?.Value));
     }
+
+    private static int? PositiveInt(string? value) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : null;
 }

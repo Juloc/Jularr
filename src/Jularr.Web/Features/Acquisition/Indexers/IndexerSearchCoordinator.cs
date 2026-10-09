@@ -143,7 +143,7 @@ public sealed class IndexerSearchCoordinator(
             return IndexerRun.Skipped(entry, "No client is registered for this indexer type.");
         }
 
-        var capabilities = entry.Type == IndexerType.Newznab ? entry.Settings.Capabilities : null;
+        var capabilities = entry.Type == IndexerType.Newznab ? cache.WithoutRefusedModes(entry.Id, entry.Settings.Capabilities) : null;
         var plan = planFor(capabilities);
         var limit = Math.Min(entry.Settings.SearchLimit, capabilities?.MaximumLimit ?? int.MaxValue);
         var effective = entry.Type == IndexerType.Prowlarr && options.ProwlarrIndexerIds is { Count: > 0 } prowlarrIds
@@ -151,13 +151,14 @@ public sealed class IndexerSearchCoordinator(
             : entry;
         var categories = SearchPlanner.Categories(kind, entry).ToArray();
 
-        // An indexer that stopped offering the categories of a media type (its caps say so) is not asked for it: its answers would come from some other section.
+        // An indexer without a category for a media type (its caps say so) is not asked for it: its answers would come from some other section.
         if (capabilities is { Categories.Length: > 0 })
         {
             var offered = categories.Where(capabilities.Offers).ToArray();
             if (offered.Length == 0)
             {
-                return IndexerRun.Skipped(entry, $"Skipped: the indexer offers none of the categories searched for {kind} ({string.Join(", ", categories)}). Test it again after changing them.");
+                var searched = categories.Length == 0 ? "no category that belongs to it" : $"none of the categories searched for it ({string.Join(", ", categories)})";
+                return IndexerRun.Skipped(entry, $"Skipped: the indexer offers {searched} for {kind}. Refresh its capabilities, or choose categories for it in the indexer's advanced settings.");
             }
 
             categories = offered;
@@ -166,6 +167,7 @@ public sealed class IndexerSearchCoordinator(
         var hits = new List<SearchHit>();
         var trace = new List<SearchTraceLine>();
         var queriesRun = 0;
+        var refusals = new List<IndexerRequestRejectedException>();
         string? failure = null;
         var state = IndexerSearchState.Searched;
         DateTimeOffset? retryAfter = null;
@@ -184,8 +186,34 @@ public sealed class IndexerSearchCoordinator(
 
                 foreach (var query in plan.Where(candidate => candidate.Tier == tier))
                 {
+                    // A structured function the indexer refused is not repeated in this search, whatever else the plan holds for it.
+                    if (query.Mode != IndexerSearchMode.Search && refusals.Any(refusal => refusal.Mode == query.Mode))
+                    {
+                        continue;
+                    }
+
                     queriesRun++;
-                    await ReadQueryPagesAsync(indexer, effective, entry, query, categories, limit, options, budget, session, hits, trace, timeout.Token);
+                    try
+                    {
+                        await ReadQueryPagesAsync(indexer, effective, entry, query, categories, limit, options, budget, session, hits, trace, timeout.Token);
+                    }
+                    catch (IndexerRequestRejectedException refusal)
+                    {
+                        refusals.Add(refusal);
+                        trace.Add(new SearchTraceLine(entry.Name, query.Stage, $"{query.Provenance} · refused", query.Text ?? string.Join(' ', query.Parameters.Select(pair => $"{pair.Key}={pair.Value}")), 0, 0, 0, false));
+                        logger.LogWarning("Indexer '{Indexer}' refused a search: {Message}", entry.Name, refusal.Message);
+                        if (refusal.Mode == IndexerSearchMode.Search)
+                        {
+                            break;
+                        }
+
+                        cache.RefuseMode(entry.Id, refusal.Mode);
+                    }
+                }
+
+                if (refusals.Any(refusal => refusal.Mode == IndexerSearchMode.Search))
+                {
+                    break;
                 }
             }
         }
@@ -213,6 +241,17 @@ public sealed class IndexerSearchCoordinator(
         {
             state = IndexerSearchState.Unavailable;
             failure = exception.Message;
+        }
+
+        // The plain text search itself was refused: nothing is left to fall back to, and the reason names the request that was sent.
+        if (state == IndexerSearchState.Searched && refusals.Any(refusal => refusal.Mode == IndexerSearchMode.Search) && hits.Count == 0)
+        {
+            state = IndexerSearchState.ParametersRejected;
+            failure = refusals[^1].Message;
+        }
+        else if (refusals.Count > 0 && failure is null)
+        {
+            failure = $"{refusals[0].Message} Jularr continued with the supported searches.";
         }
 
         // An indexer that answered some queries before it failed keeps what it returned and reports the problem next to it.
