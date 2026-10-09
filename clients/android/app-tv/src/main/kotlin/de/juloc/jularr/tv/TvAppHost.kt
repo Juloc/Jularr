@@ -875,6 +875,7 @@ fun TvAppHost(
                         currentCue = cue,
                         skipSegments = bundle.bootstrap.segments?.segments.orEmpty(),
                         trickplay = bundle.bootstrap.trickplay,
+                        playbackSpeeds = bundle.bootstrap.controls?.playbackSpeeds.orEmpty(),
                         serverOrigin = settings.origin.orEmpty(),
                         requestHeaders = cookies.requestHeaders(),
                         audioTracks = bundle.bootstrap.audioTracks,
