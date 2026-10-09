@@ -17,12 +17,18 @@ public sealed class PlexCatalogReconciliationJobTests
         var dispatcher = new PlexCatalogReconciliationJobs(queue);
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
-            async () => await dispatcher.QueueBatchAsync(
-                new ClaimsPrincipal(new ClaimsIdentity()),
-                "plex-machine-1234", "1", "client-instance"));
+            async () =>
+            {
+                await dispatcher.QueueBatchAsync(
+                    new ClaimsPrincipal(new ClaimsIdentity()),
+                    "plex-machine-1234", "1", "client-instance");
+            });
 
         await Assert.ThrowsExactlyAsync<ArgumentNullException>(
-            async () => await dispatcher.QueueBatchAsync(
-                null!, "plex-machine-1234", "1", "client-instance"));
+            async () =>
+            {
+                await dispatcher.QueueBatchAsync(
+                    null!, "plex-machine-1234", "1", "client-instance");
+            });
     }
 }
