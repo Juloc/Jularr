@@ -311,8 +311,12 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             return null;
         }
 
-        // Serving a segment is the one access that keeps a session alive.
-        entry.Touch(_time.GetUtcNow());
+        // Polling a playlist or init header does not prove the viewer is still consuming media.
+        // Only fetching a playable segment renews the encoder/cache lease.
+        if (s_segmentPattern.IsMatch(fileName))
+        {
+            entry.Touch(_time.GetUtcNow());
+        }
 
         return new HlsPlaybackAsset(
             path,
