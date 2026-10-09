@@ -88,6 +88,7 @@ internal fun PlayerControls(
     selectedAudioTrackId: String?,
     selectedSubtitleTrackId: String?,
     playbackSpeed: Float,
+    hasSpeedOptions: Boolean,
     design: TvPlayerDesign,
     primaryControlFocus: FocusRequester,
     audioTrackFocus: FocusRequester,
@@ -374,12 +375,14 @@ internal fun PlayerControls(
                         )
                     }
                 }
-                Button(
-                    onClick = onOpenSettingsPanel,
-                    modifier = Modifier.focusRequester(settingsFocus),
-                ) {
-                    Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.tv_player_settings))
-                    Text(" " + stringResource(R.string.tv_player_more))
+                if (hasSpeedOptions) {
+                    Button(
+                        onClick = onOpenSettingsPanel,
+                        modifier = Modifier.focusRequester(settingsFocus),
+                    ) {
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.tv_player_settings))
+                        Text(" " + stringResource(R.string.tv_player_more))
+                    }
                 }
             }
             if (canLearn) {
