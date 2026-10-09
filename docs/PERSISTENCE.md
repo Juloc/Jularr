@@ -2,6 +2,8 @@
 
 Jularr uses PostgreSQL as its single canonical database.
 
+**Current vs target:** the migration chain below documents today's installable PostgreSQL runtime. The owner-approved **future single-baseline** schema and rules for new features are in [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md). The clean cut is not implemented by this document.
+
 ## Runtime contract
 
 - The connection string is `ConnectionStrings:Default`, overridable with `ConnectionStrings__Default`.
