@@ -481,7 +481,7 @@ public sealed class PlaybackServerResourceTests
         cache.Time.Advance(HlsPlaybackSessionManager.BudgetPruneIdleAfter + TimeSpan.FromSeconds(31));
         var requesting = new PlaybackStreamSessionStore(cache.Time).Create(
             "incoming",
-            new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid()),
+            new PlaybackVideoTarget(1, Guid.NewGuid()),
             Guid.NewGuid(),
             "/media/new.mkv",
             1400,
