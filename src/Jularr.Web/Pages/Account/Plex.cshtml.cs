@@ -37,6 +37,7 @@ public sealed class PlexModel(
     public string ReturnUrl { get; set; } = "/";
 
     public bool HasVerifiedIdentity { get; private set; }
+    public bool PlexLinked { get; private set; }
     public bool AutoProvisionEnabled =>
         configuration.GetValue<bool>("Plex:AutoProvisionEnabled");
     public bool CanUsePlex =>
@@ -63,9 +64,15 @@ public sealed class PlexModel(
             return RedirectToPage("/Account/Setup");
         }
 
-        var isLinkedAccount = OwnerAuthService.GetAccountId(User) is not null;
-        if (!CanUsePlex || isLinkedAccount && !LinkEnabled
-            || !isLinkedAccount && !LoginEnabled)
+        var accountId = OwnerAuthService.GetAccountId(User);
+        PlexLinked = accountId is not null &&
+            await db.AccountLoginIdentities.AsNoTracking().AnyAsync(
+                x => x.AccountId == accountId && x.Provider == "plex",
+                cancellationToken);
+        var isLinkedAccount = accountId is not null;
+        if (!PlexLinked &&
+            (!CanUsePlex || isLinkedAccount && !LinkEnabled ||
+                !isLinkedAccount && !LoginEnabled))
         {
             return NotFound();
         }
@@ -228,6 +235,13 @@ public sealed class PlexModel(
             cancellationToken);
         if (linkedAccount is not null)
         {
+            if (currentAccountId is not null &&
+                currentAccountId != linkedAccount.Id)
+            {
+                Message = "This Plex account belongs to a different Jularr account.";
+                return Page();
+            }
+
             if (attempt.StartedAccountId is not null &&
                 attempt.StartedAccountId != linkedAccount.Id)
             {
@@ -399,6 +413,43 @@ public sealed class PlexModel(
         }
 
         return LocalRedirect(attempt.ReturnPath);
+    }
+
+    public async Task<IActionResult> OnPostUnlinkAsync(
+        CancellationToken cancellationToken)
+    {
+        var accountId = OwnerAuthService.GetAccountId(User);
+        if (accountId is null)
+        {
+            return Forbid();
+        }
+
+        var account = await accountAuth.ValidateCredentialsAsync(
+            User.Identity?.Name ?? string.Empty,
+            LocalPassword,
+            cancellationToken);
+        if (account?.Id != accountId)
+        {
+            PlexLinked = true;
+            Message = "Confirm your Jularr password to remove Plex login.";
+            return Page();
+        }
+
+        try
+        {
+            await accountAuth.UnlinkExternalIdentityAsync(
+                accountId,
+                "plex",
+                cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            PlexLinked = true;
+            Message = "Add a working local sign-in method before removing Plex.";
+            return Page();
+        }
+
+        return LocalRedirect("/");
     }
 
     private async Task<PlexLoginAttempt?> GetAttemptAsync(
