@@ -106,6 +106,36 @@ public sealed class PlexServerSelectionTests
         }
     }
 
+    [TestMethod]
+    public async Task ServerSelection_MachineIdentityMismatchCannotPersistAnyGrant()
+    {
+        var directory = Path.Combine(
+            Path.GetTempPath(), $"jularr-plex-mismatch-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new PlexServerGrantStore(
+                new EphemeralDataProtectionProvider(), TimeProvider.System,
+                directory);
+            using var http = CreateClient("different-machine-999");
+            var picker = new PlexServerSelectionService(
+                new PlexLibraryClient(http), store);
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+                picker.ApproveAsync(
+                    Admin(), Candidate(), HttpsPlexServer, ["1"],
+                    "jularr-client", CancellationToken.None));
+
+            Assert.AreEqual(0, (await store.ListAsync()).Count);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
     private static ClaimsPrincipal Admin() =>
         OwnerAuthService.CreatePrincipal(new OwnerAccount
         {
@@ -120,7 +150,7 @@ public sealed class PlexServerSelectionTests
             "super-private-server-token",
             [new PlexServerConnection(HttpsPlexServer, true, false)]);
 
-    private static HttpClient CreateClient() => new(new Handler(request =>
+    private static HttpClient CreateClient(string machineId = "machine-123456") => new(new Handler(request =>
     {
         Assert.AreEqual(HttpsPlexServer.Host, request.RequestUri!.Host);
         Assert.AreEqual("super-private-server-token",
@@ -129,7 +159,7 @@ public sealed class PlexServerSelectionTests
         {
             Content = new StringContent(
                 request.RequestUri.AbsolutePath.EndsWith("/identity", StringComparison.Ordinal)
-                    ? """{"MediaContainer":{"machineIdentifier":"machine-123456"}}"""
+                    ? "{\\\"MediaContainer\\\":{\\\"machineIdentifier\\\":\\\"" + machineId + "\\\"}}"
                     : """
                 {"MediaContainer":{"Directory":[
                   {"key":"1","type":"movie","title":"Movies"},
