@@ -1389,7 +1389,7 @@
 
         const width = stage.clientWidth;
         const height = stage.clientHeight;
-        const key = `${width}:${height}:${video.videoWidth}:${video.videoHeight}`;
+        const key = `${width}:${height}:${video.videoWidth}:${video.videoHeight}:${stage.dataset.chromeState || ""}`;
         if (key === subtitleCanvasSizeKey) return false;
         subtitleCanvasSizeKey = key;
         const scale = Math.min(width / video.videoWidth, height / video.videoHeight);
@@ -1434,6 +1434,7 @@
         }
 
         if (!subtitleStack?.getBoundingClientRect) return;
+        subtitleStack.style.transition = "none";
         subtitleStack.style.bottom = "";
         const stageBox = stage.getBoundingClientRect();
         let caption = subtitleStack.getBoundingClientRect();
