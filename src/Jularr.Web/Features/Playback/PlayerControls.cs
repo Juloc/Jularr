@@ -93,6 +93,7 @@ public sealed record PlayerControls(
             ? tracks.Where(track =>
                     track.Kind == PlaybackTrackKind.Subtitle &&
                     track.IsText &&
+                    SubtitleFormats.IsText(track.Codec) &&
                     PlaybackTrackIds.Format(track.StreamIndex) != initialSubtitle &&
                     PlaybackLanguages.Normalize(track.Language) == language)
                 .OrderBy(track => track.IsForced)
