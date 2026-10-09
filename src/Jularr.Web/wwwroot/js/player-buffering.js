@@ -158,6 +158,8 @@
             reset() {
                 lastEnd = null;
                 lastAt = null;
+                value = null;
+                valueAt = null;
             },
             observe({ nowMs, bufferedEndSeconds, bitrateKbps, idle }) {
                 if (bufferedEndSeconds === null || !(bitrateKbps > 0)) {
