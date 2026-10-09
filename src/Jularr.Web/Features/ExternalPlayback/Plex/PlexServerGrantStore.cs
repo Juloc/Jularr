@@ -68,6 +68,15 @@ public sealed class PlexServerGrantStore
         }
     }
 
+    /// <summary>
+    /// Returns whether this connection is currently decryptable. No secrets
+    /// or internal grant objects are exposed to the caller.
+    /// </summary>
+    public async Task<bool> IsUsableAsync(
+        string machineIdentifier,
+        CancellationToken cancellationToken = default) =>
+        await GetGrantAsync(machineIdentifier, cancellationToken) is not null;
+
     /// <summary>Only trusted backend callers can retrieve server credentials.</summary>
     internal async Task<PlexServerGrant?> GetGrantAsync(
         string machineIdentifier,
