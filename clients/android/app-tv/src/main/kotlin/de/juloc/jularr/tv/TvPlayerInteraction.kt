@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.design.PlayerSeekSteps
+import de.juloc.jularr.core.model.ClientMediaSegment
 
 enum class TvLearningLayer {
     CLOSED,
@@ -17,6 +18,8 @@ data class TvPlayerUiState(
 
 sealed interface TvPlayerEffect {
     data object TogglePlayback : TvPlayerEffect
+    data object PlayPlayback : TvPlayerEffect
+    data object PauseMediaPlayback : TvPlayerEffect
     data class SeekBy(val deltaMs: Long) : TvPlayerEffect
     data object PausePlayback : TvPlayerEffect
     data object ResumePlayback : TvPlayerEffect
@@ -30,16 +33,27 @@ data class TvPlayerTransition(
 )
 
 object TvPlayerInteraction {
+    fun activeSkipSegment(segments: List<ClientMediaSegment>, positionMs: Long): ClientMediaSegment? =
+        segments.firstOrNull { it.canSkip && positionMs >= it.startMs && positionMs < it.endMs }
+
     fun mediaPlayPause(state: TvPlayerUiState): TvPlayerTransition =
         TvPlayerTransition(state, listOf(TvPlayerEffect.TogglePlayback))
+
+    fun mediaPlay(state: TvPlayerUiState): TvPlayerTransition =
+        TvPlayerTransition(state, listOf(TvPlayerEffect.PlayPlayback))
+
+    fun mediaPause(state: TvPlayerUiState): TvPlayerTransition =
+        TvPlayerTransition(state, listOf(TvPlayerEffect.PauseMediaPlayback))
 
     fun autoHide(
         state: TvPlayerUiState,
         isPlaying: Boolean,
         companionVisible: Boolean = false,
+        scrubActive: Boolean = false,
     ): TvPlayerTransition =
         if (isPlaying &&
             !companionVisible &&
+            !scrubActive &&
             state.controlsVisible &&
             state.learningLayer == TvLearningLayer.CLOSED
         ) {

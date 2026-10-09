@@ -1,6 +1,14 @@
 package de.juloc.jularr.tv
 
 import android.content.Context
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -8,8 +16,6 @@ data class TvSavedSession(
     val id: String,
     val serverOrigin: String,
     val userName: String,
-    val role: String? = null,
-    val profileId: String? = null,
     val cookies: Map<String, String> = emptyMap(),
     val lastActiveAtMillis: Long = System.currentTimeMillis(),
 )
@@ -20,9 +26,28 @@ class TvSessionStore(context: Context) {
         Context.MODE_PRIVATE,
     )
 
+    init {
+        val legacy = preferences.getString(KEY_SESSIONS, null)
+        if (legacy != null) {
+            try {
+                check(preferences.edit()
+                    .putString(KEY_ENCRYPTED_SESSIONS, encrypt(legacy))
+                    .remove(KEY_SESSIONS)
+                    .commit())
+            } catch (exception: Exception) {
+                preferences.edit()
+                    .remove(KEY_SESSIONS)
+                    .remove(KEY_ENCRYPTED_SESSIONS)
+                    .commit()
+                throw IllegalStateException("Could not safely migrate stored TV sessions.", exception)
+            }
+        }
+    }
+
     @Synchronized
     fun getSessions(): List<TvSavedSession> {
-        val rawJson = preferences.getString(KEY_SESSIONS, null) ?: return emptyList()
+        val encoded = preferences.getString(KEY_ENCRYPTED_SESSIONS, null) ?: return emptyList()
+        val rawJson = runCatching { decrypt(encoded) }.getOrElse { return emptyList() }
         return runCatching {
             val array = JSONArray(rawJson)
             val list = mutableListOf<TvSavedSession>()
@@ -39,8 +64,6 @@ class TvSessionStore(context: Context) {
                         id = obj.getString("id"),
                         serverOrigin = obj.getString("serverOrigin"),
                         userName = obj.getString("userName"),
-                        role = obj.optString("role").takeIf { it.isNotBlank() },
-                        profileId = obj.optString("profileId").takeIf { it.isNotBlank() },
                         cookies = cookies,
                         lastActiveAtMillis = obj.optLong("lastActiveAtMillis", System.currentTimeMillis()),
                     ),
@@ -52,8 +75,10 @@ class TvSessionStore(context: Context) {
 
     @Synchronized
     fun getActiveSession(): TvSavedSession? {
-        val activeId = preferences.getString(KEY_ACTIVE_ID, null) ?: return getSessions().firstOrNull()
-        return getSessions().firstOrNull { it.id == activeId } ?: getSessions().firstOrNull()
+        val activeId = preferences.getString(KEY_ACTIVE_ID, null)
+        if (activeId == NEW_SIGN_IN) return null
+        val sessions = getSessions()
+        return if (activeId == null) sessions.firstOrNull() else sessions.firstOrNull { it.id == activeId }
     }
 
     @Synchronized
@@ -63,6 +88,11 @@ class TvSessionStore(context: Context) {
             if (it.id == id) it.copy(lastActiveAtMillis = System.currentTimeMillis()) else it
         }
         persistSessions(sessions)
+    }
+
+    @Synchronized
+    fun beginNewSignIn() {
+        preferences.edit().putString(KEY_ACTIVE_ID, NEW_SIGN_IN).apply()
     }
 
     @Synchronized
@@ -110,8 +140,6 @@ class TvSessionStore(context: Context) {
             obj.put("id", session.id)
             obj.put("serverOrigin", session.serverOrigin)
             obj.put("userName", session.userName)
-            obj.put("role", session.role ?: "")
-            obj.put("profileId", session.profileId ?: "")
             obj.put("lastActiveAtMillis", session.lastActiveAtMillis)
 
             val cookieObj = JSONObject()
@@ -122,12 +150,49 @@ class TvSessionStore(context: Context) {
 
             array.put(obj)
         }
-        preferences.edit().putString(KEY_SESSIONS, array.toString()).apply()
+        check(preferences.edit().putString(KEY_ENCRYPTED_SESSIONS, encrypt(array.toString())).commit()) {
+            "Could not save encrypted TV sessions."
+        }
+    }
+
+    private fun secretKey(): SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build(),
+        )
+        return generator.generateKey()
+    }
+
+    private fun encrypt(plainText: String): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey())
+        val data = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
+        return Base64.encodeToString(cipher.iv + data, Base64.NO_WRAP)
+    }
+
+    private fun decrypt(encoded: String): String {
+        val payload = Base64.decode(encoded, Base64.NO_WRAP)
+        require(payload.size > 12 + 16) { "Invalid session ciphertext." }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, payload.copyOfRange(0, 12)))
+        return cipher.doFinal(payload.copyOfRange(12, payload.size)).toString(Charsets.UTF_8)
     }
 
     private companion object {
         const val PREFS_NAME = "jularr-tv-sessions"
         const val KEY_SESSIONS = "saved_sessions"
+        const val KEY_ENCRYPTED_SESSIONS = "encrypted_sessions"
         const val KEY_ACTIVE_ID = "active_session_id"
+        const val KEY_ALIAS = "jularr-tv-sessions-key"
+        const val NEW_SIGN_IN = "new-sign-in"
     }
 }

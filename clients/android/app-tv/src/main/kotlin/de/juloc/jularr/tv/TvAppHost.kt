@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -33,6 +34,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.api.TvServerDiscoveryClient
 import de.juloc.jularr.core.model.DiscoveredJularrServer
+import de.juloc.jularr.core.model.EpisodeSummary
 import de.juloc.jularr.core.player.JularrMedia3Player
 import de.juloc.jularr.core.player.PlaybackTransport
 import de.juloc.jularr.core.player.toPlaybackMetadata
@@ -49,6 +51,8 @@ import de.juloc.jularr.core.update.UpdatePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import androidx.media3.common.util.UnstableApi
 import java.io.File
@@ -178,6 +182,16 @@ fun TvAppHost(
     val episodeBundle = snapshot.episode
     val episodeId = playerRoute?.episodeId
     val progressPolicy = remember(episodeId) { TvProgressPolicy() }
+    val progressWriteMutex = remember { Mutex() }
+    var episodeNeighbors by remember(episodeId) { mutableStateOf(TvEpisodeNeighbors()) }
+    var advancingEpisode by remember(episodeId) { mutableStateOf(false) }
+
+    LaunchedEffect(episodeId) {
+        val route = playerRoute ?: return@LaunchedEffect
+        episodeNeighbors = runCatching {
+            controller.episodeNeighbors(route.episodeId, route.animeId)
+        }.getOrDefault(TvEpisodeNeighbors())
+    }
 
     fun launchSnapshot(block: suspend () -> TvAppSnapshot) {
         snapshot = snapshot.copy(busy = true, error = null)
@@ -293,8 +307,38 @@ fun TvAppHost(
             durationMs = durationMs.takeIf { it > 0 },
         ) ?: return
 
+        val targetEpisodeId = episodeId ?: return
         scope.launch {
-            controller.saveProgress(write)
+            progressWriteMutex.withLock { controller.saveProgress(write, targetEpisodeId) }
+        }
+    }
+
+    fun switchEpisode(target: EpisodeSummary) {
+        val currentEpisodeId = episodeId ?: return
+        val animeId = playerRoute?.animeId ?: return
+        if (advancingEpisode) return
+        advancingEpisode = true
+        val write = progressPolicy.evaluate(
+            event = TvProgressEvent.CLOSE,
+            nowMs = SystemClock.elapsedRealtime(),
+            positionMs = currentPositionMs,
+            durationMs = currentDurationMs.takeIf { it > 0 },
+        )
+        scope.launch {
+            try {
+                if (write != null) {
+                    progressWriteMutex.withLock { controller.saveProgress(write, currentEpisodeId) }
+                }
+                val next = controller.playEpisode(target.id, animeId)
+                if (next.navigation.route == TvRoute.Player(target.id, animeId) &&
+                    next.episode?.bootstrap?.episode?.id == target.id
+                ) {
+                    resetPlaybackRuntime()
+                }
+                snapshot = next
+            } finally {
+                advancingEpisode = false
+            }
         }
     }
 
@@ -497,7 +541,9 @@ fun TvAppHost(
         updatePromptInfo = null
     }
 
-    val focusMemory = remember { TvFocusMemory() }
+    val focusMemory = remember(settings.origin, snapshot.account?.profileId) {
+        TvFocusMemory()
+    }
 
     when (val route = snapshot.navigation.route) {
         TvRoute.Setup -> TvSetupScreen(
@@ -508,7 +554,7 @@ fun TvAppHost(
             discovered = discoveredServers,
             onConnect = { origin ->
                 launchSnapshot {
-                    cookies.clear()
+                    cookies.loadCookies(emptyMap())
                     controller.connect(origin)
                 }
             },
@@ -524,8 +570,7 @@ fun TvAppHost(
                 }
             },
             onChangeServer = {
-                cookies.clear()
-                snapshot = controller.changeServer()
+                launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
             },
             pairingEnabled = snapshot.capabilities?.features?.devicePairing == true,
             onStartPairing = { controller.startDevicePairing() },
@@ -535,30 +580,51 @@ fun TvAppHost(
             },
         )
 
-        TvRoute.ProfileSelect -> {
-            val sessions = sessionStore?.getSessions().orEmpty()
-            TvProfileSelectScreen(
-                sessions = sessions,
+        TvRoute.AccountSelect -> {
+            BackHandler(enabled = snapshot.busy) { }
+            TvAccountSelectScreen(
+                sessions = sessionStore?.getSessions().orEmpty(),
+                activeSessionId = if (snapshot.account != null) sessionStore?.getActiveSession()?.id else null,
+                error = snapshot.error,
+                busy = snapshot.busy,
                 onSelectSession = { session ->
-                    launchSnapshot {
-                        controller.selectSavedSession(session)
-                    }
+                    resetPlaybackRuntime()
+                    launchSnapshot { progressWriteMutex.withLock { controller.selectSavedSession(session) } }
                 },
                 onAddAccount = {
-                    cookies.clear()
-                    snapshot = controller.changeServer()
+                    resetPlaybackRuntime()
+                    launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
+                },
+                onSignOut = {
+                    resetPlaybackRuntime()
+                    launchSnapshot { progressWriteMutex.withLock { controller.signOut() } }
                 },
             )
         }
 
-        TvRoute.Home, TvRoute.Watchlist, TvRoute.Activity, TvRoute.Profile -> Box(modifier = Modifier.fillMaxSize()) {
+        TvRoute.ProfileSelect -> TvMessageScreen(
+            title = stringResource(R.string.tv_profile_select_title),
+            message = snapshot.error ?: stringResource(R.string.tv_profile_select_unavailable),
+            action = stringResource(R.string.tv_profile_switch_account),
+            onAction = {
+                resetPlaybackRuntime()
+                snapshot = controller.openAccountSelect()
+            },
+        )
+
+        TvRoute.Home, TvRoute.Watchlist, TvRoute.Settings -> Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TvSidebar(
                     selected = route,
                     focusMemory = focusMemory,
                     onSelect = { selected ->
                         if (selected != route) {
-                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                            if (selected == TvRoute.ProfileSelect) {
+                                resetPlaybackRuntime()
+                                snapshot = controller.openProfileSelect()
+                            } else {
+                                launchSnapshot { controller.selectSidebarRoute(selected) }
+                            }
                         }
                     },
                 )
@@ -573,8 +639,8 @@ fun TvAppHost(
                                         ?: stringResource(R.string.tv_message_home_unavailable_body),
                                     action = stringResource(R.string.tv_action_sign_in),
                                     onAction = {
-                                        cookies.clear()
-                                        snapshot = controller.changeServer()
+                                        resetPlaybackRuntime()
+                                        launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
                                     },
                                 )
                             } else {
@@ -604,6 +670,7 @@ fun TvAppHost(
                         TvRoute.Watchlist -> TvWatchlistScreen(
                             entries = snapshot.watchlist,
                             supported = snapshot.capabilities?.features?.watchlist == true,
+                            continueWatching = snapshot.continueWatching,
                             serverOrigin = settings.origin.orEmpty(),
                             requestHeaders = cookies.requestHeaders(),
                             focusMemory = focusMemory,
@@ -612,21 +679,7 @@ fun TvAppHost(
                             },
                         )
 
-                        TvRoute.Activity -> TvActivityScreen(
-                            history = snapshot.activity,
-                            continueWatchingFallback = snapshot.continueWatching,
-                            usesContinueWatchingFallback = snapshot.activityUsesContinueWatchingFallback,
-                            serverOrigin = settings.origin.orEmpty(),
-                            requestHeaders = cookies.requestHeaders(),
-                            focusMemory = focusMemory,
-                            onOpenEpisode = { episodeId, animeId ->
-                                launchSnapshot {
-                                    controller.openEpisode(episodeId = episodeId, animeId = animeId)
-                                }
-                            },
-                        )
-
-                        TvRoute.Profile -> {
+                        TvRoute.Settings -> {
                             val account = snapshot.account
                             if (account == null) {
                                 TvMessageScreen(
@@ -635,13 +688,19 @@ fun TvAppHost(
                                         ?: stringResource(R.string.tv_message_home_unavailable_body),
                                     action = stringResource(R.string.tv_action_sign_in),
                                     onAction = {
-                                        cookies.clear()
-                                        snapshot = controller.changeServer()
+                                        resetPlaybackRuntime()
+                                        launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
                                     },
                                 )
                             } else {
                                 TvProfileScreen(
                                     account = account,
+                                    playbackPreferences = snapshot.playbackPreferences,
+                                    busy = snapshot.busy,
+                                    error = snapshot.error,
+                                    onUpdatePlaybackPreferences = { update ->
+                                        launchSnapshot { controller.changePlaybackPreferences(update) }
+                                    },
                                     serverOrigin = settings.origin.orEmpty(),
                                     currentVersionName = BuildConfig.VERSION_NAME,
                                     updateState = updateState,
@@ -655,18 +714,21 @@ fun TvAppHost(
                                     onStartUpdateDownload = ::startUpdateDownload,
                                     onInstallUpdate = ::installUpdate,
                                     onSwitchAccount = {
+                                        resetPlaybackRuntime()
+                                        snapshot = controller.openAccountSelect()
+                                    },
+                                    onSwitchProfile = {
+                                        resetPlaybackRuntime()
                                         snapshot = controller.openProfileSelect()
                                     },
                                     onSignOut = {
                                         launchSnapshot {
-                                            val next = controller.signOut()
-                                            cookies.clear()
-                                            next
+                                            progressWriteMutex.withLock { controller.signOut() }
                                         }
                                     },
                                     onChangeServer = {
-                                        cookies.clear()
-                                        snapshot = controller.changeServer()
+                                        resetPlaybackRuntime()
+                                        launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
                                     },
                                 )
                             }
@@ -683,7 +745,7 @@ fun TvAppHost(
                     onUpdateNow = {
                         updatePromptInfo = null
                         startUpdateDownload(info)
-                        launchSnapshot { controller.selectSidebarRoute(TvRoute.Profile) }
+                        launchSnapshot { controller.selectSidebarRoute(TvRoute.Settings) }
                     },
                     onLater = {
                         updatePreferences.dismissedVersion = info.version
@@ -699,18 +761,30 @@ fun TvAppHost(
             if (library == null) {
                 controller.back()?.let { snapshot = it }
             } else {
-                TvSearchScreen(
-                    library = library,
-                    serverOrigin = settings.origin.orEmpty(),
-                    requestHeaders = cookies.requestHeaders(),
-                    focusMemory = focusMemory,
-                    onAnime = { anime ->
-                        launchSnapshot { controller.openAnime(anime.id) }
-                    },
-                    onBack = {
-                        controller.back()?.let { snapshot = it }
-                    },
-                )
+                Row(modifier = Modifier.fillMaxSize()) {
+                    TvSidebar(
+                        selected = TvRoute.Home,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                        },
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        TvSearchScreen(
+                            library = library,
+                            query = snapshot.searchQuery,
+                            selectedFilter = snapshot.searchCategory,
+                            serverOrigin = settings.origin.orEmpty(),
+                            requestHeaders = cookies.requestHeaders(),
+                            focusMemory = focusMemory,
+                            onQueryChange = { snapshot = controller.updateSearchQuery(it) },
+                            onFilterChange = { snapshot = controller.updateSearchCategory(it) },
+                            onAnime = { anime ->
+                                launchSnapshot { controller.openAnime(anime.id) }
+                            },
+                        )
+                    }
+                }
             }
         }
 
@@ -727,22 +801,38 @@ fun TvAppHost(
                     },
                 )
             } else {
-                TvAnimeScreen(
-                    anime = anime,
-                    serverOrigin = settings.origin.orEmpty(),
-                    requestHeaders = cookies.requestHeaders(),
-                    onEpisode = { episode ->
-                        launchSnapshot {
-                            controller.openEpisode(
-                                episodeId = episode.id,
-                                animeId = anime.id,
-                            )
-                        }
-                    },
-                    onBack = {
-                        controller.back()?.let { snapshot = it }
-                    },
-                )
+                Row(modifier = Modifier.fillMaxSize()) {
+                    TvSidebar(
+                        selected = TvRoute.Home,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                        },
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        TvAnimeScreen(
+                            anime = anime,
+                            continueWatching = snapshot.continueWatching,
+                            focusMemory = focusMemory,
+                            serverOrigin = settings.origin.orEmpty(),
+                            requestHeaders = cookies.requestHeaders(),
+                            onEpisode = { episode ->
+                                launchSnapshot {
+                                    controller.openEpisode(
+                                        episodeId = episode.id,
+                                        animeId = anime.id,
+                                    )
+                                }
+                            },
+                            onPlayEpisode = { episode ->
+                                launchSnapshot { controller.playEpisode(episode.id, anime.id) }
+                            },
+                            onBack = {
+                                controller.back()?.let { snapshot = it }
+                            },
+                        )
+                    }
+                }
             }
         }
 
@@ -824,203 +914,222 @@ fun TvAppHost(
                     currentPositionMs,
                 )
 
-                TvPlayerScreen(
-                    player = player,
-                    episodeTitle = bundle.bootstrap.episode.title,
-                    currentCue = cue,
-                    audioTracks = bundle.bootstrap.audioTracks,
-                    subtitleTracks = bundle.bootstrap.subtitleTracks,
-                    selectedAudioTrackId = selectedAudioTrackId,
-                    selectedSubtitleTrackId = selectedSubtitleTrackId,
-                    onSelectAudioTrack = { id ->
-                        bundle.bootstrap.audioTracks
-                            .firstOrNull { it.id == id }
-                            ?.let { track ->
-                                if (TvMediaTrackSelector.selectAudio(
-                                        player.player,
-                                        track,
-                                    )
-                                ) {
-                                    selectedAudioTrackId = id
-                                    pushCompanionState(force = true)
+                key(route.episodeId) {
+                    TvPlayerScreen(
+                        player = player,
+                        episodeTitle = bundle.bootstrap.episode.title,
+                        currentCue = cue,
+                        skipSegments = bundle.bootstrap.segments?.segments.orEmpty(),
+                        trickplay = bundle.bootstrap.trickplay,
+                        playbackSpeeds = bundle.bootstrap.controls?.playbackSpeeds.orEmpty(),
+                        defaultPlaybackSpeed = snapshot.playbackPreferences?.defaultPlaybackSpeed?.toFloat() ?: 1f,
+                        preferredAudioLanguage = snapshot.playbackPreferences?.preferredAudioLanguage,
+                        preferredSubtitleLanguage = snapshot.playbackPreferences?.preferredSubtitleLanguage,
+                        serverOrigin = settings.origin.orEmpty(),
+                        requestHeaders = cookies.requestHeaders(),
+                        audioTracks = bundle.bootstrap.audioTracks,
+                        subtitleTracks = bundle.bootstrap.subtitleTracks,
+                        selectedAudioTrackId = selectedAudioTrackId,
+                        selectedSubtitleTrackId = selectedSubtitleTrackId,
+                        onSelectAudioTrack = { id ->
+                            val track = bundle.bootstrap.audioTracks.firstOrNull { it.id == id }
+                            val selected = track != null && TvMediaTrackSelector.selectAudio(player.player, track)
+                            if (selected) {
+                                selectedAudioTrackId = id
+                                pushCompanionState(force = true)
+                            }
+                            selected
+                        },
+                        onSelectSubtitleTrack = { id ->
+                            val track = id?.let { selected ->
+                                bundle.bootstrap.subtitleTracks
+                                    .firstOrNull { it.id == selected }
+                            }
+                            val selected = TvMediaTrackSelector.selectSubtitle(player.player, track)
+                            if (selected) {
+                                selectedSubtitleTrackId = id
+                                pushCompanionState(force = true)
+                            }
+                            selected
+                        },
+                        onPlaybackSpeedChanged = { pushCompanionState(force = true) },
+                        onPositionChanged = { position, duration, isPlaying ->
+                            currentPositionMs = position
+                            currentDurationMs = duration
+                            resumePositionMs = position
+                            resumeShouldPlay = isPlaying
+                            persist(
+                                event = if (isPlaying) {
+                                    TvProgressEvent.HEARTBEAT
+                                } else {
+                                    TvProgressEvent.PAUSE
+                                },
+                                positionMs = position,
+                                durationMs = duration,
+                            )
+                            refreshCueWindowIfNeeded(position)
+                            pushCompanionState()
+                        },
+                        onPlaybackEnded = { position, duration ->
+                            persist(TvProgressEvent.ENDED, position, duration)
+                        },
+                        previousEpisodeTitle = episodeNeighbors.previous?.title,
+                        nextEpisodeTitle = episodeNeighbors.next?.title,
+                        onPreviousEpisode = {
+                            episodeNeighbors.previous?.let(::switchEpisode)
+                        },
+                        onNextEpisode = {
+                            episodeNeighbors.next?.let(::switchEpisode)
+                        },
+                        onSeeked = { position, duration, isPlaying ->
+                            currentPositionMs = position
+                            currentDurationMs = duration
+                            resumePositionMs = position
+                            resumeShouldPlay = isPlaying
+                            persist(
+                                TvProgressEvent.SEEK,
+                                position,
+                                duration,
+                            )
+                            refreshCueWindowIfNeeded(position)
+                            pushCompanionState(force = true)
+                        },
+                        playbackError = snapshot.error?.takeIf { it.isNotBlank() },
+                        onRetryPlayback = {
+                            scope.launch {
+                                val refreshed = controller.refreshEpisodeStorage(0)
+                                snapshot = refreshed
+                                if (refreshed.storageDecision == null && refreshed.error == null) {
+                                    openedEpisodeId = null
+                                    playbackGeneration += 1
                                 }
                             }
-                    },
-                    onSelectSubtitleTrack = { id ->
-                        val track = id?.let { selected ->
-                            bundle.bootstrap.subtitleTracks
-                                .firstOrNull { it.id == selected }
-                        }
-                        if (TvMediaTrackSelector.selectSubtitle(
-                                player.player,
-                                track,
-                            )
-                        ) {
-                            selectedSubtitleTrackId = id
-                            pushCompanionState(force = true)
-                        }
-                    },
-                    onPositionChanged = { position, duration, isPlaying ->
-                        currentPositionMs = position
-                        currentDurationMs = duration
-                        resumePositionMs = position
-                        resumeShouldPlay = isPlaying
-                        persist(
-                            event = if (isPlaying) {
-                                TvProgressEvent.HEARTBEAT
-                            } else {
-                                TvProgressEvent.PAUSE
-                            },
-                            positionMs = position,
-                            durationMs = duration,
-                        )
-                        refreshCueWindowIfNeeded(position)
-                        pushCompanionState()
-                    },
-                    onPlaybackEnded = { position, duration ->
-                        persist(
-                            TvProgressEvent.ENDED,
-                            position,
-                            duration,
-                        )
-                    },
-                    onSeeked = { position, duration, isPlaying ->
-                        currentPositionMs = position
-                        currentDurationMs = duration
-                        resumePositionMs = position
-                        resumeShouldPlay = isPlaying
-                        persist(
-                            TvProgressEvent.SEEK,
-                            position,
-                            duration,
-                        )
-                        refreshCueWindowIfNeeded(position)
-                        pushCompanionState(force = true)
-                    },
-                    onPlaybackFailure = { position ->
-                        resumePositionMs = position
-                        resumeShouldPlay = true
-                        player.player.stop()
-                        openedEpisodeId = null
-
-                        scope.launch {
-                            val storage = controller.refreshEpisodeStorage(0)
-                            snapshot = storage
-                            if (storage.storageDecision != null) {
-                                return@launch
+                        },
+                        onPlaybackFailure = { position ->
+                            resumePositionMs = position
+                            resumeShouldPlay = true
+                            player.player.stop()
+                            openedEpisodeId = null
+    
+                            scope.launch {
+                                val storage = controller.refreshEpisodeStorage(0)
+                                snapshot = storage
+                                if (storage.storageDecision != null) {
+                                    return@launch
+                                }
+    
+                                if (currentTransport == PlaybackTransport.DIRECT) {
+                                    forceFallback = true
+                                    playbackGeneration += 1
+                                } else {
+                                    snapshot = controller.reportError(
+                                        IllegalStateException(
+                                            "Server compatibility playback failed.",
+                                        ),
+                                    )
+                                }
                             }
-
-                            if (currentTransport == PlaybackTransport.DIRECT) {
-                                forceFallback = true
-                                playbackGeneration += 1
-                            } else {
-                                snapshot = controller.reportError(
-                                    IllegalStateException(
-                                        "Server compatibility playback failed.",
-                                    ),
+                        },
+                        canOpenOnPhone =
+                            companionRuntime != null &&
+                                snapshot.capabilities?.features?.companionControl == true &&
+                                snapshot.capabilities?.features?.playbackSessions == true,
+                        remoteCommand = remoteCommand,
+                        companionVisible = companionPairing != null,
+                        onCloseCompanion = {
+                            companionPairing = null
+                        },
+                        companionOverlay = companionPairing?.let { pairing ->
+                            {
+                                val origin = settings.origin.orEmpty()
+                                val base = URI(origin.trimEnd('/') + "/")
+                                val companionUrl = base
+                                    .resolve(pairing.companionUrl.removePrefix("/"))
+                                    .toString()
+    
+                                TvCompanionPairingOverlay(
+                                    pairing = pairing,
+                                    companionUrl = companionUrl,
+                                    busy = companionBusy,
+                                    onNewCode = {
+                                        val runtime = companionRuntime
+                                        if (runtime != null) {
+                                            scope.launch {
+                                                companionBusy = true
+                                                companionPairing = runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        runtime.createPairing()
+                                                    }
+                                                }.getOrNull()
+                                                companionBusy = false
+                                            }
+                                        }
+                                    },
+                                    onRevoke = {
+                                        val runtime = companionRuntime
+                                        if (runtime != null) {
+                                            scope.launch {
+                                                companionBusy = true
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        runtime.revoke()
+                                                    }
+                                                }
+                                                companionPairing = null
+                                                companionBusy = false
+                                            }
+                                        }
+                                    },
+                                    onClose = {
+                                        companionPairing = null
+                                    },
                                 )
                             }
-                        }
-                    },
-                    canOpenOnPhone =
-                        companionRuntime != null &&
-                            snapshot.capabilities?.features?.companionControl == true &&
-                            snapshot.capabilities?.features?.playbackSessions == true,
-                    remoteCommand = remoteCommand,
-                    companionVisible = companionPairing != null,
-                    onCloseCompanion = {
-                        companionPairing = null
-                    },
-                    companionOverlay = companionPairing?.let { pairing ->
-                        {
-                            val origin = settings.origin.orEmpty()
-                            val base = URI(origin.trimEnd('/') + "/")
-                            val companionUrl = base
-                                .resolve(pairing.companionUrl.removePrefix("/"))
-                                .toString()
-
-                            TvCompanionPairingOverlay(
-                                pairing = pairing,
-                                companionUrl = companionUrl,
-                                busy = companionBusy,
-                                onNewCode = {
-                                    val runtime = companionRuntime
-                                    if (runtime != null) {
-                                        scope.launch {
-                                            companionBusy = true
-                                            companionPairing = runCatching {
-                                                withContext(Dispatchers.IO) {
-                                                    runtime.createPairing()
-                                                }
-                                            }.getOrNull()
-                                            companionBusy = false
-                                        }
-                                    }
-                                },
-                                onRevoke = {
-                                    val runtime = companionRuntime
-                                    if (runtime != null) {
-                                        scope.launch {
-                                            companionBusy = true
-                                            runCatching {
-                                                withContext(Dispatchers.IO) {
-                                                    runtime.revoke()
-                                                }
-                                            }
-                                            companionPairing = null
-                                            companionBusy = false
-                                        }
-                                    }
-                                },
-                                onClose = {
-                                    companionPairing = null
-                                },
-                            )
-                        }
-                    },
-                    onSetTermState = { termId, state ->
-                        scope.launch {
-                            snapshot = controller.setTermState(termId, state)
-                            pushCompanionState(force = true)
-                        }
-                    },
-                    onSelectedTermChanged = { termId ->
-                        companionSelectedTermId = termId
-                        pushCompanionState(force = true)
-                    },
-                    onOpenOnPhone = { _, termId ->
-                        companionSelectedTermId = termId
-                        pushCompanionState(force = true)
-                        val runtime = companionRuntime
-                        if (runtime != null) {
+                        },
+                        onSetTermState = { termId, state ->
                             scope.launch {
-                                companionBusy = true
-                                companionPairing = runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        runtime.createPairing()
-                                    }
-                                }.getOrNull()
-                                companionBusy = false
+                                snapshot = controller.setTermState(termId, state)
+                                pushCompanionState(force = true)
                             }
-                        }
-                    },
-                    onExit = {
-                        val write = progressPolicy.evaluate(
-                            event = TvProgressEvent.CLOSE,
-                            nowMs = SystemClock.elapsedRealtime(),
-                            positionMs = currentPositionMs,
-                            durationMs = currentDurationMs.takeIf { it > 0 },
-                        )
-
-                        scope.launch {
-                            if (write != null) {
-                                controller.saveProgress(write)
+                        },
+                        onSelectedTermChanged = { termId ->
+                            companionSelectedTermId = termId
+                            pushCompanionState(force = true)
+                        },
+                        onOpenOnPhone = { _, termId ->
+                            companionSelectedTermId = termId
+                            pushCompanionState(force = true)
+                            val runtime = companionRuntime
+                            if (runtime != null) {
+                                scope.launch {
+                                    companionBusy = true
+                                    companionPairing = runCatching {
+                                        withContext(Dispatchers.IO) {
+                                            runtime.createPairing()
+                                        }
+                                    }.getOrNull()
+                                    companionBusy = false
+                                }
                             }
-                            resetPlaybackRuntime()
-                            controller.back()?.let { snapshot = it }
-                        }
-                    },
-                )
+                        },
+                        onExit = {
+                            val write = progressPolicy.evaluate(
+                                event = TvProgressEvent.CLOSE,
+                                nowMs = SystemClock.elapsedRealtime(),
+                                positionMs = currentPositionMs,
+                                durationMs = currentDurationMs.takeIf { it > 0 },
+                            )
+    
+                            scope.launch {
+                                if (write != null) {
+                                    progressWriteMutex.withLock { controller.saveProgress(write, route.episodeId) }
+                                }
+                                resetPlaybackRuntime()
+                                controller.back()?.let { snapshot = it }
+                            }
+                        },
+                    )
+                }
             }
         }
     }

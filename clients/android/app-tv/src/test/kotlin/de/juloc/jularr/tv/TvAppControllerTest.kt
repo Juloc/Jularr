@@ -80,32 +80,50 @@ class TvAppControllerTest {
     }
 
     @Test
-    fun selectingActivityLoadsPlaybackHistoryWhenTheServerAdvertisesIt() {
+    fun failedAccountRestoreCannotExposePreviousAccountData() {
+        val api = FakeApi(failRestore = true)
+        val controller = TvAppController(FakeOriginStore("https://jularr.example")) { api }
+
+        runSuspend { controller.restoreConnection() }
+        runSuspend { controller.login("jessi", "password-password") }
+        assertEquals(1, controller.snapshot.library?.anime?.size)
+
+        val failed = runSuspend {
+            controller.selectSavedSession(
+                TvSavedSession(
+                    id = "another-account",
+                    serverOrigin = "https://jularr.example",
+                    userName = "other",
+                ),
+            )
+        }
+        assertEquals(TvRoute.AccountSelect, failed.navigation.route)
+        assertNull(failed.account)
+        assertNull(failed.library)
+        assertTrue(failed.continueWatching.isEmpty())
+        assertTrue(failed.watchlist.isEmpty())
+        assertEquals("Cannot restore account.", failed.error)
+    }
+
+    @Test
+    fun settingsLoadAndPersistCanonicalProfilePreferences() {
         val store = FakeOriginStore("https://jularr.example")
         val api = FakeApi()
         val controller = TvAppController(store) { api }
 
         runSuspend { controller.restoreConnection() }
         runSuspend { controller.login("jessi", "password-password") }
-        val state = runSuspend { controller.selectSidebarRoute(TvRoute.Activity) }
+        val loaded = runSuspend { controller.selectSidebarRoute(TvRoute.Settings) }
+        assertEquals(TvRoute.Settings, loaded.navigation.route)
+        assertEquals(1.0, loaded.playbackPreferences?.defaultPlaybackSpeed)
 
-        assertEquals(TvRoute.Activity, state.navigation.route)
-        assertFalse(state.activityUsesContinueWatchingFallback)
-        assertEquals(1, state.activity.size)
-    }
-
-    @Test
-    fun selectingActivityFallsBackToContinueWatchingWithoutTheFlag() {
-        val store = FakeOriginStore("https://jularr.example")
-        val api = FakeApi(advertisePlaybackHistory = false)
-        val controller = TvAppController(store) { api }
-
-        runSuspend { controller.restoreConnection() }
-        runSuspend { controller.login("jessi", "password-password") }
-        val state = runSuspend { controller.selectSidebarRoute(TvRoute.Activity) }
-
-        assertTrue(state.activityUsesContinueWatchingFallback)
-        assertEquals(1, state.continueWatching.size)
+        val changed = runSuspend {
+            controller.changePlaybackPreferences(
+                de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate(defaultPlaybackSpeed = 1.5),
+            )
+        }
+        assertEquals(1.5, changed.playbackPreferences?.defaultPlaybackSpeed)
+        assertFalse(changed.busy)
     }
 
     @Test
@@ -169,6 +187,27 @@ class TvAppControllerTest {
     }
 
     @Test
+    fun progressWritesRemainBoundToTheOriginalEpisode() {
+        val api = FakeApi()
+        val controller = TvAppController(FakeOriginStore("https://jularr.example")) { api }
+        runSuspend { controller.restoreConnection() }
+
+        runSuspend { controller.saveProgress(TvProgressWrite(20_000, 100_000, false), "first") }
+        assertEquals("first", api.lastSavedEpisodeId)
+    }
+
+    @Test
+    fun adjacentEpisodesUseServerSeasonOrderAndDoNotSkipMissingMedia() {
+        val controller = TvAppController(FakeOriginStore("https://jularr.example")) { FakeApi() }
+        runSuspend { controller.restoreConnection() }
+
+        assertEquals("next", runSuspend { controller.episodeNeighbors("episode", "anime") }.next?.id)
+        assertEquals("episode", runSuspend { controller.episodeNeighbors("next", "anime") }.previous?.id)
+        assertNull(runSuspend { controller.episodeNeighbors("next", "anime") }.next)
+        assertNull(runSuspend { controller.episodeNeighbors("unknown", "anime") }.next)
+    }
+
+    @Test
     fun openingEpisodeShowsDetailRouteBeforePlayback() {
         val store = FakeOriginStore("https://jularr.example")
         val api = FakeApi()
@@ -201,9 +240,12 @@ class TvAppControllerTest {
 
     private class FakeApi(
         private val failLogin: Boolean = false,
+        private val failRestore: Boolean = false,
         private val advertisePlaybackHistory: Boolean = true,
         private val advertiseWatchlist: Boolean = true,
     ) : JularrClientApi {
+        var lastSavedEpisodeId: String? = null
+
         override suspend fun getCapabilities() = ClientCapabilities(
             apiVersion = 2,
             minimumSupportedApiVersion = 2,
@@ -240,11 +282,10 @@ class TvAppControllerTest {
 
         override suspend fun logout() = Unit
 
-        override suspend fun getMe() = ClientAccount(
-            "profile",
-            "jessi",
-            "owner",
-        )
+        override suspend fun getMe(): ClientAccount {
+            if (failRestore) error("Cannot restore account.")
+            return ClientAccount("profile", "jessi", "owner")
+        }
 
         override suspend fun getLibrary() = ClientLibrary(
             anime = listOf(
@@ -297,6 +338,27 @@ class TvAppControllerTest {
             ),
         )
 
+        private var preference = de.juloc.jularr.core.model.ClientPlaybackPreferences(
+            autoplayNext = true,
+            preferredAudioLanguage = "ja",
+            preferredSubtitleLanguage = "de",
+            defaultPlaybackSpeed = 1.0,
+        )
+
+        override suspend fun getPlaybackPreferences() = preference
+
+        override suspend fun updatePlaybackPreferences(
+            update: de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate,
+        ): de.juloc.jularr.core.model.ClientPlaybackPreferences {
+            preference = preference.copy(
+                autoplayNext = update.autoplayNext ?: preference.autoplayNext,
+                preferredAudioLanguage = update.preferredAudioLanguage ?: preference.preferredAudioLanguage,
+                preferredSubtitleLanguage = update.preferredSubtitleLanguage ?: preference.preferredSubtitleLanguage,
+                defaultPlaybackSpeed = update.defaultPlaybackSpeed ?: preference.defaultPlaybackSpeed,
+            )
+            return preference
+        }
+
         override suspend fun getWatchlist() = listOf(
             WatchlistItem(
                 id = "anime",
@@ -309,7 +371,33 @@ class TvAppControllerTest {
             ),
         )
 
-        override suspend fun getAnime(animeId: String): AnimeDetail = error("unused")
+        override suspend fun getAnime(animeId: String) = AnimeDetail(
+            id = animeId,
+            title = "Anime",
+            localTitle = "Anime",
+            nativeTitle = null,
+            description = null,
+            coverImageUrl = null,
+            bannerImageUrl = null,
+            seasonYear = 2026,
+            format = "TV",
+            seasons = listOf(
+                de.juloc.jularr.core.model.Season(
+                    number = 1,
+                    episodes = listOf(
+                        de.juloc.jularr.core.model.EpisodeSummary("next", 1, 4, "Episode 4", true, false),
+                        de.juloc.jularr.core.model.EpisodeSummary("episode", 1, 3, "Episode 3", true, false),
+                    ),
+                ),
+                de.juloc.jularr.core.model.Season(
+                    number = 2,
+                    episodes = listOf(
+                        de.juloc.jularr.core.model.EpisodeSummary("missing", 2, 1, "Episode 1", false, false),
+                        de.juloc.jularr.core.model.EpisodeSummary("later", 2, 2, "Episode 2", true, false),
+                    ),
+                ),
+            ),
+        )
 
         override suspend fun getEpisode(episodeId: String) = EpisodeDetail(
             id = episodeId,
@@ -339,7 +427,16 @@ class TvAppControllerTest {
         override suspend fun setProgress(
             episodeId: String,
             update: EpisodeProgressUpdate,
-        ): EpisodeProgress = error("unused")
+        ): EpisodeProgress {
+            lastSavedEpisodeId = episodeId
+            return EpisodeProgress(
+                positionMs = update.positionMs,
+                durationMs = update.durationMs,
+                percent = 20,
+                isCompleted = update.completed,
+                updatedAtUtc = null,
+            )
+        }
         override suspend fun getPlayer(episodeId: String): PlayerBootstrap = error("unused")
         override suspend fun getCues(
             episodeId: String,

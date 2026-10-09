@@ -1,0 +1,88 @@
+package de.juloc.jularr.tv
+
+import de.juloc.jularr.core.model.AnimeDetail
+import de.juloc.jularr.core.model.ContinueWatchingItem
+import de.juloc.jularr.core.model.EpisodeSummary
+import de.juloc.jularr.core.model.Season
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class TvAnimeDetailScreenTest {
+    private val episode = EpisodeSummary(
+        id = "episode-4",
+        seasonNumber = 1,
+        number = 4,
+        title = "Chapter 4",
+        hasMedia = true,
+        hasJapaneseLearningSubtitle = false,
+    )
+    private val anime = AnimeDetail(
+        id = "anime-1",
+        title = "Test",
+        localTitle = "Test",
+        nativeTitle = null,
+        description = null,
+        coverImageUrl = null,
+        bannerImageUrl = null,
+        seasonYear = 2026,
+        format = "TV",
+        seasons = listOf(Season(1, listOf(episode))),
+    )
+    private fun progress(
+        episodeId: String = "episode-4",
+        animeId: String = "anime-1",
+        percent: Int = 73,
+    ) = ContinueWatchingItem(
+        kind = "episode",
+        episodeId = episodeId,
+        animeId = animeId,
+        animeTitle = "Test",
+        seasonNumber = 1,
+        episodeNumber = 4,
+        episodeTitle = "Chapter 4",
+        resumePositionMs = 730_000L,
+        durationMs = 1_000_000L,
+        percent = percent,
+        updatedAtUtc = "2026-10-09T12:00:00Z",
+        coverImageUrl = null,
+    )
+
+    @Test
+    fun resumeRequiresSameWorkAndPlayableEpisode() {
+        assertEquals(73, currentAnimeResume(anime, listOf(progress()))?.percent)
+        assertNull(currentAnimeResume(anime, listOf(progress(animeId = "another"))))
+        assertNull(currentAnimeResume(anime, listOf(progress(episodeId = "missing"))))
+        assertNull(currentAnimeResume(anime.copy(seasons = listOf(Season(1, listOf(episode.copy(hasMedia = false))))), listOf(progress())))
+    }
+
+    @Test
+    fun firstPlayableEpisodePrefersMainSeasonOverSpecials() {
+        val special = episode.copy(id = "special", seasonNumber = 0, number = 1)
+        val show = anime.copy(seasons = listOf(
+            Season(0, listOf(special)),
+            Season(1, listOf(episode)),
+        ))
+        assertEquals(episode.id, firstTvPlayableEpisode(show)?.id)
+        assertEquals(special.id, firstTvPlayableEpisode(show.copy(
+            seasons = listOf(Season(0, listOf(special))),
+        ))?.id)
+    }
+
+    @Test
+    fun newestIncompleteProgressIsPreferred() {
+        val old = progress().copy(updatedAtUtc = "2026-01-01T12:00:00Z")
+        val recent = progress().copy(
+            updatedAtUtc = "2026-10-09T13:00:00Z",
+            percent = 88,
+        )
+        assertEquals(88, currentAnimeResume(anime, listOf(old, recent))?.percent)
+    }
+
+    @Test
+    fun completedOrUnstartedEpisodesHaveNoResumeAction() {
+        assertNull(currentAnimeResume(anime, listOf(progress(percent = 0))))
+        assertNull(currentAnimeResume(anime, listOf(progress(percent = 100))))
+        assertNull(currentAnimeResume(anime, listOf(progress().copy(resumePositionMs = 0L))))
+    }
+}

@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +29,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -32,6 +39,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Button
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
@@ -52,111 +61,280 @@ fun TvHomeScreen(
     onAnime: (AnimeSummary) -> Unit,
     onContinueWatching: (ContinueWatchingItem) -> Unit,
 ) {
-    var filter by remember { mutableStateOf(TvContentFilter.ALL) }
+    var filter by remember {
+        mutableStateOf(
+            TvContentFilter.entries.firstOrNull {
+                it.name == focusMemory.recall("home-filter")
+            } ?: TvContentFilter.ALL,
+        )
+    }
+    val restoringItem = remember { focusMemory.recall("home") }
+    val listState = rememberLazyListState()
     val focusColor = rememberTvFocusColor()
+    val selected = remember(library, filter) {
+        library.anime.filter { filter.includes(it.format) }
+    }
+    val featured = selected.firstOrNull { !it.bannerImageUrl.isNullOrBlank() }
+        ?: selected.firstOrNull()
+    val formats = remember(library) { library.anime.associateBy { it.id } }
+    val inProgress = remember(library, continueWatching, filter) {
+        continueWatching.filter { item ->
+            formats[item.animeId]?.let { filter.includes(it.format) } ?: (filter == TvContentFilter.ALL)
+        }
+    }
+    val movies = selected.filter { it.format.equals("MOVIE", ignoreCase = true) }
+    val series = selected.filterNot { it.format.equals("MOVIE", ignoreCase = true) }
+    val rows = buildList {
+        add("filters")
+        if (featured != null) add("hero")
+        if (error != null) add("error")
+        if (inProgress.isNotEmpty()) addAll(listOf("continue-title", "continue-row"))
+        if (series.isNotEmpty()) addAll(listOf("series-title", "series-row"))
+        if (movies.isNotEmpty()) addAll(listOf("movies-title", "movies-row"))
+        if (selected.isEmpty()) add("empty")
+        add("search")
+    }
+    LaunchedEffect(restoringItem) {
+        val targetRow = when {
+            restoringItem == "hero:${featured?.id}" -> "hero"
+            restoringItem?.startsWith("continue:") == true -> "continue-row"
+            restoringItem?.startsWith("anime:") == true -> {
+                val id = restoringItem.removePrefix("anime:")
+                if (movies.any { it.id == id }) "movies-row"
+                else if (series.any { it.id == id }) "series-row"
+                else null
+            }
+            else -> null
+        }
+        val index = targetRow?.let(rows::indexOf) ?: -1
+        if (index >= 0) listState.scrollToItem(index)
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        colors = SurfaceDefaults.colors(
-            containerColor = Color(0xFF0B0D14),
-        ),
+        colors = SurfaceDefaults.colors(containerColor = Color(0xFF0B0D14)),
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 32.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // Item 1: Top Bar
-            item {
-                TvTopBar()
-            }
-
-            // Item 2: Category Filters
             item {
                 TvFilterChipRow(
                     selected = filter,
                     focusMemory = focusMemory,
                     screenKey = "home",
-                    onSelect = { filter = it },
+                    onSelect = {
+                        filter = it
+                        focusMemory.remember("home-filter", it.name)
+                    },
                 )
             }
 
-            // Item 3: Sub-Filter & Sort Bar
-            item {
-                TvSubFilterBar(
-                    onOpenFilter = onOpenSearch,
-                    onOpenSort = onOpenSearch,
-                )
-            }
-
-            error?.let {
-                item {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+            if (featured != null) {
+                item(key = "hero:${featured.id}") {
+                    val heroFocus = remember(featured.id) { FocusRequester() }
+                    LaunchedEffect(restoringItem, featured.id) {
+                        if (restoringItem == "hero:${featured.id}") {
+                            runCatching { heroFocus.requestFocus() }
+                        }
+                    }
+                    var focused by remember(featured.id) { mutableStateOf(false) }
+                    val shape = RoundedCornerShape(20.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(340.dp)
+                            .clip(shape)
+                            .tvFocusIndication(focused, focusColor, shape)
+                            .focusRequester(heroFocus)
+                            .clickable { onAnime(featured) }
+                            .reportFocus {
+                                focused = it
+                                if (it) focusMemory.remember("home", "hero:${featured.id}")
+                            },
+                    ) {
+                        TvArtwork(
+                            url = featured.bannerImageUrl ?: featured.coverImageUrl,
+                            serverOrigin = serverOrigin,
+                            requestHeaders = requestHeaders,
+                            contentDescription = featured.title,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        0.0f to Color.Black.copy(alpha = 0.85f),
+                                        0.65f to Color.Black.copy(alpha = 0.22f),
+                                        1.0f to Color.Transparent,
+                                    ),
+                                ),
+                        )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth(0.72f)
+                                .padding(28.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                text = featured.title,
+                                color = Color.White,
+                                style = MaterialTheme.typography.headlineLarge,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = listOfNotNull(
+                                    featured.seasonYear?.toString(),
+                                    featured.format,
+                                    stringResource(R.string.tv_anime_episode_count, featured.episodeCount),
+                                ).joinToString(" · "),
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White)
+                                Text(
+                                    " " + stringResource(R.string.tv_home_hero_details),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            // Item 4: Continue Watching Row
-            if (continueWatching.isNotEmpty()) {
-                item {
-                    Text(
-                        stringResource(R.string.tv_home_row_continue_watching),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
+            error?.let { message ->
+                item { Text(message, color = MaterialTheme.colorScheme.error) }
+            }
+
+            if (inProgress.isNotEmpty()) {
+                item(key = "continue-title") {
+                    Text(stringResource(R.string.tv_home_row_continue_watching), style = MaterialTheme.typography.titleLarge)
                 }
-                item {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        items(items = continueWatching, key = { it.episodeId }) { row ->
+                item(key = "continue-row") {
+                    val rowState = rememberLazyListState()
+                    val restoreIndex = inProgress.indexOfFirst { restoringItem == "continue:${it.episodeId}" }
+                    LaunchedEffect(restoreIndex) {
+                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+                    }
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        items(items = inProgress, key = { it.episodeId }) { entry ->
+                            val itemFocus = remember(entry.episodeId) { FocusRequester() }
+                            LaunchedEffect(restoringItem, entry.episodeId) {
+                                if (restoringItem == "continue:${entry.episodeId}") {
+                                    runCatching { itemFocus.requestFocus() }
+                                }
+                            }
                             ContinueWatchingCard(
-                                item = row,
+                                item = entry,
                                 serverOrigin = serverOrigin,
                                 requestHeaders = requestHeaders,
-                                onClick = { onContinueWatching(row) },
+                                focusRequester = itemFocus,
+                                onFocused = { focusMemory.remember("home", "continue:${entry.episodeId}") },
+                                onClick = { onContinueWatching(entry) },
                             )
                         }
                     }
                 }
             }
 
-            // Item 5: Anime Library Section
-            item {
-                Text(
-                    stringResource(R.string.tv_home_row_anime),
-                    style = MaterialTheme.typography.titleLarge,
-                )
+            if (series.isNotEmpty()) {
+                item(key = "series-title") { Text(stringResource(R.string.tv_home_row_series), style = MaterialTheme.typography.titleLarge) }
+                item(key = "series-row") {
+                    TvHomeAnimeRow(
+                        entries = series,
+                        restoringItem = restoringItem,
+                        serverOrigin = serverOrigin,
+                        requestHeaders = requestHeaders,
+                        focusMemory = focusMemory,
+                        focusColor = focusColor,
+                        onAnime = onAnime,
+                    )
+                }
             }
-            item {
-                if (library.anime.isEmpty()) {
+
+            if (movies.isNotEmpty()) {
+                item(key = "movies-title") { Text(stringResource(R.string.tv_home_row_movies), style = MaterialTheme.typography.titleLarge) }
+                item(key = "movies-row") {
+                    TvHomeAnimeRow(
+                        entries = movies,
+                        restoringItem = restoringItem,
+                        serverOrigin = serverOrigin,
+                        requestHeaders = requestHeaders,
+                        focusMemory = focusMemory,
+                        focusColor = focusColor,
+                        onAnime = onAnime,
+                    )
+                }
+            }
+
+            if (selected.isEmpty()) {
+                item {
                     Text(
-                        stringResource(R.string.tv_home_empty),
+                        if (library.anime.isEmpty()) stringResource(R.string.tv_home_empty)
+                        else stringResource(R.string.tv_home_no_media_of_type),
                         style = MaterialTheme.typography.bodyLarge,
                     )
-                } else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        items(items = library.anime, key = { it.id }) { anime ->
-                            var focused by remember(anime.id) { mutableStateOf(false) }
-                            AnimeButton(
-                                anime = anime,
-                                serverOrigin = serverOrigin,
-                                requestHeaders = requestHeaders,
-                                focused = focused,
-                                focusColor = focusColor,
-                                onFocusChanged = { isFocused ->
-                                    focused = isFocused
-                                    if (isFocused) {
-                                        focusMemory.remember("home", "anime:${anime.id}")
-                                    }
-                                },
-                                onClick = { onAnime(anime) },
-                            )
-                        }
-                    }
                 }
             }
+
+            item {
+                Button(onClick = onOpenSearch) { Text(stringResource(R.string.tv_home_browse)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvHomeAnimeRow(
+    entries: List<AnimeSummary>,
+    restoringItem: String?,
+    serverOrigin: String,
+    requestHeaders: Map<String, String>,
+    focusMemory: TvFocusMemory,
+    focusColor: Color,
+    onAnime: (AnimeSummary) -> Unit,
+) {
+    val rowState = rememberLazyListState()
+    val restoreIndex = entries.indexOfFirst { restoringItem == "anime:${it.id}" }
+    LaunchedEffect(restoreIndex) {
+        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+    }
+    LazyRow(
+        state = rowState,
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        items(items = entries, key = { it.id }) { anime ->
+            val itemFocus = remember(anime.id) { FocusRequester() }
+            LaunchedEffect(restoringItem, anime.id) {
+                if (restoringItem == "anime:${anime.id}") {
+                    runCatching { itemFocus.requestFocus() }
+                }
+            }
+            var focused by remember(anime.id) { mutableStateOf(false) }
+            AnimeButton(
+                anime = anime,
+                serverOrigin = serverOrigin,
+                requestHeaders = requestHeaders,
+                focused = focused,
+                focusColor = focusColor,
+                focusRequester = itemFocus,
+                onFocusChanged = {
+                    focused = it
+                    if (it) focusMemory.remember("home", "anime:${anime.id}")
+                },
+                onClick = { onAnime(anime) },
+            )
         }
     }
 }
@@ -166,12 +344,14 @@ private fun ContinueWatchingCard(
     item: ContinueWatchingItem,
     serverOrigin: String,
     requestHeaders: Map<String, String>,
+    focusRequester: FocusRequester,
+    onFocused: () -> Unit,
     onClick: () -> Unit,
 ) {
     val focusColor = rememberTvFocusColor()
     var focused by remember(item.episodeId) { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
-    val cardBackground = if (focused) Color(0xFF2A1F60) else Color(0xFF121520)
+    val cardBackground = if (focused) focusColor.copy(alpha = 0.28f) else Color(0xFF121520)
 
     Box(
         modifier = Modifier
@@ -179,8 +359,12 @@ private fun ContinueWatchingCard(
             .clip(cardShape)
             .background(cardBackground)
             .tvFocusIndication(focused, focusColor, cardShape)
+            .focusRequester(focusRequester)
             .clickable(onClick = onClick)
-            .reportFocus { focused = it },
+            .reportFocus {
+                focused = it
+                if (it) onFocused()
+            },
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             TvArtwork(
@@ -240,7 +424,7 @@ private fun ContinueWatchingCard(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .fillMaxWidth(progressFraction)
-                                .background(Color(0xFF7B61FF)),
+                                .background(focusColor),
                         )
                     }
                     Text(

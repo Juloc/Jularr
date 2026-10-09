@@ -448,7 +448,10 @@ public sealed record ClientWatchlistItem(
     string? ArtworkUrl,
     string Availability,
     string? DetailsUrl,
-    DateTime? AddedAtUtc);
+    DateTime? AddedAtUtc,
+    Guid? LocalMediaId = null,
+    string? Status = null,
+    string? Format = null);
 
 /// <summary>
 /// Profile-level TTS preferences, backed by the canonical Reader preference "default"
@@ -758,7 +761,10 @@ public static class ClientApiMappings
             item.CoverImageUrl,
             item.LocalMediaId is null ? "external" : "in_library",
             item.DetailsUrl,
-            item.AddedAtUtc);
+            item.AddedAtUtc,
+            item.LocalMediaId,
+            item.Status,
+            item.Format);
 
     private static ClientEpisodeReference? ToClientEpisodeReference(
         EpisodeReference? episode) =>

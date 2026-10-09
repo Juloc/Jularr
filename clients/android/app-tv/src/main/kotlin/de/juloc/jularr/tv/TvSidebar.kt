@@ -1,10 +1,8 @@
 package de.juloc.jularr.tv
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
@@ -32,7 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -44,11 +43,13 @@ private data class TvSidebarItem(
     val icon: ImageVector,
 )
 
-private val sidebarItems = listOf(
+private val mainNavigation = listOf(
     TvSidebarItem(TvRoute.Home, R.string.tv_sidebar_home, Icons.Filled.Home),
     TvSidebarItem(TvRoute.Watchlist, R.string.tv_sidebar_watchlist, Icons.Filled.Bookmark),
-    TvSidebarItem(TvRoute.Activity, R.string.tv_sidebar_activity, Icons.Filled.CalendarMonth),
-    TvSidebarItem(TvRoute.Profile, R.string.tv_sidebar_profile, Icons.Filled.Settings),
+)
+private val footerNavigation = listOf(
+    TvSidebarItem(TvRoute.Settings, R.string.tv_sidebar_settings, Icons.Filled.Settings),
+    TvSidebarItem(TvRoute.ProfileSelect, R.string.tv_profile_switch_profile, Icons.Filled.AccountCircle),
 )
 
 @Composable
@@ -57,99 +58,93 @@ fun TvSidebar(
     focusMemory: TvFocusMemory,
     onSelect: (TvRoute) -> Unit,
 ) {
-    val focusColor = rememberTvFocusColor()
-    var focusedRoute by remember { mutableStateOf<TvRoute?>(null) }
-    val expanded = focusedRoute != null
-    val width by animateDpAsState(if (expanded) 190.dp else 72.dp, label = "sidebar-width")
-
-    val itemShape = RoundedCornerShape(14.dp)
-    val selectedPurple = Color(0xFF5B46F6)
-    val idleBackground = Color(0xFF10121A)
-
+    val context = LocalContext.current
+    val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .width(width)
-            .background(idleBackground)
-            .padding(vertical = 20.dp, horizontal = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .width(208.dp)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 14.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        for (item in sidebarItems) {
-            val isSelected = item.route == selected
-            val isFocused = focusedRoute == item.route
-            val background by animateColorAsState(
-                if (isSelected) selectedPurple else Color.Transparent,
-                label = "sidebar-item-background",
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(itemShape)
-                    .background(background)
-                    .tvFocusIndication(isFocused, focusColor, itemShape)
-                    .selectable(selected = isSelected, onClick = { onSelect(item.route) })
-                    .reportFocus { hasFocus ->
-                        focusedRoute = if (hasFocus) {
-                            focusMemory.remember(
-                                "sidebar",
-                                TvNavigation.screenKey(item.route),
-                            )
-                            item.route
-                        } else if (focusedRoute == item.route) {
-                            null
-                        } else {
-                            focusedRoute
-                        }
-                    }
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Icon(
-                    imageVector = item.icon,
-                    contentDescription = stringResource(item.labelRes),
-                    tint = if (isSelected || isFocused) Color.White else Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.size(24.dp),
-                )
-                if (expanded) {
-                    Text(
-                        text = stringResource(item.labelRes),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = if (isSelected || isFocused) Color.White else Color.White.copy(alpha = 0.7f),
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Bottom profile icon
-        val profileRoute = TvRoute.Profile
-        val isProfileSelected = selected == profileRoute
-        val isProfileFocused = focusedRoute == profileRoute
-
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(itemShape)
-                .background(if (isProfileSelected) selectedPurple else Color.Transparent)
-                .tvFocusIndication(isProfileFocused, focusColor, itemShape)
-                .selectable(selected = isProfileSelected, onClick = { onSelect(profileRoute) })
-                .reportFocus { hasFocus ->
-                    focusedRoute = if (hasFocus) profileRoute else if (focusedRoute == profileRoute) null else focusedRoute
-                },
-            contentAlignment = Alignment.Center,
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Filled.AccountCircle,
-                contentDescription = stringResource(R.string.tv_sidebar_profile),
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(28.dp),
+            Text(
+                text = "Jularr",
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = " TV",
+                color = accent,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
             )
         }
+        Spacer(Modifier.height(12.dp))
+        mainNavigation.forEach { item ->
+            TvSidebarLink(item, selected, accent, focusMemory, onSelect)
+        }
+        Spacer(Modifier.weight(1f))
+        footerNavigation.forEach { item ->
+            TvSidebarLink(item, selected, accent, focusMemory, onSelect)
+        }
+    }
+}
+
+@Composable
+private fun TvSidebarLink(
+    item: TvSidebarItem,
+    selected: TvRoute,
+    accent: Color,
+    focusMemory: TvFocusMemory,
+    onSelect: (TvRoute) -> Unit,
+) {
+    var focused by remember(item.route) { mutableStateOf(false) }
+    val shape = RoundedCornerShape(13.dp)
+    val selectedHere = selected == item.route
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(shape)
+            .background(
+                when {
+                    selectedHere -> accent.copy(alpha = 0.31f)
+                    focused -> accent.copy(alpha = 0.13f)
+                    else -> Color.Transparent
+                },
+            )
+            .border(
+                if (focused) 2.dp else 1.dp,
+                if (focused) accent else if (selectedHere) accent.copy(alpha = 0.50f) else Color.Transparent,
+                shape,
+            )
+            .selectable(selected = selectedHere, onClick = { onSelect(item.route) })
+            .reportFocus { hasFocus ->
+                focused = hasFocus
+                if (hasFocus) focusMemory.remember("sidebar", TvNavigation.screenKey(item.route))
+            }
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        Icon(
+            imageVector = item.icon,
+            contentDescription = null,
+            tint = if (selectedHere || focused) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+            modifier = Modifier.size(23.dp),
+        )
+        Text(
+            text = stringResource(item.labelRes),
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.titleSmall,
+        )
     }
 }

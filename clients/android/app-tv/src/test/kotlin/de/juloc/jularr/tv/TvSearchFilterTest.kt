@@ -53,6 +53,22 @@ class TvSearchFilterTest {
     }
 
     @Test
+    fun mediaSelectionAlsoFiltersWithoutAQuery() {
+        val series = anime("tv", "Night Series")
+        val film = anime("film", "Night Film").copy(format = "MOVIE")
+        val library = listOf(series, film)
+
+        assertEquals(
+            listOf(film),
+            TvSearchFilter.matches(library, "night", TvContentFilter.MOVIES),
+        )
+        assertEquals(
+            listOf(series),
+            TvSearchFilter.matches(library, "", TvContentFilter.SERIES),
+        )
+    }
+
+    @Test
     fun noMatchesReturnsEmptyList() {
         val library = listOf(anime("1", "Frieren"))
         assertEquals(emptyList<AnimeSummary>(), TvSearchFilter.matches(library, "nonexistent"))

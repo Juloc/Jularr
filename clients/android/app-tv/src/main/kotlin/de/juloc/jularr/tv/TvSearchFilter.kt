@@ -13,14 +13,22 @@ object TvSearchFilter {
     fun matches(
         library: List<AnimeSummary>,
         query: String,
+        category: TvContentFilter = TvContentFilter.ALL,
     ): List<AnimeSummary> {
         val needle = query.trim()
-        if (needle.isEmpty()) return library
-
         return library.filter { anime ->
-            anime.title.contains(needle, ignoreCase = true) ||
-                anime.localTitle.contains(needle, ignoreCase = true) ||
-                anime.nativeTitle?.contains(needle, ignoreCase = true) == true
+            val isMovie = anime.format.equals("MOVIE", ignoreCase = true)
+            val matchesType = when (category) {
+                TvContentFilter.ALL, TvContentFilter.ANIME -> true
+                TvContentFilter.SERIES -> !isMovie
+                TvContentFilter.MOVIES -> isMovie
+            }
+            matchesType && (
+                needle.isBlank() ||
+                    anime.title.contains(needle, ignoreCase = true) ||
+                    anime.localTitle.contains(needle, ignoreCase = true) ||
+                    anime.nativeTitle?.contains(needle, ignoreCase = true) == true
+                )
         }
     }
 }

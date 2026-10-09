@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.design.PlayerSeekSteps
+import de.juloc.jularr.core.model.ClientMediaSegment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,6 +26,48 @@ class TvPlayerInteractionTest {
         assertTrue(shown.state.controlsVisible)
         assertTrue(visible.state.controlsVisible)
         assertEquals(emptyList<TvPlayerEffect>(), visible.effects)
+    }
+
+    @Test
+    fun dedicatedMediaKeysDoNotToggleTheOppositeState() {
+        val state = TvPlayerUiState(controlsVisible = true)
+        assertEquals(listOf(TvPlayerEffect.PlayPlayback), TvPlayerInteraction.mediaPlay(state).effects)
+        assertEquals(listOf(TvPlayerEffect.PauseMediaPlayback), TvPlayerInteraction.mediaPause(state).effects)
+        assertEquals(listOf(TvPlayerEffect.TogglePlayback), TvPlayerInteraction.mediaPlayPause(state).effects)
+    }
+
+    @Test
+    fun skipAppearsOnlyInsideServerApprovedMarker() {
+        val windows = listOf(
+            ClientMediaSegment("intro", startMs = 60_000, endMs = 90_000, canSkip = false),
+            ClientMediaSegment("recap", startMs = 100_000, endMs = 120_000, canSkip = true),
+        )
+
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 75_000))
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 99_999))
+        assertEquals("recap", TvPlayerInteraction.activeSkipSegment(windows, 100_000)?.kind)
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 120_000))
+    }
+
+    @Test
+    fun introAndRecapHaveIndependentServerApprovedSkipActions() {
+        val windows = listOf(
+            ClientMediaSegment("intro", startMs = 0, endMs = 90_000, canSkip = true),
+            ClientMediaSegment("recap", startMs = 100_000, endMs = 120_000, canSkip = true),
+        )
+
+        val intro = TvPlayerInteraction.activeSkipSegment(windows, 0)
+        val recap = TvPlayerInteraction.activeSkipSegment(windows, 100_000)
+
+        assertEquals("intro", intro?.kind)
+        assertEquals(90_000L, intro?.endMs)
+        assertEquals(R.string.tv_player_skip_intro, skipLabelRes(intro!!.kind))
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 90_000))
+
+        assertEquals("recap", recap?.kind)
+        assertEquals(120_000L, recap?.endMs)
+        assertEquals(R.string.tv_player_skip_recap, skipLabelRes(recap!!.kind))
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 120_000))
     }
 
     @Test
@@ -107,11 +150,17 @@ class TvPlayerInteractionTest {
             isPlaying = true,
             companionVisible = true,
         )
+        val scrubbing = TvPlayerInteraction.autoHide(
+            TvPlayerUiState(controlsVisible = true),
+            isPlaying = true,
+            scrubActive = true,
+        )
 
         assertEquals(false, playing.state.controlsVisible)
         assertTrue(paused.state.controlsVisible)
         assertTrue(learning.state.controlsVisible)
         assertTrue(companion.state.controlsVisible)
+        assertTrue(scrubbing.state.controlsVisible)
     }
 
     @Test

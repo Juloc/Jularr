@@ -22,6 +22,19 @@ class TvSessionCookieStoreTest {
     }
 
     @Test
+    fun selectingAnotherAccountDoesNotPersistOrErasePreviouslySavedCookies() {
+        val persisted = mutableListOf<Map<String, String>>()
+        val store = TvSessionCookieStore { persisted += it.toMap() }
+        store.accept(listOf("session=account-a; path=/"))
+        store.loadCookies(emptyMap())
+        store.loadCookies(mapOf("session" to "account-b"))
+
+        assertEquals(1, persisted.size)
+        assertEquals(mapOf("session" to "account-a"), persisted.single())
+        assertEquals(mapOf("Cookie" to "session=account-b"), store.requestHeaders())
+    }
+
+    @Test
     fun expiredCookieIsRemoved() {
         val store = TvSessionCookieStore()
         store.accept(listOf(".AspNetCore.Cookies=session; path=/"))
