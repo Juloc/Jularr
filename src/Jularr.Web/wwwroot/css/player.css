@@ -607,7 +607,7 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 }
 .player-round-button:hover { background: rgba(0,0,0,.5); transform: scale(1.05); }
 .player-round-button .player-icon { width: 30px; height: 30px; }
-.player-round-seek .player-icon { width: 34px; height: 34px; }
+.player-round-button.player-round-seek .player-icon { width: 34px; height: 34px; }
 .player-round-seek .player-seek-count {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, calc(-50% + 3px));
     font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: -.02em;
