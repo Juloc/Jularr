@@ -114,6 +114,51 @@ public sealed class PlexLibraryClient(HttpClient client)
     }
 
     /// <summary>
+    /// Short, explicit, user-triggered Plex search. The title is only a
+    /// candidate retrieval hint; every result must be resolved by confirmed
+    /// external GUIDs and independently reauthorized before handoff.
+    /// No background full-library traversal occurs.
+    /// </summary>
+    public async Task<IReadOnlyList<PlexLibraryItem>> FindCandidatesAsync(
+        Uri server,
+        string accessToken,
+        string clientIdentifier,
+        string sectionId,
+        string title,
+        CancellationToken cancellationToken)
+    {
+        if (!IsSafeSectionId(sectionId) ||
+            string.IsNullOrWhiteSpace(title) ||
+            title.Length > 160)
+        {
+            throw new ArgumentException(
+                "A valid Plex library section and title are required.");
+        }
+
+        const int maximumCandidates = 24;
+        var path = $"library/sections/{sectionId}/all"
+            + "?includeGuids=1"
+            + "&X-Plex-Container-Start=0"
+            + $"&X-Plex-Container-Size={maximumCandidates}"
+            + "&title=" + Uri.EscapeDataString(title.Trim());
+
+        using var json = await GetJsonAsync(
+            server, path, accessToken, clientIdentifier, cancellationToken);
+        if (!json.RootElement.TryGetProperty("MediaContainer", out var root) ||
+            !root.TryGetProperty("Metadata", out var metadata) ||
+            metadata.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return metadata.EnumerateArray()
+            .Take(maximumCandidates)
+            .Select(ToItem)
+            .OfType<PlexLibraryItem>()
+            .ToArray();
+    }
+
+    /// <summary>
     /// Re-reads an exact Plex item with the current profile's token. The
     /// returned library section must be checked against the intersection of
     /// Admin-approved and user-accessible libraries before offering playback.
