@@ -251,6 +251,11 @@ class TvAppController(
                     } else {
                         emptyList()
                     },
+                    continueWatching = if (capabilities?.features?.continueWatching == true) {
+                        flow.loadContinueWatching()
+                    } else {
+                        emptyList()
+                    },
                 )
 
                 else -> this
