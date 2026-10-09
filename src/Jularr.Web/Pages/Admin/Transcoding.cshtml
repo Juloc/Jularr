@@ -135,6 +135,15 @@
                 <span id="wan-budget-hint" class="admset-hint">@ui["admin.transcoding.wanBudgetHint"]</span>
                 <span asp-validation-for="WanUploadBudgetMbps" class="admset-error"></span>
             </div>
+            <div class="admset-field admset-field-wide">
+                <span>@ui["admin.transcoding.containerTxTitle"]</span>
+                <span class="admset-hint-row">
+                    <span class="admin-tag">@(Model.ContainerOutboundMbps is { } rate
+                        ? ui.Format("admin.transcoding.containerTxValue", ("rate", rate.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)))
+                        : ui["admin.transcoding.containerTxUnavailable"])</span>
+                </span>
+                <span class="admset-hint">@ui["admin.transcoding.containerTxHint"]</span>
+            </div>
         </div>
     </section>
 </form>
