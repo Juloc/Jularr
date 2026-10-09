@@ -202,7 +202,7 @@ public sealed class PlaybackPlanService(
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(input);
 
-        var candidates = canonicalStorage is not null
+        IReadOnlyList<CanonicalPlayableFile> candidates = canonicalStorage is not null
             ? await canonicalStorage.ResolveVideoCandidatesAsync(
                 target.WorkId,
                 target.WorkEpisodeId,
@@ -233,7 +233,7 @@ public sealed class PlaybackPlanService(
             foreach (var candidate in candidates)
             {
                 var analysis = await mediaInventory.GetAsync(candidate.StoredFileId, cancellationToken);
-                if (analysis?.Technical is not { } technical)
+                if (analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical })
                 {
                     continue;
                 }
