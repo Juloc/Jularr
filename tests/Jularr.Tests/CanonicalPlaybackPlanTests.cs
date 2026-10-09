@@ -157,7 +157,7 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.IsNotNull(sourceAnalysis.SourceFingerprint);
         var version = await fixture.Db.WorkVersions.FindAsync(candidate.WorkVersionId);
         Assert.IsNotNull(version);
-        version.Source = PlaybackPreparedRenditionEligibility.PreparedVersionSource;
+        version.Source = "jularr-prepared:v1";
         version.Notes = System.Text.Json.JsonSerializer.Serialize(new
         {
             sourceStoredFileId = original.StoredFileId,
