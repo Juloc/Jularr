@@ -251,76 +251,30 @@ fun TvHomeScreen(
             if (series.isNotEmpty()) {
                 item(key = "series-title") { Text(stringResource(R.string.tv_home_row_series), style = MaterialTheme.typography.titleLarge) }
                 item(key = "series-row") {
-                    val rowState = rememberLazyListState()
-                    val restoreIndex = series.indexOfFirst { restoringItem == "anime:${it.id}" }
-                    LaunchedEffect(restoreIndex) {
-                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
-                    }
-                    LazyRow(
-                        state = rowState,
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    ) {
-                        items(items = series, key = { it.id }) { anime ->
-                            val itemFocus = remember(anime.id) { FocusRequester() }
-                            LaunchedEffect(restoringItem, anime.id) {
-                                if (restoringItem == "anime:${anime.id}") {
-                                    runCatching { itemFocus.requestFocus() }
-                                }
-                            }
-                            var focused by remember(anime.id) { mutableStateOf(false) }
-                            AnimeButton(
-                                anime = anime,
-                                serverOrigin = serverOrigin,
-                                requestHeaders = requestHeaders,
-                                focused = focused,
-                                focusColor = focusColor,
-                                focusRequester = itemFocus,
-                                onFocusChanged = {
-                                    focused = it
-                                    if (it) focusMemory.remember("home", "anime:${anime.id}")
-                                },
-                                onClick = { onAnime(anime) },
-                            )
-                        }
-                    }
+                    TvHomeAnimeRow(
+                        entries = series,
+                        restoringItem = restoringItem,
+                        serverOrigin = serverOrigin,
+                        requestHeaders = requestHeaders,
+                        focusMemory = focusMemory,
+                        focusColor = focusColor,
+                        onAnime = onAnime,
+                    )
                 }
             }
 
             if (movies.isNotEmpty()) {
                 item(key = "movies-title") { Text(stringResource(R.string.tv_home_row_movies), style = MaterialTheme.typography.titleLarge) }
                 item(key = "movies-row") {
-                    val rowState = rememberLazyListState()
-                    val restoreIndex = movies.indexOfFirst { restoringItem == "anime:${it.id}" }
-                    LaunchedEffect(restoreIndex) {
-                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
-                    }
-                    LazyRow(
-                        state = rowState,
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
-                    ) {
-                        items(items = movies, key = { it.id }) { anime ->
-                            val itemFocus = remember(anime.id) { FocusRequester() }
-                            LaunchedEffect(restoringItem, anime.id) {
-                                if (restoringItem == "anime:${anime.id}") {
-                                    runCatching { itemFocus.requestFocus() }
-                                }
-                            }
-                            var focused by remember(anime.id) { mutableStateOf(false) }
-                            AnimeButton(
-                                anime = anime,
-                                serverOrigin = serverOrigin,
-                                requestHeaders = requestHeaders,
-                                focused = focused,
-                                focusColor = focusColor,
-                                focusRequester = itemFocus,
-                                onFocusChanged = {
-                                    focused = it
-                                    if (it) focusMemory.remember("home", "anime:${anime.id}")
-                                },
-                                onClick = { onAnime(anime) },
-                            )
-                        }
-                    }
+                    TvHomeAnimeRow(
+                        entries = movies,
+                        restoringItem = restoringItem,
+                        serverOrigin = serverOrigin,
+                        requestHeaders = requestHeaders,
+                        focusMemory = focusMemory,
+                        focusColor = focusColor,
+                        onAnime = onAnime,
+                    )
                 }
             }
 
@@ -337,6 +291,50 @@ fun TvHomeScreen(
             item {
                 Button(onClick = onOpenSearch) { Text(stringResource(R.string.tv_home_browse)) }
             }
+        }
+    }
+}
+
+@Composable
+private fun TvHomeAnimeRow(
+    entries: List<AnimeSummary>,
+    restoringItem: String?,
+    serverOrigin: String,
+    requestHeaders: Map<String, String>,
+    focusMemory: TvFocusMemory,
+    focusColor: Color,
+    onAnime: (AnimeSummary) -> Unit,
+) {
+    val rowState = rememberLazyListState()
+    val restoreIndex = entries.indexOfFirst { restoringItem == "anime:${it.id}" }
+    LaunchedEffect(restoreIndex) {
+        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+    }
+    LazyRow(
+        state = rowState,
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        items(items = entries, key = { it.id }) { anime ->
+            val itemFocus = remember(anime.id) { FocusRequester() }
+            LaunchedEffect(restoringItem, anime.id) {
+                if (restoringItem == "anime:${anime.id}") {
+                    runCatching { itemFocus.requestFocus() }
+                }
+            }
+            var focused by remember(anime.id) { mutableStateOf(false) }
+            AnimeButton(
+                anime = anime,
+                serverOrigin = serverOrigin,
+                requestHeaders = requestHeaders,
+                focused = focused,
+                focusColor = focusColor,
+                focusRequester = itemFocus,
+                onFocusChanged = {
+                    focused = it
+                    if (it) focusMemory.remember("home", "anime:${anime.id}")
+                },
+                onClick = { onAnime(anime) },
+            )
         }
     }
 }
