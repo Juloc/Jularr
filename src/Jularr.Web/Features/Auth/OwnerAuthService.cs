@@ -227,8 +227,12 @@ public sealed class OwnerAuthService(
             return;
         }
 
+        await using var transaction = await db.Database.BeginTransactionAsync(
+            cancellationToken);
         db.AccountLoginIdentities.Remove(identity);
         await db.SaveChangesAsync(cancellationToken);
+        await BumpSessionVersionAsync(accountId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<OwnerAccount> CreateExternalAccountAsync(
