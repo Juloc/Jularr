@@ -135,6 +135,8 @@ public sealed class VideoProgressTests
 
         await progress.UpdateAsync("short", film, new MediaProgressUpdate(15_000, 120_000, false));
         await progress.UpdateAsync("finished", film, new MediaProgressUpdate(120_000, 120_000, true));
+        await progress.UpdateAsync("rewatch", film, new MediaProgressUpdate(120_000, 120_000, true));
+        await progress.UpdateAsync("rewatch", film, new MediaProgressUpdate(50_000, 120_000, false));
         await progress.UpdateAsync("first", tv, new MediaProgressUpdate(60_000, 120_000, false));
         await progress.UpdateAsync("second", tv, new MediaProgressUpdate(70_000, 120_000, false));
 
@@ -146,7 +148,7 @@ public sealed class VideoProgressTests
             DateTime.UtcNow.AddDays(-14));
 
         Assert.AreEqual(2, counts.Count);
-        Assert.AreEqual(2L, counts.Single(item => item.WorkId == movie.Id).ResumeProfiles);
+        Assert.AreEqual(3L, counts.Single(item => item.WorkId == movie.Id).ResumeProfiles);
         var episodeCount = counts.Single(item => item.WorkId == series.Id);
         Assert.AreEqual(episode.Id, episodeCount.WorkEpisodeId);
         Assert.AreEqual(2L, episodeCount.ResumeProfiles);
