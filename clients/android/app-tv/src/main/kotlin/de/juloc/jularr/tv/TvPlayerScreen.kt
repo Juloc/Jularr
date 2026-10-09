@@ -17,12 +17,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Icon
@@ -459,7 +463,7 @@ fun TvPlayerScreen(
                         text = cue.text,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = if (uiState.controlsVisible) 285.dp else 48.dp)
+                            .padding(bottom = if (uiState.controlsVisible) 340.dp else 48.dp)
                             .background(design.subtitleBackground)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         color = design.subtitleText,
@@ -514,11 +518,6 @@ fun TvPlayerScreen(
                         trackSelectionError = false
                         trackPanel = TvPlayerPanel.SUBTITLES
                     },
-                    onBackTen = {
-                        player.player.seekTo(
-                            (player.player.currentPosition - design.seek.backMs).coerceAtLeast(0),
-                        )
-                    },
                     onPlayPause = {
                         if (player.player.isPlaying) {
                             player.player.pause()
@@ -526,13 +525,6 @@ fun TvPlayerScreen(
                             if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
                             player.player.play()
                         }
-                    },
-                    onForwardTen = {
-                        val duration = player.player.duration
-                        val target = player.player.currentPosition + design.seek.forwardMs
-                        player.player.seekTo(
-                            if (duration > 0) target.coerceAtMost(duration) else target,
-                        )
                     },
                     onSeekTo = { target ->
                         if (durationMs > 0) {
@@ -702,7 +694,7 @@ fun TvPlayerScreen(
                         .align(Alignment.BottomEnd)
                         .padding(
                             end = 52.dp,
-                            bottom = if (uiState.controlsVisible) 248.dp else 48.dp,
+                            bottom = if (uiState.controlsVisible) 310.dp else 48.dp,
                         )
                         .focusRequester(skipFocus),
                 ) {
@@ -775,9 +767,7 @@ private fun PlayerControls(
     onOpenSettingsPanel: () -> Unit,
     onOpenAudioTracks: () -> Unit,
     onOpenSubtitleTracks: () -> Unit,
-    onBackTen: () -> Unit,
     onPlayPause: () -> Unit,
-    onForwardTen: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onRepeatLine: () -> Unit,
     onLearn: () -> Unit,
@@ -926,6 +916,16 @@ private fun PlayerControls(
                 )
             }
 
+            if (trickplay?.state == "ready" && durationMs > 0) {
+                TvSeekScenes(
+                    descriptor = trickplay,
+                    durationMs = durationMs,
+                    serverOrigin = serverOrigin,
+                    requestHeaders = requestHeaders,
+                    onSeekTo = onSeekTo,
+                )
+            }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
@@ -1058,6 +1058,76 @@ private fun PlayerControls(
                     }
                     Button(onClick = onLearn) {
                         Text("Learn this line")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvSeekScenes(
+    descriptor: ClientTrickplayDescriptor,
+    durationMs: Long,
+    serverOrigin: String,
+    requestHeaders: Map<String, String>,
+    onSeekTo: (Long) -> Unit,
+) {
+    val columns = descriptor.columns?.takeIf { it > 0 } ?: return
+    val rows = descriptor.rows?.takeIf { it > 0 } ?: return
+    val intervalMs = descriptor.intervalMs?.takeIf { it > 0 } ?: return
+    val count = descriptor.thumbnailCount?.takeIf { it > 0 } ?: return
+    if (descriptor.spriteUrls.isEmpty()) return
+
+    val sampleCount = minOf(count, 8)
+    val samples = remember(count, sampleCount) {
+        (0 until sampleCount).map { index ->
+            if (sampleCount == 1) 0 else index * (count - 1) / (sampleCount - 1)
+        }
+    }
+    var selectedSample by remember { mutableStateOf<Int?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            if (selectedSample == null) "Szenen · nach unten für Zeitpunkte"
+            else "Springen zu ${formatTime(selectedSample!!.toLong() * intervalMs)}",
+            color = Color.White.copy(alpha = 0.8f),
+            style = MaterialTheme.typography.labelMedium,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(samples) { sample ->
+                val sheetSize = columns * rows
+                val spriteIndex = sample / sheetSize
+                val spriteUrl = descriptor.spriteUrls.getOrNull(spriteIndex)
+                val column = sample % columns
+                val row = (sample / columns) % rows
+                var focused by remember(sample) { mutableStateOf(false) }
+                val shape = RoundedCornerShape(8.dp)
+                Box(
+                    modifier = Modifier
+                        .width(128.dp)
+                        .height(72.dp)
+                        .clip(shape)
+                        .tvFocusIndication(focused, rememberTvFocusColor(), shape)
+                        .clickable {
+                            onSeekTo((sample.toLong() * intervalMs).coerceIn(0L, durationMs))
+                        }
+                        .reportFocus {
+                            focused = it
+                            selectedSample = if (it) sample else if (selectedSample == sample) null else selectedSample
+                        },
+                ) {
+                    if (spriteUrl != null) {
+                        TvArtwork(
+                            url = spriteUrl,
+                            serverOrigin = serverOrigin,
+                            requestHeaders = requestHeaders,
+                            contentDescription = formatTime(sample.toLong() * intervalMs),
+                            modifier = Modifier
+                                .offset(x = (-column * 128).dp, y = (-row * 72).dp)
+                                .requiredWidth((columns * 128).dp)
+                                .requiredHeight((rows * 72).dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
+                        )
                     }
                 }
             }
