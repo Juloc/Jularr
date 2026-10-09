@@ -329,6 +329,46 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task PlaylistPollingCannotKeepAnIdleHlsEncoderAlive()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var session = await cache.StartAsync("profile-0", segmentBytes: 10);
+        var lease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
+        Assert.IsNotNull(lease);
+        lease.Dispose();
+
+        for (var minute = 0; minute < 11; minute++)
+        {
+            cache.Time.Advance(TimeSpan.FromMinutes(1));
+            Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, session.EpisodeId, session.ProfileId, "index.m3u8"));
+            Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, session.EpisodeId, session.ProfileId, "init.mp4"));
+        }
+
+        Assert.AreEqual(1, cache.Manager.CleanupExpired(), "Playlist and init requests alone must not keep a transcode running.");
+        Assert.IsFalse(cache.Manager.IsActive(session.SessionId, session.ProfileId));
+        Assert.IsTrue(cache.Processes[0].Killed, "Idle FFmpeg is stopped instead of encoding a movie nobody is watching.");
+    }
+
+    [TestMethod]
+    public async Task ReadingAnAuthorizedHlsSegmentRenewsTheActiveSession()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var session = await cache.StartAsync("profile-0", segmentBytes: 10);
+
+        cache.Time.Advance(TimeSpan.FromMinutes(9));
+        Assert.IsNull(cache.Manager.GetAsset(session.SessionId, session.EpisodeId, "another-profile", "segment-00000.m4s"));
+        Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, session.EpisodeId, session.ProfileId, "segment-00000.m4s"));
+
+        cache.Time.Advance(TimeSpan.FromMinutes(2));
+        Assert.AreEqual(0, cache.Manager.CleanupExpired(), "A recently fetched segment proves playback is still consuming media.");
+        Assert.IsTrue(cache.Manager.IsActive(session.SessionId, session.ProfileId));
+
+        cache.Time.Advance(HlsPlaybackSessionManager.IdleLifetime + TimeSpan.FromSeconds(1));
+        Assert.AreEqual(1, cache.Manager.CleanupExpired(), "An abandoned stream is eventually released.");
+        Assert.AreEqual(HlsSessionEndReason.Idle, cache.Manager.EndReason(session.SessionId));
+    }
+
+    [TestMethod]
     public async Task AForeignFolderIsNeitherAcceptedNorSweptAndAFailedStartLeavesNoDirectory()
     {
         var kit = PlaybackServerTestKit.Create();
