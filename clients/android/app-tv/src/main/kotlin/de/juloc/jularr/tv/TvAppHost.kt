@@ -603,6 +603,11 @@ fun TvAppHost(
 
                         TvRoute.Watchlist -> TvWatchlistScreen(
                             entries = snapshot.watchlist,
+                            page = snapshot.watchlistPage,
+                            hasMore = snapshot.watchlistHasMore,
+                            onPageChange = { page ->
+                                launchSnapshot { controller.loadWatchlistPage(page) }
+                            },
                             supported = snapshot.capabilities?.features?.watchlist == true,
                             serverOrigin = settings.origin.orEmpty(),
                             requestHeaders = cookies.requestHeaders(),
