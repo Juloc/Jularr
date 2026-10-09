@@ -447,6 +447,50 @@ namespace Jularr.Web.Data.Migrations
                     b.ToTable("OwnerAccounts");
                 });
 
+            modelBuilder.Entity("Jularr.Web.Features.Auth.PlexLoginAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BrowserNonceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ClientIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("PinId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReturnPath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("StartedAccountId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("VerifiedPlexAccountId")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("StartedAccountId");
+
+                    b.ToTable("PlexLoginAttempts");
+                });
+
             modelBuilder.Entity("Jularr.Web.Features.Books.BookEdition", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4742,6 +4786,14 @@ namespace Jularr.Web.Data.Migrations
                         .HasForeignKey("AnimeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.Auth.PlexLoginAttempt", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.Auth.OwnerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("StartedAccountId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Jularr.Web.Features.Auth.AccountLoginIdentity", b =>
