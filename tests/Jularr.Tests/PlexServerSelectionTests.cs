@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using Jularr.Web.Features.ExternalPlayback.Plex;
+using Jularr.Web.Features.Auth;
+using System.Security.Claims;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Tests;
@@ -27,11 +29,11 @@ public sealed class PlexServerSelectionTests
             var candidate = Candidate();
 
             var available = await picker.GetAvailableLibrariesAsync(
-                candidate, HttpsPlexServer, "jularr-client", CancellationToken.None);
+                Admin(), candidate, HttpsPlexServer, "jularr-client", CancellationToken.None);
             Assert.AreEqual(2, available.Count);
 
             var approved = await picker.ApproveAsync(
-                candidate, HttpsPlexServer, ["1"],
+                Admin(), candidate, HttpsPlexServer, ["1"],
                 "jularr-client", CancellationToken.None);
 
             Assert.AreEqual("machine-123456", approved.MachineIdentifier);
@@ -75,15 +77,15 @@ public sealed class PlexServerSelectionTests
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
                 picker.ApproveAsync(
-                    Candidate(), HttpsPlexServer, ["300"],
+                    Admin(), Candidate(), HttpsPlexServer, ["300"],
                     "jularr-client", CancellationToken.None));
             await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
                 picker.ApproveAsync(
-                    Candidate(), new Uri("https://other.example:32400/"),
+                    Admin(), Candidate(), new Uri("https://other.example:32400/"),
                     ["1"], "jularr-client", CancellationToken.None));
             await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
                 picker.ApproveAsync(
-                    Candidate(), HttpsPlexServer, ["1", "1"],
+                    Admin(), Candidate(), HttpsPlexServer, ["1", "1"],
                     "jularr-client", CancellationToken.None));
 
             Assert.AreEqual(0, (await store.ListAsync()).Count);
@@ -97,6 +99,15 @@ public sealed class PlexServerSelectionTests
             }
         }
     }
+
+    private static ClaimsPrincipal Admin() =>
+        OwnerAuthService.CreatePrincipal(new OwnerAccount
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            UserName = "owner",
+            Role = AccountRole.Owner,
+            IsEnabled = true
+        });
 
     private static PlexServerCandidate Candidate() =>
         new("machine-123456", "Home server", true,
