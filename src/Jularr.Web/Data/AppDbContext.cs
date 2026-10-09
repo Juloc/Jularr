@@ -140,6 +140,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<WorkSeason> WorkSeasons => Set<WorkSeason>();
     public DbSet<WorkEpisode> WorkEpisodes => Set<WorkEpisode>();
     public DbSet<WorkTrack> WorkTracks => Set<WorkTrack>();
+    public DbSet<MusicRecording> MusicRecordings => Set<MusicRecording>();
 
     // Music (manager MVP): artists own album Works; albums add their provider identity and monitoring to the Work row.
     public DbSet<MusicArtist> MusicArtists => Set<MusicArtist>();
@@ -791,9 +792,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Title).HasMaxLength(500);
-            entity.Property(x => x.MusicBrainzRecordingId).HasMaxLength(64);
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<MusicRecording>().WithMany().HasForeignKey(x => x.MusicRecordingId).OnDelete(DeleteBehavior.NoAction);
             entity.HasIndex(x => new { x.WorkId, x.Disc, x.Number }).IsUnique();
+            entity.HasIndex(x => x.MusicRecordingId);
+        });
+
+        modelBuilder.Entity<MusicRecording>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.MusicBrainzId).HasMaxLength(64);
+            entity.Property(x => x.Title).HasMaxLength(500);
+            entity.HasIndex(x => x.MusicBrainzId).IsUnique();
         });
 
         modelBuilder.Entity<MusicArtist>(entity =>
@@ -812,6 +822,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(x => x.WorkId);
             entity.Property(x => x.Type).HasConversion<int>();
             entity.Property(x => x.MusicBrainzReleaseGroupId).HasMaxLength(64);
+            entity.Property(x => x.MusicBrainzReleaseId).HasMaxLength(64);
             entity.HasOne<Work>().WithOne().HasForeignKey<MusicAlbum>(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<MusicArtist>().WithMany().HasForeignKey(x => x.ArtistId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => x.MusicBrainzReleaseGroupId).IsUnique().HasFilter("\"MusicBrainzReleaseGroupId\" IS NOT NULL");

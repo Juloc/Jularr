@@ -124,6 +124,28 @@ public sealed class MusicLibraryTests
         Assert.AreEqual(1, fake.TrackReads["rg-3"], "A stored list is never read again.");
     }
 
+    [TestMethod]
+    public async Task ARecordingOnTwoAlbumsIsOneRecordingAndATrackWithoutAnIdStaysUnresolved()
+    {
+        await using var db = await CreateDbAsync();
+        var fake = new FakeMusicProvider();
+        fake.Releases["rg-1"] = new MusicAlbumTracks("rel-1", [new MusicTrackInfo(1, 1, "Give Life Back to Music", 274000, "rec-1"), new MusicTrackInfo(1, 2, "The Game of Love", 321000, null)]);
+        var service = new MusicLibraryService(db, fake, new WorkService(db), MonitoringTestSupport.Commands(db), new FixedClock(Now));
+        await service.AddArtistAsync(ArtistId, MusicMonitorMode.All, "owner", CancellationToken.None);
+        var homework = (await db.MusicAlbums.SingleAsync(album => album.MusicBrainzReleaseGroupId == "rg-1")).WorkId;
+        var memories = (await db.MusicAlbums.SingleAsync(album => album.MusicBrainzReleaseGroupId == "rg-3")).WorkId;
+
+        await service.EnsureTracksAsync(homework, CancellationToken.None);
+        await service.EnsureTracksAsync(memories, CancellationToken.None);
+
+        var recordings = await db.MusicRecordings.AsNoTracking().ToListAsync();
+        CollectionAssert.AreEquivalent(new[] { "rec-1", "rec-2" }, recordings.Select(recording => recording.MusicBrainzId).ToArray());
+        var placements = await db.WorkTracks.AsNoTracking().ToListAsync();
+        Assert.AreEqual(2, placements.Count(track => track.MusicRecordingId == recordings.Single(recording => recording.MusicBrainzId == "rec-1").Id), "Both albums place the one recording.");
+        Assert.IsNull(placements.Single(track => track.WorkId == homework && track.Number == 2).MusicRecordingId, "The same title on another album does not make it that recording.");
+        Assert.AreEqual("rel-1", (await db.MusicAlbums.AsNoTracking().SingleAsync(album => album.WorkId == homework)).MusicBrainzReleaseId);
+    }
+
     private static MusicBrainzProvider Provider(Func<HttpRequestMessage, HttpResponseMessage> responder)
     {
         var clock = TimeProvider.System;
@@ -164,6 +186,8 @@ public sealed class MusicLibraryTests
 
         public Dictionary<string, int> TrackReads { get; } = [];
 
+        public Dictionary<string, MusicAlbumTracks> Releases { get; } = [];
+
         public Task<IReadOnlyList<MusicArtistSummary>> SearchArtistsAsync(string query, int limit, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<MusicArtistSummary>>([new(ArtistId, "Daft Punk", "Daft Punk", null, "FR", "Group")]);
 
@@ -179,7 +203,7 @@ public sealed class MusicLibraryTests
         public Task<MusicAlbumTracks?> GetTracksAsync(string releaseGroupMusicBrainzId, CancellationToken cancellationToken)
         {
             TrackReads[releaseGroupMusicBrainzId] = TrackReads.GetValueOrDefault(releaseGroupMusicBrainzId) + 1;
-            return Task.FromResult(releaseGroupMusicBrainzId == "rg-3"
+            return Task.FromResult(Releases.TryGetValue(releaseGroupMusicBrainzId, out var release) ? release : releaseGroupMusicBrainzId == "rg-3"
                 ? new MusicAlbumTracks("rel", [new MusicTrackInfo(1, 1, "Give Life Back to Music", 274000, "rec-1"), new MusicTrackInfo(1, 2, "The Game of Love", 321000, "rec-2")])
                 : null);
         }

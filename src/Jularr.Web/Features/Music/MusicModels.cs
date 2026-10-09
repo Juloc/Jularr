@@ -58,6 +58,9 @@ public sealed class MusicAlbum
     /// <summary>The provider identity (MusicBrainz release group id); unique when set.</summary>
     public string? MusicBrainzReleaseGroupId { get; set; }
 
+    /// <summary>The MusicBrainz release whose track placements the album's <see cref="WorkTrack"/> rows are; null until a track list was stored from one.</summary>
+    public string? MusicBrainzReleaseId { get; set; }
+
     /// <summary>Whether a missing album is wanted. The artist's monitor mode sets it when the album is added; the owner can switch it per album.</summary>
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

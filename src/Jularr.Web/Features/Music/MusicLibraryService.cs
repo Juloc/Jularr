@@ -124,12 +124,23 @@ public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider 
             return true;
         }
 
-        var groupId = await db.MusicAlbums.Where(album => album.WorkId == workId).Select(album => album.MusicBrainzReleaseGroupId).FirstOrDefaultAsync(cancellationToken);
-        if (groupId is null || await provider.GetTracksAsync(groupId, cancellationToken) is not { Tracks.Count: > 0 } tracks)
+        var album = await db.MusicAlbums.FirstOrDefaultAsync(candidate => candidate.WorkId == workId, cancellationToken);
+        if (album?.MusicBrainzReleaseGroupId is not { } groupId || await provider.GetTracksAsync(groupId, cancellationToken) is not { Tracks.Count: > 0 } tracks)
         {
             return false;
         }
 
+        // A recording is one row however many releases place it; a track without a recording id stays unresolved.
+        var recordingIds = tracks.Tracks.Select(track => track.RecordingId).OfType<string>().Where(id => id.Length > 0).Distinct().ToArray();
+        var recordings = await db.MusicRecordings.Where(recording => recordingIds.Contains(recording.MusicBrainzId)).ToDictionaryAsync(recording => recording.MusicBrainzId, cancellationToken);
+        foreach (var track in tracks.Tracks.Where(track => track.RecordingId is { Length: > 0 } id && !recordings.ContainsKey(id)))
+        {
+            var recording = new MusicRecording { MusicBrainzId = track.RecordingId!, Title = track.Title };
+            db.MusicRecordings.Add(recording);
+            recordings[recording.MusicBrainzId] = recording;
+        }
+
+        album.MusicBrainzReleaseId = tracks.ReleaseId;
         db.WorkTracks.AddRange(tracks.Tracks
             .GroupBy(track => (track.Disc, track.Number))
             .Select(group => group.First())
@@ -140,7 +151,7 @@ public sealed class MusicLibraryService(AppDbContext db, IMusicMetadataProvider 
                 Number = track.Number,
                 Title = track.Title,
                 DurationMs = track.DurationMs,
-                MusicBrainzRecordingId = track.RecordingId
+                MusicRecordingId = track.RecordingId is { Length: > 0 } id ? recordings[id].Id : null
             }));
         await db.SaveChangesAsync(cancellationToken);
         return true;

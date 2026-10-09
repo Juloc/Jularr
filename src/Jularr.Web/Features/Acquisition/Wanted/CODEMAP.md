@@ -33,6 +33,8 @@ Installed coverage (SQL in `WantedReconciler`)
 - Book: a `BookFile` of a linked edition. Light Novel: a `NovelVolume`. Manga: a `MangaChapter` (through `WorkSourceLink`).
 - Reading targets are whole Works until the Work has provider-identified canonical units (`WorkVolume` for Light Novel, `WorkChapter` for Manga, created only by `ReadingUnits.EnrichVolumesAsync/EnrichChaptersAsync` from a provider id) and every local volume/chapter it holds is tied to one (`WorkUnitBindings`: owner mapping via `PUT /api/monitoring/v1/works/{id}/reading-units/...`); then the units are the targets (Volume, Chapter) and a tied local unit installs its own. Local numbers and titles never tie anything. No provider feeds enrichment yet.
 
+Music identity: an album Work is the release group; its `WorkTrack` rows are the placements of the release in `MusicAlbum.MusicBrainzReleaseId` (disc, number), each pointing at a shared `MusicRecording` (MusicBrainz recording id) or at none while the id is unknown; recordings are never matched by title or position. Wanted stays album-level (target kinds Recording/ReleaseTrack are reserved).
+
 Media adapters: `MusicRequestDrafter` (release group + payload), `IdentityRequestDrafter` (primary provider identity).
 
 Cost: a single-Work reconcile is index-driven (0.7 ms on 40k episodes), the full run is one statement (about 160 ms on 4600 Works and 36k episodes).

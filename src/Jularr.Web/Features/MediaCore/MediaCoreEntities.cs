@@ -174,8 +174,23 @@ public sealed class WorkVolume
 }
 
 /// <summary>
-/// A track of an album <see cref="Work"/>: logical content that exists without a file, the music equivalent of an episode or chapter.
-/// Not to be confused with the technical stream <c>Track</c> below an Asset.
+/// The underlying audio recording, identified by its MusicBrainz recording id; one recording can be placed on many releases (albums). A track whose
+/// recording id is unknown has no recording: recordings are never matched by title or position.
+/// </summary>
+public sealed class MusicRecording
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public string MusicBrainzId { get; set; } = "";
+
+    public string Title { get; set; } = "";
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// A track of an album <see cref="Work"/> (a release group): the placement of a recording on a release, at a disc and position. Logical content that exists
+/// without a file, the music equivalent of an episode or chapter. Not to be confused with the technical stream <c>Track</c> below an Asset.
 /// </summary>
 public sealed class WorkTrack
 {
@@ -190,8 +205,8 @@ public sealed class WorkTrack
 
     public int? DurationMs { get; set; }
 
-    /// <summary>The provider identity of the recording (MusicBrainz recording id), when known.</summary>
-    public string? MusicBrainzRecordingId { get; set; }
+    /// <summary>The recording placed here, when the provider named it; null while unresolved.</summary>
+    public Guid? MusicRecordingId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

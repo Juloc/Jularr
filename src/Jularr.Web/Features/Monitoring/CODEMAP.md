@@ -37,7 +37,7 @@ Monitoring only states intent. `Features/Acquisition/Wanted` (see its CODEMAP) r
 - Readers: `ConsumerAcquisition`, `VideoDetail`, `InstantPlay/VideoPlaybackFactsQuery`, `WantedListService`, `VideoUpgradeWantedSource`.
 
 ## Not built (needs a product decision)
-Author / Book series / Label / Franchise entities, recording-level Music, Audiobook chapters, a provider feed of volume/chapter identities (the unit model and owner mapping exist, see Wanted).
+Author / Book series / Label / Franchise entities, Audiobook chapters, a provider feed of volume/chapter identities (the unit model and owner mapping exist, see Wanted).
 
 ## Tests
 `CanonicalMonitoringTests` (states, inheritance, Future, relations, bulk, tracks), `CanonicalMonitoringMigrationTests`
