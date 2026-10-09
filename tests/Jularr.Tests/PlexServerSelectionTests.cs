@@ -130,6 +130,10 @@ public sealed class PlexServerSelectionTests
                 new PlexLibraryClient(http), store);
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+                picker.GetAvailableLibrariesAsync(
+                    Admin(), Candidate(), HttpsPlexServer,
+                    "jularr-client", CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
                 picker.ApproveAsync(
                     Admin(), Candidate(), HttpsPlexServer, ["1"],
                     "jularr-client", CancellationToken.None));
