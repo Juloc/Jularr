@@ -105,7 +105,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
-                playbackPreferences = null,
+                playbackPreferences = runCatching { flow.loadPlaybackPreferences() }.getOrNull(),
                 storageDecision = null,
                 error = null,
             )
@@ -156,7 +156,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
-                playbackPreferences = null,
+                playbackPreferences = runCatching { flow.loadPlaybackPreferences() }.getOrNull(),
                 storageDecision = null,
                 error = null,
             )
@@ -192,6 +192,7 @@ class TvAppController(
                         account = signedIn.account,
                         library = signedIn.library,
                         continueWatching = signedIn.continueWatching,
+                        playbackPreferences = runCatching { flow.loadPlaybackPreferences() }.getOrNull(),
                         error = null,
                     )
                 }
@@ -233,7 +234,7 @@ class TvAppController(
                 library = signedIn.library,
                 continueWatching = signedIn.continueWatching,
                 watchlist = emptyList(),
-                playbackPreferences = null,
+                playbackPreferences = runCatching { flow.loadPlaybackPreferences() }.getOrNull(),
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 anime = null,
