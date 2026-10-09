@@ -66,7 +66,7 @@ public sealed class PlayerDesignTests
         var episodeScript = File.ReadAllText(
             Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
 
-        StringAssert.DoesNotContain(designScript, "token.isInteractive");
+        Assert.IsFalse(designScript.Contains("token.isInteractive", StringComparison.Ordinal));
         StringAssert.Contains(learningScript, "token.isInteractive");
         StringAssert.Contains(learningScript, "actions.openWord");
         StringAssert.Contains(learningScript, "actions.learnCurrentCue");
