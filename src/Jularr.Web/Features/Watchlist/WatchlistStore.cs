@@ -750,13 +750,6 @@ public sealed class WatchlistStore(AppDbContext db)
         return items.Values.ToArray();
     }
 
-    public async Task<HashSet<string>> GetEffectiveKeysAsync(
-        string profileId,
-        CancellationToken cancellationToken) =>
-        (await GetEffectiveAsync(profileId, cancellationToken))
-            .Select(item => item.Identity.Key)
-            .ToHashSet(StringComparer.Ordinal);
-
     private async Task UpsertPreferenceAsync(
         string profileId,
         WatchlistDraft draft,
