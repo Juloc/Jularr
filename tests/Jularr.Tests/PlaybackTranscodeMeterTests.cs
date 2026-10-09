@@ -297,15 +297,17 @@ public sealed class PlaybackTranscodeMeterTests
     }
 
     [TestMethod]
-    public void OnlyAnEncodeAsksFfmpegForItsProgressAndTheArgumentsStayWithTheCommandOwner()
+    public void HlsReportsOutputPositionAndProgressiveVideoEncodeReportsSpeed()
     {
         var encode = PlaybackDeliveryCommand.Hls("/media/a.mkv", Transcode(Video()), 0, "/cache/x").ToList();
         var progressive = PlaybackDeliveryCommand.Progressive("/media/a.mkv", Transcode(Video(), PlaybackTransport.ProgressiveMp4), 0).ToList();
         var copy = PlaybackDeliveryCommand.Hls("/media/a.mkv", Remux(), 0, "/cache/x").ToList();
 
-        Assert.AreEqual("pipe:2", encode[encode.IndexOf("-progress") + 1], "stdout carries the progressive media, so progress shares stderr.");
+        Assert.AreEqual("pipe:2", encode[encode.IndexOf("-progress") + 1]);
         CollectionAssert.Contains(encode, "-nostats");
         CollectionAssert.Contains(progressive, "-progress");
-        CollectionAssert.DoesNotContain(copy, "-progress", "A lossless remux has no speed to protect.");
+        Assert.AreEqual("pipe:2", copy[copy.IndexOf("-progress") + 1],
+            "HLS remuxes expose output position for buffer pacing without re-encoding video.");
+        Assert.AreEqual("copy", copy[copy.IndexOf("-c:v") + 1]);
     }
 }
