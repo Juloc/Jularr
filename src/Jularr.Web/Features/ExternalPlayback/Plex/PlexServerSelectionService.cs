@@ -103,7 +103,8 @@ public sealed class PlexServerSelectionService(
     {
         ArgumentNullException.ThrowIfNull(discovered);
         ArgumentNullException.ThrowIfNull(serverEndpoint);
-        if (!serverEndpoint.IsAbsoluteUri ||
+        if (!discovered.Owned ||
+            !serverEndpoint.IsAbsoluteUri ||
             serverEndpoint.Scheme != Uri.UriSchemeHttps ||
             !discovered.Connections.Any(x => x.Url == serverEndpoint))
         {
