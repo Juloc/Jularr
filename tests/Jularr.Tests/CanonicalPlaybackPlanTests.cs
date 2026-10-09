@@ -183,6 +183,21 @@ public sealed class CanonicalPlaybackPlanTests
             "A verified identical-timeline rendition avoids video re-encoding.");
         Assert.AreEqual(candidate.StoredFileId, verified.Session!.MediaFileId);
 
+        // An automatically prepared file may sort before its source by filename.
+        // It can never become the canonical original just because the filename changed.
+        var preparedStored = await fixture.Db.StoredFiles.FindAsync(candidate.StoredFileId);
+        Assert.IsNotNull(preparedStored);
+        var earlierPath = Path.Combine(Path.GetDirectoryName(preparedStored.Path)!, "0-prepared-video.mp4");
+        File.Move(preparedStored.Path, earlierPath);
+        preparedStored.Path = earlierPath;
+        await fixture.Db.SaveChangesAsync();
+        var candidatesByOrigin = await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None);
+        Assert.AreEqual(original.StoredFileId, candidatesByOrigin[0].StoredFileId);
+        var sortedPlan = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(candidate.StoredFileId, sortedPlan.MediaFileId,
+            "The verified rendition remains selectable even when its path sorts ahead of the source.");
+
         var local = (await planner.PlanAsync(
             PlaybackVideoTarget.Movie(movie.Id), "reader",
             input with { RemoteAddress = IPAddress.Loopback, Network = null }, CancellationToken.None))!;
@@ -241,6 +256,12 @@ public sealed class CanonicalPlaybackPlanTests
             PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
         Assert.AreEqual(original.StoredFileId, unknownRecipe.MediaFileId,
             "Future preparation recipes require explicit compatibility review before selecting their output.");
+
+        await storage.RemoveFilesAsync([original.StoredFileId], CancellationToken.None);
+        var orphaned = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None);
+        Assert.IsNull(orphaned,
+            "A surviving prepared rendition is not allowed to masquerade as the missing source file.");
     }
 
     [DataTestMethod]
