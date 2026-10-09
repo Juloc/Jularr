@@ -236,7 +236,9 @@ private fun TvSettingOptions(
         TvSettingPanel.SUBTITLE -> tvLanguageOptions(includeOff = true).map { (language, label) ->
             label to ClientPlaybackPreferencesUpdate(preferredSubtitleLanguage = language)
         }
-        TvSettingPanel.SPEED -> listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0).map {
+        TvSettingPanel.SPEED -> remember(LocalContext.current) {
+            TvPlayerDesignLoader.load(LocalContext.current).playbackSpeeds
+        }.map {
             "${it}x" to ClientPlaybackPreferencesUpdate(defaultPlaybackSpeed = it)
         }
     }
