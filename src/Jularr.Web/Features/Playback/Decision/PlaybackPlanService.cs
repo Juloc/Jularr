@@ -26,7 +26,8 @@ public sealed record PlaybackPlanInput(
     IReadOnlySet<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
     bool Wake = true,
-    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None);
+    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None,
+    bool HasUntrustedForwardedFor = false);
 
 /// <summary>
 /// The client's own view of its connection. Only measured values count as throughput;
@@ -53,7 +54,8 @@ public static class PlaybackNetworkClassifier
 {
     // Carrier-grade NAT (100.64/10) is also where overlay VPNs such as Tailscale live; such a
     // client may be anywhere, so it counts as remote.
-    public static PlaybackNetworkClass Classify(IPAddress? remote, PlaybackNetworkReport? report)
+    public static PlaybackNetworkClass Classify(
+        IPAddress? remote, PlaybackNetworkReport? report, bool hasUntrustedForwardedFor = false)
     {
         if (report is { } hints &&
             (hints.SaveData == true ||
@@ -63,7 +65,7 @@ public static class PlaybackNetworkClassifier
             return PlaybackNetworkClass.Metered;
         }
 
-        if (remote is null)
+        if (remote is null || hasUntrustedForwardedFor)
         {
             return PlaybackNetworkClass.Unknown;
         }
@@ -244,7 +246,7 @@ public sealed class PlaybackPlanService(
 
         var capabilities = input.Capabilities?.Normalize() ??
                            ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
-        var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
+        var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network, input.HasUntrustedForwardedFor);
         var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
 
         // What the replaced session's player reported (its buffer and the stalls of the last minute) is the evidence of how that
