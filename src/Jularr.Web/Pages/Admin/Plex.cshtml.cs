@@ -44,7 +44,10 @@ public sealed class PlexModel(
     public IReadOnlyList<PlexSelectedServer> Connected { get; private set; } = [];
     public IReadOnlyList<PlexAdminServerOption> Available { get; private set; } = [];
 
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    // Discovery is always explicit. Opening Admin/Plex itself never polls a
+    // Plex server or traverses a user's libraries.
+    public async Task OnGetAsync(
+        bool discover, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(
             HttpContext, db);
@@ -61,7 +64,7 @@ public sealed class PlexModel(
         var status = accountId is null ? null
             : await personal.GetStatusAsync(accountId, cancellationToken);
         HasPersonalConnection = status?.IsUsable == true;
-        if (!HasPersonalConnection)
+        if (!HasPersonalConnection || !discover)
         {
             return;
         }
