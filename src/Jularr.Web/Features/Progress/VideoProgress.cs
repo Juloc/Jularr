@@ -178,11 +178,12 @@ public sealed class VideoProgressService(AppDbContext db)
             throw new ArgumentException("The cutoff must be UTC.", nameof(sinceUtc));
         }
 
-        var ids = workIds.Distinct().ToArray();
-        if (ids.Length > 100)
+        if (workIds.Count > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(workIds));
         }
+
+        var ids = workIds.Distinct().ToArray();
 
         if (ids.Length == 0)
         {
