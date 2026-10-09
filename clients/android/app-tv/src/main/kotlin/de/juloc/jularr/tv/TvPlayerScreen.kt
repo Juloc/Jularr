@@ -433,7 +433,7 @@ fun TvPlayerScreen(
                         text = cue.text,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = if (uiState.controlsVisible) 220.dp else 48.dp)
+                            .padding(bottom = if (uiState.controlsVisible) 285.dp else 48.dp)
                             .background(design.subtitleBackground)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         color = design.subtitleText,
@@ -931,25 +931,9 @@ private fun PlayerControls(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (canLearn) {
-                    Button(onClick = onRepeatLine) {
-                        Icon(
-                            imageVector = Icons.Filled.Replay,
-                            contentDescription = "Repeat line",
-                            modifier = Modifier.size(22.dp),
-                        )
-                        Text("  Repeat line")
-                    }
-                    Button(onClick = onLearn) {
-                        Text("Learn this line")
-                    }
-                }
-
-                Spacer(Modifier.weight(1f))
-
                 if (audioTracks.isNotEmpty()) {
                     Button(
                         onClick = onOpenAudioTracks,
@@ -988,6 +972,25 @@ private fun PlayerControls(
                     modifier = Modifier.focusRequester(speedControlFocus),
                 ) {
                     Text("Speed: ${playbackSpeed}x")
+                }
+            }
+            if (canLearn) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Button(onClick = onRepeatLine) {
+                        Icon(
+                            imageVector = Icons.Filled.Replay,
+                            contentDescription = "Repeat line",
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Text("  Repeat line")
+                    }
+                    Button(onClick = onLearn) {
+                        Text("Learn this line")
+                    }
                 }
             }
         }
