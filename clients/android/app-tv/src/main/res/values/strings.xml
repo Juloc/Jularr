@@ -123,6 +123,14 @@
     <string name="tv_update_action_retry">Retry</string>
 
     <!-- Anime / episode detail -->
+    <string name="tv_anime_seasons_count">%1$d seasons</string>
+    <string name="tv_anime_continue">Continue watching</string>
+    <string name="tv_anime_play">Play</string>
+    <string name="tv_anime_resume_info">S%1$02d E%2$02d · %3$d%%</string>
+    <string name="tv_anime_specials">Specials / OVA</string>
+    <string name="tv_anime_no_episodes">No episodes in this season.</string>
+    <string name="tv_anime_media_indexed">In library · check playback availability</string>
+    <string name="tv_anime_progress">Continue</string>
     <string name="tv_anime_episode_count">%1$d episodes</string>
     <string name="tv_anime_season_header">Season %1$d</string>
     <string name="tv_episode_status_ready">Ready to play</string>
