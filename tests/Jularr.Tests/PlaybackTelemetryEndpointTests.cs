@@ -58,6 +58,24 @@ public sealed class PlaybackTelemetryEndpointTests
     }
 
     [TestMethod]
+    public async Task BufferingWithoutServerEvidenceReturnsIndeterminateNetworkCause()
+    {
+        await using var host = await VideoDetailPageTestHost.CreateAsync();
+        var session = NewSession(host);
+        var response = await host.SendAsync(
+            HttpMethod.Put,
+            s_path + session.Id + "/telemetry",
+            Body(buffer: 1.0, throughput: 1_600, stalls: 2),
+            profile: Owner);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.Status);
+        using var json = JsonDocument.Parse(response.Body);
+        Assert.AreEqual("connection_uncertain",
+            json.RootElement.GetProperty("bottleneck").GetString(),
+            "The server must not claim the client's Internet is slow without evidence from both ends.");
+    }
+
+    [TestMethod]
     public async Task ARepeatedOrOlderReportAnswersLikeANewOneAndChangesNothing()
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
