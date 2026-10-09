@@ -52,6 +52,7 @@
     const chromeHidden = () => stage.dataset.chromeState === "hidden";
     const focusedOnControls = () =>
         stage.contains(document.activeElement) &&
+        document.activeElement?.matches?.(":focus-visible") === true &&
         Boolean(document.activeElement?.closest?.(".player-top, .player-center, .player-bottom, .player-settings"));
     const hoveredControls = () =>
         Boolean(stage.querySelector(".player-top:hover, .player-center:hover, .player-bottom:hover, .player-settings:hover"));
