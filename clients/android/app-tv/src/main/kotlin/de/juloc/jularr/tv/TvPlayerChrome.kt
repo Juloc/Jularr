@@ -39,6 +39,8 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,6 +100,7 @@ internal fun PlayerControls(
     onOpenAudioTracks: () -> Unit,
     onOpenSubtitleTracks: () -> Unit,
     onPlayPause: () -> Unit,
+    onScrubActive: (Boolean) -> Unit,
     onSeekTo: (Long) -> Unit,
     onRepeatLine: () -> Unit,
     onLearn: () -> Unit,
@@ -106,7 +109,9 @@ internal fun PlayerControls(
 ) {
     val focusColor = rememberTvFocusColor()
     var scrubPreviewMs by remember(durationMs) { mutableStateOf<Long?>(null) }
-    androidx.activity.compose.BackHandler(enabled = scrubPreviewMs != null) { scrubPreviewMs = null }
+    LaunchedEffect(scrubPreviewMs) { onScrubActive(scrubPreviewMs != null) }
+    DisposableEffect(Unit) { onDispose { onScrubActive(false) } }
+    BackHandler(enabled = scrubPreviewMs != null) { scrubPreviewMs = null }
     val progress = if (durationMs > 0) {
         ((scrubPreviewMs ?: positionMs).toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     } else {
