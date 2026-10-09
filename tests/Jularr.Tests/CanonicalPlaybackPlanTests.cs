@@ -177,6 +177,12 @@ public sealed class CanonicalPlaybackPlanTests
         });
         await fixture.Db.SaveChangesAsync();
 
+        var installed = await storage.ListVideoFilesAsync(movie.Id, CancellationToken.None);
+        Assert.AreEqual(1, installed.Count, "A disposable prepared cache entry is not an installed acquisition version.");
+        Assert.AreEqual(original.StoredFileId, installed[0].StoredFileId);
+        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count,
+            "Playback can still consider the verified derivative without exposing it as an installed release.");
+
         var verified = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
         Assert.AreEqual(candidate.StoredFileId, verified.MediaFileId);
         Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, verified.Plan.Mode,
