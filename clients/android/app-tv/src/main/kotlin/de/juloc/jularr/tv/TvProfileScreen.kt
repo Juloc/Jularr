@@ -35,8 +35,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.model.ClientAccount
-import de.juloc.jularr.core.model.TvPlaybackPreferences
-import de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate
+import de.juloc.jularr.core.model.ClientPlaybackPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate
 import de.juloc.jularr.core.update.UpdateCheckResult
 
 /**
@@ -59,10 +59,10 @@ fun TvProfileScreen(
     onSignOut: () -> Unit,
     onChangeServer: () -> Unit,
     onSwitchAccount: (() -> Unit)? = null,
-    playbackPreferences: TvPlaybackPreferences? = null,
+    playbackPreferences: ClientPlaybackPreferences? = null,
     busy: Boolean = false,
     error: String? = null,
-    onUpdatePlaybackPreferences: (TvPlaybackPreferencesUpdate) -> Unit = {},
+    onUpdatePlaybackPreferences: (ClientPlaybackPreferencesUpdate) -> Unit = {},
 ) {
     var selectedPanel by remember { mutableStateOf<TvSettingPanel?>(null) }
     val preferencesAvailable = playbackPreferences != null
@@ -217,27 +217,27 @@ private fun displayTvLanguage(language: String?): String = when (language?.lower
 @Composable
 private fun TvSettingOptions(
     selected: TvSettingPanel,
-    preferences: TvPlaybackPreferences,
+    preferences: ClientPlaybackPreferences,
     accent: Color,
     busy: Boolean,
     error: String?,
-    onSelect: (TvPlaybackPreferencesUpdate) -> Unit,
+    onSelect: (ClientPlaybackPreferencesUpdate) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
-    val options: List<Pair<String, TvPlaybackPreferencesUpdate>> = when (selected) {
+    val options: List<Pair<String, ClientPlaybackPreferencesUpdate>> = when (selected) {
         TvSettingPanel.AUTOPLAY -> listOf(
-            stringResource(R.string.tv_settings_on) to TvPlaybackPreferencesUpdate(autoplayNext = true),
-            stringResource(R.string.tv_settings_off) to TvPlaybackPreferencesUpdate(autoplayNext = false),
+            stringResource(R.string.tv_settings_on) to ClientPlaybackPreferencesUpdate(autoplayNext = true),
+            stringResource(R.string.tv_settings_off) to ClientPlaybackPreferencesUpdate(autoplayNext = false),
         )
         TvSettingPanel.AUDIO -> tvLanguageOptions(includeOff = false).map { (language, label) ->
-            label to TvPlaybackPreferencesUpdate(preferredAudioLanguage = language)
+            label to ClientPlaybackPreferencesUpdate(preferredAudioLanguage = language)
         }
         TvSettingPanel.SUBTITLE -> tvLanguageOptions(includeOff = true).map { (language, label) ->
-            label to TvPlaybackPreferencesUpdate(preferredSubtitleLanguage = language)
+            label to ClientPlaybackPreferencesUpdate(preferredSubtitleLanguage = language)
         }
         TvSettingPanel.SPEED -> listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0).map {
-            "${it}x" to TvPlaybackPreferencesUpdate(defaultPlaybackSpeed = it)
+            "${it}x" to ClientPlaybackPreferencesUpdate(defaultPlaybackSpeed = it)
         }
     }
     val currentIndex = options.indexOfFirst { (_, value) ->
