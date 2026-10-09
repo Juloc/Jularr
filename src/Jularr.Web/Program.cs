@@ -126,6 +126,10 @@ builder.Services.AddSingleton(services =>
         services.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerSelectionService>();
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerCatalogScanService>();
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.ExternalPlayback.Plex.PlexCatalogCheckpointStore(
+        services.GetRequiredService<TimeProvider>()));
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexCatalogReconciliationService>();
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWorkMatcher>();
 builder.Services.AddSingleton(services =>
     new Jularr.Web.Features.ExternalPlayback.Plex.PlexProfileConnectionStore(
