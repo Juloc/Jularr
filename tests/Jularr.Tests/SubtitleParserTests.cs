@@ -219,6 +219,26 @@ public sealed class SubtitleParserTests
     }
 
     [TestMethod]
+    public void AssFontOnlyStyle_RetainsFontFamilyWithoutLayerMetadata()
+    {
+        const string content = """
+            [V4+ Styles]
+            Format: Name, Fontname
+            Style: Signs, Arial
+
+            [Events]
+            Format: Start, End, Style, Text
+            Dialogue: 0:00:01.00,0:00:03.00,Signs,Station sign
+            """;
+
+        var cue = SubtitleParser.ParseAss(content).Single();
+
+        Assert.AreEqual("Station sign", cue.Text);
+        Assert.AreEqual("Arial", cue.Presentation?.FontFamily);
+        Assert.IsNull(cue.Presentation?.Layer);
+    }
+
+    [TestMethod]
     public void AssPositionWithoutCanvasCoordinatesFallsBackToAlignment()
     {
         const string content = """
