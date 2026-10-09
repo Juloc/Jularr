@@ -1,5 +1,6 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.MediaCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -113,6 +114,60 @@ public sealed class PlexIdentityTests
                 service.LinkExternalIdentityAsync(
                     account.Id, "plex", new string('a', 161)));
         });
+    }
+
+    [TestMethod]
+    public async Task AutoProvision_CapsInstantRoleDefaultsWithoutGrantingHiddenMedia()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(), $"jularr-plex-caps-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new MediaCapabilityStore(root);
+            await store.SetRoleDefaultAsync(
+                AccountRole.User,
+                WorkMediaType.Movie,
+                MediaCapability.Instant);
+            await store.SetRoleDefaultAsync(
+                AccountRole.User,
+                WorkMediaType.Anime,
+                MediaCapability.Hidden);
+
+            await store.ConstrainNewExternalAccountAsync("new-plex-account");
+            var policy = await store.LoadAsync();
+
+            Assert.AreEqual(
+                MediaCapability.Request,
+                policy.Resolve(
+                    AccountRole.User,
+                    "new-plex-account",
+                    WorkMediaType.Movie));
+            Assert.AreEqual(
+                MediaCapability.Hidden,
+                policy.Resolve(
+                    AccountRole.User,
+                    "new-plex-account",
+                    WorkMediaType.Anime));
+
+            await store.SetRoleDefaultAsync(
+                AccountRole.User,
+                WorkMediaType.Anime,
+                MediaCapability.Instant);
+            policy = await store.LoadAsync();
+            Assert.AreEqual(
+                MediaCapability.Hidden,
+                policy.Resolve(
+                    AccountRole.User,
+                    "new-plex-account",
+                    WorkMediaType.Anime));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     private static async Task WithDatabaseAsync(
