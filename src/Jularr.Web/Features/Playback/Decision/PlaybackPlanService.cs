@@ -110,6 +110,8 @@ public sealed class PlaybackServerCapabilityProvider(
     PlaybackTranscodeSlots slots,
     PlaybackHardwareService hardware)
 {
+    public int WanUploadBudgetKbps => settings.Current.WanUploadBudgetKbps;
+
     /// <param name="tooSlow">Encoders that already failed to keep up with real time for the title being planned; see <see cref="PlaybackHardwareService.Choose"/>.</param>
     public PlaybackServerCapabilities Current(IReadOnlyCollection<PlaybackHardwareBackend>? tooSlow = null)
     {
@@ -249,11 +251,20 @@ public sealed class PlaybackPlanService(
             observed * PlaybackQualityPresets.ThroughputHeadroom < currentLimit
                 ? observed
                 : null;
+        int? egressLimit = null;
+        if (networkClass is not PlaybackNetworkClass.Local && serverCapabilities.WanUploadBudgetKbps > 0)
+        {
+            var active = sessions.ActiveExternalDeliveries(previous?.Id);
+            var safeBudget = serverCapabilities.WanUploadBudgetKbps * 0.85;
+            egressLimit = Math.Max(100, (int)(safeBudget / (active + 1)));
+        }
+
         var network = new PlaybackNetworkConditions(
             networkClass,
             strugglingThroughput ?? (input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null),
             evidence?.BufferSeconds ?? (input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null),
-            evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
+            evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100),
+            egressLimit);
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
 
         // The replaced session's advice and what the server learned about its own capacity for this title (a tier ceiling, encoders that could
