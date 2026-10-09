@@ -10,7 +10,19 @@
         <partial name="_AppBrandMark" />
     </div>
 
-    @if (Model.HasVerifiedIdentity)
+    @if (linking && Model.PlexLinked && !Model.HasVerifiedIdentity)
+    {
+        <h1>Plex login linked</h1>
+        <p>This Jularr account already has a Plex sign-in method.</p>
+        <form method="post" asp-page-handler="Unlink" class="form-stack">
+            <label asp-for="LocalPassword">
+                Confirm your Jularr password
+                <input asp-for="LocalPassword" type="password" autocomplete="current-password" />
+            </label>
+            <button class="button button-secondary" type="submit">Remove Plex login</button>
+        </form>
+    }
+    else if (Model.HasVerifiedIdentity)
     {
         <h1>Plex verified</h1>
         <p>Choose how to use this Plex identity with Jularr.</p>
@@ -82,5 +94,12 @@
         <div role="status" class="validation">@Model.Message</div>
     }
 
-    <p><a asp-page="/Account/Login">Back to Jularr login</a></p>
+    @if (linking)
+    {
+        <p><a asp-page="/Settings/Index">Back to settings</a></p>
+    }
+    else
+    {
+        <p><a asp-page="/Account/Login">Back to Jularr login</a></p>
+    }
 </section>
