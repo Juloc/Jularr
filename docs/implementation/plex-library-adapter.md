@@ -25,6 +25,10 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 - Disconnect affects only the selected profile media grant, **not** the Account-level Plex sign-in identity in #912, other users' connections, watchlists, requests, or Jularr progress.
 - Sync starts **off** and remains unavailable until an independently consented sync engine is implemented. A Plex sign-in never enables it automatically.
 - `SaveVerifiedAsync` is a trusted backend API, **not** an HTTP endpoint. Before calling it, the future connection handler must verify the Plex token and stable account ID server-side, prove ownership of the current signed-in Jularr profile, confirm user intent, and meet admin policy. This integration is not yet implemented.
+- `PlexProfileConnectionService` is the only intended surface for current-profile status, disconnection and media permissions in future web/client handlers. It derives the V1 profile identifier from the authenticated Jularr Account principal rather than accepting a caller-supplied profile ID.
+- For a user to see a Plex library, both scopes must permit it: the Admin must approve the server and section, **and** the user's independently connected Plex token must be able to list that section on the approved endpoint. Admin tokens are never substituted for user tokens. Unauthorized, forbidden and not-found Plex responses yield no accessible libraries.
+- This is a **library-access check**, not proof that an individual movie/episode is playable. Actual media-item verification and a deep link must be implemented before showing `In Plex öffnen`.
+
 
 ## Required before opening media in Plex
 
