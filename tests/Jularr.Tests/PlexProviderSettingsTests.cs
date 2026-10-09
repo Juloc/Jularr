@@ -28,7 +28,8 @@ public sealed class PlexProviderSettingsTests
                 ["loginEnabled"] = "true",
                 ["linkEnabled"] = "true",
                 ["autoProvisionEnabled"] = "false",
-                ["requireApproval"] = "true"
+                ["requireApproval"] = "true",
+                ["mediaConnectionEnabled"] = "true"
             };
 
             Assert.AreEqual(
@@ -42,17 +43,52 @@ public sealed class PlexProviderSettingsTests
             Assert.IsTrue(saved.CanLink);
             Assert.IsFalse(saved.AutoProvisionEnabled);
             Assert.IsTrue(saved.RequireApproval);
+            Assert.IsTrue(saved.CanConnectMedia);
             Assert.AreEqual(32, saved.ClientIdentifier.Length);
 
             var providerView = await provider.GetViewAsync(CancellationToken.None);
             Assert.AreEqual(ProviderFamily.Identity, providerView.Family);
-            Assert.AreEqual(4, providerView.Options.Count);
+            Assert.AreEqual(5, providerView.Options.Count);
         }
         finally
         {
             if (Directory.Exists(directory))
             {
                 Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task MediaConnection_IsOffByDefaultAndDoesNotEnableLogin()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(), $"plex-media-optin-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new PlexIdentitySettingsStore(
+                new ConfigurationBuilder().Build(), root);
+            var defaults = await store.GetAsync();
+            Assert.IsFalse(defaults.CanConnectMedia);
+
+            await store.SaveAsync(
+                true, false, false, false, true,
+                true, CancellationToken.None);
+            var mediaOnly = await store.GetAsync();
+            Assert.IsTrue(mediaOnly.CanConnectMedia);
+            Assert.IsFalse(mediaOnly.CanLogin);
+            Assert.IsFalse(mediaOnly.CanLink);
+
+            await store.SaveAsync(
+                false, false, false, false, true,
+                true, CancellationToken.None);
+            Assert.IsFalse((await store.GetAsync()).CanConnectMedia);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, true);
             }
         }
     }
