@@ -541,7 +541,9 @@ fun TvAppHost(
         updatePromptInfo = null
     }
 
-    val focusMemory = remember { TvFocusMemory() }
+    val focusMemory = remember(sessionStore?.getActiveSession()?.id, snapshot.account?.profileId) {
+        TvFocusMemory()
+    }
 
     when (val route = snapshot.navigation.route) {
         TvRoute.Setup -> TvSetupScreen(
