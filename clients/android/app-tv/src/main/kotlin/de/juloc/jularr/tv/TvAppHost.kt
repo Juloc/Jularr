@@ -654,6 +654,12 @@ fun TvAppHost(
                             } else {
                                 TvProfileScreen(
                                     account = account,
+                                    playbackPreferences = snapshot.playbackPreferences,
+                                    busy = snapshot.busy,
+                                    error = snapshot.error,
+                                    onUpdatePlaybackPreferences = { update ->
+                                        launchSnapshot { controller.changePlaybackPreferences(update) }
+                                    },
                                     serverOrigin = settings.origin.orEmpty(),
                                     currentVersionName = BuildConfig.VERSION_NAME,
                                     updateState = updateState,
