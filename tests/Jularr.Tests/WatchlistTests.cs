@@ -152,7 +152,7 @@ public sealed class WatchlistTests
             CancellationToken.None);
 
         var release = Assert.ContainsSingle(events);
-        Assert.AreEqual(lastExternalId, release.ExternalId);
+        Assert.AreEqual(lastExternalId, release.ProviderExternalId);
         Assert.AreEqual(5, release.Unit?.Number);
     }
 
