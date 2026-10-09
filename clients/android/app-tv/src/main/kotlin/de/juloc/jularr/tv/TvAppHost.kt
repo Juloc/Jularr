@@ -50,6 +50,8 @@ import de.juloc.jularr.core.update.UpdatePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import androidx.media3.common.util.UnstableApi
 import java.io.File
@@ -179,7 +181,16 @@ fun TvAppHost(
     val episodeBundle = snapshot.episode
     val episodeId = playerRoute?.episodeId
     val progressPolicy = remember(episodeId) { TvProgressPolicy() }
-    var nextEpisode by remember(episodeId) { mutableStateOf<EpisodeSummary?>(null) }
+    val progressWriteMutex = remember { Mutex() }
+    var episodeNeighbors by remember(episodeId) { mutableStateOf(TvEpisodeNeighbors()) }
+    var advancingEpisode by remember(episodeId) { mutableStateOf(false) }
+
+    LaunchedEffect(episodeId) {
+        val route = playerRoute ?: return@LaunchedEffect
+        episodeNeighbors = runCatching {
+            controller.episodeNeighbors(route.episodeId, route.animeId)
+        }.getOrDefault(TvEpisodeNeighbors())
+    }
 
     fun launchSnapshot(block: suspend () -> TvAppSnapshot) {
         snapshot = snapshot.copy(busy = true, error = null)
@@ -297,7 +308,36 @@ fun TvAppHost(
 
         val targetEpisodeId = episodeId ?: return
         scope.launch {
-            controller.saveProgress(write, targetEpisodeId)
+            progressWriteMutex.withLock { controller.saveProgress(write, targetEpisodeId) }
+        }
+    }
+
+    fun switchEpisode(target: EpisodeSummary) {
+        val currentEpisodeId = episodeId ?: return
+        val animeId = playerRoute?.animeId ?: return
+        if (advancingEpisode) return
+        advancingEpisode = true
+        val write = progressPolicy.evaluate(
+            event = TvProgressEvent.CLOSE,
+            nowMs = SystemClock.elapsedRealtime(),
+            positionMs = currentPositionMs,
+            durationMs = currentDurationMs.takeIf { it > 0 },
+        )
+        scope.launch {
+            try {
+                if (write != null) {
+                    progressWriteMutex.withLock { controller.saveProgress(write, currentEpisodeId) }
+                }
+                val next = controller.playEpisode(target.id, animeId)
+                if (next.navigation.route == TvRoute.Player(target.id, animeId) &&
+                    next.episode?.bootstrap?.episode?.id == target.id
+                ) {
+                    resetPlaybackRuntime()
+                }
+                snapshot = next
+            } finally {
+                advancingEpisode = false
+            }
         }
     }
 
@@ -875,21 +915,14 @@ fun TvAppHost(
                     },
                     onPlaybackEnded = { position, duration ->
                         persist(TvProgressEvent.ENDED, position, duration)
-                        scope.launch {
-                            nextEpisode = runCatching {
-                                controller.nextEpisode(route.episodeId, route.animeId)
-                            }.getOrNull()
-                        }
                     },
-                    nextEpisodeTitle = nextEpisode?.title,
+                    previousEpisodeTitle = episodeNeighbors.previous?.title,
+                    nextEpisodeTitle = episodeNeighbors.next?.title,
+                    onPreviousEpisode = {
+                        episodeNeighbors.previous?.let(::switchEpisode)
+                    },
                     onNextEpisode = {
-                        val next = nextEpisode
-                        if (next != null) {
-                            scope.launch {
-                                resetPlaybackRuntime()
-                                snapshot = controller.playEpisode(next.id, route.animeId)
-                            }
-                        }
+                        episodeNeighbors.next?.let(::switchEpisode)
                     },
                     onSeeked = { position, duration, isPlaying ->
                         currentPositionMs = position
@@ -1021,7 +1054,7 @@ fun TvAppHost(
 
                         scope.launch {
                             if (write != null) {
-                                controller.saveProgress(write, route.episodeId)
+                                progressWriteMutex.withLock { controller.saveProgress(write, route.episodeId) }
                             }
                             resetPlaybackRuntime()
                             controller.back()?.let { snapshot = it }
