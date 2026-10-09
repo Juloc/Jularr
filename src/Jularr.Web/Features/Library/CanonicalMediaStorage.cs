@@ -72,7 +72,9 @@ public sealed record CanonicalPlayableFile(
     Guid WorkVersionId,
     string Path,
     long SizeBytes,
-    DateTime LastWriteTimeUtc);
+    DateTime LastWriteTimeUtc,
+    string? VersionSource = null,
+    string? VersionNotes = null);
 
 /// <summary>
 /// Single application owner for canonical video Asset/StoredFile identity. Batch attachment is used by
@@ -454,6 +456,8 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             from asset in db.MediaAssets.AsNoTracking()
             join file in db.StoredFiles.AsNoTracking()
                 on (Guid?)asset.Id equals file.MediaAssetId
+            join version in db.WorkVersions.AsNoTracking()
+                on asset.WorkVersionId equals version.Id
             where asset.Kind == MediaAssetKind.Video &&
                   asset.WorkId == workId &&
                   asset.WorkEpisodeId == workEpisodeId
@@ -466,7 +470,9 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
                 asset.WorkVersionId,
                 file.Path,
                 file.SizeBytes,
-                file.LastWriteTimeUtc))
+                file.LastWriteTimeUtc,
+                version.Source,
+                version.Notes))
         .Take(8)
         .ToListAsync(cancellationToken);
 
