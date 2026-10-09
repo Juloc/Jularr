@@ -149,7 +149,7 @@ internal fun PlayerControls(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.tv_action_back),
                     tint = Color.White,
                     modifier = Modifier.size(22.dp),
                 )
@@ -188,14 +188,15 @@ internal fun PlayerControls(
             var scrubFocused by remember { mutableStateOf(false) }
             if (scrubPreviewMs != null) {
                 Text(
-                    text = "Seek to ${formatTime(scrubPreviewMs ?: positionMs)} · OK to confirm · Back to cancel",
+                    text = stringResource(R.string.tv_player_seek_hint, formatTime(scrubPreviewMs ?: positionMs)),
                     color = design.subtitleText,
                     style = MaterialTheme.typography.bodyLarge,
                 )
             }
             if (playbackEnded) {
                 Text(
-                    text = if (nextEpisodeTitle == null) "Episode finished" else "Episode finished · Next: $nextEpisodeTitle",
+                    text = if (nextEpisodeTitle == null) stringResource(R.string.tv_player_finished)
+                    else stringResource(R.string.tv_player_finished_next, nextEpisodeTitle),
                     color = design.subtitleText,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
@@ -347,11 +348,11 @@ internal fun PlayerControls(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.VolumeUp,
-                            contentDescription = "Audio",
+                            contentDescription = stringResource(R.string.tv_player_audio),
                             modifier = Modifier.size(22.dp),
                         )
                         Text(
-                            "  ${trackLabel(audioTracks, selectedAudioTrackId, "Default")}",
+                            "  ${trackLabel(audioTracks, selectedAudioTrackId, stringResource(R.string.tv_player_default))}",
                             maxLines = 1,
                         )
                     }
@@ -364,11 +365,11 @@ internal fun PlayerControls(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Subtitles,
-                            contentDescription = "Subtitles",
+                            contentDescription = stringResource(R.string.tv_player_subtitles),
                             modifier = Modifier.size(22.dp),
                         )
                         Text(
-                            "  ${trackLabel(subtitleTracks, selectedSubtitleTrackId, "Off")}",
+                            "  ${trackLabel(subtitleTracks, selectedSubtitleTrackId, stringResource(R.string.tv_player_off))}",
                             maxLines = 1,
                         )
                     }
@@ -377,8 +378,8 @@ internal fun PlayerControls(
                     onClick = onOpenSettingsPanel,
                     modifier = Modifier.focusRequester(settingsFocus),
                 ) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    Text(" Mehr")
+                    Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.tv_player_settings))
+                    Text(" " + stringResource(R.string.tv_player_more))
                 }
             }
             if (canLearn) {
@@ -437,8 +438,8 @@ private fun TvSeekScenes(
     var selectedSample by remember { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-            if (selectedSample == null) "Szenen · nach unten für Zeitpunkte"
-            else "Springen zu ${formatTime(selectedSample!!.toLong() * intervalMs)}",
+            if (selectedSample == null) stringResource(R.string.tv_player_scenes_down)
+            else stringResource(R.string.tv_player_scene_seek_to, formatTime(selectedSample!!.toLong() * intervalMs)),
             color = Color.White.copy(alpha = 0.8f),
             style = MaterialTheme.typography.labelMedium,
         )
@@ -506,14 +507,14 @@ internal fun TvSettingsPanel(
                 .padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Einstellungen", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.tv_player_settings), style = MaterialTheme.typography.headlineSmall)
             Button(
                 onClick = onOpenSpeed,
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
             ) {
-                Text("Wiedergabetempo · ${playbackSpeed}x")
+                Text(stringResource(R.string.tv_player_speed_value, playbackSpeed.toString()))
             }
-            Button(onClick = onBack) { Text("Schließen") }
+            Button(onClick = onBack) { Text(stringResource(R.string.tv_player_close)) }
         }
     }
 }
@@ -539,7 +540,7 @@ internal fun TvSpeedSelectionPanel(
                 .padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Playback speed", style = MaterialTheme.typography.headlineMedium)
+            Text(stringResource(R.string.tv_player_speed), style = MaterialTheme.typography.headlineMedium)
             allowedSpeeds.ifEmpty { listOf(playbackSpeed) }.forEachIndexed { index, speed ->
                 val selected = speed == playbackSpeed
                 Button(
@@ -586,7 +587,7 @@ internal fun TvTrackSelectionPanel(
         ) {
             Text(title, style = MaterialTheme.typography.headlineMedium)
             if (selectionFailed) {
-                Text("Track unavailable on this device", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.tv_player_track_unavailable), color = MaterialTheme.colorScheme.error)
             }
             Column(
                 modifier = Modifier
@@ -604,7 +605,7 @@ internal fun TvTrackSelectionPanel(
                         onClick = { onSelect(null) },
                     ) {
                         if (selectedId == null) Icon(Icons.Filled.Check, contentDescription = null)
-                        Text("Off")
+                        Text(stringResource(R.string.tv_player_off))
                     }
                 }
                 tracks.forEachIndexed { index, track ->
