@@ -67,6 +67,12 @@ public sealed record ManualSearchCandidate(
     bool IsTried,
     bool CanGrab)
 {
+    /// <summary>
+    /// Where the release stands in the order automatic selection would take it: 1 is the best, and a rejected release has none. The order is the selection engine's,
+    /// so the release ranked 1 is the one an automatic search grabs.
+    /// </summary>
+    public int? Rank { get; init; }
+
     /// <summary>The queries that found the release, per indexer, so a row can say how it was found.</summary>
     public IReadOnlyList<QueryProvenance> Provenance { get; init; } = [];
 

@@ -63,15 +63,18 @@ public sealed class VideoManualSearchTests
         Assert.AreEqual("WEB-1080p", eligible.Quality);
         Assert.AreEqual(ManualSearchReasonCode.MatchesTarget, eligible.Reasons[0].Code);
         Assert.IsNotNull(eligible.Score);
+        Assert.AreEqual(1, eligible.Rank, "Rank 1 is the release automatic selection takes.");
 
         var lower = Candidate(result, DuneLowerQuality);
         Assert.AreEqual(ManualSearchVerdict.Warning, lower.Verdict);
         Assert.IsTrue(lower.CanGrab, "A warning does not stop the owner from choosing it.");
         Assert.IsTrue(lower.Reasons.Any(reason => reason.Code == ManualSearchReasonCode.LowerQuality));
+        Assert.AreEqual(2, lower.Rank);
 
         var rejected = Candidate(result, DuneRejectedQuality);
         Assert.AreEqual(ManualSearchVerdict.Rejected, rejected.Verdict);
         Assert.IsFalse(rejected.CanGrab);
+        Assert.IsNull(rejected.Rank, "A rejected release has no rank.");
         var profileReason = rejected.Reasons.Single(reason => reason.Code == ManualSearchReasonCode.ProfileRejected);
         StringAssert.Contains(profileReason.Detail, "not allowed", "The rejection carries the scorer's own explanation.");
 
@@ -123,6 +126,8 @@ public sealed class VideoManualSearchTests
 
         var best = result!.Candidates.Where(candidate => candidate.CanGrab).OrderByDescending(candidate => candidate.Verdict == ManualSearchVerdict.Eligible).First();
         Assert.AreEqual(Dune, best.Title);
+        Assert.AreEqual(Dune, result.Candidates.Single(candidate => candidate.Rank == 1).Title, "Rank 1 is the release the automatic search grabbed.");
+        CollectionAssert.AreEqual(Enumerable.Range(1, result.Candidates.Count(candidate => candidate.Rank is not null)).Select(position => (int?)position).ToArray(), result.Candidates.Where(candidate => candidate.Rank is not null).Select(candidate => candidate.Rank).ToArray(), "The list is in rank order.");
     }
 
     [TestMethod]

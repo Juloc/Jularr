@@ -243,7 +243,7 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
             "age" => filtered.OrderBy(candidate => candidate.AgeDays ?? int.MaxValue),
             "size" => filtered.OrderBy(candidate => candidate.SizeBytes ?? long.MaxValue),
             "title" => filtered.OrderBy(candidate => candidate.Title, StringComparer.OrdinalIgnoreCase),
-            _ => filtered.OrderBy(candidate => candidate.Verdict == ManualSearchVerdict.Rejected).ThenByDescending(candidate => candidate.Score ?? int.MinValue)
+            _ => filtered.OrderBy(candidate => candidate.Rank ?? int.MaxValue)
         }).ToArray();
     }
 

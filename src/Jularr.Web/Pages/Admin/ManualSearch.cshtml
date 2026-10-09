@@ -203,7 +203,7 @@
                 <label class="bms-select">
                     <span>@ui["admin.manualSearch.filter.sort"]</span>
                     <select name="sort">
-                        <option value="">@ui["admin.manualSearch.sort.score"]</option>
+                        <option value="">@ui["admin.manualSearch.sort.rank"]</option>
                         @foreach (var option in new[] { "age", "size", "title" })
                         {
                             <option value="@option" selected="@(Model.Sort == option)">@ui["admin.manualSearch.sort." + option]</option>
@@ -255,7 +255,7 @@
                         <table class="bms-table">
                             <thead>
                                 <tr>
-                                    <th scope="col">@ui["admin.manualSearch.col.score"]</th>
+                                    <th scope="col">@ui["admin.manualSearch.col.rank"]</th>
                                     <th scope="col">@ui["admin.manualSearch.col.release"]</th>
                                     <th scope="col">@ui["admin.manualSearch.col.type"]</th>
                                     <th scope="col" class="bms-col-source">@ui["admin.manualSearch.filter.indexer"]</th>
@@ -276,7 +276,7 @@
                                     var headline = ManualSearchModel.Headline(candidate);
                                     var languages = candidate.AudioLanguages.Count > 0 ? string.Join(" / ", candidate.AudioLanguages) : "—";
                                     <tr class="@(isSelected ? "is-selected" : "")" data-verdict="@verdict">
-                                        <td class="bms-score bms-score-@verdict">@(candidate.Score?.ToString() ?? "–")</td>
+                                        <td class="bms-score bms-score-@verdict">@(candidate.Rank?.ToString() ?? "–")</td>
                                         <td class="bms-release">
                                             <a class="bms-release-title" href="@Href(candidate.Identity, fragment: "bms-selected")" aria-current="@(isSelected ? "true" : null)">@candidate.Title</a>
                                             <small>
@@ -319,7 +319,7 @@
                                 <article class="bms-card @(isSelected ? "is-selected" : "")" id="@(isSelected ? "bms-selected-card" : null)" data-verdict="@verdict">
                                     <a class="bms-card-link" href="@Href(isSelected ? null : candidate.Identity, fragment: isSelected ? null : "bms-selected-card")" aria-label="@ui["admin.manualSearch.select"]: @candidate.Title" aria-current="@(isSelected ? "true" : null)">
                                         <span class="bms-card-check" aria-hidden="true">@if (isSelected) { <partial name="_AdminIcon" model='"check"' /> }</span>
-                                        <span class="bms-score bms-score-@verdict">@(candidate.Score?.ToString() ?? "–")</span>
+                                        <span class="bms-score bms-score-@verdict">@(candidate.Rank?.ToString() ?? "–")</span>
                                         <strong>@candidate.Title</strong>
                                     </a>
                                     <small>@ui[ManualSearchModel.TypeKey(candidate.ReleaseType)] · @(candidate.Indexer ?? "—") · @ManualSearchModel.AgeText(ui, candidate.AgeDays) · @ManualSearchModel.Size(candidate.SizeBytes)</small>

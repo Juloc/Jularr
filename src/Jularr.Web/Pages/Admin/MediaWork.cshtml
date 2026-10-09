@@ -162,7 +162,14 @@
         </dl>
         @if (acquisition.OpenRequest is { } open)
         {
-            <p class="admmd-note">@ui["requests.status." + AcquisitionAccessNames.Status(open.Status)]@(string.IsNullOrWhiteSpace(open.StatusMessage) ? "" : " · " + open.StatusMessage)</p>
+            <p class="admmd-note">
+                @ui["requests.status." + AcquisitionAccessNames.Status(open.Status)]@(string.IsNullOrWhiteSpace(open.StatusMessage) ? "" : " · " + open.StatusMessage)
+                @if (open.OperationId is { } operationId)
+                {
+                    <a class="text-link" asp-page="/Admin/Operation" asp-route-id="@operationId">@ui["admin.media.downloadDetails"]</a>
+                }
+                <a class="text-link" asp-page="/Admin/ManualSearch" asp-route-id="@open.Id" asp-route-tab="history">@ui["admin.media.requestHistory"]</a>
+            </p>
         }
     </div>
 </section>

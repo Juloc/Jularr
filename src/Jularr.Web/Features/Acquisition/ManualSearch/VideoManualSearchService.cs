@@ -69,11 +69,12 @@ public sealed partial class VideoManualSearchService(
         var evaluation = await engine.SearchManualAsync(request, target, cancellationToken, depth, refresh);
         var tried = new HashSet<string>(shown.TriedReleases, StringComparer.OrdinalIgnoreCase);
         var bestResolution = HighestAllowedResolution(evaluation.Profile);
+        // The evaluations come in the order of the selection engine, the order automatic acquisition grabs by; Rank numbers the releases that can still be taken in it.
+        var rank = 0;
         var candidates = evaluation.Releases
             .Select(release => ToCandidate(request.Kind, release, tried, bestResolution))
             .OrderBy(candidate => candidate.Verdict == ManualSearchVerdict.Rejected)
-            .ThenByDescending(candidate => candidate.Score ?? int.MinValue)
-            .ThenBy(candidate => candidate.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(candidate => candidate.Verdict == ManualSearchVerdict.Rejected ? candidate : candidate with { Rank = ++rank })
             .ToArray();
         var warnings = evaluation.Search.Warnings.Select(warning => new ManualSearchIndexerWarning(warning.IndexerName, Redact(warning.Message))).ToArray();
         return new ManualSearchResult(shown, candidates, warnings, VideoAcquisitionSetupProblem.None, Searched: true)
