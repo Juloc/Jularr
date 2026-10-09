@@ -31,7 +31,7 @@ public sealed class PlexIdentityTests
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
                 service.CreateExternalAccountAsync(
                     "plex", "42", "another-viewer", isEnabled: true));
-            Assert.AreEqual(1, await db.OwnerAccounts.CountAsync());
+            Assert.AreEqual(2, await db.OwnerAccounts.CountAsync());
         });
     }
 
@@ -185,6 +185,8 @@ public sealed class PlexIdentityTests
             await DatabaseMigrationBridge.UpgradeAsync(db);
             var service = new OwnerAuthService(
                 db, new PasswordHasher<OwnerAccount>());
+            await service.CreateOwnerAsync(
+                "owner", "a sufficiently long owner password");
             await test(db, service);
         }
         finally
