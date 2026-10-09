@@ -2,6 +2,7 @@ package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.api.JularrClientApi
 import de.juloc.jularr.core.model.AnimeDetail
+import de.juloc.jularr.core.model.EpisodeSummary
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientCapabilities
 import de.juloc.jularr.core.model.ClientLibrary
@@ -11,6 +12,11 @@ import de.juloc.jularr.core.model.DevicePairingPollResult
 import de.juloc.jularr.core.model.DevicePairingSession
 import de.juloc.jularr.core.model.PlaybackHistoryItem
 import de.juloc.jularr.core.model.WatchlistItem
+
+data class TvEpisodeNeighbors(
+    val previous: EpisodeSummary? = null,
+    val next: EpisodeSummary? = null,
+)
 
 data class TvAppSnapshot(
     val navigation: TvNavigationState,
@@ -315,12 +321,19 @@ class TvAppController(
                 TvStorageRecoveryPolicy.decide(it, elapsedMs = 0)
             }
 
+            val advancing = navigation.route is TvRoute.Player
+            val fromEpisode = navigation.previous.lastOrNull() is TvRoute.Episode
             copy(
-                navigation = TvNavigation.openPlayer(
-                    navigation,
-                    episodeId,
-                    animeId,
-                ),
+                navigation = if (advancing) {
+                    TvNavigation.nextPlayer(navigation, episodeId, animeId)
+                } else {
+                    TvNavigation.openPlayer(navigation, episodeId, animeId)
+                },
+                episodePage = if (advancing && fromEpisode) {
+                    flow.loadEpisodePage(episodeId)
+                } else {
+                    episodePage
+                },
                 episode = bundle,
                 storageDecision = decision?.takeUnless {
                     it.primaryAction == TvStorageAction.PLAY
@@ -328,6 +341,19 @@ class TvAppController(
                 error = null,
             )
         }
+
+    suspend fun episodeNeighbors(episodeId: String, animeId: String): TvEpisodeNeighbors {
+        val details = snapshot.anime?.takeIf { it.id == animeId } ?: flow.loadAnime(animeId)
+        val ordered = details.seasons
+            .flatMap { it.episodes }
+            .sortedWith(compareBy<EpisodeSummary> { it.seasonNumber }.thenBy { it.number })
+        val currentIndex = ordered.indexOfFirst { it.id == episodeId }
+        if (currentIndex < 0) return TvEpisodeNeighbors()
+        return TvEpisodeNeighbors(
+            previous = ordered.getOrNull(currentIndex - 1)?.takeIf { it.hasMedia },
+            next = ordered.getOrNull(currentIndex + 1)?.takeIf { it.hasMedia },
+        )
+    }
 
     suspend fun refreshEpisodeStorage(
         elapsedMs: Long,
@@ -393,16 +419,16 @@ class TvAppController(
 
     suspend fun saveProgress(
         write: TvProgressWrite,
+        episodeId: String,
     ) {
-        val bundle = snapshot.episode ?: return
         val progress = flow.saveProgress(
-            episodeId = bundle.bootstrap.episode.id,
+            episodeId = episodeId,
             positionMs = write.positionMs,
             durationMs = write.durationMs,
             completed = write.completed,
         )
         val page = snapshot.episodePage
-        if (page?.detail?.id == bundle.bootstrap.episode.id) {
+        if (page?.detail?.id == episodeId) {
             snapshot = snapshot.copy(
                 episodePage = page.copy(progress = progress),
             )
