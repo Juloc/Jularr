@@ -131,6 +131,15 @@
         {
             <a class="button button-primary" href="@openUrl">@ui["requests.detail.openDetails"]</a>
         }
+        @if (Model.ShowPlex)
+        {
+            <form method="post" asp-page="/Requests/Details"
+                  asp-page-handler="OpenInPlex" asp-route-id="@id">
+                <button class="button" type="submit">
+                    @ui["library.external.plex.open"]
+                </button>
+            </form>
+        }
         @if (Model.Embedded)
         {
             <button type="button" class="button" data-rqs-close>@ui["library.browse.close"]</button>
