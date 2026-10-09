@@ -16,7 +16,6 @@ public sealed class AccountLoginIdentities : Migration
             name: "AccountLoginIdentities",
             columns: table => new
             {
-                Id = table.Column<Guid>(type: "uuid", nullable: false),
                 AccountId = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                 Provider = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                 ExternalAccountId = table.Column<string>(type: "character varying(160)", maxLength: 160, nullable: false),
@@ -24,7 +23,7 @@ public sealed class AccountLoginIdentities : Migration
             },
             constraints: table =>
             {
-                table.PrimaryKey("PK_AccountLoginIdentities", x => x.Id);
+                table.PrimaryKey("PK_AccountLoginIdentities", x => new { x.Provider, x.ExternalAccountId });
                 table.ForeignKey(
                     name: "FK_AccountLoginIdentities_OwnerAccounts_AccountId",
                     column: x => x.AccountId,
@@ -39,11 +38,6 @@ public sealed class AccountLoginIdentities : Migration
             columns: new[] { "AccountId", "Provider" },
             unique: true);
 
-        migrationBuilder.CreateIndex(
-            name: "IX_AccountLoginIdentities_Provider_ExternalAccountId",
-            table: "AccountLoginIdentities",
-            columns: new[] { "Provider", "ExternalAccountId" },
-            unique: true);
         migrationBuilder.CreateTable(
             name: "PlexLoginAttempts",
             columns: table => new
