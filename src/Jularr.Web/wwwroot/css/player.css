@@ -68,7 +68,7 @@
 }
 
 .playback-subtitle-overlay[data-subtitle-layer="secondary"] {
-    font-size: clamp(14px, 2vw, 20px);
+    font-size: var(--player-secondary-subtitle-size, 20px);
     font-weight: 600;
 }
 
@@ -120,7 +120,7 @@
 }
 
 .player-subtitle-positioned-layer[data-subtitle-layer="secondary"] .player-subtitle-positioned-cue {
-    font-size: clamp(14px, 2vw, 20px);
+    font-size: var(--player-secondary-subtitle-size, 20px);
     font-weight: 600;
 }
 
