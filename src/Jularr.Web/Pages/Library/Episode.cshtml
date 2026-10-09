@@ -68,8 +68,11 @@ else if (Model.Playback.Media is { } media)
         Cues: Model.Playback.Cues,
         ShowPlayerTools: Model.ShowPlayerTools);
     <partial name="_VideoPlayerStage" model="stage" />
-    <partial name="_LanguageInspector" model='LanguageInspectorHost.ForAnimeEpisode(Model.AnimeId, Model.EpisodeId, "ja")' />
-    <partial name="_VideoPlayerScripts" />
+    @if (stage.ShowPlayerTools)
+    {
+        <partial name="_LanguageInspector" model='LanguageInspectorHost.ForAnimeEpisode(Model.AnimeId, Model.EpisodeId, "ja")' />
+    }
+    <partial name="_VideoPlayerScripts" model="@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)" />
     <partial name="_EpisodeMediaNavigation" model="new Jularr.Web.Features.MediaSegments.EpisodeMediaNavigationView(Model.EpisodeId, Model.Playback.Navigation, CanEdit: false, ui)" />
 }
 else

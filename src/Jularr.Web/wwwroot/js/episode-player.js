@@ -1346,7 +1346,7 @@
 
     let cues = [];
     try {
-        cues = JSON.parse(data.textContent || "[]");
+        cues = JSON.parse(data?.textContent || "[]");
     } catch {
         if (error) {
             error.hidden = false;
@@ -1571,9 +1571,10 @@
     // learning sheet wherever the resolved scope renders it; the sheet below
     // stays only as the fallback for scopes without PlayerTools.
     const sharedInspector = window.JularrLanguageInspector;
-    const sharedInspectorAvailable = sharedInspector?.available === true;
+    const sharedInspectorAvailable = sharedInspector?.available === true && Boolean(overlay && window.JularrPlayerLearning);
 
     const openLearning = (cue, token = null, selectedElement = null) => {
+        if (!overlay || !window.JularrPlayerLearning || !cue) return;
         overlay.querySelectorAll('[aria-pressed="true"]').forEach(element =>
             element.removeAttribute("aria-pressed"));
         if (selectedElement instanceof HTMLElement) {
@@ -1638,7 +1639,8 @@
     };
 
     const renderCue = (index) => {
-        design.renderCue(root, overlay, index < 0 ? null : cues[index]);
+        if (!overlay || !window.JularrPlayerLearning) return;
+        window.JularrPlayerLearning.renderCue(root, overlay, index < 0 ? null : cues[index]);
     };
 
     if (sharedInspectorAvailable) {

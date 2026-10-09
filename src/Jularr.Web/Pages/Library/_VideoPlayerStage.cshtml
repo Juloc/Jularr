@@ -48,11 +48,14 @@
          aria-label="@ui["library.watch.playerAria"]">
         <video preload="none" playsinline hidden data-playback-video></video>
         <div class="player-subtitle-stack">
-            <div class="subtitle-overlay"
-                 data-subtitle-overlay
-                 lang="ja"
-                 aria-live="polite"
-                 hidden></div>
+            @if (Model.ShowPlayerTools || Model.Controls?.HasLearningCues == true)
+            {
+                <div class="subtitle-overlay"
+                     data-subtitle-overlay
+                     lang="ja"
+                     aria-live="polite"
+                     hidden></div>
+            }
             <div class="playback-subtitle-overlay"
                  data-playback-subtitle
                  data-subtitle-layer="primary"
@@ -473,6 +476,9 @@
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
     }
     <script type="application/json" data-player-icons>@Html.Raw(JsonSerializer.Serialize(PlayerDesign.ScriptIcons, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
-    <script type="application/json" data-cue-data>@Html.Raw(JsonSerializer.Serialize(Model.Controls is { HasLearningCues: true } ? Model.Cues : [], new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
+    @if (Model.Controls is { HasLearningCues: true })
+    {
+        <script type="application/json" data-cue-data>@Html.Raw(JsonSerializer.Serialize(Model.Cues, new JsonSerializerOptions(JsonSerializerDefaults.Web)))</script>
+    }
     <script type="application/json" data-player-text>@Html.Raw(JsonSerializer.Serialize(ui.WithPrefix("playback.")))</script>
 </section>
