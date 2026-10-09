@@ -32,6 +32,16 @@ public partial class ProfileSubtitleDisplayPreferences : Migration
             type: "integer",
             nullable: false,
             defaultValue: 0);
+
+        migrationBuilder.AddCheckConstraint(
+            name: "CK_ProfilePlaybackPreferences_SubtitleSizePercent",
+            table: "ProfilePlaybackPreferences",
+            sql: "\"SubtitleSizePercent\" BETWEEN 75 AND 200");
+
+        migrationBuilder.AddCheckConstraint(
+            name: "CK_ProfilePlaybackPreferences_SubtitleOffsetMs",
+            table: "ProfilePlaybackPreferences",
+            sql: "\"SubtitleOffsetMs\" BETWEEN -10000 AND 10000");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
