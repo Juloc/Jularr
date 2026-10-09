@@ -30,6 +30,18 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 - This is a **library-access check**, not proof that an individual movie/episode is playable. The additional `PlexItemAccessService` now re-reads the *exact* Plex metadata key using the current profile token, confirms that Plex reports a library the profile can access, and matches its GUIDs to one confirmed Jularr Work. Missing section IDs, conflicting/missing GUIDs, unapproved sections, or a different Work ID fail closed. This is still a **server-side eligibility check**, not a working Plex deep link or playback launch. Actual media-item verification and a deep link must be implemented before showing `In Plex öffnen`.
 
 
+## Resumable catalog reconciliation
+
+`PlexCatalogReconciliationService` is the bounded entry point for the **existing** `PlexServerCatalogScanService`: AdminSystem authorization, selected machine and library, checked server-grant version, page-size maximum 200 and at most four pages per invocation.
+
+`PlexCatalogCheckpointStore` writes nonsecret checkpoint state and a separate atomic snapshot per returned Plex page under `/data/integrations/plex/catalog`. It advances a cursor only **after** writing the matching page; interruption retries the same cursor idempotently. A changed Admin server grant or explicit restart starts a fresh scan generation. Only positive confirmed Jularr Work/ratingKey matches are persisted—never Plex tokens, viewing progress or request status. The service does not schedule scans by itself: an Admin-controlled scheduler with backoff and quiet-hour policy is still needed before periodic automatic runs can be enabled.
+
+## Verified-item browser handoff boundary
+
+`PlexWebDestinationService` constructs a token-free hosted Plex Web **details** URL only after `PlexItemAccessService` confirms that the signed-in profile's Plex token can access the exact ratingKey and its approved library section, and that its GUIDs resolve uniquely to the requested Jularr Work. It does **not** start playback, alter progress, or render a Jularr button. Plex Web URL behavior is based on known browser patterns but **must be tested against a live Plex account and current clients** before UI activation. Plex may require the user's own active browser login.
+
+Exact item library sections can be reported by PMS on either the `MediaContainer` root or its `Metadata` entry; the adapter supports both cases.
+
 ## Required before opening media in Plex
 
 1. Use the discovery adapter in the admin-scoped Plex server connection flow, alongside the existing Account-scoped Plex login identity and a new Profile-scoped media Connection. Add explicit user consent, secure grants and revocation in the existing provider architecture. Encrypted tokens and revocation only; Plex login must not automatically imply sync.
