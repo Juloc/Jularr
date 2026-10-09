@@ -257,20 +257,6 @@ public sealed class PlexModel(
             return Page();
         }
 
-        if (attempt.StartedAccountId is not null)
-        {
-            await accountAuth.LinkExternalIdentityAsync(
-                attempt.StartedAccountId,
-                "plex",
-                attempt.VerifiedPlexAccountId,
-                cancellationToken);
-            if (!await ConsumeAttemptAsync(attempt, cancellationToken))
-            {
-                return BadRequest();
-            }
-            return LocalRedirect(attempt.ReturnPath);
-        }
-
         HasVerifiedIdentity = true;
         return Page();
     }
@@ -369,14 +355,15 @@ public sealed class PlexModel(
         CancellationToken cancellationToken)
     {
         var attempt = await GetAttemptAsync(cancellationToken);
-        if (attempt is null || attempt.VerifiedPlexAccountId is null
-            || attempt.StartedAccountId is not null)
+        if (attempt is null || attempt.VerifiedPlexAccountId is null)
         {
             return BadRequest();
         }
 
         var accountId = OwnerAuthService.GetAccountId(User);
-        if (accountId is null || !LinkEnabled)
+        if (accountId is null || !LinkEnabled ||
+            attempt.StartedAccountId is not null &&
+            attempt.StartedAccountId != accountId)
         {
             return Forbid();
         }
