@@ -85,26 +85,30 @@ public sealed class PlexModel(
             var options = new List<PlexAdminServerOption>();
             foreach (var server in found.Where(x => x.Owned).Take(5))
             {
-                var endpoint = server.Connections.FirstOrDefault()?.Url;
-                if (endpoint is null)
+                var reachable = false;
+                foreach (var connection in server.Connections.Take(3))
                 {
-                    continue;
-                }
-
-                try
-                {
-                    var libraries = await serverSelection.GetAvailableLibrariesAsync(
-                        User, server, endpoint, settings.ClientIdentifier,
-                        cancellationToken);
-                    if (libraries.Count > 0)
+                    try
                     {
-                        options.Add(new PlexAdminServerOption(
-                            server.MachineIdentifier,
-                            server.Name, endpoint, libraries));
+                        var libraries = await serverSelection.GetAvailableLibrariesAsync(
+                            User, server, connection.Url, settings.ClientIdentifier,
+                            cancellationToken);
+                        reachable = true;
+                        if (libraries.Count > 0)
+                        {
+                            options.Add(new PlexAdminServerOption(
+                                server.MachineIdentifier,
+                                server.Name, connection.Url, libraries));
+                            break;
+                        }
+                    }
+                    catch (Exception error)
+                        when (error is HttpRequestException or InvalidDataException or InvalidOperationException)
+                    {
                     }
                 }
-                catch (Exception error)
-                    when (error is HttpRequestException or InvalidDataException or InvalidOperationException)
+
+                if (!reachable)
                 {
                     DiscoveryFailed = true;
                 }
