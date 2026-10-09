@@ -7,6 +7,13 @@ namespace Jularr.Web.Features.Playback.Transcoding;
 /// What one delivery costs the server. Each class has its own concurrent-session limit so a
 /// cheap remux can never be starved by (or starve) CPU-bound software encodes.
 /// </summary>
+public enum PlaybackWanUploadMode
+{
+    Off,
+    Automatic,
+    Manual
+}
+
 public enum PlaybackCostClass
 {
     SoftwareVideo,
@@ -31,11 +38,13 @@ public sealed record PlaybackTranscodingSettings(
     long CacheBudgetBytes,
     long FreeSpaceFloorBytes,
     PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal,
-    int WanUploadBudgetKbps = 0)
+    int WanUploadBudgetKbps = 0,
+    PlaybackWanUploadMode WanUploadMode = PlaybackWanUploadMode.Off)
 {
     public const string DefaultHlsCachePath = "/data/playback-cache/hls";
     public const int MaxSessionsPerClass = 64;
     public const int MaxWanUploadBudgetKbps = 1_000_000;
+    public const int AutomaticFallbackBudgetKbps = 8_000;
     public const long BytesPerGiB = 1L << 30;
     // The Admin form offers whole GiB (so at least 1); the stored rule only refuses a budget too small to hold a single segment.
     public const long MinCacheBudgetGiB = 1;
@@ -53,6 +62,13 @@ public sealed record PlaybackTranscodingSettings(
         CacheBudgetBytes: 10 * BytesPerGiB,
         FreeSpaceFloorBytes: 5 * BytesPerGiB,
         BufferPreset: PlaybackBufferPreset.Normal);
+
+    public int EffectiveWanUploadBudgetKbps => WanUploadMode switch
+    {
+        PlaybackWanUploadMode.Manual => WanUploadBudgetKbps,
+        PlaybackWanUploadMode.Automatic => AutomaticFallbackBudgetKbps,
+        _ => 0
+    };
 
     public int LimitFor(PlaybackCostClass costClass) =>
         costClass switch
@@ -78,7 +94,8 @@ public enum PlaybackSettingsIssueCode
     BudgetRange,
     FloorRange,
     BufferPresetInvalid,
-    WanUploadBudgetInvalid
+    WanUploadBudgetInvalid,
+    WanUploadModeInvalid
 }
 
 /// <summary>One rejected setting: the field name and why.</summary>
@@ -117,6 +134,16 @@ public static class PlaybackTranscodingSettingsRules
         }
 
         if (settings.WanUploadBudgetKbps < 0 || settings.WanUploadBudgetKbps > PlaybackTranscodingSettings.MaxWanUploadBudgetKbps)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps), PlaybackSettingsIssueCode.WanUploadBudgetInvalid));
+        }
+
+        if (!Enum.IsDefined(settings.WanUploadMode))
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadMode), PlaybackSettingsIssueCode.WanUploadModeInvalid));
+        }
+
+        if (settings.WanUploadMode == PlaybackWanUploadMode.Manual && settings.WanUploadBudgetKbps == 0)
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps), PlaybackSettingsIssueCode.WanUploadBudgetInvalid));
         }
@@ -400,7 +427,8 @@ public sealed class PlaybackTranscodingSettingsStore
         long? FreeSpaceFloorBytes,
         string[]? RetiredCachePaths,
         PlaybackBufferPreset? BufferPreset = null,
-        int? WanUploadBudgetKbps = null)
+        int? WanUploadBudgetKbps = null,
+        PlaybackWanUploadMode? WanUploadMode = null)
     {
         public static Persisted From(Stored stored) =>
             new(
@@ -414,7 +442,8 @@ public sealed class PlaybackTranscodingSettingsStore
                 stored.Settings.FreeSpaceFloorBytes,
                 stored.RetiredRoots,
                 stored.Settings.BufferPreset,
-                stored.Settings.WanUploadBudgetKbps);
+                stored.Settings.WanUploadBudgetKbps,
+                stored.Settings.WanUploadMode);
 
         public PlaybackTranscodingSettings ToSettings()
         {
@@ -429,7 +458,8 @@ public sealed class PlaybackTranscodingSettingsStore
                 CacheBudgetBytes ?? defaults.CacheBudgetBytes,
                 FreeSpaceFloorBytes ?? defaults.FreeSpaceFloorBytes,
                 BufferPreset ?? defaults.BufferPreset,
-                WanUploadBudgetKbps ?? defaults.WanUploadBudgetKbps);
+                WanUploadBudgetKbps ?? defaults.WanUploadBudgetKbps,
+                WanUploadMode ?? (WanUploadBudgetKbps is > 0 ? PlaybackWanUploadMode.Manual : PlaybackWanUploadMode.Off));
         }
     }
 }

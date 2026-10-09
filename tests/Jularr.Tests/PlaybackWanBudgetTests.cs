@@ -13,20 +13,47 @@ public sealed class PlaybackWanBudgetTests
         var kit = PlaybackServerTestKit.Create();
         try
         {
-            Assert.AreEqual(0, PlaybackTranscodingSettings.Default.WanUploadBudgetKbps);
+            Assert.AreEqual(PlaybackWanUploadMode.Off, PlaybackTranscodingSettings.Default.WanUploadMode);
             Assert.AreEqual(0, kit.Capabilities.WanUploadBudgetKbps);
 
             var saved = await kit.Settings.SaveAsync(
                 PlaybackTranscodingSettings.Default with
                 {
                     HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
-                    WanUploadBudgetKbps = 10_000
+                    WanUploadBudgetKbps = 10_000,
+                    WanUploadMode = PlaybackWanUploadMode.Manual
                 });
             Assert.IsTrue(saved.Succeeded);
             Assert.AreEqual(10_000, kit.Capabilities.WanUploadBudgetKbps);
 
             var restarted = new PlaybackTranscodingSettingsStore(kit.DataRoot);
-            Assert.AreEqual(10_000, (await restarted.LoadAsync()).WanUploadBudgetKbps);
+            Assert.AreEqual(PlaybackWanUploadMode.Manual, (await restarted.LoadAsync()).WanUploadMode);
+            Assert.AreEqual(10_000, restarted.Current.EffectiveWanUploadBudgetKbps);
+
+            var settingsPath = Path.Combine(kit.DataRoot, "playback", PlaybackTranscodingSettingsStore.FileName);
+            var legacyJson = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(settingsPath))!.AsObject();
+            legacyJson.Remove("wanUploadMode");
+            await File.WriteAllTextAsync(settingsPath, legacyJson.ToJsonString());
+            var legacy = new PlaybackTranscodingSettingsStore(kit.DataRoot);
+            Assert.AreEqual(PlaybackWanUploadMode.Manual, (await legacy.LoadAsync()).WanUploadMode);
+
+            Assert.IsTrue((await kit.Settings.SaveAsync(kit.Settings.Current with
+            {
+                WanUploadMode = PlaybackWanUploadMode.Automatic
+            })).Succeeded);
+            Assert.AreEqual(PlaybackTranscodingSettings.AutomaticFallbackBudgetKbps, kit.Capabilities.WanUploadBudgetKbps);
+
+            Assert.IsTrue((await kit.Settings.SaveAsync(kit.Settings.Current with
+            {
+                WanUploadMode = PlaybackWanUploadMode.Off
+            })).Succeeded);
+            Assert.AreEqual(0, kit.Capabilities.WanUploadBudgetKbps);
+
+            Assert.IsTrue((await kit.Settings.SaveAsync(kit.Settings.Current with
+            {
+                WanUploadMode = PlaybackWanUploadMode.Manual
+            })).Succeeded);
+            Assert.AreEqual(10_000, kit.Capabilities.WanUploadBudgetKbps);
 
             var invalid = await kit.Settings.SaveAsync(
                 kit.Settings.Current with
@@ -36,6 +63,11 @@ public sealed class PlaybackWanBudgetTests
             Assert.IsFalse(invalid.Succeeded);
             Assert.AreEqual(PlaybackSettingsIssueCode.WanUploadBudgetInvalid, invalid.Issues.Single().Code);
             Assert.AreEqual(10_000, kit.Settings.Current.WanUploadBudgetKbps);
+
+            var invalidMode = await kit.Settings.SaveAsync(
+                kit.Settings.Current with { WanUploadMode = (PlaybackWanUploadMode)999 });
+            Assert.IsFalse(invalidMode.Succeeded);
+            Assert.AreEqual(PlaybackSettingsIssueCode.WanUploadModeInvalid, invalidMode.Issues.Single().Code);
         }
         finally
         {

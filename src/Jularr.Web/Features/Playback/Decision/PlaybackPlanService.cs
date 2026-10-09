@@ -121,7 +121,7 @@ public sealed class PlaybackServerCapabilityProvider(
     PlaybackTranscodeSlots slots,
     PlaybackHardwareService hardware)
 {
-    public int WanUploadBudgetKbps => settings.Current.WanUploadBudgetKbps;
+    public int WanUploadBudgetKbps => settings.Current.EffectiveWanUploadBudgetKbps;
 
     /// <param name="tooSlow">Encoders that already failed to keep up with real time for the title being planned; see <see cref="PlaybackHardwareService.Choose"/>.</param>
     public PlaybackServerCapabilities Current(IReadOnlyCollection<PlaybackHardwareBackend>? tooSlow = null)

@@ -549,7 +549,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
             policy));
 
         if (decision.Reason != PlaybackAdaptationReason.TranscodeTooSlow &&
-            settings?.Current.WanUploadBudgetKbps is > 0 and var budget &&
+            settings?.Current.EffectiveWanUploadBudgetKbps is > 0 and var budget &&
             session.Plan.Quality.Network != PlaybackNetworkClass.Local &&
             session.Plan.Quality.DeliveredBitrateKbps is { } delivered &&
             now - session.CreatedAtUtc >= policy.MinSessionAge &&

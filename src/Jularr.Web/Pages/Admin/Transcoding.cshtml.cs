@@ -54,6 +54,9 @@ public sealed class TranscodingModel(
     public PlaybackBufferPreset BufferPreset { get; set; }
 
     [BindProperty]
+    public PlaybackWanUploadMode WanUploadMode { get; set; }
+
+    [BindProperty]
     public int WanUploadBudgetMbps { get; set; }
 
     /// <summary>Recent Jularr-container TX rate only; not ISP uplink capacity or video-only traffic.</summary>
@@ -119,7 +122,8 @@ public sealed class TranscodingModel(
                 ToBytes(CacheBudgetGiB),
                 ToBytes(FreeSpaceFloorGiB),
                 BufferPreset,
-                uploadKbps),
+                uploadKbps,
+                WanUploadMode),
             cancellationToken);
         if (!result.Succeeded)
         {
@@ -162,6 +166,7 @@ public sealed class TranscodingModel(
         CacheBudgetGiB = settings.CacheBudgetBytes / PlaybackTranscodingSettings.BytesPerGiB;
         FreeSpaceFloorGiB = settings.FreeSpaceFloorBytes / PlaybackTranscodingSettings.BytesPerGiB;
         BufferPreset = settings.BufferPreset;
+        WanUploadMode = settings.WanUploadMode;
         WanUploadBudgetMbps = settings.WanUploadBudgetKbps / 1000;
     }
 
@@ -176,6 +181,7 @@ public sealed class TranscodingModel(
             nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes) => nameof(FreeSpaceFloorGiB),
             nameof(PlaybackTranscodingSettings.BufferPreset) => nameof(BufferPreset),
             nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps) => nameof(WanUploadBudgetMbps),
+            nameof(PlaybackTranscodingSettings.WanUploadMode) => nameof(WanUploadMode),
             _ => nameof(HlsCachePath)
         };
 

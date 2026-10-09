@@ -129,6 +129,16 @@
         </div>
         <div class="admset-fields">
             <div class="admset-field">
+                <label asp-for="WanUploadMode">@ui["admin.transcoding.wanMode"]</label>
+                <select asp-for="WanUploadMode" aria-describedby="wan-mode-hint">
+                    <option value="Off">@ui["admin.transcoding.wanOff"]</option>
+                    <option value="Automatic">@ui["admin.transcoding.wanAutomatic"]</option>
+                    <option value="Manual">@ui["admin.transcoding.wanManual"]</option>
+                </select>
+                <span id="wan-mode-hint" class="admset-hint">@ui["admin.transcoding.wanModeHint"]</span>
+                <span asp-validation-for="WanUploadMode" class="admset-error"></span>
+            </div>
+            <div class="admset-field">
                 <label asp-for="WanUploadBudgetMbps">@ui["admin.transcoding.wanBudget"]</label>
                 <input asp-for="WanUploadBudgetMbps" type="number" inputmode="numeric" min="0" max="1000"
                        aria-describedby="wan-budget-hint" />

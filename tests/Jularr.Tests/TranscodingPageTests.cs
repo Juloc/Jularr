@@ -99,18 +99,38 @@ public sealed class TranscodingPageTests
     {
         await using var host = await TranscodingPageHost.CreateAsync();
         Assert.AreEqual(HttpStatusCode.Redirect,
-            await host.PostAsync(host.ValidForm(("WanUploadBudgetMbps", "10"))));
-        Assert.AreEqual(10_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
+            await host.PostAsync(host.ValidForm(("WanUploadBudgetMbps", "10"), ("WanUploadMode", "Manual"))));
+        Assert.AreEqual(10_000, host.Kit.Settings.Current.EffectiveWanUploadBudgetKbps);
+        Assert.AreEqual(PlaybackWanUploadMode.Manual, host.Kit.Settings.Current.WanUploadMode);
 
         var html = await host.GetHtmlAsync();
+        StringAssert.Contains(html, "name=\"WanUploadMode\"");
         StringAssert.Contains(html, "name=\"WanUploadBudgetMbps\"");
         StringAssert.Contains(html, "value=\"10\"");
 
         var invalid = await host.PostForHtmlAsync(
-            host.ValidForm(("WanUploadBudgetMbps", "1001")));
+            host.ValidForm(("WanUploadBudgetMbps", "1001"), ("WanUploadMode", "Manual")));
         Assert.AreEqual(HttpStatusCode.OK, invalid.Status);
         Assert.AreEqual(10_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
-        StringAssert.Contains(invalid.Html, "between 0 and 1000 Mbit/s");
+        StringAssert.Contains(invalid.Html, "between 1 and 1000 Mbit/s");
+    }
+
+    [TestMethod]
+    public async Task WanPolicyModes_PersistAndApplyWithoutChangingManualValue()
+    {
+        await using var host = await TranscodingPageHost.CreateAsync();
+        Assert.AreEqual(HttpStatusCode.Redirect,
+            await host.PostAsync(host.ValidForm(("WanUploadBudgetMbps", "20"), ("WanUploadMode", "Automatic"))));
+        Assert.AreEqual(PlaybackWanUploadMode.Automatic, host.Kit.Settings.Current.WanUploadMode);
+        Assert.AreEqual(PlaybackTranscodingSettings.AutomaticFallbackBudgetKbps,
+            host.Kit.Settings.Current.EffectiveWanUploadBudgetKbps);
+
+        var html = await host.GetHtmlAsync();
+        StringAssert.Contains(html, "value=\"Automatic\"");
+        Assert.AreEqual(HttpStatusCode.Redirect,
+            await host.PostAsync(host.ValidForm(("WanUploadBudgetMbps", "20"), ("WanUploadMode", "Off"))));
+        Assert.AreEqual(0, host.Kit.Settings.Current.EffectiveWanUploadBudgetKbps);
+        Assert.AreEqual(20_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
     }
 
     [TestMethod]
@@ -273,7 +293,8 @@ public sealed class TranscodingPageTests
                 ["CacheBudgetGiB"] = "10",
                 ["FreeSpaceFloorGiB"] = "5",
                 ["BufferPreset"] = "Normal",
-                ["WanUploadBudgetMbps"] = "0"
+                ["WanUploadBudgetMbps"] = "0",
+                ["WanUploadMode"] = "Off"
             };
             foreach (var (name, value) in overrides)
             {
