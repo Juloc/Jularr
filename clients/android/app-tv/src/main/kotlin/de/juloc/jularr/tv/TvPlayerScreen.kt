@@ -95,6 +95,7 @@ fun TvPlayerScreen(
     currentCue: SubtitleCue?,
     skipSegments: List<ClientMediaSegment> = emptyList(),
     trickplay: ClientTrickplayDescriptor? = null,
+    playbackSpeeds: List<Float> = emptyList(),
     serverOrigin: String = "",
     requestHeaders: Map<String, String> = emptyMap(),
     audioTracks: List<MediaTrack> = emptyList(),
@@ -564,6 +565,7 @@ fun TvPlayerScreen(
             } else if (trackPanel == TvPlayerPanel.SPEED) {
                 TvSpeedSelectionPanel(
                     playbackSpeed = playbackSpeed,
+                    allowedSpeeds = playbackSpeeds,
                     focusRequester = trackPanelFocus,
                     onSelect = { speed ->
                         player.player.setPlaybackParameters(PlaybackParameters(speed))
@@ -1176,6 +1178,7 @@ private fun TvSettingsPanel(
 @Composable
 private fun TvSpeedSelectionPanel(
     playbackSpeed: Float,
+    allowedSpeeds: List<Float>,
     focusRequester: FocusRequester,
     onSelect: (Float) -> Unit,
     onBack: () -> Unit,
@@ -1194,12 +1197,12 @@ private fun TvSpeedSelectionPanel(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Playback speed", style = MaterialTheme.typography.headlineMedium)
-            listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+            allowedSpeeds.ifEmpty { listOf(playbackSpeed) }.forEachIndexed { index, speed ->
                 val selected = speed == playbackSpeed
                 Button(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (selected) Modifier.focusRequester(focusRequester) else Modifier),
+                        .then(if (selected || (index == 0 && playbackSpeed !in allowedSpeeds)) Modifier.focusRequester(focusRequester) else Modifier),
                     onClick = { onSelect(speed) },
                 ) {
                     if (selected) Icon(Icons.Filled.Check, contentDescription = null)
