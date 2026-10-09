@@ -116,7 +116,9 @@ public sealed class PlexProfileConnectionTests
             await store.SaveVerifiedAsync(
                 "profile-one", "100", null, "verified-secret");
 
-            Assert.IsTrue((await store.GetStatusAsync("profile-one"))?.IsUsable);
+            var status = await store.GetStatusAsync("profile-one");
+            Assert.IsNotNull(status);
+            Assert.IsTrue(status.IsUsable);
         }
         finally
         {
