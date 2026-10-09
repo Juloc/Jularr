@@ -65,7 +65,10 @@ public sealed class DetailsModel(
             account,
             members.Select(member => member.Media.Identity).ToArray(),
             cancellationToken);
-        var hidden = await watchlist.GetHiddenKeysAsync(account.ProfileId, cancellationToken);
+        var hidden = await watchlist.GetHiddenKeysForIdentitiesAsync(
+            account,
+            members.Select(member => member.Media.Identity).ToArray(),
+            cancellationToken);
         var titles = members.ToDictionary(member => member.Media.Identity.Key, member => member.Media.Title, StringComparer.Ordinal);
 
         Members = members
