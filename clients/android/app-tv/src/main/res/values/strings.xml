@@ -37,6 +37,14 @@
     <string name="tv_sidebar_watchlist">Watchlist</string>
     <string name="tv_sidebar_activity">Activity</string>
     <string name="tv_sidebar_profile">Profile</string>
+    <string name="tv_sidebar_settings">Settings</string>
+    <string name="tv_profile_select_description">Select an account to continue.</string>
+    <string name="tv_profile_select_current">Current account</string>
+    <string name="tv_profile_select_other_account">Other account</string>
+    <string name="tv_profile_select_sign_out">Sign out</string>
+    <string name="tv_settings_description">Adjust your TV experience.</string>
+    <string name="tv_settings_section_account">Server &amp; Account</string>
+    <string name="tv_settings_section_info">Information</string>
 
     <!-- Home -->
     <string name="tv_home_search_placeholder">Search Jularr</string>
