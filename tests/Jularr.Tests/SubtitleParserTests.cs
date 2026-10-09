@@ -1,3 +1,5 @@
+using Jularr.Web.Features.ClientApi;
+using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Subtitles;
 
 namespace Jularr.Tests;
@@ -5,6 +7,20 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class SubtitleParserTests
 {
+    [TestMethod]
+    public void PresentationMetadataTravelsThroughClientSubtitleCueMapping()
+    {
+        var authored = new SubtitleCueData(1000, 2000, "Sign",
+            new SubtitleCuePresentation(7, 25, 10, 3, "Noto Sans", 24, true, false, "#0099FF"));
+        var converted = ClientApiMappings.ToClientEmbeddedSubtitleCues(
+            new PlaybackEmbeddedSubtitleCues("stream:3", "ja", [authored]));
+
+        Assert.AreEqual("Sign", converted.Cues.Single().Text);
+        Assert.AreEqual(7, converted.Cues.Single().Presentation?.Alignment);
+        Assert.AreEqual(25d, converted.Cues.Single().Presentation?.XPercent);
+        Assert.AreEqual(3, converted.Cues.Single().Presentation?.Layer);
+    }
+
     [TestMethod]
     public void ParsesSrtAndNormalizesFormatting()
     {
