@@ -61,14 +61,39 @@ public sealed class PlayerDesignTests
         var root = FindRepositoryRoot();
         var designScript = File.ReadAllText(
             Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-design.js"));
+        var learningScript = File.ReadAllText(
+            Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-learning-design.js"));
         var episodeScript = File.ReadAllText(
             Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
 
-        StringAssert.Contains(designScript, "token.isInteractive");
-        StringAssert.Contains(designScript, "actions.openWord");
-        StringAssert.Contains(designScript, "actions.learnCurrentCue");
+        StringAssert.DoesNotContain(designScript, "token.isInteractive");
+        StringAssert.Contains(learningScript, "token.isInteractive");
+        StringAssert.Contains(learningScript, "actions.openWord");
+        StringAssert.Contains(learningScript, "actions.learnCurrentCue");
+        StringAssert.Contains(episodeScript, "window.JularrPlayerLearning.renderCue");
         StringAssert.Contains(episodeScript, "design.actions.repeatCurrentCue");
         StringAssert.Contains(episodeScript, "learningResumeOnClose");
+    }
+
+    [TestMethod]
+    public void LearningRendererIsNotLoadedForNormalPlayback()
+    {
+        var root = FindRepositoryRoot();
+        var pages = Path.Combine(root, "src", "Jularr.Web", "Pages", "Library");
+        var scripts = File.ReadAllText(Path.Combine(pages, "_VideoPlayerScripts.cshtml"));
+        var stage = File.ReadAllText(Path.Combine(pages, "_VideoPlayerStage.cshtml"));
+        var watch = File.ReadAllText(Path.Combine(pages, "Watch.cshtml"));
+        var episode = File.ReadAllText(Path.Combine(pages, "Episode.cshtml"));
+        var player = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
+
+        StringAssert.Contains(scripts, "@if (Model)");
+        StringAssert.Contains(scripts, "~/js/player-learning-design.js");
+        StringAssert.Contains(watch, "model=\"@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)\"");
+        StringAssert.Contains(episode, "model=\"@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)\"");
+        StringAssert.Contains(stage, "@if (Model.ShowPlayerTools || Model.Controls?.HasLearningCues == true)");
+        StringAssert.Contains(stage, "@if (Model.Controls is { HasLearningCues: true })");
+        StringAssert.Contains(player, "data?.textContent || \"[]\"");
+        StringAssert.Contains(player, "if (!overlay || !window.JularrPlayerLearning) return;");
     }
 
     [TestMethod]
