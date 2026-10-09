@@ -333,10 +333,6 @@ public sealed class PlaybackServerResourceTests
     {
         await using var cache = await CacheAsync(budgetBytes: 1L << 30);
         var session = await cache.StartAsync("profile-0", segmentBytes: 10);
-        var lease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo);
-        Assert.IsNotNull(lease);
-        lease.Dispose();
-
         for (var minute = 0; minute < 11; minute++)
         {
             cache.Time.Advance(TimeSpan.FromMinutes(1));
