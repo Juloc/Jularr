@@ -103,7 +103,7 @@ public sealed class EmbeddedSubtitleExtractor(
                 "-nostdin",
                 "-i", fullPath,
                 "-map", $"0:{stream.Index}",
-                "-c:s", format,
+                "-c:s", stream.Codec == "ass" ? "copy" : format,
                 "-f", format,
                 "pipe:1"
             ],
