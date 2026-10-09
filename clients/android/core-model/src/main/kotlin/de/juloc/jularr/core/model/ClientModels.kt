@@ -144,6 +144,9 @@ data class WatchlistItem(
     val availability: String,
     val detailsUrl: String?,
     val addedAtUtc: String?,
+    val localMediaId: String? = null,
+    val status: String? = null,
+    val format: String? = null,
 )
 
 data class AnimeDetail(
