@@ -33,9 +33,9 @@ public sealed class DetailsModel(
     RequestStatusQuery status,
     AcquisitionRequestService requests,
     VideoRequestScopeResolver scopes,
-    PlexExternalPlaybackAction plexExternal,
-    IAppShellService appShell,
-    TimeProvider clock) : PageModel
+    TimeProvider clock,
+    PlexExternalPlaybackAction? plexExternal = null,
+    IAppShellService? appShell = null) : PageModel
 {
     private static readonly IReadOnlySet<string> s_noticeKeys = new HashSet<string>(StringComparer.Ordinal) { "changed", "failed", "plexUnavailable" };
 
@@ -83,6 +83,11 @@ public sealed class DetailsModel(
         Guid id,
         CancellationToken cancellationToken)
     {
+        if (plexExternal is null || appShell is null)
+        {
+            return NotFound();
+        }
+
         var request = await status.FindOwnAsync(
             id, account.ProfileId, cancellationToken);
         if (request?.WorkId is not long workId || workId <= 0 ||
@@ -212,6 +217,7 @@ public sealed class DetailsModel(
         var showPlex = view.Request.WorkId is > 0 &&
             (view.Request.Kind is MediaAcquisitionKind.Movie or
                 MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime) &&
+            plexExternal is not null &&
             await plexExternal.IsOfferVisibleAsync(User, cancellationToken);
         Panel = new RequestStatusPanel(
             ui, view, clock.GetUtcNow().UtcDateTime,
