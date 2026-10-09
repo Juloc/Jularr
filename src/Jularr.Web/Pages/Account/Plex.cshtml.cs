@@ -18,6 +18,7 @@ namespace Jularr.Web.Pages.Account;
 public sealed class PlexModel(
     AppDbContext db,
     OwnerAuthService accountAuth,
+    MediaCapabilityStore capabilities,
     PlexAuthClient plex,
     IConfiguration configuration) : PageModel
 {
@@ -294,8 +295,19 @@ public sealed class PlexModel(
                 "plex",
                 attempt.VerifiedPlexAccountId,
                 UserName,
-                isEnabled: !configuration.GetValue("Plex:RequireApproval", true),
+                isEnabled: false,
                 cancellationToken);
+            await capabilities.ConstrainNewExternalAccountAsync(
+                account.Id,
+                cancellationToken);
+
+            if (!configuration.GetValue("Plex:RequireApproval", true))
+            {
+                await accountAuth.SetEnabledAsync(
+                    account.Id,
+                    true,
+                    cancellationToken);
+            }
         }
         catch (InvalidOperationException)
         {
