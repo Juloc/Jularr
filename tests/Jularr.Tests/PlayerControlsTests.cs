@@ -599,6 +599,53 @@ public sealed class PlayerControlsTests
     }
 
     [TestMethod]
+    public void SubtitleAppearanceSlidersUpdateBothLanguagesWithoutReloadingPlayback()
+    {
+        var root = RepositoryRoot();
+        var player = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const applySubtitleAppearance = () => {");
+            const end = source.indexOf("    const resolveSecondarySelection = () => {", start);
+            if (start < 0 || end < 0) throw new Error("subtitle appearance settings missing");
+
+            const properties = new Map();
+            const handlers = {};
+            const root = { style: { setProperty: (key, value) => properties.set(key, value) } };
+            const subtitleSizeInput = {
+                value: "100", addEventListener: (event, handler) => handlers["size:" + event] = handler
+            };
+            const subtitleOffsetInput = {
+                value: "0", addEventListener: (event, handler) => handlers["offset:" + event] = handler
+            };
+            const subtitleSizeOutput = { textContent: "" };
+            const subtitleOffsetOutput = { textContent: "" };
+            let subtitleSizePercent = 100;
+            let subtitleOffsetMs = 0;
+            let playbackCueKey = "cached";
+            let secondaryCueKey = "cached";
+            let frames = 0;
+            const sync = () => frames++;
+            eval(source.slice(start, end) + "applySubtitleAppearance()");
+            subtitleSizeInput.value = "150";
+            handlers["size:input"]();
+            subtitleOffsetInput.value = "-2500";
+            handlers["offset:input"]();
+            console.log([
+                properties.get("--player-playback-subtitle-size"),
+                properties.get("--player-secondary-subtitle-size"),
+                subtitleSizeOutput.textContent,
+                subtitleOffsetOutput.textContent,
+                frames,
+                playbackCueKey === null && secondaryCueKey === null
+            ].join("|"));
+            """;
+
+        Assert.AreEqual("33.0px|30.0px|150%|-2500 ms|3|true", RunNode(script, player));
+    }
+
+    [TestMethod]
     public void WebCueLookupFollowsTheMediaClockAtEveryPlaybackSpeed()
     {
         var root = RepositoryRoot();
