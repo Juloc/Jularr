@@ -374,6 +374,41 @@ namespace Jularr.Web.Data.Migrations
                     b.ToTable("AudiobookProgress");
                 });
 
+            modelBuilder.Entity("Jularr.Web.Features.Auth.AccountLoginIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ExternalAccountId")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime>("LinkedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "Provider")
+                        .IsUnique();
+
+                    b.HasIndex("Provider", "ExternalAccountId")
+                        .IsUnique();
+
+                    b.ToTable("AccountLoginIdentities");
+                });
+
             modelBuilder.Entity("Jularr.Web.Features.Auth.OwnerAccount", b =>
                 {
                     b.Property<string>("Id")
@@ -4705,6 +4740,15 @@ namespace Jularr.Web.Data.Migrations
                     b.HasOne("Jularr.Web.Features.Library.Anime", null)
                         .WithMany()
                         .HasForeignKey("AnimeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Jularr.Web.Features.Auth.AccountLoginIdentity", b =>
+                {
+                    b.HasOne("Jularr.Web.Features.Auth.OwnerAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
