@@ -32,6 +32,14 @@ class TvNavigationTest {
     }
 
     @Test
+    fun savedAccountRemainsSelectableAfterChangingServers() {
+        assertEquals(
+            TvRoute.AccountSelect,
+            TvNavigation.initial(hasServerOrigin = false, hasSavedSessions = true).route,
+        )
+    }
+
+    @Test
     fun signingInLandsOnHomeNotLibrary() {
         val state = TvNavigation.signedIn(TvNavigationState(TvRoute.Login))
         assertEquals(TvRoute.Home, state.route)
