@@ -121,6 +121,73 @@ public sealed class SubtitleParserTests
         Assert.AreEqual("ここで待って", cues[1].Text);
     }
 
+    [DataTestMethod]
+    [DataRow(1, 1)]
+    [DataRow(2, 2)]
+    [DataRow(3, 3)]
+    [DataRow(5, 7)]
+    [DataRow(6, 8)]
+    [DataRow(7, 9)]
+    [DataRow(9, 4)]
+    [DataRow(10, 5)]
+    [DataRow(11, 6)]
+    public void LegacySsaStyleAlignment_MapsToAssNumpadPosition(int legacy, int expected)
+    {
+        var content = """
+            [V4 Styles]
+            Format: Name, Alignment
+            Style: Signs, {ALIGNMENT}
+
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            Dialogue: 0,0:00:01.00,0:00:02.00,Signs,,0,0,0,,Station sign
+            """.Replace("{ALIGNMENT}", legacy.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        var cue = SubtitleParser.ParseFormat("ssa", content).Single();
+
+        Assert.AreEqual("Station sign", cue.Text);
+        Assert.AreEqual(expected, cue.Presentation?.Alignment);
+    }
+
+    [DataTestMethod]
+    [DataRow(5, 7)]
+    [DataRow(6, 8)]
+    [DataRow(7, 9)]
+    [DataRow(9, 4)]
+    [DataRow(10, 5)]
+    [DataRow(11, 6)]
+    public void LegacySsaAlignmentTag_OverridesModernStyle(int legacy, int expected)
+    {
+        const string header = """
+            [V4+ Styles]
+            Format: Name, Alignment
+            Style: Signs, 2
+
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+
+            """;
+        var content = header + $@"Dialogue: 0,0:00:01.00,0:00:02.00,Signs,,0,0,0,,{{\a{legacy}}}Sign";
+        var cue = SubtitleParser.ParseAss(content).Single();
+
+        Assert.AreEqual(expected, cue.Presentation?.Alignment);
+    }
+
+    [TestMethod]
+    public void MixedSsaAndAssAlignmentTags_LastOverrideWins()
+    {
+        const string content = """
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            Dialogue: 0,0:00:01.00,0:00:02.00,Signs,,0,0,0,,{\a10\an9}Top right
+            """;
+
+        var cue = SubtitleParser.ParseAss(content).Single();
+
+        Assert.AreEqual("Top right", cue.Text);
+        Assert.AreEqual(9, cue.Presentation?.Alignment);
+    }
+
     [TestMethod]
     public void AssPositionWithoutCanvasCoordinatesFallsBackToAlignment()
     {
