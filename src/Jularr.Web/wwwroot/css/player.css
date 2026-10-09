@@ -59,7 +59,7 @@
     border-radius: 10px;
     background: var(--player-subtitle-bg);
     color: var(--player-subtitle-text);
-    font-size: clamp(15px, 2.2vw, var(--player-playback-subtitle-size));
+    font-size: clamp(15px, var(--player-playback-subtitle-size), 44px);
     font-weight: 650;
     line-height: 1.45;
     text-align: center;
@@ -114,7 +114,7 @@
     position: absolute;
     max-width: min(85%, 800px);
     width: max-content;
-    font-size: clamp(15px, 2.2vw, var(--player-playback-subtitle-size));
+    font-size: clamp(15px, var(--player-playback-subtitle-size), 44px);
     font-weight: 650;
     line-height: 1.45;
 }
