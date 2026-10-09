@@ -74,6 +74,19 @@ public sealed class PlexServerSelectionService(
             .Single(x => x.MachineIdentifier == discovered.MachineIdentifier);
     }
 
+    /// <summary>
+    /// Revoking a server grant requires the same AdminSystem permission as
+    /// approving it; user sessions never receive the saved PMS credential.
+    /// </summary>
+    public async Task RevokeAsync(
+        ClaimsPrincipal admin,
+        string machineIdentifier,
+        CancellationToken cancellationToken)
+    {
+        RequireAdmin(admin);
+        await grants.RemoveAsync(machineIdentifier, cancellationToken);
+    }
+
     private static void RequireAdmin(ClaimsPrincipal caller)
     {
         ArgumentNullException.ThrowIfNull(caller);
