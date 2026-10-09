@@ -53,6 +53,7 @@ public static class PlaybackDecisionRegistration
             return store;
         });
         services.AddScoped<PlaybackPlanService>();
+        services.AddScoped<PlaybackPreparationDemandService>();
         services.AddScoped<CanonicalPlayerNavigationAssetService>();
         services.AddScoped<CanonicalVideoPlayerService>();
 
