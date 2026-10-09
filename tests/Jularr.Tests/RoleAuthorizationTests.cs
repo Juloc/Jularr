@@ -120,10 +120,19 @@ public sealed class RoleAuthorizationTests
             }
         }
 
+        var foundPageNames = restricted.Select(page => page.type.FullName!).ToArray();
+        var unexpectedPages = foundPageNames
+            .Except(PagePolicies.Keys, StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        var missingPages = PagePolicies.Keys
+            .Except(foundPageNames, StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
         CollectionAssert.AreEquivalent(
             PagePolicies.Keys.ToArray(),
-            restricted.Select(page => page.type.FullName!).ToArray(),
-            "A restricted page was added or removed; update the permissions matrix.");
+            foundPageNames,
+            $"Restricted page policy matrix mismatch. Unexpected: [{string.Join(", ", unexpectedPages)}]; Missing: [{string.Join(", ", missingPages)}].");
         foreach (var (type, attributes) in restricted)
         {
             Assert.AreEqual(PagePolicies[type.FullName!], attributes.Single().Policy, type.FullName);
