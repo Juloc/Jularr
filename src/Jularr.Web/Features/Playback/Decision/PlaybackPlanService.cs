@@ -587,7 +587,7 @@ internal static class PlaybackPreparedRenditionEligibility
                 !root.TryGetProperty("sourceFingerprint", out var storedFingerprint) ||
                 !string.Equals(storedFingerprint.GetString(), fingerprint, StringComparison.Ordinal) ||
                 !root.TryGetProperty("recipeVersion", out var recipe) ||
-                !recipe.TryGetInt32(out var recipeVersion) || recipeVersion < 1 ||
+                !recipe.TryGetInt32(out var recipeVersion) || recipeVersion != 1 ||
                 !root.TryGetProperty("verifiedOutput", out var verified) ||
                 verified.ValueKind != JsonValueKind.True)
             {
