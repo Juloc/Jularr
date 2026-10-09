@@ -25,8 +25,12 @@ public sealed class WatchlistStore(AppDbContext db)
         ValidateProfile(profileId);
         if (await IsIncludedByFollowedFranchiseAsync(profileId, identity, cancellationToken))
         {
-            var existing = (await GetEffectiveAsync(profileId, cancellationToken))
-                .FirstOrDefault(item => item.Identity.Key == identity.Key);
+            var existing = (await GetEffectivePageAsync(
+                CurrentAccountContext.ForProfile(profileId),
+                new PageRequest(),
+                [identity.MediaType],
+                cancellationToken,
+                identity)).Items.FirstOrDefault();
             var draft = existing is null
                 ? new WatchlistDraft(identity, identity.ExternalKey)
                 : new WatchlistDraft(
@@ -118,6 +122,148 @@ public sealed class WatchlistStore(AppDbContext db)
             await command.ExecuteNonQueryAsync(cancellationToken);
         }, cancellationToken);
 
+
+    /// <summary>
+    /// Resolve only the currently displayed Discover identities; never materialize a full profile
+    /// watchlist for a bounded card shelf. This is a profile-scoped, fixed-SQL point lookup.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, Guid?>> GetFollowedFranchiseIdsForKeysAsync(
+        CurrentAccountContext account,
+        IReadOnlyCollection<WatchlistIdentity> identities,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(identities);
+
+        var profileId = account.ProfileId;
+        ValidateProfile(profileId);
+        var keys = identities
+            .Select(identity => identity.Key)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var result = new Dictionary<string, Guid?>(StringComparer.Ordinal);
+        if (keys.Length == 0)
+        {
+            return result;
+        }
+
+        await WithConnectionAsync(async connection =>
+        {
+            foreach (var batch in keys.Chunk(PageRequest.MaximumPageSize))
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    WITH "Candidates" AS (
+                        SELECT
+                            "FranchiseMembers"."MediaType",
+                            "FranchiseMembers"."Provider",
+                            "FranchiseMembers"."ExternalId",
+                            "Franchises"."Id" AS "FranchiseId",
+                            "Franchises"."Title" AS "FranchiseTitle"
+                        FROM
+                            "FranchiseMembers"
+                        INNER JOIN
+                            "ProfileFranchiseFollows"
+                                ON "ProfileFranchiseFollows"."FranchiseId" = "FranchiseMembers"."FranchiseId"
+                        INNER JOIN
+                            "Franchises"
+                                ON "Franchises"."Id" = "FranchiseMembers"."FranchiseId"
+                        WHERE
+                            "ProfileFranchiseFollows"."ProfileId" = @ProfileId
+                            AND (
+                                "FranchiseMembers"."MediaType" || ':' ||
+                                "FranchiseMembers"."Provider" || ':' ||
+                                "FranchiseMembers"."ExternalId"
+                            ) = ANY(@Keys)
+                        UNION ALL
+                        SELECT
+                            "ProfileWatchlistPreferences"."MediaType",
+                            "ProfileWatchlistPreferences"."Provider",
+                            "ProfileWatchlistPreferences"."ExternalId",
+                            NULL AS "FranchiseId",
+                            NULL AS "FranchiseTitle"
+                        FROM
+                            "ProfileWatchlistPreferences"
+                        WHERE
+                            "ProfileWatchlistPreferences"."ProfileId" = @ProfileId
+                            AND "ProfileWatchlistPreferences"."FollowState" = 'follow'
+                            AND (
+                                "ProfileWatchlistPreferences"."MediaType" || ':' ||
+                                "ProfileWatchlistPreferences"."Provider" || ':' ||
+                                "ProfileWatchlistPreferences"."ExternalId"
+                            ) = ANY(@Keys)
+                    )
+                    SELECT DISTINCT ON (
+                        "Candidates"."MediaType",
+                        "Candidates"."Provider",
+                        "Candidates"."ExternalId"
+                    )
+                        "Candidates"."MediaType",
+                        "Candidates"."Provider",
+                        "Candidates"."ExternalId",
+                        "Candidates"."FranchiseId"
+                    FROM
+                        "Candidates"
+                    WHERE
+                        NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "ProfileWatchlistPreferences" AS "Ignored"
+                            WHERE
+                                "Ignored"."ProfileId" = @ProfileId
+                                AND "Ignored"."FollowState" = 'ignore'
+                                AND "Ignored"."MediaType" = "Candidates"."MediaType"
+                                AND "Ignored"."Provider" = "Candidates"."Provider"
+                                AND "Ignored"."ExternalId" = "Candidates"."ExternalId"
+                        )
+                    ORDER BY
+                        "Candidates"."MediaType" ASC,
+                        "Candidates"."Provider" ASC,
+                        "Candidates"."ExternalId" ASC,
+                        "Candidates"."FranchiseTitle" ASC NULLS LAST,
+                        "Candidates"."FranchiseId" ASC NULLS LAST
+                    LIMIT
+                        @MaxResults
+                    """;
+                foreach (var parameter in SqlParams.Create()
+                    .Add("ProfileId", profileId)
+                    .Add("Keys", batch, NpgsqlDbType.Array | NpgsqlDbType.Text)
+                    .Add("MaxResults", batch.Length)
+                    .ToArray())
+                {
+                    command.Parameters.Add(parameter);
+                }
+
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var mediaType = WatchlistMediaTypeNames.Parse(reader.GetString(0));
+                    if (mediaType is null)
+                    {
+                        continue;
+                    }
+
+                    var key = new WatchlistIdentity(
+                        mediaType.Value,
+                        reader.GetString(1),
+                        reader.GetString(2)).Key;
+                    Guid? franchiseId = null;
+                    if (!reader.IsDBNull(3) &&
+                        Guid.TryParse(reader.GetString(3), out var parsed))
+                    {
+                        franchiseId = parsed;
+                    }
+
+                    result[key] = franchiseId;
+                }
+            }
+        }, cancellationToken);
+
+        return result;
+    }
 
     private const string ReadEffectivePageSql = """
         WITH "InheritedRanks" AS (

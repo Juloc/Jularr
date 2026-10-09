@@ -108,6 +108,55 @@ public sealed class WatchlistTests
     }
 
     [TestMethod]
+    public async Task CalendarReadsReleaseFromSecondBoundedWatchlistPage()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var watchlist = new WatchlistStore(fixture.Db);
+        var cache = new ReleaseCalendarCacheStore(fixture.Db);
+        const string profile = "profile-a";
+
+        for (var i = 0; i <= PageRequest.MaximumPageSize; i++)
+        {
+            await watchlist.FollowAsync(
+                profile,
+                Draft((200000 + i).ToString(), $"Item {i:D3}"),
+                CancellationToken.None);
+        }
+
+        const string lastExternalId = "200100";
+        var airing = ReleaseDate.FromInstant(
+            new DateTimeOffset(2026, 10, 5, 15, 0, 0, TimeSpan.Zero));
+        await cache.SaveAsync(
+            "anilist",
+            [
+                new ReleaseSourceSnapshot(
+                    lastExternalId,
+                    "RELEASING",
+                    [new CachedRelease("anilist", lastExternalId, ReleaseKind.Episode, 5, airing)])
+            ],
+            new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+            new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc),
+            CancellationToken.None);
+
+        var source = new WatchlistReleaseEventSource(
+            cache,
+            watchlist,
+            new WatchlistLibraryResolver(fixture.Db));
+        var events = await source.GetEventsAsync(
+            new ReleaseEventQuery(
+                new DateOnly(2026, 10, 1),
+                new DateOnly(2026, 10, 31),
+                TimeZoneInfo.Utc,
+                new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero),
+                ProfileId: profile),
+            CancellationToken.None);
+
+        var release = Assert.ContainsSingle(events);
+        Assert.AreEqual(lastExternalId, release.ProviderExternalId);
+        Assert.AreEqual(5, release.Unit?.Number);
+    }
+
+    [TestMethod]
     public void WatchlistInputRejectsUnsafeImageUrls()
     {
         Assert.IsTrue(WatchlistDraftInput.TryCreate(
@@ -322,6 +371,66 @@ public sealed class WatchlistTests
         Assert.AreEqual(false, second.HasMore);
         Assert.IsEmpty(otherProfile.Items);
         Assert.AreEqual(0L, otherProfile.TotalCount);
+    }
+
+    [TestMethod]
+    public async Task DiscoverFollowLookup_FiltersRequestedKeysAndCurrentProfile()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var store = new WatchlistStore(fixture.Db);
+        var franchises = new FranchiseStore(fixture.Db);
+        var inherited = Draft("800", "Inherited");
+        var hidden = Draft("801", "Hidden");
+        var explicitOnly = Draft("802", "Explicit");
+        var foreign = Draft("803", "Other account");
+        var franchiseId = await franchises.GetOrCreateBySeedAsync(
+            inherited.Identity, CancellationToken.None);
+        await franchises.UpsertMemberAsync(
+            franchiseId, inherited, null, true, CancellationToken.None);
+        await franchises.UpsertMemberAsync(
+            franchiseId, hidden, "SEQUEL", false, CancellationToken.None);
+        await franchises.FollowAsync("profile-a", franchiseId, CancellationToken.None);
+        await store.FollowAsync("profile-a", inherited, CancellationToken.None);
+        await store.FollowAsync("profile-a", explicitOnly, CancellationToken.None);
+        await store.UnfollowAsync("profile-a", hidden.Identity, CancellationToken.None);
+        await store.FollowAsync("profile-b", foreign, CancellationToken.None);
+
+        // Force a second SQL batch: the matching keys come after more than 100 misses.
+        var selected = Enumerable.Range(0, PageRequest.MaximumPageSize + 5)
+            .Select(i => Draft("missing-" + i, "Not followed").Identity)
+            .Concat([
+                inherited.Identity,
+                hidden.Identity,
+                explicitOnly.Identity,
+                foreign.Identity,
+                inherited.Identity
+            ])
+            .ToArray();
+        var result = await store.GetFollowedFranchiseIdsForKeysAsync(
+            CurrentAccountContext.ForProfile("profile-a"),
+            selected,
+            CancellationToken.None);
+
+        Assert.AreEqual(2, result.Count);
+        Assert.AreEqual(franchiseId, result[inherited.Identity.Key]);
+        Assert.IsTrue(result.ContainsKey(explicitOnly.Identity.Key));
+        Assert.IsNull(result[explicitOnly.Identity.Key]);
+        Assert.IsFalse(result.ContainsKey(hidden.Identity.Key));
+        Assert.IsFalse(result.ContainsKey(foreign.Identity.Key));
+
+        var other = await store.GetFollowedFranchiseIdsForKeysAsync(
+            CurrentAccountContext.ForProfile("profile-b"),
+            selected,
+            CancellationToken.None);
+        Assert.AreEqual(1, other.Count);
+        Assert.IsTrue(other.ContainsKey(foreign.Identity.Key));
+        Assert.IsNull(other[foreign.Identity.Key]);
+
+        var empty = await store.GetFollowedFranchiseIdsForKeysAsync(
+            CurrentAccountContext.ForProfile("profile-a"),
+            [],
+            CancellationToken.None);
+        Assert.IsEmpty(empty);
     }
 
     private static WatchlistDraft Draft(string externalId, string title) =>

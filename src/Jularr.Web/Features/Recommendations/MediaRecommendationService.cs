@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.MediaCore;
@@ -158,97 +159,99 @@ public sealed class MediaRecommendationService(
         List<RecommendationOwnedEntity> owned,
         CancellationToken cancellationToken)
     {
-        var followed = await watchlist.GetEffectiveAsync(profileId, cancellationToken);
-        if (followed.Count == 0)
-        {
-            return [];
-        }
-
-        // Every followed work is owned for recommendation purposes.
-        foreach (var item in followed)
-        {
-            owned.Add(new RecommendationOwnedEntity(
-                RecommendationScoring.Identity(item.Title, null),
-                item.Identity.Key));
-        }
-
-        var seedItems = followed
-            .Where(item => FranchiseService.CanSeed(item.Identity))
-            .ToArray();
-        if (seedItems.Length == 0)
-        {
-            return [];
-        }
-
+        var account = CurrentAccountContext.ForProfile(profileId);
+        var visibleTypes = Enum.GetValues<WatchlistMediaType>();
         var links = new List<MediaContinuationLink>();
-        var targetIdentities = new List<WatchlistIdentity>();
-        var pending = new List<(WatchlistItem Seed, WatchlistDraft Target, string GroupKey)>();
 
-        foreach (var item in seedItems)
+        // Process SQL pages independently: even a very large watchlist never becomes
+        // one unbounded database result or one unbounded relation lookup.
+        for (var pageNumber = 1; ; pageNumber++)
         {
-            var groups = await franchises.GetRelationGroupsAsync(item.Identity, cancellationToken);
-            foreach (var group in groups)
+            var page = await watchlist.GetEffectivePageAsync(
+                account,
+                new PageRequest(pageNumber, PageRequest.MaximumPageSize),
+                visibleTypes,
+                cancellationToken);
+
+            var pending = new List<(WatchlistItem Seed, WatchlistDraft Target, string GroupKey)>();
+            foreach (var item in page.Items)
             {
-                // Only typed relations (adaptation, sequel, …) are honest continuations; the generic
-                // "same franchise" bucket is skipped so a row means something specific.
-                if (group.GroupKey == FranchiseLabels.SameFranchiseGroupKey)
+                // Every followed work is owned for recommendation purposes.
+                owned.Add(new RecommendationOwnedEntity(
+                    RecommendationScoring.Identity(item.Title, null),
+                    item.Identity.Key));
+
+                if (!FranchiseService.CanSeed(item.Identity))
                 {
                     continue;
                 }
 
-                foreach (var target in group.Items)
+                var groups = await franchises.GetRelationGroupsAsync(item.Identity, cancellationToken);
+                foreach (var group in groups)
                 {
-                    if (target.Identity.Key == item.Identity.Key)
+                    // Only typed relationships form continuation links. The generic
+                    // "same franchise" bucket is not a continuation recommendation.
+                    if (group.GroupKey == FranchiseLabels.SameFranchiseGroupKey)
                     {
                         continue;
                     }
 
-                    pending.Add((item, target, group.GroupKey));
-                    targetIdentities.Add(target.Identity);
+                    foreach (var target in group.Items)
+                    {
+                        if (target.Identity.Key != item.Identity.Key)
+                        {
+                            pending.Add((item, target, group.GroupKey));
+                        }
+                    }
                 }
             }
-        }
 
-        if (pending.Count == 0)
-        {
-            return [];
-        }
-
-        var matches = await libraryResolver.ResolveAsync(targetIdentities, cancellationToken);
-
-        foreach (var (seedItem, target, groupKey) in pending)
-        {
-            var mediaType = WorkMediaTypes.FromWatchlist(target.Identity.MediaType);
-            var href = matches.TryGetValue(target.Identity.Key, out var match)
-                ? match.DetailsUrl
-                : target.Identity.ProviderUrl;
-            if (string.IsNullOrWhiteSpace(href))
+            if (pending.Count > 0)
             {
-                continue;
+                var matches = await libraryResolver.ResolveAsync(
+                    pending.Select(entry => entry.Target.Identity),
+                    cancellationToken);
+
+                foreach (var (seedItem, target, groupKey) in pending)
+                {
+                    var mediaType = WorkMediaTypes.FromWatchlist(target.Identity.MediaType);
+                    var href = matches.TryGetValue(target.Identity.Key, out var match)
+                        ? match.DetailsUrl
+                        : target.Identity.ProviderUrl;
+                    if (string.IsNullOrWhiteSpace(href))
+                    {
+                        continue;
+                    }
+
+                    var seed = new MediaRecommendationSeed(
+                        WorkMediaTypes.FromWatchlist(seedItem.Identity.MediaType),
+                        seedItem.Identity,
+                        seedItem.Title,
+                        null,
+                        [],
+                        IsFinished: false,
+                        seedItem.AddedAtUtc ?? DateTime.UtcNow);
+
+                    var candidate = new MediaRecommendationCandidate(
+                        target.Identity.Key,
+                        mediaType,
+                        target.Identity,
+                        target.Title,
+                        null,
+                        [],
+                        target.CoverImageUrl,
+                        href,
+                        target.Year,
+                        IsLocal: match is not null);
+
+                    links.Add(new MediaContinuationLink(seed, candidate, groupKey));
+                }
             }
 
-            var seed = new MediaRecommendationSeed(
-                WorkMediaTypes.FromWatchlist(seedItem.Identity.MediaType),
-                seedItem.Identity,
-                seedItem.Title,
-                null,
-                [],
-                IsFinished: false,
-                seedItem.AddedAtUtc ?? DateTime.UtcNow);
-
-            var candidate = new MediaRecommendationCandidate(
-                target.Identity.Key,
-                mediaType,
-                target.Identity,
-                target.Title,
-                null,
-                [],
-                target.CoverImageUrl,
-                href,
-                target.Year,
-                IsLocal: match is not null);
-
-            links.Add(new MediaContinuationLink(seed, candidate, groupKey));
+            if (page.HasMore != true)
+            {
+                break;
+            }
         }
 
         return links;
