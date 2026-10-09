@@ -106,7 +106,7 @@ fun TvHomeScreen(
             }
             else -> null
         }
-        val index = rows.indexOf(targetRow)
+        val index = targetRow?.let(rows::indexOf) ?: -1
         if (index >= 0) listState.scrollToItem(index)
     }
 
@@ -219,12 +219,28 @@ fun TvHomeScreen(
                     Text(stringResource(R.string.tv_home_row_continue_watching), style = MaterialTheme.typography.titleLarge)
                 }
                 item(key = "continue-row") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    val rowState = rememberLazyListState()
+                    val restoreIndex = inProgress.indexOfFirst { restoringItem == "continue:${it.episodeId}" }
+                    LaunchedEffect(restoreIndex) {
+                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+                    }
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
                         items(items = inProgress, key = { it.episodeId }) { entry ->
+                            val itemFocus = remember(entry.episodeId) { FocusRequester() }
+                            LaunchedEffect(restoringItem, entry.episodeId) {
+                                if (restoringItem == "continue:${entry.episodeId}") {
+                                    runCatching { itemFocus.requestFocus() }
+                                }
+                            }
                             ContinueWatchingCard(
                                 item = entry,
                                 serverOrigin = serverOrigin,
                                 requestHeaders = requestHeaders,
+                                focusRequester = itemFocus,
+                                onFocused = { focusMemory.remember("home", "continue:${entry.episodeId}") },
                                 onClick = { onContinueWatching(entry) },
                             )
                         }
@@ -235,8 +251,22 @@ fun TvHomeScreen(
             if (series.isNotEmpty()) {
                 item(key = "series-title") { Text(stringResource(R.string.tv_home_row_series), style = MaterialTheme.typography.titleLarge) }
                 item(key = "series-row") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    val rowState = rememberLazyListState()
+                    val restoreIndex = series.indexOfFirst { restoringItem == "anime:${it.id}" }
+                    LaunchedEffect(restoreIndex) {
+                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+                    }
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
                         items(items = series, key = { it.id }) { anime ->
+                            val itemFocus = remember(anime.id) { FocusRequester() }
+                            LaunchedEffect(restoringItem, anime.id) {
+                                if (restoringItem == "anime:${anime.id}") {
+                                    runCatching { itemFocus.requestFocus() }
+                                }
+                            }
                             var focused by remember(anime.id) { mutableStateOf(false) }
                             AnimeButton(
                                 anime = anime,
@@ -244,6 +274,7 @@ fun TvHomeScreen(
                                 requestHeaders = requestHeaders,
                                 focused = focused,
                                 focusColor = focusColor,
+                                focusRequester = itemFocus,
                                 onFocusChanged = {
                                     focused = it
                                     if (it) focusMemory.remember("home", "anime:${anime.id}")
@@ -258,8 +289,22 @@ fun TvHomeScreen(
             if (movies.isNotEmpty()) {
                 item(key = "movies-title") { Text(stringResource(R.string.tv_home_row_movies), style = MaterialTheme.typography.titleLarge) }
                 item(key = "movies-row") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    val rowState = rememberLazyListState()
+                    val restoreIndex = movies.indexOfFirst { restoringItem == "anime:${it.id}" }
+                    LaunchedEffect(restoreIndex) {
+                        if (restoreIndex >= 0) rowState.scrollToItem(restoreIndex)
+                    }
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
                         items(items = movies, key = { it.id }) { anime ->
+                            val itemFocus = remember(anime.id) { FocusRequester() }
+                            LaunchedEffect(restoringItem, anime.id) {
+                                if (restoringItem == "anime:${anime.id}") {
+                                    runCatching { itemFocus.requestFocus() }
+                                }
+                            }
                             var focused by remember(anime.id) { mutableStateOf(false) }
                             AnimeButton(
                                 anime = anime,
@@ -267,6 +312,7 @@ fun TvHomeScreen(
                                 requestHeaders = requestHeaders,
                                 focused = focused,
                                 focusColor = focusColor,
+                                focusRequester = itemFocus,
                                 onFocusChanged = {
                                     focused = it
                                     if (it) focusMemory.remember("home", "anime:${anime.id}")
@@ -300,6 +346,8 @@ private fun ContinueWatchingCard(
     item: ContinueWatchingItem,
     serverOrigin: String,
     requestHeaders: Map<String, String>,
+    focusRequester: FocusRequester,
+    onFocused: () -> Unit,
     onClick: () -> Unit,
 ) {
     val focusColor = rememberTvFocusColor()
@@ -313,8 +361,12 @@ private fun ContinueWatchingCard(
             .clip(cardShape)
             .background(cardBackground)
             .tvFocusIndication(focused, focusColor, cardShape)
+            .focusRequester(focusRequester)
             .clickable(onClick = onClick)
-            .reportFocus { focused = it },
+            .reportFocus {
+                focused = it
+                if (it) onFocused()
+            },
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             TvArtwork(
