@@ -94,6 +94,14 @@ public sealed class PlayerDesignTests
         StringAssert.Contains(episode, "@if (stage.ShowPlayerTools)");
         StringAssert.Contains(stage, "@if (Model.ShowPlayerTools || Model.Controls?.HasLearningCues == true)");
         StringAssert.Contains(stage, "@if (Model.Controls is { HasLearningCues: true })");
+        foreach (var selector in new[]
+                 {
+                     "data-playback-video", "data-playback-subtitle", "data-secondary-playback-subtitle",
+                     "data-primary-positioned-subtitles", "data-secondary-positioned-subtitles"
+                 })
+        {
+            StringAssert.Contains(stage, selector);
+        }
         StringAssert.Contains(player, "data?.textContent || \"[]\"");
         StringAssert.Contains(player, "if (!overlay || !window.JularrPlayerLearning) return;");
     }
