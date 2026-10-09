@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -57,7 +61,15 @@ fun TvHomeScreen(
     onAnime: (AnimeSummary) -> Unit,
     onContinueWatching: (ContinueWatchingItem) -> Unit,
 ) {
-    var filter by remember { mutableStateOf(TvContentFilter.ALL) }
+    var filter by remember {
+        mutableStateOf(
+            TvContentFilter.entries.firstOrNull {
+                it.name == focusMemory.recall("home-filter")
+            } ?: TvContentFilter.ALL,
+        )
+    }
+    val restoringItem = remember { focusMemory.recall("home") }
+    val listState = rememberLazyListState()
     val focusColor = rememberTvFocusColor()
     val selected = remember(library, filter) {
         library.anime.filter { filter.includes(it.format) }
@@ -72,12 +84,38 @@ fun TvHomeScreen(
     }
     val movies = selected.filter { it.format.equals("MOVIE", ignoreCase = true) }
     val series = selected.filterNot { it.format.equals("MOVIE", ignoreCase = true) }
+    val rows = buildList {
+        add("filters")
+        if (featured != null) add("hero")
+        if (error != null) add("error")
+        if (inProgress.isNotEmpty()) addAll(listOf("continue-title", "continue-row"))
+        if (series.isNotEmpty()) addAll(listOf("series-title", "series-row"))
+        if (movies.isNotEmpty()) addAll(listOf("movies-title", "movies-row"))
+        if (selected.isEmpty()) add("empty")
+        add("search")
+    }
+    LaunchedEffect(restoringItem) {
+        val targetRow = when {
+            restoringItem == "hero:${featured?.id}" -> "hero"
+            restoringItem?.startsWith("continue:") == true -> "continue-row"
+            restoringItem?.startsWith("anime:") == true -> {
+                val id = restoringItem.removePrefix("anime:")
+                if (movies.any { it.id == id }) "movies-row"
+                else if (series.any { it.id == id }) "series-row"
+                else null
+            }
+            else -> null
+        }
+        val index = rows.indexOf(targetRow)
+        if (index >= 0) listState.scrollToItem(index)
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         colors = SurfaceDefaults.colors(containerColor = Color(0xFF0B0D14)),
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 32.dp, vertical = 20.dp),
@@ -88,12 +126,21 @@ fun TvHomeScreen(
                     selected = filter,
                     focusMemory = focusMemory,
                     screenKey = "home",
-                    onSelect = { filter = it },
+                    onSelect = {
+                        filter = it
+                        focusMemory.remember("home-filter", it.name)
+                    },
                 )
             }
 
             if (featured != null) {
                 item(key = "hero:${featured.id}") {
+                    val heroFocus = remember(featured.id) { FocusRequester() }
+                    LaunchedEffect(restoringItem, featured.id) {
+                        if (restoringItem == "hero:${featured.id}") {
+                            runCatching { heroFocus.requestFocus() }
+                        }
+                    }
                     var focused by remember(featured.id) { mutableStateOf(false) }
                     val shape = RoundedCornerShape(20.dp)
                     Box(
@@ -102,6 +149,7 @@ fun TvHomeScreen(
                             .height(340.dp)
                             .clip(shape)
                             .tvFocusIndication(focused, focusColor, shape)
+                            .focusRequester(heroFocus)
                             .clickable { onAnime(featured) }
                             .reportFocus {
                                 focused = it
