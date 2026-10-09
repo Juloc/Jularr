@@ -83,6 +83,7 @@ fun TvAnimeScreen(
     val context = LocalContext.current
     val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
     val focusColor = rememberTvFocusColor()
+    val heroFocus = remember(anime.id) { FocusRequester() }
     val chapters = anime.seasons.sortedBy { it.number }
     var selectedSeason by remember(anime.id) {
         mutableStateOf(
@@ -106,6 +107,10 @@ fun TvAnimeScreen(
     LaunchedEffect(anime.id, selectedSeason, restoreIndex) {
         if (restoreIndex >= 0) {
             gridState.scrollToItem(restoreIndex + 2)
+        } else {
+            gridState.scrollToItem(0)
+            withFrameNanos { }
+            runCatching { heroFocus.requestFocus() }
         }
     }
 
@@ -185,7 +190,10 @@ fun TvAnimeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (activeEpisode != null) {
-                            Button(onClick = { onPlayEpisode(activeEpisode) }) {
+                            Button(
+                                onClick = { onPlayEpisode(activeEpisode) },
+                                modifier = Modifier.focusRequester(heroFocus),
+                            ) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
                                 Text(
                                     " " + stringResource(
@@ -207,7 +215,11 @@ fun TvAnimeScreen(
                                 )
                             }
                         }
-                        Button(onClick = onBack) {
+                        Button(
+                            onClick = onBack,
+                            modifier = if (activeEpisode == null)
+                                Modifier.focusRequester(heroFocus) else Modifier,
+                        ) {
                             Text(stringResource(R.string.tv_action_back))
                         }
                     }
