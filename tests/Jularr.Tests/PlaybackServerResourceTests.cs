@@ -365,6 +365,53 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task HlsProducerPausesAtHighWaterAndResumesWhenSegmentsAreConsumed()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var readings = new List<PlaybackTranscodeSample>();
+        var session = await cache.Manager.StartAsync(
+            Guid.NewGuid(), "profile-0", 0, cache.Arguments, null, CancellationToken.None, readings.Add);
+        var encoder = cache.Processes.Single();
+
+        encoder.Report(new PlaybackTranscodeSample(6, 60, 20));
+        Assert.IsFalse(encoder.IsPaused, "Initial segments are encoded quickly to fill the startup buffer.");
+
+        cache.Time.Advance(TimeSpan.FromSeconds(1));
+        encoder.Report(new PlaybackTranscodeSample(6, 60, 34));
+        Assert.IsTrue(encoder.IsPaused, "FFmpeg stops once enough video has been produced ahead of demand.");
+
+        cache.Time.Advance(TimeSpan.FromMinutes(1));
+        Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, session.EpisodeId, session.ProfileId, "index.m3u8"));
+        Assert.IsTrue(encoder.IsPaused, "Polling the playlist while paused does not consume video.");
+
+        File.WriteAllBytes(Path.Combine(cache.SessionDirectory(session.SessionId), "segment-00005.m4s"), [1]);
+        Assert.IsNotNull(cache.Manager.GetAsset(session.SessionId, session.EpisodeId, session.ProfileId, "segment-00005.m4s"));
+        Assert.IsFalse(encoder.IsPaused, "The viewer's progress to segment six reaches low-water and wakes FFmpeg.");
+
+        cache.Time.Advance(TimeSpan.FromSeconds(1));
+        encoder.Report(new PlaybackTranscodeSample(0.1, 60, 36));
+        Assert.IsNull(readings[^1].Speed, "The first resumed output sample cannot measure an active interval.");
+        cache.Time.Advance(TimeSpan.FromSeconds(1));
+        encoder.Report(new PlaybackTranscodeSample(0.1, 60, 37.5));
+        Assert.AreEqual(1.5, readings[^1].Speed, "Paused wall time does not make a sustainable encoder appear too slow.");
+    }
+
+    [TestMethod]
+    public async Task HlsProducerFallsBackWhenPauseIsUnsupported()
+    {
+        await using var cache = await CacheAsync(
+            budgetBytes: 1L << 30, startOutcome: _ => new FakeHlsProcess { SupportsPacing = false });
+        var readings = new List<PlaybackTranscodeSample>();
+        await cache.Manager.StartAsync(Guid.NewGuid(), "profile-0", 0, cache.Arguments, null, CancellationToken.None, readings.Add);
+        var encoder = cache.Processes.Single();
+
+        encoder.Report(new PlaybackTranscodeSample(2, 60, 90));
+
+        Assert.IsFalse(encoder.IsPaused);
+        Assert.AreEqual(2, readings.Single().Speed, "A non-Linux host does not lose the normal encoder speed measurement.");
+    }
+
+    [TestMethod]
     public async Task AForeignFolderIsNeitherAcceptedNorSweptAndAFailedStartLeavesNoDirectory()
     {
         var kit = PlaybackServerTestKit.Create();
@@ -1020,7 +1067,7 @@ public sealed class PlaybackServerResourceTests
         }
     }
 
-    private sealed class FakeHlsProcess : IHlsEncoderProcess
+    private sealed class FakeHlsProcess : IHlsEncoderProcess, IHlsPausableEncoderProcess, IFfmpegProgressSource
     {
         public bool HasExited { get; set; }
 
@@ -1031,6 +1078,25 @@ public sealed class PlaybackServerResourceTests
         public bool Killed { get; private set; }
 
         public bool Disposed { get; private set; }
+
+        public bool IsPaused { get; private set; }
+
+        public bool SupportsPacing { get; set; } = true;
+
+        public event Action<PlaybackTranscodeSample>? ProgressReported;
+
+        public void Report(PlaybackTranscodeSample sample) => ProgressReported?.Invoke(sample);
+
+        public bool TrySetPaused(bool paused)
+        {
+            if (!SupportsPacing || HasExited)
+            {
+                return false;
+            }
+
+            IsPaused = paused;
+            return true;
+        }
 
         public void Kill()
         {
