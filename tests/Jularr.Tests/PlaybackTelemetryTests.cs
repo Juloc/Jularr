@@ -258,6 +258,32 @@ public sealed class PlaybackTelemetryTests
     }
 
     [TestMethod]
+    public void DeferredSameViewerStreamReplacementCountsOnlyOneExternalConsumer()
+    {
+        var store = new PlaybackStreamSessionStore(new ManualTimeProvider(s_start));
+        var target = new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid());
+        var plan = Transcode(Video()) with
+        {
+            Quality = new PlaybackQualityResolution(
+                PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote,
+                8_000, PlaybackLimitSource.Network, 12_000, 8_000)
+        };
+        var selections = new PlaybackStreamSelections(
+            null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web");
+        var original = store.Create(Reader, target, Guid.NewGuid(), "/media/a.mkv", 1400, plan, selections);
+        var replacement = store.Create(
+            Reader, target, Guid.NewGuid(), "/media/a.mkv", 1400, plan,
+            selections, replaces: original.Id, deferRetirement: true);
+
+        Assert.AreSame(original, replacement.Replacing);
+        Assert.AreEqual(1, store.ActiveExternalDeliveries(),
+            "A make-before-break quality switch must not halve the other viewers' WAN shares.");
+
+        Assert.AreEqual(original.Id, store.CompleteReplacement(replacement));
+        Assert.AreEqual(1, store.ActiveExternalDeliveries());
+    }
+
+    [TestMethod]
     public void AFloodOfReportsStillGivesTheRightEvidence()
     {
         var telemetry = new PlaybackSessionTelemetry();
