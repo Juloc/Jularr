@@ -100,7 +100,8 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
                 HlsCachePath ?? "",
                 ToBytes(CacheBudgetGiB),
                 ToBytes(FreeSpaceFloorGiB),
-                BufferPreset),
+                BufferPreset,
+                store.Current.WanUploadBudgetKbps),
             cancellationToken);
         if (!result.Succeeded)
         {
