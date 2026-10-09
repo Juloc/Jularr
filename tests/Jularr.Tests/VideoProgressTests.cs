@@ -161,9 +161,9 @@ public sealed class VideoProgressTests
         var progress = new VideoProgressService(db);
 
         Assert.AreEqual(0, (await progress.GetRecentResumeDemandAsync([], DateTime.UtcNow)).Count);
-        await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
             () => progress.GetRecentResumeDemandAsync(Enumerable.Range(1, 101).Select(i => (long)i).ToArray(), DateTime.UtcNow));
-        await Assert.ThrowsExceptionAsync<ArgumentException>(
+        await Assert.ThrowsExactlyAsync<ArgumentException>(
             () => progress.GetRecentResumeDemandAsync([1L], DateTime.Now));
     }
 
