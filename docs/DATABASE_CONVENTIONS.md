@@ -175,3 +175,54 @@ Canonical Work identity (owner decision, mandatory):
 - **Target IDs:** ordinary internal entity IDs default to bigint, including Account, Profile and newly canonical MediaCore nodes. FKs use exact target-specific `...Id` names; persisted fixed enums map from C# `: byte` to PostgreSQL `smallint` with a seeded `...Types` table and real FK.
 - **Target junctions:** use `SingularFirst + PluralSecond` (e.g. `AccountProfiles`, `FranchiseWorks`), except documented semantic entities such as `WorkRelations`.
 - **Target local authentication:** required unique Account email, non-unique display names, Account/Profile split and separate authenticator/session tables. Profile-owned state references `ProfileId`, never Account credentials.
+
+## Mandatory outward-facing pagination and bounded reads (owner decision)
+
+**No unbounded result lists leave the backend.** Every query that returns a collection to an HTTP API, Razor page, PWA, Android/TV client or other interactive external caller **must** use *server-side* pagination. This applies even to admin, search, watchlist, history, metadata, jobs, downloads, library, accounts and episode/chapter lists. A Razor Page calls the same bounded backend service directly; it is not allowed to load all database rows then paginate only in UI. The user approves **no blanket list-endpoint exceptions**. A single-entity read by ID is not a list. A genuinely fixed, explicitly capped nested payload is not a replacement for a potentially unbounded independent list endpoint; split any growing child collection into its own paginated read. Bulk/internal jobs process bounded batches and cannot justify returning an unlimited HTTP response.
+
+### One consistent list contract
+
+- **API inputs:** `limit`, `cursor` and only explicitly supported fixed `filter`/`sort` variants. Default page size **25**, maximum **100**, minimum **1**. Values outside the contract return a localized `400` problem response; never treat `limit=0` or an omitted limit as "all".
+- **Service inputs:** reuse one small `PageRequest` (validated size + cursor) and one `PageResult<T>` (`Items`, `NextCursor`, `HasMore`). Every externally used `Read*List*`/`List*` service operation accepts or internally creates a bounded `PageRequest`. Query-specific DTO projections remain explicit. This is a tiny shared DTO/validation utility, **not** a generic SQL/ORM/query generator.
+- **Default database strategy:** keyset/seek pagination with a **fully unique, deterministic** `ORDER BY` (usually selected sort column + `Id` as tie-breaker) and a matching composite index if proven useful. Start/end direction and NULL sort semantics must be explicit. Read at most `limit + 1` rows; return at most `limit`, compute `HasMore` from the extra row and issue a cursor derived from the **last returned item**. A page is bounded **in PostgreSQL** via `LIMIT @FetchLimit`.
+- **Offset use:** `OFFSET` is allowed only when random page jumps are a real requirement and the requested offset is bounded; otherwise keyset is preferred. Explain measured impact on large tables and concurrent inserts/deletes. Do not expose an arbitrary huge offset or numeric offset as a default fallback.
+- **Cursor:** opaque, validated and integrity-protected using existing ASP.NET Core Data Protection or another *existing* centrally owned token facility. Bind cursor data to the selected order/filter and current Account/Profile security scope (or revalidate all of them against request); reject malformed, stale or mismatched cursors as a structured client error. Never trust a cursor as authorization. Do not put raw SQL snippets, untrusted column names or credentials into cursors.
+- **Order of operations:** authorize and scope by Account/Profile, filter **in SQL**, then order, then paginate, then select/map only the needed DTO fields. Avoid joins that multiply roots before the page; page root identifiers first before aggregating images, tracks, availability etc. N+1 and `ToList`-then-`Skip` are forbidden.
+- **Counts:** a separate filtered `COUNT(*)` is optional, only when an actual UX requires `TotalCount`. Do not execute it automatically for every page, and never infer `HasMore` from a `COUNT` over an independently moving dataset.
+- **SQL statement style:** static multiline statement, `@Named` bound typed parameters, one selected column per line, table-qualified columns in multi-table statements; no SQL interpolation or concatenation. Different allowed sort variants should use different reviewed static statements.
+- **Client behavior:** stable shape even for an empty page (`Items = []`, `HasMore = false`, `NextCursor = null`); client requests the next page only as needed, does not silently download every page in parallel. Page limits, cursor validation, filtering and authorization are enforced server-side.
+
+**Example: a keyset-based user list**. This is a target-schema example for `AdminAccountService.ReadUsersV1`; `LastId` defaults to zero for the first page because generated internal ids are positive. `FetchLimit` is the validated `min(limit,100) + 1`. Both are explicitly bound by `SqlParams` / named Npgsql parameters; the query text stays **static**:
+
+```sql
+SELECT
+    "Id",
+    "Email",
+    "DisplayName",
+    "AccountRoleTypeId",
+    "IsEnabled"
+FROM
+    "Accounts"
+WHERE
+    "Id" > @LastId
+ORDER BY
+    "Id" ASC
+LIMIT
+    @FetchLimit
+```
+
+For `CreatedAt DESC` lists, paginate by the pair `("CreatedAt", "Id")`, not just `CreatedAt`. A cursor containing a last-seen key is an implementation detail, not a replacement for stable ordering and server-side authorization. Paged endpoints returning individual WorkCards may include explicitly bounded language or small status arrays; growing episodes, chapters, releases, operations and history get dedicated paginated access.
+
+### Other shared API / database correctness practices
+
+1. **Explicit outward DTOs and field allowlists.** Do not expose EF/domain entities, credentials, internal state or secret fields directly. User and Admin `ReadUserV1` may use **different SELECT projections** and access checks. Public `UpdateUserV1` accepts only permitted change fields; shared internal mutation owner performs read-for-update if required, verifies invariants and writes in one transaction.
+2. **HTTP/API and Razor use the same backend operation.** Direct DI call from Razor, HTTP wrapper for remote clients; no internal HTTP loop. Keep `/api/v1/account` for the own-account singleton; list routes (e.g. `/api/v1/admin/accounts`) take paging.
+3. **Validate at the boundary, verify again at the mutation owner and let PostgreSQL enforce structural invariants.** For PATCH, distinguish omitted fields from explicit null; no arbitrary client-selected columns. Use typed operation-specific DTOs; keep AccountId and ProfileId distinct.
+4. **Optimistic concurrency where user edits may race** (version/check in UPDATE and conflict result), or `FOR UPDATE` / appropriate isolation for short transactional state transitions. Never hold transactions over network I/O/filesystem/AI. Idempotency keys protect repeatable external mutations where retries can duplicate effects.
+5. **Use async I/O and propagate `CancellationToken` and real timeouts** to SQL, providers, jobs. Fail/timeout clearly, and keep expensive queries limited and index-supported.
+6. **Uniform HTTP status and `ProblemDetails` errors** with stable error codes and localized client-safe messages; do not return exception messages/stack traces or secrets. Use `400` for invalid paging input, `401` unauthenticated, `403` denied, `404` unknown/hidden resources, `409` for applicable conflicts, `429` for rate limits. Preserve Razor anti-forgery for state-changing forms.
+7. **Rate limiting and resource budgets** by Account/IP/provider and operation cost for externally accessible or costly routes; limits protect availability but do not substitute for permissions.
+8. **Explicit query/transaction tests:** page 1/last/empty, invalid sizes/cursors, filters/sorts changed mid-pagination, duplicate sort keys, unauthorized scope, new/deleted rows between pages, pagination indexes with representative data, null/enum SQL mapping, read-only projections and concurrent conflicting updates. Review actual PostgreSQL plans for expensive paths.
+
+Microsoft references for these patterns: [Web API design](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design), [EF Core pagination](https://learn.microsoft.com/en-us/ef/core/querying/pagination), [EF Core efficient querying](https://learn.microsoft.com/en-us/ef/core/performance/efficient-querying), [ASP.NET Core Problem Details](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/error-handling-api?view=aspnetcore-10.0), [Rate limiting](https://learn.microsoft.com/en-us/aspnet/core/performance/rate-limit?view=aspnetcore-10.0). These are general recommendations; Jularr's mandatory paging, 25/100 caps and service naming are owner product rules.
+
