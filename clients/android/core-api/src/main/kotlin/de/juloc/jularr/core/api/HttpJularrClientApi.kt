@@ -4,6 +4,7 @@ import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.AnimeSummary
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientSegmentDescriptor
+import de.juloc.jularr.core.model.ClientPlayerControls
 import de.juloc.jularr.core.model.ClientMediaSegment
 import de.juloc.jularr.core.model.ClientTrickplayDescriptor
 import de.juloc.jularr.core.model.ClientCapabilities
@@ -561,6 +562,16 @@ class HttpJularrClientApi(
                 thumbnailCount = descriptor.intOrNull("thumbnailCount"),
                 spriteUrls = descriptor.optJSONArray("spriteUrls")?.let { sprites ->
                     (0 until sprites.length()).map { index -> sprites.getString(index) }
+                }.orEmpty(),
+            )
+        },
+        controls = objectOrNull("controls")?.let { controls ->
+            ClientPlayerControls(
+                playbackSpeeds = controls.optJSONArray("playbackSpeeds")?.let { speeds ->
+                    (0 until speeds.length()).map { index -> speeds.getDouble(index).toFloat() }
+                }.orEmpty(),
+                qualityCaps = controls.optJSONArray("qualityCaps")?.let { caps ->
+                    (0 until caps.length()).map { index -> caps.getString(index) }
                 }.orEmpty(),
             )
         },
