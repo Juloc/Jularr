@@ -91,11 +91,11 @@ public sealed class PlexOnDemandTargetResolver(
                     continue;
                 }
 
-                foreach (var item in candidates)
+                var matches = await matcher.ResolvePageAsync(
+                    candidates, cancellationToken);
+                foreach (var match in matches)
                 {
-                    if (item.Type is not ("movie" or "show") ||
-                        await matcher.ResolveWorkIdAsync(
-                            item, cancellationToken) != workId)
+                    if (match.WorkId != workId)
                     {
                         continue;
                     }
@@ -103,7 +103,7 @@ public sealed class PlexOnDemandTargetResolver(
                     var destination = await webDestination.ResolveAsync(
                         caller,
                         server.MachineIdentifier,
-                        item.RatingKey,
+                        match.Item.RatingKey,
                         workId,
                         clientIdentifier,
                         cancellationToken);
