@@ -110,6 +110,62 @@ public sealed class VideoProgressTests
     }
 
     [TestMethod]
+    public async Task ResumeDemand_AggregatesRecentProfilesWithoutExposingIdentities()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var root = new LibraryRoot { Name = "Video", Path = $"/tmp/jularr-demand-{Guid.NewGuid():N}" };
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Movie" };
+        var series = new Work { MediaType = WorkMediaType.Series, CanonicalTitle = "Series" };
+        db.AddRange(root, movie, series);
+        await db.SaveChangesAsync();
+
+        var episode = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 1 };
+        db.WorkEpisodes.Add(episode);
+        await db.SaveChangesAsync();
+        await AddPlayableAsync(db, root, movie, null, "movie.mkv");
+        await AddPlayableAsync(db, root, series, episode, "episode.mkv");
+
+        var progress = new VideoProgressService(db);
+        var film = MediaProgressTarget.Movie(movie.Id);
+        var tv = MediaProgressTarget.Episode(series.Id, episode.Id);
+        foreach (var viewer in new[] { "first", "second", "old" })
+        {
+            await progress.UpdateAsync(viewer, film, new MediaProgressUpdate(60_000, 120_000, false));
+        }
+
+        await progress.UpdateAsync("short", film, new MediaProgressUpdate(15_000, 120_000, false));
+        await progress.UpdateAsync("finished", film, new MediaProgressUpdate(120_000, 120_000, true));
+        await progress.UpdateAsync("first", tv, new MediaProgressUpdate(60_000, 120_000, false));
+        await progress.UpdateAsync("second", tv, new MediaProgressUpdate(70_000, 120_000, false));
+
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE \"MediaProgress\" SET \"UpdatedAt\" = {DateTime.UtcNow.AddDays(-40)} WHERE \"ProfileId\" = {"old"} AND \"WorkId\" = {movie.Id}");
+
+        var counts = await progress.GetRecentResumeDemandAsync(
+            [movie.Id, movie.Id, series.Id],
+            DateTime.UtcNow.AddDays(-14));
+
+        Assert.AreEqual(2, counts.Count);
+        Assert.AreEqual(2L, counts.Single(item => item.WorkId == movie.Id).ResumeProfiles);
+        var episodeCount = counts.Single(item => item.WorkId == series.Id);
+        Assert.AreEqual(episode.Id, episodeCount.WorkEpisodeId);
+        Assert.AreEqual(2L, episodeCount.ResumeProfiles);
+    }
+
+    [TestMethod]
+    public async Task ResumeDemand_BoundsWorkBatchAndRequiresUtcCutoff()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var progress = new VideoProgressService(db);
+
+        Assert.AreEqual(0, (await progress.GetRecentResumeDemandAsync([], DateTime.UtcNow)).Count);
+        await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(
+            () => progress.GetRecentResumeDemandAsync(Enumerable.Range(1, 101).Select(i => (long)i).ToArray(), DateTime.UtcNow));
+        await Assert.ThrowsExceptionAsync<ArgumentException>(
+            () => progress.GetRecentResumeDemandAsync([1L], DateTime.Now));
+    }
+
+    [TestMethod]
     public async Task ContinueWatchingProjectsMovieAndTvFromOneOwner()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
