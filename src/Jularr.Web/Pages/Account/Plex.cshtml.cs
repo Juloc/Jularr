@@ -280,11 +280,42 @@ public sealed class PlexModel(
 
         attempt.VerifiedPlexAccountId = verified.AccountId;
         await db.SaveChangesAsync(cancellationToken);
-        await mediaConnections.SaveVerifiedAsync(
-            accountId, verified.AccountId,
-            null, verified.AccessToken, cancellationToken);
 
-        if (!await ConsumeAttemptAsync(attempt, cancellationToken))
+        // Claim before writing the grant so concurrent callbacks cannot restore a revoked connection.
+        var claimed = await db.PlexLoginAttempts
+            .Where(x => x.Id == attempt.Id &&
+                x.Purpose == "media" &&
+                x.StartedAccountId == accountId &&
+                x.VerifiedPlexAccountId == verified.AccountId &&
+                x.ExpiresAtUtc > DateTime.UtcNow)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(x => x.Purpose, "media-final"),
+                cancellationToken);
+        if (claimed != 1)
+        {
+            return BadRequest();
+        }
+
+        try
+        {
+            await mediaConnections.SaveVerifiedAsync(
+                accountId, verified.AccountId,
+                null, verified.AccessToken, cancellationToken);
+        }
+        catch (IOException)
+        {
+            await db.PlexLoginAttempts
+                .Where(x => x.Id == attempt.Id && x.Purpose == "media-final")
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(x => x.Purpose, "media"),
+                    CancellationToken.None);
+            MediaFlowPending = true;
+            MessageKey = "account.plex.unavailable";
+            return Page();
+        }
+
+        if (!await ConsumeAttemptAsync(
+            attempt, cancellationToken, "media-final"))
         {
             return BadRequest();
         }
@@ -620,10 +651,12 @@ public sealed class PlexModel(
 
     private async Task<bool> ConsumeAttemptAsync(
         PlexLoginAttempt attempt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? purpose = null)
     {
         var deleted = await db.PlexLoginAttempts.Where(
             x => x.Id == attempt.Id &&
+                x.Purpose == (purpose ?? attempt.Purpose) &&
                 x.VerifiedPlexAccountId != null &&
                 x.ExpiresAtUtc > DateTime.UtcNow)
             .ExecuteDeleteAsync(cancellationToken);
