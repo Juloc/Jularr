@@ -595,6 +595,29 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task PacingSnapshotIsReadOnlyAndNeverLeaksAcrossProfiles()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var session = await cache.Manager.StartAsync(
+            Guid.NewGuid(), "viewer-a", 0, cache.Arguments, null, CancellationToken.None,
+            remainingDurationSeconds: 300);
+        Assert.IsNull(cache.Manager.GetPacingSnapshot(session.SessionId, "viewer-b"));
+        var initial = cache.Manager.GetPacingSnapshot(session.SessionId, "viewer-a");
+        Assert.IsNotNull(initial);
+        Assert.IsNull(initial.ProducedAheadSeconds);
+        Assert.IsFalse(initial.IsPaused);
+
+        cache.Processes[0].Report(new PlaybackTranscodeSample(5, 50, 34));
+        var full = cache.Manager.GetPacingSnapshot(session.SessionId, "viewer-a");
+        Assert.IsNotNull(full);
+        Assert.IsTrue(full.IsPaused);
+        Assert.AreEqual(34 - HlsPlaybackSessionManager.SegmentSeconds, full.ProducedAheadSeconds);
+
+        cache.Manager.Stop(session.SessionId, "viewer-a");
+        Assert.IsNull(cache.Manager.GetPacingSnapshot(session.SessionId, "viewer-a"));
+    }
+
+    [TestMethod]
     public async Task AForeignFolderIsNeitherAcceptedNorSweptAndAFailedStartLeavesNoDirectory()
     {
         var kit = PlaybackServerTestKit.Create();
