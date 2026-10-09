@@ -577,6 +577,14 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
                 return new PlaybackAdaptationDecision(
                     PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.ServerEgress);
             }
+
+            if (decision.Advice == PlaybackAdaptationAdvice.StepUp &&
+                session.Plan.Quality.LimitSource == PlaybackLimitSource.ServerEgress &&
+                session.Plan.Quality.LimitKbps is { } currentLimit &&
+                limit <= currentLimit + Math.Max(128, currentLimit / 20))
+            {
+                return PlaybackAdaptationDecision.None;
+            }
         }
 
         return decision.Advice == PlaybackAdaptationAdvice.StepUp &&
