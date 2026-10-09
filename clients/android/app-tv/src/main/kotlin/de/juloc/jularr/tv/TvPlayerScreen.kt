@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -129,6 +130,7 @@ fun TvPlayerScreen(
     var trackSelectionError by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(player.player.isPlaying) }
     var playbackEnded by remember { mutableStateOf(false) }
+    var focusedLearningWord by remember { mutableStateOf(true) }
     var positionMs by remember { mutableStateOf(player.player.currentPosition.coerceAtLeast(0)) }
     var durationMs by remember { mutableStateOf(player.player.duration.takeIf { it > 0 } ?: 0L) }
     var bufferedPositionMs by remember { mutableStateOf(player.player.bufferedPosition.coerceAtLeast(0L)) }
@@ -378,9 +380,8 @@ fun TvPlayerScreen(
                     Key.DirectionCenter,
                     Key.Enter,
                     -> {
-                        if ((uiState.controlsVisible &&
-                                uiState.learningLayer == TvLearningLayer.CLOSED) ||
-                            uiState.learningLayer == TvLearningLayer.WORD
+                        if (uiState.controlsVisible ||
+                            uiState.learningLayer != TvLearningLayer.CLOSED
                         ) {
                             return@onPreviewKeyEvent false
                         }
@@ -391,8 +392,10 @@ fun TvPlayerScreen(
                     }
 
                     Key.DirectionLeft -> {
-                        if (uiState.controlsVisible &&
-                            uiState.learningLayer == TvLearningLayer.CLOSED
+                        if ((uiState.controlsVisible &&
+                                uiState.learningLayer == TvLearningLayer.CLOSED) ||
+                            (uiState.learningLayer != TvLearningLayer.CLOSED &&
+                                (!focusedLearningWord || currentCue?.tokens.isNullOrEmpty()))
                         ) {
                             return@onPreviewKeyEvent false
                         }
@@ -404,8 +407,10 @@ fun TvPlayerScreen(
                     }
 
                     Key.DirectionRight -> {
-                        if (uiState.controlsVisible &&
-                            uiState.learningLayer == TvLearningLayer.CLOSED
+                        if ((uiState.controlsVisible &&
+                                uiState.learningLayer == TvLearningLayer.CLOSED) ||
+                            (uiState.learningLayer != TvLearningLayer.CLOSED &&
+                                (!focusedLearningWord || currentCue?.tokens.isNullOrEmpty()))
                         ) {
                             return@onPreviewKeyEvent false
                         }
@@ -629,6 +634,7 @@ fun TvPlayerScreen(
                         null
                     },
                     wordFocusRequester = learningOverlayFocus,
+                    onWordFocusChanged = { focusedLearningWord = it },
                     modifier = Modifier.align(Alignment.Center),
                 )
             }
@@ -1150,6 +1156,7 @@ private fun LearningOverlay(
     layer: TvLearningLayer,
     focusedWordIndex: Int,
     wordFocusRequester: FocusRequester,
+    onWordFocusChanged: (Boolean) -> Unit,
     onFocusWord: (Int) -> Unit,
     onOpenWord: (Int) -> Unit,
     onRepeatLine: () -> Unit,
@@ -1175,11 +1182,11 @@ private fun LearningOverlay(
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(cue.tokens) { index, token ->
                 Button(
-                    modifier = if (index == focusedWordIndex) {
+                    modifier = (if (index == focusedWordIndex) {
                         Modifier.focusRequester(wordFocusRequester)
                     } else {
                         Modifier
-                    },
+                    }).onFocusChanged { if (it.isFocused) onWordFocusChanged(true) },
                     onClick = {
                         onFocusWord(index)
                         onOpenWord(index)
@@ -1208,21 +1215,31 @@ private fun LearningOverlay(
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(
-                modifier = if (cue.tokens.isEmpty()) Modifier.focusRequester(wordFocusRequester) else Modifier,
+                modifier = (if (cue.tokens.isEmpty()) Modifier.focusRequester(wordFocusRequester) else Modifier)
+                    .onFocusChanged { if (it.isFocused) onWordFocusChanged(false) },
                 onClick = onRepeatLine,
             ) {
                 Text("Repeat line")
             }
             if (layer == TvLearningLayer.WORD && focused?.termId != null) {
-                Button(onClick = onMarkKnown) {
+                Button(
+                    modifier = Modifier.onFocusChanged { if (it.isFocused) onWordFocusChanged(false) },
+                    onClick = onMarkKnown,
+                ) {
                     Text("Known")
                 }
-                Button(onClick = onAddToLearning) {
+                Button(
+                    modifier = Modifier.onFocusChanged { if (it.isFocused) onWordFocusChanged(false) },
+                    onClick = onAddToLearning,
+                ) {
                     Text("Learning")
                 }
             }
             if (onOpenOnPhone != null) {
-                Button(onClick = onOpenOnPhone) {
+                Button(
+                    modifier = Modifier.onFocusChanged { if (it.isFocused) onWordFocusChanged(false) },
+                    onClick = onOpenOnPhone,
+                ) {
                     Text("Open on phone")
                 }
             }
