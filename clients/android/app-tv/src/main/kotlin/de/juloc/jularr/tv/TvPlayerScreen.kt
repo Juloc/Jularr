@@ -192,7 +192,7 @@ fun TvPlayerScreen(
         )
     }
 
-    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, companionVisible, trackPanel) {
+    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, uiState.focusedWordIndex, companionVisible, trackPanel) {
         if (companionVisible) return@LaunchedEffect
         val target = when {
             trackPanel != null -> trackPanelFocus
@@ -584,9 +584,8 @@ fun TvPlayerScreen(
                     } else {
                         null
                     },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .focusRequester(learningOverlayFocus),
+                    wordFocusRequester = learningOverlayFocus,
+                    modifier = Modifier.align(Alignment.Center),
                 )
             }
 
@@ -981,6 +980,7 @@ private fun LearningOverlay(
     cue: SubtitleCue,
     layer: TvLearningLayer,
     focusedWordIndex: Int,
+    wordFocusRequester: FocusRequester,
     onFocusWord: (Int) -> Unit,
     onOpenWord: (Int) -> Unit,
     onRepeatLine: () -> Unit,
@@ -995,8 +995,7 @@ private fun LearningOverlay(
         modifier = modifier
             .fillMaxWidth(0.86f)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
-            .padding(32.dp)
-            .focusable(),
+            .padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text(
@@ -1007,6 +1006,11 @@ private fun LearningOverlay(
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(cue.tokens) { index, token ->
                 Button(
+                    modifier = if (index == focusedWordIndex) {
+                        Modifier.focusRequester(wordFocusRequester)
+                    } else {
+                        Modifier
+                    },
                     onClick = {
                         onFocusWord(index)
                         onOpenWord(index)
@@ -1034,7 +1038,10 @@ private fun LearningOverlay(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = onRepeatLine) {
+            Button(
+                modifier = if (cue.tokens.isEmpty()) Modifier.focusRequester(wordFocusRequester) else Modifier,
+                onClick = onRepeatLine,
+            ) {
                 Text("Repeat line")
             }
             if (layer == TvLearningLayer.WORD && focused?.termId != null) {
