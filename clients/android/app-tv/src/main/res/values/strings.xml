@@ -70,6 +70,8 @@
     <string name="tv_player_speed">Playback speed</string>
     <string name="tv_player_speed_value">Playback speed · %1$sx</string>
     <string name="tv_player_scenes">Scenes</string>
+    <string name="tv_player_repeat_line">Repeat current line</string>
+    <string name="tv_player_learn_line">Learn current line</string>
     <string name="tv_player_scene_seek_to">Seek to %1$s</string>
     <string name="tv_player_seek_hint">Seek to %1$s · OK to confirm · Back to cancel</string>
     <string name="tv_player_finished">Episode finished</string>
