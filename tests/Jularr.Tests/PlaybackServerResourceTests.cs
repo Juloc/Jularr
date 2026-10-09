@@ -554,6 +554,47 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task LinuxFfmpegSuspendResume_CompletesWithoutLosingTheProcess()
+    {
+        if (!OperatingSystem.IsLinux() || !File.Exists("/usr/bin/ffmpeg"))
+        {
+            return;
+        }
+
+        using var process = FfmpegHlsProcess.Start(
+        [
+            "-v", "error", "-nostdin", "-re",
+            "-f", "lavfi", "-i", "testsrc2=size=64x64:rate=10:duration=3",
+            "-c:v", "mpeg4", "-f", "null", "-"
+        ]);
+
+        try
+        {
+            await Task.Delay(200);
+            Assert.IsTrue(process.TrySetPaused(true));
+            await Task.Delay(400);
+            Assert.IsFalse(process.HasExited);
+            Assert.IsTrue(process.TrySetPaused(false));
+
+            var deadline = DateTime.UtcNow.AddSeconds(8);
+            while (!process.HasExited && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.IsTrue(process.HasExited);
+            Assert.AreEqual(0, process.ExitCode);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill();
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task AForeignFolderIsNeitherAcceptedNorSweptAndAFailedStartLeavesNoDirectory()
     {
         var kit = PlaybackServerTestKit.Create();
