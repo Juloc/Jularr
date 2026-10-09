@@ -95,6 +95,7 @@ public sealed class EmbeddedSubtitleExtractor(
         MediaStreamInfo stream,
         CancellationToken cancellationToken)
     {
+        var format = stream.Codec is "ass" or "ssa" ? "ass" : "srt";
         var extraction = await processRunner.RunAsync(
             "ffmpeg",
             [
@@ -102,8 +103,8 @@ public sealed class EmbeddedSubtitleExtractor(
                 "-nostdin",
                 "-i", fullPath,
                 "-map", $"0:{stream.Index}",
-                "-c:s", "srt",
-                "-f", "srt",
+                "-c:s", stream.Codec == "ass" ? "copy" : format,
+                "-f", format,
                 "pipe:1"
             ],
             ProcessTimeout,
@@ -130,7 +131,7 @@ public sealed class EmbeddedSubtitleExtractor(
 
         return new EmbeddedSubtitleContent(
             BuildSourceKey(fullPath, stream.Index),
-            "srt",
+            format,
             extraction.Output);
     }
 

@@ -72,6 +72,58 @@
     font-weight: 600;
 }
 
+.playback-subtitle-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    padding: 0;
+}
+
+.playback-subtitle-cue,
+.player-subtitle-positioned-cue {
+    max-width: 100%;
+    padding: 5px 10px;
+    border-radius: 10px;
+    background: var(--player-subtitle-bg);
+    color: var(--player-subtitle-text);
+    text-align: center;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+    text-shadow: 0 2px 4px #000;
+}
+
+.player-subtitle-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.player-subtitle-positioned-layer {
+    position: absolute;
+    inset: 0;
+}
+
+.player-subtitle-positioned-layer[hidden] {
+    display: none;
+}
+
+.player-subtitle-positioned-cue {
+    position: absolute;
+    max-width: min(85%, 800px);
+    width: max-content;
+    font-size: clamp(15px, 2.2vw, var(--player-playback-subtitle-size));
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.player-subtitle-positioned-layer[data-subtitle-layer="secondary"] .player-subtitle-positioned-cue {
+    font-size: clamp(14px, 2vw, 20px);
+    font-weight: 600;
+}
+
 .playback-subtitle-overlay[hidden] {
     display: none;
 }
