@@ -142,6 +142,24 @@
                     </article>
                 }
             </div>
+            @if (Model.FranchisePageCount > 1)
+            {
+                <nav class="inline-actions" aria-label="@ui["admin.history.pagerAria"]">
+                    @if (Model.CurrentFranchisePage > 1)
+                    {
+                        <a class="button"
+                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage - 1)"
+                           rel="prev">@ui["admin.history.page.previous"]</a>
+                    }
+                    <span aria-current="page">@Model.CurrentFranchisePage / @Model.FranchisePageCount</span>
+                    @if (Model.CurrentFranchisePage < Model.FranchisePageCount)
+                    {
+                        <a class="button"
+                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage + 1)"
+                           rel="next">@ui["admin.history.page.next"]</a>
+                    }
+                </nav>
+            }
         </section>
     }
 </div>
