@@ -47,6 +47,9 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
     [BindProperty]
     public PlaybackBufferPreset BufferPreset { get; set; }
 
+    [BindProperty]
+    public int WanUploadBudgetMbps { get; set; }
+
     public int Running(PlaybackCostClass costClass) => slots.Active(costClass);
 
     /// <summary>The value of one per-class session field, addressed by the form field name the page posts.</summary>
@@ -90,6 +93,10 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
         // Out-of-range input stays out of range after the multiplication instead of overflowing into a valid value.
         long ToBytes(long gibibytes) => Math.Clamp(gibibytes, -1, 1_000_000_000) * PlaybackTranscodingSettings.BytesPerGiB;
 
+        var uploadKbps = WanUploadBudgetMbps is >= 0 and <= PlaybackTranscodingSettings.MaxWanUploadBudgetKbps / 1000
+            ? WanUploadBudgetMbps * 1000
+            : -1;
+
         var result = await store.SaveAsync(
             new PlaybackTranscodingSettings(
                 TranscodingEnabled,
@@ -101,7 +108,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
                 ToBytes(CacheBudgetGiB),
                 ToBytes(FreeSpaceFloorGiB),
                 BufferPreset,
-                store.Current.WanUploadBudgetKbps),
+                uploadKbps),
             cancellationToken);
         if (!result.Succeeded)
         {
@@ -128,6 +135,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
         CacheBudgetGiB = settings.CacheBudgetBytes / PlaybackTranscodingSettings.BytesPerGiB;
         FreeSpaceFloorGiB = settings.FreeSpaceFloorBytes / PlaybackTranscodingSettings.BytesPerGiB;
         BufferPreset = settings.BufferPreset;
+        WanUploadBudgetMbps = settings.WanUploadBudgetKbps / 1000;
     }
 
     private static string FormField(string settingsField) =>
@@ -140,6 +148,7 @@ public sealed class TranscodingModel(AppDbContext db, PlaybackTranscodingSetting
             nameof(PlaybackTranscodingSettings.CacheBudgetBytes) => nameof(CacheBudgetGiB),
             nameof(PlaybackTranscodingSettings.FreeSpaceFloorBytes) => nameof(FreeSpaceFloorGiB),
             nameof(PlaybackTranscodingSettings.BufferPreset) => nameof(BufferPreset),
+            nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps) => nameof(WanUploadBudgetMbps),
             _ => nameof(HlsCachePath)
         };
 
