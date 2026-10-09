@@ -95,6 +95,11 @@ public sealed class NewModel(
             TempData["Status"] = request.StatusMessage ?? Ui["requests.new.sent"];
             return RedirectToPage("/Requests/Index");
         }
+        catch (AcquisitionAccessDeniedException exception) when (exception.MessageKey is not null)
+        {
+            Error = Ui[exception.MessageKey];
+            return Page();
+        }
         catch (AcquisitionAccessDeniedException)
         {
             return Forbid();

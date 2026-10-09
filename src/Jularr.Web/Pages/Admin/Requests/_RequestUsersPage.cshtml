@@ -1,0 +1,50 @@
+@model Jularr.Web.Pages.Admin.Requests.UsersModel
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Auth
+@{
+    var ui = Model.Ui;
+    var rules = Model.RequestSettings.Rules;
+}
+<div asp-validation-summary="All" class="validation"></div>
+@if (Model.IsUserSettings && Model.SelectedUser is { } selected)
+{
+    <nav class="rre-user-context" aria-label="@ui["requestRules.userSettings"]"><a class="button button-secondary" href="/Admin/User/@Uri.EscapeDataString(selected.Id)">@selected.UserName</a><span>@ui["requestRules.userSettings"] / @ui["admin.nav.requests"]</span></nav>
+}
+<div class="admreq rre-users-workspace @(Model.SelectedUser is not null ? "rre-has-user rre-mobile-editor" : "")" data-rre-workspace>
+    @if (!Model.IsUserSettings)
+    {
+        <section class="panel rre-list rre-users-list" aria-label="@ui["admin.users.accounts"]">
+            <form method="get" class="rre-user-search" data-rre-navigation><input type="search" name="q" maxlength="80" value="@Model.Query" aria-label="@ui["requestRules.searchUsers"]" placeholder="@ui["requestRules.searchUsers"]" /><button class="button button-secondary" type="submit"><partial name="_AppIcon" model="@("search")" /><span class="sr-only">@ui["common.search"]</span></button></form>
+            <p class="muted">@ui["admin.users.accounts"] · @Model.Directory.Total</p>
+            @if (Model.Directory.Accounts.Count == 0) { <div class="empty-state"><strong>@ui[Model.Query.Length > 0 ? "requestRules.noMatchingUsers" : "admin.users.noAccounts"]</strong></div> }
+            @foreach (var account in Model.Directory.Accounts)
+            {
+                var resolved = rules.Resolve(account.Id, Model.RequestSettings.AutoApprovalRules);
+                var allowed = resolved.Values.Kinds.Where(kind => Model.EnabledKinds.Contains(kind) && Model.Capabilities.Resolve(account.Role, account.Id, AcquisitionAccessNames.WorkType(kind)) >= MediaCapability.Request);
+                <article class="rre-user-row @(account.Id == Model.SelectedUser?.Id ? "is-selected" : "")">
+                    <div class="rre-user-row-head"><partial name="/Pages/Admin/_RequestRequester.cshtml" model="account.UserName" /><span class="status-pill">@ui[AccountRoles.LabelKey(account.Role)]</span>
+                        <a class="button button-secondary" href="/Admin/Requests/Users?userId=@Uri.EscapeDataString(account.Id)&amp;q=@Uri.EscapeDataString(Model.Query)&amp;p=@Model.Directory.Page" data-rre-navigation>@ui["requestRules.edit"]</a>
+                    </div>
+                    @if (!account.IsEnabled) { <span class="status-pill">@ui["admin.user.disabledPendingLabel"]</span> }
+                    <div class="rre-user-summary"><strong>@resolved.Profile.Name</strong><span class="muted">@(resolved.InheritsDefault ? ui["requestRules.inherited"] : ui["requestRules.assigned"])</span><span>@(resolved.Values.Limit is { } limit ? ui.Format("requestRules.limitSummary", ("count", limit), ("days", resolved.Values.PeriodDays)) : ui["requestRules.unlimited"])</span>
+                        <span>@ui[resolved.TransitionRules.Count > 0 ? "requestRules.transition" : resolved.Values.Approval == RequestApprovalMode.Automatic ? "requestRules.automatic" : "requestRules.manual"]</span>
+                        <span class="status-pill">@ui[resolved.Overrides.HasChanges ? "requestRules.custom" : "requestRules.inherited"]</span>
+                    </div>
+                    <div class="rre-tags">@foreach (var kind in allowed) { <partial name="/Pages/Admin/_RequestTypeTag.cshtml" model="kind" /> }</div>
+                </article>
+            }
+            @if (Model.Directory.Total > Model.Directory.PageSize)
+            {
+                <nav class="rre-pagination" aria-label="@ui["admin.users.accounts"]">
+                    @if (Model.Directory.Page > 1) { <a class="button button-secondary" href="?q=@Uri.EscapeDataString(Model.Query)&amp;p=@(Model.Directory.Page - 1)" data-rre-navigation><partial name="_AppIcon" model="@("chevronLeft")" /></a> }
+                    <span>@Model.Directory.Page / @((Model.Directory.Total + Model.Directory.PageSize - 1) / Model.Directory.PageSize)</span>
+                    @if (Model.Directory.Page * Model.Directory.PageSize < Model.Directory.Total) { <a class="button button-secondary" href="?q=@Uri.EscapeDataString(Model.Query)&amp;p=@(Model.Directory.Page + 1)" data-rre-navigation><partial name="_AppIcon" model="@("chevronRight")" /></a> }
+                </nav>
+            }
+        </section>
+    }
+    @if (Model.SelectedUser is { } user)
+    {
+        <partial name="/Pages/Admin/Requests/_RequestRuleEditor.cshtml" model="new RequestRuleEditorView(ui, Model.Editor, Model.RequestSettings, Model.EnabledKinds, Model.EditableKinds, user.UserName, user.Id)" />
+    }
+</div>

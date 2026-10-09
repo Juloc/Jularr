@@ -902,6 +902,7 @@ try
     await InitializeDatabaseAsync(
         app.Services,
         message => Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} {message}"));
+    await app.Services.GetRequiredService<Jularr.Web.Features.Acquisition.Access.AcquisitionRequestSettingsStore>().InitializeAsync(app.Lifetime.ApplicationStopping);
     Console.WriteLine($"[Jularr] {DateTimeOffset.UtcNow:O} Database ready. Starting web server.");
     try
     {

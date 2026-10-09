@@ -63,13 +63,15 @@ public sealed record AutoApprovalRule(
 
 /// <summary>
 /// The owner's request settings that are configuration and not relational data (JSON store, like the
-/// capability matrix): the auto-approval rules and the quality profiles requesters may pick from.
+/// capability matrix): request rule profiles, sparse user assignments, preserved approval rules and requester-selectable quality profiles.
 /// </summary>
 public sealed record AcquisitionRequestSettings(
     IReadOnlyList<AutoApprovalRule> AutoApprovalRules,
     IReadOnlyList<string> RequesterQualityProfileIds)
 {
     public static AcquisitionRequestSettings Default { get; } = new([], []);
+    public RequestRuleConfiguration Rules { get; init; } = RequestRuleConfiguration.Standard;
+    public long Revision { get; init; }
 }
 
 /// <summary>What the rules decide for one new request.</summary>

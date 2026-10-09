@@ -34,6 +34,77 @@ namespace Jularr.Tests;
 public sealed class RequestPagesRenderTests
 {
     [TestMethod]
+    public async Task RuleEditor_BothUserRoutesShareRenderingValidationAndSparsePersistence()
+    {
+        await using var host = await RequestPagesHost.CreateAsync();
+        host.Db.OwnerAccounts.Add(new OwnerAccount { Id = "rule-user", UserName = "Rule User", NormalizedUserName = "RULE USER", PasswordHash = "test-only", Role = AccountRole.User });
+        await host.Db.SaveChangesAsync();
+        var settings = await host.Settings.LoadAsync();
+        settings = await host.Settings.SaveProfileAsync(null, "Trusted", "Reusable", new(20, 30, RequestApprovalMode.Automatic, [MediaAcquisitionKind.Book]), settings.Revision, CancellationToken.None);
+        var ruleId = settings.Rules.Profiles.Last().Id;
+        var directoryPath = "/Admin/Requests/Users?userId=rule-user";
+        var userPath = "/Admin/Users/rule-user/Settings/Requests";
+        var directory = await host.GetHtmlAsync(directoryPath, true);
+        var user = await host.GetHtmlAsync(userPath, true);
+        StringAssert.Contains(directory, "data-rre-editor");
+        StringAssert.Contains(user, "data-rre-editor");
+        StringAssert.Contains(user, "href=\"/Admin/User/rule-user\"");
+        Assert.IsFalse(user.Contains("admin.requests.section.requests", StringComparison.Ordinal), "Deep-link labels and breadcrumbs must use existing localized navigation keys.");
+        var sharedFields = "<fieldset class=\"rre-fields\"[\\s\\S]*?</fieldset>\\s*</fieldset>";
+        Assert.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(directory, sharedFields), "The shared field comparison must contain the actual editor fields.");
+        Assert.AreEqual(System.Text.RegularExpressions.Regex.Match(directory, sharedFields).Value, System.Text.RegularExpressions.Regex.Match(user, sharedFields).Value);
+        Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync("/Admin/Users/missing/Settings/Requests", true));
+        Assert.AreEqual(HttpStatusCode.Forbidden, await host.GetStatusAsync(userPath, false));
+        var values = new Dictionary<string, string>
+        {
+            ["userId"] = "rule-user", ["Editor.Name"] = "Trusted", ["Editor.RuleId"] = ruleId.ToString(), ["Editor.Revision"] = settings.Revision.ToString(),
+            ["Editor.UseOverrides"] = "true", ["Editor.Limit"] = "5", ["Editor.PeriodDays"] = "30", ["Editor.Approval"] = "Automatic", ["Editor.Kinds"] = "book"
+        };
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(directoryPath + "&handler=SaveUser", values));
+        settings = await host.Settings.LoadAsync();
+        var assignment = settings.Rules.Users["rule-user"];
+        Assert.AreEqual(ruleId, assignment.RuleId);
+        Assert.IsTrue(assignment.Overrides.HasLimit);
+        Assert.IsNull(assignment.Overrides.Approval);
+        Assert.IsNull(assignment.Overrides.Kinds);
+        values["Editor.Revision"] = settings.Revision.ToString();
+        values["Editor.PeriodDays"] = "0";
+        Assert.AreEqual(HttpStatusCode.OK, await host.PostAsync(userPath + "?handler=SaveUser", values));
+        Assert.AreEqual(settings.Revision, (await host.Settings.LoadAsync()).Revision, "Invalid input in the deep editor must not mutate settings.");
+        values["Editor.PeriodDays"] = "30";
+        Assert.AreEqual(HttpStatusCode.Forbidden, await host.PostAsync(userPath + "?handler=SaveUser", values, false));
+        values["Editor.UseOverrides"] = "false";
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(userPath + "?handler=SaveUser", values));
+        settings = await host.Settings.LoadAsync();
+        Assert.IsFalse(settings.Rules.Users["rule-user"].Overrides.HasChanges);
+        Assert.AreEqual(20, settings.Rules.Resolve("rule-user", []).Values.Limit);
+    }
+
+    [TestMethod]
+    public async Task Rules_PostsValidateDefaultAndRevision_AndPreserveQualitySelection()
+    {
+        await using var host = await RequestPagesHost.CreateAsync();
+        await host.Settings.SetRequesterQualityProfilesAsync([AnimeQualityProfiles.DefaultAnime1080pId]);
+        var settings = await host.Settings.LoadAsync();
+        var values = new Dictionary<string, string>
+        {
+            ["Editor.Name"] = "Family", ["Editor.Revision"] = settings.Revision.ToString(), ["Editor.Unlimited"] = "true",
+            ["Editor.PeriodDays"] = "7", ["Editor.Approval"] = "Manual", ["Editor.Kinds"] = "book"
+        };
+        var path = "/Admin/Requests/Settings";
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(path + "?handler=SaveRule", values));
+        settings = await host.Settings.LoadAsync();
+        Assert.AreEqual(2, settings.Rules.Profiles.Count);
+        Assert.IsNull(settings.Rules.Profiles.Last().Values.Limit);
+        Assert.AreEqual(AnimeQualityProfiles.DefaultAnime1080pId, settings.RequesterQualityProfileIds.Single());
+        Assert.AreEqual(HttpStatusCode.OK, await host.PostAsync(path + "?handler=SaveRule", values));
+        Assert.AreEqual(2, (await host.Settings.LoadAsync()).Rules.Profiles.Count, "A stale form cannot create a second profile.");
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(path + "?handler=Delete", new Dictionary<string, string> { ["id"] = "1", ["revision"] = settings.Revision.ToString(), ["confirmReassignment"] = "true" }));
+        Assert.AreEqual(1, (await host.Settings.LoadAsync()).Rules.DefaultId);
+        Assert.AreEqual(HttpStatusCode.Forbidden, await host.PostAsync(path + "?handler=SaveRule", values, false));
+    }
+
+    [TestMethod]
     public async Task AdminSearch_UsesRealBoundedResultsAndOmitsEmptyGroups()
     {
         await using var host = await RequestPagesHost.CreateAsync();
@@ -47,7 +118,7 @@ public sealed class RequestPagesRenderTests
         var html = await host.GetHtmlAsync("/Admin/Search?handler=Preview&q=dEmO", asOwner: true);
         StringAssert.Contains(html, "data-admin-search-group=\"admin.search.users\"");
         Assert.AreEqual(8, System.Text.RegularExpressions.Regex.Matches(html, "class=\"admin-search-result\"").Count);
-        StringAssert.Contains(html, "/Admin/User?id=search-user-0");
+        StringAssert.Contains(html, "/Admin/User/search-user-0");
         Assert.IsFalse(html.Contains("Other account", StringComparison.Ordinal));
         Assert.IsFalse(html.Contains("never-search-this-secret", StringComparison.Ordinal));
         Assert.IsFalse(html.Contains("admin.search.settings", StringComparison.Ordinal));
@@ -98,6 +169,9 @@ public sealed class RequestPagesRenderTests
         }
 
         StringAssert.Contains(users, "Disabled / pending");
+        var unmatched = await host.GetHtmlAsync("/Admin/Requests/Users?q=unmatched-account", asOwner: true);
+        StringAssert.Contains(unmatched, "No matching users.");
+        Assert.IsFalse(unmatched.Contains("No accounts yet", StringComparison.Ordinal));
         Assert.IsFalse(users.Contains("PasswordHash", StringComparison.Ordinal));
         Assert.IsFalse(users.Contains("test-only", StringComparison.Ordinal));
         Assert.IsFalse(users.Contains("handler=Create", StringComparison.Ordinal));
@@ -235,11 +309,11 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(html, "/Admin/Requests/Settings");
         Assert.IsFalse(html.Contains("Add rule", StringComparison.Ordinal), "The queue contains operations, not configuration.");
         var settings = await host.GetHtmlAsync("/Admin/Requests/Settings", asOwner: true);
-        StringAssert.Contains(settings, "Auto-approval");
+        StringAssert.Contains(settings, "Existing auto-approval rules");
         StringAssert.Contains(settings, "Trusted friends");
         StringAssert.Contains(settings, "3 per 7 days");
         StringAssert.Contains(settings, "Off for now");
-        StringAssert.Contains(settings, "Switch on");
+        StringAssert.Contains(settings, "Use new rule profiles only");
         StringAssert.Contains(settings, "Add rule");
         StringAssert.Contains(settings, "Quality profiles for requests");
         StringAssert.Contains(settings, "/Admin/Capabilities/Manual");
@@ -571,6 +645,29 @@ public sealed class RequestPagesRenderTests
         {
             using var client = Client(asOwner, mediaCapability);
             using var response = await client.GetAsync(path);
+            return response.StatusCode;
+        }
+
+        public async Task<HttpStatusCode> PostAsync(string path, IReadOnlyDictionary<string, string> values, bool asOwner = true)
+        {
+            using var client = Client(true, MediaCapability.Request);
+            using var page = await client.GetAsync(path);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            var token = System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"").Groups[1].Value;
+            Assert.IsTrue(token.Length > 0, "The real Razor form must include antiforgery protection.");
+            if (page.Headers.TryGetValues("Set-Cookie", out var cookies))
+            {
+                client.DefaultRequestHeaders.Add("Cookie", string.Join("; ", cookies.Select(cookie => cookie.Split(';')[0])));
+            }
+
+            if (!asOwner)
+            {
+                client.DefaultRequestHeaders.Remove(OwnerHeader);
+            }
+
+            using var content = new FormUrlEncodedContent(values.Append(new KeyValuePair<string, string>("__RequestVerificationToken", WebUtility.HtmlDecode(token))));
+            using var response = await client.PostAsync(path, content);
             return response.StatusCode;
         }
 

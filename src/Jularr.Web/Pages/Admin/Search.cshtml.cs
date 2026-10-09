@@ -49,7 +49,7 @@ public sealed class SearchModel(AppDbContext db, OwnerAuthService accounts, Acqu
         if (JularrPolicies.Allows(User, JularrPolicies.AdminSystem))
         {
             var users = await accounts.SearchAsync(Query, cancellationToken);
-            groups.Add(new("admin.search.users", users.Select(account => new AdminSearchItem(account.UserName, $"/Admin/User?id={Uri.EscapeDataString(account.Id)}", "users", true)).ToArray()));
+            groups.Add(new("admin.search.users", users.Select(account => new AdminSearchItem(account.UserName, $"/Admin/User/{Uri.EscapeDataString(account.Id)}", "users", true)).ToArray()));
         }
 
         foreach (var destinationGroup in destinations)

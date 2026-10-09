@@ -260,7 +260,10 @@ public enum RequestRetryOutcome
     NotRetryable
 }
 
-public sealed class AcquisitionAccessDeniedException(string message) : Exception(message);
+public sealed class AcquisitionAccessDeniedException(string message, string? messageKey = null) : Exception(message)
+{
+    public string? MessageKey { get; } = messageKey;
+}
 
 public static class AcquisitionAccessNames
 {

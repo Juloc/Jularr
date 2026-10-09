@@ -9,7 +9,8 @@ namespace Jularr.Web.Features.Acquisition.Access;
 /// The one path for requesting a title from search, for every media type. What the profile may do comes
 /// from the capability matrix (#436): a profile with <see cref="MediaCapability.Instant"/> has its request
 /// approved right away, one with <see cref="MediaCapability.Request"/> creates a request, and anything
-/// below cannot request. A request waits for the owner unless an auto-approval rule approves it; an
+/// below cannot request. The resolved rule profile restricts submission and decides approval; preserved legacy
+/// approval rules only apply during the explicitly exposed upgrade transition. An
 /// approved request goes to the media type's executor.
 /// </summary>
 public sealed partial class AcquisitionRequestService(
@@ -31,9 +32,7 @@ public sealed partial class AcquisitionRequestService(
     /// <summary>The status surface of one request: its current state, saved settings and the actions that are allowed.</summary>
     public static string StatusPath(Guid requestId) => $"{HistoryPath}/{requestId:D}";
 
-    public async Task<AcquisitionCapabilities> GetCapabilitiesAsync(
-        MediaAcquisitionKind kind,
-        CancellationToken cancellationToken)
+    public async Task<AcquisitionCapabilities> GetCapabilitiesAsync(MediaAcquisitionKind kind, CancellationToken cancellationToken, ResolvedRequestRule? rule = null)
     {
         var capability = await mediaCapabilities.GetEffectiveCapabilityAsync(
             account.User,
@@ -51,7 +50,22 @@ public sealed partial class AcquisitionRequestService(
         }
 
         var policy = await store.GetPolicyAsync(kind, cancellationToken);
-        return AcquisitionCapabilities.Resolve(kind, capability, policy.Manual, account.Can(JularrPolicies.AdminMedia));
+        var capabilities = AcquisitionCapabilities.Resolve(kind, capability, policy.Manual, account.Can(JularrPolicies.AdminMedia));
+        if (capabilities.CanRequest)
+        {
+            if (rule is null)
+            {
+                var settings = await requestSettings.LoadAsync(cancellationToken);
+                rule = settings.Rules.Resolve(account.ProfileId, settings.AutoApprovalRules);
+            }
+
+            if (!rule.Values.Kinds.Contains(kind))
+            {
+                capabilities = capabilities with { CanRequest = false, AutoApproves = false };
+            }
+        }
+
+        return capabilities;
     }
 
     /// <summary>Requests a title. Returns the open request for it, new or existing.</summary>
@@ -65,7 +79,9 @@ public sealed partial class AcquisitionRequestService(
     /// </summary>
     public async Task<AcquisitionSubmission> SubmitWithOutcomeAsync(AcquisitionRequestDraft draft, CancellationToken cancellationToken)
     {
-        var capabilities = await GetCapabilitiesAsync(draft.Kind, cancellationToken);
+        var settings = await requestSettings.LoadAsync(cancellationToken);
+        var rule = settings.Rules.Resolve(account.ProfileId, settings.AutoApprovalRules);
+        var capabilities = await GetCapabilitiesAsync(draft.Kind, cancellationToken, rule);
         if (!capabilities.CanRequest)
         {
             throw new AcquisitionAccessDeniedException("You may not request this kind of media.");
@@ -91,17 +107,23 @@ public sealed partial class AcquisitionRequestService(
 
         var status = AcquisitionRequestStatus.Approved;
         var decidedBy = account.ProfileId;
-        if (!capabilities.AutoApproves)
+        if (!capabilities.AutoApproves && rule.TransitionRules.Count == 0)
         {
-            var decision = await EvaluateAutoApprovalAsync(draft.Kind, cancellationToken);
-            status = decision.Rule is null ? AcquisitionRequestStatus.Pending : AcquisitionRequestStatus.Approved;
-            decidedBy = decision.Rule is { } rule ? AcquisitionAutoApproval.DecidedBy(rule.Id) : null;
+            status = rule.Values.Approval == RequestApprovalMode.Automatic ? AcquisitionRequestStatus.Approved : AcquisitionRequestStatus.Pending;
+            decidedBy = status == AcquisitionRequestStatus.Approved ? AcquisitionAutoApproval.DecidedBy(rule.Profile.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)) : null;
+        }
+
+        async Task<(AcquisitionRequestStatus, string?)> DecideAsync()
+        {
+            var decision = await EvaluateAutoApprovalAsync(rule.TransitionRules, draft.Kind, cancellationToken);
+            return (decision.Rule is null ? AcquisitionRequestStatus.Pending : AcquisitionRequestStatus.Approved, decision.Rule is { } matched ? AcquisitionAutoApproval.DecidedBy(matched.Id) : null);
         }
 
         AcquisitionRequest created;
         try
         {
-            created = (await RecordedAsync(async () => await store.CreateAsync(draft, account.ProfileId, status, decidedBy, cancellationToken), cancellationToken))!;
+            var approval = !capabilities.AutoApproves && rule.TransitionRules.Count > 0 ? DecideAsync : (Func<Task<(AcquisitionRequestStatus, string?)>>?)null;
+            created = (await RecordedAsync(async () => await store.CreateAsync(draft, account.ProfileId, status, decidedBy, cancellationToken, rule.Values, approval), cancellationToken))!;
         }
         catch (OpenRequestExistsException)
         {
@@ -110,7 +132,7 @@ public sealed partial class AcquisitionRequestService(
             return new AcquisitionSubmission(winner, AlreadyRequested: true);
         }
 
-        if (status == AcquisitionRequestStatus.Pending)
+        if (created.Status == AcquisitionRequestStatus.Pending)
         {
             return new AcquisitionSubmission(created, AlreadyRequested: false);
         }
@@ -358,21 +380,12 @@ public sealed partial class AcquisitionRequestService(
     }
 
     /// <summary>Whether an auto-approval rule approves a new request of the signed-in profile (quota counted per rule).</summary>
-    private async Task<AutoApprovalDecision> EvaluateAutoApprovalAsync(
-        MediaAcquisitionKind kind,
-        CancellationToken cancellationToken)
+    private async Task<AutoApprovalDecision> EvaluateAutoApprovalAsync(IReadOnlyList<AutoApprovalRule> rules, MediaAcquisitionKind kind, CancellationToken cancellationToken)
     {
-        var rules = (await requestSettings.LoadAsync(cancellationToken)).AutoApprovalRules;
         var profileId = account.ProfileId;
-        var used = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var rule in AutoApprovalEvaluator.QuotaRulesFor(rules, kind, profileId))
-        {
-            used[rule.Id] = await store.CountAutoApprovedSinceAsync(
-                profileId,
-                rule.Id,
-                DateTime.UtcNow - rule.Quota!.Period,
-                cancellationToken);
-        }
+        var now = DateTime.UtcNow;
+        var thresholds = AutoApprovalEvaluator.QuotaRulesFor(rules, kind, profileId).ToDictionary(rule => rule.Id, rule => now - rule.Quota!.Period, StringComparer.Ordinal);
+        var used = await store.CountAutoApprovedAsync(profileId, thresholds, cancellationToken);
 
         return AutoApprovalEvaluator.Evaluate(rules, kind, profileId, used);
     }

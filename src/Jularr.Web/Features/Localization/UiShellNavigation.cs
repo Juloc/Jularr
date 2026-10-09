@@ -368,6 +368,17 @@ public sealed record UiShellNavigation(
             breadcrumb = new UiBreadcrumb(ToItem(contextParent, false), ToItem(contextChild, true));
         }
 
+        var segments = path.Value?.Trim('/').Split('/') ?? [];
+        if (can(JularrPolicies.AdminSystem) && segments.Length == 5 && string.Equals(segments[0], "Admin", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(segments[1], "Users", StringComparison.OrdinalIgnoreCase) && string.Equals(segments[3], "Settings", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(segments[4], "Requests", StringComparison.OrdinalIgnoreCase))
+        {
+            var users = UiNavigationCatalog.All.Single(entry => entry.Id == "admin-users");
+            var requests = UiNavigationCatalog.All.Single(entry => entry.Id == "admin-request-users");
+            breadcrumb = new UiBreadcrumb(ToItem(users, false) with { Href = $"/Admin/User/{Uri.EscapeDataString(segments[2])}", LabelKey = "requestRules.userSettings" },
+                ToItem(requests, true) with { Href = path.Value!, LabelKey = "admin.nav.requests" });
+        }
+
         return new UiShellNavigation(primary, secondary, mobilePrimary, showCurrentReading) { Breadcrumb = breadcrumb };
     }
 

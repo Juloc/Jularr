@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Jularr.Web.Features.Auth;
 
+public sealed record LocalAccountPage(IReadOnlyList<LocalAccountSummary> Accounts, int Total, int Page, int PageSize);
+
 public sealed class OwnerAuthService(
     AppDbContext db,
     IPasswordHasher<OwnerAccount> passwordHasher)
@@ -149,6 +151,23 @@ public sealed class OwnerAuthService(
             ORDER BY "UserName"
             LIMIT 8
             """).ToListAsync(cancellationToken);
+    }
+
+    public async Task<LocalAccountPage> ListPageAsync(string query, int page, CancellationToken cancellationToken)
+    {
+        var normalized = query.Trim().ToUpperInvariant();
+        const int pageSize = 50;
+        var total = await db.Database.SqlQuery<int>($"""
+            SELECT COUNT(*)::integer AS "Value" FROM "OwnerAccounts" WHERE strpos("NormalizedUserName", {normalized}) > 0
+            """).SingleAsync(cancellationToken);
+        page = Math.Clamp(page, 1, Math.Max(1, (total + pageSize - 1) / pageSize));
+        var offset = (page - 1) * pageSize;
+        var accounts = await db.Database.SqlQuery<LocalAccountSummary>($"""
+            SELECT "Id", "UserName", "Role", "IsEnabled", "CreatedAt" FROM "OwnerAccounts"
+            WHERE strpos("NormalizedUserName", {normalized}) > 0
+            ORDER BY "Role", "UserName", "Id" LIMIT {pageSize} OFFSET {offset}
+            """).ToListAsync(cancellationToken);
+        return new(accounts, total, page, pageSize);
     }
 
     public async Task RenameAsync(
