@@ -113,7 +113,15 @@ public sealed class PlaybackAdmissionService(
         }
 
         var takesOver = session.TakesOverSlotOf(costClass);
-        return slots.CanAcquire(costClass, profileId, takesOver) ? null : SlotRefusal(profileId);
+        if (slots.CanAcquire(costClass, profileId, takesOver))
+        {
+            return null;
+        }
+
+        var ownSlotsFull = slots.ActiveFor(profileId) >= PlaybackTranscodeSlots.MaxPerProfile;
+        return hls?.HasReclaimableStalePaused(costClass, profileId, ownSlotsFull) == true
+            ? null
+            : SlotRefusal(profileId);
     }
 
     /// <summary>An admission for a legacy delivery that has no plan: a software transcode or a remux.</summary>
