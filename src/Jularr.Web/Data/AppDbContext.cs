@@ -467,7 +467,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.ProfileId).HasMaxLength(80);
             entity.Property(x => x.PreferredAudioLanguage).HasMaxLength(16);
             entity.Property(x => x.PreferredSubtitleLanguage).HasMaxLength(16);
+            entity.Property(x => x.PreferredSecondarySubtitleLanguage).HasMaxLength(16);
             entity.Property(x => x.DefaultPlaybackSpeed).HasDefaultValue(PlaybackPreferenceRules.DefaultSpeed);
+            entity.Property(x => x.SubtitleSizePercent).HasDefaultValue(100);
+            entity.Property(x => x.SubtitleOffsetMs).HasDefaultValue(0);
         });
 
         LearningCourseModelConfiguration.Configure(modelBuilder);
