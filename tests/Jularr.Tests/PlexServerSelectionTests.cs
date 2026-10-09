@@ -128,7 +128,9 @@ public sealed class PlexServerSelectionTests
         return new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(
-                """
+                request.RequestUri.AbsolutePath.EndsWith("/identity", StringComparison.Ordinal)
+                    ? """{"MediaContainer":{"machineIdentifier":"machine-123456"}}"""
+                    : """
                 {"MediaContainer":{"Directory":[
                   {"key":"1","type":"movie","title":"Movies"},
                   {"key":"2","type":"show","title":"Series"},
