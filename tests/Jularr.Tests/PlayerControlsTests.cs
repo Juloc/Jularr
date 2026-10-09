@@ -497,6 +497,65 @@ public sealed class PlayerControlsTests
     }
 
     [TestMethod]
+    public void SubtitleMenuRendersBothTrackSelectorsFromSharedOptions()
+    {
+        var root = RepositoryRoot();
+        var chrome = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-chrome.js");
+        var script = """
+            const fs = require("fs");
+            const source = fs.readFileSync(process.argv[2], "utf8");
+            const start = source.indexOf("    const renderSettingValues = () => {");
+            const end = source.indexOf('    const setSettings = (open, mode = "all") => {', start);
+            if (start < 0 || end < 0) throw new Error("settings option owner missing");
+
+            const create = tag => ({
+                tag, children: [], attrs: {}, dataset: {},
+                append(...children) { this.children.push(...children); },
+                setAttribute(name, value) { this.attrs[name] = value; },
+                remove() {},
+                textContent: ""
+            });
+            const document = { createElement: create };
+            const primary = [
+                { value: "off", textContent: "Off" },
+                { value: "stream:2", textContent: "German" }
+            ];
+            const secondary = [
+                { value: "off", textContent: "Off" },
+                { value: "stream:3", textContent: "English" }
+            ];
+            const settingSelects = {
+                subtitles: { value: "stream:2", options: primary, selectedOptions: [primary[1]] },
+                secondarySubtitles: { value: "stream:3", options: secondary, selectedOptions: [secondary[1]] }
+            };
+            const settings = {
+                querySelector(query) {
+                    if (query === ".player-settings-header") return { after() {} };
+                    return { textContent: query.includes("secondarySubtitles") ? "Second" : "First" };
+                }
+            };
+            const stage = { querySelectorAll: () => [] };
+            const optionLabel = option => option.textContent.trim();
+            let optionList = null;
+            const result = eval(source.slice(start, end) + `
+                (() => {
+                    renderOptions("subtitles", "Subtitles");
+                    return optionList.children
+                        .filter(row => row.className === "player-options")
+                        .map(row => row.children.map(button =>
+                            button.dataset.settingMode + "=" + button.dataset.value).join(","))
+                        .join("|");
+                })()
+            `);
+            console.log(result);
+            """;
+
+        Assert.AreEqual(
+            "subtitles=off,subtitles=stream:2|secondarySubtitles=off,secondarySubtitles=stream:3",
+            RunNode(script, chrome));
+    }
+
+    [TestMethod]
     public void WebCueLookupFollowsTheMediaClockAtEveryPlaybackSpeed()
     {
         var root = RepositoryRoot();
