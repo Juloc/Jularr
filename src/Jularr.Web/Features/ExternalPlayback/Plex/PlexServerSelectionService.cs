@@ -44,6 +44,17 @@ public sealed class PlexServerSelectionService(
                 nameof(selectedLibraryIds));
         }
 
+        var actualMachineId = await libraries.GetServerIdentityAsync(
+            serverEndpoint, discovered.AccessToken, clientIdentifier,
+            cancellationToken);
+        if (!string.Equals(
+                actualMachineId, discovered.MachineIdentifier,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The connected Plex endpoint is not the discovered server.");
+        }
+
         var available = await libraries.GetSectionsAsync(
             serverEndpoint, discovered.AccessToken, clientIdentifier,
             cancellationToken);
