@@ -35,9 +35,13 @@ public sealed class PlexServerCatalogScanTests
                     .EndsWith("/library/sections", StringComparison.Ordinal);
                 return new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = new StringContent(isSections
-                        ? """{"MediaContainer":{"Directory":[{"key":"1","type":"movie","title":"Films"}]}}"""
-                        : """{"MediaContainer":{"totalSize":3,"Metadata":[{"ratingKey":"44","type":"movie","title":"Dune","Guid":[{"id":"tmdb://438631"}]}]}}""",
+                    Content = new StringContent(
+                        request.RequestUri.AbsolutePath.EndsWith("/identity",
+                            StringComparison.Ordinal)
+                            ? """{"MediaContainer":{"machineIdentifier":"plex-machine-1234"}}"""
+                            : isSections
+                                ? """{"MediaContainer":{"Directory":[{"key":"1","type":"movie","title":"Films"}]}}"""
+                                : """{"MediaContainer":{"totalSize":3,"Metadata":[{"ratingKey":"44","type":"movie","title":"Dune","Guid":[{"id":"tmdb://438631"}]}]}}""",
                         Encoding.UTF8, "application/json")
                 };
             }));
