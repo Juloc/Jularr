@@ -32,7 +32,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -473,7 +472,7 @@ internal fun tvSeekSceneIndices(availableCount: Int): List<Int> {
     if (availableCount <= 0) return emptyList()
     val shown = minOf(availableCount, 8)
     return (0 until shown).map { index ->
-        if (shown == 1) 0 else index.toLong() * (availableCount - 1) / (shown - 1)
+        if (shown == 1) 0L else index.toLong() * (availableCount - 1) / (shown - 1)
     }.map(Long::toInt)
 }
 
