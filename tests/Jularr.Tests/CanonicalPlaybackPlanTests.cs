@@ -215,6 +215,8 @@ public sealed class CanonicalPlaybackPlanTests
     [DataTestMethod]
     [DataRow("shifted-timeline")]
     [DataRow("different-audio-language")]
+    [DataRow("different-soundtrack-title")]
+    [DataRow("distorted-picture")]
     public async Task PreparedRenditionsCannotChangeTimelineOrTrackIdentity(string mismatch)
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
@@ -232,6 +234,10 @@ public sealed class CanonicalPlaybackPlanTests
                 "\"duration\": \"1440.0\"", "\"duration\": \"1420.0\"", StringComparison.Ordinal),
             "different-audio-language" => MediaProbeFixtures.H264Stereo.Replace(
                 "\"language\": \"jpn\"", "\"language\": \"eng\"", StringComparison.Ordinal),
+            "different-soundtrack-title" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"language\": \"jpn\"", "\"language\": \"jpn\", \"title\": \"Commentary\"", StringComparison.Ordinal),
+            "distorted-picture" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"width\": 1920", "\"width\": 1280", StringComparison.Ordinal),
             _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
         };
 
