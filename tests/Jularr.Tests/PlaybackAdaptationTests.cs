@@ -123,6 +123,45 @@ public sealed class PlaybackAdaptationTests
     }
 
     [TestMethod]
+    public async Task ConfiguredWanCap_BlocksRedundantUpshiftUntilCapacityReturns()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        try
+        {
+            var root = Path.Combine(kit.DataRoot, "hls");
+            Assert.IsTrue((await kit.Settings.SaveAsync(
+                PlaybackTranscodingSettings.Default with
+                {
+                    HlsCachePath = root,
+                    WanUploadBudgetKbps = 5_000
+                })).Succeeded);
+
+            var plan = AutoPlan(delivered: 4_000, limit: 4_250) with
+            {
+                Quality = new PlaybackQualityResolution(
+                    PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote,
+                    4_250, PlaybackLimitSource.ServerEgress, 12_000, 4_000)
+            };
+            var harness = new Harness(plan, settings: kit.Settings);
+            harness.PlayUntil(140, throughput: 24_000);
+
+            Assert.AreEqual(PlaybackAdaptationAdvice.None, harness.Advice.Decision.Advice,
+                "A still binding Admin WAN budget is not a reason to restart the stream at the same bitrate.");
+
+            Assert.IsTrue((await kit.Settings.SaveAsync(
+                kit.Settings.Current with { WanUploadBudgetKbps = 10_000 })).Succeeded);
+            Assert.AreEqual(PlaybackAdaptationAdvice.StepUp, harness.Advice.Decision.Advice);
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public void NothingIsAdvisedBeforeThePlayerHasShownAnything()
     {
         var harness = new Harness();
