@@ -202,12 +202,71 @@ public sealed class PlaybackPlanService(
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(input);
 
-        var playable = canonicalStorage is not null
-            ? await canonicalStorage.ResolveVideoAsync(
+        var candidates = canonicalStorage is not null
+            ? await canonicalStorage.ResolveVideoCandidatesAsync(
                 target.WorkId,
                 target.WorkEpisodeId,
                 cancellationToken)
-            : await ResolveCanonicalVideoAsync(target, cancellationToken);
+            : [];
+
+        CanonicalPlayableFile? playable = candidates.Count > 0
+            ? candidates[0]
+            : canonicalStorage is null
+                ? await ResolveCanonicalVideoAsync(target, cancellationToken)
+                : null;
+
+        if (candidates.Count > 1)
+        {
+            var capabilities = input.Capabilities?.Normalize() ??
+                               ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
+            var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
+            var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
+            var network = new PlaybackNetworkConditions(
+                networkClass,
+                input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null,
+                input.Network?.BufferSeconds,
+                Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
+            var server = serverCapabilities.Current();
+            var bestMode = int.MaxValue;
+            var bestBitrate = -1;
+
+            foreach (var candidate in candidates)
+            {
+                var analysis = await mediaInventory.GetAsync(candidate.StoredFileId, cancellationToken);
+                if (analysis?.Technical is not { } technical)
+                {
+                    continue;
+                }
+
+                var profile = PlaybackMediaProfile.From(candidate.Path, candidate.SizeBytes, technical);
+                var plan = PlaybackDecisionEngine.Decide(new PlaybackDecisionRequest(
+                    profile,
+                    capabilities,
+                    server,
+                    input.AudioStreamIndex,
+                    input.SubtitleStreamIndex,
+                    input.BurnInSubtitle,
+                    quality,
+                    network,
+                    input.ModePreference,
+                    input.FailedModes));
+
+                var mode = plan.Mode switch
+                {
+                    PlaybackDeliveryMode.DirectPlay => 0,
+                    PlaybackDeliveryMode.DirectStream => 1,
+                    PlaybackDeliveryMode.Transcode => 2,
+                    _ => 3
+                };
+                var bitrate = plan.Quality.DeliveredBitrateKbps ?? 0;
+                if (mode < bestMode || mode == bestMode && bitrate > bestBitrate)
+                {
+                    playable = candidate;
+                    bestMode = mode;
+                    bestBitrate = bitrate;
+                }
+            }
+        }
 
         if (playable is null)
         {
