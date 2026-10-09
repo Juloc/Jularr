@@ -22,8 +22,8 @@ import de.juloc.jularr.core.model.TermStateResult
 import de.juloc.jularr.core.model.TtsPreferences
 import de.juloc.jularr.core.model.TtsPreferencesUpdate
 import de.juloc.jularr.core.model.WatchlistItem
-import de.juloc.jularr.core.model.TvPlaybackPreferences
-import de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate
+import de.juloc.jularr.core.model.ClientPlaybackPreferences
+import de.juloc.jularr.core.model.ClientPlaybackPreferencesUpdate
 
 interface JularrClientApi {
     suspend fun getCapabilities(): ClientCapabilities
@@ -41,9 +41,9 @@ interface JularrClientApi {
     /** `GET /watchlist`: the signed-in profile's followed works. */
     suspend fun getWatchlist(): List<WatchlistItem>
 
-    suspend fun getPlaybackPreferences(): TvPlaybackPreferences =
+    suspend fun getPlaybackPreferences(): ClientPlaybackPreferences =
         throw UnsupportedOperationException("Playback preferences require the client API.")
-    suspend fun updatePlaybackPreferences(update: TvPlaybackPreferencesUpdate): TvPlaybackPreferences =
+    suspend fun updatePlaybackPreferences(update: ClientPlaybackPreferencesUpdate): ClientPlaybackPreferences =
         throw UnsupportedOperationException("Playback preferences require the client API.")
 
     suspend fun getAnime(animeId: String): AnimeDetail
