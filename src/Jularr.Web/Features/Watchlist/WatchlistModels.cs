@@ -58,6 +58,11 @@ public sealed record WatchlistIdentity(
 
     public string Key => $"{WatchlistMediaTypeNames.ToStorage(MediaType)}:{ProviderKey}:{ExternalKey}";
 
+    public string WatchlistUrl =>
+        $"/Watchlist?mediaType={Uri.EscapeDataString(WatchlistMediaTypeNames.ToStorage(MediaType))}" +
+        $"&provider={Uri.EscapeDataString(ProviderKey)}" +
+        $"&externalId={Uri.EscapeDataString(ExternalKey)}#target-{StableId:D}";
+
     public Guid StableId
     {
         get
