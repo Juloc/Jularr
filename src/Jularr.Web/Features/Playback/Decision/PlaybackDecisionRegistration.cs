@@ -39,7 +39,9 @@ public static class PlaybackDecisionRegistration
         services.AddHostedService(provider => provider.GetRequiredService<PlaybackServerResourceService>());
         services.AddSingleton(provider =>
         {
-            var store = new PlaybackStreamSessionStore(provider.GetRequiredService<TimeProvider>());
+            var store = new PlaybackStreamSessionStore(
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<PlaybackTranscodingSettingsStore>());
             // A replaced, expired or ended playback session takes its HLS output with it.
             store.Removed += session =>
             {

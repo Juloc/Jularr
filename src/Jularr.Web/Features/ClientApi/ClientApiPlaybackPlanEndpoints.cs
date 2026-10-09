@@ -846,7 +846,8 @@ public static class ClientApiPlaybackPlanEndpoints
             request.FailedModes is { Count: > 0 } failed ? failed.Take(4).ToHashSet() : null,
             request.ReplacesSessionId,
             request.Wake,
-            followedAdvice);
+            followedAdvice,
+            HasUntrustedForwardedFor: httpContext.Request.Headers.ContainsKey("X-Forwarded-For"));
         return true;
     }
 

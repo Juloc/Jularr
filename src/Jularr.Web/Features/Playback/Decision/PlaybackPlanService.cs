@@ -26,7 +26,8 @@ public sealed record PlaybackPlanInput(
     IReadOnlySet<PlaybackDeliveryMode>? FailedModes = null,
     Guid? ReplacesSessionId = null,
     bool Wake = true,
-    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None);
+    PlaybackAdaptationAdvice FollowedAdvice = PlaybackAdaptationAdvice.None,
+    bool HasUntrustedForwardedFor = false);
 
 /// <summary>
 /// The client's own view of its connection. Only measured values count as throughput;
@@ -53,7 +54,8 @@ public static class PlaybackNetworkClassifier
 {
     // Carrier-grade NAT (100.64/10) is also where overlay VPNs such as Tailscale live; such a
     // client may be anywhere, so it counts as remote.
-    public static PlaybackNetworkClass Classify(IPAddress? remote, PlaybackNetworkReport? report)
+    public static PlaybackNetworkClass Classify(
+        IPAddress? remote, PlaybackNetworkReport? report, bool hasUntrustedForwardedFor = false)
     {
         if (report is { } hints &&
             (hints.SaveData == true ||
@@ -63,7 +65,7 @@ public static class PlaybackNetworkClassifier
             return PlaybackNetworkClass.Metered;
         }
 
-        if (remote is null)
+        if (remote is null || hasUntrustedForwardedFor)
         {
             return PlaybackNetworkClass.Unknown;
         }
@@ -111,6 +113,8 @@ public sealed class PlaybackServerCapabilityProvider(
     PlaybackTranscodeSlots slots,
     PlaybackHardwareService hardware)
 {
+    public int WanUploadBudgetKbps => settings.Current.WanUploadBudgetKbps;
+
     /// <param name="tooSlow">Encoders that already failed to keep up with real time for the title being planned; see <see cref="PlaybackHardwareService.Choose"/>.</param>
     public PlaybackServerCapabilities Current(IReadOnlyCollection<PlaybackHardwareBackend>? tooSlow = null)
     {
@@ -242,7 +246,7 @@ public sealed class PlaybackPlanService(
 
         var capabilities = input.Capabilities?.Normalize() ??
                            ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
-        var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
+        var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network, input.HasUntrustedForwardedFor);
         var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
 
         // What the replaced session's player reported (its buffer and the stalls of the last minute) is the evidence of how that
@@ -250,11 +254,19 @@ public sealed class PlaybackPlanService(
         // title's stalls say nothing about this one, and a stale or missing report leaves the request's own hints in charge.
         // Throughput stays the request's hint because a player cannot measure the link while the browser is not fetching.
         var evidence = previous is not null && previous.Target == target ? sessions.TelemetryEvidence(previous) : null;
+        int? egressLimit = null;
+        if (networkClass != PlaybackNetworkClass.Local && serverCapabilities.WanUploadBudgetKbps > 0)
+        {
+            var active = sessions.ActiveExternalDeliveries(previous?.Id);
+            egressLimit = Math.Max(100, (int)(serverCapabilities.WanUploadBudgetKbps * 0.85 / (active + 1)));
+        }
+
         var network = new PlaybackNetworkConditions(
             networkClass,
             input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null,
             evidence?.BufferSeconds ?? (input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null),
-            evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
+            evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100),
+            egressLimit);
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
 
         // The replaced session's advice and what the server learned about its own capacity for this title (a tier ceiling, encoders that could
