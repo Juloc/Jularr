@@ -940,6 +940,17 @@ fun TvAppHost(
                             refreshCueWindowIfNeeded(position)
                             pushCompanionState(force = true)
                         },
+                        playbackError = snapshot.error?.takeIf { it.isNotBlank() },
+                        onRetryPlayback = {
+                            scope.launch {
+                                val refreshed = controller.refreshEpisodeStorage(0)
+                                snapshot = refreshed
+                                if (refreshed.storageDecision == null && refreshed.error == null) {
+                                    openedEpisodeId = null
+                                    playbackGeneration += 1
+                                }
+                            }
+                        },
                         onPlaybackFailure = { position ->
                             resumePositionMs = position
                             resumeShouldPlay = true
