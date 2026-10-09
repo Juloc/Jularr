@@ -60,6 +60,35 @@ public sealed class PlexAuthClientTests
         Assert.IsNull(accountId);
     }
 
+    [TestMethod]
+    public async Task VerifiedProfileGrantKeepsPlexTokenOutOfSerializedIdentity()
+    {
+        using var client = new HttpClient(new Handler(request =>
+            request.RequestUri!.AbsolutePath switch
+            {
+                "/api/v2/pins/124" => Json(
+                    """{"authToken":"verified-profile-secret"}"""),
+                "/api/v2/user" => Json(
+                    """{"id":500,"username":"viewer"}"""),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }))
+        {
+            BaseAddress = new Uri("https://plex.tv/")
+        };
+
+        var verified = await new PlexAuthClient(client)
+            .ResolveVerifiedIdentityAsync(
+                124, "jularr-test", CancellationToken.None);
+        Assert.IsNotNull(verified);
+        Assert.AreEqual("500", verified.AccountId);
+        var json = System.Text.Json.JsonSerializer.Serialize(verified);
+        StringAssert.Contains(json, "500");
+        Assert.IsFalse(json.Contains(
+            "verified-profile-secret", StringComparison.Ordinal));
+        Assert.IsFalse(verified.ToString().Contains(
+            "verified-profile-secret", StringComparison.Ordinal));
+    }
+
     private static HttpResponseMessage Json(string content) =>
         new(HttpStatusCode.OK)
         {
