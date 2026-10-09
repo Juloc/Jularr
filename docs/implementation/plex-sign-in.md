@@ -30,6 +30,20 @@ The default-off feature flags must remain disabled in production until sign-in, 
 
 Plex auth callbacks need an externally valid HTTPS URL with correct forwarded protocol/host. Local loopback HTTP is allowed for development only. A stable client identifier must persist across application restarts and replicas.
 
+## Reusing verified Plex PINs for a separate media grant
+
+The canonical `PlexAuthClient.ResolveVerifiedIdentityAsync` now makes the
+server-verified stable Plex account ID available together with an **internal,
+JSON-ignored** access token. Existing `ResolveAuthenticatedAccountIdAsync`
+still uses the same verification method and returns only the stable ID.
+
+**Important:** Calling the verifier does not connect Plex media, create a
+Profile Connection or enable sync. Once both draft feature branches are
+integrated, a separate, browser-bound, explicitly confirmed connection flow
+must call the verified-credential result and `PlexProfileConnectionStore`.
+Never copy the token into login identities, browser forms, URLs, Jularr
+sessions, diagnostics or logs.
+
 ## Remaining work before release
 
 - Verify Admin → Providers → Plex switches, authorization and persistence through a real browser session, then complete per-provider diagnostics. The current Test checks PIN endpoint availability, not an end-to-end user sign-in.
