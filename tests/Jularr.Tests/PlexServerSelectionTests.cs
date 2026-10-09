@@ -91,6 +91,14 @@ public sealed class PlexServerSelectionTests
                     Admin(), Candidate(), new Uri("https://other.example:32400/"),
                     ["1"], "jularr-client", CancellationToken.None));
             await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+                picker.GetAvailableLibrariesAsync(
+                    Admin(), Candidate(owned: false), HttpsPlexServer,
+                    "jularr-client", CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+                picker.ApproveAsync(
+                    Admin(), Candidate(owned: false), HttpsPlexServer, ["1"],
+                    "jularr-client", CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
                 picker.ApproveAsync(
                     Admin(), Candidate(), HttpsPlexServer, ["1", "1"],
                     "jularr-client", CancellationToken.None));
@@ -216,8 +224,8 @@ public sealed class PlexServerSelectionTests
             IsEnabled = true
         });
 
-    private static PlexServerCandidate Candidate() =>
-        new("machine-123456", "Home server", true,
+    private static PlexServerCandidate Candidate(bool owned = true) =>
+        new("machine-123456", "Home server", owned,
             "super-private-server-token",
             [new PlexServerConnection(HttpsPlexServer, true, false)]);
 
