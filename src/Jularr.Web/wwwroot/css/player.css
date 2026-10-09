@@ -723,6 +723,10 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 }
 .player-setting select option { background: var(--player-popup-bg); color: var(--player-field-text); }
 .player-setting select:focus-visible { outline: 2px solid var(--player-focus); outline-offset: 1px; }
+.player-setting-slider { min-width: 0; display: grid !important; grid-template-columns: minmax(0, 1fr) 62px; gap: 8px !important; }
+.player-setting-slider input { min-width: 0; width: 100%; accent-color: var(--accent); cursor: pointer; }
+.player-setting-slider output { font-variant-numeric: tabular-nums; text-align: end; font-weight: 600; }
+.player-setting-slider input:focus-visible { outline: 2px solid var(--player-focus); outline-offset: 2px; }
 .player-setting-toggle { grid-template-columns: 1fr auto; }
 .player-setting-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
 .player-setting-hint, .player-setting-status small { color: rgba(255,255,255,.72); font-size: 11px; line-height: 1.4; }
