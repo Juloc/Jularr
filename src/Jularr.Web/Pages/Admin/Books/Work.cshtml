@@ -1,0 +1,74 @@
+@page "{workId:guid}"
+@model Jularr.Web.Pages.Admin.Books.WorkModel
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Books
+@{
+    var ui = Model.Ui;
+    var view = Model.View;
+    ViewData["Title"] = view.Title;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<header class="page-header">
+    <div>
+        <h1>@view.Title</h1>
+        @if (view.Year is { } year)
+        {
+            <p>@year</p>
+        }
+    </div>
+</header>
+
+<partial name="_AdminNavigation" model="Model.Ui" />
+
+@if (Model.Notice is not null)
+{
+    <p class="admset-notice" role="status">@Model.Notice</p>
+}
+@if (Model.Error is not null)
+{
+    <p class="admset-notice" role="alert">@Model.Error</p>
+}
+
+<div class="admmusic">
+    @foreach (var (heading, audiobook, state) in new[] { (ui["admin.books.book"], false, view.Book), (ui["admin.books.audiobook"], true, view.Audiobook) })
+    {
+        <section class="admset-section" aria-label="@heading">
+            <div class="admset-head"><div><h2>@heading</h2></div></div>
+            <div class="admmusic-tags">
+                <span class="admin-tag admin-tag-@(state.Installed ? "success" : state.Wanted ? "warning" : "text")">@Model.StateLabel(state)</span>
+                @if (state.RequestStatus is { } status)
+                {
+                    <span class="admin-tag admin-tag-text">@Model.RequestLabel(status)</span>
+                }
+            </div>
+            @if (state.RequestMessage is not null)
+            {
+                <p class="admset-hint">@state.RequestMessage</p>
+            }
+            <div class="admset-actions">
+                <form method="post" asp-page-handler="Monitor" asp-route-workId="@view.WorkId">
+                    <input type="hidden" name="audiobook" value="@audiobook.ToString().ToLowerInvariant()" />
+                    <input type="hidden" name="monitored" value="@((!state.Monitored).ToString().ToLowerInvariant())" />
+                    <button class="admmusic-toggle @(state.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(state.Monitored ? "true" : "false")">
+                        <span class="admin-switch" aria-hidden="true"></span>
+                        <span>@(state.Monitored ? ui["admin.music.monitored"] : ui["admin.music.unmonitored"])</span>
+                    </button>
+                </form>
+                @if (audiobook && !state.Installed && (state.RequestStatus is null or AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed))
+                {
+                    <form method="post" asp-page-handler="RequestAudiobook" asp-route-workId="@view.WorkId">
+                        <button class="button button-primary" type="submit">@ui["admin.books.requestAudiobook"]</button>
+                    </form>
+                }
+            </div>
+        </section>
+    }
+</div>

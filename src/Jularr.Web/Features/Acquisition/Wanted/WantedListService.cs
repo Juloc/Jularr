@@ -262,7 +262,7 @@ public sealed class WantedListService(
             NextSearchUtc = state.NextSearchUtc is { } next ? AsUtc(next) : null,
             Note = string.IsNullOrWhiteSpace(request.StatusMessage) ? null : request.StatusMessage,
             CoverUrl = request.CoverImageUrl,
-            DetailUrl = LocalUrl(request.ResultUrl),
+            DetailUrl = request is { Kind: MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook, WorkId: { } bookWorkId } ? $"/Admin/Books/Work/{bookWorkId:D}" : LocalUrl(request.ResultUrl),
             CanSearch = hasExecutor && request.Status is AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed
         };
     }

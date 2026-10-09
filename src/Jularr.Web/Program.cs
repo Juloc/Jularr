@@ -514,6 +514,7 @@ builder.Services.AddHttpClient<BookCatalogService>(client =>
 });
 builder.Services.AddScoped<BookSearchCoordinator>();
 builder.Services.AddScoped<BookManualSearchService>();
+builder.Services.AddScoped<BookWorkAdminQuery>();
 
 builder.Services.AddSingleton<SabnzbdAcquisitionStore>();
 builder.Services.AddHttpClient<ISabnzbdClient, SabnzbdClient>(client =>
