@@ -587,7 +587,11 @@ internal static class PlaybackPreparedRenditionEligibility
             Math.Abs(sourceDuration - preparedDuration) > 0.25 ||
             sourceTechnical.Video is not { } sourceVideo ||
             preparedTechnical.Video is not { } preparedVideo ||
-            !string.Equals(sourceVideo.DynamicRange, preparedVideo.DynamicRange, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(sourceVideo.DynamicRange, preparedVideo.DynamicRange, StringComparison.OrdinalIgnoreCase) ||
+            sourceVideo.Width is not > 0 || sourceVideo.Height is not > 0 ||
+            preparedVideo.Width is not > 0 || preparedVideo.Height is not > 0 ||
+            Math.Abs((double)sourceVideo.Width.Value / sourceVideo.Height.Value -
+                     (double)preparedVideo.Width.Value / preparedVideo.Height.Value) > 0.02)
         {
             return false;
         }
@@ -603,7 +607,10 @@ internal static class PlaybackPreparedRenditionEligibility
                    string.Equals(pair.First.Language, pair.Second.Language, StringComparison.OrdinalIgnoreCase) &&
                    pair.First.IsDefault == pair.Second.IsDefault &&
                    pair.First.IsForced == pair.Second.IsForced &&
-                   pair.First.Channels == pair.Second.Channels);
+                   pair.First.Channels == pair.Second.Channels &&
+                   string.Equals(pair.First.Title, pair.Second.Title, StringComparison.Ordinal) &&
+                   (pair.First.Kind != MediaTrackKind.Subtitle ||
+                    string.Equals(pair.First.Codec, pair.Second.Codec, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool IsFresh(CanonicalPlayableFile file, MediaInventoryEntry analysis) =>
