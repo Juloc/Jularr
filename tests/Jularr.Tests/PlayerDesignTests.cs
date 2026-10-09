@@ -259,6 +259,34 @@ public sealed class PlayerDesignTests
         Assert.AreEqual("false", engine.Evaluate("String(learning.isSheetOpen())").ToString());
         Assert.AreEqual("1500", engine.Evaluate("String(learning.selectedCueStartMs())").ToString());
         Assert.AreEqual("playPause", engine.Evaluate("window.JularrPlayerDesign.actions.playPause").ToString());
+
+        engine.Execute("""
+            window.JularrLanguageInspector.available = false;
+            var fallbackRoot = makeElement(), fallbackOverlay = makeElement(), fallbackSheet = makeElement();
+            var fallbackVideo = {
+                paused: false, ended: false, pauses: 0, plays: 0,
+                pause() { this.paused = true; this.pauses++; },
+                play() { this.paused = false; this.plays++; return { catch() {} }; }
+            };
+            var fallback = window.JularrPlayerLearning.attachInspector({
+                root: fallbackRoot, overlay: fallbackOverlay, video: fallbackVideo, inspector: fallbackSheet,
+                design: window.JularrPlayerDesign,
+                learningKicker: makeElement(), word: makeElement(), reading: makeElement(),
+                meaning: makeElement(), state: makeElement(), replay: makeElement(),
+                closeLearning: makeElement(), getCues: () => [cue],
+                getActiveIndex: () => 0, renderActiveCue: () => {}
+            });
+            fallbackRoot.emit(window.JularrPlayerDesign.actionEvent, {
+                detail: { action: "learnCurrentCue", cue }
+            });
+            var sheetOpened = fallback.isSheetOpen();
+            fallbackRoot.emit(window.JularrPlayerDesign.actionEvent, {
+                detail: { action: "closeOverlay" }
+            });
+            """);
+        Assert.AreEqual("true", engine.Evaluate("String(sheetOpened)").ToString());
+        Assert.AreEqual("false", engine.Evaluate("String(fallback.isSheetOpen())").ToString());
+        Assert.AreEqual("1,1", engine.Evaluate("[fallbackVideo.pauses, fallbackVideo.plays].join(',')").ToString());
     }
 
     [TestMethod]
