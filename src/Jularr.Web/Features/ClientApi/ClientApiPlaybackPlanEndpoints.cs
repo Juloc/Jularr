@@ -452,7 +452,9 @@ public static class ClientApiPlaybackPlanEndpoints
                             directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, admitted.Encoder),
                             admitted.Lease,
                             token,
-                            session.BeginTranscodeRun(admitted.Encoder.Backend))).SessionId,
+                            session.BeginTranscodeRun(admitted.Encoder.Backend),
+                            remainingDurationSeconds: session.DurationSeconds is { } duration ? duration - start : null,
+                            costClass: admitted.CostClass)).SessionId,
                         session),
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
@@ -846,7 +848,8 @@ public static class ClientApiPlaybackPlanEndpoints
             request.FailedModes is { Count: > 0 } failed ? failed.Take(4).ToHashSet() : null,
             request.ReplacesSessionId,
             request.Wake,
-            followedAdvice);
+            followedAdvice,
+            HasUntrustedForwardedFor: httpContext.Request.Headers.ContainsKey("X-Forwarded-For"));
         return true;
     }
 

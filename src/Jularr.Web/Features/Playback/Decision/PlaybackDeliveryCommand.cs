@@ -132,9 +132,9 @@ public static class PlaybackDeliveryCommand
             arguments.Add("-y");
         }
 
-        // The speed of an encode is what admission and adaptation need to know; a stream copy has none worth measuring. Progress goes to
-        // stderr because the progressive response owns stdout; the process owners recognise its lines (FfmpegProgressParser).
-        if (!video.Copy)
+        // HLS always reports produced media time for demand-based pacing, including cheap stream-copy remuxes.
+        // The transcode speed meter uses these samples only when video is actually encoded.
+        if (!video.Copy || plan.Transport == PlaybackTransport.Hls)
         {
             arguments.AddRange(["-progress", "pipe:2", "-nostats"]);
         }
