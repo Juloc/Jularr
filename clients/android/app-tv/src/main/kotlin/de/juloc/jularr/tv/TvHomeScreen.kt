@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -32,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Button
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
@@ -54,12 +59,23 @@ fun TvHomeScreen(
 ) {
     var filter by remember { mutableStateOf(TvContentFilter.ALL) }
     val focusColor = rememberTvFocusColor()
+    val selected = remember(library, filter) {
+        library.anime.filter { filter.includes(it.format) }
+    }
+    val featured = selected.firstOrNull { !it.bannerImageUrl.isNullOrBlank() }
+        ?: selected.firstOrNull()
+    val formats = remember(library) { library.anime.associateBy { it.id } }
+    val inProgress = remember(library, continueWatching, filter) {
+        continueWatching.filter { item ->
+            formats[item.animeId]?.let { filter.includes(it.format) } ?: (filter == TvContentFilter.ALL)
+        }
+    }
+    val movies = selected.filter { it.format.equals("MOVIE", ignoreCase = true) }
+    val series = selected.filterNot { it.format.equals("MOVIE", ignoreCase = true) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        colors = SurfaceDefaults.colors(
-            containerColor = Color(0xFF0B0D14),
-        ),
+        colors = SurfaceDefaults.colors(containerColor = Color(0xFF0B0D14)),
     ) {
         LazyColumn(
             modifier = Modifier
@@ -67,12 +83,6 @@ fun TvHomeScreen(
                 .padding(horizontal = 32.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // Item 1: Top Bar
-            item {
-                TvTopBar()
-            }
-
-            // Item 2: Category Filters
             item {
                 TvFilterChipRow(
                     selected = filter,
@@ -82,62 +92,103 @@ fun TvHomeScreen(
                 )
             }
 
-            // Item 3: Sub-Filter & Sort Bar
-            item {
-                TvSubFilterBar(
-                    onOpenFilter = onOpenSearch,
-                    onOpenSort = onOpenSearch,
-                )
-            }
-
-            error?.let {
-                item {
-                    Text(
-                        text = it,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+            if (featured != null) {
+                item(key = "hero:${featured.id}") {
+                    var focused by remember(featured.id) { mutableStateOf(false) }
+                    val shape = RoundedCornerShape(20.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(340.dp)
+                            .clip(shape)
+                            .tvFocusIndication(focused, focusColor, shape)
+                            .clickable { onAnime(featured) }
+                            .reportFocus {
+                                focused = it
+                                if (it) focusMemory.remember("home", "hero:${featured.id}")
+                            },
+                    ) {
+                        TvArtwork(
+                            url = featured.bannerImageUrl ?: featured.coverImageUrl,
+                            serverOrigin = serverOrigin,
+                            requestHeaders = requestHeaders,
+                            contentDescription = featured.title,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        0.0f to Color.Black.copy(alpha = 0.85f),
+                                        0.65f to Color.Black.copy(alpha = 0.22f),
+                                        1.0f to Color.Transparent,
+                                    ),
+                                ),
+                        )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth(0.72f)
+                                .padding(28.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                text = featured.title,
+                                color = Color.White,
+                                style = MaterialTheme.typography.headlineLarge,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = listOfNotNull(
+                                    featured.seasonYear?.toString(),
+                                    featured.format,
+                                    "${featured.episodeCount} episodes",
+                                ).joinToString(" · "),
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White)
+                                Text(
+                                    " Details",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
-            // Item 4: Continue Watching Row
-            if (continueWatching.isNotEmpty()) {
-                item {
-                    Text(
-                        stringResource(R.string.tv_home_row_continue_watching),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
+            error?.let { message ->
+                item { Text(message, color = MaterialTheme.colorScheme.error) }
+            }
+
+            if (inProgress.isNotEmpty()) {
+                item(key = "continue-title") {
+                    Text(stringResource(R.string.tv_home_row_continue_watching), style = MaterialTheme.typography.titleLarge)
                 }
-                item {
+                item(key = "continue-row") {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        items(items = continueWatching, key = { it.episodeId }) { row ->
+                        items(items = inProgress, key = { it.episodeId }) { entry ->
                             ContinueWatchingCard(
-                                item = row,
+                                item = entry,
                                 serverOrigin = serverOrigin,
                                 requestHeaders = requestHeaders,
-                                onClick = { onContinueWatching(row) },
+                                onClick = { onContinueWatching(entry) },
                             )
                         }
                     }
                 }
             }
 
-            // Item 5: Anime Library Section
-            item {
-                Text(
-                    stringResource(R.string.tv_home_row_anime),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            }
-            item {
-                if (library.anime.isEmpty()) {
-                    Text(
-                        stringResource(R.string.tv_home_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                } else {
+            if (series.isNotEmpty()) {
+                item(key = "series-title") { Text("Series & Anime", style = MaterialTheme.typography.titleLarge) }
+                item(key = "series-row") {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        items(items = library.anime, key = { it.id }) { anime ->
+                        items(items = series, key = { it.id }) { anime ->
                             var focused by remember(anime.id) { mutableStateOf(false) }
                             AnimeButton(
                                 anime = anime,
@@ -145,17 +196,52 @@ fun TvHomeScreen(
                                 requestHeaders = requestHeaders,
                                 focused = focused,
                                 focusColor = focusColor,
-                                onFocusChanged = { isFocused ->
-                                    focused = isFocused
-                                    if (isFocused) {
-                                        focusMemory.remember("home", "anime:${anime.id}")
-                                    }
+                                onFocusChanged = {
+                                    focused = it
+                                    if (it) focusMemory.remember("home", "anime:${anime.id}")
                                 },
                                 onClick = { onAnime(anime) },
                             )
                         }
                     }
                 }
+            }
+
+            if (movies.isNotEmpty()) {
+                item(key = "movies-title") { Text("Films", style = MaterialTheme.typography.titleLarge) }
+                item(key = "movies-row") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        items(items = movies, key = { it.id }) { anime ->
+                            var focused by remember(anime.id) { mutableStateOf(false) }
+                            AnimeButton(
+                                anime = anime,
+                                serverOrigin = serverOrigin,
+                                requestHeaders = requestHeaders,
+                                focused = focused,
+                                focusColor = focusColor,
+                                onFocusChanged = {
+                                    focused = it
+                                    if (it) focusMemory.remember("home", "anime:${anime.id}")
+                                },
+                                onClick = { onAnime(anime) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (selected.isEmpty()) {
+                item {
+                    Text(
+                        if (library.anime.isEmpty()) stringResource(R.string.tv_home_empty)
+                        else "No media of this type in the connected TV library.",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+            }
+
+            item {
+                Button(onClick = onOpenSearch) { Text("Browse library / Search") }
             }
         }
     }
