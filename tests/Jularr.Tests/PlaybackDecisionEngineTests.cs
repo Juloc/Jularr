@@ -320,6 +320,35 @@ public sealed class PlaybackDecisionEngineTests
     }
 
     [TestMethod]
+    public void ServerEgressBudgetCapsEvenAnExplicitOriginalRequest()
+    {
+        var network = new PlaybackNetworkConditions(
+            PlaybackNetworkClass.Remote,
+            EstimatedThroughputKbps: 60_000,
+            ServerEgressLimitKbps: 4_250);
+        var original = PlaybackDecisionEngine.Decide(Request(HevcHdrMkv, Android) with
+        {
+            Quality = PlaybackQualityPreset.Original,
+            Network = network
+        });
+
+        Assert.AreEqual(4_250, original.Quality.LimitKbps);
+        Assert.AreEqual(PlaybackLimitSource.ServerEgress, original.Quality.LimitSource);
+        Assert.AreEqual(PlaybackDeliveryMode.Transcode, original.Mode);
+
+        var lowerUserPreset = PlaybackAutoQuality.Resolve(
+            PlaybackQualityPreset.Mbps2,
+            network);
+        Assert.AreEqual(2_000, lowerUserPreset.MaxKbps);
+        Assert.AreEqual(PlaybackLimitSource.Preset, lowerUserPreset.Source);
+
+        var disabled = PlaybackAutoQuality.Resolve(
+            PlaybackQualityPreset.Original,
+            network with { ServerEgressLimitKbps = null });
+        Assert.IsNull(disabled.MaxKbps);
+    }
+
+    [TestMethod]
     public void RepeatedStallsStepDownOneLadderRung()
     {
         var limit = PlaybackAutoQuality.Resolve(
