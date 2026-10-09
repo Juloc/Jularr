@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Franchises;
@@ -94,7 +95,7 @@ public sealed class WatchlistTests
         Assert.AreEqual(ReleaseLocalState.Following, release.Local.State);
         Assert.IsNull(release.Local.Monitored);
         Assert.IsFalse(release.Local.InLibrary);
-        Assert.AreEqual($"/Watchlist#target-{followed.Identity.StableId:D}", release.DetailsUrl);
+        Assert.AreEqual(followed.Identity.WatchlistUrl, release.DetailsUrl);
         CollectionAssert.AreEquivalent(
             new[] { ReleaseMediaType.Anime, ReleaseMediaType.Manga, ReleaseMediaType.LightNovel },
             source.MediaTypes.ToArray(),
@@ -220,6 +221,107 @@ public sealed class WatchlistTests
         await watchlist.FollowAsync(profile, seed, CancellationToken.None);
         var explicitItem = Assert.ContainsSingle(await watchlist.GetEffectiveAsync(profile, CancellationToken.None));
         Assert.IsNotNull(explicitItem.AddedAtUtc, "Explicitly following a franchise work now records when it was added.");
+    }
+
+
+    [TestMethod]
+    public async Task PagedEffectiveRead_MergesFranchisesOverridesAndIgnoresBeforePaging()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var watchlist = new WatchlistStore(fixture.Db);
+        var franchises = new FranchiseStore(fixture.Db);
+        const string profile = "profile-a";
+
+        var inherited = Draft("100", "Original");
+        var ignored = Draft("101", "Hidden");
+        var franchiseId = await franchises.GetOrCreateBySeedAsync(
+            inherited.Identity,
+            CancellationToken.None);
+        await franchises.UpsertMemberAsync(franchiseId, inherited, null, true, CancellationToken.None);
+        await franchises.UpsertMemberAsync(franchiseId, ignored, "SEQUEL", false, CancellationToken.None);
+        await franchises.FollowAsync(profile, franchiseId, CancellationToken.None);
+
+        await watchlist.FollowAsync(profile, Draft("100", "Override"), CancellationToken.None);
+        await watchlist.UnfollowAsync(profile, ignored.Identity, CancellationToken.None);
+        await watchlist.FollowAsync(profile, Draft("200", "Alpha"), CancellationToken.None);
+        await watchlist.FollowAsync(profile, Draft("201", "Beta"), CancellationToken.None);
+        await watchlist.FollowAsync(profile, Draft("202", "Gamma"), CancellationToken.None);
+        await watchlist.FollowAsync(
+            profile,
+            new WatchlistDraft(new WatchlistIdentity(WatchlistMediaType.Manga, "anilist", "300"), "Manga"),
+            CancellationToken.None);
+        await watchlist.FollowAsync("profile-b", Draft("400", "Secret"), CancellationToken.None);
+
+        var account = CurrentAccountContext.ForProfile(profile);
+        var visible = new[] { WatchlistMediaType.Anime };
+        var first = await watchlist.GetEffectivePageAsync(account, new PageRequest(1, 2), visible, CancellationToken.None);
+        var second = await watchlist.GetEffectivePageAsync(account, new PageRequest(2, 2), visible, CancellationToken.None);
+        var beyond = await watchlist.GetEffectivePageAsync(account, new PageRequest(3, 2), visible, CancellationToken.None);
+
+        CollectionAssert.AreEqual(new[] { "Alpha", "Beta" }, first.Items.Select(item => item.Title).ToArray());
+        CollectionAssert.AreEqual(new[] { "Gamma", "Override" }, second.Items.Select(item => item.Title).ToArray());
+        Assert.AreEqual(4L, first.TotalCount);
+        Assert.AreEqual(true, first.HasMore);
+        Assert.AreEqual(false, second.HasMore);
+        Assert.IsEmpty(beyond.Items);
+        Assert.AreEqual(4L, beyond.TotalCount);
+        var overridden = second.Items.Single(item => item.Title == "Override");
+        Assert.AreEqual(franchiseId, overridden.FranchiseId);
+        Assert.IsTrue(overridden.IsExplicit);
+
+        var addressed = await watchlist.GetEffectivePageAsync(
+            account,
+            new PageRequest(),
+            visible,
+            CancellationToken.None,
+            inherited.Identity);
+        var targetItem = Assert.ContainsSingle(addressed.Items);
+        Assert.AreEqual("Override", targetItem.Title);
+        Assert.AreEqual(1L, addressed.TotalCount);
+
+        var hiddenTarget = await watchlist.GetEffectivePageAsync(
+            account,
+            new PageRequest(),
+            visible,
+            CancellationToken.None,
+            ignored.Identity);
+        Assert.IsEmpty(hiddenTarget.Items);
+
+        var other = await watchlist.GetEffectivePageAsync(
+            CurrentAccountContext.ForProfile("profile-b"),
+            new PageRequest(),
+            visible,
+            CancellationToken.None);
+        Assert.AreEqual("Secret", Assert.ContainsSingle(other.Items).Title);
+        Assert.AreEqual(1L, other.TotalCount);
+    }
+
+    [TestMethod]
+    public async Task FollowedFranchises_ArePagedAndProfileScoped()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var franchises = new FranchiseStore(fixture.Db);
+        for (var i = 1; i <= 3; i++)
+        {
+            var item = Draft(i.ToString(), "Franchise " + i);
+            var id = await franchises.GetOrCreateBySeedAsync(item.Identity, CancellationToken.None);
+            await franchises.FollowAsync("profile-a", id, CancellationToken.None);
+        }
+
+        var first = await franchises.ListFollowedAsync(
+            "profile-a", new PageRequest(1, 2), CancellationToken.None);
+        var second = await franchises.ListFollowedAsync(
+            "profile-a", new PageRequest(2, 2), CancellationToken.None);
+        var otherProfile = await franchises.ListFollowedAsync(
+            "profile-b", new PageRequest(), CancellationToken.None);
+
+        Assert.AreEqual(2, first.Items.Count);
+        Assert.AreEqual(1, second.Items.Count);
+        Assert.AreEqual(3L, first.TotalCount);
+        Assert.AreEqual(true, first.HasMore);
+        Assert.AreEqual(false, second.HasMore);
+        Assert.IsEmpty(otherProfile.Items);
+        Assert.AreEqual(0L, otherProfile.TotalCount);
     }
 
     private static WatchlistDraft Draft(string externalId, string title) =>

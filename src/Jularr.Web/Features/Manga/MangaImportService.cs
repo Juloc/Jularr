@@ -100,8 +100,11 @@ public sealed partial class MangaImportService
         var existingByPath = existing.ToDictionary(
             x => x.SourcePath,
             StringComparer.Ordinal);
+        // Only a record whose file is gone can be the one a new file replaces by rename; a file that is still there next to a new one (a ZIP beside its
+        // CBZ) is another version of the same chapter and keeps its own record.
+        var currentPaths = sources.Select(x => x.Path).ToHashSet(StringComparer.Ordinal);
         var existingByNumber = new Dictionary<(double Number, int? VolumeNumber), Guid>();
-        foreach (var item in existing)
+        foreach (var item in existing.Where(x => !currentPaths.Contains(x.SourcePath)))
         {
             existingByNumber.TryAdd((item.Number, item.VolumeNumber), item.Id);
         }

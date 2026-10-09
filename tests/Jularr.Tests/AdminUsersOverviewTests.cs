@@ -29,7 +29,8 @@ public sealed class AdminUsersOverviewTests
         Assert.IsFalse(page.Contains("CurrentNovel", StringComparison.Ordinal));
         Assert.IsFalse(page.Contains(".Learning", StringComparison.Ordinal));
 
-        StringAssert.Contains(model, "authService.ListAsync(cancellationToken)");
+        StringAssert.Contains(model, "adminAccounts.ReadUsersV1(");
+        Assert.IsFalse(model.Contains("authService.ListAsync(", StringComparison.Ordinal));
         Assert.IsFalse(model.Contains("AdminUserProgressService", StringComparison.Ordinal));
     }
 

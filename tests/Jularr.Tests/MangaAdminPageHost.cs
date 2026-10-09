@@ -74,6 +74,7 @@ internal sealed class MangaAdminPageHost : IAsyncDisposable
                     collection.AddSingleton(services.GetRequiredService<MonitoringCommands>());
                     collection.AddSingleton(services.GetRequiredService<WantedReconciler>());
                     collection.AddSingleton(services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>());
+                    collection.AddSingleton(services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaVersionSelector>());
                     collection.AddSingleton(services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>());
                     collection.AddScoped<Jularr.Web.Features.ReadingAcquisition.MangaWorkAdminQuery>();
                 })

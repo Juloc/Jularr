@@ -34,7 +34,8 @@ public sealed class ReadingAcquisitionEngine(
     QualityProfileStore? profiles = null,
     RequestWorkBinder? binder = null,
     ReadingCoverageService? coverage = null,
-    ReadingStructureService? structure = null)
+    ReadingStructureService? structure = null,
+    ReleaseRequestTracker? tracker = null)
 {
     public const string OperationKind = "reading-usenet-download";
 
@@ -68,6 +69,33 @@ public sealed class ReadingAcquisitionEngine(
         var profile = profiles is null ? ReadingQualityProfiles.For(request.Kind) : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
         var search = await core.SearchAsync(ReadingReleaseJudge.Plan(target), profile, new SearchOptions(), cancellationToken);
         var grabbable = search.Grabbable.Where(release => usenetProblem is null || release.Candidate.Type == AcquisitionType.DirectImport).ToArray();
+
+        // A Manga that is in the library is searched again only for a better version of what it holds, and only a better one is taken. With a structure the judge
+        // already limits the releases to the missing units and genuine upgrades; without one the installed quality decides.
+        var installed = target.Want is null && coverage is not null && request.Kind == MediaAcquisitionKind.Manga && request.WorkId is { } workId
+            ? await coverage.InstalledQualityAsync(workId, cancellationToken)
+            : null;
+        if (installed is not null)
+        {
+            if (!UpgradePolicy.Assess(profile, installed).IsUpgradable)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"The Manga is in the library as {installed}.");
+            }
+
+            grabbable = [.. grabbable.Where(release => release.Candidate.Type != AcquisitionType.DirectImport && release.Score is { } score && UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey))];
+        }
+
+        if ((installed is not null || target.Want is { HasMissing: false }) && tracker is not null
+            && await tracker.WaitForUpgradeAsync(
+                request,
+                payload,
+                [.. grabbable.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
+                "The Manga is in the library and no better version is known yet.",
+                cancellationToken) is { } waiting)
+        {
+            return waiting;
+        }
+
         return grabbable.Length == 0 && usenetProblem is not null
             ? new AcquisitionExecution(AcquisitionRequestStatus.Failed, usenetProblem)
             : await GrabAsync(request, payload, grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);

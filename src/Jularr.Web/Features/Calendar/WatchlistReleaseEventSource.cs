@@ -83,7 +83,7 @@ public sealed class WatchlistReleaseEventSource(
                 release.ExternalId,
                 ReleaseLocalStatus.Following,
                 item.CoverImageUrl,
-                DetailsUrl: $"/Watchlist#target-{item.StableId:D}"));
+                DetailsUrl: item.Identity.WatchlistUrl));
         }
 
         return events;

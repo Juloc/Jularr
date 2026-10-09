@@ -10,7 +10,8 @@ public sealed class PaginationTests
     [DataRow(1, 25, 0L)]
     [DataRow(2, 25, 25L)]
     [DataRow(3, 25, 50L)]
-    [DataRow(2147483647, 100, 214748364600L)]
+    [DataRow(1001, 100, 100000L)]
+    [DataRow(4001, 25, 100000L)]
     public void PageRequest_ValidPage_ComputesOffset(int page, int pageSize, long expectedOffset)
     {
         var request = new PageRequest(page, pageSize);
@@ -36,6 +37,9 @@ public sealed class PaginationTests
     [DataRow(1, 0)]
     [DataRow(1, -1)]
     [DataRow(1, 101)]
+    [DataRow(1002, 100)]
+    [DataRow(4002, 25)]
+    [DataRow(int.MaxValue, 100)]
     public void PageRequest_InvalidPageOrSize_Throws(int page, int pageSize)
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
@@ -56,6 +60,16 @@ public sealed class PaginationTests
         Assert.AreEqual("Offset", parameters[1].ParameterName);
         Assert.AreEqual(NpgsqlDbType.Bigint, parameters[1].NpgsqlDbType);
         Assert.AreEqual(50L, parameters[1].Value);
+    }
+
+    [TestMethod]
+    public void PageRequest_MaximumOffset_RejectsExpensiveDeepPages()
+    {
+        var request = new PageRequest(1001, 100);
+
+        Assert.AreEqual(PageRequest.MaximumOffset, request.Offset);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => new PageRequest(1002, 100));
     }
 
     [TestMethod]

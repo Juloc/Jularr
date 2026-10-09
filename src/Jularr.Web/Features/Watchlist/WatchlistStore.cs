@@ -2,7 +2,9 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Auth;
 using Microsoft.EntityFrameworkCore;
+using NpgsqlTypes;
 
 namespace Jularr.Web.Features.Watchlist;
 
@@ -115,6 +117,296 @@ public sealed class WatchlistStore(AppDbContext db)
             Add(command, "@externalId", identity.ExternalKey);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }, cancellationToken);
+
+
+    private const string ReadEffectivePageSql = """
+        WITH "InheritedRanks" AS (
+            SELECT
+                "FranchiseMembers"."MediaType",
+                "FranchiseMembers"."Provider",
+                "FranchiseMembers"."ExternalId",
+                "FranchiseMembers"."Title",
+                "FranchiseMembers"."NativeTitle",
+                "FranchiseMembers"."CoverImageUrl",
+                "FranchiseMembers"."Format",
+                "FranchiseMembers"."Status",
+                "FranchiseMembers"."Year",
+                "Franchises"."Id" AS "FranchiseId",
+                "Franchises"."Title" AS "FranchiseTitle",
+                ROW_NUMBER() OVER (
+                    PARTITION BY
+                        "FranchiseMembers"."MediaType",
+                        "FranchiseMembers"."Provider",
+                        "FranchiseMembers"."ExternalId"
+                    ORDER BY
+                        "Franchises"."Title" ASC,
+                        "Franchises"."Id" ASC
+                ) AS "RowNumber"
+            FROM
+                "FranchiseMembers"
+            INNER JOIN
+                "ProfileFranchiseFollows"
+                    ON "ProfileFranchiseFollows"."FranchiseId" = "FranchiseMembers"."FranchiseId"
+            INNER JOIN
+                "Franchises"
+                    ON "Franchises"."Id" = "FranchiseMembers"."FranchiseId"
+            WHERE
+                "ProfileFranchiseFollows"."ProfileId" = @ProfileId
+        ),
+        "Inherited" AS (
+            SELECT
+                "InheritedRanks"."MediaType",
+                "InheritedRanks"."Provider",
+                "InheritedRanks"."ExternalId",
+                "InheritedRanks"."Title",
+                "InheritedRanks"."NativeTitle",
+                "InheritedRanks"."CoverImageUrl",
+                "InheritedRanks"."Format",
+                "InheritedRanks"."Status",
+                "InheritedRanks"."Year",
+                "InheritedRanks"."FranchiseId",
+                "InheritedRanks"."FranchiseTitle"
+            FROM
+                "InheritedRanks"
+            WHERE
+                "InheritedRanks"."RowNumber" = 1
+        ),
+        "Direct" AS (
+            SELECT
+                "ProfileWatchlistPreferences"."MediaType",
+                "ProfileWatchlistPreferences"."Provider",
+                "ProfileWatchlistPreferences"."ExternalId",
+                "ProfileWatchlistPreferences"."Title",
+                "ProfileWatchlistPreferences"."NativeTitle",
+                "ProfileWatchlistPreferences"."CoverImageUrl",
+                "ProfileWatchlistPreferences"."Format",
+                "ProfileWatchlistPreferences"."Status",
+                "ProfileWatchlistPreferences"."Year",
+                "ProfileWatchlistPreferences"."UpdatedAtUtc"
+            FROM
+                "ProfileWatchlistPreferences"
+            WHERE
+                "ProfileWatchlistPreferences"."ProfileId" = @ProfileId
+                AND "ProfileWatchlistPreferences"."FollowState" = 'follow'
+        ),
+        "Effective" AS (
+            SELECT
+                COALESCE("Direct"."MediaType", "Inherited"."MediaType") AS "MediaType",
+                COALESCE("Direct"."Provider", "Inherited"."Provider") AS "Provider",
+                COALESCE("Direct"."ExternalId", "Inherited"."ExternalId") AS "ExternalId",
+                COALESCE("Direct"."Title", "Inherited"."Title") AS "Title",
+                CASE
+                    WHEN "Direct"."MediaType" IS NOT NULL THEN "Direct"."NativeTitle"
+                    ELSE "Inherited"."NativeTitle"
+                END AS "NativeTitle",
+                CASE
+                    WHEN "Direct"."MediaType" IS NOT NULL THEN "Direct"."CoverImageUrl"
+                    ELSE "Inherited"."CoverImageUrl"
+                END AS "CoverImageUrl",
+                CASE
+                    WHEN "Direct"."MediaType" IS NOT NULL THEN "Direct"."Format"
+                    ELSE "Inherited"."Format"
+                END AS "Format",
+                CASE
+                    WHEN "Direct"."MediaType" IS NOT NULL THEN "Direct"."Status"
+                    ELSE "Inherited"."Status"
+                END AS "Status",
+                CASE
+                    WHEN "Direct"."MediaType" IS NOT NULL THEN "Direct"."Year"
+                    ELSE "Inherited"."Year"
+                END AS "Year",
+                "Inherited"."FranchiseId",
+                "Inherited"."FranchiseTitle",
+                "Direct"."UpdatedAtUtc",
+                ("Direct"."MediaType" IS NOT NULL) AS "IsExplicit"
+            FROM
+                "Inherited"
+            FULL OUTER JOIN
+                "Direct"
+                    ON "Direct"."MediaType" = "Inherited"."MediaType"
+                    AND "Direct"."Provider" = "Inherited"."Provider"
+                    AND "Direct"."ExternalId" = "Inherited"."ExternalId"
+        )
+        SELECT
+            "Effective"."MediaType",
+            "Effective"."Provider",
+            "Effective"."ExternalId",
+            "Effective"."Title",
+            "Effective"."NativeTitle",
+            "Effective"."CoverImageUrl",
+            "Effective"."Format",
+            "Effective"."Status",
+            "Effective"."Year",
+            "Effective"."FranchiseId",
+            "Effective"."FranchiseTitle",
+            "Effective"."UpdatedAtUtc",
+            "Effective"."IsExplicit",
+            COUNT(*) OVER () AS "TotalCount"
+        FROM
+            "Effective"
+        WHERE
+            "Effective"."MediaType" = ANY(@VisibleMediaTypes)
+            AND (
+                @TargetMediaType IS NULL
+                OR (
+                    "Effective"."MediaType" = @TargetMediaType
+                    AND "Effective"."Provider" = @TargetProvider
+                    AND "Effective"."ExternalId" = @TargetExternalId
+                )
+            )
+            AND NOT EXISTS (
+                SELECT
+                    1
+                FROM
+                    "ProfileWatchlistPreferences" AS "Ignored"
+                WHERE
+                    "Ignored"."ProfileId" = @ProfileId
+                    AND "Ignored"."FollowState" = 'ignore'
+                    AND "Ignored"."MediaType" = "Effective"."MediaType"
+                    AND "Ignored"."Provider" = "Effective"."Provider"
+                    AND "Ignored"."ExternalId" = "Effective"."ExternalId"
+            )
+        ORDER BY
+            LOWER("Effective"."Title") ASC,
+            "Effective"."MediaType" ASC,
+            "Effective"."Provider" ASC,
+            "Effective"."ExternalId" ASC
+        LIMIT
+            @PageSize
+        OFFSET
+            @Offset
+        """;
+
+    private const string CountEffectiveSql = """
+        WITH "Candidates" AS (
+            SELECT
+                "FranchiseMembers"."MediaType",
+                "FranchiseMembers"."Provider",
+                "FranchiseMembers"."ExternalId"
+            FROM
+                "FranchiseMembers"
+            INNER JOIN
+                "ProfileFranchiseFollows"
+                    ON "ProfileFranchiseFollows"."FranchiseId" = "FranchiseMembers"."FranchiseId"
+            WHERE
+                "ProfileFranchiseFollows"."ProfileId" = @ProfileId
+            UNION
+            SELECT
+                "ProfileWatchlistPreferences"."MediaType",
+                "ProfileWatchlistPreferences"."Provider",
+                "ProfileWatchlistPreferences"."ExternalId"
+            FROM
+                "ProfileWatchlistPreferences"
+            WHERE
+                "ProfileWatchlistPreferences"."ProfileId" = @ProfileId
+                AND "ProfileWatchlistPreferences"."FollowState" = 'follow'
+        )
+        SELECT
+            COUNT(*)
+        FROM
+            "Candidates"
+        WHERE
+            "Candidates"."MediaType" = ANY(@VisibleMediaTypes)
+            AND (
+                @TargetMediaType IS NULL
+                OR (
+                    "Candidates"."MediaType" = @TargetMediaType
+                    AND "Candidates"."Provider" = @TargetProvider
+                    AND "Candidates"."ExternalId" = @TargetExternalId
+                )
+            )
+            AND NOT EXISTS (
+                SELECT
+                    1
+                FROM
+                    "ProfileWatchlistPreferences" AS "Ignored"
+                WHERE
+                    "Ignored"."ProfileId" = @ProfileId
+                    AND "Ignored"."FollowState" = 'ignore'
+                    AND "Ignored"."MediaType" = "Candidates"."MediaType"
+                    AND "Ignored"."Provider" = "Candidates"."Provider"
+                    AND "Ignored"."ExternalId" = "Candidates"."ExternalId"
+            )
+        """;
+
+    public async Task<PageResult<WatchlistItem>> GetEffectivePageAsync(
+        CurrentAccountContext account,
+        PageRequest paging,
+        IReadOnlyCollection<WatchlistMediaType> visibleTypes,
+        CancellationToken cancellationToken,
+        WatchlistIdentity? target = null)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(paging);
+        ArgumentNullException.ThrowIfNull(visibleTypes);
+
+        var profileId = account.ProfileId;
+        ValidateProfile(profileId);
+        var mediaTypes = visibleTypes.Select(WatchlistMediaTypeNames.ToStorage).Distinct().ToArray();
+
+        return await WithConnectionAsync(async connection =>
+        {
+            var items = new List<WatchlistItem>(paging.PageSize);
+            long? totalCount = null;
+
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = ReadEffectivePageSql;
+                foreach (var parameter in SqlParams.Create()
+                    .Add("ProfileId", profileId)
+                    .Add("VisibleMediaTypes", mediaTypes, NpgsqlDbType.Array | NpgsqlDbType.Text)
+                    .Add("TargetMediaType", target is null
+                        ? (string?)null
+                        : WatchlistMediaTypeNames.ToStorage(target.MediaType))
+                    .Add("TargetProvider", target?.ProviderKey)
+                    .Add("TargetExternalId", target?.ExternalKey)
+                    .ToArray())
+                {
+                    command.Parameters.Add(parameter);
+                }
+
+                foreach (var parameter in paging.ToSqlParameters())
+                {
+                    command.Parameters.Add(parameter);
+                }
+
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    items.Add(ReadItem(reader, reader.GetBoolean(12)));
+                    totalCount ??= reader.GetInt64(13);
+                }
+            }
+
+            if (totalCount is null)
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = CountEffectiveSql;
+                foreach (var parameter in SqlParams.Create()
+                    .Add("ProfileId", profileId)
+                    .Add("VisibleMediaTypes", mediaTypes, NpgsqlDbType.Array | NpgsqlDbType.Text)
+                    .Add("TargetMediaType", target is null
+                        ? (string?)null
+                        : WatchlistMediaTypeNames.ToStorage(target.MediaType))
+                    .Add("TargetProvider", target?.ProviderKey)
+                    .Add("TargetExternalId", target?.ExternalKey)
+                    .ToArray())
+                {
+                    command.Parameters.Add(parameter);
+                }
+
+                totalCount = Convert.ToInt64(
+                    await command.ExecuteScalarAsync(cancellationToken),
+                    CultureInfo.InvariantCulture);
+            }
+
+            return PageResult<WatchlistItem>.From(
+                items,
+                paging,
+                totalCount,
+                paging.Offset + items.Count < totalCount.Value);
+        }, cancellationToken);
+    }
 
     public async Task<IReadOnlyList<WatchlistItem>> GetEffectiveAsync(
         string profileId,

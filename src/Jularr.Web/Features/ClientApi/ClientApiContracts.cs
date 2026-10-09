@@ -431,7 +431,11 @@ public sealed record ClientPlaybackHistoryResponse(
     IReadOnlyList<ClientPlaybackHistoryItem> Items);
 
 public sealed record ClientWatchlistResponse(
-    IReadOnlyList<ClientWatchlistItem> Items);
+    IReadOnlyList<ClientWatchlistItem> Items,
+    int Page,
+    int PageSize,
+    long TotalCount,
+    bool HasMore);
 
 /// <summary>
 /// A followed work from the signed-in profile's watchlist. <c>availability</c> is

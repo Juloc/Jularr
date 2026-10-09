@@ -129,6 +129,42 @@ public sealed class MangaReleaseCoverageTests
         Assert.IsTrue(ReadingRank.Judge(Candidate("Frieren CBZ"), new ReadingAcquisitionTarget(MediaAcquisitionKind.Manga, "Frieren", [])).Score > 0);
     }
 
+    private static ReadingWant Upgrade(int volume, string installed, int[]? missing = null, int[]? held = null) =>
+        new(missing ?? [], [], held ?? [volume], [])
+        {
+            UpgradeVolumes = new Dictionary<int, string?> { [volume] = installed },
+            Profile = ReadingQualityProfiles.CreateDefaultManga()
+        };
+
+    [TestMethod]
+    public void AnInstalledZipVolumeIsWantedAgainOnlyByABetterFormat()
+    {
+        var want = Upgrade(2, "ZIP", held: [1, 2]);
+
+        var cbz = ReadingRank.Judge(Candidate("Frieren v02 CBZ"), Target(want));
+        var zip = ReadingRank.Judge(Candidate("Frieren v02 ZIP"), Target(want));
+        var other = ReadingRank.Judge(Candidate("Frieren v01 CBZ"), Target(want));
+
+        Assert.IsTrue(cbz.Score > 0);
+        Assert.AreEqual(0, zip.Score);
+        Assert.AreEqual("not better than the installed ZIP", zip.RejectedBecause, "An equal version is never downloaded again.");
+        Assert.AreEqual(0, other.Score, "A held volume without an upgrade is not wanted.");
+    }
+
+    [TestMethod]
+    public void ASetThatUpgradesOneVolumeAndAddsAMissingOneBeatsTheSingleVolumeAndCostsNothingForAnUpgradedOne()
+    {
+        var want = Upgrade(1, "ZIP", missing: [2], held: [1]);
+
+        var pack = ReadingRank.Judge(Candidate("Frieren Vol 1-2 CBZ"), Target(want));
+        var single = ReadingRank.Judge(Candidate("Frieren v02 CBZ"), Target(want));
+        var inferiorPack = ReadingRank.Judge(Candidate("Frieren Vol 1-2 ZIP"), Target(want));
+
+        Assert.IsTrue(pack.Score > single.Score, "Two units improved beat one.");
+        Assert.IsTrue(inferiorPack.Score > 0, "The missing volume 2 is still wanted, from a ZIP too.");
+        Assert.IsTrue(pack.Score > inferiorPack.Score, "Upgrading volume 1 as well makes the CBZ set better.");
+    }
+
     private static AcquisitionCandidate Candidate(string title) =>
         new(
             title,

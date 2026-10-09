@@ -402,44 +402,113 @@ public sealed class FranchiseStore(AppDbContext db)
             return result.ToArray();
         }, cancellationToken);
 
-    public async Task<IReadOnlyList<FranchiseSummary>> ListFollowedAsync(string profileId, CancellationToken cancellationToken) =>
+    public async Task<PageResult<FranchiseSummary>> ListFollowedAsync(
+        string profileId,
+        PageRequest paging,
+        CancellationToken cancellationToken) =>
         await WithConnectionAsync(async connection =>
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                """
-                SELECT f."Id", f."Title", f."SeedMediaType", f."SeedProvider", f."SeedExternalId",
-                       f."LastRefreshedAtUtc",
-                       (SELECT COUNT(*) FROM "FranchiseMembers" m WHERE m."FranchiseId" = f."Id")
-                FROM "Franchises" f
-                INNER JOIN "ProfileFranchiseFollows" pf ON pf."FranchiseId" = f."Id"
-                WHERE pf."ProfileId" = @profile
-                ORDER BY f."Title";
-                """;
-            Add(command, "@profile", profileId);
-            var result = new List<FranchiseSummary>();
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var mediaType = WatchlistMediaTypeNames.Parse(reader.GetString(2));
-                if (mediaType is null || !Guid.TryParse(reader.GetString(0), out var id)) continue;
+            var result = new List<FranchiseSummary>(paging.PageSize);
+            long? totalCount = null;
 
-                DateTime? refreshed = null;
-                if (!reader.IsDBNull(5) &&
-                    DateTime.TryParse(reader.GetString(5), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    """
+                    SELECT
+                        "Franchises"."Id",
+                        "Franchises"."Title",
+                        "Franchises"."SeedMediaType",
+                        "Franchises"."SeedProvider",
+                        "Franchises"."SeedExternalId",
+                        "Franchises"."LastRefreshedAtUtc",
+                        (
+                            SELECT
+                                COUNT(*)
+                            FROM
+                                "FranchiseMembers"
+                            WHERE
+                                "FranchiseMembers"."FranchiseId" = "Franchises"."Id"
+                        ) AS "MemberCount",
+                        COUNT(*) OVER () AS "TotalCount"
+                    FROM
+                        "Franchises"
+                    INNER JOIN
+                        "ProfileFranchiseFollows"
+                            ON "ProfileFranchiseFollows"."FranchiseId" = "Franchises"."Id"
+                    WHERE
+                        "ProfileFranchiseFollows"."ProfileId" = @ProfileId
+                    ORDER BY
+                        "Franchises"."Title" ASC,
+                        "Franchises"."Id" ASC
+                    LIMIT
+                        @PageSize
+                    OFFSET
+                        @Offset
+                    """;
+                foreach (var parameter in SqlParams.Create()
+                    .Add("ProfileId", profileId).ToArray().Concat(paging.ToSqlParameters()))
                 {
-                    refreshed = parsed;
+                    command.Parameters.Add(parameter);
                 }
 
-                result.Add(new FranchiseSummary(
-                    id,
-                    reader.GetString(1),
-                    new WatchlistIdentity(mediaType.Value, reader.GetString(3), reader.GetString(4)),
-                    refreshed,
-                    Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture)));
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    totalCount ??= reader.GetInt64(7);
+                    var mediaType = WatchlistMediaTypeNames.Parse(reader.GetString(2));
+                    if (mediaType is null || !Guid.TryParse(reader.GetString(0), out var id))
+                    {
+                        continue;
+                    }
+
+                    DateTime? refreshed = null;
+                    if (!reader.IsDBNull(5) &&
+                        DateTime.TryParse(
+                            reader.GetString(5),
+                            CultureInfo.InvariantCulture,
+                            DateTimeStyles.RoundtripKind,
+                            out var parsed))
+                    {
+                        refreshed = parsed;
+                    }
+
+                    result.Add(new FranchiseSummary(
+                        id,
+                        reader.GetString(1),
+                        new WatchlistIdentity(mediaType.Value, reader.GetString(3), reader.GetString(4)),
+                        refreshed,
+                        Convert.ToInt32(reader.GetValue(6), CultureInfo.InvariantCulture)));
+                }
             }
 
-            return result.ToArray();
+            if (totalCount is null)
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    """
+                    SELECT
+                        COUNT(*)
+                    FROM
+                        "ProfileFranchiseFollows"
+                    WHERE
+                        "ProfileId" = @ProfileId
+                    """;
+                foreach (var parameter in SqlParams.Create().Add("ProfileId", profileId).ToArray())
+                {
+                    command.Parameters.Add(parameter);
+                }
+
+                totalCount = Convert.ToInt64(
+                    await command.ExecuteScalarAsync(cancellationToken),
+                    CultureInfo.InvariantCulture);
+            }
+
+            return PageResult<FranchiseSummary>.From(
+                result,
+                paging,
+                totalCount,
+                paging.Offset + result.Count < totalCount.Value);
         }, cancellationToken);
 
     /// <summary>Records that every member's relations are current.</summary>

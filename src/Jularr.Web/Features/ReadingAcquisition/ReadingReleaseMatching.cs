@@ -27,26 +27,59 @@ public sealed record ReadingReleaseInfo(
     double? ChapterEnd,
     string? Language,
     bool IsCompleteOrBatch,
-    int? VolumeEnd = null);
+    int? VolumeEnd = null)
+{
+    private bool Everything => VolumeNumber is null && ChapterStart is null && IsCompleteOrBatch;
 
-// What a Work still lacks and already holds, as volume and chapter numbers; present only when the Work has a provider-identified structure.
+    public bool HoldsVolume(int volume) => Everything || (VolumeNumber is { } first && volume >= first && volume <= (VolumeEnd ?? first));
+
+    public bool HoldsChapter(double chapter) => Everything || (ChapterStart is { } first && chapter >= first && chapter <= (ChapterEnd ?? first));
+}
+
+// What a Work still lacks and already holds, as volume and chapter numbers; present only when the Work has a provider-identified structure. A held unit whose
+// installed quality the profile still wants better (Upgrade*, with that quality) is wanted again, but only by a release that is better by the profile's upgrade policy.
 public sealed record ReadingWant(
     IReadOnlyList<int> Volumes,
     IReadOnlyList<double> Chapters,
     IReadOnlyList<int> HeldVolumes,
     IReadOnlyList<double> HeldChapters)
 {
-    public bool IsEmpty => Volumes.Count == 0 && Chapters.Count == 0;
+    public IReadOnlyDictionary<int, string?> UpgradeVolumes { get; init; } = new Dictionary<int, string?>();
 
-    public int Total => Volumes.Count + Chapters.Count;
+    public IReadOnlyDictionary<double, string?> UpgradeChapters { get; init; } = new Dictionary<double, string?>();
 
-    public (int Wanted, int Unwanted) Cover(ReadingReleaseInfo release)
+    public QualityProfile? Profile { get; init; }
+
+    public bool IsEmpty => Volumes.Count == 0 && Chapters.Count == 0 && UpgradeVolumes.Count == 0 && UpgradeChapters.Count == 0;
+
+    public bool HasMissing => Volumes.Count > 0 || Chapters.Count > 0;
+
+    public int Total => Volumes.Count + Chapters.Count + UpgradeVolumes.Count + UpgradeChapters.Count;
+
+    public (int Wanted, int Unwanted) Cover(ReadingReleaseInfo release, string? quality)
     {
-        var everything = release.VolumeNumber is null && release.ChapterStart is null && release.IsCompleteOrBatch;
-        bool Holds(int volume) => everything || (release.VolumeNumber is { } first && volume >= first && volume <= (release.VolumeEnd ?? first));
-        bool Contains(double chapter) => everything || (release.ChapterStart is { } first && chapter >= first && chapter <= (release.ChapterEnd ?? first));
-        return (Volumes.Count(Holds) + Chapters.Count(Contains), HeldVolumes.Count(Holds) + HeldChapters.Count(Contains));
+        var (holds, contains) = Spans(release);
+        var upgraded = UpgradeVolumes.Count(unit => holds(unit.Key) && Improves(unit.Value, quality)) + UpgradeChapters.Count(unit => contains(unit.Key) && Improves(unit.Value, quality));
+        var held = HeldVolumes.Count(unit => holds(unit)) + HeldChapters.Count(unit => contains(unit));
+        return (Volumes.Count(unit => holds(unit)) + Chapters.Count(unit => contains(unit)) + upgraded, Math.Max(0, held - upgraded));
     }
+
+    // The installed quality of the first unit a release holds that is only wanted for an upgrade, or null when it holds none.
+    public string? UpgradeTargetOf(ReadingReleaseInfo release)
+    {
+        var (holds, contains) = Spans(release);
+        return UpgradeVolumes.Where(unit => holds(unit.Key)).Select(unit => unit.Value).Concat(UpgradeChapters.Where(unit => contains(unit.Key)).Select(unit => unit.Value)).FirstOrDefault();
+    }
+
+    public bool OverlapsUpgrade(ReadingReleaseInfo release)
+    {
+        var (holds, contains) = Spans(release);
+        return UpgradeVolumes.Keys.Any(unit => holds(unit)) || UpgradeChapters.Keys.Any(unit => contains(unit));
+    }
+
+    private bool Improves(string? installed, string? candidate) => Profile is not null && UpgradePolicy.IsUpgrade(Profile, installed, candidate);
+
+    private static (Func<int, bool> Holds, Func<double, bool> Contains) Spans(ReadingReleaseInfo release) => (release.HoldsVolume, release.HoldsChapter);
 }
 
 public sealed record ReadingAcquisitionTarget(
@@ -315,7 +348,7 @@ public static class ReadingReleaseJudge
         if (want is not null)
         {
             // Covering more of what is missing wins, and every unit the library already holds is a download nobody needs.
-            var (covered, unwanted) = want.Cover(parsed);
+            var (covered, unwanted) = want.Cover(parsed, ReadingReleaseEvidenceParser.QualityOf(parsed.Format));
             coverage = new SelectionCoverage(covered, want.Total, unwanted);
             context += Math.Min(covered, 12) * 6 - Math.Min(unwanted, 10) * 4;
         }
@@ -367,12 +400,17 @@ public static class ReadingReleaseJudge
             return ReleaseIdentityEvidence.Ambiguous("UnnamedUnit", "the release names no volume, chapter or batch");
         }
 
-        var (covered, _) = want.Cover(parsed);
+        var (covered, _) = want.Cover(parsed, ReadingReleaseEvidenceParser.QualityOf(parsed.Format));
         if (covered > 0)
         {
             return parsed.VolumeNumber is not null || parsed.ChapterStart is not null
                 ? ReleaseIdentityEvidence.Exact("VolumeOrChapter", "The release names a volume or chapter that is wanted.")
                 : ReleaseIdentityEvidence.Strong("CompleteSeries", "A complete set that holds wanted units.");
+        }
+
+        if (want.OverlapsUpgrade(parsed))
+        {
+            return ReleaseIdentityEvidence.Conflict("NotAnUpgrade", $"not better than the installed {want.UpgradeTargetOf(parsed) ?? "version"}");
         }
 
         return parsed.VolumeNumber is { } volume

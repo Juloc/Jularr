@@ -147,6 +147,25 @@ public sealed class SqlParamsTests
     }
 
     [TestMethod]
+    public void Create_IncompatibleExplicitTypes_AreRejected()
+    {
+        Assert.ThrowsExactly<ArgumentException>(
+            () => SqlParams.Create().Add("Id", 42L, NpgsqlDbType.Text));
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => SqlParams.Create().Add("Json", 42, NpgsqlDbType.Jsonb));
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => SqlParams.Create().Add("Languages", new[] { "de" }, NpgsqlDbType.Array | NpgsqlDbType.Integer));
+
+        Assert.ThrowsExactly<ArgumentException>(
+            () => SqlParams.Create().Add("When", new[] { DateTime.UtcNow }, NpgsqlDbType.Array | NpgsqlDbType.TimestampTz));
+
+        Assert.ThrowsExactly<NotSupportedException>(
+            () => SqlParams.Create().Add("Languages", new[] { "de" }));
+    }
+
+    [TestMethod]
     public void From_UnknownOrDuplicatedProperty_IsRejected()
     {
         var data = new AccountData(12, "M", State.Pending);

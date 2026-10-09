@@ -25,6 +25,7 @@ public sealed class WorkModel(
     AcquisitionAccessStore requestStore,
     QualityProfileStore profiles,
     ReadingStructureService structure,
+    MangaVersionSelector versions,
     IInstanceModuleService? instanceModules = null) : PageModel
 {
     public const int ChaptersPerPage = 40;
@@ -187,6 +188,7 @@ public sealed class WorkModel(
         }
 
         await profiles.AssignWorkAsync(workId, profileId, cancellationToken);
+        await versions.ReselectAsync(workId, cancellationToken);
         await wanted.ReconcileAsync(workId, cancellationToken);
         TempData["MangaWorkNotice"] = Ui["admin.manga.profile.saved"];
         return RedirectToPage(new { workId });
@@ -227,6 +229,13 @@ public sealed class WorkModel(
             _ => wanted ? "admin.manga.state.wanted" : "admin.manga.state.missing"
         }];
 
+    public string? TransferText(bool transferring) =>
+        !transferring || View.Transfer is not { } transfer
+            ? null
+            : transfer.Status == AcquisitionRequestStatus.Importing
+                ? Ui["admin.manga.transfer.importing"]
+                : transfer.ProgressPercent is { } percent ? Ui.Format("admin.manga.transfer.downloading", ("percent", percent)) : Ui["admin.manga.transfer.downloadingNoProgress"];
+
     public string RequestLabel(AcquisitionRequestStatus status) => Ui["requests.status." + AcquisitionAccessNames.Status(status)];
 
     public static bool Readable(string path) => path.Length > 0 && (System.IO.File.Exists(path) || Directory.Exists(path));
@@ -237,4 +246,6 @@ public sealed class WorkModel(
 
 public sealed record MangaUnitControls(long WorkId, string Scope, Guid Id, double Number, bool Monitored, bool? Decision, string Name, bool CanSearch, UiTextBundle Ui);
 
-public sealed record MangaUnitRow(long WorkId, ReadingChapterUnit Chapter, UiTextBundle Ui, bool CanSearch);
+public sealed record MangaUnitRow(long WorkId, ReadingChapterUnit Chapter, UiTextBundle Ui, bool CanSearch, string? Transfer);
+
+public sealed record MangaUnitTags(string State, string Tone, bool Monitored, string? Quality, bool UpgradeWanted, string? Transfer, UiTextBundle Ui);

@@ -814,7 +814,8 @@ public sealed class BookPdfAcquisitionTests
             {
                 collection.AddSingleton<BookManualSearchService>();
                 // The upgrade part of the Wanted pass for Books, as Program.cs registers it.
-                collection.AddSingleton(provider => new WantedReconciler(db, TimeProvider.System, null, new UpgradeAssessors([new BookUpgradeAssessor(db, provider.GetRequiredService<QualityProfileStore>())])));
+                collection.AddSingleton(provider => new WantedReconciler(db, TimeProvider.System, null, new UpgradeAssessors(
+                    [new BookUpgradeAssessor(db, provider.GetRequiredService<QualityProfileStore>()), .. MangaAssessors(provider, aniList is not null)])));
                 collection.AddSingleton<UpgradeScanState>();
                 collection.AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(MediaAcquisitionKind.Book, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<QualityProfileStore>(), provider.GetRequiredService<UpgradeScanState>()));
             }
@@ -874,13 +875,23 @@ public sealed class BookPdfAcquisitionTests
             return new BookAcquisitionEnvironment(root, services, db);
         }
 
+        private static IEnumerable<IUpgradeAssessor> MangaAssessors(IServiceProvider provider, bool enabled) =>
+            !enabled
+                ? []
+                : new[] { WantedTargetKind.Work, WantedTargetKind.Volume, WantedTargetKind.Chapter }.Select(target => (IUpgradeAssessor)new Jularr.Web.Features.ReadingAcquisition.MangaUpgradeAssessor(
+                    target,
+                    provider.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>(),
+                    provider.GetRequiredService<QualityProfileStore>()));
+
         // The Manga half of the shared Reading pipeline, wired as Program.cs does it.
         private static void AddManga(ServiceCollection collection, AppDbContext db, string root, HttpMessageHandler aniList)
         {
             collection.AddSingleton<IHttpClientFactory>(new FixedHttpClientFactory(aniList));
             collection.AddSingleton<Jularr.Web.Features.MediaCore.ReadingUnits>();
             collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.MangaVersionSelector>();
             collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>();
+            collection.AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(MediaAcquisitionKind.Manga, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<QualityProfileStore>(), provider.GetRequiredService<UpgradeScanState>()));
             collection.AddSingleton<IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRegistration>();
             collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
             collection.AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
@@ -903,7 +914,8 @@ public sealed class BookPdfAcquisitionTests
                 Path.Combine(root, "manga-cache"),
                 routing: provider.GetRequiredService<Jularr.Web.Features.Storage.LibraryRootRoutingService>(),
                 binder: provider.GetRequiredService<RequestWorkBinder>(),
-                wanted: provider.GetRequiredService<WantedReconciler>()));
+                wanted: provider.GetRequiredService<WantedReconciler>(),
+                versions: provider.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaVersionSelector>()));
         }
 
         private sealed class FixedHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory

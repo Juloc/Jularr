@@ -278,6 +278,27 @@ internal static class WantedSql
         LIMIT 1
         """;
 
+    // Whether the library holds the Manga volume or chapter a queue row names (the row of an installed unit is an upgrade the request that fetched it continues); a
+    // Light Novel volume row is never installed here.
+    private const string MangaVolumeItemInstalled =
+        """
+        (work."MediaType" = @manga AND item."TargetKind" = 2 AND (
+            EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId" WHERE bound."LocalKind" = 1 AND bound."WorkVolumeId" = item."TargetId")
+            OR (EXISTS (SELECT 1 FROM "WorkChapters" part WHERE part."VolumeId" = item."TargetId" AND part."ExternalId" IS NOT NULL)
+                AND NOT EXISTS (
+                    SELECT 1 FROM "WorkChapters" part WHERE part."VolumeId" = item."TargetId" AND part."ExternalId" IS NOT NULL
+                      AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
+                                      WHERE bound."LocalKind" = 1 AND bound."WorkChapterId" = part."Id")))))
+        """;
+
+    private const string MangaChapterItemInstalled =
+        """
+        (work."MediaType" = @manga AND item."TargetKind" = 3 AND
+            EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
+                    WHERE bound."LocalKind" = 1 AND (bound."WorkChapterId" = item."TargetId"
+                       OR bound."WorkVolumeId" = (SELECT chapter."VolumeId" FROM "WorkChapters" chapter WHERE chapter."Id" = item."TargetId"))))
+        """;
+
     public const string WorksWithoutOpenRequest =
         $$"""
         SELECT DISTINCT work."Id" AS "Value"
@@ -287,7 +308,7 @@ internal static class WantedSql
         WHERE work."Id" > @after
           AND (item."TargetKind" = 4) = @editions
           AND NOT EXISTS ({{RequestOf}} AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing'))
-          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} WHEN 2 THEN FALSE WHEN 3 THEN FALSE ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
+          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} WHEN 2 THEN {{MangaVolumeItemInstalled}} WHEN 3 THEN {{MangaChapterItemInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
         ORDER BY 1
         LIMIT @limit
         """;

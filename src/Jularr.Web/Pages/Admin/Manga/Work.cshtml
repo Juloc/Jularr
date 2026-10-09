@@ -196,16 +196,16 @@
                                 <span class="admmd-group-state">
                                     <span>@ui.Format("admin.manga.stat.of", ("installed", volume.InstalledChapters), ("total", volume.Chapters.Count))</span>
                                 </span>
-                                <span class="admmd-group-langs"><span class="admin-tag admin-tag-@StateTone(volume.State)">@Model.StateLabel(volume.State, volume.Wanted)</span></span>
+                                <span class="admmd-group-langs"><partial name="_MangaUnitTags" model="@(new MangaUnitTags(Model.StateLabel(volume.State, volume.Wanted), StateTone(volume.State), volume.Monitored, volume.InstalledQuality, volume.UpgradeWanted, Model.TransferText(view.IsTransferring(volume)), Model.Ui))" /></span>
                                 <span class="admmd-group-monitor" onclick="event.stopPropagation()">
-                                    <partial name="_MangaUnitControls" model="@(new MangaUnitControls(view.WorkId, "volume", volume.Id, volume.Number, volume.Monitored, volume.Decision, volumeName, canSearch && volume.State != ReadingCoverageState.Installed, Model.Ui))" />
+                                    <partial name="_MangaUnitControls" model="@(new MangaUnitControls(view.WorkId, "volume", volume.Id, volume.Number, volume.Monitored, volume.Decision, volumeName, canSearch && (volume.State != ReadingCoverageState.Installed || volume.UpgradeWanted), Model.Ui))" />
                                 </span>
                             </summary>
                             <ul class="admmd-episodes">
                                 @foreach (var chapter in volume.Chapters)
                                 {
                                     <li data-manga-chapter="@chapter.Number.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" data-state="@(chapter.Installed ? "installed" : "missing")">
-                                        <partial name="_MangaUnitRow" model="@(new MangaUnitRow(view.WorkId, chapter, Model.Ui, false))" />
+                                        <partial name="_MangaUnitRow" model="@(new MangaUnitRow(view.WorkId, chapter, Model.Ui, false, Model.TransferText(view.IsTransferring(chapter))))" />
                                     </li>
                                 }
                             </ul>
@@ -217,14 +217,10 @@
                             <span class="admmd-ep-number"><span>@volume.Number</span></span>
                             <span class="admmd-ep-title"><strong>@volumeName</strong></span>
                             <span class="admmd-ep-status">
-                                <span class="admin-tag admin-tag-@StateTone(volume.State)">@Model.StateLabel(volume.State, volume.Wanted)</span>
-                                @if (!volume.Monitored)
-                                {
-                                    <span class="admin-tag">@ui["admin.media.monitoring.off"]</span>
-                                }
+                                <partial name="_MangaUnitTags" model="@(new MangaUnitTags(Model.StateLabel(volume.State, volume.Wanted), StateTone(volume.State), volume.Monitored, volume.InstalledQuality, volume.UpgradeWanted, Model.TransferText(view.IsTransferring(volume)), Model.Ui))" />
                             </span>
                             <span class="admmd-ep-monitor">
-                                <partial name="_MangaUnitControls" model="@(new MangaUnitControls(view.WorkId, "volume", volume.Id, volume.Number, volume.Monitored, volume.Decision, volumeName, canSearch && volume.State != ReadingCoverageState.Installed, Model.Ui))" />
+                                <partial name="_MangaUnitControls" model="@(new MangaUnitControls(view.WorkId, "volume", volume.Id, volume.Number, volume.Monitored, volume.Decision, volumeName, canSearch && (volume.State != ReadingCoverageState.Installed || volume.UpgradeWanted), Model.Ui))" />
                             </span>
                         </div>
                     }
@@ -233,7 +229,7 @@
             @foreach (var chapter in shownLoose)
             {
                 <li data-manga-chapter="@chapter.Number.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" data-state="@(chapter.Installed ? "installed" : "missing")">
-                    <partial name="_MangaUnitRow" model="@(new MangaUnitRow(view.WorkId, chapter, Model.Ui, canSearch && !chapter.Installed))" />
+                    <partial name="_MangaUnitRow" model="@(new MangaUnitRow(view.WorkId, chapter, Model.Ui, canSearch && (!chapter.Installed || chapter.UpgradeWanted), Model.TransferText(view.IsTransferring(chapter))))" />
                 </li>
             }
         </ul>
@@ -264,7 +260,14 @@
                             }
                             <span class="admmd-lang admmd-lang-quiet">@ui.Format("admin.manga.file.pages", ("count", file.PageCount))</span>
                             <span class="admin-tag admin-tag-@(readable ? "success" : "danger")">@(readable ? ui["admin.books.file.available"] : ui["admin.books.file.missing"])</span>
-                            <a class="text-link" href="/Manga/Read/@file.Id">@ui["admin.books.read"]</a>
+                            @if (file.Superseded)
+                            {
+                                <span class="admin-tag" title="@ui["admin.manga.file.olderHint"]">@ui["admin.manga.file.older"]</span>
+                            }
+                            else
+                            {
+                                <a class="text-link" href="/Manga/Read/@file.Id">@ui["admin.books.read"]</a>
+                            }
                         </span>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(file.SourcePath))
