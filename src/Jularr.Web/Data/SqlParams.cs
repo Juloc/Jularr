@@ -101,6 +101,36 @@ public sealed class SqlParams
         var actualType = Nullable.GetUnderlyingType(declaredType) ?? declaredType;
         var resolvedType = databaseType ?? ResolveType(actualType);
 
+        if (databaseType is { } explicitType)
+        {
+            bool isCompatible;
+
+            if (actualType.IsArray && actualType != typeof(byte[]))
+            {
+                var elementType = actualType.GetElementType()!;
+                isCompatible = actualType.GetArrayRank() == 1
+                    && (elementType == typeof(string)
+                        || elementType == typeof(int)
+                        || elementType == typeof(long)
+                        || elementType == typeof(bool)
+                        || elementType == typeof(Guid))
+                    && explicitType == (NpgsqlDbType.Array | ResolveType(elementType));
+            }
+            else
+            {
+                isCompatible = explicitType == ResolveType(actualType)
+                    || (actualType == typeof(string)
+                        && explicitType is NpgsqlDbType.Jsonb or NpgsqlDbType.Citext);
+            }
+
+            if (!isCompatible)
+            {
+                throw new ArgumentException(
+                    "The PostgreSQL type is incompatible with the declared CLR type.",
+                    nameof(databaseType));
+            }
+        }
+
         if (actualType.IsEnum)
         {
             if (Enum.GetUnderlyingType(actualType) != typeof(byte))
