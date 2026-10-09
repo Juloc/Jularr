@@ -1,4 +1,5 @@
-using Microsoft.AspNetCore.DataProtection;
+using System.Security.Claims;
+using Jularr.Web.Features.Auth;
 
 namespace Jularr.Web.Features.ExternalPlayback.Plex;
 
@@ -11,11 +12,13 @@ public sealed class PlexServerSelectionService(
     PlexServerGrantStore grants)
 {
     public Task<IReadOnlyList<PlexLibrarySection>> GetAvailableLibrariesAsync(
+        ClaimsPrincipal admin,
         PlexServerCandidate discovered,
         Uri serverEndpoint,
         string clientIdentifier,
         CancellationToken cancellationToken)
     {
+        RequireAdmin(admin);
         ValidateDiscoveredEndpoint(discovered, serverEndpoint);
         return libraries.GetSectionsAsync(
             serverEndpoint, discovered.AccessToken, clientIdentifier,
@@ -23,12 +26,14 @@ public sealed class PlexServerSelectionService(
     }
 
     public async Task<PlexSelectedServer> ApproveAsync(
+        ClaimsPrincipal admin,
         PlexServerCandidate discovered,
         Uri serverEndpoint,
         IReadOnlyCollection<string> selectedLibraryIds,
         string clientIdentifier,
         CancellationToken cancellationToken)
     {
+        RequireAdmin(admin);
         ValidateDiscoveredEndpoint(discovered, serverEndpoint);
         if (selectedLibraryIds.Count == 0 ||
             selectedLibraryIds.Count > 100 ||
@@ -56,6 +61,16 @@ public sealed class PlexServerSelectionService(
 
         return (await grants.ListAsync(cancellationToken))
             .Single(x => x.MachineIdentifier == discovered.MachineIdentifier);
+    }
+
+    private static void RequireAdmin(ClaimsPrincipal caller)
+    {
+        ArgumentNullException.ThrowIfNull(caller);
+        if (!JularrPolicies.Allows(caller, JularrPolicies.AdminSystem))
+        {
+            throw new UnauthorizedAccessException(
+                "Only an authorized administrator may approve Plex server grants.");
+        }
     }
 
     private static void ValidateDiscoveredEndpoint(
