@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Jularr.Web.Features.Acquisition;
 using Jularr.Web.Features.Providers;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -80,10 +81,18 @@ public sealed class PlexServerGrantStore
                 string.Equals(x.Server.MachineIdentifier, machineIdentifier,
                     StringComparison.Ordinal));
 
-            return entry is null
+            if (entry is null)
+            {
+                return null;
+            }
+
+            // Restoring /data without the previous Data Protection key ring must
+            // disable this grant, not break the admin page or ongoing scans.
+            var token = ProtectedSecrets.Read(
+                protector, entry.ProtectedAccessToken);
+            return string.IsNullOrWhiteSpace(token)
                 ? null
-                : new PlexServerGrant(entry.Server,
-                    protector.Unprotect(entry.ProtectedAccessToken));
+                : new PlexServerGrant(entry.Server, token);
         }
         finally
         {
