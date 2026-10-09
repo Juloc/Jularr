@@ -83,6 +83,8 @@ fun TvPlayerScreen(
     onPositionChanged: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onSeeked: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onPlaybackEnded: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
+    nextEpisodeTitle: String? = null,
+    onNextEpisode: () -> Unit = {},
     onPlaybackFailure: (positionMs: Long) -> Unit = {},
     canOpenOnPhone: Boolean = false,
     remoteCommand: PlaybackCommand? = null,
@@ -101,7 +103,9 @@ fun TvPlayerScreen(
     var controlsInteractionRevision by remember { mutableIntStateOf(0) }
     val playerFocus = remember { FocusRequester() }
     val primaryControlFocus = remember { FocusRequester() }
+    val learningOverlayFocus = remember { FocusRequester() }
     var isPlaying by remember { mutableStateOf(player.player.isPlaying) }
+    var playbackEnded by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(player.player.currentPosition.coerceAtLeast(0)) }
     var durationMs by remember { mutableStateOf(player.player.duration.takeIf { it > 0 } ?: 0L) }
 
@@ -118,7 +122,11 @@ fun TvPlayerScreen(
                 positionMs = player.player.currentPosition.coerceAtLeast(0)
                 durationMs = player.player.duration.takeIf { it > 0 } ?: durationMs
                 if (playbackState == Player.STATE_ENDED) {
+                    playbackEnded = true
+                    uiState = uiState.copy(controlsVisible = true)
                     onPlaybackEnded(positionMs, durationMs)
+                } else if (playbackState == Player.STATE_READY) {
+                    playbackEnded = false
                 }
             }
 
@@ -152,6 +160,11 @@ fun TvPlayerScreen(
     }
 
     fun apply(transition: TvPlayerTransition) {
+        if (transition.state.learningLayer != TvLearningLayer.CLOSED &&
+            transition.state.focusedWordIndex != uiState.focusedWordIndex
+        ) {
+            onSelectedTermChanged(currentCue?.tokens?.getOrNull(transition.state.focusedWordIndex)?.termId)
+        }
         uiState = transition.state
         applyEffects(
             effects = transition.effects,
@@ -165,12 +178,10 @@ fun TvPlayerScreen(
 
     LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, companionVisible) {
         if (companionVisible) return@LaunchedEffect
-        val target = if (uiState.controlsVisible &&
-            uiState.learningLayer == TvLearningLayer.CLOSED
-        ) {
-            primaryControlFocus
-        } else {
-            playerFocus
+        val target = when {
+            uiState.learningLayer != TvLearningLayer.CLOSED -> learningOverlayFocus
+            uiState.controlsVisible -> primaryControlFocus
+            else -> playerFocus
         }
         runCatching { target.requestFocus() }
     }
@@ -303,10 +314,9 @@ fun TvPlayerScreen(
                 }
 
                 val transition = when (event.key) {
-                    Key.MediaPlayPause,
-                    Key.MediaPlay,
-                    Key.MediaPause,
-                    -> TvPlayerInteraction.mediaPlayPause(uiState)
+                    Key.MediaPlayPause -> TvPlayerInteraction.mediaPlayPause(uiState)
+                    Key.MediaPlay -> TvPlayerInteraction.mediaPlay(uiState)
+                    Key.MediaPause -> TvPlayerInteraction.mediaPause(uiState)
 
                     Key.DirectionCenter,
                     Key.Enter,
@@ -349,6 +359,13 @@ fun TvPlayerScreen(
                         )
                     }
 
+                    Key.DirectionDown, Key.DirectionUp -> {
+                        if (uiState.learningLayer != TvLearningLayer.CLOSED || uiState.controlsVisible) {
+                            return@onPreviewKeyEvent false
+                        }
+                        TvPlayerTransition(uiState.copy(controlsVisible = true))
+                    }
+
                     else -> return@onPreviewKeyEvent false
                 }
 
@@ -367,7 +384,7 @@ fun TvPlayerScreen(
                         text = cue.text,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = if (uiState.controlsVisible) 148.dp else 48.dp)
+                            .padding(bottom = if (uiState.controlsVisible) 220.dp else 48.dp)
                             .background(design.subtitleBackground)
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         color = design.subtitleText,
@@ -383,6 +400,9 @@ fun TvPlayerScreen(
                 PlayerControls(
                     episodeTitle = episodeTitle,
                     isPlaying = isPlaying,
+                    playbackEnded = playbackEnded,
+                    nextEpisodeTitle = nextEpisodeTitle,
+                    onNextEpisode = onNextEpisode,
                     canLearn = currentCue != null,
                     positionMs = positionMs,
                     durationMs = durationMs,
@@ -400,7 +420,12 @@ fun TvPlayerScreen(
                         )
                     },
                     onPlayPause = {
-                        if (player.player.isPlaying) player.player.pause() else player.player.play()
+                        if (player.player.isPlaying) {
+                            player.player.pause()
+                        } else {
+                            if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
+                            player.player.play()
+                        }
                     },
                     onForwardTen = {
                         val duration = player.player.duration
@@ -408,6 +433,12 @@ fun TvPlayerScreen(
                         player.player.seekTo(
                             if (duration > 0) target.coerceAtMost(duration) else target,
                         )
+                    },
+                    onSeekTo = { target ->
+                        if (durationMs > 0) {
+                            positionMs = target.coerceIn(0L, durationMs)
+                            player.player.seekTo(positionMs)
+                        }
                     },
                     onRepeatLine = {
                         currentCue?.let { cue ->
@@ -475,7 +506,9 @@ fun TvPlayerScreen(
                     } else {
                         null
                     },
-                    modifier = Modifier.align(Alignment.Center),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .focusRequester(learningOverlayFocus),
                 )
             }
 
@@ -509,6 +542,9 @@ private fun VideoSurface(player: JularrMedia3Player) {
 private fun PlayerControls(
     episodeTitle: String,
     isPlaying: Boolean,
+    playbackEnded: Boolean,
+    nextEpisodeTitle: String?,
+    onNextEpisode: () -> Unit,
     canLearn: Boolean,
     positionMs: Long,
     durationMs: Long,
@@ -523,14 +559,17 @@ private fun PlayerControls(
     onBackTen: () -> Unit,
     onPlayPause: () -> Unit,
     onForwardTen: () -> Unit,
+    onSeekTo: (Long) -> Unit,
     onRepeatLine: () -> Unit,
     onLearn: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val focusColor = rememberTvFocusColor()
+    var scrubPreviewMs by remember(durationMs) { mutableStateOf<Long?>(null) }
+    androidx.activity.compose.BackHandler(enabled = scrubPreviewMs != null) { scrubPreviewMs = null }
     val progress = if (durationMs > 0) {
-        (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+        ((scrubPreviewMs ?: positionMs).toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
     } else {
         0f
     }
@@ -575,16 +614,79 @@ private fun PlayerControls(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = "${formatTime(positionMs)} / ${formatTime(durationMs)}",
+                text = "${formatTime(scrubPreviewMs ?: positionMs)} / ${formatTime(durationMs)}",
                 color = design.muted,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
 
-        // Center Transport Controls: Rewind 10s | Play/Pause | Forward 10s
+        // Bottom Controls: Scrub Bar + Track Selector Buttons
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            // Interactive Scrub Bar
+            var scrubFocused by remember { mutableStateOf(false) }
+            if (scrubPreviewMs != null) {
+                Text(
+                    text = "Seek to ${formatTime(scrubPreviewMs ?: positionMs)} · OK to confirm · Back to cancel",
+                    color = design.subtitleText,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Color(0xFF1E2230))
+                    .tvFocusIndication(scrubFocused, focusColor, RoundedCornerShape(7.dp))
+                    .clickable(enabled = durationMs > 0) {
+                        if (scrubPreviewMs == null) {
+                            scrubPreviewMs = positionMs.coerceIn(0L, durationMs)
+                        } else {
+                            onSeekTo(scrubPreviewMs ?: positionMs)
+                            scrubPreviewMs = null
+                        }
+                    }
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown || durationMs <= 0) {
+                            false
+                        } else {
+                            when (event.key) {
+                                Key.DirectionLeft -> {
+                                    scrubPreviewMs = ((scrubPreviewMs ?: positionMs) - design.seek.backMs)
+                                        .coerceAtLeast(0)
+                                    true
+                                }
+                                Key.DirectionRight -> {
+                                    scrubPreviewMs = ((scrubPreviewMs ?: positionMs) + design.seek.forwardMs)
+                                        .coerceAtMost(durationMs)
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
+                    }
+                    .reportFocus {
+                        scrubFocused = it
+                        if (!it) scrubPreviewMs = null
+                    },
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progress)
+                        .background(design.accent),
+                )
+            }
+
         Row(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             var backTenFocused by remember { mutableStateOf(false) }
@@ -646,48 +748,6 @@ private fun PlayerControls(
             }
         }
 
-        // Bottom Controls: Scrub Bar + Track Selector Buttons
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            // Interactive Scrub Bar
-            var scrubFocused by remember { mutableStateOf(false) }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(7.dp))
-                    .background(Color(0xFF1E2230))
-                    .tvFocusIndication(scrubFocused, focusColor, RoundedCornerShape(7.dp))
-                    .clickable(onClick = onPlayPause)
-                    .onPreviewKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown) {
-                            when (event.key) {
-                                Key.DirectionLeft -> {
-                                    onBackTen()
-                                    true
-                                }
-                                Key.DirectionRight -> {
-                                    onForwardTen()
-                                    true
-                                }
-                                else -> false
-                            }
-                        } else false
-                    }
-                    .reportFocus { scrubFocused = it },
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(progress)
-                        .background(Color(0xFF7B61FF)),
-                )
-            }
 
             // Bottom Buttons
             Row(
@@ -706,6 +766,12 @@ private fun PlayerControls(
                     }
                     Button(onClick = onLearn) {
                         Text("Learn this line")
+                    }
+                }
+
+                if (playbackEnded && nextEpisodeTitle != null) {
+                    Button(onClick = onNextEpisode) {
+                        Text("Next: $nextEpisodeTitle", maxLines = 1)
                     }
                 }
 
@@ -778,7 +844,8 @@ private fun LearningOverlay(
         modifier = modifier
             .fillMaxWidth(0.86f)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
-            .padding(32.dp),
+            .padding(32.dp)
+            .focusable(),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Text(
@@ -847,14 +914,22 @@ private fun applyEffects(
 ) {
     for (effect in effects) {
         when (effect) {
-            TvPlayerEffect.TogglePlayback -> if (player.player.isPlaying) player.player.pause() else player.player.play()
+            TvPlayerEffect.TogglePlayback -> if (player.player.isPlaying) player.player.pause() else {
+                if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
+                player.player.play()
+            }
+            TvPlayerEffect.PlayPlayback -> {
+                if (player.player.playbackState == Player.STATE_ENDED) player.player.seekTo(0)
+                player.player.play()
+            }
+            TvPlayerEffect.PauseMediaPlayback -> player.player.pause()
             TvPlayerEffect.PausePlayback -> player.player.pause()
             TvPlayerEffect.ResumePlayback -> player.player.play()
-            is TvPlayerEffect.SeekBy -> player.player.seekTo(
-                (player.player.currentPosition + effect.deltaMs)
-                    .coerceAtLeast(0)
-                    .coerceAtMost(player.player.duration.coerceAtLeast(0)),
-            )
+            is TvPlayerEffect.SeekBy -> {
+                val target = (player.player.currentPosition + effect.deltaMs).coerceAtLeast(0)
+                val duration = player.player.duration
+                player.player.seekTo(if (duration > 0) target.coerceAtMost(duration) else target)
+            }
             TvPlayerEffect.ExitPlayer -> onExit()
             TvPlayerEffect.OpenOnPhone -> {
                 val termId = cue?.tokens?.getOrNull(focusedWordIndex)?.termId
@@ -898,5 +973,6 @@ private fun formatTime(valueMs: Long): String {
     val totalSeconds = valueMs.coerceAtLeast(0) / 1000
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
+    val hours = minutes / 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes % 60, seconds) else "%d:%02d".format(minutes, seconds)
 }
