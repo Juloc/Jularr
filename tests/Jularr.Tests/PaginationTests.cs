@@ -49,7 +49,7 @@ public sealed class PaginationTests
 
         var parameters = request.ToSqlParameters();
 
-        Assert.HasCount(2, parameters);
+        Assert.AreEqual(2, parameters.Length);
         Assert.AreEqual("PageSize", parameters[0].ParameterName);
         Assert.AreEqual(NpgsqlDbType.Integer, parameters[0].NpgsqlDbType);
         Assert.AreEqual(25, parameters[0].Value);
