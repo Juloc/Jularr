@@ -25,6 +25,30 @@ data class TvNavigationState(
 )
 
 object TvNavigation {
+    val sidebarRoutes: List<TvRoute> = listOf(TvRoute.Home, TvRoute.Watchlist)
+    val bottomRoutes: List<TvRoute> = listOf(TvRoute.Settings, TvRoute.ProfileSelect)
+
+    fun initial(hasServerOrigin: Boolean, hasMultipleSessions: Boolean = false): TvNavigationState =
+        TvNavigationState(
+            route = when {
+                hasMultipleSessions -> TvRoute.ProfileSelect
+                hasServerOrigin -> TvRoute.Login
+                else -> TvRoute.Setup
+            },
+        )
+
+    fun profileSelect(): TvNavigationState =
+        TvNavigationState(TvRoute.ProfileSelect)
+
+    fun openProfileSelect(state: TvNavigationState): TvNavigationState =
+        state.push(TvRoute.ProfileSelect)
+
+    fun connected(state: TvNavigationState): TvNavigationState =
+        state.replace(TvRoute.Login)
+
+    fun signedIn(state: TvNavigationState): TvNavigationState =
+        state.replace(TvRoute.Home)
+
     /** Sidebar navigation replaces peers rather than building an ever-growing stack. */
     fun openSidebarRoute(
         state: TvNavigationState,
