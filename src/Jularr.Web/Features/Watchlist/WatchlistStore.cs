@@ -246,6 +246,14 @@ public sealed class WatchlistStore(AppDbContext db)
             "Effective"
         WHERE
             "Effective"."MediaType" = ANY(@VisibleMediaTypes)
+            AND (
+                @TargetMediaType IS NULL
+                OR (
+                    "Effective"."MediaType" = @TargetMediaType
+                    AND "Effective"."Provider" = @TargetProvider
+                    AND "Effective"."ExternalId" = @TargetExternalId
+                )
+            )
             AND NOT EXISTS (
                 SELECT
                     1
@@ -299,6 +307,14 @@ public sealed class WatchlistStore(AppDbContext db)
             "Candidates"
         WHERE
             "Candidates"."MediaType" = ANY(@VisibleMediaTypes)
+            AND (
+                @TargetMediaType IS NULL
+                OR (
+                    "Candidates"."MediaType" = @TargetMediaType
+                    AND "Candidates"."Provider" = @TargetProvider
+                    AND "Candidates"."ExternalId" = @TargetExternalId
+                )
+            )
             AND NOT EXISTS (
                 SELECT
                     1
@@ -317,7 +333,8 @@ public sealed class WatchlistStore(AppDbContext db)
         CurrentAccountContext account,
         PageRequest paging,
         IReadOnlyCollection<WatchlistMediaType> visibleTypes,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WatchlistIdentity? target = null)
     {
         ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(paging);
@@ -338,6 +355,11 @@ public sealed class WatchlistStore(AppDbContext db)
                 foreach (var parameter in SqlParams.Create()
                     .Add("ProfileId", profileId)
                     .Add("VisibleMediaTypes", mediaTypes, NpgsqlDbType.Array | NpgsqlDbType.Text)
+                    .Add("TargetMediaType", target is null
+                        ? (string?)null
+                        : WatchlistMediaTypeNames.ToStorage(target.MediaType))
+                    .Add("TargetProvider", target?.ProviderKey)
+                    .Add("TargetExternalId", target?.ExternalKey)
                     .ToArray())
                 {
                     command.Parameters.Add(parameter);
@@ -363,6 +385,11 @@ public sealed class WatchlistStore(AppDbContext db)
                 foreach (var parameter in SqlParams.Create()
                     .Add("ProfileId", profileId)
                     .Add("VisibleMediaTypes", mediaTypes, NpgsqlDbType.Array | NpgsqlDbType.Text)
+                    .Add("TargetMediaType", target is null
+                        ? (string?)null
+                        : WatchlistMediaTypeNames.ToStorage(target.MediaType))
+                    .Add("TargetProvider", target?.ProviderKey)
+                    .Add("TargetExternalId", target?.ExternalKey)
                     .ToArray())
                 {
                     command.Parameters.Add(parameter);
