@@ -11,8 +11,6 @@ public enum ReadingCoverageState
     Installed
 }
 
-/// <param name="Wanted">Whether Monitoring or a request for the whole title wants it now, which is what the Wanted queue lists.</param>
-/// <param name="Decision">The owner's own decision on the unit; null while it follows its volume or the Work.</param>
 public sealed record ReadingChapterUnit(Guid Id, double Number, string? Title, bool IsSpecial, Guid? VolumeId, bool Monitored, bool Installed, bool Wanted, bool? Decision = null);
 
 public sealed record ReadingVolumeUnit(Guid Id, int Number, string? Title, bool Monitored, ReadingCoverageState State, bool Wanted, IReadOnlyList<ReadingChapterUnit> Chapters, bool? Decision = null)
@@ -20,8 +18,6 @@ public sealed record ReadingVolumeUnit(Guid Id, int Number, string? Title, bool 
     public int InstalledChapters => Chapters.Count(chapter => chapter.Installed);
 }
 
-/// <param name="LocalChapters">The chapters of the Work's series in the library, however they are tied.</param>
-/// <param name="UntiedLocalChapters">Library chapters nothing ties to a volume or chapter yet; while any exist the Work is not wanted unit by unit.</param>
 public sealed record ReadingCoverageView(
     long WorkId,
     bool Monitored,
@@ -34,13 +30,8 @@ public sealed record ReadingCoverageView(
     public bool HasStructure => Volumes.Count > 0 || LooseChapters.Count > 0;
 }
 
-/// <summary>
-/// The one calculation of what a Manga Work holds and lacks, read by the Admin page and by release judging. A volume is installed when a library file is
-/// tied to it or when every chapter it consists of is installed; a chapter is installed when a library file is tied to it or its volume is. Only
-/// provider-identified units count, so a Work whose structure is unknown is never wanted unit by unit. A chapter inside a monitored volume is covered by
-/// the volume, and a request for the whole title wants every missing unit except one the owner switched off. The Wanted SQL (<c>WantedSql</c>) applies the
-/// same rules.
-/// </summary>
+// The one calculation of what a Manga Work holds and lacks, for the Admin page and release judging; WantedSql applies the same rules. A volume is installed when a
+// file is tied to it or all its chapters are, a chapter when a file is tied to it or its volume is; a chapter inside a monitored volume is covered by the volume.
 public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver monitoring)
 {
     private sealed class TiedUnit
@@ -112,16 +103,10 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
         return new ReadingCoverageView(workId, decisions.IsWorkMonitored, volumeUnits, loose, local, untied, want);
     }
 
-    /// <summary>Whether the request names the whole title (Search now, an owner's request), which wants every missing unit that is not switched off.</summary>
     public async Task<bool> WholeTitleAskedAsync(Guid requestId, CancellationToken cancellationToken) =>
         await db.Database.SqlQuery<bool>(
             $"""SELECT EXISTS (SELECT 1 FROM "RequestTargets" target WHERE target."RequestId" = {requestId.ToString()} AND target."TargetKind" = 0) AS "Value" """).SingleAsync(cancellationToken);
 
-    /// <summary>
-    /// What a release is judged against for one request: the wanted units of the Work, or for a request that names a volume or chapters (Search now on one row)
-    /// exactly the missing units it names, whether or not Monitoring wants them. Null while the Work has no provider-identified structure (or a library chapter
-    /// nothing is tied to yet), or when the named unit is not part of it; an empty result means nothing is missing.
-    /// </summary>
     public async Task<ReadingWant?> WantAsync(long workId, bool wholeTitleAsked, int? volume, double? chapterStart, double? chapterEnd, CancellationToken cancellationToken)
     {
         var view = await LoadAsync(workId, cancellationToken, wholeTitleAsked);

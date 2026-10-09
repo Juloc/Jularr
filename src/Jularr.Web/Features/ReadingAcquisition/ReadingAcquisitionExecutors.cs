@@ -73,10 +73,7 @@ public sealed class ReadingAcquisitionEngine(
             : await GrabAsync(request, payload, grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
     }
 
-    /// <summary>
-    /// What the request searches for. A Manga Work with a provider-identified structure is searched for the units it still lacks (the first search asks AniList for
-    /// the structure), so Manual Search, which builds its target here too, ranks releases exactly as the automatic search does.
-    /// </summary>
+    // Manual Search builds its target here too, so it ranks releases exactly as the automatic search does.
     public async Task<ReadingAcquisitionTarget> TargetAsync(AcquisitionRequest request, ReadingRequestPayload payload, bool refreshStructure, CancellationToken cancellationToken)
     {
         var target = ToTarget(request.Kind, payload);

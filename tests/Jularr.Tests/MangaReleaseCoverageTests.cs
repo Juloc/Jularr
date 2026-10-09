@@ -6,7 +6,6 @@ using Jularr.Web.Features.ReadingAcquisition;
 
 namespace Jularr.Tests;
 
-/// <summary>How a Manga release is judged against the volumes and chapters a Work still lacks and already holds.</summary>
 [TestClass]
 public sealed class MangaReleaseCoverageTests
 {

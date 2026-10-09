@@ -23,7 +23,6 @@ using Env = Jularr.Tests.BookPdfAcquisitionTests.BookAcquisitionEnvironment;
 
 namespace Jularr.Tests;
 
-/// <summary>The real Admin Manga page in front of a Manga acquisition environment: the same database, engine and Wanted pass, signed in as the owner or a plain user, with real anti-forgery.</summary>
 internal sealed class MangaAdminPageHost : IAsyncDisposable
 {
     private const string OwnerHeader = "X-Test-Owner";
@@ -116,7 +115,6 @@ internal sealed class MangaAdminPageHost : IAsyncDisposable
         return response.StatusCode;
     }
 
-    /// <summary>Posts a form the way a browser does (anti-forgery token and cookie from the form page); a successful action answers with the redirect back, which is not followed.</summary>
     public async Task<HttpStatusCode> PostAsync(string formPage, string handlerPath, IEnumerable<KeyValuePair<string, string>> fields, bool asOwner = true)
     {
         var form = fields.ToList();

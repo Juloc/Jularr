@@ -6,12 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.ReadingAcquisition;
 
-/// <summary>
-/// Ties the library chapters an import brought to the canonical volumes and chapters of the Work, from what the files and the release say they hold: a
-/// file that names chapters is those chapters, one that names a volume (or several) is that whole volume, and a file that names neither takes what its
-/// release names. A single chapter never completes a volume, and a file that says nothing is left untied rather than guessed. Repeating the import
-/// replaces the same ties with the same result.
-/// </summary>
+// A file that names chapters is those chapters, one that names a volume (or several) is that whole volume, one that names neither takes what its release names,
+// and a single chapter never completes a volume. A file that says nothing stays untied rather than guessed.
 public sealed class ReadingImportTies(AppDbContext db, ReadingUnits units)
 {
     public async Task<int> TieAsync(long workId, Guid seriesId, string releasePath, CancellationToken cancellationToken)

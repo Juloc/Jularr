@@ -15,11 +15,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages.Admin.Manga;
 
-/// <summary>
-/// One Manga Work: its volumes and chapters with what the library holds, each with its own Monitoring switch, the request that fetches the missing ones and
-/// the files in the library. Every change is a Monitoring command, a request through the shared access policy or a profile assignment; nothing here is
-/// Manga-specific state.
-/// </summary>
 [Authorize(Policy = JularrPolicies.AdminMedia)]
 public sealed class WorkModel(
     AppDbContext db,
@@ -62,7 +57,6 @@ public sealed class WorkModel(
         return Page();
     }
 
-    /// <summary>Switches the Work, a volume or a chapter on or off, or back to following its parent with <c>inherit</c>; the Wanted queue follows at once.</summary>
     public async Task<IActionResult> OnPostMonitorAsync(long workId, string scope, Guid? targetId, string state, CancellationToken cancellationToken)
     {
         if (!await ModuleEnabledAsync(cancellationToken))
@@ -98,10 +92,6 @@ public sealed class WorkModel(
         return RedirectToPage(new { workId });
     }
 
-    /// <summary>
-    /// Searches now: the open request that waits for a release is run again, the same action as Search now on Wanted and Requests; a Manga without an open request
-    /// gets one through the shared access policy, for the whole title or for one volume or chapter, and is searched, downloaded and imported like any other.
-    /// </summary>
     public async Task<IActionResult> OnPostSearchAsync(long workId, int? volume, double? chapter, CancellationToken cancellationToken)
     {
         if (!await ModuleEnabledAsync(cancellationToken))
@@ -150,7 +140,6 @@ public sealed class WorkModel(
         return RedirectToPage(new { workId });
     }
 
-    /// <summary>Runs the failed request of this Manga again with the intent it was saved with, the same action as Retry on Requests.</summary>
     public async Task<IActionResult> OnPostRetryAsync(long workId, CancellationToken cancellationToken)
     {
         if (!await ModuleEnabledAsync(cancellationToken))
@@ -178,7 +167,6 @@ public sealed class WorkModel(
         return RedirectToPage(new { workId });
     }
 
-    /// <summary>Assigns the quality profile of this Manga; a blank profile returns to the default of the media type.</summary>
     public async Task<IActionResult> OnPostProfileAsync(long workId, string? profileId, CancellationToken cancellationToken)
     {
         if (!await ModuleEnabledAsync(cancellationToken))
@@ -204,7 +192,6 @@ public sealed class WorkModel(
         return RedirectToPage(new { workId });
     }
 
-    /// <summary>Asks AniList again for the volumes and chapters it states: units that became known are added, nothing the Work holds is removed or renumbered.</summary>
     public async Task<IActionResult> OnPostRefreshAsync(long workId, CancellationToken cancellationToken)
     {
         if (!await ModuleEnabledAsync(cancellationToken))
@@ -242,16 +229,12 @@ public sealed class WorkModel(
 
     public string RequestLabel(AcquisitionRequestStatus status) => Ui["requests.status." + AcquisitionAccessNames.Status(status)];
 
-    /// <summary>Whether a library file can be read now (an unmounted share, a deleted file); asked only for the rows a page shows.</summary>
     public static bool Readable(string path) => path.Length > 0 && (System.IO.File.Exists(path) || Directory.Exists(path));
 
     private async Task<bool> ModuleEnabledAsync(CancellationToken cancellationToken) =>
         instanceModules is null || await instanceModules.IsEnabledAsync(AcquisitionInstanceModules.For(MediaAcquisitionKind.Manga), cancellationToken);
 }
 
-/// <summary>The switch, the search and the reset of one volume or chapter row.</summary>
-/// <param name="Scope"><c>volume</c> or <c>chapter</c>.</param>
-/// <param name="Decision">The owner's own decision on the unit; the reset shows only while there is one.</param>
 public sealed record MangaUnitControls(long WorkId, string Scope, Guid Id, double Number, bool Monitored, bool? Decision, string Name, bool CanSearch, UiTextBundle Ui);
 
 public sealed record MangaUnitRow(long WorkId, ReadingChapterUnit Chapter, UiTextBundle Ui, bool CanSearch);

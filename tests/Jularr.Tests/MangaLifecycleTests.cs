@@ -14,10 +14,6 @@ using Env = Jularr.Tests.BookPdfAcquisitionTests.BookAcquisitionEnvironment;
 
 namespace Jularr.Tests;
 
-/// <summary>
-/// Manga from request to reader through the shared pipeline: AniList answering from a script, a real Newznab indexer, the real Reading engine, the download
-/// client fake, the Manga import with its ties to the volumes and chapters of the Work, the Wanted pass and the library.
-/// </summary>
 [TestClass]
 public sealed class MangaLifecycleTests
 {
@@ -68,7 +64,6 @@ public sealed class MangaLifecycleTests
         return environment;
     }
 
-    /// <summary>A request as Discover sends it: the AniList id, the title and the native title.</summary>
     internal static Task<AcquisitionRequest> SubmitAsync(Env environment) =>
         environment.Services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
             new AcquisitionRequestDraft(MediaAcquisitionKind.Manga, "anilist", AniListId, Title, "葬送のフリーレン", null),

@@ -268,7 +268,6 @@ public sealed partial class MangaAniListService(
         return decision;
     }
 
-    /// <summary>One AniList manga by id with its status and the volume and chapter counts AniList states, or null when AniList does not know it.</summary>
     public async Task<MangaAniListCandidate?> GetAsync(
         string externalId,
         CancellationToken cancellationToken)

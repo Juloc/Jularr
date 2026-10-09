@@ -12,7 +12,6 @@ using Lifecycle = Jularr.Tests.MangaLifecycleTests;
 
 namespace Jularr.Tests;
 
-/// <summary>What happens to a Manga request when the download is unusable, the storage is away, an import is repeated or AniList is down.</summary>
 [TestClass]
 public sealed class MangaRecoveryTests
 {

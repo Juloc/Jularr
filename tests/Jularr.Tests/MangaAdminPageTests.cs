@@ -11,7 +11,6 @@ using Lifecycle = Jularr.Tests.MangaLifecycleTests;
 
 namespace Jularr.Tests;
 
-/// <summary>The Admin Manga page: every number and control comes from the canonical Work and the shared coverage calculation, and every action goes through the shared request, monitoring and profile paths.</summary>
 [TestClass]
 public sealed class MangaAdminPageTests
 {

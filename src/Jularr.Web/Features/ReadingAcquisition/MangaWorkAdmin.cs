@@ -11,10 +11,8 @@ namespace Jularr.Web.Features.ReadingAcquisition;
 
 public sealed record MangaIdentityAdmin(string Provider, string ExternalId, bool IsPrimary);
 
-/// <summary>One chapter or volume file of the library; whether its path can be read now is decided for the rows a page shows, not for all of them.</summary>
 public sealed record MangaLocalFile(Guid Id, double Number, int? VolumeNumber, string Name, int PageCount, string Format, string SourcePath);
 
-/// <summary>What the Admin Manga page shows: the title, its provider identity, the volumes and chapters with what the library holds, the request, the profile and the files.</summary>
 public sealed record MangaWorkAdminView(
     long WorkId,
     string Title,
@@ -44,7 +42,6 @@ public sealed record MangaWorkAdminView(
 
     public IReadOnlyList<string> Formats => [.. Files.Select(file => file.Format).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
 
-    /// <summary>Everything the structure says is wanted, installed or missing: the one summary of the header.</summary>
     public (int Installed, int Total) VolumeCount => (Coverage.Volumes.Count(volume => volume.State == ReadingCoverageState.Installed), Coverage.Volumes.Count);
 
     public (int Installed, int Total) ChapterCount
@@ -56,14 +53,12 @@ public sealed record MangaWorkAdminView(
         }
     }
 
-    /// <summary>Whether a search can find something: a unit is missing (whether or not it is monitored), or while the structure is unknown nothing is in the library yet.</summary>
     public bool CanSearch => (!RequestIsOpen || RequestIsWaiting)
         && (Coverage.HasStructure
             ? Coverage.Volumes.Any(volume => volume.State != ReadingCoverageState.Installed) || Coverage.LooseChapters.Any(chapter => !chapter.Installed)
             : Coverage.LocalChapters == 0);
 }
 
-/// <summary>The read model of the Admin Manga page, built from the canonical Work, the coverage calculation and the library's own series.</summary>
 public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService coverage, AcquisitionAccessStore requests, QualityProfileStore? profiles = null)
 {
     public async Task<MangaWorkAdminView?> GetAsync(long workId, CancellationToken cancellationToken)
@@ -139,7 +134,6 @@ public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService 
             files);
     }
 
-    /// <summary>The provider identity a request of the Work is made with, or null when it has none the request pipeline trusts.</summary>
     public async Task<(string Provider, string ExternalId)?> IdentityAsync(long workId, CancellationToken cancellationToken)
     {
         var identity = await db.WorkExternalIdentities.AsNoTracking()
@@ -150,7 +144,6 @@ public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService 
         return identity is not null && RequestWorkBinder.IsTrustworthy(MediaAcquisitionKind.Manga, identity.Provider, identity.ExternalId) ? (identity.Provider, identity.ExternalId) : null;
     }
 
-    /// <summary>Whether a profile can take a Manga at all: it allows a CBZ or a ZIP.</summary>
     public static bool ServesManga(QualityProfile profile) =>
         profile.AllowedQualities.Any(quality => quality.Equals("CBZ", StringComparison.OrdinalIgnoreCase) || quality.Equals("ZIP", StringComparison.OrdinalIgnoreCase));
 

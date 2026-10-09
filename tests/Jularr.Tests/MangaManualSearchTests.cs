@@ -9,7 +9,6 @@ using Lifecycle = Jularr.Tests.MangaLifecycleTests;
 
 namespace Jularr.Tests;
 
-/// <summary>Manual Search of a Manga request ranks the releases exactly as automatic acquisition and re-validates a grab on the server.</summary>
 [TestClass]
 public sealed class MangaManualSearchTests
 {

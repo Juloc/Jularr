@@ -8,18 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.ReadingAcquisition;
 
-/// <param name="Problem">Why AniList could not be asked or does not know the title; the Work is left as it was.</param>
 public sealed record ReadingStructureRefresh(ReadingUnitEnrichment? Volumes, ReadingUnitEnrichment? Chapters, string? Problem)
 {
     public bool Changed => Volumes is { Created: > 0 } or { Updated: > 0 } || Chapters is { Created: > 0 } or { Updated: > 0 };
 }
 
-/// <summary>
-/// The volumes and chapters AniList states for a Manga Work. Only what AniList counts becomes a unit, each with a stable provider identity: the volumes of a
-/// title whose volumes are counted, else the chapters of a title whose chapters are counted. An ongoing title with neither stays a single wanted unit, and a
-/// count is never guessed; a refresh adds units that became known and never removes or renumbers a unit that has files tied to it. Library files of the
-/// Work that name the volume or chapters they hold are tied to those units, so a library that existed before AniList stated them is matched, not fetched again.
-/// </summary>
+// Only what AniList counts becomes a unit: the volumes of a title whose volumes are counted, else its chapters. A title with neither stays one wanted unit and a
+// count is never guessed. A refresh adds units and never removes or renumbers one; library files that name their volume or chapters are tied to the units.
 public sealed class ReadingStructureService(AppDbContext db, ReadingUnits units, WorkService works, WantedReconciler wanted, IHttpClientFactory httpClientFactory, ILogger<ReadingStructureService> logger)
 {
     public async Task<ReadingStructureRefresh> RefreshAsync(long workId, CancellationToken cancellationToken)
@@ -97,7 +92,6 @@ public sealed class ReadingStructureService(AppDbContext db, ReadingUnits units,
         return await ReconciledAsync(workId, refresh, cancellationToken);
     }
 
-    /// <summary>The other names the Work is known by (native, English, romaji, synonyms): search aliases next to the title the request carries.</summary>
     public async Task<IReadOnlyList<string>> AliasesAsync(long workId, CancellationToken cancellationToken) =>
         await db.WorkTitles.AsNoTracking()
             .Where(title => title.WorkId == workId)

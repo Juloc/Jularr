@@ -145,10 +145,7 @@ public sealed class ReadingUnits(AppDbContext db)
         return true;
     }
 
-    /// <summary>
-    /// Ties one local manga unit that holds several chapters (a package of chapters 17-24) to every one of those canonical chapters of the Work. An import-made
-    /// tie never replaces an owner's mapping; returns false then, or when a chapter or the local unit does not belong to the Work.
-    /// </summary>
+    // An import-made tie never replaces an owner's mapping.
     public async Task<bool> TieChaptersAsync(long workId, string localId, IReadOnlyCollection<Guid> chapterIds, CancellationToken cancellationToken)
     {
         if (chapterIds.Count == 0
@@ -161,10 +158,7 @@ public sealed class ReadingUnits(AppDbContext db)
         return await ReplaceMangaBindingsAsync(workId, localId, chapterIds, volumes: false, cancellationToken);
     }
 
-    /// <summary>
-    /// Ties one local manga unit that holds one or several whole volumes (a volume file, or an omnibus of volumes 1-3) to those canonical volumes of the Work.
-    /// An import-made tie never replaces an owner's mapping; returns false then, or when a volume or the local unit does not belong to the Work.
-    /// </summary>
+    // An import-made tie never replaces an owner's mapping.
     public async Task<bool> TieVolumesAsync(long workId, string localId, IReadOnlyCollection<Guid> volumeIds, CancellationToken cancellationToken)
     {
         if (volumeIds.Count == 0

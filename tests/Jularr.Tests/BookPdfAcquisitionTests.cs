@@ -719,7 +719,6 @@ public sealed class BookPdfAcquisitionTests
         public OperationStore Operations => new(Db);
         public string FilesPath => Books.FilesPath;
 
-        /// <param name="aniList">When given, the environment also serves Manga: the shared Reading pipeline with this handler answering AniList.</param>
         public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null, HttpMessageHandler? newznab = null, bool canonicalWorks = false, HttpMessageHandler? aniList = null)
         {
             canonicalWorks |= aniList is not null;
@@ -960,7 +959,6 @@ public sealed class BookPdfAcquisitionTests
         public string CompletedFolder(string job) =>
             Directory.CreateDirectory(Path.Combine(Root, "mnt", "complete", "books", job)).FullName;
 
-        /// <summary>The Manga job folder as Jularr sees it (under the mapped mount).</summary>
         public string MangaFolder(string job) =>
             Directory.CreateDirectory(Path.Combine(Root, "mnt", "complete", "manga", job)).FullName;
 

@@ -38,7 +38,6 @@ public sealed class SeriesModel(
     public string? SearchError { get; private set; }
     public bool IsOwner => account.IsOwner;
 
-    /// <summary>The canonical Work of this series for the owner's link to its Admin page; null when the series has none.</summary>
     public long? ManageWorkId { get; private set; }
     public IReadOnlyList<FranchiseSummary> Franchises { get; private set; } = [];
     public IReadOnlyList<FranchiseRelationGroup> FranchiseGroups { get; private set; } = [];

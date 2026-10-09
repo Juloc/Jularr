@@ -11,13 +11,11 @@ using Lifecycle = Jularr.Tests.MangaLifecycleTests;
 
 namespace Jularr.Tests;
 
-/// <summary>Volumes, chapters and ranges of a Manga Work through the real pipeline: what is wanted, what a download covers and what the library then holds.</summary>
 [TestClass]
 public sealed class MangaUnitCoverageTests
 {
     private const string Job = "/data/downloads/complete/manga/";
 
-    /// <summary>The Wanted queue and the coverage calculation say the same: the rows of the Work are exactly the units the coverage view calls wanted.</summary>
     private static async Task AssertWantedMatchesCoverageAsync(Env environment, long workId)
     {
         await environment.Services.GetRequiredService<WantedReconciler>().ReconcileAsync(workId, CancellationToken.None);

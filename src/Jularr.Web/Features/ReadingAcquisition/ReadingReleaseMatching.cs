@@ -29,10 +29,7 @@ public sealed record ReadingReleaseInfo(
     bool IsCompleteOrBatch,
     int? VolumeEnd = null);
 
-/// <summary>
-/// What a Work still lacks and what it already holds, as volume and chapter numbers: the units a release is judged against. Present only when
-/// the Work has a provider-identified structure; without it a release is judged by the requested volume or chapter alone.
-/// </summary>
+// What a Work still lacks and already holds, as volume and chapter numbers; present only when the Work has a provider-identified structure.
 public sealed record ReadingWant(
     IReadOnlyList<int> Volumes,
     IReadOnlyList<double> Chapters,
@@ -43,7 +40,6 @@ public sealed record ReadingWant(
 
     public int Total => Volumes.Count + Chapters.Count;
 
-    /// <summary>How many wanted and how many already held units a release that holds the given volumes and chapters would cover.</summary>
     public (int Wanted, int Unwanted) Cover(ReadingReleaseInfo release)
     {
         var everything = release.VolumeNumber is null && release.ChapterStart is null && release.IsCompleteOrBatch;
