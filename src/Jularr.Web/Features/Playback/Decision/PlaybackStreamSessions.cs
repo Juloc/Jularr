@@ -304,7 +304,7 @@ public sealed record PlaybackStreamSelections(
     PlaybackModePreference ModePreference,
     string ClientKind);
 
-public sealed class PlaybackStreamSessionStore(TimeProvider time)
+public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTranscodingSettingsStore? settings = null)
 {
     public const int MaxSessions = 64;
     public const int MaxSessionsPerProfile = 6;
@@ -561,8 +561,26 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
             reading.State,
             policy));
 
-        // Raising the quality adds load; a server that already struggles with a conversion of this kind is not asked for more.
-        return decision.Advice == PlaybackAdaptationAdvice.StepUp && IsTranscodeOverloaded(reading.Backend is { } backend && backend != PlaybackHardwareBackend.Software, session)
+        if (decision.Reason != PlaybackAdaptationReason.TranscodeTooSlow &&
+            settings?.Current.WanUploadBudgetKbps is > 0 and var budget &&
+            session.Plan.Quality.Network != PlaybackNetworkClass.Local &&
+            session.Plan.Quality.DeliveredBitrateKbps is { } delivered &&
+            now - session.CreatedAtUtc >= policy.MinSessionAge &&
+            session.Telemetry.Latest is { } latest &&
+            latest.State != PlaybackClientState.Paused &&
+            now - latest.ReportedAtUtc <= PlaybackSessionTelemetry.FreshFor)
+        {
+            var active = Math.Max(1, ActiveExternalDeliveries());
+            var limit = Math.Max(100, (int)(budget * 0.85 / active));
+            if (delivered > limit + Math.Max(128, limit / 20))
+            {
+                return new PlaybackAdaptationDecision(
+                    PlaybackAdaptationAdvice.StepDown, PlaybackAdaptationReason.ServerEgress);
+            }
+        }
+
+        return decision.Advice == PlaybackAdaptationAdvice.StepUp &&
+               IsTranscodeOverloaded(reading.Backend is { } backend && backend != PlaybackHardwareBackend.Software, session)
             ? PlaybackAdaptationDecision.None
             : decision;
     }
