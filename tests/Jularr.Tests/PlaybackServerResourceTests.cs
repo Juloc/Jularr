@@ -370,7 +370,8 @@ public sealed class PlaybackServerResourceTests
         await using var cache = await CacheAsync(budgetBytes: 1L << 30);
         var readings = new List<PlaybackTranscodeSample>();
         var session = await cache.Manager.StartAsync(
-            Guid.NewGuid(), "profile-0", 0, cache.Arguments, null, CancellationToken.None, readings.Add);
+            Guid.NewGuid(), "profile-0", 0, cache.Arguments, null, CancellationToken.None,
+            readings.Add, remainingDurationSeconds: 300);
         var encoder = cache.Processes.Single();
 
         encoder.Report(new PlaybackTranscodeSample(6, 60, 20));
@@ -402,13 +403,30 @@ public sealed class PlaybackServerResourceTests
         await using var cache = await CacheAsync(
             budgetBytes: 1L << 30, startOutcome: _ => new FakeHlsProcess { SupportsPacing = false });
         var readings = new List<PlaybackTranscodeSample>();
-        await cache.Manager.StartAsync(Guid.NewGuid(), "profile-0", 0, cache.Arguments, null, CancellationToken.None, readings.Add);
+        await cache.Manager.StartAsync(Guid.NewGuid(), "profile-0", 0, cache.Arguments, null, CancellationToken.None,
+            readings.Add, remainingDurationSeconds: 300);
         var encoder = cache.Processes.Single();
 
         encoder.Report(new PlaybackTranscodeSample(2, 60, 90));
 
         Assert.IsFalse(encoder.IsPaused);
         Assert.AreEqual(2, readings.Single().Speed, "A non-Linux host does not lose the normal encoder speed measurement.");
+    }
+
+    [TestMethod]
+    public async Task HlsProducerNeverPausesWithoutReliableDurationOrNearTheEnd()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        await cache.Manager.StartAsync(Guid.NewGuid(), "unknown-duration", 0, cache.Arguments, null, CancellationToken.None);
+        var unknown = cache.Processes[^1];
+        unknown.Report(new PlaybackTranscodeSample(4, 60, 80));
+        Assert.IsFalse(unknown.IsPaused, "Without reliable duration the producer must be able to finish its playlist.");
+
+        await cache.Manager.StartAsync(Guid.NewGuid(), "short-movie", 0, cache.Arguments, null, CancellationToken.None,
+            remainingDurationSeconds: 100);
+        var shortMovie = cache.Processes[^1];
+        shortMovie.Report(new PlaybackTranscodeSample(4, 60, 75));
+        Assert.IsFalse(shortMovie.IsPaused, "The last buffer window must complete and finalise the HLS playlist.");
     }
 
     [TestMethod]
