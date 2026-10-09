@@ -527,7 +527,10 @@ internal fun TvSettingsPanel(
                     Text(stringResource(R.string.tv_player_learn_line))
                 }
             }
-            Button(onClick = onBack) { Text(stringResource(R.string.tv_player_close)) }
+            Button(
+                onClick = onBack,
+                modifier = if (!hasSpeedOptions && !canLearn) Modifier.focusRequester(focusRequester) else Modifier,
+            ) { Text(stringResource(R.string.tv_player_close)) }
         }
     }
 }
