@@ -578,23 +578,27 @@ fun TvAppHost(
             },
         )
 
-        TvRoute.AccountSelect -> TvAccountSelectScreen(
-            sessions = sessionStore?.getSessions().orEmpty(),
-            activeSessionId = if (snapshot.account != null) sessionStore?.getActiveSession()?.id else null,
-            error = snapshot.error,
-            onSelectSession = { session ->
-                resetPlaybackRuntime()
-                launchSnapshot { controller.selectSavedSession(session) }
-            },
-            onAddAccount = {
-                resetPlaybackRuntime()
-                snapshot = controller.changeServer()
-            },
-            onSignOut = {
-                resetPlaybackRuntime()
-                launchSnapshot { controller.signOut() }
-            },
-        )
+        TvRoute.AccountSelect -> {
+            BackHandler(enabled = snapshot.busy) { }
+            TvAccountSelectScreen(
+                sessions = sessionStore?.getSessions().orEmpty(),
+                activeSessionId = if (snapshot.account != null) sessionStore?.getActiveSession()?.id else null,
+                error = snapshot.error,
+                busy = snapshot.busy,
+                onSelectSession = { session ->
+                    resetPlaybackRuntime()
+                    launchSnapshot { progressWriteMutex.withLock { controller.selectSavedSession(session) } }
+                },
+                onAddAccount = {
+                    resetPlaybackRuntime()
+                    launchSnapshot { progressWriteMutex.withLock { controller.changeServer() } }
+                },
+                onSignOut = {
+                    resetPlaybackRuntime()
+                    launchSnapshot { progressWriteMutex.withLock { controller.signOut() } }
+                },
+            )
+        }
 
         TvRoute.ProfileSelect -> TvMessageScreen(
             title = stringResource(R.string.tv_profile_select_title),
