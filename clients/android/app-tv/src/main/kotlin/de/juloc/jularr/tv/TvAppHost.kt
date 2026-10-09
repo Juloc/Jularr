@@ -554,6 +554,7 @@ fun TvAppHost(
                     TvProfileSelectScreen(
                         sessions = sessions,
                         activeSessionId = sessionStore?.getActiveSession()?.id,
+                        error = snapshot.error,
                         onSelectSession = { session ->
                             launchSnapshot { controller.selectSavedSession(session) }
                         },
