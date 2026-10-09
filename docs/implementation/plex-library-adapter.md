@@ -42,6 +42,14 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 
 Exact item library sections can be reported by PMS on either the `MediaContainer` root or its `Metadata` entry; the adapter supports both cases.
 
+## Personal opt-in and Jularr UI
+
+The existing browser-bound Plex PIN pipeline distinguishes `Purpose = login` from `Purpose = media` in the persisted state. A media flow must begin from a signed-in Jularr profile **after an explicit consent checkbox**, return to the same browser nonce/account, and exchange a verified Plex ID/token directly into the separately encrypted `PlexProfileConnectionStore`. The account login identity and Jularr credentials never receive that token. An administrator independently enables `Plex:MediaConnectionEnabled`; default off. The user may disconnect media without removing Plex login.
+
+The Movie/Series detail hero and the signed-in user's own Request detail offer the **secondary** Plex action only when a usable profile grant and an Admin server selection exist. The primary Jularr play/request action remains unchanged, including Request-only mode. On explicit click, `PlexOnDemandTargetResolver` inspects at most two servers, two sections per server and 24 candidate items per search; the title is only a search hint. A candidate must match the canonical Jularr Work via a confirmed Plex GUID and then pass an **exact user-token item access check**. Unavailable or ambiguous results do not redirect. Nothing is pre-synchronized when users merely open a Jularr detail.
+
+**Important:** The current hosted Plex URL navigates to a **detail page**; it is not guaranteed to start playback in every installed client. Browser, mobile and Plex account behavior still require live tests. No subtitles, streams, artwork, Plex progress or Plex watchlists are fetched or synchronized here.
+
 ## Required before opening media in Plex
 
 1. Use the discovery adapter in the admin-scoped Plex server connection flow, alongside the existing Account-scoped Plex login identity and a new Profile-scoped media Connection. Add explicit user consent, secure grants and revocation in the existing provider architecture. Encrypted tokens and revocation only; Plex login must not automatically imply sync.
