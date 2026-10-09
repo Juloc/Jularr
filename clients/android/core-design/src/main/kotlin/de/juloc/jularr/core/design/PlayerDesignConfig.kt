@@ -44,6 +44,7 @@ data class PlayerDesignConfig(
     val subtitlePreferredSp: Int,
     val controlsAutoHideMs: Long,
     val seek: PlayerSeekSteps,
+    val playbackSpeeds: List<Double> = listOf(1.0),
 )
 
 object PlayerDesignConfigLoader {
@@ -78,6 +79,9 @@ object PlayerDesignConfigLoader {
             subtitlePreferredSp = typography.getInt("subtitlePreferred"),
             controlsAutoHideMs = timing.getLong("controlsAutoHide"),
             seek = PlayerSeekSteps.fromTokens(json),
+            playbackSpeeds = json.getJSONObject("playback").getJSONArray("speeds").let { speeds ->
+                (0 until speeds.length()).map { speeds.getDouble(it) }
+            },
         )
     }
 
