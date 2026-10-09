@@ -339,6 +339,8 @@ internal fun TvFilterChipRow(
     onSelect: (TvContentFilter) -> Unit,
 ) {
     val focusColor = rememberTvFocusColor()
+    val context = LocalContext.current
+    val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
     val chipShape = RoundedCornerShape(20.dp)
 
     LazyRow(
@@ -353,7 +355,7 @@ internal fun TvFilterChipRow(
                 modifier = Modifier
                     .clip(chipShape)
                     .background(
-                        color = if (focused) Color(0xFF2A1F60) else if (isSelected) Color(0xFF5B46F6) else Color(0xFF1E2230),
+                        color = if (focused) accent.copy(alpha = 0.35f) else if (isSelected) accent else Color(0xFF1E2230),
                     )
                     .tvFocusIndication(focused, focusColor, chipShape)
                     .selectable(
@@ -421,7 +423,7 @@ internal fun AnimeButton(
     onClick: () -> Unit,
 ) {
     val cardShape = RoundedCornerShape(14.dp)
-    val cardBackground = if (focused) Color(0xFF2A1F60) else Color(0xFF121520)
+    val cardBackground = if (focused) focusColor.copy(alpha = 0.28f) else Color(0xFF121520)
 
     Box(
         modifier = Modifier
