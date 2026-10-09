@@ -42,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
@@ -69,6 +70,9 @@ fun TvPlayerScreen(
     skipSegments: List<ClientMediaSegment> = emptyList(),
     trickplay: ClientTrickplayDescriptor? = null,
     playbackSpeeds: List<Float> = emptyList(),
+    defaultPlaybackSpeed: Float = 1f,
+    preferredAudioLanguage: String? = null,
+    preferredSubtitleLanguage: String? = null,
     serverOrigin: String = "",
     requestHeaders: Map<String, String> = emptyMap(),
     audioTracks: List<MediaTrack> = emptyList(),
@@ -130,6 +134,31 @@ fun TvPlayerScreen(
     var durationMs by remember { mutableStateOf(player.player.duration.takeIf { it > 0 } ?: 0L) }
     var bufferedPositionMs by remember { mutableStateOf(player.player.bufferedPosition.coerceAtLeast(0L)) }
     var playbackSpeed by remember { mutableStateOf(player.player.playbackParameters.speed) }
+
+    LaunchedEffect(player, defaultPlaybackSpeed, preferredAudioLanguage, preferredSubtitleLanguage) {
+        val validatedSpeed = defaultPlaybackSpeed.takeIf { speed ->
+            speed > 0f && playbackSpeeds.any { kotlin.math.abs(it - speed) < 0.01f }
+        } ?: 1f
+        player.player.setPlaybackParameters(PlaybackParameters(validatedSpeed))
+        playbackSpeed = validatedSpeed
+
+        val tracks = player.player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        preferredAudioLanguage?.takeIf { it.isNotBlank() }?.let {
+            tracks.setPreferredAudioLanguage(it)
+        }
+        if (preferredSubtitleLanguage.equals("off", ignoreCase = true)) {
+            tracks.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        } else {
+            tracks.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            preferredSubtitleLanguage?.takeIf { it.isNotBlank() }?.let {
+                tracks.setPreferredTextLanguage(it)
+            }
+        }
+        player.player.trackSelectionParameters = tracks.build()
+    }
+
     val skipSegment = TvPlayerInteraction.activeSkipSegment(skipSegments, positionMs)
     val canLearn = currentCue != null
 
