@@ -94,19 +94,22 @@ public sealed class TranscodingPageTests
     }
 
     [TestMethod]
-    public async Task SavingTranscodingSettingsPreservesExistingWanBudget()
+    public async Task OwnerCanConfigureWanBudgetAndInvalidValuesAreRefused()
     {
         await using var host = await TranscodingPageHost.CreateAsync();
-        var saved = await host.Kit.Settings.SaveAsync(
-            PlaybackTranscodingSettings.Default with
-            {
-                HlsCachePath = host.CachePath,
-                WanUploadBudgetKbps = 10_000
-            });
-        Assert.IsTrue(saved.Succeeded);
-
-        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(host.ValidForm()));
+        Assert.AreEqual(HttpStatusCode.Redirect,
+            await host.PostAsync(host.ValidForm(("WanUploadBudgetMbps", "10"))));
         Assert.AreEqual(10_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
+
+        var html = await host.GetHtmlAsync();
+        StringAssert.Contains(html, "name=\"WanUploadBudgetMbps\"");
+        StringAssert.Contains(html, "value=\"10\"");
+
+        var invalid = await host.PostForHtmlAsync(
+            host.ValidForm(("WanUploadBudgetMbps", "1001")));
+        Assert.AreEqual(HttpStatusCode.OK, invalid.Status);
+        Assert.AreEqual(10_000, host.Kit.Settings.Current.WanUploadBudgetKbps);
+        StringAssert.Contains(invalid.Html, "between 0 and 1000 Mbit/s");
     }
 
     [TestMethod]
@@ -237,7 +240,8 @@ public sealed class TranscodingPageTests
                 ["HlsCachePath"] = CachePath,
                 ["CacheBudgetGiB"] = "10",
                 ["FreeSpaceFloorGiB"] = "5",
-                ["BufferPreset"] = "Normal"
+                ["BufferPreset"] = "Normal",
+                ["WanUploadBudgetMbps"] = "0"
             };
             foreach (var (name, value) in overrides)
             {
