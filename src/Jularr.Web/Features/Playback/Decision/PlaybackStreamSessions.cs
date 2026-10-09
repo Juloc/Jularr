@@ -127,6 +127,7 @@ public sealed class PlaybackStreamSession(
     bool deferRetirement)
 {
     private PlaybackStreamSession? _replacing = deferRetirement ? replaced : null;
+    private int _deliveryStarted;
 
     private readonly object gate = new();
 
@@ -188,6 +189,10 @@ public sealed class PlaybackStreamSession(
     /// playing; null otherwise. The old session is retired by <see cref="TakeReplacing"/> after the first output of this one succeeded.
     /// </summary>
     public PlaybackStreamSession? Replacing => Volatile.Read(ref _replacing);
+
+    public bool HasStartedDelivery => Volatile.Read(ref _deliveryStarted) != 0;
+
+    public void MarkDeliveryStarted() => Interlocked.Exchange(ref _deliveryStarted, 1);
 
     /// <summary>Hands the session being replaced to whoever retires it (once); null when there is none or it was already taken.</summary>
     public PlaybackStreamSession? TakeReplacing() => Interlocked.Exchange(ref _replacing, null);
@@ -324,6 +329,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
         return sessions.Values.Count(session =>
             session.Id != replacingSessionId &&
             session.Replacing is null &&
+            session.HasStartedDelivery &&
             session.LastSeenUtc >= since &&
             session.Plan.Quality.Network is PlaybackNetworkClass.Remote or PlaybackNetworkClass.Metered or PlaybackNetworkClass.Unknown &&
             session.Telemetry.Latest?.State != PlaybackClientState.Paused);
@@ -428,6 +434,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
 
         if (session.Telemetry.Apply(report) == PlaybackTelemetryOutcome.ShowsProgress)
         {
+            session.MarkDeliveryStarted();
             session.Touch(time.GetUtcNow());
         }
 

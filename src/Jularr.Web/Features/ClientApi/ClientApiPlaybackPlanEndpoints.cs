@@ -877,6 +877,7 @@ public static class ClientApiPlaybackPlanEndpoints
     // ActiveSession moves to the new one.
     private static async Task RetireReplacedSessionAsync(PlaybackStreamSession session, PlaybackStreamSessionStore sessions, ActiveSessionService activeSessions, CancellationToken cancellationToken)
     {
+        session.MarkDeliveryStarted();
         if (sessions.CompleteReplacement(session) is { } replacedId)
         {
             await activeSessions.OpenAsync(session.Id, session.ProfileId, session.MediaFileId, session.Plan.Mode.ToString(), session.Selections.ClientKind, replacedId, cancellationToken);

@@ -70,6 +70,8 @@ public sealed class PlaybackWanBudgetTests
             "local", PlaybackVideoTarget.Movie(1), Guid.NewGuid(),
             "/media/a.mkv", 1400, local, selections);
 
+        Assert.AreEqual(0, sessions.ActiveExternalDeliveries(), "A playback plan without a successful stream is not an active WAN viewer.");
+        first.MarkDeliveryStarted();
         Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
         sessions.Create(
             "viewer", PlaybackVideoTarget.Movie(1), Guid.NewGuid(),
@@ -78,6 +80,32 @@ public sealed class PlaybackWanBudgetTests
         Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
 
         clock.Advance(TimeSpan.FromSeconds(31));
+        Assert.AreEqual(0, sessions.ActiveExternalDeliveries());
+    }
+
+    [TestMethod]
+    public void ActiveExternalDeliveries_AuthenticatedPlaybackTelemetryActivatesDirectFileSession()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-09T12:00:00Z"));
+        var sessions = new PlaybackStreamSessionStore(clock);
+        var plan = Transcode(Video()) with
+        {
+            Quality = new PlaybackQualityResolution(
+                PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote,
+                8_000, PlaybackLimitSource.Network, 12_000, 8_000)
+        };
+        var session = sessions.Create(
+            "viewer", PlaybackVideoTarget.Movie(1), Guid.NewGuid(), "/media/movie.mp4", 1400,
+            plan, new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
+
+        Assert.AreEqual(0, sessions.ActiveExternalDeliveries());
+
+        Assert.IsTrue(sessions.ReportTelemetry(session.Id, "viewer", new PlaybackTelemetry(
+            1, clock.GetUtcNow(), PlaybackClientState.Playing, 5, 5000, 0, 0, 1)));
+
+        Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
+        Assert.IsTrue(sessions.ReportTelemetry(session.Id, "viewer", new PlaybackTelemetry(
+            2, clock.GetUtcNow(), PlaybackClientState.Paused, 5, null, 0, 0, 1)));
         Assert.AreEqual(0, sessions.ActiveExternalDeliveries());
     }
 }
