@@ -80,32 +80,24 @@ class TvAppControllerTest {
     }
 
     @Test
-    fun selectingActivityLoadsPlaybackHistoryWhenTheServerAdvertisesIt() {
+    fun settingsLoadAndPersistCanonicalProfilePreferences() {
         val store = FakeOriginStore("https://jularr.example")
         val api = FakeApi()
         val controller = TvAppController(store) { api }
 
         runSuspend { controller.restoreConnection() }
         runSuspend { controller.login("jessi", "password-password") }
-        val state = runSuspend { controller.selectSidebarRoute(TvRoute.Activity) }
+        val loaded = runSuspend { controller.selectSidebarRoute(TvRoute.Settings) }
+        assertEquals(TvRoute.Settings, loaded.navigation.route)
+        assertEquals(1.0, loaded.playbackPreferences?.defaultPlaybackSpeed)
 
-        assertEquals(TvRoute.Activity, state.navigation.route)
-        assertFalse(state.activityUsesContinueWatchingFallback)
-        assertEquals(1, state.activity.size)
-    }
-
-    @Test
-    fun selectingActivityFallsBackToContinueWatchingWithoutTheFlag() {
-        val store = FakeOriginStore("https://jularr.example")
-        val api = FakeApi(advertisePlaybackHistory = false)
-        val controller = TvAppController(store) { api }
-
-        runSuspend { controller.restoreConnection() }
-        runSuspend { controller.login("jessi", "password-password") }
-        val state = runSuspend { controller.selectSidebarRoute(TvRoute.Activity) }
-
-        assertTrue(state.activityUsesContinueWatchingFallback)
-        assertEquals(1, state.continueWatching.size)
+        val changed = runSuspend {
+            controller.changePlaybackPreferences(
+                de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate(defaultPlaybackSpeed = 1.5),
+            )
+        }
+        assertEquals(1.5, changed.playbackPreferences?.defaultPlaybackSpeed)
+        assertFalse(changed.busy)
     }
 
     @Test
@@ -296,6 +288,27 @@ class TvAppControllerTest {
                 reachedEnd = false,
             ),
         )
+
+        private var preference = de.juloc.jularr.core.model.TvPlaybackPreferences(
+            autoplayNext = true,
+            preferredAudioLanguage = "ja",
+            preferredSubtitleLanguage = "de",
+            defaultPlaybackSpeed = 1.0,
+        )
+
+        override suspend fun getPlaybackPreferences() = preference
+
+        override suspend fun updatePlaybackPreferences(
+            update: de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate,
+        ): de.juloc.jularr.core.model.TvPlaybackPreferences {
+            preference = preference.copy(
+                autoplayNext = update.autoplayNext ?: preference.autoplayNext,
+                preferredAudioLanguage = update.preferredAudioLanguage ?: preference.preferredAudioLanguage,
+                preferredSubtitleLanguage = update.preferredSubtitleLanguage ?: preference.preferredSubtitleLanguage,
+                defaultPlaybackSpeed = update.defaultPlaybackSpeed ?: preference.defaultPlaybackSpeed,
+            )
+            return preference
+        }
 
         override suspend fun getWatchlist() = listOf(
             WatchlistItem(
