@@ -453,6 +453,65 @@ public sealed class PlaybackServerResourceTests
     }
 
     [TestMethod]
+    public async Task AbandonedPausedEncoderMakesRoomForAnInteractiveViewer()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var firstLease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo, "parked");
+        var secondLease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo, "active");
+        Assert.IsNotNull(firstLease);
+        Assert.IsNotNull(secondLease);
+
+        var parked = await cache.Manager.StartAsync(
+            Guid.NewGuid(), "parked", 0, cache.Arguments, firstLease, CancellationToken.None,
+            remainingDurationSeconds: 360, costClass: PlaybackCostClass.SoftwareVideo);
+        var active = await cache.Manager.StartAsync(
+            Guid.NewGuid(), "active", 0, cache.Arguments, secondLease, CancellationToken.None,
+            remainingDurationSeconds: 360, costClass: PlaybackCostClass.SoftwareVideo);
+        cache.Processes[0].Report(new PlaybackTranscodeSample(4, 24, 34));
+        Assert.IsTrue(cache.Processes[0].IsPaused);
+
+        var admission = new PlaybackAdmissionService(
+            cache.Kit.Settings, cache.Slots, cache.Kit.Hardware,
+            new PlaybackStreamSessionStore(cache.Time), cache.Manager);
+
+        var early = admission.Admit(Transcode(Video()), "incoming");
+        Assert.AreEqual(PlaybackAdmissionCodes.TranscoderBusy, early.RefusalCode);
+        Assert.IsTrue(cache.Manager.IsActive(parked.SessionId, "parked"));
+
+        cache.Time.Advance(HlsPlaybackSessionManager.BudgetPruneIdleAfter + TimeSpan.FromSeconds(31));
+        var incoming = admission.Admit(Transcode(Video()), "incoming");
+
+        Assert.IsTrue(incoming.Admitted);
+        Assert.AreEqual(2, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+        Assert.IsTrue(cache.Processes[0].Killed);
+        Assert.AreEqual(HlsSessionEndReason.Idle, cache.Manager.EndReason(parked.SessionId));
+        Assert.IsTrue(cache.Manager.IsActive(active.SessionId, "active"));
+        incoming.Lease!.Dispose();
+    }
+
+    [TestMethod]
+    public async Task RecentSegmentFetchPreventsParkedEncoderReclamation()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var lease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo, "reader");
+        var session = await cache.Manager.StartAsync(
+            Guid.NewGuid(), "reader", 0, cache.Arguments, lease, CancellationToken.None,
+            remainingDurationSeconds: 360, costClass: PlaybackCostClass.SoftwareVideo);
+        cache.Processes[0].Report(new PlaybackTranscodeSample(3, 24, 34));
+        Assert.IsTrue(cache.Processes[0].IsPaused);
+
+        cache.Time.Advance(HlsPlaybackSessionManager.BudgetPruneIdleAfter);
+        Assert.IsNotNull(cache.Manager.GetAsset(
+            session.SessionId, session.EpisodeId, session.ProfileId, "segment-00000.m4s"));
+        cache.Time.Advance(TimeSpan.FromSeconds(31));
+
+        Assert.IsFalse(cache.Manager.ReclaimStalePaused(
+            PlaybackCostClass.SoftwareVideo, "other", sameProfileOnly: false));
+        Assert.IsTrue(cache.Manager.IsActive(session.SessionId, session.ProfileId));
+        Assert.AreEqual(1, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+    }
+
+    [TestMethod]
     public async Task AForeignFolderIsNeitherAcceptedNorSweptAndAFailedStartLeavesNoDirectory()
     {
         var kit = PlaybackServerTestKit.Create();
