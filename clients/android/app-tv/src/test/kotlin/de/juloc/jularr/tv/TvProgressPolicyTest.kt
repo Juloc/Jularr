@@ -155,6 +155,16 @@ class TvProgressPolicyTest {
     }
 
     @Test
+    fun endedThenCloseKeepsTheEpisodeCompleted() {
+        val policy = TvProgressPolicy()
+        val ended = policy.evaluate(TvProgressEvent.ENDED, nowMs = 1_000, positionMs = 100_000, durationMs = 100_000)
+        val close = policy.evaluate(TvProgressEvent.CLOSE, nowMs = 1_100, positionMs = 100_000, durationMs = 100_000)
+
+        assertTrue(ended!!.completed)
+        assertTrue(close!!.completed)
+    }
+
+    @Test
     fun seekAfterCrossingResetsTheCompletion() {
         val policy = TvProgressPolicy()
         policy.evaluate(TvProgressEvent.HEARTBEAT, nowMs = 1_000, positionMs = 94_900, durationMs = 100_000)
