@@ -1644,6 +1644,10 @@
         activeIndex = -2;
         playbackCueKey = null;
         secondaryCueKey = null;
+        playbackCues = [];
+        secondaryPlaybackCues = [];
+        updateRepeatAvailability();
+        sync();
         const [primary, secondary] = await Promise.all([
             loadSubtitleCues(playbackTrackId()),
             loadSubtitleCues(secondaryTrackId())
