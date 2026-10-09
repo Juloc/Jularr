@@ -88,6 +88,10 @@
     const audioSelect = root.querySelector("[data-audio-track]");
     const subtitleSelect = root.querySelector("[data-subtitle-track]");
     const secondarySubtitleSelect = root.querySelector("[data-secondary-subtitle-track]");
+    const subtitleSizeInput = root.querySelector("[data-subtitle-size-percent]");
+    const subtitleOffsetInput = root.querySelector("[data-subtitle-offset-ms]");
+    const subtitleSizeOutput = root.querySelector("[data-subtitle-size-output]");
+    const subtitleOffsetOutput = root.querySelector("[data-subtitle-offset-output]");
     const qualitySelect = root.querySelector("[data-quality-cap]");
     const qualityHint = root.querySelector("[data-quality-hint]");
     const saveDefaults = root.querySelector("[data-save-playback-defaults]");
@@ -154,6 +158,8 @@
     let playbackSpeed = Number(speedSelect?.value) > 0 ? Number(speedSelect.value) : 1;
     let subtitleChoice = subtitleSelect?.value || "off";
     let secondarySubtitleChoice = secondarySubtitleSelect?.value || "off";
+    let subtitleSizePercent = Number(subtitleSizeInput?.value) || 100;
+    let subtitleOffsetMs = Number(subtitleOffsetInput?.value) || 0;
     if (qualitySelect) {
         qualitySelect.value = qualityPreset || "auto";
     }
@@ -1734,7 +1740,7 @@
     // cue timing exact; the frame loop only raises the sampling rate.
     const sync = () => {
         const nowMs = Math.floor(absoluteCurrentTime() * 1000);
-        renderPlaybackSubtitle(nowMs);
+        renderPlaybackSubtitle(nowMs + subtitleOffsetMs);
 
         const index = learningOverlayVisible() ? design.cueIndexAt(cues, nowMs) : -1;
         if (index === activeIndex) {
@@ -1786,6 +1792,29 @@
         updateRepeatAvailability();
         sync();
     };
+
+    const applySubtitleAppearance = () => {
+        root.style.setProperty("--player-playback-subtitle-size", `${(22 * subtitleSizePercent / 100).toFixed(1)}px`);
+        root.style.setProperty("--player-secondary-subtitle-size", `${(20 * subtitleSizePercent / 100).toFixed(1)}px`);
+        if (subtitleSizeOutput) subtitleSizeOutput.textContent = `${subtitleSizePercent}%`;
+        if (subtitleOffsetOutput) subtitleOffsetOutput.textContent = `${subtitleOffsetMs} ms`;
+        playbackCueKey = null;
+        secondaryCueKey = null;
+        sync();
+    };
+
+    subtitleSizeInput?.addEventListener("input", () => {
+        const value = Number(subtitleSizeInput.value);
+        if (!Number.isFinite(value) || value < 75 || value > 200) return;
+        subtitleSizePercent = value;
+        applySubtitleAppearance();
+    });
+    subtitleOffsetInput?.addEventListener("input", () => {
+        const value = Number(subtitleOffsetInput.value);
+        if (!Number.isFinite(value) || value < -10000 || value > 10000) return;
+        subtitleOffsetMs = value;
+        applySubtitleAppearance();
+    });
 
     const resolveSecondarySelection = () => {
         if (!secondarySubtitleSelect) return;
@@ -1858,6 +1887,11 @@
         const body = {
             preferredAudioLanguage: audioSelect?.selectedOptions[0]?.dataset.language || "",
             preferredSubtitleLanguage: subtitleLanguage,
+            preferredSecondarySubtitleLanguage: secondarySubtitleChoice === "off"
+                ? "off"
+                : secondarySubtitleSelect?.selectedOptions[0]?.dataset.language || "",
+            subtitleSizePercent,
+            subtitleOffsetMs,
             defaultPlaybackSpeed: playbackSpeed
         };
         if (!audioSelect) {
@@ -2318,6 +2352,7 @@
 
     updateTimeline();
     applySpeed();
+    applySubtitleAppearance();
     void applyPlayback();
     void applySubtitleChoice();
 })();
