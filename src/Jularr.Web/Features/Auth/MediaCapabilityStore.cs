@@ -71,6 +71,36 @@ public sealed class MediaCapabilityStore
         CancellationToken cancellationToken = default) =>
         MutateAsync(policy => policy.WithUserOverride(profileId, mediaType, capability), cancellationToken);
 
+    public Task<MediaCapabilityPolicy> ConstrainNewExternalAccountAsync(
+        string profileId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
+
+        return MutateAsync(
+            policy =>
+            {
+                var updated = policy;
+                foreach (var mediaType in WorkMediaTypes.All)
+                {
+                    var effective = policy.Resolve(
+                        AccountRole.User,
+                        profileId,
+                        mediaType);
+                    var safe = effective > MediaCapability.Request
+                        ? MediaCapability.Request
+                        : effective;
+                    updated = updated.WithUserOverride(
+                        profileId,
+                        mediaType,
+                        safe);
+                }
+
+                return updated;
+            },
+            cancellationToken);
+    }
+
     /// <summary>Removes every override for one profile (used when a user is deleted or reset to role defaults).</summary>
     public Task<MediaCapabilityPolicy> ClearUserAsync(string profileId, CancellationToken cancellationToken = default)
     {
