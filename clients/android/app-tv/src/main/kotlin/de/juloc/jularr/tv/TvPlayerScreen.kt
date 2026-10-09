@@ -131,6 +131,7 @@ fun TvPlayerScreen(
     var bufferedPositionMs by remember { mutableStateOf(player.player.bufferedPosition.coerceAtLeast(0L)) }
     var playbackSpeed by remember { mutableStateOf(player.player.playbackParameters.speed) }
     val skipSegment = TvPlayerInteraction.activeSkipSegment(skipSegments, positionMs)
+    val canLearn = currentCue != null
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -206,7 +207,7 @@ fun TvPlayerScreen(
         )
     }
 
-    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, uiState.focusedWordIndex, companionVisible, trackPanel, playbackError, skipSegment?.kind) {
+    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, uiState.focusedWordIndex, companionVisible, trackPanel, playbackError, skipSegment?.kind, canLearn, playbackSpeeds.size) {
         if (companionVisible) return@LaunchedEffect
         val target = when {
             playbackError != null -> retryFocus
@@ -215,7 +216,8 @@ fun TvPlayerScreen(
             uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.AUDIO -> audioTrackFocus
             uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SUBTITLES -> subtitleTrackFocus
             uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SPEED -> speedControlFocus
-            uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SETTINGS -> settingsFocus
+            uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SETTINGS &&
+                (playbackSpeeds.size > 1 || canLearn) -> settingsFocus
             uiState.controlsVisible -> primaryControlFocus
             skipSegment != null -> skipFocus
             else -> playerFocus
