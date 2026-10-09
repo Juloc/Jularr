@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.design.PlayerSeekSteps
+import de.juloc.jularr.core.model.ClientMediaSegment
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +34,19 @@ class TvPlayerInteractionTest {
         assertEquals(listOf(TvPlayerEffect.PlayPlayback), TvPlayerInteraction.mediaPlay(state).effects)
         assertEquals(listOf(TvPlayerEffect.PauseMediaPlayback), TvPlayerInteraction.mediaPause(state).effects)
         assertEquals(listOf(TvPlayerEffect.TogglePlayback), TvPlayerInteraction.mediaPlayPause(state).effects)
+    }
+
+    @Test
+    fun skipAppearsOnlyInsideServerApprovedMarker() {
+        val windows = listOf(
+            ClientMediaSegment("intro", startMs = 60_000, endMs = 90_000, canSkip = false),
+            ClientMediaSegment("recap", startMs = 100_000, endMs = 120_000, canSkip = true),
+        )
+
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 75_000))
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 99_999))
+        assertEquals("recap", TvPlayerInteraction.activeSkipSegment(windows, 100_000)?.kind)
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 120_000))
     }
 
     @Test
