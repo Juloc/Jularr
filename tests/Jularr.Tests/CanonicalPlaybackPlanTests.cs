@@ -121,26 +121,24 @@ public sealed class CanonicalPlaybackPlanTests
     }
 
     [TestMethod]
-    public async Task CanonicalPlaybackPrefersCompatibleAnalyzedVersionOverLiveTranscode()
+    public async Task OnlyProvenanceLinkedRenditionsCanReplaceTheOriginal()
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
         var storage = new CanonicalMediaStorageService(fixture.Db);
-        var movie = new Work
-        {
-            MediaType = WorkMediaType.Movie,
-            CanonicalTitle = "Multiple Video Versions"
-        };
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Safe Video Renditions" };
         fixture.Db.Works.Add(movie);
         await fixture.Db.SaveChangesAsync();
 
-        var incompatible = await AttachAsync(
-            fixture, storage, movie.Id, null, "a-hevc.mkv", MediaProbeFixtures.HevcTenBitHdrMultiAudio);
-        var compatible = await AttachAsync(
-            fixture, storage, movie.Id, null, "b-h264.mp4", MediaProbeFixtures.H264Stereo);
-        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count);
-
-        await fixture.Inventory.EnsureAnalyzedAsync(incompatible.StoredFileId, CancellationToken.None);
-        await fixture.Inventory.EnsureAnalyzedAsync(compatible.StoredFileId, CancellationToken.None);
+        const string originalCodec = "\"codec_name\": \"h264\"";
+        const string originalContainer = "\"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\"";
+        var hevcStereo = MediaProbeFixtures.H264Stereo
+            .Replace(originalCodec, "\"codec_name\": \"hevc\"", StringComparison.Ordinal)
+            .Replace("\"profile\": \"High\"", "\"profile\": \"Main\"", StringComparison.Ordinal)
+            .Replace(originalContainer, "\"format_name\": \"matroska,webm\"", StringComparison.Ordinal);
+        var original = await AttachAsync(fixture, storage, movie.Id, null, "a-hevc.mkv", hevcStereo);
+        var candidate = await AttachAsync(fixture, storage, movie.Id, null, "b-h264.mp4", MediaProbeFixtures.H264Stereo);
+        await fixture.Inventory.EnsureAnalyzedAsync(original.StoredFileId, CancellationToken.None);
+        await fixture.Inventory.EnsureAnalyzedAsync(candidate.StoredFileId, CancellationToken.None);
 
         var planner = new PlaybackPlanService(
             fixture.Db,
@@ -148,28 +146,62 @@ public sealed class CanonicalPlaybackPlanTests
             new PlaybackStreamSessionStore(TimeProvider.System),
             PlaybackServerTestKit.Create().Capabilities,
             canonicalStorage: storage);
-        var plan = await planner.PlanAsync(
-            PlaybackVideoTarget.Movie(movie.Id),
-            "reader",
-            new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback),
-            CancellationToken.None);
+        var input = new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback);
 
-        Assert.IsNotNull(plan);
-        Assert.AreEqual(compatible.StoredFileId, plan.MediaFileId);
-        Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, plan.Plan.Mode);
-        Assert.AreEqual(compatible.StoredFileId, plan.Session!.MediaFileId);
+        var unproven = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, unproven.MediaFileId,
+            "A separate imported edition is not evidence of the same cut, default language or timeline.");
 
-        var selectedSubtitle = await planner.PlanAsync(
-            PlaybackVideoTarget.Movie(movie.Id),
-            "reader",
-            new PlaybackPlanInput(
-                null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback,
-                SubtitleStreamIndex: 3),
-            CancellationToken.None);
+        var sourceAnalysis = (await fixture.Inventory.GetManyAsync(
+            [original.StoredFileId], CancellationToken.None))[original.StoredFileId];
+        Assert.IsNotNull(sourceAnalysis.SourceFingerprint);
+        var version = await fixture.Db.WorkVersions.FindAsync(candidate.WorkVersionId);
+        Assert.IsNotNull(version);
+        version.Source = PlaybackPreparedRenditionEligibility.PreparedVersionSource;
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
 
-        Assert.IsNotNull(selectedSubtitle);
-        Assert.AreEqual(incompatible.StoredFileId, selectedSubtitle.MediaFileId,
-            "Track indices belong to their source file; a different version must not silently change the selected track.");
+        var verified = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(candidate.StoredFileId, verified.MediaFileId);
+        Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, verified.Plan.Mode,
+            "A verified identical-timeline rendition avoids video re-encoding.");
+        Assert.AreEqual(candidate.StoredFileId, verified.Session!.MediaFileId);
+
+        var selectedAudio = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { AudioStreamIndex = 1 }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, selectedAudio.MediaFileId,
+            "Track indices belong to a particular file, even when a prepared version has the same language.");
+
+        var requestedOriginal = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { Quality = PlaybackQualityPreset.Original }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, requestedOriginal.MediaFileId,
+            "Explicit Original never silently switches to a lossy prepared file.");
+
+        var continued = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            input with { ReplacesSessionId = unproven.Session!.Id }, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, continued.MediaFileId,
+            "An in-progress seek/re-plan retains its current physical file and timeline.");
+
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = new string('0', 64),
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+        var stale = (await planner.PlanAsync(PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, stale.MediaFileId,
+            "A changed source fingerprint invalidates an otherwise compatible prepared file.");
     }
 
     [TestMethod]
