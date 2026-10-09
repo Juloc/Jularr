@@ -63,7 +63,7 @@ public sealed class PlexLibraryClient(HttpClient client)
         }
 
         var path = $"library/sections/{sectionId}/all"
-            + $"?X-Plex-Container-Start={offset}&X-Plex-Container-Size={pageSize}";
+            + $"?X-Plex-Container-Start={offset}&X-Plex-Container-Size={pageSize}&includeGuids=1";
 
         using var json = await GetJsonAsync(
             server, path, accessToken, clientIdentifier, cancellationToken);
