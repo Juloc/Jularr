@@ -604,6 +604,7 @@ fun TvAppHost(
                         TvRoute.Watchlist -> TvWatchlistScreen(
                             entries = snapshot.watchlist,
                             supported = snapshot.capabilities?.features?.watchlist == true,
+                            continueWatching = snapshot.continueWatching,
                             serverOrigin = settings.origin.orEmpty(),
                             requestHeaders = cookies.requestHeaders(),
                             focusMemory = focusMemory,
