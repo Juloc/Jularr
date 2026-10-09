@@ -537,28 +537,54 @@ fun TvAppHost(
 
         TvRoute.ProfileSelect -> {
             val sessions = sessionStore?.getSessions().orEmpty()
-            TvProfileSelectScreen(
-                sessions = sessions,
-                onSelectSession = { session ->
-                    launchSnapshot {
-                        controller.selectSavedSession(session)
-                    }
-                },
-                onAddAccount = {
-                    cookies.clear()
-                    snapshot = controller.changeServer()
-                },
-            )
+            Row(Modifier.fillMaxSize()) {
+                if (snapshot.account != null) {
+                    TvSidebar(
+                        selected = TvRoute.ProfileSelect,
+                        focusMemory = focusMemory,
+                        onSelect = { selected ->
+                            when (selected) {
+                                TvRoute.ProfileSelect -> Unit
+                                else -> launchSnapshot { controller.selectSidebarRoute(selected) }
+                            }
+                        },
+                    )
+                }
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    TvProfileSelectScreen(
+                        sessions = sessions,
+                        activeSessionId = sessionStore?.getActiveSession()?.id,
+                        onSelectSession = { session ->
+                            launchSnapshot { controller.selectSavedSession(session) }
+                        },
+                        onAddAccount = {
+                            cookies.clear()
+                            snapshot = controller.changeServer()
+                        },
+                        onSignOut = {
+                            launchSnapshot {
+                                val next = controller.signOut()
+                                cookies.clear()
+                                next
+                            }
+                        },
+                    )
+                }
+            }
         }
 
-        TvRoute.Home, TvRoute.Watchlist, TvRoute.Activity, TvRoute.Profile -> Box(modifier = Modifier.fillMaxSize()) {
+        TvRoute.Home, TvRoute.Watchlist, TvRoute.Settings -> Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TvSidebar(
                     selected = route,
                     focusMemory = focusMemory,
                     onSelect = { selected ->
                         if (selected != route) {
-                            launchSnapshot { controller.selectSidebarRoute(selected) }
+                            if (selected == TvRoute.ProfileSelect) {
+                                snapshot = controller.openProfileSelect()
+                            } else {
+                                launchSnapshot { controller.selectSidebarRoute(selected) }
+                            }
                         }
                     },
                 )
@@ -612,21 +638,7 @@ fun TvAppHost(
                             },
                         )
 
-                        TvRoute.Activity -> TvActivityScreen(
-                            history = snapshot.activity,
-                            continueWatchingFallback = snapshot.continueWatching,
-                            usesContinueWatchingFallback = snapshot.activityUsesContinueWatchingFallback,
-                            serverOrigin = settings.origin.orEmpty(),
-                            requestHeaders = cookies.requestHeaders(),
-                            focusMemory = focusMemory,
-                            onOpenEpisode = { episodeId, animeId ->
-                                launchSnapshot {
-                                    controller.openEpisode(episodeId = episodeId, animeId = animeId)
-                                }
-                            },
-                        )
-
-                        TvRoute.Profile -> {
+                        TvRoute.Settings -> {
                             val account = snapshot.account
                             if (account == null) {
                                 TvMessageScreen(
@@ -683,7 +695,7 @@ fun TvAppHost(
                     onUpdateNow = {
                         updatePromptInfo = null
                         startUpdateDownload(info)
-                        launchSnapshot { controller.selectSidebarRoute(TvRoute.Profile) }
+                        launchSnapshot { controller.selectSidebarRoute(TvRoute.Settings) }
                     },
                     onLater = {
                         updatePreferences.dismissedVersion = info.version
