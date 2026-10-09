@@ -146,13 +146,29 @@ public sealed class PlaybackTelemetryTests
         var initial = (await service.PlanAsync(media.EpisodeId!.Value, Reader, remote, CancellationToken.None))!;
         Assert.AreEqual(11_200, initial.Plan.Quality.LimitKbps);
 
-        store.ReportTelemetry(initial.Session!.Id, Reader, Report(Update(sequence: 1, throughput: 6_000), clock.GetUtcNow()));
+        store.ReportTelemetry(initial.Session!.Id, Reader, Report(Update(sequence: 1, throughput: 6_000, stalls: 1, stallMs: 1200), clock.GetUtcNow()));
         var replanned = (await service.PlanAsync(
             media.EpisodeId.Value,
             Reader,
             remote with { ReplacesSessionId = initial.Session.Id },
             CancellationToken.None))!;
         Assert.AreEqual(4_200, replanned.Plan.Quality.LimitKbps);
+
+        var healthy = store.Create(
+            Reader,
+            initial.Session.Target,
+            Guid.NewGuid(),
+            media.Path,
+            1400,
+            initial.Plan,
+            initial.Session.Selections);
+        store.ReportTelemetry(healthy.Id, Reader, Report(Update(sequence: 1, throughput: 19_000), clock.GetUtcNow()));
+        var unchanged = (await service.PlanAsync(
+            media.EpisodeId.Value,
+            Reader,
+            remote with { ReplacesSessionId = healthy.Id },
+            CancellationToken.None))!;
+        Assert.AreEqual(11_200, unchanged.Plan.Quality.LimitKbps);
 
         var otherTitle = store.Create(
             Reader,
