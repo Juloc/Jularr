@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -348,6 +351,12 @@ internal fun TvFilterChipRow(
         modifier = Modifier.fillMaxWidth(),
     ) {
         items(TvContentFilter.visible) { filter ->
+            val focusRequester = remember(filter) { FocusRequester() }
+            LaunchedEffect(filter) {
+                if (focusMemory.recall(screenKey) == "filter:${filter.name}") {
+                    runCatching { focusRequester.requestFocus() }
+                }
+            }
             var focused by remember(filter) { mutableStateOf(false) }
             val isSelected = filter == selected
 
@@ -358,6 +367,7 @@ internal fun TvFilterChipRow(
                         color = if (focused) accent.copy(alpha = 0.35f) else if (isSelected) accent else Color(0xFF1E2230),
                     )
                     .tvFocusIndication(focused, focusColor, chipShape)
+                    .focusRequester(focusRequester)
                     .selectable(
                         selected = isSelected,
                         onClick = { onSelect(filter) },
@@ -421,6 +431,7 @@ internal fun AnimeButton(
     focusColor: Color,
     onFocusChanged: (Boolean) -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     val cardShape = RoundedCornerShape(14.dp)
     val cardBackground = if (focused) focusColor.copy(alpha = 0.28f) else Color(0xFF121520)
@@ -431,6 +442,7 @@ internal fun AnimeButton(
             .clip(cardShape)
             .background(cardBackground)
             .tvFocusIndication(focused, focusColor, cardShape)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .clickable(onClick = onClick)
             .reportFocus(onFocusChanged),
     ) {
