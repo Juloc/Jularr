@@ -483,14 +483,17 @@ public sealed class PlayerControlsTests
             };
             const resolve = eval(source.slice(start, end) + "resolveSubtitleCollisions");
             resolve();
-            console.log([
-                sourceSign.style.transform,
-                translatedSign.style.transform,
-                subtitleStack.style.bottom
-            ].join("|"));
+            const authored = sourceSign.style.transform;
+            const translated = translatedSign.style.transform;
+            primaryPositionedSubtitles.querySelectorAll = () => [{
+                getBoundingClientRect: () => box(140, 245, 500, 272)
+            }];
+            secondaryPositionedSubtitles.querySelectorAll = () => [];
+            resolve();
+            console.log([authored, translated, subtitleStack.style.bottom].join("|"));
             """;
 
-        Assert.AreEqual("translate(0%, 0%)|translate(0%, 0%) translateY(-48px)|", RunNode(script, player));
+        Assert.AreEqual("translate(0%, 0%)|translate(0%, 0%) translateY(-48px)|121px", RunNode(script, player));
     }
 
     [TestMethod]
