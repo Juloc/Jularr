@@ -49,9 +49,11 @@ object TvPlayerInteraction {
         state: TvPlayerUiState,
         isPlaying: Boolean,
         companionVisible: Boolean = false,
+        scrubActive: Boolean = false,
     ): TvPlayerTransition =
         if (isPlaying &&
             !companionVisible &&
+            !scrubActive &&
             state.controlsVisible &&
             state.learningLayer == TvLearningLayer.CLOSED
         ) {
