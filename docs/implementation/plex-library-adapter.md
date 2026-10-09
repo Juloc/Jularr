@@ -16,6 +16,16 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 - `PlexWorkMatcher` resolves Plex movie/show metadata to a *single* existing canonical Jularr Work using **confirmed** provider identities. If none or more than one Work match, returns no result. An episode cannot be silently treated as a matched series.
 - No background sync, account sign-in, user access policy or request/progress mutation is performed by either adapter.
 
+## Personal Plex media connections (separate from Account login)
+
+`PlexProfileConnectionStore` now implements the persistence foundation for an explicitly consented Plex media connection, scoped to one Jularr profile:
+
+- Stores one encrypted Plex access token and stable verified Plex user ID per profile in `/data/integrations/plex/profiles`. It uses the existing provider Data Protection convention and owner-only atomic credential files.
+- Offers only token-free status (connected identity, usability and consent flags) to Settings. A lost key ring makes the media connection unusable until reauthorization; it does not silently attach another identity.
+- Disconnect affects only the selected profile media grant, **not** the Account-level Plex sign-in identity in #912, other users' connections, watchlists, requests, or Jularr progress.
+- Sync starts **off** and remains unavailable until an independently consented sync engine is implemented. A Plex sign-in never enables it automatically.
+- `SaveVerifiedAsync` is a trusted backend API, **not** an HTTP endpoint. Before calling it, the future connection handler must verify the Plex token and stable account ID server-side, prove ownership of the current signed-in Jularr profile, confirm user intent, and meet admin policy. This integration is not yet implemented.
+
 ## Required before opening media in Plex
 
 1. Use the discovery adapter in the admin-scoped Plex server connection flow, alongside the existing Account-scoped Plex login identity and a new Profile-scoped media Connection. Add explicit user consent, secure grants and revocation in the existing provider architecture. Encrypted tokens and revocation only; Plex login must not automatically imply sync.
