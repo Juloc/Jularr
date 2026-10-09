@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Jularr.Web.Features.ExternalPlayback.Plex;
 using Jularr.Web.Features.Auth;
 using System.Security.Claims;
@@ -159,7 +160,10 @@ public sealed class PlexServerSelectionTests
         {
             Content = new StringContent(
                 request.RequestUri.AbsolutePath.EndsWith("/identity", StringComparison.Ordinal)
-                    ? "{\\\"MediaContainer\\\":{\\\"machineIdentifier\\\":\\\"" + machineId + "\\\"}}"
+                    ? JsonSerializer.Serialize(new
+                    {
+                        MediaContainer = new { machineIdentifier = machineId }
+                    })
                     : """
                 {"MediaContainer":{"Directory":[
                   {"key":"1","type":"movie","title":"Movies"},
