@@ -21,11 +21,21 @@ public sealed class IndexModel(
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
-    public IReadOnlyList<WatchlistItem> Items { get; private set; } = [];
+    [BindProperty(SupportsGet = true, Name = "page")]
+    public int CurrentPage { get; set; } = 1;
+
+    public PageResult<WatchlistItem> ItemPage { get; private set; } =
+        PageResult<WatchlistItem>.From([], new PageRequest());
+
+    public IReadOnlyList<WatchlistItem> Items => ItemPage.Items;
+
+    public long TotalCount => ItemPage.TotalCount ?? 0;
+
+    public long PageCount => Math.Max(1L, (TotalCount + PageRequest.DefaultPageSize - 1) / PageRequest.DefaultPageSize);
 
     public IReadOnlyList<FranchiseSummary> Franchises { get; private set; } = [];
 
-    public async Task OnGetAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var visible = shell is null
@@ -34,12 +44,28 @@ public sealed class IndexModel(
                 .VisibleMediaTypes
                 .ToHashSet();
 
-        Items = await library.ApplyAsync(
-            (await watchlist.GetEffectiveAsync(account.ProfileId, cancellationToken))
-                .Where(item => visible.Contains(WorkMediaTypes.FromWatchlist(item.Identity.MediaType)))
-                .ToArray(),
-            cancellationToken);
+        try
+        {
+            var page = await watchlist.GetEffectivePageAsync(
+                account,
+                new PageRequest(CurrentPage),
+                Enum.GetValues<WatchlistMediaType>()
+                    .Where(type => visible.Contains(WorkMediaTypes.FromWatchlist(type)))
+                    .ToArray(),
+                cancellationToken);
+
+            ItemPage = page with
+            {
+                Items = await library.ApplyAsync(page.Items, cancellationToken)
+            };
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return BadRequest();
+        }
+
         Franchises = await franchises.ListFollowedAsync(account.ProfileId, cancellationToken);
+        return Page();
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(
