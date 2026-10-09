@@ -80,6 +80,8 @@ class TvAppController(
     ): TvAppSnapshot =
         runBusy {
             val resolvedCapabilities = ensureConnected()
+            sessionStore?.beginNewSignIn()
+            cookiesStore?.loadCookies(emptyMap())
             val signedIn = flow.login(userName, password, resolvedCapabilities)
             val origin = settings.origin.orEmpty()
 
@@ -115,8 +117,11 @@ class TvAppController(
      * `POST /pairing/start` (#489). Called from the Login screen's own pairing loop, not wrapped
      * in [runBusy]: it must not fight the polling loop over `snapshot.busy`/`snapshot.error`.
      */
-    suspend fun startDevicePairing(): DevicePairingSession =
-        flow.startDevicePairing()
+    suspend fun startDevicePairing(): DevicePairingSession {
+        sessionStore?.beginNewSignIn()
+        cookiesStore?.loadCookies(emptyMap())
+        return flow.startDevicePairing()
+    }
 
     /** `POST /pairing/poll` (#489). See [startDevicePairing]. */
     suspend fun pollDevicePairing(deviceCode: String): DevicePairingPollResult =
@@ -175,7 +180,7 @@ class TvAppController(
 
             if (sessions.size > 1 && navigation.route == TvRoute.Login) {
                 return@runBusy copy(
-                    navigation = TvNavigationState(TvRoute.ProfileSelect),
+                    navigation = TvNavigation.accountSelect(),
                     capabilities = capabilities,
                     error = null,
                 )
@@ -186,6 +191,7 @@ class TvAppController(
                 cookiesStore?.loadCookies(activeSession.cookies)
                 val signedIn = runCatching { flow.restoreSession(capabilities) }.getOrNull()
                 if (signedIn != null) {
+                    settings.origin = activeSession.serverOrigin
                     return@runBusy copy(
                         navigation = TvNavigation.signedIn(navigation),
                         capabilities = capabilities,
@@ -198,6 +204,7 @@ class TvAppController(
                 }
             }
 
+            cookiesStore?.loadCookies(emptyMap())
             copy(
                 navigation = TvNavigation.connected(navigation),
                 capabilities = capabilities,
@@ -207,7 +214,11 @@ class TvAppController(
 
     suspend fun selectSavedSession(session: TvSavedSession): TvAppSnapshot {
         snapshot = snapshot.copy(
+            navigation = TvNavigation.accountSelect(),
+            capabilities = null,
             account = null,
+            searchQuery = "",
+            searchCategory = TvContentFilter.ALL,
             library = null,
             continueWatching = emptyList(),
             watchlist = emptyList(),
@@ -220,11 +231,14 @@ class TvAppController(
             storageDecision = null,
         )
         return runBusy {
-            sessionStore?.setActiveSessionId(session.id)
-            cookiesStore?.loadCookies(session.cookies)
-            settings.origin = session.serverOrigin
+            val saved = sessionStore?.getSessions()?.firstOrNull { it.id == session.id }
+                ?: session.takeIf { sessionStore == null }
+                ?: error("This account is no longer saved.")
+            sessionStore?.setActiveSessionId(saved.id)
+            cookiesStore?.loadCookies(saved.cookies)
+            settings.origin = saved.serverOrigin
 
-            val capabilities = flow.connect(session.serverOrigin)
+            val capabilities = flow.connect(saved.serverOrigin)
             val signedIn = flow.restoreSession(capabilities)
 
             copy(
@@ -254,12 +268,24 @@ class TvAppController(
             )
         }
 
+    fun openAccountSelect(): TvAppSnapshot {
+        snapshot = snapshot.copy(
+            navigation = if (snapshot.account != null) {
+                TvNavigation.openAccountSelect(snapshot.navigation)
+            } else {
+                TvNavigation.accountSelect()
+            },
+            error = null,
+        )
+        return snapshot
+    }
+
     fun openProfileSelect(): TvAppSnapshot {
         snapshot = snapshot.copy(
             navigation = if (snapshot.account != null) {
                 TvNavigation.openProfileSelect(snapshot.navigation)
             } else {
-                TvNavigationState(TvRoute.ProfileSelect)
+                TvNavigation.accountSelect()
             },
             error = null,
         )
@@ -521,10 +547,10 @@ class TvAppController(
             if (active != null) {
                 sessionStore.removeSession(active.id)
             }
-            cookiesStore?.clear()
+            cookiesStore?.loadCookies(emptyMap())
 
             val remaining = sessionStore?.getSessions().orEmpty()
-            val nextRoute = if (remaining.isNotEmpty()) TvRoute.ProfileSelect else TvRoute.Login
+            val nextRoute = if (remaining.isNotEmpty()) TvRoute.AccountSelect else TvRoute.Login
 
             copy(
                 navigation = TvNavigationState(nextRoute),
@@ -534,6 +560,8 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
+                searchQuery = "",
+                searchCategory = TvContentFilter.ALL,
                 playbackPreferences = null,
                 anime = null,
                 episodePage = null,
@@ -544,6 +572,8 @@ class TvAppController(
         }
 
     fun changeServer(): TvAppSnapshot {
+        sessionStore?.beginNewSignIn()
+        cookiesStore?.loadCookies(emptyMap())
         settings.clear()
         snapshot = TvAppSnapshot(
             navigation = TvNavigation.changeServer(),
