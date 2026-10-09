@@ -29,11 +29,12 @@ class TvNavigationTest {
     }
 
     @Test
-    fun sidebarIsExactlyHomeWatchlistActivityProfile() {
+    fun sidebarSeparatesMainNavigationFromSettingsAndProfileSwitching() {
         assertEquals(
-            listOf(TvRoute.Home, TvRoute.Watchlist, TvRoute.Activity, TvRoute.Profile),
+            listOf(TvRoute.Home, TvRoute.Watchlist),
             TvNavigation.sidebarRoutes,
         )
+        assertEquals(listOf(TvRoute.Settings, TvRoute.ProfileSelect), TvNavigation.bottomRoutes)
     }
 
     @Test
@@ -79,10 +80,9 @@ class TvNavigationTest {
     fun switchingSidebarTabsReplacesInsteadOfStacking() {
         var state = TvNavigationState(TvRoute.Home)
         state = TvNavigation.openSidebarRoute(state, TvRoute.Watchlist)
-        state = TvNavigation.openSidebarRoute(state, TvRoute.Activity)
-        state = TvNavigation.openSidebarRoute(state, TvRoute.Profile)
+        state = TvNavigation.openSidebarRoute(state, TvRoute.Settings)
 
-        assertEquals(TvRoute.Profile, state.route)
+        assertEquals(TvRoute.Settings, state.route)
         assertEquals(emptyList<TvRoute>(), state.previous)
         assertNull(TvNavigation.back(state))
     }
@@ -102,6 +102,13 @@ class TvNavigationTest {
 
         state = TvNavigation.back(state)!!
         assertEquals(TvRoute.Watchlist, state.route)
+    }
+
+    @Test
+    fun profileSwitchOpenedFromSettingsReturnsThereOnBack() {
+        val next = TvNavigation.openProfileSelect(TvNavigationState(TvRoute.Settings))
+        assertEquals(TvRoute.ProfileSelect, next.route)
+        assertEquals(TvRoute.Settings, TvNavigation.back(next)?.route)
     }
 
     @Test
@@ -127,8 +134,7 @@ class TvNavigationTest {
         assertEquals("home", TvNavigation.screenKey(TvRoute.Home))
         assertEquals("search", TvNavigation.screenKey(TvRoute.Search))
         assertEquals("watchlist", TvNavigation.screenKey(TvRoute.Watchlist))
-        assertEquals("activity", TvNavigation.screenKey(TvRoute.Activity))
-        assertEquals("profile", TvNavigation.screenKey(TvRoute.Profile))
+        assertEquals("settings", TvNavigation.screenKey(TvRoute.Settings))
         assertEquals(
             "anime:one",
             TvNavigation.screenKey(TvRoute.Anime("one")),
