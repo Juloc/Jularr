@@ -212,6 +212,63 @@ public sealed class CanonicalPlaybackPlanTests
             "A changed source fingerprint invalidates an otherwise compatible prepared file.");
     }
 
+    [DataTestMethod]
+    [DataRow("shifted-timeline")]
+    [DataRow("different-audio-language")]
+    public async Task PreparedRenditionsCannotChangeTimelineOrTrackIdentity(string mismatch)
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Different Edition" };
+        fixture.Db.Works.Add(movie);
+        await fixture.Db.SaveChangesAsync();
+
+        var originalJson = MediaProbeFixtures.H264Stereo
+            .Replace("\"codec_name\": \"h264\"", "\"codec_name\": \"hevc\"", StringComparison.Ordinal)
+            .Replace("\"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\"", "\"format_name\": \"matroska,webm\"", StringComparison.Ordinal);
+        var derivativeJson = mismatch switch
+        {
+            "shifted-timeline" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"duration\": \"1440.0\"", "\"duration\": \"1420.0\"", StringComparison.Ordinal),
+            "different-audio-language" => MediaProbeFixtures.H264Stereo.Replace(
+                "\"language\": \"jpn\"", "\"language\": \"eng\"", StringComparison.Ordinal),
+            _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
+        };
+
+        var original = await AttachAsync(fixture, storage, movie.Id, null, "a-hevc.mkv", originalJson);
+        var other = await AttachAsync(fixture, storage, movie.Id, null, "b-h264.mp4", derivativeJson);
+        var originalAnalysis = await fixture.Inventory.EnsureAnalyzedAsync(original.StoredFileId, CancellationToken.None);
+        await fixture.Inventory.EnsureAnalyzedAsync(other.StoredFileId, CancellationToken.None);
+        Assert.IsNotNull(originalAnalysis!.SourceFingerprint);
+
+        var version = await fixture.Db.WorkVersions.FindAsync(other.WorkVersionId);
+        Assert.IsNotNull(version);
+        version.Source = "jularr-prepared:v1";
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = originalAnalysis.SourceFingerprint,
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var planner = new PlaybackPlanService(
+            fixture.Db, fixture.Inventory,
+            new PlaybackStreamSessionStore(TimeProvider.System),
+            PlaybackServerTestKit.Create().Capabilities,
+            canonicalStorage: storage);
+        var result = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Parse("203.0.113.9"),
+                Network: new PlaybackNetworkReport(ThroughputKbps: 24_000)),
+            CancellationToken.None);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(original.StoredFileId, result.MediaFileId,
+            "A marked prepared file is not enough: seek positions and audio/forced-subtitle selection must be equivalent.");
+    }
+
     [TestMethod]
     public async Task LosslessFourKRemuxOutranksLowerResolutionDirectPlayOnSafari()
     {
