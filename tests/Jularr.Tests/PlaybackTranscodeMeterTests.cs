@@ -213,8 +213,8 @@ public sealed class PlaybackTranscodeMeterTests
     {
         var store = new PlaybackStreamSessionStore(new ManualTimeProvider(s_start));
         var selections = new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web");
-        var transcoding = store.Create("p", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/m/a.mkv", 1400, Transcode(Video()), selections);
-        var remuxing = store.Create("p", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/m/b.mkv", 1400, Remux(), selections);
+        var transcoding = store.Create("p", Guid.NewGuid(), Guid.NewGuid(), "/m/a.mkv", 1400, Transcode(Video()), selections);
+        var remuxing = store.Create("p", Guid.NewGuid(), Guid.NewGuid(), "/m/b.mkv", 1400, Remux(), selections);
 
         var progress = transcoding.BeginTranscodeRun(PlaybackHardwareBackend.Software);
         progress!(Sample(2.0));
@@ -297,15 +297,17 @@ public sealed class PlaybackTranscodeMeterTests
     }
 
     [TestMethod]
-    public void OnlyAnEncodeAsksFfmpegForItsProgressAndTheArgumentsStayWithTheCommandOwner()
+    public void HlsReportsOutputPositionAndProgressiveVideoEncodeReportsSpeed()
     {
         var encode = PlaybackDeliveryCommand.Hls("/media/a.mkv", Transcode(Video()), 0, "/cache/x").ToList();
         var progressive = PlaybackDeliveryCommand.Progressive("/media/a.mkv", Transcode(Video(), PlaybackTransport.ProgressiveMp4), 0).ToList();
         var copy = PlaybackDeliveryCommand.Hls("/media/a.mkv", Remux(), 0, "/cache/x").ToList();
 
-        Assert.AreEqual("pipe:2", encode[encode.IndexOf("-progress") + 1], "stdout carries the progressive media, so progress shares stderr.");
+        Assert.AreEqual("pipe:2", encode[encode.IndexOf("-progress") + 1]);
         CollectionAssert.Contains(encode, "-nostats");
         CollectionAssert.Contains(progressive, "-progress");
-        CollectionAssert.DoesNotContain(copy, "-progress", "A lossless remux has no speed to protect.");
+        Assert.AreEqual("pipe:2", copy[copy.IndexOf("-progress") + 1],
+            "HLS remuxes expose output position for buffer pacing without re-encoding video.");
+        Assert.AreEqual("copy", copy[copy.IndexOf("-c:v") + 1]);
     }
 }
