@@ -1,11 +1,5 @@
 package de.juloc.jularr.tv
 
-/**
- * TV screens. The sidebar (#522, docs/INFORMATION_ARCHITECTURE.md "TV sidebar") only ever
- * shows [Home], [Watchlist], [Activity] and [Profile] as peer destinations; there is no
- * dedicated Library, Discover or per-media-type screen. [Search] is Home's full browse/
- * discover surface, reached only by activating the search field at the top of Home.
- */
 sealed interface TvRoute {
     data object Setup : TvRoute
     data object Login : TvRoute
@@ -13,8 +7,7 @@ sealed interface TvRoute {
     data object Home : TvRoute
     data object Search : TvRoute
     data object Watchlist : TvRoute
-    data object Activity : TvRoute
-    data object Profile : TvRoute
+    data object Settings : TvRoute
     data class Anime(val animeId: String) : TvRoute
     data class Episode(
         val episodeId: String,
@@ -32,40 +25,7 @@ data class TvNavigationState(
 )
 
 object TvNavigation {
-    /** Top-level destinations selectable directly from the sidebar. */
-    val sidebarRoutes: List<TvRoute> = listOf(
-        TvRoute.Home,
-        TvRoute.Watchlist,
-        TvRoute.Activity,
-        TvRoute.Profile,
-    )
-
-    fun initial(hasServerOrigin: Boolean, hasMultipleSessions: Boolean = false): TvNavigationState =
-        TvNavigationState(
-            route = when {
-                hasMultipleSessions -> TvRoute.ProfileSelect
-                hasServerOrigin -> TvRoute.Login
-                else -> TvRoute.Setup
-            },
-        )
-
-    fun profileSelect(): TvNavigationState =
-        TvNavigationState(TvRoute.ProfileSelect)
-
-    fun connected(state: TvNavigationState): TvNavigationState =
-        state.replace(TvRoute.Login)
-
-    fun signedIn(state: TvNavigationState): TvNavigationState =
-        state.replace(TvRoute.Home)
-
-    /**
-     * Sidebar destinations are peers, not a drill-in stack: switching between Home,
-     * Watchlist, Activity and Profile replaces the current top-level screen instead of
-     * growing the back stack, so repeated tab switching cannot pile up. Back from a
-     * top-level screen leaves the app (the existing empty-stack behavior below), while
-     * content pushed from within a tab (Search, Anime, Episode, Player) still restores
-     * that tab on Back because it is `push`ed on top of it.
-     */
+    /** Sidebar navigation replaces peers rather than building an ever-growing stack. */
     fun openSidebarRoute(
         state: TvNavigationState,
         route: TvRoute,
@@ -110,8 +70,7 @@ object TvNavigation {
                 TvRoute.Home,
                 TvRoute.Search,
                 TvRoute.Watchlist,
-                TvRoute.Activity,
-                TvRoute.Profile,
+                TvRoute.Settings,
                 -> null
 
                 is TvRoute.Anime -> TvNavigationState(TvRoute.Home)
@@ -146,8 +105,7 @@ object TvNavigation {
             TvRoute.Home -> "home"
             TvRoute.Search -> "search"
             TvRoute.Watchlist -> "watchlist"
-            TvRoute.Activity -> "activity"
-            TvRoute.Profile -> "profile"
+            TvRoute.Settings -> "settings"
             is TvRoute.Anime -> "anime:${route.animeId}"
             is TvRoute.Episode -> "episode:${route.episodeId}"
             is TvRoute.Player -> "player:${route.episodeId}"
