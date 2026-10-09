@@ -527,6 +527,14 @@ public static class ClientApiPlaybackPlanEndpoints
                 return Results.Text(PlaybackDeliveryCommand.StartAtBeginning(playlist), asset.ContentType);
             }
 
+            // Playlist reloads and init headers are not evidence of video consumption.
+            // GetAsset already validates exact segment names and the owning profile.
+            if (fileName.StartsWith("segment-", StringComparison.Ordinal) &&
+                fileName.EndsWith(".m4s", StringComparison.Ordinal))
+            {
+                session.MarkDeliveryStarted();
+            }
+
             manager.PruneBehind(hlsSessionId, currentAccount.ProfileId, fileName);
             return Results.File(asset.Path, asset.ContentType, enableRangeProcessing: asset.EnableRangeProcessing);
         });

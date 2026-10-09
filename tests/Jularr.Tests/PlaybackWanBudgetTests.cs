@@ -112,7 +112,11 @@ public sealed class PlaybackWanBudgetTests
         Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
 
         clock.Advance(TimeSpan.FromSeconds(31));
+        // A playlist/status GET touches session lifecycle but must not fake actual WAN traffic.
+        Assert.IsNotNull(sessions.Get(first.Id, "viewer"));
         Assert.AreEqual(0, sessions.ActiveExternalDeliveries());
+        first.MarkDeliveryStarted(); // next authenticated video segment
+        Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
     }
 
     [TestMethod]
