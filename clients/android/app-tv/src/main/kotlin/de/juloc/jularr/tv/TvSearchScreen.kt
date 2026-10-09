@@ -44,8 +44,8 @@ fun TvSearchScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var filter by remember { mutableStateOf(TvContentFilter.ALL) }
     val focusColor = rememberTvFocusColor()
-    val results = remember(library, query) {
-        TvSearchFilter.matches(library.anime, query)
+    val results = remember(library, query, filter) {
+        TvSearchFilter.matches(library.anime, query, filter)
     }
 
     Surface(modifier = Modifier.fillMaxSize()) {
