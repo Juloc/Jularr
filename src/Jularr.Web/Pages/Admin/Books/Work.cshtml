@@ -53,6 +53,56 @@
             {
                 <p class="admset-hint">@state.RequestMessage</p>
             }
+            @if (audiobook)
+            {
+                @if (Model.AudiobookDetails is { } details)
+                {
+                    <dl class="admset-facts">
+                        @if (details.Narrators.Length > 0)
+                        {
+                            <dt>@ui["admin.books.narrators"]</dt>
+                            <dd>@string.Join(", ", details.Narrators)</dd>
+                        }
+                        @if (details.DurationSeconds is { } seconds)
+                        {
+                            <dt>@ui["admin.books.duration"]</dt>
+                            <dd>@TimeSpan.FromSeconds(seconds).ToString(seconds >= 3600 ? @"h:mm:ss" : @"m:ss")</dd>
+                        }
+                        @if (details.Asin is not null)
+                        {
+                            <dt>ASIN</dt>
+                            <dd>@details.Asin</dd>
+                        }
+                        <dt>@ui["admin.books.source"]</dt>
+                        <dd>@if (details.SourceUrl is { } source && Uri.TryCreate(source, UriKind.Absolute, out var sourceUri) && sourceUri.Scheme == Uri.UriSchemeHttps) { <a class="text-link" href="@sourceUri" rel="noopener noreferrer">@details.Provider</a> } else { @details.Provider }</dd>
+                    </dl>
+                }
+                <p><a class="button" asp-page="Work" asp-route-workId="@view.WorkId" asp-route-find="true">@ui["admin.books.findRecording"]</a></p>
+                @if (Model.Candidates is { } candidates)
+                {
+                    @if (candidates.Count == 0)
+                    {
+                        <p class="admset-hint">@ui["admin.books.noRecordings"]</p>
+                    }
+                    else
+                    {
+                        <ul class="admset-list">
+                            @foreach (var candidate in candidates)
+                            {
+                                <li>
+                                    <strong>@candidate.Title</strong>
+                                    <span class="admset-hint">@string.Join(", ", new[] { string.Join(" & ", candidate.Authors), candidate.Language, candidate.Narrators.Count > 0 ? string.Join(", ", candidate.Narrators) : null }.Where(part => !string.IsNullOrEmpty(part)))</span>
+                                    <form method="post" asp-page-handler="UseMetadata" asp-route-workId="@view.WorkId">
+                                        <input type="hidden" name="provider" value="@candidate.Provider" />
+                                        <input type="hidden" name="externalId" value="@candidate.ExternalId" />
+                                        <button class="button" type="submit">@ui["admin.books.useRecording"]</button>
+                                    </form>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+            }
             <div class="admset-actions">
                 <form method="post" asp-page-handler="Monitor" asp-route-workId="@view.WorkId">
                     <input type="hidden" name="audiobook" value="@audiobook.ToString().ToLowerInvariant()" />

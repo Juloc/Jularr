@@ -23,17 +23,26 @@ public sealed class WorkModel(
     BookWorkAdminQuery query,
     MonitoringCommands monitoring,
     WantedReconciler wanted,
-    AcquisitionRequestService requests) : PageModel
+    AcquisitionRequestService requests,
+    AudiobookMetadataService audiobookMetadata,
+    ILogger<WorkModel> logger) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
     public BookWorkAdminView View { get; private set; } = null!;
 
+    public AudiobookEditionMetadata? AudiobookDetails { get; private set; }
+
+    /// <summary>The recordings the providers offer for the Book, listed only when the owner asked to look; none is attached before the owner confirms it.</summary>
+    public IReadOnlyList<AudiobookCandidate>? Candidates { get; private set; }
+
     public string? Notice => TempData["BookWorkNotice"] as string;
 
-    public string? Error => TempData["BookWorkError"] as string;
+    public string? Error => TempData["BookWorkError"] as string ?? providerProblem;
 
-    public async Task<IActionResult> OnGetAsync(Guid workId, CancellationToken cancellationToken)
+    private string? providerProblem;
+
+    public async Task<IActionResult> OnGetAsync(Guid workId, bool find, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (await query.GetAsync(workId, cancellationToken) is not { } view)
@@ -42,6 +51,20 @@ public sealed class WorkModel(
         }
 
         View = view;
+        AudiobookDetails = await audiobookMetadata.GetAsync(workId, cancellationToken);
+        if (find)
+        {
+            try
+            {
+                Candidates = await audiobookMetadata.FindAsync(workId, cancellationToken);
+            }
+            catch (Exception exception) when (exception is AudiobookMetadataException or HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning(exception, "The audiobook providers could not be asked for Work {WorkId}.", workId);
+                providerProblem = Ui["admin.books.providerUnavailable"];
+            }
+        }
+
         return Page();
     }
 
@@ -58,6 +81,27 @@ public sealed class WorkModel(
 
         await wanted.ReconcileAsync(workId, cancellationToken);
         TempData["BookWorkNotice"] = Ui["admin.books.saved"];
+        return RedirectToPage(new { workId });
+    }
+
+    public async Task<IActionResult> OnPostUseMetadataAsync(Guid workId, string provider, string externalId, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        try
+        {
+            if (await audiobookMetadata.AttachAsync(workId, provider, externalId, cancellationToken) is null)
+            {
+                return NotFound();
+            }
+        }
+        catch (Exception exception) when (exception is AudiobookMetadataException or HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(exception, "The audiobook metadata of Work {WorkId} could not be read.", workId);
+            TempData["BookWorkError"] = Ui["admin.books.providerUnavailable"];
+            return RedirectToPage(new { workId });
+        }
+
+        TempData["BookWorkNotice"] = Ui["admin.books.metadataSaved"];
         return RedirectToPage(new { workId });
     }
 

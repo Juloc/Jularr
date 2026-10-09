@@ -544,6 +544,13 @@ builder.Services.AddHttpClient<Jularr.Web.Features.Music.MusicBrainzProvider>(cl
 });
 builder.Services.AddScoped<Jularr.Web.Features.Music.IMusicMetadataProvider>(services => services.GetRequiredService<Jularr.Web.Features.Music.MusicBrainzProvider>());
 builder.Services.AddScoped<Jularr.Web.Features.Music.MusicLibraryService>();
+builder.Services.AddHttpClient<Jularr.Web.Features.Audiobooks.LibriVoxClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/0.1 (+https://github.com/Juloc/Jularr)");
+});
+builder.Services.AddScoped<Jularr.Web.Features.Audiobooks.IAudiobookMetadataProvider>(services => services.GetRequiredService<Jularr.Web.Features.Audiobooks.LibriVoxClient>());
+builder.Services.AddScoped<Jularr.Web.Features.Audiobooks.AudiobookMetadataService>();
 builder.Services.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(services =>
     new Dictionary<IndexerType, IIndexer>
     {

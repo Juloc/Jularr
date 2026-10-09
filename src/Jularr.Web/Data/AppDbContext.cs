@@ -128,6 +128,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     // WorkSourceKind.Audiobook, plus canonical per-profile listening progress.
     public DbSet<Audiobook> Audiobooks => Set<Audiobook>();
     public DbSet<AudiobookFile> AudiobookFiles => Set<AudiobookFile>();
+    public DbSet<AudiobookEditionMetadata> AudiobookEditionMetadata => Set<AudiobookEditionMetadata>();
     public DbSet<AudiobookProgress> AudiobookProgress => Set<AudiobookProgress>();
 
     // Universal media core (#592): provider-independent works, external identities, titles, structure
@@ -796,6 +797,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasOne<MusicRecording>().WithMany().HasForeignKey(x => x.MusicRecordingId).OnDelete(DeleteBehavior.NoAction);
             entity.HasIndex(x => new { x.WorkId, x.Disc, x.Number }).IsUnique();
             entity.HasIndex(x => x.MusicRecordingId);
+        });
+
+        modelBuilder.Entity<AudiobookEditionMetadata>(entity =>
+        {
+            entity.HasKey(x => x.EditionId);
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.ExternalId).HasMaxLength(200);
+            entity.Property(x => x.Title).HasMaxLength(500);
+            entity.Property(x => x.Asin).HasMaxLength(16);
+            entity.Property(x => x.CoverUrl).HasMaxLength(2048);
+            entity.Property(x => x.SourceUrl).HasMaxLength(2048);
+            entity.HasOne<WorkEdition>().WithOne().HasForeignKey<AudiobookEditionMetadata>(x => x.EditionId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<MusicRecording>(entity =>
