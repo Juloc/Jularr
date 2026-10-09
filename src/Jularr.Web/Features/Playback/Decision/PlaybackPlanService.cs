@@ -241,11 +241,17 @@ public sealed class PlaybackPlanService(
         var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
         var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
 
-        // Only fresh evidence from this same title can replace request hints; an idle browser has no measured receive rate.
+        // A re-plan unrelated to quality must not silently raise the tier just because the browser fetched quickly.
         var evidence = previous is not null && previous.Target == target ? sessions.TelemetryEvidence(previous) : null;
+        int? strugglingThroughput = evidence?.RecentStalls > 0 &&
+            evidence.ThroughputKbps is int observed &&
+            previous?.Plan.Quality.LimitKbps is int currentLimit &&
+            observed * PlaybackQualityPresets.ThroughputHeadroom < currentLimit
+                ? observed
+                : null;
         var network = new PlaybackNetworkConditions(
             networkClass,
-            evidence?.ThroughputKbps ?? (input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null),
+            strugglingThroughput ?? (input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null),
             evidence?.BufferSeconds ?? (input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null),
             evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
