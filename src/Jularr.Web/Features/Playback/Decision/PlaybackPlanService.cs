@@ -216,20 +216,39 @@ public sealed class PlaybackPlanService(
                 ? await ResolveCanonicalVideoAsync(target, cancellationToken)
                 : null;
 
-        // Never exchange different cuts or their track numbers during a running session.
+        // A re-plan retains the same physical cut only while its provenance is still valid.
+        // Explicit Original (including LAN Auto) always requests the original, not a derivative.
+        var networkClassForSelection = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
+        var effectiveQuality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClassForSelection);
         var current = input.ReplacesSessionId is { } replaced
             ? sessions.Get(replaced, profileId)
             : null;
-        if (current?.Target == target &&
+        if (effectiveQuality != PlaybackQualityPreset.Original &&
+            current?.Target == target &&
             candidates.FirstOrDefault(candidate => candidate.StoredFileId == current.MediaFileId) is { } selected)
         {
-            playable = selected;
+            if (selected.StoredFileId == candidates[0].StoredFileId)
+            {
+                playable = selected;
+            }
+            else
+            {
+                var originalsAndSelected = await mediaInventory.GetManyAsync(
+                    [candidates[0].StoredFileId, selected.StoredFileId], cancellationToken);
+                if (originalsAndSelected.TryGetValue(candidates[0].StoredFileId, out var originAnalysis) &&
+                    originalsAndSelected.TryGetValue(selected.StoredFileId, out var renditionAnalysis) &&
+                    PlaybackPreparedRenditionEligibility.IsEligible(
+                        candidates[0], originAnalysis, selected, renditionAnalysis))
+                {
+                    playable = selected;
+                }
+                // A revoked/stale derivative cannot persist by being named in a previous session.
+            }
         }
         else if (candidates.Count > 1 &&
                  input.AudioStreamIndex is null &&
                  input.SubtitleStreamIndex is null &&
-                 (input.Quality ?? PlaybackQualityPresets.DefaultFor(
-                     PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network))) != PlaybackQualityPreset.Original)
+                 effectiveQuality != PlaybackQualityPreset.Original)
         {
             var capabilities = input.Capabilities?.Normalize() ??
                                ClientPlaybackCapabilities.InferFromUserAgent(input.UserAgent, input.ClientKind);
