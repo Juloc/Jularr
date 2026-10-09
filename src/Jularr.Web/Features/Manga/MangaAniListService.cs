@@ -268,8 +268,8 @@ public sealed partial class MangaAniListService(
         return decision;
     }
 
-    public async Task MatchAsync(
-        Guid seriesId,
+    /// <summary>One AniList manga by id with its status and the volume and chapter counts AniList states, or null when AniList does not know it.</summary>
+    public async Task<MangaAniListCandidate?> GetAsync(
         string externalId,
         CancellationToken cancellationToken)
     {
@@ -283,15 +283,20 @@ public sealed partial class MangaAniListService(
             new { id },
             cancellationToken);
 
-        if (!document.RootElement.TryGetProperty("data", out var data) ||
-            !data.TryGetProperty("Media", out var media) ||
-            media.ValueKind == JsonValueKind.Null)
-        {
-            throw new InvalidOperationException("AniList manga was not found.");
-        }
+        return document.RootElement.TryGetProperty("data", out var data) &&
+               data.TryGetProperty("Media", out var media) &&
+               media.ValueKind != JsonValueKind.Null
+            ? Parse(media)
+            : null;
+    }
 
-        var candidate = Parse(media)
-            ?? throw new InvalidOperationException("AniList result is not a manga.");
+    public async Task MatchAsync(
+        Guid seriesId,
+        string externalId,
+        CancellationToken cancellationToken)
+    {
+        var candidate = await GetAsync(externalId, cancellationToken)
+            ?? throw new InvalidOperationException("AniList manga was not found.");
 
         if (coverArtwork is not null)
         {

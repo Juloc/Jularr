@@ -608,6 +608,8 @@ builder.Services.AddScoped<AnimeEpisodeStates>();
 builder.Services.AddScoped<AnimeLegacyAcquisitionMigration>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, AnimeWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
+builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>();
+builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>();
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();

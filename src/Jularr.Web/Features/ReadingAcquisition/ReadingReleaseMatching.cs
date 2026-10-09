@@ -26,7 +26,32 @@ public sealed record ReadingReleaseInfo(
     double? ChapterStart,
     double? ChapterEnd,
     string? Language,
-    bool IsCompleteOrBatch);
+    bool IsCompleteOrBatch,
+    int? VolumeEnd = null);
+
+/// <summary>
+/// What a Work still lacks and what it already holds, as volume and chapter numbers: the units a release is judged against. Present only when
+/// the Work has a provider-identified structure; without it a release is judged by the requested volume or chapter alone.
+/// </summary>
+public sealed record ReadingWant(
+    IReadOnlyList<int> Volumes,
+    IReadOnlyList<double> Chapters,
+    IReadOnlyList<int> HeldVolumes,
+    IReadOnlyList<double> HeldChapters)
+{
+    public bool IsEmpty => Volumes.Count == 0 && Chapters.Count == 0;
+
+    public int Total => Volumes.Count + Chapters.Count;
+
+    /// <summary>How many wanted and how many already held units a release that holds the given volumes and chapters would cover.</summary>
+    public (int Wanted, int Unwanted) Cover(ReadingReleaseInfo release)
+    {
+        var everything = release.VolumeNumber is null && release.ChapterStart is null && release.IsCompleteOrBatch;
+        bool Holds(int volume) => everything || (release.VolumeNumber is { } first && volume >= first && volume <= (release.VolumeEnd ?? first));
+        bool Contains(double chapter) => everything || (release.ChapterStart is { } first && chapter >= first && chapter <= (release.ChapterEnd ?? first));
+        return (Volumes.Count(Holds) + Chapters.Count(Contains), HeldVolumes.Count(Holds) + HeldChapters.Count(Contains));
+    }
+}
 
 public sealed record ReadingAcquisitionTarget(
     MediaAcquisitionKind Kind,
@@ -36,11 +61,12 @@ public sealed record ReadingAcquisitionTarget(
     int? RequestedVolume = null,
     double? RequestedChapterStart = null,
     double? RequestedChapterEnd = null,
-    IReadOnlyList<string>? PreferredLanguages = null);
+    IReadOnlyList<string>? PreferredLanguages = null,
+    ReadingWant? Want = null);
 
 public static partial class ReadingReleaseParser
 {
-    [GeneratedRegex(@"(?:^|[\s._\-\[\(])(?:vol(?:ume)?\.?\s*|v)(?<value>\d{1,3})(?:\b|[\s._\-\]\)])", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?:^|[\s._\-\[\(])(?:vol(?:ume)?s?\.?\s*|v)(?<value>\d{1,3})(?:\s*(?:-|–|—|to)\s*(?:vol(?:ume)?s?\.?\s*|v)?(?<end>\d{1,3})(?!\d))?(?:\b|[\s._\-\]\)])", RegexOptions.IgnoreCase)]
     private static partial Regex VolumeRegex();
 
     [GeneratedRegex(@"(?:^|[\s._\-\[\(])(?:ch(?:apter)?\.?\s*|c)(?<start>\d{1,4}(?:\.\d+)?)(?:\s*(?:-|–|—|to)\s*(?:ch(?:apter)?\.?\s*|c)?(?<end>\d{1,4}(?:\.\d+)?))?", RegexOptions.IgnoreCase)]
@@ -66,11 +92,18 @@ public static partial class ReadingReleaseParser
                             : ReadingReleaseFormat.Unknown;
 
         int? volume = null;
+        int? volumeEnd = null;
         var volumeMatch = VolumeRegex().Match(value);
         if (volumeMatch.Success &&
             int.TryParse(volumeMatch.Groups["value"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedVolume))
         {
             volume = parsedVolume;
+            if (volumeMatch.Groups["end"].Success &&
+                int.TryParse(volumeMatch.Groups["end"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedVolumeEnd) &&
+                parsedVolumeEnd > parsedVolume)
+            {
+                volumeEnd = parsedVolumeEnd;
+            }
         }
 
         double? chapterStart = null;
@@ -90,6 +123,7 @@ public static partial class ReadingReleaseParser
 
         var language = DetectLanguage(lower);
         var completeOrBatch =
+            volumeEnd is not null ||
             ContainsToken(lower, "complete") ||
             ContainsToken(lower, "completed") ||
             ContainsToken(lower, "batch") ||
@@ -112,7 +146,8 @@ public static partial class ReadingReleaseParser
             chapterStart,
             chapterEnd,
             language,
-            completeOrBatch);
+            completeOrBatch,
+            volumeEnd);
     }
 
     private static string? DetectLanguage(string lower)
@@ -187,7 +222,7 @@ public static class ReadingReleaseJudge
             {
                 Aliases = target.Aliases ?? [],
                 Creator = target.Author,
-                Volume = target.RequestedVolume,
+                Volume = target.RequestedVolume ?? (target.Want is { Volumes: [var only], Chapters.Count: 0 } ? only : null),
                 Chapter = target.RequestedChapterStart is { } chapter ? (decimal)chapter : null
             },
             release => Judge(release, target));
@@ -239,10 +274,23 @@ public static class ReadingReleaseJudge
         }
 
         var releaseChapterEnd = parsed.ChapterEnd ?? parsed.ChapterStart;
+        var want = target.Want is { IsEmpty: false } known ? known : null;
         ReleaseIdentityEvidence identity;
         if (!names.Any(name => TitleMatches(release.Title, name)))
         {
             identity = ReleaseIdentityEvidence.Conflict("TitleDoesNotMatch", "title does not match");
+        }
+        else if (target.Want is { IsEmpty: true })
+        {
+            identity = ReleaseIdentityEvidence.Conflict("NothingMissing", "nothing is missing");
+        }
+        else if (want is not null && preferredLanguages.Length > 0 && parsed.Language is { } wantedLanguage && !preferredLanguages.Contains(wantedLanguage, StringComparer.OrdinalIgnoreCase))
+        {
+            identity = ReleaseIdentityEvidence.Conflict("LanguageNotAllowed", $"release language '{wantedLanguage}' is not allowed");
+        }
+        else if (want is not null)
+        {
+            identity = UnitIdentity(parsed, want);
         }
         else if (target.RequestedVolume is { } requestedVolume && parsed.VolumeNumber is { } releaseVolume && requestedVolume != releaseVolume)
         {
@@ -267,7 +315,15 @@ public static class ReadingReleaseJudge
         }
 
         var context = 0;
-        if (target.RequestedVolume is { } wantedVolume && parsed.VolumeNumber == wantedVolume)
+        var coverage = SelectionCoverage.Single;
+        if (want is not null)
+        {
+            // Covering more of what is missing wins, and every unit the library already holds is a download nobody needs.
+            var (covered, unwanted) = want.Cover(parsed);
+            coverage = new SelectionCoverage(covered, want.Total, unwanted);
+            context += Math.Min(covered, 12) * 6 - Math.Min(unwanted, 10) * 4;
+        }
+        else if (target.RequestedVolume is { } wantedVolume && parsed.VolumeNumber == wantedVolume)
         {
             context += 24;
         }
@@ -276,7 +332,7 @@ public static class ReadingReleaseJudge
             context += 12;
         }
 
-        if (target.RequestedChapterStart is { } wantedChapter && parsed.ChapterStart is { } chapterStart && wantedChapter >= chapterStart && wantedChapter <= releaseChapterEnd)
+        if (want is null && target.RequestedChapterStart is { } wantedChapter && parsed.ChapterStart is { } chapterStart && wantedChapter >= chapterStart && wantedChapter <= releaseChapterEnd)
         {
             context += 20;
         }
@@ -299,11 +355,35 @@ public static class ReadingReleaseJudge
             > 100L * 1024 * 1024 * 1024 when target.Kind == MediaAcquisitionKind.Manga => 10,
             _ => 0
         };
-        return new ReleaseJudgement<ReadingReleaseInfo>(parsed, ReadingReleaseEvidenceParser.Instance.Parse(release.Title), identity, SelectionCoverage.Single with { Cost = cost }, safety)
+        return new ReleaseJudgement<ReadingReleaseInfo>(parsed, ReadingReleaseEvidenceParser.Instance.Parse(release.Title), identity, coverage with { Cost = cost }, safety)
         {
             ContextScore = context,
             Languages = parsed.Language is { } statedLanguage ? [statedLanguage] : null
         };
+    }
+
+    // Which of the wanted units a release holds: one that names no volume, chapter or batch cannot be told apart from any other, and one that holds
+    // nothing that is missing is a download nobody needs.
+    private static ReleaseIdentityEvidence UnitIdentity(ReadingReleaseInfo parsed, ReadingWant want)
+    {
+        if (parsed.VolumeNumber is null && parsed.ChapterStart is null && !parsed.IsCompleteOrBatch)
+        {
+            return ReleaseIdentityEvidence.Ambiguous("UnnamedUnit", "the release names no volume, chapter or batch");
+        }
+
+        var (covered, _) = want.Cover(parsed);
+        if (covered > 0)
+        {
+            return parsed.VolumeNumber is not null || parsed.ChapterStart is not null
+                ? ReleaseIdentityEvidence.Exact("VolumeOrChapter", "The release names a volume or chapter that is wanted.")
+                : ReleaseIdentityEvidence.Strong("CompleteSeries", "A complete set that holds wanted units.");
+        }
+
+        return parsed.VolumeNumber is { } volume
+            ? ReleaseIdentityEvidence.Conflict("WrongVolume", parsed.VolumeEnd is { } end ? $"volumes {volume}-{end} are not wanted" : $"volume {volume} is not wanted")
+            : parsed.ChapterStart is { } chapter
+                ? ReleaseIdentityEvidence.Conflict("WrongChapter", parsed.ChapterEnd is { } last && last != chapter ? $"chapters {chapter:0.##}-{last:0.##} are not wanted" : $"chapter {chapter:0.##} is not wanted")
+                : ReleaseIdentityEvidence.Conflict("NothingWanted", "the set holds nothing that is missing");
     }
 
     internal static bool TitleMatches(string releaseTitle, string expectedTitle)
