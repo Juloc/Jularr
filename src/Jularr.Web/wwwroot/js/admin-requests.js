@@ -1,4 +1,18 @@
 (() => {
+    const adminNav = document.querySelector('.admin-nav');
+    if (adminNav && window.matchMedia('(max-width: 820px)').matches) {
+        const activeNavItem = adminNav.querySelector('.admin-nav-item.active');
+        if (activeNavItem) {
+            window.requestAnimationFrame(() => {
+                const navBounds = adminNav.getBoundingClientRect();
+                const itemBounds = activeNavItem.getBoundingClientRect();
+                if (itemBounds.left < navBounds.left + 6 || itemBounds.right > navBounds.right - 6) {
+                    adminNav.scrollLeft += itemBounds.left - navBounds.left - 6;
+                }
+            });
+        }
+    }
+
     const submitForm = form => {
         if (typeof form?.requestSubmit === 'function') {
             form.requestSubmit();
@@ -9,6 +23,44 @@
     };
 
     const filterForm = document.querySelector('[data-admreq-filters]');
+    const filterGroup = filterForm?.querySelector('.admreq-selects');
+    const filterRow = filterForm?.querySelector('.admreq-filter-row');
+    const sortControl = filterForm?.querySelector('.admreq-sort-control');
+    const filterDialog = filterForm?.querySelector('[data-admreq-filter-dialog]');
+    const filterDialogContent = filterDialog?.querySelector('[data-admreq-filter-dialog-content]');
+    const mobileFilterTrigger = filterForm?.querySelector('[data-admreq-open-filters]');
+    if (filterGroup && filterRow && sortControl && filterDialog && filterDialogContent && mobileFilterTrigger) {
+        const mobileFilters = window.matchMedia('(max-width: 820px)');
+        const positionFilters = () => {
+            if (mobileFilters.matches) {
+                filterDialogContent.append(filterGroup);
+            }
+            else {
+                if (filterDialog.open) filterDialog.close();
+                filterRow.insertBefore(filterGroup, sortControl);
+            }
+        };
+
+        document.documentElement.classList.add('admreq-js');
+        positionFilters();
+        mobileFilters.addEventListener('change', positionFilters);
+        mobileFilterTrigger.addEventListener('click', () => {
+            filterDialog.showModal();
+            mobileFilterTrigger.setAttribute('aria-expanded', 'true');
+            filterDialog.querySelector('[data-admreq-select-trigger]')?.focus();
+        });
+        filterDialog.querySelectorAll('[data-admreq-close-filters]').forEach(button => {
+            button.addEventListener('click', () => filterDialog.close());
+        });
+        filterDialog.addEventListener('close', () => {
+            mobileFilterTrigger.setAttribute('aria-expanded', 'false');
+            if (mobileFilters.matches) mobileFilterTrigger.focus();
+        });
+        filterDialog.addEventListener('click', event => {
+            if (event.target === filterDialog) filterDialog.close();
+        });
+    }
+
     const search = filterForm?.querySelector('[data-admreq-search]');
     let searchTimer;
     let isComposing = false;
@@ -48,11 +100,11 @@
     };
 
     for (const select of customSelects) {
-        if (!select.closest('.admreq-select-control, .admreq-page-size')) {
+        if (!select.closest('.admreq-select-control')) {
             continue;
         }
 
-        const control = select.closest('.admreq-select-control, .admreq-page-size');
+        const control = select.closest('.admreq-select-control');
         const trigger = document.createElement('button');
         trigger.type = 'button';
         trigger.className = 'admreq-select-trigger';
@@ -66,6 +118,10 @@
         const chevron = document.createElement('span');
         chevron.className = 'admreq-select-chevron';
         chevron.setAttribute('aria-hidden', 'true');
+        const filterIcon = control.querySelector('.admreq-filter-icon');
+        if (filterIcon) {
+            trigger.append(filterIcon);
+        }
         trigger.append(triggerText, chevron);
 
         const panel = document.createElement('div');
@@ -185,27 +241,71 @@
     document.addEventListener('scroll', () => closeCustomSelects(), true);
 
     const pageSizeForm = document.querySelector('[data-admreq-page-size]');
-    const pageSizeSelect = pageSizeForm?.querySelector('[data-admreq-page-size-select]');
-    const customPageSize = pageSizeForm?.querySelector('[data-admreq-custom-page-size]');
-    const syncCustomPageSize = () => {
-        if (!pageSizeSelect || !customPageSize) {
-            return false;
+    const pageSizeInput = pageSizeForm?.querySelector('[data-admreq-page-size-input]');
+    const pageSizeTrigger = pageSizeForm?.querySelector('[data-admreq-page-size-trigger]');
+    const pageSizePanel = pageSizeForm?.querySelector('[data-admreq-page-size-options]');
+    const pageSizeOptions = [...(pageSizePanel?.querySelectorAll('[data-admreq-page-size-option]') || [])];
+
+    pageSizeInput?.addEventListener('change', () => {
+        if (pageSizeInput.value && pageSizeInput.checkValidity()) {
+            submitForm(pageSizeForm);
         }
-
-        const custom = pageSizeSelect.value === '0';
-        customPageSize.disabled = !custom;
-        return custom;
-    };
-
-    pageSizeSelect?.addEventListener('change', () => {
-        if (syncCustomPageSize()) {
-            customPageSize?.focus();
+    });
+    pageSizeInput?.addEventListener('keydown', event => {
+        if (event.key === 'ArrowDown' && pageSizePanel && !pageSizePanel.matches(':popover-open')) {
+            event.preventDefault();
+            pageSizeTrigger?.click();
+        }
+    });
+    pageSizeTrigger?.addEventListener('click', () => {
+        if (!pageSizePanel) {
             return;
         }
 
-        submitForm(pageSizeForm);
+        if (pageSizePanel.matches(':popover-open')) {
+            pageSizePanel.hidePopover();
+            pageSizeInput?.focus();
+            return;
+        }
+
+        closeCustomSelects();
+        pageSizePanel.showPopover();
+        const bounds = pageSizeTrigger.closest('.admreq-page-size-combobox').getBoundingClientRect();
+        const panelWidth = Math.max(pageSizePanel.offsetWidth, bounds.width);
+        const panelHeight = pageSizePanel.offsetHeight;
+        pageSizePanel.style.left = `${Math.max(8, Math.min(bounds.right - panelWidth, window.innerWidth - panelWidth - 8))}px`;
+        const bottomInset = window.matchMedia('(max-width: 820px)').matches ? 82 : 8;
+        pageSizePanel.style.top = `${bounds.bottom + panelHeight <= window.innerHeight - bottomInset ? bounds.bottom + 6 : Math.max(8, bounds.top - panelHeight - 6)}px`;
+        pageSizeOptions.find(option => option.getAttribute('aria-selected') === 'true')?.focus();
     });
-    customPageSize?.addEventListener('change', () => submitForm(pageSizeForm));
+    pageSizePanel?.addEventListener('toggle', () => pageSizeTrigger?.setAttribute('aria-expanded', String(pageSizePanel.matches(':popover-open'))));
+    window.addEventListener('resize', () => {
+        if (pageSizePanel?.matches(':popover-open')) {
+            pageSizePanel.hidePopover();
+        }
+    });
+    document.addEventListener('scroll', () => {
+        if (pageSizePanel?.matches(':popover-open')) {
+            pageSizePanel.hidePopover();
+        }
+    }, true);
+    pageSizeOptions.forEach((option, index) => {
+        option.addEventListener('click', () => {
+            pageSizeInput.value = option.dataset.admreqPageSizeOption;
+            pageSizePanel.hidePopover();
+            submitForm(pageSizeForm);
+        });
+        option.addEventListener('keydown', event => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                pageSizeOptions[(index + (event.key === 'ArrowDown' ? 1 : -1) + pageSizeOptions.length) % pageSizeOptions.length].focus();
+            }
+            else if (event.key === 'Escape') {
+                pageSizePanel.hidePopover();
+                pageSizeInput?.focus();
+            }
+        });
+    });
 
     const table = document.querySelector('[data-admin-requests]');
     if (!table) {

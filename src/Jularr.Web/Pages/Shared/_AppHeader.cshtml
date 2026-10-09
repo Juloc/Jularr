@@ -1,4 +1,5 @@
 @using Jularr.Web.Features.Localization
+@using Jularr.Web.Features.Auth
 @model (UiBreadcrumb? Breadcrumb, bool ShowSearch)
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
@@ -43,6 +44,13 @@
         @if (filter is not null)
         {
             <partial name="_DiscoverFilter" model="filter" />
+        }
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <a class="app-header-button" href="@(JularrPolicies.Allows(User, JularrPolicies.AdminMedia) ? "/Admin#admdash-downloads" : "/Settings/Offline")"
+               aria-label="@ui["admin.dashboard.downloads.title"]" title="@ui["admin.dashboard.downloads.title"]">
+                <partial name="_AppIcon" model="@("download")" />
+            </a>
         }
         <partial name="_NotificationBell" />
         <partial name="_AppUserMenu" model='"header"' />

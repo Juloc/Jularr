@@ -56,6 +56,10 @@
                            aria-current="@(active ? "page" : null)">@label <span class="admreq-count">@queue.TabCounts[tab]</span></a>
                     }
                 </nav>
+                <button class="admreq-mobile-filter-trigger" type="button" data-admreq-open-filters aria-haspopup="dialog" aria-controls="admreq-filter-dialog" aria-expanded="false">
+                    <partial name="_AdminIcon" model='"filter"' />
+                    <span>@ui["admin.requests.filters.open"]</span>
+                </button>
                 <div class="admreq-selects">
                 <div class="admreq-select-control">
                     <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"stack"' /></span>
@@ -109,6 +113,7 @@
                         }
                     </select>
                 </div>
+                </div>
                 <div class="admreq-select-control admreq-sort-control">
                     <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"arrow-down"' /></span>
                     <select name="sort" aria-label="@ui["admin.requests.sort"]" data-admreq-custom-select>
@@ -125,20 +130,40 @@
                         }
                     </select>
                 </div>
-                </div>
+                <details class="admreq-search-menu" open="@(string.IsNullOrWhiteSpace(filter.Search) ? null : "open")">
+                    <summary class="button admin-icon-button" aria-label="@ui["admin.requests.searchPlaceholder"]" title="@ui["admin.requests.searchPlaceholder"]">
+                        <partial name="_AdminIcon" model='"search"' />
+                    </summary>
+                    <div class="admreq-search-panel">
+                        <div class="admreq-search">
+                            <input type="search" name="q" value="@filter.Search" maxlength="120"
+                                   placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
+                            <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]" title="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
+                        </div>
+                        <span class="admreq-results-count">@ui.Format("admin.requests.matching", ("count", queue.Total))</span>
+                        @if (filter.HasNarrowing)
+                        {
+                            <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
+                        }
+                    </div>
+                </details>
             </div>
-            <div class="admreq-search-row">
-                <div class="admreq-search">
-                    <input type="search" name="q" value="@filter.Search" maxlength="120"
-                           placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
-                    <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]" title="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
+            <dialog class="admreq-filter-dialog" id="admreq-filter-dialog" data-admreq-filter-dialog aria-labelledby="admreq-filter-heading">
+                <div class="admreq-filter-dialog-head">
+                    <h2 id="admreq-filter-heading">@ui["admin.requests.filters.open"]</h2>
+                    <button class="button admin-icon-button" type="button" data-admreq-close-filters aria-label="@ui["admin.requests.filters.close"]">
+                        <partial name="_AdminIcon" model='"close"' />
+                    </button>
                 </div>
-                <span class="admreq-results-count">@ui.Format("admin.requests.matching", ("count", queue.Total))</span>
-                @if (filter.HasNarrowing)
-                {
-                    <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
-                }
-            </div>
+                <div data-admreq-filter-dialog-content></div>
+                <div class="admreq-filter-dialog-foot">
+                    @if (filter.HasNarrowing)
+                    {
+                        <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
+                    }
+                    <button class="button button-primary" type="button" data-admreq-close-filters>@ui["admin.requests.filters.done"]</button>
+                </div>
+            </dialog>
         </form>
     </div>
 
@@ -189,7 +214,8 @@
                             MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Book => "book",
                             MediaAcquisitionKind.Movie => "film",
                             MediaAcquisitionKind.Tv => "tv",
-                            MediaAcquisitionKind.Audiobook or MediaAcquisitionKind.Music => "headphones",
+                            MediaAcquisitionKind.Audiobook => "headphones",
+                            MediaAcquisitionKind.Music => "music-note",
                             _ => "stack"
                         };
                         var requesterInitial = string.IsNullOrWhiteSpace(requester) ? "?" : requester[..1].ToUpperInvariant();
@@ -245,6 +271,9 @@
                                             <small title="@request.Subtitle">@request.Subtitle</small>
                                         }
                                     </span>
+                                    <small class="admreq-mobile-meta">
+                                        @requester · <time datetime="@Iso(request.CreatedAt)" data-local-time="date"><span data-local-date>@Day(request.CreatedAt)</span></time>
+                                    </small>
                                 </span>
                               </div>
                             </td>
@@ -436,36 +465,18 @@
                         <input type="hidden" name="sort" value="@filter.Sort" />
                     }
                     <label for="admreq-page-size">@ui["admin.requests.pageSize"]</label>
-                        <select id="admreq-page-size" name="size" aria-label="@ui["admin.requests.pageSize"]" data-admreq-page-size-select data-admreq-custom-select>
+                    <span class="admreq-page-size-combobox">
+                        <input id="admreq-page-size" type="number" name="size" value="@filter.PageSize" min="1" max="500" required inputmode="numeric" autocomplete="off" aria-controls="admreq-page-size-options" aria-label="@ui["admin.requests.pageSize"]" data-admreq-page-size-input />
+                        <button class="admreq-page-size-trigger" type="button" aria-label="@ui["admin.requests.pageSize"]" aria-haspopup="listbox" aria-controls="admreq-page-size-options" aria-expanded="false" data-admreq-page-size-trigger><span class="admreq-select-chevron" aria-hidden="true"></span></button>
+                    </span>
+                    <div id="admreq-page-size-options" class="admreq-dropdown-panel" popover="auto" role="listbox" aria-label="@ui["admin.requests.pageSize"]" data-admreq-page-size-options>
                         @foreach (var size in AdminRequestQuery.StandardPageSizes)
                         {
-                            <option value="@size" selected="@(filter.PageSize == size)">@size</option>
+                            <button type="button" class="admreq-dropdown-option @(filter.PageSize == size ? "is-selected" : "")" role="option" aria-selected="@(filter.PageSize == size ? "true" : "false")" data-admreq-page-size-option="@size">@size</button>
                         }
-                        <option value="0" selected="@(!AdminRequestQuery.StandardPageSizes.Contains(filter.PageSize))">@ui["admin.requests.pageSize.custom"]</option>
-                    </select>
-                    @if (AdminRequestQuery.StandardPageSizes.Contains(filter.PageSize))
-                    {
-                        <input type="number" name="customSize" value="@filter.PageSize" min="1" max="500" inputmode="numeric" aria-label="@ui["admin.requests.pageSize.customAria"]" data-admreq-custom-page-size disabled />
-                    }
-                    else
-                    {
-                        <input type="number" name="customSize" value="@filter.PageSize" min="1" max="500" inputmode="numeric" aria-label="@ui["admin.requests.pageSize.customAria"]" data-admreq-custom-page-size />
-                    }
+                    </div>
                 </form>
                 <span>@ui.Format("admin.requests.showing", ("from", (queue.Page - 1) * queue.PageSize + 1), ("to", (queue.Page - 1) * queue.PageSize + queue.Items.Count), ("total", queue.Total))</span>
-                <form class="admreq-go-to" method="get" action="/Admin/Requests">
-                    @if (filter.Tab != AdminRequestTab.All) { <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" /> }
-                    @if (filter.Kind is { } gotoKind) { <input type="hidden" name="type" value="@AcquisitionAccessNames.Kind(gotoKind)" /> }
-                    @if (filter.Status is { } gotoStatus) { <input type="hidden" name="status" value="@AcquisitionAccessNames.Status(gotoStatus)" /> }
-                    @if (filter.Language is not null) { <input type="hidden" name="lang" value="@filter.Language" /> }
-                    @if (filter.RequesterProfileId is not null) { <input type="hidden" name="by" value="@filter.RequesterProfileId" /> }
-                    @if (filter.Season is { } gotoSeason) { <input type="hidden" name="season" value="@gotoSeason" /> }
-                    @if (filter.Search is not null) { <input type="hidden" name="q" value="@filter.Search" /> }
-                    <input type="hidden" name="size" value="@filter.PageSize" />
-                    @if (filter.Sort != "newest") { <input type="hidden" name="sort" value="@filter.Sort" /> }
-                    <label for="admreq-go-page">@ui["admin.requests.goTo"]</label>
-                    <input id="admreq-go-page" type="number" name="p" min="1" max="@queue.PageCount" value="@queue.Page" inputmode="numeric" />
-                </form>
             </div>
             @if (queue.PageCount > 1)
             {
