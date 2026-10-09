@@ -113,6 +113,49 @@ public sealed class PlexLibraryClient(HttpClient client)
         return new PlexLibraryPage(total, items.GetArrayLength(), entries);
     }
 
+    /// <summary>
+    /// Re-reads an exact Plex item with the current profile's token. The
+    /// returned library section must be checked against the intersection of
+    /// Admin-approved and user-accessible libraries before offering playback.
+    /// </summary>
+    public async Task<PlexLibraryItem?> GetItemAsync(
+        Uri server,
+        string accessToken,
+        string clientIdentifier,
+        string ratingKey,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(ratingKey) ||
+            ratingKey.Length > 18 ||
+            !ratingKey.All(char.IsAsciiDigit))
+        {
+            throw new ArgumentException(
+                "The Plex item key must be numeric.", nameof(ratingKey));
+        }
+
+        using var json = await GetJsonAsync(
+            server,
+            $"library/metadata/{ratingKey}?includeGuids=1",
+            accessToken,
+            clientIdentifier,
+            cancellationToken);
+
+        if (!json.RootElement.TryGetProperty("MediaContainer", out var container) ||
+            !container.TryGetProperty("Metadata", out var entries) ||
+            entries.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        // A conflicting duplicate rating key must not produce a playback target.
+        var matches = entries.EnumerateArray()
+            .Select(ToItem)
+            .Where(item => item?.RatingKey == ratingKey)
+            .Take(2)
+            .ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
     private async Task<JsonDocument> GetJsonAsync(
         Uri server,
         string path,
@@ -211,7 +254,8 @@ public sealed class PlexLibraryClient(HttpClient client)
             mediaType,
             GetString(item, "title"),
             GetInt(item, "year"),
-            ids.Distinct().ToArray());
+            ids.Distinct().ToArray(),
+            GetNumericId(item, "librarySectionID"));
     }
 
     private static bool IsSafeSectionId(string section) =>
@@ -223,6 +267,24 @@ public sealed class PlexLibraryClient(HttpClient client)
         property.ValueKind == JsonValueKind.String
             ? property.GetString() ?? ""
             : "";
+
+    private static string? GetNumericId(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var id))
+        {
+            return null;
+        }
+
+        var value = id.ValueKind switch
+        {
+            JsonValueKind.String => id.GetString(),
+            JsonValueKind.Number when id.TryGetInt64(out var number) && number > 0 =>
+                number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => null
+        };
+        return value is { Length: > 0 and <= 12 } &&
+            value.All(char.IsAsciiDigit) ? value : null;
+    }
 
     private static int? GetInt(JsonElement root, string name) =>
         root.TryGetProperty(name, out var property) &&
@@ -239,5 +301,6 @@ public sealed record PlexLibraryItem(
     string Type,
     string Title,
     int? Year,
-    IReadOnlyList<PlexExternalId> ExternalIds);
+    IReadOnlyList<PlexExternalId> ExternalIds,
+    string? LibrarySectionId = null);
 public sealed record PlexLibraryPage(int TotalSize, int ReturnedSize, IReadOnlyList<PlexLibraryItem> Items);
