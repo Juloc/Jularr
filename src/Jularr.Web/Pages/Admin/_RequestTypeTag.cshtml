@@ -1,0 +1,18 @@
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Localization
+@model MediaAcquisitionKind
+@{
+    var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
+    var name = AcquisitionAccessNames.Kind(Model);
+    var icon = Model switch
+    {
+        MediaAcquisitionKind.Anime => "screen-play",
+        MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Book => "book",
+        MediaAcquisitionKind.Movie => "film",
+        MediaAcquisitionKind.Tv => "tv",
+        MediaAcquisitionKind.Audiobook => "headphones",
+        MediaAcquisitionKind.Music => "music-note",
+        _ => "stack"
+    };
+}
+<span class="admreq-badge admreq-type admreq-type-@name" title="@ui["admin.requests.kind." + name]"><partial name="_AdminIcon" model="icon" />@ui["admin.requests.kind." + name]</span>

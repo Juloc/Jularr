@@ -9,6 +9,8 @@
     };
 
     const filterForm = document.querySelector('[data-admreq-filters]');
+    const selectionValue = select => [...select.selectedOptions].map(option => option.value).filter(Boolean).sort().join('\u0000');
+    const initialFilters = new Map([...(filterForm?.querySelectorAll('select[multiple]') || [])].map(select => [select, selectionValue(select)]));
     const filterGroup = filterForm?.querySelector('.admreq-selects');
     const filterRow = filterForm?.querySelector('.admreq-filter-row');
     const sortControl = filterForm?.querySelector('.admreq-sort-control');
@@ -67,7 +69,13 @@
         searchTimer = window.setTimeout(() => submitForm(filterForm), 320);
     });
     filterForm?.querySelectorAll('select').forEach(select => {
-        select.addEventListener('change', () => submitForm(filterForm));
+        select.addEventListener('change', () => {
+            if (select.multiple) {
+                const apply = filterForm.querySelector('[data-admreq-filter-apply]');
+                if (apply) apply.hidden = ![...initialFilters].some(([filter, initial]) => selectionValue(filter) !== initial);
+            }
+            else submitForm(filterForm);
+        });
     });
 
     const customSelects = [...document.querySelectorAll('select[data-admreq-custom-select]')];
@@ -112,12 +120,27 @@
 
         const panel = document.createElement('div');
         panel.className = 'admreq-dropdown-panel';
+        if (select.multiple) panel.classList.add('admreq-dropdown-multiple');
         panel.setAttribute('popover', 'auto');
-        panel.setAttribute('role', 'listbox');
         panel.id = `admreq-options-${select.name}`;
         panel.dataset.admreqSelectPanel = '';
-        trigger.setAttribute('aria-controls', panel.id);
+        const listbox = document.createElement('div');
+        listbox.id = `${panel.id}-listbox`;
+        listbox.setAttribute('role', 'listbox');
+        listbox.setAttribute('aria-label', select.getAttribute('aria-label') || '');
+        if (select.multiple) listbox.setAttribute('aria-multiselectable', 'true');
+        trigger.setAttribute('aria-controls', listbox.id);
         const options = [...select.options];
+        const initialValues = options.filter(option => option.selected && option.value).map(option => option.value);
+        const templates = [...control.closest('form').querySelectorAll('template[data-admreq-option-select]')]
+            .filter(template => template.dataset.admreqOptionSelect === select.name);
+        const renderOption = (option, target) => {
+            const template = templates.find(candidate => candidate.dataset.value === option?.value);
+            target.replaceChildren();
+            if (template) target.append(template.content.cloneNode(true));
+            else target.textContent = option?.textContent.trim() || '';
+            return Boolean(template);
+        };
         if (options.length > 8) {
             const searchBox = document.createElement('input');
             searchBox.type = 'search';
@@ -133,17 +156,36 @@
             panel.append(searchBox);
         }
 
-        const optionButtons = options.map((option, index) => {
+        panel.append(listbox);
+        const optionButtons = options.map(option => {
             const optionButton = document.createElement('button');
             optionButton.type = 'button';
             optionButton.className = 'admreq-dropdown-option';
             optionButton.setAttribute('role', 'option');
+            optionButton.setAttribute('aria-label', option.textContent.trim());
             optionButton.dataset.value = option.value;
             optionButton.tabIndex = -1;
-            optionButton.textContent = option.textContent.trim();
+            const optionText = document.createElement('span');
+            optionText.className = 'admreq-dropdown-option-text';
+            renderOption(option, optionText);
+            if (select.multiple) {
+                const checkbox = document.createElement('span');
+                checkbox.className = 'admreq-dropdown-checkbox';
+                checkbox.setAttribute('aria-hidden', 'true');
+                optionButton.append(checkbox);
+            }
+            optionButton.append(optionText);
             optionButton.addEventListener('click', () => {
-                select.value = option.value;
+                if (select.multiple) {
+                    if (!option.value) options.forEach(candidate => { candidate.selected = false; });
+                    else {
+                        option.selected = !option.selected;
+                        options.filter(candidate => !candidate.value).forEach(candidate => { candidate.selected = false; });
+                    }
+                }
+                else select.value = option.value;
                 select.dispatchEvent(new Event('change', { bubbles: true }));
+                if (select.multiple) return;
                 panel.hidePopover();
                 trigger.setAttribute('aria-expanded', 'false');
                 trigger.focus();
@@ -158,33 +200,58 @@
                 }
                 else if (event.key === 'Home' || event.key === 'End') {
                     event.preventDefault();
-                    (event.key === 'Home' ? optionButtons[0] : optionButtons.at(-1))?.focus();
+                    const visible = optionButtons.filter(button => !button.hidden);
+                    (event.key === 'Home' ? visible[0] : visible.at(-1))?.focus();
                 }
             });
-            panel.append(optionButton);
+            listbox.append(optionButton);
             return optionButton;
         });
 
         const syncSelect = () => {
-            const selectedOption = select.selectedOptions[0];
-            triggerText.textContent = selectedOption?.textContent.trim() || '';
+            const selectedOptions = [...select.selectedOptions].filter(option => option.value);
+            const selectedOption = selectedOptions[0] || options[0];
+            const rich = renderOption(selectedOption, triggerText);
+            if (select.multiple && selectedOptions.length > 1) {
+                const count = document.createElement('span');
+                count.className = 'admreq-select-extra';
+                count.textContent = `+${selectedOptions.length - 1}`;
+                triggerText.append(count);
+            }
+            trigger.title = selectedOptions.map(option => option.textContent.trim()).join(', ');
+            trigger.classList.toggle('admreq-select-rich', rich);
+            if (filterIcon) filterIcon.hidden = rich;
             for (const optionButton of optionButtons) {
-                const selected = optionButton.dataset.value === select.value;
+                const selected = select.multiple
+                    ? selectedOptions.some(option => option.value === optionButton.dataset.value) || (!selectedOptions.length && !optionButton.dataset.value)
+                    : optionButton.dataset.value === select.value;
                 optionButton.setAttribute('aria-selected', String(selected));
                 optionButton.classList.toggle('is-selected', selected);
             }
         };
-        trigger.addEventListener('click', () => {
-            const isOpen = trigger.getAttribute('aria-expanded') === 'true';
-            closeCustomSelects(control);
-            if (isOpen) {
+        if (select.multiple) {
+            const footer = document.createElement('div');
+            footer.className = 'admreq-dropdown-foot';
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'button button-secondary';
+            cancel.textContent = filterForm.dataset.cancelLabel;
+            cancel.addEventListener('click', () => {
+                options.forEach(option => { option.selected = initialValues.includes(option.value); });
+                select.dispatchEvent(new Event('change', { bubbles: true }));
                 panel.hidePopover();
-                trigger.setAttribute('aria-expanded', 'false');
-                return;
-            }
-
-            panel.showPopover();
-            trigger.setAttribute('aria-expanded', 'true');
+                trigger.focus();
+            });
+            const apply = document.createElement('button');
+            apply.type = 'button';
+            apply.className = 'button button-primary';
+            apply.textContent = filterForm.dataset.applyLabel;
+            apply.addEventListener('click', () => submitForm(select.form));
+            footer.append(cancel, apply);
+            panel.append(footer);
+        }
+        const positionPanel = () => {
+            if (!panel.matches(':popover-open')) return;
             const triggerBounds = trigger.getBoundingClientRect();
             const viewportWidth = document.documentElement.clientWidth;
             const viewportHeight = document.documentElement.clientHeight;
@@ -198,13 +265,36 @@
                 : Math.max(8, triggerBounds.top - panelHeight - 6);
             panel.style.left = `${left}px`;
             panel.style.top = `${top}px`;
+        };
+        trigger.addEventListener('click', () => {
+            const isOpen = trigger.getAttribute('aria-expanded') === 'true';
+            closeCustomSelects(control);
+            if (isOpen) {
+                panel.hidePopover();
+                trigger.setAttribute('aria-expanded', 'false');
+                return;
+            }
+
+            panel.showPopover();
+            trigger.setAttribute('aria-expanded', 'true');
+            positionPanel();
             const selectedIndex = options.findIndex(option => option.value === select.value);
             (optionButtons[selectedIndex] || optionButtons[0])?.focus();
         });
+        document.addEventListener('scroll', event => {
+            if (!event.target.closest?.('[data-admreq-select-panel]')) positionPanel();
+        }, true);
         trigger.addEventListener('keydown', event => {
             if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 trigger.click();
+            }
+        });
+        panel.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                panel.hidePopover();
+                trigger.focus();
             }
         });
         panel.addEventListener('toggle', () => trigger.setAttribute('aria-expanded', String(panel.matches(':popover-open'))));
@@ -228,7 +318,6 @@
         }
     });
     window.addEventListener('resize', () => closeCustomSelects());
-    document.addEventListener('scroll', () => closeCustomSelects(), true);
 
     const pageSizeForm = document.querySelector('[data-admreq-page-size]');
     const pageSizeInput = pageSizeForm?.querySelector('[data-admreq-page-size-input]');

@@ -900,6 +900,10 @@ Binding screen specifications:
 
 Requests moderates user requests and hands approved acquisition needs into Wanted.
 
+The Requests / Rules / Users section tabs precede the lifecycle tabs in the first desktop row. The second row contains visible request-local search, centered type/language/status/requester filters and right-aligned sorting. Filters support multiple choices (OR within a dimension, AND across dimensions), applied together; sorting is single-choice. There is no season filter; season coverage remains in each request. Rich filter options reuse table tags and requester avatars, with language flags and direction-specific sort icons. Narrow layouts place filters in the existing modal sheet.
+
+Within Admin, the shared header search searches permission/module-scoped canonical Admin destinations, account names and request titles. Only nonempty Users / Pages / Settings / Requests groups are rendered. Configuration destinations are searchable by their translated labels, not by secret setting values. Consumer header search remains Discover; request-local search remains independent.
+
 Activity / To-Do is the live/pending operational work queue for imports, remux, repack/replace, subtitles, translations, metadata, AI and maintenance.
 
 History is the past operational record with category/date filters and actor/result details.

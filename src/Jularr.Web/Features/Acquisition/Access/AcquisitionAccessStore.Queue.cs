@@ -9,6 +9,26 @@ public sealed record AdminRequestQueue(AdminRequestPage Page, bool AnyRequests, 
 
 public sealed partial class AcquisitionAccessStore
 {
+    /// <summary>Bounded title lookup for Admin search without recomputing queue facets or materializing request payloads.</summary>
+    public async Task<IReadOnlyList<string>> SearchTitlesAsync(string query, IReadOnlyCollection<MediaAcquisitionKind> kinds, CancellationToken cancellationToken)
+    {
+        var search = query.Trim().ToLowerInvariant();
+        if (search.Length == 0 || kinds.Count == 0)
+        {
+            return [];
+        }
+
+        var names = kinds.Select(AcquisitionAccessNames.Kind).ToArray();
+        return await db.Database.SqlQuery<string>($"""
+            SELECT DISTINCT "Title" AS "Value"
+            FROM "AcquisitionRequests"
+            WHERE "Kind" = ANY({names})
+                AND (strpos(lower("Title"), {search}) > 0 OR strpos(lower(COALESCE("Subtitle", '')), {search}) > 0)
+            ORDER BY "Title"
+            LIMIT 8
+            """).ToListAsync(cancellationToken);
+    }
+
     private const string QueueSource = """
         WITH source AS (
             SELECT r.*, COALESCE(r."PayloadJson"::jsonb, '{}'::jsonb) AS payload
@@ -40,9 +60,9 @@ public sealed partial class AcquisitionAccessStore
         """;
 
     private const string QueueNarrowing = """
-        (@kind::text IS NULL OR "Kind" = @kind)
-        AND (@language::text IS NULL OR language = @language)
-        AND (@requester::text IS NULL OR "RequestedByProfileId" = @requester)
+        (cardinality(@filterKinds::text[]) = 0 OR "Kind" = ANY(@filterKinds))
+        AND (cardinality(@languages::text[]) = 0 OR language = ANY(@languages))
+        AND (cardinality(@requesters::text[]) = 0 OR "RequestedByProfileId" = ANY(@requesters))
         AND (@season::integer IS NULL OR @season = ANY(seasons))
         AND (@search::text IS NULL OR strpos(lower("Title"), @search) > 0 OR strpos(lower(COALESCE("Subtitle", '')), @search) > 0
             OR "RequestedByProfileId" = ANY(@matchedNames))
@@ -111,14 +131,14 @@ public sealed partial class AcquisitionAccessStore
 
     private static bool MatchesQueueStatus(AcquisitionRequestStatus status, AdminRequestFilter filter) =>
         (filter.Tab == AdminRequestTab.All || AdminRequestQuery.TabOf(status) == filter.Tab)
-        && (filter.Status is null || status == filter.Status);
+        && (filter.Statuses is not { Count: > 0 } || filter.Statuses.Contains(status));
 
     private static void BindQueue(DbCommand command, AdminRequestFilter filter, IReadOnlyCollection<MediaAcquisitionKind> kinds, IReadOnlyDictionary<string, string> names)
     {
         Add(command, "@kinds", kinds.Select(AcquisitionAccessNames.Kind).ToArray());
-        Add(command, "@kind", filter.Kind is { } kind ? AcquisitionAccessNames.Kind(kind) : null);
-        Add(command, "@language", filter.Language);
-        Add(command, "@requester", filter.RequesterProfileId);
+        Add(command, "@filterKinds", (filter.Kinds ?? []).Select(AcquisitionAccessNames.Kind).Distinct().ToArray());
+        Add(command, "@languages", (filter.Languages ?? []).Distinct().ToArray());
+        Add(command, "@requesters", (filter.RequesterProfileIds ?? []).Distinct().ToArray());
         Add(command, "@season", filter.Season);
         Add(command, "@search", filter.Search?.Trim().ToLowerInvariant());
         Add(command, "@matchedNames", names.Where(pair => filter.Search is not null && pair.Value.Contains(filter.Search.Trim(), StringComparison.OrdinalIgnoreCase)).Select(pair => pair.Key).ToArray());

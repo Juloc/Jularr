@@ -106,7 +106,7 @@ public sealed class AdminRequestQueryTests
         }
 
         CollectionAssert.AreEquivalent(statuses, includedStatuses.ToArray());
-        var completed = (await fixture.Store.ReadQueueAsync(new AdminRequestFilter(Status: AcquisitionRequestStatus.Completed), [MediaAcquisitionKind.Book], Names, CancellationToken.None)).Page;
+        var completed = (await fixture.Store.ReadQueueAsync(new AdminRequestFilter(Statuses: [AcquisitionRequestStatus.Completed]), [MediaAcquisitionKind.Book], Names, CancellationToken.None)).Page;
         Assert.AreEqual(1, completed.Total);
         Assert.AreEqual(AcquisitionRequestStatus.Completed, completed.Items.Single().Status);
         Assert.AreEqual(statuses.Length, completed.TabCounts[AdminRequestTab.All]);
@@ -123,28 +123,74 @@ public sealed class AdminRequestQueryTests
             Row("Berserk", AcquisitionRequestStatus.Completed, "bob", MediaAcquisitionKind.Manga)
         };
 
-        var byKind = await QueryAsync(rows, new AdminRequestFilter(Kind: MediaAcquisitionKind.Anime), Names);
+        var byKind = await QueryAsync(rows, new AdminRequestFilter(Kinds: [MediaAcquisitionKind.Anime]), Names);
         Assert.AreEqual(2, byKind.Total);
         Assert.AreEqual(2, byKind.TabCounts[AdminRequestTab.All]);
 
-        var byLanguage = await QueryAsync(rows, new AdminRequestFilter(AdminRequestTab.Done, Language: "de"), Names);
+        var byLanguage = await QueryAsync(rows, new AdminRequestFilter(AdminRequestTab.Done, Languages: ["de"]), Names);
         CollectionAssert.AreEqual(new[] { "Dungeon Meshi" }, byLanguage.Items.Select(item => item.Title).ToArray());
 
-        var byRequester = await QueryAsync(rows, new AdminRequestFilter(RequesterProfileId: "bob"), Names);
+        var byRequester = await QueryAsync(rows, new AdminRequestFilter(RequesterProfileIds: ["bob"]), Names);
         CollectionAssert.AreEquivalent(new[] { "Dune", "Berserk" }, byRequester.Items.Select(item => item.Title).ToArray());
         Assert.AreEqual(1, byRequester.TabCounts[AdminRequestTab.Open]);
         Assert.AreEqual(1, byRequester.TabCounts[AdminRequestTab.Done]);
 
         // Status narrows the list only: the tab numbers keep saying what each tab holds.
-        var byStatus = await QueryAsync(rows, new AdminRequestFilter(Status: AcquisitionRequestStatus.Completed), Names);
+        var byStatus = await QueryAsync(rows, new AdminRequestFilter(Statuses: [AcquisitionRequestStatus.Completed]), Names);
         Assert.AreEqual(2, byStatus.Total);
         Assert.AreEqual(4, byStatus.TabCounts[AdminRequestTab.All]);
 
         var emptyIntersection = await QueryAsync(
             rows,
-            new AdminRequestFilter(AdminRequestTab.Open, Status: AcquisitionRequestStatus.Completed),
+            new AdminRequestFilter(AdminRequestTab.Open, Statuses: [AcquisitionRequestStatus.Completed]),
             Names);
         Assert.AreEqual(0, emptyIntersection.Total);
+    }
+
+    [TestMethod]
+    public async Task MultiFilters_UseOrWithinDimensionsAndAndAcrossDimensions()
+    {
+        var rows = new[]
+        {
+            Row("A", AcquisitionRequestStatus.Pending, "alice", MediaAcquisitionKind.Anime, "de"),
+            Row("B", AcquisitionRequestStatus.Completed, "bob", MediaAcquisitionKind.Movie, "ja"),
+            Row("Rejected", AcquisitionRequestStatus.Rejected, "alice", MediaAcquisitionKind.Movie, "ja"),
+            Row("Wrong type", AcquisitionRequestStatus.Pending, "alice", MediaAcquisitionKind.Book, "de"),
+            Row("Wrong language", AcquisitionRequestStatus.Pending, "alice", MediaAcquisitionKind.Anime, "fr"),
+            Row("Wrong user", AcquisitionRequestStatus.Pending, "charlie", MediaAcquisitionKind.Anime, "de")
+        };
+        var filter = new AdminRequestFilter(Kinds: [MediaAcquisitionKind.Anime, MediaAcquisitionKind.Movie], Statuses: [AcquisitionRequestStatus.Pending, AcquisitionRequestStatus.Completed],
+            Languages: ["de", "ja"], RequesterProfileIds: ["alice", "bob"], PageSize: 1, Sort: "title");
+        var first = await QueryAsync(rows, filter, Names);
+        Assert.AreEqual(2, first.Total);
+        Assert.AreEqual(2, first.PageCount);
+        Assert.AreEqual(3, first.TabCounts[AdminRequestTab.All]);
+        CollectionAssert.AreEqual(new[] { "A" }, first.Items.Select(item => item.Title).ToArray());
+        var second = await QueryAsync(rows, filter with { Page = 2 }, Names);
+        CollectionAssert.AreEqual(new[] { "B" }, second.Items.Select(item => item.Title).ToArray());
+        var href = Jularr.Web.Pages.Admin.RequestsModel.Href(filter);
+        StringAssert.Contains(href, "type=anime&type=movie");
+        StringAssert.Contains(href, "status=pending&status=completed");
+        StringAssert.Contains(href, "lang=de&lang=ja");
+        StringAssert.Contains(href, "by=alice&by=bob");
+    }
+
+    [TestMethod]
+    public async Task SearchTitles_IsBoundedAndRespectsEnabledMediaKinds()
+    {
+        await using var fixture = await AcquisitionAccessFixture.CreateAsync();
+        for (var index = 0; index < 12; index++)
+        {
+            await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Book, "test", "title-" + index, "Needle " + index.ToString("D2"), null, null, null),
+                "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        }
+
+        await fixture.Store.CreateAsync(new AcquisitionRequestDraft(MediaAcquisitionKind.Movie, "test", "hidden", "Needle hidden", null, null, null), "alice", AcquisitionRequestStatus.Pending, null, CancellationToken.None);
+        var titles = await fixture.Store.SearchTitlesAsync("nEeDlE", [MediaAcquisitionKind.Book], CancellationToken.None);
+        Assert.AreEqual(8, titles.Count);
+        Assert.IsFalse(titles.Contains("Needle hidden"));
+        Assert.AreEqual(0, (await fixture.Store.SearchTitlesAsync("%", [MediaAcquisitionKind.Book], CancellationToken.None)).Count);
+        Assert.AreEqual(0, (await fixture.Store.SearchTitlesAsync("Needle", [], CancellationToken.None)).Count);
     }
 
     [TestMethod]

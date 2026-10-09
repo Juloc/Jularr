@@ -103,11 +103,25 @@ public sealed class RequestsModel(
         }
 
         Add("tab", filter.Tab == AdminRequestTab.All ? null : AdminRequestQuery.TabName(filter.Tab));
-        Add("type", filter.Kind is { } kind ? AcquisitionAccessNames.Kind(kind) : null);
-        Add("status", filter.Status is { } status ? AcquisitionAccessNames.Status(status) : null);
-        Add("lang", filter.Language);
-        Add("by", filter.RequesterProfileId);
-        Add("season", filter.Season?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var kind in filter.Kinds ?? [])
+        {
+            Add("type", AcquisitionAccessNames.Kind(kind));
+        }
+
+        foreach (var status in filter.Statuses ?? [])
+        {
+            Add("status", AcquisitionAccessNames.Status(status));
+        }
+
+        foreach (var language in filter.Languages ?? [])
+        {
+            Add("lang", language);
+        }
+
+        foreach (var requester in filter.RequesterProfileIds ?? [])
+        {
+            Add("by", requester);
+        }
         Add("q", filter.Search?.Trim());
         Add("sort", filter.Sort == "newest" ? null : filter.Sort);
         Add("p", filter.Page > 1 ? filter.Page.ToString(System.Globalization.CultureInfo.InvariantCulture) : null);
@@ -117,13 +131,12 @@ public sealed class RequestsModel(
 
     public async Task OnGetAsync(
         string? tab,
-        string? type,
-        string? status,
-        string? lang,
-        string? by,
+        string[]? type,
+        string[]? status,
+        string[]? lang,
+        string[]? by,
         string? q,
         string? sort,
-        int? season,
         int p,
         int size,
         int customSize,
@@ -140,15 +153,14 @@ public sealed class RequestsModel(
 
         var filter = new AdminRequestFilter(
             AdminRequestQuery.ParseTab(tab),
-            AdminRequestQuery.TryParseKind(type),
-            AdminRequestQuery.TryParseStatus(status),
-            string.IsNullOrWhiteSpace(lang) ? null : lang.Trim().ToLowerInvariant(),
-            string.IsNullOrWhiteSpace(by) ? null : by,
+            (type ?? []).Select(AdminRequestQuery.TryParseKind).OfType<MediaAcquisitionKind>().Distinct().ToArray(),
+            (status ?? []).Select(AdminRequestQuery.TryParseStatus).OfType<AcquisitionRequestStatus>().Distinct().ToArray(),
+            (lang ?? []).Where(value => !string.IsNullOrWhiteSpace(value) && value.Length <= 35).Select(value => value.Trim().ToLowerInvariant()).Distinct().Take(20).ToArray(),
+            (by ?? []).Where(value => !string.IsNullOrWhiteSpace(value) && value.Length <= 128).Distinct().Take(100).ToArray(),
             string.IsNullOrWhiteSpace(q) ? null : q.Trim(),
             Math.Max(p, 1),
             AdminRequestQuery.NormalizePageSize(size == 0 ? customSize : size),
-            AdminRequestQuery.NormalizeSort(sort),
-            season);
+            AdminRequestQuery.NormalizeSort(sort));
         try
         {
             var result = await store.ReadQueueAsync(filter, EnabledKinds, ProfileNames, cancellationToken);

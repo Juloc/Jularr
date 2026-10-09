@@ -1,0 +1,45 @@
+@using Jularr.Web.Features.Acquisition.Access
+@model string
+@{
+    var language = Model.Split('-')[0].ToLowerInvariant();
+}
+<span class="admreq-language">
+    @* Flag artwork is code-native so Windows does not substitute unsupported flag emoji with letters. Language names remain authoritative. *@
+    @switch (language)
+    {
+        case "de":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#202020" d="M0 0h24v6H0z"/><path fill="#dc2838" d="M0 5.33h24v5.34H0z"/><path fill="#ffcc45" d="M0 10.67h24V16H0z"/></svg>
+            break;
+        case "ja":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#fff" d="M0 0h24v16H0z"/><circle fill="#cf2444" cx="12" cy="8" r="4.5"/></svg>
+            break;
+        case "en":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#254d9c" d="M0 0h24v16H0z"/><path stroke="#fff" stroke-width="4" d="m0 0 24 16M24 0 0 16"/><path stroke="#cf2444" stroke-width="1.5" d="m0 0 24 16M24 0 0 16"/><path stroke="#fff" stroke-width="6" d="M12 0v16M0 8h24"/><path stroke="#cf2444" stroke-width="3" d="M12 0v16M0 8h24"/></svg>
+            break;
+        case "fr":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#fff" d="M0 0h24v16H0z"/><path fill="#254d9c" d="M0 0h8v16H0z"/><path fill="#dc2838" d="M16 0h8v16h-8z"/></svg>
+            break;
+        case "it":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#fff" d="M0 0h24v16H0z"/><path fill="#16956a" d="M0 0h8v16H0z"/><path fill="#dc2838" d="M16 0h8v16h-8z"/></svg>
+            break;
+        case "es":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#cf2444" d="M0 0h24v16H0z"/><path fill="#ffcc45" d="M0 4h24v8H0z"/></svg>
+            break;
+        case "pt":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#cf2444" d="M0 0h24v16H0z"/><path fill="#16956a" d="M0 0h10v16H0z"/><circle fill="#ffcc45" cx="10" cy="8" r="3"/><path fill="#fff" d="M8.5 6h3v4h-3z"/></svg>
+            break;
+        case "ru":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#fff" d="M0 0h24v16H0z"/><path fill="#254d9c" d="M0 5.33h24v5.34H0z"/><path fill="#dc2838" d="M0 10.67h24V16H0z"/></svg>
+            break;
+        case "zh":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#cf2444" d="M0 0h24v16H0z"/><path fill="#ffcc45" d="m5 2 1 2 2.2.3-1.6 1.5.4 2.2L5 7l-2 1 .4-2.2-1.6-1.5L4 4zm5-1 .4.8.9.1-.7.6.2.9-.8-.4-.8.4.2-.9-.7-.6.9-.1zm2 3 .4.8.9.1-.7.6.2.9-.8-.4-.8.4.2-.9-.7-.6.9-.1zm0 4 .4.8.9.1-.7.6.2.9-.8-.4-.8.4.2-.9-.7-.6.9-.1zm-2 3 .4.8.9.1-.7.6.2.9-.8-.4-.8.4.2-.9-.7-.6.9-.1z"/></svg>
+            break;
+        case "ko":
+            <svg class="admreq-language-flag" viewBox="0 0 24 16" aria-hidden="true"><path fill="#fff" d="M0 0h24v16H0z"/><circle fill="#254d9c" cx="12" cy="8" r="3.6"/><path fill="#cf2444" d="M8.4 8a3.6 3.6 0 0 1 7.2 0c0-2.4-3.6-2.4-3.6 0s-3.6 2.4-3.6 0"/><path stroke="#202020" stroke-width=".8" d="m3 4 3-2m-2.5 3 3-2m-2.5 3 3-2m11 0 3 2m-3.5-1 3 2m-3.5-1 3 2M3 12l3 2m-2.5-3 3 2m-2.5-3 3 2m11 0 3-2m-3.5 1 3-2m-3.5 1 3-2"/></svg>
+            break;
+        default:
+            <partial name="_AdminIcon" model='"globe"' />
+            break;
+    }
+    <span>@RequestLanguages.Name(Model)</span>
+</span>

@@ -107,7 +107,10 @@ public static class UiNavigationCatalog
     [
         new("nav.group.management",
         [
-            new("admin-overview", "admin.dashboard.title", "/Admin", "admin", Exact: true, Policy: JularrPolicies.AdminMedia),
+            new("admin-overview", "admin.dashboard.title", "/Admin", "admin", ["/Admin", "/Admin/Search"], Exact: true, Policy: JularrPolicies.AdminMedia, Links:
+            [
+                new("admin-search", "admin.search.title", "/Admin/Search", "search", Exact: true, Policy: JularrPolicies.AdminMedia)
+            ]),
             new("admin-library", "admin.nav.library", "/Admin/Library", "library", ["/Admin/Library", "/Admin/Media", "/Admin/Books", "/Admin/ManualSearch", "/Admin/ReadingManualSearch", "/Admin/BookManualSearch"], Policy: JularrPolicies.AdminMedia, Links:
             [
                 new("admin-music", "admin.nav.music", "/Admin/Music", "headphones", Policy: JularrPolicies.AdminMedia, Modules: [InstanceModule.Music, InstanceModule.Acquisition]),
@@ -430,6 +433,32 @@ public sealed record UiShellNavigation(
             .ToArray();
     }
 
+    /// <summary>Searchable Admin destinations, including contextual children, with the same gates as normal navigation.</summary>
+    public static IReadOnlyList<UiNavigationGroup> BuildAdminSearchDestinations(Func<string, bool> can, IReadOnlySet<InstanceModule> modules)
+    {
+        if (!can(JularrPolicies.AdminMedia))
+        {
+            return [];
+        }
+
+        IEnumerable<(UiNavigationEntry Entry, bool IsSettings)> Descendants(IEnumerable<UiNavigationEntry> entries, bool isSettings)
+        {
+            foreach (var entry in entries.Where(entry => Allowed(entry, true, can, modules)))
+            {
+                var configuration = isSettings || entry.Id is "admin-settings" or "admin-request-settings" or "admin-capabilities";
+                yield return (entry, configuration);
+                foreach (var child in Descendants(entry.Links ?? [], configuration))
+                {
+                    yield return child;
+                }
+            }
+        }
+
+        var destinations = UiNavigationCatalog.Admin.SelectMany(section => Descendants(section.Entries, section.TitleKey == "nav.group.configuration")).ToArray();
+        return new[] { false, true }.Select(isSettings => new UiNavigationGroup(isSettings ? "admin.search.settings" : "admin.search.pages",
+            destinations.Where(destination => destination.IsSettings == isSettings).Select(destination => ToItem(destination.Entry, false)).ToArray())).ToArray();
+    }
+
     private static UiNavigationEntry? ContextualParent(PathString path, Func<string, bool> can, IReadOnlySet<InstanceModule> modules) =>
         UiNavigationCatalog.All.Where(entry => entry.Links is { Length: > 0 } && Allowed(entry, true, can, modules) && IsActive(entry, path))
             .OrderByDescending(entry => UiNavigationCatalog.PathOf(entry.Href).Length).FirstOrDefault();
@@ -535,7 +564,7 @@ public sealed record UiShellNavigation(
         if (entry.Exact)
         {
             var current = path.Value!.TrimEnd('/');
-            return string.Equals(current, href.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) ? href.Length : -1;
+            return (entry.Matches ?? [href]).Where(root => string.Equals(current, root.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)).Select(root => root.Length).DefaultIfEmpty(-1).Max();
         }
 
         return UiNavigationCatalog.RootsOf(entry)

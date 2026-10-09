@@ -56,6 +56,7 @@
         current = recent.FirstOrDefault(item => item.ChapterId == chapterId || (workId is { } id && item.WorkId == id));
     }
 }
+@{ ViewData["AdminSearch"] = nav.Expanded?.Id == "admin"; }
 <partial name="_AppHeader" model="(nav.Breadcrumb, true)" />
 
 <aside class="sidebar">

@@ -11,6 +11,24 @@ public sealed partial class CanonicalNavigationTests
     private static readonly Func<string, bool> Owner = RoleNavigationTests.As(AccountRole.Owner);
 
     [TestMethod]
+    public void AdminSearch_DestinationsRespectPermissionsModulesAndContextualChildren()
+    {
+        var modules = Enum.GetValues<InstanceModule>().ToHashSet();
+        var owner = UiShellNavigation.BuildAdminSearchDestinations(Owner, modules).SelectMany(group => group.Items).ToArray();
+        Assert.IsTrue(owner.Any(item => item.Href == "/Admin/Requests/Settings"));
+        Assert.IsTrue(owner.Any(item => item.Href == "/Admin/User" || item.Href == "/Admin/Users"));
+        Assert.AreEqual(owner.Length, owner.Select(item => item.Href).Distinct().Count());
+        Assert.AreEqual(0, UiShellNavigation.BuildAdminSearchDestinations(RoleNavigationTests.As(AccountRole.User), modules).Count);
+        var manager = UiShellNavigation.BuildAdminSearchDestinations(RoleNavigationTests.As(AccountRole.MediaManager), modules).SelectMany(group => group.Items).ToArray();
+        Assert.IsFalse(manager.Any(item => item.Href == "/Admin/Users" || item.Href == "/Admin/Requests/Users" || item.Href == "/Settings/ApiKeys"));
+        modules.Remove(InstanceModule.Acquisition);
+        Assert.IsFalse(UiShellNavigation.BuildAdminSearchDestinations(Owner, modules).SelectMany(group => group.Items).Any(item => item.Href.StartsWith("/Admin/Requests", StringComparison.Ordinal)));
+        var nav = UiShellNavigation.Build("/Admin/Search", false, Owner);
+        Assert.AreEqual("admin", nav.Expanded!.Id);
+        Assert.AreEqual("admin-search", nav.Breadcrumb!.Current!.Id);
+    }
+
+    [TestMethod]
     [DataRow("/Admin/Requests", "admin-requests")]
     [DataRow("/Admin/Requests/Settings", "admin-request-settings")]
     [DataRow("/Admin/Requests/Users", "admin-request-users")]

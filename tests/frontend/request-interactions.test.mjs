@@ -82,3 +82,82 @@ test('Free numeric page size submits on Enter and rejects out-of-range values', 
     pageSize.dispatchEvent({ type: 'change' });
     assert.equal(pageForm.submissions, 2);
 });
+
+function filterHarness(initialValues = []) {
+    class Element extends Target {
+        children = [];
+        attributes = new Map();
+        style = {};
+        open = false;
+        classList = { add() {}, toggle() {} };
+        append(...children) { this.children.push(...children); }
+        replaceChildren(...children) { this.children = children; }
+        setAttribute(name, value) { this.attributes.set(name, value); }
+        getAttribute(name) { return this.attributes.get(name); }
+        hasAttribute(name) { return this.attributes.has(name); }
+        matches() { return this.open; }
+        showPopover() { this.open = true; }
+        hidePopover() { this.open = false; }
+        focus() {}
+        getBoundingClientRect() { return { left: 20, top: 20, bottom: 60, width: 140 }; }
+        offsetWidth = 180;
+        offsetHeight = 200;
+    }
+    const document = new Element();
+    const form = new Element();
+    form.dataset = { cancelLabel: 'Cancel', applyLabel: 'Apply' };
+    form.submissions = 0;
+    form.requestSubmit = () => form.submissions++;
+    const applyAll = new Element();
+    applyAll.hidden = true;
+    const control = new Element();
+    control.closest = selector => selector === 'form' ? form : null;
+    const select = new Element();
+    select.multiple = true;
+    select.name = 'type';
+    select.form = form;
+    select.options = ['', 'movie', 'tv'].map(value => ({ value, textContent: value || 'Media type', selected: initialValues.includes(value) }));
+    Object.defineProperty(select, 'selectedOptions', { get: () => select.options.filter(option => option.selected) });
+    select.closest = () => control;
+    form.querySelectorAll = selector => selector === 'select[multiple]' || selector === 'select' ? [select] : [];
+    form.querySelector = selector => selector === '[data-admreq-filter-apply]' ? applyAll : null;
+    document.querySelector = selector => selector === '[data-admreq-filters]' ? form : null;
+    document.querySelectorAll = selector => selector === 'select[data-admreq-custom-select]' ? [select] : [];
+    document.createElement = () => new Element();
+    document.documentElement = { clientWidth: 1440, clientHeight: 900 };
+    const window = new Element();
+    vm.runInNewContext(source, { document, window, Event: class { constructor(type) { this.type = type; } } });
+    const panel = control.children[1];
+    const options = panel.children[0].children;
+    const [cancel, apply] = panel.children[1].children;
+    return { form, select, panel, options, cancel, apply, applyAll, trigger: control.children[0] };
+}
+
+test('Multiple filters keep the popup open until Apply and submit all selected values', () => {
+    const { form, select, panel, options, apply, trigger, applyAll } = filterHarness();
+    trigger.dispatchEvent({ type: 'click' });
+    options[1].dispatchEvent({ type: 'click' });
+    options[2].dispatchEvent({ type: 'click' });
+    assert.equal(panel.open, true);
+    assert.equal(form.submissions, 0);
+    assert.equal(applyAll.hidden, false);
+    assert.deepEqual(select.selectedOptions.map(option => option.value), ['movie', 'tv']);
+    assert.equal(options[1].children[0].className, 'admreq-dropdown-checkbox');
+    assert.equal(options[1].getAttribute('aria-selected'), 'true');
+    apply.dispatchEvent({ type: 'click' });
+    assert.equal(form.submissions, 1);
+});
+
+test('Cancel restores the applied filter selection without submitting', () => {
+    const { form, select, panel, options, cancel, trigger, applyAll } = filterHarness(['movie']);
+    trigger.dispatchEvent({ type: 'click' });
+    options[1].dispatchEvent({ type: 'click' });
+    options[2].dispatchEvent({ type: 'click' });
+    cancel.dispatchEvent({ type: 'click' });
+    assert.deepEqual(select.selectedOptions.map(option => option.value), ['movie']);
+    assert.equal(form.submissions, 0);
+    assert.equal(panel.open, false);
+    assert.equal(applyAll.hidden, true);
+    assert.equal(options[1].getAttribute('aria-selected'), 'true');
+    assert.equal(options[2].getAttribute('aria-selected'), 'false');
+});

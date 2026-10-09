@@ -34,6 +34,39 @@ namespace Jularr.Tests;
 public sealed class RequestPagesRenderTests
 {
     [TestMethod]
+    public async Task AdminSearch_UsesRealBoundedResultsAndOmitsEmptyGroups()
+    {
+        await using var host = await RequestPagesHost.CreateAsync();
+        for (var index = 0; index < 12; index++)
+        {
+            host.Db.OwnerAccounts.Add(new OwnerAccount { Id = "search-user-" + index, UserName = "Demo " + index.ToString("D2"), NormalizedUserName = "DEMO " + index.ToString("D2"), PasswordHash = "never-search-this-secret", Role = AccountRole.User });
+        }
+
+        host.Db.OwnerAccounts.Add(new OwnerAccount { Id = "unmatched", UserName = "Other account", NormalizedUserName = "OTHER ACCOUNT", PasswordHash = "never-search-this-secret", Role = AccountRole.User });
+        await host.Db.SaveChangesAsync();
+        var html = await host.GetHtmlAsync("/Admin/Search?handler=Preview&q=dEmO", asOwner: true);
+        StringAssert.Contains(html, "data-admin-search-group=\"admin.search.users\"");
+        Assert.AreEqual(8, System.Text.RegularExpressions.Regex.Matches(html, "class=\"admin-search-result\"").Count);
+        StringAssert.Contains(html, "/Admin/User?id=search-user-0");
+        Assert.IsFalse(html.Contains("Other account", StringComparison.Ordinal));
+        Assert.IsFalse(html.Contains("never-search-this-secret", StringComparison.Ordinal));
+        Assert.IsFalse(html.Contains("admin.search.settings", StringComparison.Ordinal));
+        Assert.IsFalse(html.Contains("admin.search.pages", StringComparison.Ordinal));
+        var settings = await host.GetHtmlAsync("/Admin/Search?handler=Preview&q=providers", asOwner: true);
+        StringAssert.Contains(settings, "data-admin-search-group=\"admin.search.settings\"");
+        StringAssert.Contains(settings, "href=\"/Admin/Providers\"");
+        var empty = await host.GetHtmlAsync("/Admin/Search?handler=Preview&q=%25", asOwner: true);
+        StringAssert.Contains(empty, "No matching Admin results.");
+        Assert.IsFalse(empty.Contains("data-admin-search-group", StringComparison.Ordinal));
+        Assert.AreEqual(HttpStatusCode.Forbidden, await host.GetStatusAsync("/Admin/Search?handler=Preview&q=demo", asOwner: false));
+        var queue = await host.GetHtmlAsync("/Admin/Requests", asOwner: true);
+        StringAssert.Contains(queue, "action=\"/Admin/Search\"");
+        StringAssert.Contains(queue, "data-admin-search-preview");
+        var consumer = await host.GetHtmlAsync("/Requests", asOwner: false);
+        Assert.IsFalse(consumer.Contains("data-admin-search-preview", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public async Task RequestSection_RendersTabsWithoutPageHeadingsAndListsAllAccountsReadOnly()
     {
         await using var host = await RequestPagesHost.CreateAsync();
@@ -248,6 +281,16 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(all, "data-admreq-bulk");
         StringAssert.Contains(all, "class=\"admreq-control-surface\"");
         StringAssert.Contains(all, "class=\"library-type-tabs admreq-tabs\"");
+        Assert.IsTrue(all.IndexOf("admreq-navigation-row", StringComparison.Ordinal) < all.IndexOf("admreq-control-surface", StringComparison.Ordinal));
+        Assert.IsFalse(all.Contains("name=\"season\"", StringComparison.Ordinal));
+        Assert.IsFalse(all.Contains("admreq-search-menu", StringComparison.Ordinal));
+        StringAssert.Contains(all, "data-admreq-option-select=\"type\"");
+        StringAssert.Contains(all, "data-admreq-option-select=\"lang\"");
+        StringAssert.Contains(all, "data-admreq-option-select=\"status\"");
+        StringAssert.Contains(all, "data-admreq-option-select=\"by\"");
+        StringAssert.Contains(all, "data-admreq-option-select=\"sort\"");
+        StringAssert.Contains(all, "admreq-language-flag");
+        Assert.AreEqual(4, System.Text.RegularExpressions.Regex.Matches(all, "<select name=\"(?:type|lang|status|by)\" multiple").Count);
         StringAssert.Contains(all, "admreq-cell-modified");
         StringAssert.Contains(all, "admreq-cell-profile");
         StringAssert.Contains(all, "admreq-cell-coverage");

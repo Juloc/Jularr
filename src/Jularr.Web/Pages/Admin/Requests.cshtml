@@ -19,8 +19,6 @@
     <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
 }
 
-<partial name="_AdminSectionLinks" />
-
 @{
     var queue = Model.Queue;
     var filter = queue.Filter;
@@ -39,6 +37,17 @@
     static string Day(DateTime value) => value.ToString("yyyy-MM-dd");
     static string Clock(DateTime value) => value.ToString("HH:mm");
 }
+
+<div class="admreq-navigation-row">
+    <partial name="_AdminSectionLinks" />
+    <nav class="library-type-tabs admreq-tabs" aria-label="@ui["admin.requests.tabsAria"]">
+        @foreach (var (tab, label) in tabs)
+        {
+            var active = tab == filter.Tab;
+            <a class="library-type-tab @(active ? "active" : "")" href="@RequestsModel.Href(filter with { Tab = tab, Page = 1 })" aria-current="@(active ? "page" : null)">@label <span class="admreq-count">@queue.TabCounts[tab]</span></a>
+        }
+    </nav>
+</div>
 
 @if (TempData["RequestActionResults"] is string resultJson)
 {
@@ -60,21 +69,20 @@
 
 <section class="admreq" aria-label="@ui["admin.requests.title"]">
     <div class="admreq-control-surface">
-        <form method="get" action="/Admin/Requests" class="admreq-filters" data-admreq-filters>
+        <form method="get" action="/Admin/Requests" class="admreq-filters" data-admreq-filters data-apply-label="@ui["common.apply"]" data-cancel-label="@ui["common.cancel"]">
+            @if (filter.PageSize != AdminRequestQuery.DefaultPageSize)
+            {
+                <input type="hidden" name="size" value="@filter.PageSize" />
+            }
             @if (filter.Tab != AdminRequestTab.All)
             {
                 <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" />
             }
             <div class="admreq-filter-row">
-                <nav class="library-type-tabs admreq-tabs" aria-label="@ui["admin.requests.tabsAria"]">
-                    @foreach (var (tab, label) in tabs)
-                    {
-                        var active = tab == filter.Tab;
-                        <a class="library-type-tab @(active ? "active" : "")"
-                           href="@RequestsModel.Href(filter with { Tab = tab, Page = 1 })"
-                           aria-current="@(active ? "page" : null)">@label <span class="admreq-count">@queue.TabCounts[tab]</span></a>
-                    }
-                </nav>
+                <div class="admreq-search">
+                    <input type="search" name="q" value="@filter.Search" maxlength="120" placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
+                    <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
+                </div>
                 <button class="admreq-mobile-filter-trigger" type="button" data-admreq-open-filters aria-haspopup="dialog" aria-controls="admreq-filter-dialog" aria-expanded="false">
                     <partial name="_AdminIcon" model='"filter"' />
                     <span>@ui["admin.requests.filters.open"]</span>
@@ -82,55 +90,45 @@
                 <div class="admreq-selects">
                 <div class="admreq-select-control">
                     <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"stack"' /></span>
-                    <select name="type" aria-label="@ui["admin.requests.filter.type"]" data-admreq-custom-select>
+                    <select name="type" multiple aria-label="@ui["admin.requests.filter.type"]" data-admreq-custom-select>
                     <option value="">@ui["admin.requests.filter.type"]</option>
                     @foreach (var kind in Model.EnabledKinds)
                     {
                         var kindName = AcquisitionAccessNames.Kind(kind);
-                        <option value="@kindName" selected="@(filter.Kind == kind)">@ui["admin.requests.kind." + kindName]</option>
+                        <option value="@kindName" selected="@(filter.Kinds?.Contains(kind) == true)">@ui["admin.requests.kind." + kindName]</option>
                     }
                     </select>
                 </div>
                 <div class="admreq-select-control">
                 <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"globe"' /></span>
-                <select name="lang" aria-label="@ui["admin.requests.filter.language"]" data-admreq-custom-select>
+                <select name="lang" multiple aria-label="@ui["admin.requests.filter.language"]" data-admreq-custom-select>
                     <option value="">@ui["admin.requests.filter.language"]</option>
                     @foreach (var tag in queue.Languages)
                     {
-                        <option value="@tag" selected="@(filter.Language == tag)">@RequestLanguages.Name(tag)</option>
+                        <option value="@tag" selected="@(filter.Languages?.Contains(tag) == true)">@RequestLanguages.Name(tag)</option>
                     }
                 </select>
                 </div>
                 <div class="admreq-select-control">
                 <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"alert"' /></span>
-                <select name="status" aria-label="@ui["admin.requests.filter.status"]" data-admreq-custom-select>
+                <select name="status" multiple aria-label="@ui["admin.requests.filter.status"]" data-admreq-custom-select>
                     <option value="">@ui["admin.requests.filter.status"]</option>
                     @foreach (var value in Enum.GetValues<AcquisitionRequestStatus>())
                     {
                         var valueName = AcquisitionAccessNames.Status(value);
-                        <option value="@valueName" selected="@(filter.Status == value)">@ui["requests.status." + valueName]</option>
+                        <option value="@valueName" selected="@(filter.Statuses?.Contains(value) == true)">@ui["requests.status." + valueName]</option>
                     }
                 </select>
                 </div>
                 <div class="admreq-select-control">
                 <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AppIcon" model='"users"' /></span>
-                <select name="by" aria-label="@ui["admin.requests.filter.requester"]" data-admreq-custom-select>
+                <select name="by" multiple aria-label="@ui["admin.requests.filter.requester"]" data-admreq-custom-select>
                     <option value="">@ui["admin.requests.filter.requester"]</option>
                     @foreach (var (requesterId, requesterName) in Model.Requesters)
                     {
-                        <option value="@requesterId" selected="@(filter.RequesterProfileId == requesterId)">@requesterName</option>
+                        <option value="@requesterId" selected="@(filter.RequesterProfileIds?.Contains(requesterId) == true)">@requesterName</option>
                     }
                 </select>
-                </div>
-                <div class="admreq-select-control admreq-season-control">
-                    <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"columns"' /></span>
-                    <select name="season" aria-label="@ui["admin.requests.filter.season"]" data-admreq-custom-select>
-                        <option value="">@ui["admin.requests.filter.season"]</option>
-                        @foreach (var season in queue.Seasons)
-                        {
-                            <option value="@season" selected="@(filter.Season == season)">@(season == 0 ? ui["admin.requests.filter.specials"] : $"S{season}")</option>
-                        }
-                    </select>
                 </div>
                 </div>
                 <div class="admreq-select-control admreq-sort-control">
@@ -149,24 +147,34 @@
                         }
                     </select>
                 </div>
-                <details class="admreq-search-menu" open="@(string.IsNullOrWhiteSpace(filter.Search) ? null : "open")">
-                    <summary class="button admin-icon-button" aria-label="@ui["admin.requests.searchPlaceholder"]" title="@ui["admin.requests.searchPlaceholder"]">
-                        <partial name="_AdminIcon" model='"search"' />
-                    </summary>
-                    <div class="admreq-search-panel">
-                        <div class="admreq-search">
-                            <input type="search" name="q" value="@filter.Search" maxlength="120"
-                                   placeholder="@ui["admin.requests.searchPlaceholder"]" aria-label="@ui["admin.requests.searchPlaceholder"]" data-admreq-search />
-                            <button class="admreq-search-submit" type="submit" aria-label="@ui["common.search"]" title="@ui["common.search"]"><partial name="_AdminIcon" model='"search"' /></button>
-                        </div>
-                        <span class="admreq-results-count">@ui.Format("admin.requests.matching", ("count", queue.Total))</span>
-                        @if (filter.HasNarrowing)
-                        {
-                            <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
-                        }
-                    </div>
-                </details>
             </div>
+            <div class="admreq-filter-apply" data-admreq-filter-apply hidden><button class="button button-primary" type="submit">@ui["admin.requests.filters.apply"]</button></div>
+            @foreach (var kind in Model.EnabledKinds)
+            {
+                <template data-admreq-option-select="type" data-value="@AcquisitionAccessNames.Kind(kind)"><partial name="_RequestTypeTag" model="kind" /></template>
+            }
+            @foreach (var tag in queue.Languages)
+            {
+                <template data-admreq-option-select="lang" data-value="@tag"><partial name="_RequestLanguage" model="tag" /></template>
+            }
+            @foreach (var (id, name) in Model.Requesters)
+            {
+                <template data-admreq-option-select="by" data-value="@id"><partial name="_RequestRequester" model="name" /></template>
+            }
+            @foreach (var value in Enum.GetValues<AcquisitionRequestStatus>())
+            {
+                var name = AcquisitionAccessNames.Status(value);
+                var approval = value is AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Rejected;
+                <template data-admreq-option-select="status" data-value="@name"><span class="admreq-badge @(approval ? "admreq-approval admreq-approval-" + name : "admreq-media admreq-media-" + name)"><partial name="_RequestStatusIcon" model='@(value == AcquisitionRequestStatus.Rejected || value == AcquisitionRequestStatus.Failed ? "rejected" : value == AcquisitionRequestStatus.Approved || value == AcquisitionRequestStatus.Completed ? "completed" : "pending")' />@ui["requests.status." + name]</span></template>
+            }
+            @foreach (var value in new[] { "newest", "oldest", "modified", "title", "requester" })
+            {
+                <template data-admreq-option-select="sort" data-value="@value"><span class="admreq-sort-option"><partial name="_AdminIcon" model='@(value is "newest" or "modified" ? "arrow-down" : "arrow-up")' /><span>@ui["admin.requests.sort." + value]</span></span></template>
+            }
+            @if (filter.HasNarrowing)
+            {
+                <div class="admreq-filter-summary"><span class="admreq-results-count">@ui.Format("admin.requests.matching", ("count", queue.Total))</span><a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a></div>
+            }
             <dialog class="admreq-filter-dialog" id="admreq-filter-dialog" data-admreq-filter-dialog aria-labelledby="admreq-filter-heading">
                 <div class="admreq-filter-dialog-head">
                     <h2 id="admreq-filter-heading">@ui["admin.requests.filters.open"]</h2>
@@ -180,7 +188,7 @@
                     {
                         <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
                     }
-                    <button class="button button-primary" type="button" data-admreq-close-filters>@ui["admin.requests.filters.done"]</button>
+                    <button class="button button-primary" type="submit">@ui["admin.requests.filters.apply"]</button>
                 </div>
             </dialog>
         </form>
@@ -226,18 +234,6 @@
                         var status = AcquisitionAccessNames.Status(request.Status);
                         var language = AdminRequestQuery.LanguageOf(request);
                         var requester = Model.ProfileNames.GetValueOrDefault(request.RequestedByProfileId) ?? request.RequestedByProfileId;
-                        var kindName = AcquisitionAccessNames.Kind(request.Kind);
-                        var kindIcon = request.Kind switch
-                        {
-                            MediaAcquisitionKind.Anime => "screen-play",
-                            MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Book => "book",
-                            MediaAcquisitionKind.Movie => "film",
-                            MediaAcquisitionKind.Tv => "tv",
-                            MediaAcquisitionKind.Audiobook => "headphones",
-                            MediaAcquisitionKind.Music => "music-note",
-                            _ => "stack"
-                        };
-                        var requesterInitial = string.IsNullOrWhiteSpace(requester) ? "?" : requester[..1].ToUpperInvariant();
                         var isBookLike = request.Kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel;
                         var isVideo = request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv;
                         var titleId = $"request-title-{request.Id:N}";
@@ -295,10 +291,10 @@
                               </div>
                             </td>
                             <td class="admreq-cell-type" data-label="@ui["admin.requests.col.type"]">
-                                <span class="admreq-badge admreq-type admreq-type-@kindName" title="@(ui["admin.requests.kind." + kindName])"><partial name="_AdminIcon" model="kindIcon" />@ui["admin.requests.kind." + kindName]</span>
+                                <partial name="_RequestTypeTag" model="request.Kind" />
                             </td>
                             <td class="admreq-cell-who" data-label="@ui["admin.requests.col.requester"]">
-                                <span class="admreq-requester"><span class="admreq-requester-avatar" aria-hidden="true">@requesterInitial</span><span>@requester</span></span>
+                                <partial name="_RequestRequester" model="requester" />
                             </td>
                             <td class="admreq-cell-when admreq-cell-requested" data-label="@ui["admin.requests.col.requested"]">
                                 <time datetime="@Iso(request.CreatedAt)" data-local-time="parts">
@@ -477,25 +473,21 @@
                     {
                         <input type="hidden" name="tab" value="@AdminRequestQuery.TabName(filter.Tab)" />
                     }
-                    @if (filter.Kind is { } selectedKind)
+                    @foreach (var selectedKind in filter.Kinds ?? [])
                     {
                         <input type="hidden" name="type" value="@AcquisitionAccessNames.Kind(selectedKind)" />
                     }
-                    @if (filter.Status is { } selectedStatus)
+                    @foreach (var selectedStatus in filter.Statuses ?? [])
                     {
                         <input type="hidden" name="status" value="@AcquisitionAccessNames.Status(selectedStatus)" />
                     }
-                    @if (filter.Language is not null)
+                    @foreach (var language in filter.Languages ?? [])
                     {
-                        <input type="hidden" name="lang" value="@filter.Language" />
+                        <input type="hidden" name="lang" value="@language" />
                     }
-                    @if (filter.RequesterProfileId is not null)
+                    @foreach (var requester in filter.RequesterProfileIds ?? [])
                     {
-                        <input type="hidden" name="by" value="@filter.RequesterProfileId" />
-                    }
-                    @if (filter.Season is { } selectedSeason)
-                    {
-                        <input type="hidden" name="season" value="@selectedSeason" />
+                        <input type="hidden" name="by" value="@requester" />
                     }
                     @if (filter.Search is not null)
                     {

@@ -19,13 +19,13 @@ public enum AdminRequestTab
     Rejected
 }
 
-/// <summary>What the Admin → Requests list is narrowed to. Every member but <see cref="Tab"/> also narrows the tab counts.</summary>
+/// <summary>Queue filters. Lifecycle counts share the same title, media, language and requester scope, independently of the active tab and technical status filter.</summary>
 public sealed record AdminRequestFilter(
     AdminRequestTab Tab = AdminRequestTab.All,
-    MediaAcquisitionKind? Kind = null,
-    AcquisitionRequestStatus? Status = null,
-    string? Language = null,
-    string? RequesterProfileId = null,
+    IReadOnlyList<MediaAcquisitionKind>? Kinds = null,
+    IReadOnlyList<AcquisitionRequestStatus>? Statuses = null,
+    IReadOnlyList<string>? Languages = null,
+    IReadOnlyList<string>? RequesterProfileIds = null,
     string? Search = null,
     int Page = 1,
     int PageSize = AdminRequestQuery.DefaultPageSize,
@@ -33,7 +33,7 @@ public sealed record AdminRequestFilter(
     int? Season = null)
 {
     public bool HasNarrowing =>
-        Kind is not null || Status is not null || Language is not null || RequesterProfileId is not null
+        Kinds is { Count: > 0 } || Statuses is { Count: > 0 } || Languages is { Count: > 0 } || RequesterProfileIds is { Count: > 0 }
         || !string.IsNullOrWhiteSpace(Search) || Sort != "newest" || Season is not null;
 }
 
