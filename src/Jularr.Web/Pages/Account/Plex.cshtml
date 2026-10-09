@@ -28,12 +28,15 @@
         }
         else
         {
-            <p>
-                <a asp-page="/Account/Login"
-                   asp-route-returnUrl="@Url.Page("/Account/Plex", "Link", new { flow = Model.Flow })">
-                    I already have a Jularr account
-                </a>
-            </p>
+            @if (Model.PlexLinkEnabled)
+            {
+                <p>
+                    <a asp-page="/Account/Login"
+                       asp-route-returnUrl="@Url.Page("/Account/Plex", "Link", new { flow = Model.Flow })">
+                        I already have a Jularr account
+                    </a>
+                </p>
+            }
 
             @if (Model.AutoProvisionEnabled)
             {
