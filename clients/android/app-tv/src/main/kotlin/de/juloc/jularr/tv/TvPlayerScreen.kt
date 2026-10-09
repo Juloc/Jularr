@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -53,6 +54,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -71,12 +73,14 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import de.juloc.jularr.core.model.MediaTrack
+import de.juloc.jularr.core.model.ClientMediaSegment
+import de.juloc.jularr.core.model.ClientTrickplayDescriptor
 import de.juloc.jularr.core.model.SubtitleCue
 import de.juloc.jularr.core.player.JularrMedia3Player
 import de.juloc.jularr.core.session.PlaybackCommand
 import kotlinx.coroutines.delay
 
-private enum class TvPlayerPanel { AUDIO, SUBTITLES, SPEED }
+private enum class TvPlayerPanel { AUDIO, SUBTITLES, SETTINGS, SPEED }
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -84,6 +88,10 @@ fun TvPlayerScreen(
     player: JularrMedia3Player,
     episodeTitle: String,
     currentCue: SubtitleCue?,
+    skipSegments: List<ClientMediaSegment> = emptyList(),
+    trickplay: ClientTrickplayDescriptor? = null,
+    serverOrigin: String = "",
+    requestHeaders: Map<String, String> = emptyMap(),
     audioTracks: List<MediaTrack> = emptyList(),
     subtitleTracks: List<MediaTrack> = emptyList(),
     selectedAudioTrackId: String? = null,
@@ -125,6 +133,8 @@ fun TvPlayerScreen(
     val speedControlFocus = remember { FocusRequester() }
     val trackPanelFocus = remember { FocusRequester() }
     val retryFocus = remember { FocusRequester() }
+    val skipFocus = remember { FocusRequester() }
+    val settingsFocus = remember { FocusRequester() }
     var trackPanel by remember { mutableStateOf<TvPlayerPanel?>(null) }
     var returnToTrackPanel by remember { mutableStateOf<TvPlayerPanel?>(null) }
     var trackSelectionError by remember { mutableStateOf(false) }
@@ -135,6 +145,7 @@ fun TvPlayerScreen(
     var durationMs by remember { mutableStateOf(player.player.duration.takeIf { it > 0 } ?: 0L) }
     var bufferedPositionMs by remember { mutableStateOf(player.player.bufferedPosition.coerceAtLeast(0L)) }
     var playbackSpeed by remember { mutableStateOf(player.player.playbackParameters.speed) }
+    val skipSegment = TvPlayerInteraction.activeSkipSegment(skipSegments, positionMs)
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -210,7 +221,7 @@ fun TvPlayerScreen(
         )
     }
 
-    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, uiState.focusedWordIndex, companionVisible, trackPanel, playbackError) {
+    LaunchedEffect(uiState.controlsVisible, uiState.learningLayer, uiState.focusedWordIndex, companionVisible, trackPanel, playbackError, skipSegment?.kind) {
         if (companionVisible) return@LaunchedEffect
         val target = when {
             playbackError != null -> retryFocus
@@ -219,7 +230,9 @@ fun TvPlayerScreen(
             uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.AUDIO -> audioTrackFocus
             uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SUBTITLES -> subtitleTrackFocus
             uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SPEED -> speedControlFocus
+            uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SETTINGS -> settingsFocus
             uiState.controlsVisible -> primaryControlFocus
+            skipSegment != null -> skipFocus
             else -> playerFocus
         }
         runCatching { target.requestFocus() }
@@ -343,7 +356,7 @@ fun TvPlayerScreen(
         } else if (playbackError != null) {
             onExit()
         } else if (trackPanel != null) {
-            trackPanel = null
+            trackPanel = if (trackPanel == TvPlayerPanel.SPEED) TvPlayerPanel.SETTINGS else null
         } else {
             apply(TvPlayerInteraction.back(uiState))
         }
@@ -474,6 +487,9 @@ fun TvPlayerScreen(
                     positionMs = positionMs,
                     durationMs = durationMs,
                     bufferedPositionMs = bufferedPositionMs,
+                    trickplay = trickplay,
+                    serverOrigin = serverOrigin,
+                    requestHeaders = requestHeaders,
                     audioTracks = audioTracks,
                     subtitleTracks = subtitleTracks,
                     selectedAudioTrackId = selectedAudioTrackId,
@@ -483,10 +499,10 @@ fun TvPlayerScreen(
                     primaryControlFocus = primaryControlFocus,
                     audioTrackFocus = audioTrackFocus,
                     subtitleTrackFocus = subtitleTrackFocus,
-                    speedControlFocus = speedControlFocus,
-                    onOpenSpeedPanel = {
-                        returnToTrackPanel = TvPlayerPanel.SPEED
-                        trackPanel = TvPlayerPanel.SPEED
+                    settingsFocus = settingsFocus,
+                    onOpenSettingsPanel = {
+                        returnToTrackPanel = TvPlayerPanel.SETTINGS
+                        trackPanel = TvPlayerPanel.SETTINGS
                     },
                     onOpenAudioTracks = {
                         returnToTrackPanel = TvPlayerPanel.AUDIO
@@ -544,7 +560,14 @@ fun TvPlayerScreen(
                 )
             }
 
-            if (trackPanel == TvPlayerPanel.SPEED) {
+            if (trackPanel == TvPlayerPanel.SETTINGS) {
+                TvSettingsPanel(
+                    focusRequester = trackPanelFocus,
+                    playbackSpeed = playbackSpeed,
+                    onOpenSpeed = { trackPanel = TvPlayerPanel.SPEED },
+                    onBack = { trackPanel = null },
+                )
+            } else if (trackPanel == TvPlayerPanel.SPEED) {
                 TvSpeedSelectionPanel(
                     playbackSpeed = playbackSpeed,
                     focusRequester = trackPanelFocus,
@@ -552,9 +575,9 @@ fun TvPlayerScreen(
                         player.player.setPlaybackParameters(PlaybackParameters(speed))
                         playbackSpeed = speed
                         onPlaybackSpeedChanged()
-                        trackPanel = null
+                        trackPanel = TvPlayerPanel.SETTINGS
                     },
-                    onBack = { trackPanel = null },
+                    onBack = { trackPanel = TvPlayerPanel.SETTINGS },
                     modifier = Modifier.align(Alignment.Center),
                 )
             } else if (trackPanel != null) {
@@ -670,6 +693,32 @@ fun TvPlayerScreen(
                 }
             }
 
+            if (skipSegment != null && uiState.learningLayer == TvLearningLayer.CLOSED &&
+                trackPanel == null && playbackError == null && !companionVisible
+            ) {
+                Button(
+                    onClick = { player.player.seekTo(skipSegment.endMs) },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = 52.dp,
+                            bottom = if (uiState.controlsVisible) 248.dp else 48.dp,
+                        )
+                        .focusRequester(skipFocus),
+                ) {
+                    Text(
+                        when (skipSegment.kind.lowercase()) {
+                            "intro" -> "Intro überspringen"
+                            "recap" -> "Rückblick überspringen"
+                            "outro" -> "Outro überspringen"
+                            "credits" -> "Abspann überspringen"
+                            "preview" -> "Vorschau überspringen"
+                            else -> "Abschnitt überspringen"
+                        },
+                    )
+                }
+            }
+
             companionOverlay?.let { overlay ->
                 Box(modifier = Modifier.align(Alignment.Center)) {
                     overlay()
@@ -710,6 +759,9 @@ private fun PlayerControls(
     positionMs: Long,
     durationMs: Long,
     bufferedPositionMs: Long,
+    trickplay: ClientTrickplayDescriptor?,
+    serverOrigin: String,
+    requestHeaders: Map<String, String>,
     audioTracks: List<MediaTrack>,
     subtitleTracks: List<MediaTrack>,
     selectedAudioTrackId: String?,
@@ -719,8 +771,8 @@ private fun PlayerControls(
     primaryControlFocus: FocusRequester,
     audioTrackFocus: FocusRequester,
     subtitleTrackFocus: FocusRequester,
-    speedControlFocus: FocusRequester,
-    onOpenSpeedPanel: () -> Unit,
+    settingsFocus: FocusRequester,
+    onOpenSettingsPanel: () -> Unit,
     onOpenAudioTracks: () -> Unit,
     onOpenSubtitleTracks: () -> Unit,
     onBackTen: () -> Unit,
@@ -748,7 +800,14 @@ private fun PlayerControls(
 
     Box(
         modifier = modifier
-            .background(design.overlay)
+            .background(
+                Brush.verticalGradient(
+                    0.0f to Color.Black.copy(alpha = 0.35f),
+                    0.24f to Color.Transparent,
+                    0.52f to Color.Transparent,
+                    1.0f to Color.Black.copy(alpha = 0.65f),
+                ),
+            )
             .padding(horizontal = 48.dp, vertical = 32.dp),
     ) {
         Row(
@@ -893,25 +952,6 @@ private fun PlayerControls(
                 }
             }
 
-            var backTenFocused by remember { mutableStateOf(false) }
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (backTenFocused) design.accent else design.sheet)
-                    .tvFocusIndication(backTenFocused, focusColor, RoundedCornerShape(12.dp))
-                    .clickable(onClick = onBackTen)
-                    .reportFocus { backTenFocused = it },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Replay10,
-                    contentDescription = "Back ${design.seek.backSeconds} seconds",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp),
-                )
-            }
-
             var playFocused by remember { mutableStateOf(false) }
             Box(
                 modifier = Modifier
@@ -929,25 +969,6 @@ private fun PlayerControls(
                     contentDescription = if (isPlaying) "Pause" else "Play",
                     tint = Color.White,
                     modifier = Modifier.size(36.dp),
-                )
-            }
-
-            var forwardTenFocused by remember { mutableStateOf(false) }
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (forwardTenFocused) design.accent else design.sheet)
-                    .tvFocusIndication(forwardTenFocused, focusColor, RoundedCornerShape(12.dp))
-                    .clickable(onClick = onForwardTen)
-                    .reportFocus { forwardTenFocused = it },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Forward30,
-                    contentDescription = "Forward ${design.seek.forwardSeconds} seconds",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp),
                 )
             }
 
@@ -1014,10 +1035,11 @@ private fun PlayerControls(
                     }
                 }
                 Button(
-                    onClick = onOpenSpeedPanel,
-                    modifier = Modifier.focusRequester(speedControlFocus),
+                    onClick = onOpenSettingsPanel,
+                    modifier = Modifier.focusRequester(settingsFocus),
                 ) {
-                    Text("Speed: ${playbackSpeed}x")
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    Text(" Mehr")
                 }
             }
             if (canLearn) {
@@ -1044,6 +1066,40 @@ private fun PlayerControls(
 }
 
 @Composable
+private fun TvSettingsPanel(
+    focusRequester: FocusRequester,
+    playbackSpeed: Float,
+    onOpenSpeed: () -> Unit,
+    onBack: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.24f))
+            .padding(end = 38.dp, top = 65.dp, bottom = 65.dp),
+        contentAlignment = Alignment.CenterEnd,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(min = 380.dp, max = 440.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(22.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text("Einstellungen", style = MaterialTheme.typography.headlineSmall)
+            Button(
+                onClick = onOpenSpeed,
+                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            ) {
+                Text("Wiedergabetempo · ${playbackSpeed}x")
+            }
+            Button(onClick = onBack) { Text("Schließen") }
+        }
+    }
+}
+
+@Composable
 private fun TvSpeedSelectionPanel(
     playbackSpeed: Float,
     focusRequester: FocusRequester,
@@ -1052,12 +1108,12 @@ private fun TvSpeedSelectionPanel(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.24f)).padding(end = 38.dp),
+        contentAlignment = Alignment.CenterEnd,
     ) {
         Column(
             modifier = modifier
-                .widthIn(min = 420.dp, max = 620.dp)
+                .widthIn(min = 380.dp, max = 440.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(28.dp),
