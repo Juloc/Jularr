@@ -5,6 +5,26 @@ namespace Jularr.Web.Features.Plex;
 
 public sealed record PlexPin(long Id, string Code);
 
+/// <summary>
+/// A server-verified Plex identity with an optional media grant. Tokens stay
+/// inside the backend and must never appear in UI, JSON, links or logs.
+/// </summary>
+public sealed class PlexVerifiedIdentity
+{
+    internal PlexVerifiedIdentity(string accountId, string accessToken)
+    {
+        AccountId = accountId;
+        AccessToken = accessToken;
+    }
+
+    public string AccountId { get; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    internal string AccessToken { get; }
+
+    public override string ToString() => $"PlexVerifiedIdentity({AccountId})";
+}
+
 public sealed class PlexAuthClient(HttpClient httpClient)
 {
     public async Task<PlexPin> CreatePinAsync(
@@ -39,6 +59,18 @@ public sealed class PlexAuthClient(HttpClient httpClient)
     }
 
     public async Task<string?> ResolveAuthenticatedAccountIdAsync(
+        long pinId,
+        string clientIdentifier,
+        CancellationToken cancellationToken) =>
+        (await ResolveVerifiedIdentityAsync(
+            pinId, clientIdentifier, cancellationToken))?.AccountId;
+
+    /// <summary>
+    /// Consumes the same Plex PIN verification used for Jularr login.
+    /// Only an explicit, separately confirmed Profile Connection workflow
+    /// may persist the validated media token.
+    /// </summary>
+    public async Task<PlexVerifiedIdentity?> ResolveVerifiedIdentityAsync(
         long pinId,
         string clientIdentifier,
         CancellationToken cancellationToken)
@@ -107,7 +139,7 @@ public sealed class PlexAuthClient(HttpClient httpClient)
                 "Plex returned an invalid account identifier.");
         }
 
-        return accountId;
+        return new PlexVerifiedIdentity(accountId, token);
     }
 
     private static HttpRequestMessage CreateRequest(
