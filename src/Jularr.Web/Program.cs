@@ -105,6 +105,13 @@ builder.Services.AddScoped<INotificationSink, InAppNotificationSink>();
 builder.Services.AddScoped<NotificationDispatcher>();
 builder.Services.AddScoped<IJularrEventPublisher, JularrEventPublisher>();
 builder.Services.AddScoped<OwnerAuthService>();
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.Plex.PlexIdentitySettingsStore(
+        services.GetRequiredService<IConfiguration>()));
+builder.Services.AddScoped<Jularr.Web.Features.Plex.PlexIdentityProviderSettings>();
+builder.Services.AddScoped<Jularr.Web.Features.Providers.IProviderSettings>(services =>
+    services.GetRequiredService<Jularr.Web.Features.Plex.PlexIdentityProviderSettings>());
+
 builder.Services.AddHttpClient<Jularr.Web.Features.Plex.PlexAuthClient>(client =>
 {
     client.BaseAddress = new Uri("https://plex.tv/");
