@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Books;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,6 +56,12 @@ public sealed record NovelEpubImportOutcome(
 public sealed record NovelEpubDownloadImport(
     IReadOnlyList<NovelEpubImportOutcome> Outcomes,
     string? RejectedBecause);
+
+/// <summary>
+/// What an import knows about the edition it brings: the quality key it counts as and the profile of the title. A file that is strictly worse by the profile than
+/// the edition a volume shows is kept beside it and never replaces it.
+/// </summary>
+public sealed record NovelEditionHint(string Quality, QualityProfile? Profile);
 
 /// <summary>Runs an owner EPUB upload through Operations.</summary>
 public static class NovelEpubUploads
@@ -234,7 +242,8 @@ public sealed partial class NovelEpubImportService(
         string sourcePath,
         CancellationToken cancellationToken,
         bool recordSourceStoragePath = false,
-        Guid? targetWorkId = null)
+        Guid? targetWorkId = null,
+        NovelEditionHint? edition = null)
     {
         var source = Path.GetFullPath(sourcePath);
         string[] paths;
@@ -255,6 +264,17 @@ public sealed partial class NovelEpubImportService(
             throw new IOException($"The completed download '{source}' does not exist.");
         }
 
+        return await ImportFilesAsync(paths, recordSourceStoragePath, targetWorkId, edition, cancellationToken);
+    }
+
+    /// <summary>The same import for an explicit list of EPUB files: every file is parsed first, and a list that holds no usable EPUB or EPUBs of several series is refused before anything is stored.</summary>
+    public async Task<NovelEpubDownloadImport> ImportFilesAsync(
+        IReadOnlyList<string> paths,
+        bool recordSourceStoragePath,
+        Guid? targetWorkId,
+        NovelEditionHint? edition,
+        CancellationToken cancellationToken)
+    {
         var outcomes = new List<NovelEpubImportOutcome>();
         var valid = new List<string>();
         var seriesKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -291,7 +311,7 @@ public sealed partial class NovelEpubImportService(
         {
             return new NovelEpubDownloadImport(
                 outcomes,
-                paths.Length == 0
+                paths.Count == 0
                     ? "The download contains no EPUB files."
                     : $"The download contains no usable EPUB: {NovelEpubImportOutcome.Summarize(outcomes)}");
         }
@@ -313,11 +333,29 @@ public sealed partial class NovelEpubImportService(
                 targetWorkId: targetWorkId,
                 seriesHint: null,
                 cancellationToken,
-                recordSourceStoragePath ? Path.GetFullPath(path) : null));
+                recordSourceStoragePath ? Path.GetFullPath(path) : null,
+                edition));
         }
 
         await AutoMatchAsync(outcomes, cancellationToken);
         return new NovelEpubDownloadImport(outcomes, null);
+    }
+
+    /// <summary>Whether a volume of the library stores the file as one of its editions.</summary>
+    public async Task<bool> IsStoredAsync(string path, CancellationToken cancellationToken) =>
+        await db.NovelVolumeEditions.AnyAsync(edition => edition.StoragePath == path, cancellationToken)
+        || await db.NovelVolumes.AnyAsync(volume => volume.SourceStoragePath == path, cancellationToken);
+
+    /// <summary>Shows a stored edition of a volume again (a profile that prefers it, or a better one that was imported earlier); chapters keep their ids where they can be matched.</summary>
+    public async Task<NovelEpubImportOutcome> ShowEditionAsync(Guid workId, Guid volumeId, NovelVolumeEdition edition, CancellationToken cancellationToken)
+    {
+        if (edition.StoragePath is not { Length: > 0 } path || !File.Exists(path))
+        {
+            return NovelEpubImportOutcome.Failed(edition.FileName, "The file of this edition is not available.");
+        }
+
+        await using var stream = OpenShared(path);
+        return await ImportFileAsync(stream, edition.FileName, workId, seriesHint: null, cancellationToken, path, new NovelEditionHint(edition.Quality, null), volumeId);
     }
 
     private static FileStream OpenShared(string path) =>
@@ -359,7 +397,9 @@ public sealed partial class NovelEpubImportService(
         Guid? targetWorkId,
         string? seriesHint,
         CancellationToken cancellationToken,
-        string? sourceStoragePath = null)
+        string? sourceStoragePath = null,
+        NovelEditionHint? hint = null,
+        Guid? forceVolumeId = null)
     {
         fileName = Path.GetFileName(fileName);
         if (!fileName.EndsWith(".epub", StringComparison.OrdinalIgnoreCase))
@@ -394,8 +434,9 @@ public sealed partial class NovelEpubImportService(
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
             var work = await ResolveSeriesAsync(parsed, fileName, targetWorkId, seriesHint, cancellationToken);
-            (volume, createdVolume) = await ResolveVolumeAsync(work, parsed, fileName, cancellationToken);
+            (volume, createdVolume) = await ResolveVolumeAsync(work, parsed, fileName, forceVolumeId, cancellationToken);
             var storagePath = TruncateOptional(sourceStoragePath, 2048);
+            var quality = hint?.Quality ?? "EPUB";
 
             if (!createdVolume && volume.SourceContentHash == contentHash)
             {
@@ -403,13 +444,11 @@ public sealed partial class NovelEpubImportService(
                 {
                     volume.SourceStoragePath = storagePath;
                     volume.UpdatedAt = DateTime.UtcNow;
-                    await db.SaveChangesAsync(cancellationToken);
-                    await transaction.CommitAsync(cancellationToken);
                 }
-                else
-                {
-                    await transaction.RollbackAsync(cancellationToken);
-                }
+
+                await RecordEditionAsync(volume, contentHash, fileName, storagePath, quality, cancellationToken);
+                await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
 
                 db.ChangeTracker.Clear();
                 return new NovelEpubImportOutcome(
@@ -420,6 +459,28 @@ public sealed partial class NovelEpubImportService(
                     $"Volume {volume.Number} of {work.Title} is already up to date.");
             }
 
+            if (!createdVolume && hint?.Profile is { } profile && forceVolumeId is null && volume.SourceContentHash is { Length: > 0 } shown)
+            {
+                var shownQuality = await db.NovelVolumeEditions
+                    .Where(x => x.VolumeId == volume.Id && x.ContentHash == shown)
+                    .Select(x => x.Quality)
+                    .FirstOrDefaultAsync(cancellationToken) ?? "EPUB";
+                if (UpgradePolicy.RankOf(profile, quality) > UpgradePolicy.RankOf(profile, shownQuality))
+                {
+                    await RecordEditionAsync(volume, contentHash, fileName, storagePath, quality, cancellationToken);
+                    await db.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    db.ChangeTracker.Clear();
+                    return new NovelEpubImportOutcome(
+                        fileName,
+                        true,
+                        work.Id,
+                        volume.Number,
+                        $"Volume {volume.Number} of {work.Title} keeps its better version; this {quality} file is stored beside it.");
+                }
+            }
+
+            await RecordEditionAsync(volume, contentHash, fileName, storagePath, quality, cancellationToken);
             volume.Title = Truncate(parsed.Title, 500);
             volume.SourceFileName = Truncate(fileName, 500);
             if (storagePath is not null)
@@ -550,12 +611,38 @@ public sealed partial class NovelEpubImportService(
     /// Resolves the volume a file refreshes: same source identity first, then
     /// the same volume number (a replacement file), otherwise a new volume.
     /// </summary>
+    private async Task RecordEditionAsync(
+        NovelVolume volume,
+        string contentHash,
+        string fileName,
+        string? storagePath,
+        string quality,
+        CancellationToken cancellationToken)
+    {
+        var edition = db.NovelVolumeEditions.Local.FirstOrDefault(x => x.VolumeId == volume.Id && x.ContentHash == contentHash)
+            ?? await db.NovelVolumeEditions.FirstOrDefaultAsync(x => x.VolumeId == volume.Id && x.ContentHash == contentHash, cancellationToken);
+        if (edition is null)
+        {
+            db.NovelVolumeEditions.Add(new NovelVolumeEdition { VolumeId = volume.Id, ContentHash = contentHash, FileName = Truncate(fileName, 500), StoragePath = storagePath, Quality = quality });
+            return;
+        }
+
+        edition.StoragePath = storagePath ?? edition.StoragePath;
+        edition.FileName = Truncate(fileName, 500);
+    }
+
     private async Task<(NovelVolume Volume, bool Created)> ResolveVolumeAsync(
         NovelWork work,
         ParsedEpubBook parsed,
         string fileName,
+        Guid? forceVolumeId,
         CancellationToken cancellationToken)
     {
+        if (forceVolumeId is Guid forced)
+        {
+            return (await db.NovelVolumes.SingleAsync(x => x.Id == forced && x.WorkId == work.Id, cancellationToken), false);
+        }
+
         var sourceKey = VolumeKey(parsed);
         var number = VolumeNumberFrom(parsed.SeriesIndex)
             ?? ParseVolumeNumber(parsed.Title)

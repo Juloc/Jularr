@@ -275,6 +275,21 @@ public static class NovelVolumeContent
         MatchBy(x => x.SourceUrl, x => Truncate(x.SourceKey, 2048));
         MatchBy(x => x.SourceHash, x => Hash(x.Text));
         MatchBy(x => x.Title, x => Truncate(x.Title, 500));
+
+        // A replacement edition of the same chapter count keeps the place of every chapter nothing else identified, so reading progress, bookmarks and notes stay.
+        if (existing.Count == inputs.Count && assignment.Any(chapter => chapter is null))
+        {
+            var ordered = existing.OrderBy(x => x.Number).ToArray();
+            for (var index = 0; index < inputs.Count; index++)
+            {
+                if (assignment[index] is null && available.Contains(ordered[index]))
+                {
+                    assignment[index] = ordered[index];
+                    available.Remove(ordered[index]);
+                }
+            }
+        }
+
         return assignment;
     }
 

@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Selection;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Monitoring;
 using Microsoft.EntityFrameworkCore;
 
@@ -49,6 +50,8 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
         public string SourcePath { get; set; } = "";
 
         public string SourceKind { get; set; } = "";
+
+        public string? Quality { get; set; }
     }
 
     private sealed class LocalFile
@@ -56,32 +59,48 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
         public string SourcePath { get; set; } = "";
 
         public string SourceKind { get; set; } = "";
+
+        public string? Quality { get; set; }
     }
 
     public async Task<ReadingCoverageView> LoadAsync(long workId, CancellationToken cancellationToken, bool wholeTitleAsked = false)
     {
+        var novel = await db.Works.AsNoTracking().AnyAsync(work => work.Id == workId && work.MediaType == WorkMediaType.LightNovel, cancellationToken);
         var volumes = await db.WorkVolumes.AsNoTracking().Where(volume => volume.WorkId == workId && volume.ExternalId != null).OrderBy(volume => volume.Number).ToListAsync(cancellationToken);
-        var chapters = await db.WorkChapters.AsNoTracking().Where(chapter => chapter.WorkId == workId && chapter.ExternalId != null).OrderBy(chapter => chapter.Number).ToListAsync(cancellationToken);
-        var tied = await db.Database.SqlQuery<TiedUnit>(
-            $"""
-            SELECT bound."WorkVolumeId", bound."WorkChapterId", local."SourcePath", local."SourceKind" FROM "WorkUnitBindings" bound
-            JOIN "MangaChapters" local ON local."Id" = bound."LocalId"
-            WHERE bound."WorkId" = {workId} AND bound."LocalKind" = 1
-            """).ToListAsync(cancellationToken);
-        var locals = await db.Database.SqlQuery<LocalFile>(
-            $"""
-            SELECT chapter."SourcePath", chapter."SourceKind" FROM "MangaChapters" chapter
-            JOIN "WorkSourceLinks" link ON link."SourceId"::text = chapter."SeriesId" AND link."SourceKind" = 3
-            WHERE link."WorkId" = {workId}
-            """).ToListAsync(cancellationToken);
+        var chapters = novel ? [] : await db.WorkChapters.AsNoTracking().Where(chapter => chapter.WorkId == workId && chapter.ExternalId != null).OrderBy(chapter => chapter.Number).ToListAsync(cancellationToken);
+
+        // A Light Novel volume is held by the EPUB volumes of its series, and the quality of one is the best edition it keeps; a Manga volume or chapter is a library file.
+        var tied = novel
+            ? await db.Database.SqlQuery<TiedUnit>(
+                $"""
+                SELECT bound."WorkVolumeId", bound."WorkChapterId", '' AS "SourcePath", '' AS "SourceKind", COALESCE(MIN(edition."Quality"), 'EPUB') AS "Quality"
+                FROM "WorkUnitBindings" bound
+                JOIN "NovelVolumes" local ON local."Id"::text = bound."LocalId"
+                LEFT JOIN "NovelVolumeEditions" edition ON edition."VolumeId" = local."Id"
+                WHERE bound."WorkId" = {workId} AND bound."LocalKind" = 0
+                GROUP BY bound."Id", bound."WorkVolumeId", bound."WorkChapterId", local."Id"
+                """).ToListAsync(cancellationToken)
+            : await db.Database.SqlQuery<TiedUnit>(
+                $"""
+                SELECT bound."WorkVolumeId", bound."WorkChapterId", local."SourcePath", local."SourceKind", NULL AS "Quality" FROM "WorkUnitBindings" bound
+                JOIN "MangaChapters" local ON local."Id" = bound."LocalId"
+                WHERE bound."WorkId" = {workId} AND bound."LocalKind" = 1
+                """).ToListAsync(cancellationToken);
+        var locals = await LocalFilesAsync(workId, novel, cancellationToken);
         var untied = await db.Database.SqlQuery<int>(
-            $"""
-            SELECT COUNT(*)::int AS "Value" FROM "MangaChapters" chapter
-            JOIN "WorkSourceLinks" link ON link."SourceId"::text = chapter."SeriesId" AND link."SourceKind" = 3
-            WHERE link."WorkId" = {workId} AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound WHERE bound."LocalKind" = 1 AND bound."LocalId" = chapter."Id")
-            """).SingleAsync(cancellationToken);
+            novel
+                ? (FormattableString)$"""
+                  SELECT COUNT(*)::int AS "Value" FROM "NovelVolumes" local
+                  JOIN "WorkSourceLinks" link ON link."SourceId" = local."WorkId" AND link."SourceKind" = 1
+                  WHERE link."WorkId" = {workId} AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound WHERE bound."LocalKind" = 0 AND bound."LocalId" = local."Id"::text)
+                  """
+                : $"""
+                  SELECT COUNT(*)::int AS "Value" FROM "MangaChapters" chapter
+                  JOIN "WorkSourceLinks" link ON link."SourceId"::text = chapter."SeriesId" AND link."SourceKind" = 3
+                  WHERE link."WorkId" = {workId} AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound WHERE bound."LocalKind" = 1 AND bound."LocalId" = chapter."Id")
+                  """).SingleAsync(cancellationToken);
         var decisions = await monitoring.LoadAsync(workId, cancellationToken);
-        var profile = profiles is null ? null : await profiles.ResolveAsync(MediaAcquisitionKind.Manga, workId, cancellationToken);
+        var profile = profiles is null ? null : await profiles.ResolveAsync(novel ? MediaAcquisitionKind.LightNovel : MediaAcquisitionKind.Manga, workId, cancellationToken);
 
         var volumeTied = tied.Where(item => item.WorkVolumeId is not null).Select(item => item.WorkVolumeId!.Value).ToHashSet();
         var chapterTied = tied.Where(item => item.WorkChapterId is not null).Select(item => item.WorkChapterId!.Value).ToHashSet();
@@ -128,20 +147,33 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
             UpgradeChapters = chapterUnits.Where(chapter => chapter.UpgradeWanted).ToDictionary(chapter => chapter.Number, chapter => chapter.InstalledQuality),
             Profile = profile
         };
-        return new ReadingCoverageView(workId, decisions.IsWorkMonitored, volumeUnits, loose, locals.Count, untied, want, Best(profile, locals.Select(file => MangaFileQuality.Of(file.SourcePath, file.SourceKind))));
+        return new ReadingCoverageView(workId, decisions.IsWorkMonitored, volumeUnits, loose, locals.Count, untied, want, Best(profile, locals.Select(Quality)));
     }
 
     public async Task<string?> InstalledQualityAsync(long workId, CancellationToken cancellationToken)
     {
-        var profile = profiles is null ? null : await profiles.ResolveAsync(MediaAcquisitionKind.Manga, workId, cancellationToken);
-        var locals = await db.Database.SqlQuery<LocalFile>(
-            $"""
-            SELECT chapter."SourcePath", chapter."SourceKind" FROM "MangaChapters" chapter
-            JOIN "WorkSourceLinks" link ON link."SourceId"::text = chapter."SeriesId" AND link."SourceKind" = 3
-            WHERE link."WorkId" = {workId}
-            """).ToListAsync(cancellationToken);
-        return Best(profile, locals.Select(file => MangaFileQuality.Of(file.SourcePath, file.SourceKind)));
+        var novel = await db.Works.AsNoTracking().AnyAsync(work => work.Id == workId && work.MediaType == WorkMediaType.LightNovel, cancellationToken);
+        var profile = profiles is null ? null : await profiles.ResolveAsync(novel ? MediaAcquisitionKind.LightNovel : MediaAcquisitionKind.Manga, workId, cancellationToken);
+        return Best(profile, (await LocalFilesAsync(workId, novel, cancellationToken)).Select(Quality));
     }
+
+    private async Task<List<LocalFile>> LocalFilesAsync(long workId, bool novel, CancellationToken cancellationToken) =>
+        await db.Database.SqlQuery<LocalFile>(
+            novel
+                ? (FormattableString)$"""
+                  SELECT '' AS "SourcePath", '' AS "SourceKind", COALESCE(MIN(edition."Quality"), 'EPUB') AS "Quality" FROM "NovelVolumes" local
+                  JOIN "WorkSourceLinks" link ON link."SourceId" = local."WorkId" AND link."SourceKind" = 1
+                  LEFT JOIN "NovelVolumeEditions" edition ON edition."VolumeId" = local."Id"
+                  WHERE link."WorkId" = {workId} AND local."Kind" = 'epub'
+                  GROUP BY local."Id"
+                  """
+                : $"""
+                  SELECT chapter."SourcePath", chapter."SourceKind", NULL AS "Quality" FROM "MangaChapters" chapter
+                  JOIN "WorkSourceLinks" link ON link."SourceId"::text = chapter."SeriesId" AND link."SourceKind" = 3
+                  WHERE link."WorkId" = {workId}
+                  """).ToListAsync(cancellationToken);
+
+    private static string Quality(LocalFile file) => file.Quality ?? MangaFileQuality.Of(file.SourcePath, file.SourceKind);
 
     public async Task<bool> WholeTitleAskedAsync(Guid requestId, CancellationToken cancellationToken) =>
         await db.Database.SqlQuery<bool>(
@@ -176,7 +208,7 @@ public sealed class ReadingCoverageService(AppDbContext db, MonitoringResolver m
     }
 
     private static string? Best(QualityProfile? profile, IEnumerable<TiedUnit> versions) =>
-        Best(profile, versions.Select(version => MangaFileQuality.Of(version.SourcePath, version.SourceKind)));
+        Best(profile, versions.Select(version => version.Quality ?? MangaFileQuality.Of(version.SourcePath, version.SourceKind)));
 
     private static string? Best(QualityProfile? profile, IEnumerable<string?> qualities) => profile is null ? null : UpgradePolicy.Best(profile, qualities);
 

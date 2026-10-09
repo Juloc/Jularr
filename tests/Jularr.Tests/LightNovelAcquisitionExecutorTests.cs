@@ -90,7 +90,7 @@ public sealed class LightNovelAcquisitionExecutorTests
             var intent = new Jularr.Web.Features.Acquisition.Search.SearchIntent(MediaAcquisitionKind.LightNovel, "Mushoku Tensei")
             {
                 Aliases = ["無職転生"],
-                Creator = "Rifujin na Magonote"
+                Creator = "理不尽な孫の手"
             };
 
             var candidate = Assert.ContainsSingle(await directSource.SearchAsync(intent, CancellationToken.None));
@@ -127,7 +127,7 @@ public sealed class LightNovelAcquisitionExecutorTests
         var payload = new ReadingRequestPayload(
             "Mushoku Tensei",
             ["無職転生"],
-            "Rifujin na Magonote");
+            "理不尽な孫の手");
 
         Assert.IsTrue(
             LightNovelWebDirectSource.CanAutoImport(
@@ -146,6 +146,10 @@ public sealed class LightNovelAcquisitionExecutorTests
                     "https://ncode.syosetu.com/n9669bk/",
                     IsPublicWebSource: true),
                 settings));
+
+        var sameTitle = new ReadingCatalogCandidate(NcodeNovelSourceProvider.ProviderKey, "n9669bk", "無職転生", null, "理不尽な孫の手", null, null, null, null, null, "https://ncode.syosetu.com/n9669bk/", IsPublicWebSource: true);
+        Assert.IsFalse(LightNovelWebDirectSource.CanAutoImport(payload with { Author = null }, sameTitle, settings), "A title alone never makes a hosted copy the published edition that was asked for.");
+        Assert.IsFalse(LightNovelWebDirectSource.CanAutoImport(payload with { Author = "Rifujin na Magonote" }, sameTitle, settings), "An author that cannot be compared is no evidence either.");
 
         Assert.IsFalse(
             LightNovelWebDirectSource.CanAutoImport(

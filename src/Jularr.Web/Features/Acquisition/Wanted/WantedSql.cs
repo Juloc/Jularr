@@ -291,6 +291,13 @@ internal static class WantedSql
                                       WHERE bound."LocalKind" = 1 AND bound."WorkChapterId" = part."Id")))))
         """;
 
+    private const string LightNovelVolumeItemInstalled =
+        """
+        (work."MediaType" = @lightNovel AND item."TargetKind" = 2 AND
+            EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "NovelVolumes" onhand ON onhand."Id"::text = bound."LocalId"
+                    WHERE bound."LocalKind" = 0 AND bound."WorkVolumeId" = item."TargetId"))
+        """;
+
     private const string MangaChapterItemInstalled =
         """
         (work."MediaType" = @manga AND item."TargetKind" = 3 AND
@@ -308,7 +315,7 @@ internal static class WantedSql
         WHERE work."Id" > @after
           AND (item."TargetKind" = 4) = @editions
           AND NOT EXISTS ({{RequestOf}} AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing'))
-          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} WHEN 2 THEN {{MangaVolumeItemInstalled}} WHEN 3 THEN {{MangaChapterItemInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
+          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} WHEN 2 THEN ({{MangaVolumeItemInstalled}} OR {{LightNovelVolumeItemInstalled}}) WHEN 3 THEN {{MangaChapterItemInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
         ORDER BY 1
         LIMIT @limit
         """;

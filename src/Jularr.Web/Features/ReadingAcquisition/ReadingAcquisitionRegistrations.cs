@@ -56,16 +56,16 @@ public static class ReadingQualityProfiles
 
     public static QualityProfile CreateDefaultManga() => Create(DefaultMangaId, "Manga", "CBZ", upgrade: true);
 
-    public static QualityProfile CreateDefaultLightNovel() => Create(DefaultLightNovelId, "Light Novels", "EPUB");
+    public static QualityProfile CreateDefaultLightNovel() => Create(DefaultLightNovelId, "Light Novels", "EPUB", upgrade: true, zip: false);
 
     public static QualityProfile For(MediaAcquisitionKind kind) => kind == MediaAcquisitionKind.LightNovel ? CreateDefaultLightNovel() : CreateDefaultManga();
 
-    private static QualityProfile Create(string id, string name, string preferred, bool upgrade = false) =>
+    private static QualityProfile Create(string id, string name, string preferred, bool upgrade = false, bool zip = true) =>
         new(
             id,
             name,
-            [preferred, "ZIP", "UNKNOWN-UNKNOWN"],
-            [preferred, "ZIP", "UNKNOWN-UNKNOWN"],
+            [.. new[] { preferred }.Concat(zip ? ["ZIP"] : []), "UNKNOWN-UNKNOWN"],
+            [.. new[] { preferred }.Concat(zip ? ["ZIP"] : []), "UNKNOWN-UNKNOWN"],
             UpgradeAllowed: upgrade,
             UpgradeCutoffQuality: upgrade ? preferred : null,
             MinimumSizeBytes: null,

@@ -87,6 +87,10 @@ public sealed class LightNovelWebDirectSource(NovelImportService webNovels, Read
             .Concat(payload.Aliases ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name));
 
-        return names.Any(name => ReadingCatalogSearch.MatchScore(name, candidate) >= 1000);
+        // A title alone never makes a hosted text copy the published edition that was requested: the author the request names must be the copy's author too, and a
+        // request that names none (a published volume found by title) takes no web copy automatically.
+        return !string.IsNullOrWhiteSpace(payload.Author)
+            && ReadingReleaseJudge.Words(payload.Author).Overlaps(ReadingReleaseJudge.Words(candidate.Author))
+            && names.Any(name => ReadingCatalogSearch.MatchScore(name, candidate) >= 1000);
     }
 }

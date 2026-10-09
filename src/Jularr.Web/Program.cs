@@ -630,7 +630,7 @@ builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequest
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Music.MusicWantedRequestHandler>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource, Jularr.Web.Features.Music.MusicWantedSource>();
 builder.Services.AddSingleton<Jularr.Web.Features.Acquisition.Wanted.UpgradeScanState>();
-foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Anime, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Music, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Audiobook, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga })
+foreach (var upgradeKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Movie, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Tv, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Anime, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Music, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Book, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Audiobook, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.LightNovel })
 {
     builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedSource>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.Acquisition.Wanted.UpgradeWantedSource>(services, upgradeKind));
 }
@@ -640,12 +640,17 @@ foreach (var assessedKind in new[] { Jularr.Web.Features.Acquisition.Access.Medi
 }
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, Jularr.Web.Features.Music.MusicUpgradeAssessor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, Jularr.Web.Features.Books.BookUpgradeAssessor>();
-foreach (var mangaTarget in new[] { Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Work, Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Volume, Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Chapter })
+foreach (var readingKind in new[] { Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.Manga, Jularr.Web.Features.Acquisition.Access.MediaAcquisitionKind.LightNovel })
 {
-    builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.ReadingAcquisition.MangaUpgradeAssessor>(services, mangaTarget));
+    foreach (var readingTarget in new[] { Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Work, Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Volume, Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Chapter })
+    {
+        builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor>(services => ActivatorUtilities.CreateInstance<Jularr.Web.Features.ReadingAcquisition.ReadingUpgradeAssessor>(services, readingKind, readingTarget));
+    }
 }
 
 builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.MangaVersionSelector>();
+builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.LightNovelVersionSelector>();
+builder.Services.AddScoped<Jularr.Web.Features.ReadingAcquisition.NovelImportTies>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IUpgradeAssessor, Jularr.Web.Features.Audiobooks.AudiobookUpgradeAssessor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Access.IAcquisitionRequestExecutor, Jularr.Web.Features.Audiobooks.AudiobookAcquisitionRequestExecutor>();
 builder.Services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.IWantedRequestHandler, Jularr.Web.Features.Audiobooks.AudiobookWantedRequestHandler>();
