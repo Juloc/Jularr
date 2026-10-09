@@ -220,6 +220,12 @@ data class PlayerBootstrap(
     val fallback: CompatibilityFallback,
     val segments: ClientSegmentDescriptor? = null,
     val trickplay: ClientTrickplayDescriptor? = null,
+    val controls: ClientPlayerControls? = null,
+)
+
+data class ClientPlayerControls(
+    val playbackSpeeds: List<Float>,
+    val qualityCaps: List<String>,
 )
 
 data class ClientSegmentDescriptor(
