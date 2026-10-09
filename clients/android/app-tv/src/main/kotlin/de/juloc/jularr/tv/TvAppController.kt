@@ -13,6 +13,11 @@ import de.juloc.jularr.core.model.DevicePairingSession
 import de.juloc.jularr.core.model.PlaybackHistoryItem
 import de.juloc.jularr.core.model.WatchlistItem
 
+data class TvEpisodeNeighbors(
+    val previous: EpisodeSummary? = null,
+    val next: EpisodeSummary? = null,
+)
+
 data class TvAppSnapshot(
     val navigation: TvNavigationState,
     val capabilities: ClientCapabilities? = null,
@@ -337,14 +342,17 @@ class TvAppController(
             )
         }
 
-    suspend fun nextEpisode(episodeId: String, animeId: String): EpisodeSummary? {
+    suspend fun episodeNeighbors(episodeId: String, animeId: String): TvEpisodeNeighbors {
         val details = snapshot.anime?.takeIf { it.id == animeId } ?: flow.loadAnime(animeId)
         val ordered = details.seasons
             .flatMap { it.episodes }
             .sortedWith(compareBy<EpisodeSummary> { it.seasonNumber }.thenBy { it.number })
         val currentIndex = ordered.indexOfFirst { it.id == episodeId }
-        if (currentIndex < 0) return null
-        return ordered.getOrNull(currentIndex + 1)?.takeIf { it.hasMedia }
+        if (currentIndex < 0) return TvEpisodeNeighbors()
+        return TvEpisodeNeighbors(
+            previous = ordered.getOrNull(currentIndex - 1)?.takeIf { it.hasMedia },
+            next = ordered.getOrNull(currentIndex + 1)?.takeIf { it.hasMedia },
+        )
     }
 
     suspend fun refreshEpisodeStorage(
