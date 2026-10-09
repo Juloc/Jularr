@@ -69,13 +69,22 @@
         else if (Model.DiscoveryFailed)
         {
             <p role="status">@ui["admin.plex.discoveryFailed"]</p>
+            <a class="button" asp-page="/Admin/Plex" asp-route-discover="true">
+                @ui["admin.plex.discover"]
+            </a>
         }
         else if (Model.Available.Count == 0)
         {
             <p>@ui["admin.plex.noAvailable"]</p>
+            <a class="button" asp-page="/Admin/Plex" asp-route-discover="true">
+                @ui["admin.plex.discover"]
+            </a>
         }
         else
         {
+            <a class="button" asp-page="/Admin/Plex" asp-route-discover="true">
+                @ui["admin.plex.discover"]
+            </a>
             @foreach (var candidate in Model.Available)
             {
                 <form class="form-stack" method="post" asp-page-handler="Connect">
