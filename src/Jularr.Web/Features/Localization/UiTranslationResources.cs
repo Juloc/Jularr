@@ -191,6 +191,7 @@ public static class UiTranslationResources
         M("admin.plex.noAvailable", "No accessible, owned Plex servers are available.", "Admin", "Plex", "No owned Plex resource", "clear copy", 63, null, ["Plex", "Jularr"]),
         M("admin.plex.chooseLibraries", "Select libraries", "Admin", "Plex", "Plex Admin select section fieldset", "clear copy", 31, null, ["Plex", "Jularr"]),
         M("admin.plex.authorize", "Authorize selected libraries", "Admin", "Plex", "Explicit admin server authorization", "clear copy", 43, null, ["Plex", "Jularr"]),
+        M("admin.plex.discover", "Discover Plex servers", "Admin", "Plex", "Explicit button to query owned Plex servers only when requested.", "action label", 60, null, ["Plex"]),
         M("account.plex.signIn", "Sign in with Plex", "Account", "Plex login", "Sign-in action on the login page", "clear concise copy", 48, null, ["Plex", "Jularr"]),
         M("account.plex.link", "Link Plex account", "Account", "Plex login", "Action to associate a verified Plex identity with the signed-in account", "clear concise copy", 48, null, ["Plex", "Jularr"]),
         M("account.plex.linked", "Plex login linked", "Account", "Plex login", "Title for a linked Plex account", "clear concise copy", 48, null, ["Plex", "Jularr"]),
