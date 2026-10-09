@@ -67,6 +67,9 @@ public static class UiTranslationResources
         M("requestRules.unlimited", "Unlimited", "Requests", "Label", "No request submission limit.", "short label", 18),
         M("requestRules.period", "Rolling period (days)", "Requests", "Label", "Days counted backwards from the submission, not a calendar reset.", "short label", 30),
         M("requestRules.approval", "Approval mode", "Requests", "Label", "Manual or automatic approval; Instant capability semantics remain separate.", "short label", 22),
+        M("requestRules.configuredApproval", "Configured approval rule", "Requests", "Label", "The stored rule setting, not a prediction of the user's effective approval behavior.", "short label", 32),
+        M("requestRules.effectiveApprovalHelp", "Owner requests and media with Instant capability skip manual approval, regardless of this setting. "
+            + "Media permissions, enabled modules and request limits still apply.", "Requests", "Help", "Separates configured approval from effective Owner/Instant behavior without granting access.", "clear explanation", 220),
         M("requestRules.manual", "Manual approval", "Requests", "Value", "Requests wait for a decision unless the user already has Instant capability.", "short label", 24),
         M("requestRules.automatic", "Automatic approval", "Requests", "Value", "Requests are automatically approved within the existing capability boundary.", "short label", 28),
         M("requestRules.media", "Allowed request media", "Requests", "Label", "Types the rule permits within instance and capability gates.", "short label", 30),

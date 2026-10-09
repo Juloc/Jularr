@@ -21,7 +21,7 @@
 .rre-profile-actions .app-icon { width: 16px; height: 16px; }
 .rre-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .rre-tags .admreq-type { min-height: 24px; padding: 3px 7px; font-size: 10px; }
-.rre-editor form { display: grid; gap: 18px; }
+.rre-editor form { display: grid; gap: 18px; width: 100%; max-width: 760px; }
 .rre-editor-user { margin-bottom: 20px; font-size: 16px; font-weight: 750; }
 .rre-editor-user .admreq-requester-avatar { width: 34px; height: 34px; font-size: 14px; }
 .rre-field { display: grid; align-content: start; gap: 9px; min-width: 0; color: var(--text); font-size: 13px; font-weight: 650; }
@@ -38,8 +38,11 @@
 .rre-check input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
 .rre-check input[type=checkbox]:checked::after { content: ""; width: 4px; height: 7px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
 .rre-check input:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 3px; }
-.rre-check:has(input:disabled), .rre-fields:disabled { opacity: .7; }
-.rre-fields:disabled .admreq-select-trigger { pointer-events: none; }
+.rre-check:has(input:disabled), .rre-fields :disabled { cursor: not-allowed; }
+.rre-fields input:disabled, .rre-fields select:disabled { opacity: 1; color: var(--text); -webkit-text-fill-color: var(--text); }
+.rre-fields input:not([type=checkbox]):disabled { background: var(--surface-2); }
+.rre-fields input[type=checkbox]:disabled { border-style: dashed; }
+.rre-fields:disabled .admreq-select-trigger { opacity: 1; color: var(--text); background: var(--surface-2); box-shadow: none; cursor: not-allowed; pointer-events: none; }
 .rre-media { min-width: 0; margin: 0; padding: 0; border: 0; }
 .rre-media legend { margin-bottom: 10px; font-size: 13px; font-weight: 650; }
 .rre-override { padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); }
@@ -62,9 +65,10 @@
 .rre-transition { margin-top: 20px; }
 .rre-transition form { display: grid; justify-items: start; gap: 14px; }
 .rre-quality-help { margin: 0 0 10px; font-size: 12px; line-height: 1.5; }
-.rre-quality-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 6px 14px; max-height: 240px; overflow-y: auto; padding: 3px; }
-.rre-quality-options .rre-check { align-items: flex-start; overflow-wrap: anywhere; }
-.rre-quality-options input { margin-top: 2px; }
+.rre-quality-options { max-height: 240px; overflow-y: auto; padding: 3px; }
+.rre-quality-options .rre-check { min-width: 0; max-width: 100%; }
+.rre-quality-chip { color: var(--accent-text); white-space: normal; overflow-wrap: anywhere; }
+.rre-approval-help { margin: 0; color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.6; }
 .rre-quality-manage { color: var(--accent-text); font-size: 12px; justify-self: start; }
 .rre-transition li { margin-bottom: 10px; font-size: 13px; }
 .rre-transition li > span { display: block; }

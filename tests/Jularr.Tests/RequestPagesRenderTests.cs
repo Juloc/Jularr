@@ -49,6 +49,11 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(directory, "data-rre-editor");
         StringAssert.Contains(user, "data-rre-editor");
         StringAssert.Contains(user, "name=\"Editor.QualityProfileIds\"");
+        StringAssert.Contains(user, "rre-tags rre-quality-options");
+        StringAssert.Contains(user, "admreq-badge admreq-type rre-quality-chip");
+        StringAssert.Contains(user, "Configured approval rule");
+        StringAssert.Contains(user, "Owner requests and media with Instant capability skip manual approval");
+        StringAssert.Contains(user, "aria-describedby=\"rre-approval-help\"");
         StringAssert.Contains(user, "href=\"/Admin/User/rule-user\"");
         Assert.IsFalse(user.Contains("admin.requests.section.requests", StringComparison.Ordinal), "Deep-link labels and breadcrumbs must use existing localized navigation keys.");
         var sharedFields = "<fieldset class=\"rre-fields\"[\\s\\S]*?</fieldset>\\s*</fieldset>";
