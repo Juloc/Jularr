@@ -83,10 +83,10 @@ public sealed class PlexWorkMatcherTests
         var works = new WorkService(db);
         var anime = await works.CreateWorkAsync(
             WorkMediaType.Anime, "Anime", null, CancellationToken.None);
-        await works.LinkExternalIdentityAsync(
+        Assert.IsTrue(await works.LinkExternalIdentityAsync(
             anime.Id, WorkMediaType.Anime, "tmdb", "300",
             1.0, "confirmed", true, false,
-            MappingReviewState.Confirmed, CancellationToken.None);
+            MappingReviewState.Confirmed, CancellationToken.None));
 
         var matcher = new PlexWorkMatcher(db);
         var plex = Item("show", new PlexExternalId("tmdb", "300"));
@@ -96,10 +96,10 @@ public sealed class PlexWorkMatcherTests
 
         var series = await works.CreateWorkAsync(
             WorkMediaType.Series, "Unrelated series", null, CancellationToken.None);
-        await works.LinkExternalIdentityAsync(
+        Assert.IsTrue(await works.LinkExternalIdentityAsync(
             series.Id, WorkMediaType.Series, "tmdb", "300",
             1.0, "confirmed", true, false,
-            MappingReviewState.Confirmed, CancellationToken.None);
+            MappingReviewState.Confirmed, CancellationToken.None));
 
         Assert.IsNull(await matcher.ResolveWorkIdAsync(
             plex, CancellationToken.None));
