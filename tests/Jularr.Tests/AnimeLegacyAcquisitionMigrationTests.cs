@@ -75,16 +75,26 @@ public sealed class AnimeLegacyAcquisitionMigrationTests
     }
 
     [TestMethod]
-    public async Task AnAnimeWithoutAnAniListMatchHasNoRequestSoItsDownloadIsLeftToTheManualImport()
+    public async Task AnUnfinishedDownloadThatCannotBeConvertedYetKeepsItsRecordAndOwnershipAndConvertsOnceItCan()
     {
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
-        await StartLegacyAsync(environment, Best);
+        var acquisition = await StartLegacyAsync(environment, Best);
+        var metadata = await environment.Db.AnimeMetadata.AsNoTracking().SingleAsync();
         await environment.Db.AnimeMetadata.ExecuteDeleteAsync();
+        environment.Db.ChangeTracker.Clear();
 
         await environment.Scheduler.RecoverAsync(CancellationToken.None);
 
-        Assert.AreEqual(0, (await environment.Acquisitions.LoadAsync()).Acquisitions.Count);
+        Assert.AreEqual(acquisition.Id, (await environment.Acquisitions.LoadAsync()).Acquisitions.Single().Id, "Without an AniList match the download keeps its record.");
+        Assert.IsTrue((await environment.Ownership.LoadAsync()).Jobs.ContainsKey(acquisition.Id.ToString()), "Its ownership job is untouched.");
         Assert.IsNull(await environment.AnimeRequestAsync());
+
+        environment.Db.AnimeMetadata.Add(metadata);
+        await environment.Db.SaveChangesAsync();
+        await environment.Scheduler.RecoverAsync(CancellationToken.None);
+
+        Assert.AreEqual(acquisition.LatestAttempt!.OperationId, (await environment.AnimeRequestAsync())!.OperationId);
+        Assert.AreEqual(0, (await environment.Acquisitions.LoadAsync()).Acquisitions.Count);
     }
 }

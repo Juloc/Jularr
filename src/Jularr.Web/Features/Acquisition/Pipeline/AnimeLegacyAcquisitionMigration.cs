@@ -10,8 +10,9 @@ namespace Jularr.Web.Features.Acquisition.Pipeline;
 
 /// <summary>
 /// One-time move of the acquisitions the old Anime pipeline had in flight onto the request lifecycle: the download of an unfinished acquisition becomes the download of the
-/// anime's request (its Operation, episodes, ownership job and tried releases carry over), so the Wanted pass follows and imports it. Acquisitions that are finished are dropped;
-/// one that cannot be put on a request (no AniList match, another download already runs for the request) is dropped too; its files stay where the download client put them.
+/// anime's request (its Operation, episodes, ownership job and tried releases carry over), so the Wanted pass follows and imports it. Acquisitions that are finished are dropped.
+/// One that cannot be put on a request (no AniList match, another download already runs for the request) is kept as it is, with its ownership job, and tried again at every
+/// startup until it converts or the owner imports the download manually; nothing is dropped while its download is unfinished.
 /// Nothing is downloaded or renamed again. Safe to run again: a converted download is recognised by its Operation.
 /// </summary>
 public sealed class AnimeLegacyAcquisitionMigration(
@@ -39,8 +40,14 @@ public sealed class AnimeLegacyAcquisitionMigration(
             var download = acquisition.LatestAttempt is { } latest ? await operations.GetAsync(latest.OperationId, cancellationToken) : null;
             var unfinished = download is not null
                 && (download.IsActive || (download.Status == OperationStatus.Succeeded && !importState.Imports.Any(record => record.DownloadOperationId == download.Id && record.Status is AnimeImportStatus.Imported or AnimeImportStatus.Dismissed)));
-            if (unfinished && await ConvertAsync(acquisition, download!, cancellationToken))
+            if (unfinished)
             {
+                // An unfinished download that cannot be put on a request yet keeps its record (and its ownership job): it is tried again at the next startup.
+                if (!await ConvertAsync(acquisition, download!, cancellationToken))
+                {
+                    continue;
+                }
+
                 converted++;
             }
 
@@ -54,7 +61,7 @@ public sealed class AnimeLegacyAcquisitionMigration(
     {
         if (await starter.EnsureRequestAsync(acquisition.AnimeKey, cancellationToken) is not var (request, _))
         {
-            logger.LogWarning("The download of {Anime} has no AniList match to request it by; its files stay where the download client put them.", acquisition.AnimeKey);
+            logger.LogWarning("The unfinished download of {Anime} has no AniList match to request it by; it is kept and tried again at the next startup.", acquisition.AnimeKey);
             return false;
         }
 
@@ -62,7 +69,7 @@ public sealed class AnimeLegacyAcquisitionMigration(
         {
             if (request.Status is AcquisitionRequestStatus.Searching or AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing)
             {
-                logger.LogWarning("The request of {Anime} already follows another download; the earlier one's files stay where the download client put them.", acquisition.AnimeKey);
+                logger.LogWarning("The request of {Anime} already follows another download; the unfinished earlier one is kept and tried again at the next startup.", acquisition.AnimeKey);
                 return false;
             }
 

@@ -25,7 +25,7 @@ public sealed class AnimeCanonicalEpisodesState
 /// <summary>
 /// Gives every episode slot an anime is expected to have (its local episodes, its AniList match and episode-range mappings, read by
 /// <see cref="AnimeAcquisitionInventory"/>) a canonical <see cref="WorkEpisode"/>, so Monitoring, Wanted, coverage and upgrades address anime episodes by
-/// one identity. It only creates what is missing: an existing episode keeps its title, air date and numbers, the AniList entry and remote episode of a slot
+/// one identity. It only creates what is missing: an existing episode keeps its title, air date and numbers (an absolute number it lacks is filled in only where the slots name it unambiguously), the AniList entry and remote episode of a slot
 /// stay in the mapping evidence (a Jularr season is never an AniList entry), and an anime whose slots are unknown (no match, several local seasons without
 /// mappings) gets nothing until the owner maps it.
 /// </summary>
@@ -44,16 +44,46 @@ public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInve
             .FirstOrDefaultAsync(cancellationToken)
             ?? await bridge.EnsureWorkForAnimeAsync(new Anime { Id = slots.Anime.Id, Key = slots.Anime.Key, Title = slots.Anime.Title }, cancellationToken);
         var existing = await db.WorkEpisodes.Where(episode => episode.WorkId == workId).ToListAsync(cancellationToken);
-        var known = existing.Select(episode => (episode.SeasonNumber, episode.EpisodeNumber)).ToHashSet();
-        var missing = slots.Slots.Where(slot => !known.Contains((slot.Key.SeasonNumber, slot.Key.EpisodeNumber))).ToArray();
+        var known = existing.ToDictionary(episode => (episode.SeasonNumber, episode.EpisodeNumber));
+
+        // An absolute number is evidence only where it names one slot: entries that each count from 1 would give several episodes the same number, and a number another
+        // episode of the Work already holds (a mapping or manual correction) is never claimed twice. A held number is not rewritten either.
+        var ambiguous = slots.Slots.Where(slot => slot.Key.AbsoluteEpisodeNumber is not null).GroupBy(slot => slot.Key.AbsoluteEpisodeNumber).Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet();
+        var holders = existing.Where(episode => episode.AbsoluteNumber is not null).GroupBy(episode => episode.AbsoluteNumber!.Value).ToDictionary(group => group.Key, group => group.Select(episode => (episode.SeasonNumber, episode.EpisodeNumber)).ToHashSet());
+        var missing = new List<(AnimeEpisodeSlot Slot, int? Absolute)>();
+        var filled = 0;
+        foreach (var slot in slots.Slots)
+        {
+            var place = (slot.Key.SeasonNumber, slot.Key.EpisodeNumber);
+            var absolute = slot.Key.AbsoluteEpisodeNumber is { } number && !ambiguous.Contains(number) ? number : (int?)null;
+            var heldElsewhere = absolute is { } wanted && holders.TryGetValue(wanted, out var held) && !held.Contains(place);
+            if (known.TryGetValue(place, out var episode))
+            {
+                if (episode.AbsoluteNumber is null && absolute is { } fill && !heldElsewhere)
+                {
+                    episode.AbsoluteNumber = fill;
+                    holders[fill] = [place];
+                    filled++;
+                }
+            }
+            else if (!heldElsewhere)
+            {
+                missing.Add((slot, absolute));
+                if (absolute is { } claimed)
+                {
+                    holders[claimed] = [place];
+                }
+            }
+        }
+
         var unlinked = existing.Where(episode => episode.SeasonId is null).ToArray();
-        if (missing.Length == 0 && unlinked.Length == 0)
+        if (missing.Count == 0 && unlinked.Length == 0 && filled == 0)
         {
             return 0;
         }
 
         var seasonIds = await db.WorkSeasons.Where(season => season.WorkId == workId).ToDictionaryAsync(season => season.SeasonNumber, season => season.Id, cancellationToken);
-        foreach (var number in missing.Select(slot => slot.Key.SeasonNumber).Concat(unlinked.Select(episode => episode.SeasonNumber)).Distinct().Where(number => !seasonIds.ContainsKey(number)))
+        foreach (var number in missing.Select(item => item.Slot.Key.SeasonNumber).Concat(unlinked.Select(episode => episode.SeasonNumber)).Distinct().Where(number => !seasonIds.ContainsKey(number)))
         {
             var season = new WorkSeason { WorkId = workId, SeasonNumber = number, IsSpecial = number == 0 };
             db.WorkSeasons.Add(season);
@@ -66,16 +96,17 @@ public sealed class AnimeCanonicalEpisodes(AppDbContext db, AnimeAcquisitionInve
             episode.SeasonId = seasonIds[episode.SeasonNumber];
         }
 
-        db.WorkEpisodes.AddRange(missing.Select(slot => new WorkEpisode
+        db.WorkEpisodes.AddRange(missing.Select(item => new WorkEpisode
         {
             WorkId = workId,
-            SeasonId = seasonIds[slot.Key.SeasonNumber],
-            SeasonNumber = slot.Key.SeasonNumber,
-            EpisodeNumber = slot.Key.EpisodeNumber,
-            IsSpecial = slot.Key.SeasonNumber == 0
+            SeasonId = seasonIds[item.Slot.Key.SeasonNumber],
+            SeasonNumber = item.Slot.Key.SeasonNumber,
+            EpisodeNumber = item.Slot.Key.EpisodeNumber,
+            AbsoluteNumber = item.Absolute,
+            IsSpecial = item.Slot.Key.SeasonNumber == 0
         }));
         await db.SaveChangesAsync(cancellationToken);
-        return missing.Length;
+        return missing.Count;
     }
 
     /// <summary>The episodes of the Wanted queue (of one anime, or of all): missing ones, and installed ones the shared upgrade policy still wants better.</summary>

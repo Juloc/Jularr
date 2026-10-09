@@ -14,7 +14,7 @@ Canonical owners
 - `AnimeAcquisitionScheduler` has no loop: the Wanted pass calls `AdvanceAsync` (startup recovery, owner "search now" runs, the AniList list auto-monitor every 30 minutes). Searching has no schedule setting: requests carry their own back-off.
 
 Legacy and state
-- `AnimeLegacyAcquisitionMigration` (run by the scheduler's startup recovery) moves downloads the old pipeline had in flight (`sabnzbd-acquisitions.json` relations) onto the anime's request and drops the relation; the file keeps only the blocklist (`SabnzbdAcquisitionStore`). Old Operations keep their kind `AnimeAcquisitionEngine.LegacyOperationKind`.
+- `AnimeLegacyAcquisitionMigration` (run by the scheduler's startup recovery) moves downloads the old pipeline had in flight (`sabnzbd-acquisitions.json` relations) onto the anime's request and drops the relation once converted (an unfinished one that cannot be converted yet is kept and retried at startup); the file keeps only the blocklist (`SabnzbdAcquisitionStore`). Old Operations keep their kind `AnimeAcquisitionEngine.LegacyOperationKind`.
 - `AnimeMonitoringStore` (`monitoring.json`) holds per-anime settings only; wanted episodes come from `WantedItems`, the episode states shown in admin detail and the calendar from `AnimeEpisodeStates` (Wanted rows + the request payload).
 - `AnimeAcquisitionPipeline` stays as the interactive search, panel, overview and settings facade.
 
