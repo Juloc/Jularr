@@ -26,6 +26,8 @@ data class TvAppSnapshot(
      */
     val activityUsesContinueWatchingFallback: Boolean = false,
     val watchlist: List<WatchlistItem> = emptyList(),
+    val searchQuery: String = "",
+    val searchCategory: TvContentFilter = TvContentFilter.ALL,
     val anime: AnimeDetail? = null,
     val episodePage: TvEpisodePageData? = null,
     val episode: TvEpisodeBundle? = null,
@@ -265,6 +267,16 @@ class TvAppController(
                 error = null,
             )
         }
+
+    fun updateSearchQuery(query: String): TvAppSnapshot {
+        snapshot = snapshot.copy(searchQuery = query)
+        return snapshot
+    }
+
+    fun updateSearchCategory(category: TvContentFilter): TvAppSnapshot {
+        snapshot = snapshot.copy(searchCategory = category)
+        return snapshot
+    }
 
     fun openSearch(): TvAppSnapshot {
         snapshot = snapshot.copy(
