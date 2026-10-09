@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
@@ -74,7 +75,7 @@ import de.juloc.jularr.core.player.JularrMedia3Player
 import de.juloc.jularr.core.session.PlaybackCommand
 import kotlinx.coroutines.delay
 
-private enum class TvTrackPanel { AUDIO, SUBTITLES }
+private enum class TvPlayerPanel { AUDIO, SUBTITLES, SPEED }
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -88,6 +89,7 @@ fun TvPlayerScreen(
     selectedSubtitleTrackId: String? = null,
     onSelectAudioTrack: (String) -> Boolean = { false },
     onSelectSubtitleTrack: (String?) -> Boolean = { false },
+    onPlaybackSpeedChanged: () -> Unit = {},
     onPositionChanged: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onSeeked: (positionMs: Long, durationMs: Long, isPlaying: Boolean) -> Unit = { _, _, _ -> },
     onPlaybackEnded: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
@@ -117,15 +119,17 @@ fun TvPlayerScreen(
     val nextEpisodeFocus = remember { FocusRequester() }
     val audioTrackFocus = remember { FocusRequester() }
     val subtitleTrackFocus = remember { FocusRequester() }
+    val speedControlFocus = remember { FocusRequester() }
     val trackPanelFocus = remember { FocusRequester() }
-    var trackPanel by remember { mutableStateOf<TvTrackPanel?>(null) }
-    var returnToTrackPanel by remember { mutableStateOf<TvTrackPanel?>(null) }
+    var trackPanel by remember { mutableStateOf<TvPlayerPanel?>(null) }
+    var returnToTrackPanel by remember { mutableStateOf<TvPlayerPanel?>(null) }
     var trackSelectionError by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(player.player.isPlaying) }
     var playbackEnded by remember { mutableStateOf(false) }
     var positionMs by remember { mutableStateOf(player.player.currentPosition.coerceAtLeast(0)) }
     var durationMs by remember { mutableStateOf(player.player.duration.takeIf { it > 0 } ?: 0L) }
     var bufferedPositionMs by remember { mutableStateOf(player.player.bufferedPosition.coerceAtLeast(0L)) }
+    var playbackSpeed by remember { mutableStateOf(player.player.playbackParameters.speed) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -134,6 +138,11 @@ fun TvPlayerScreen(
                 positionMs = player.player.currentPosition.coerceAtLeast(0)
                 durationMs = player.player.duration.takeIf { it > 0 } ?: durationMs
                 onPositionChanged(positionMs, durationMs, value)
+            }
+
+            override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
+                playbackSpeed = playbackParameters.speed
+                onPlaybackSpeedChanged()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -201,8 +210,9 @@ fun TvPlayerScreen(
         val target = when {
             trackPanel != null -> trackPanelFocus
             uiState.learningLayer != TvLearningLayer.CLOSED -> learningOverlayFocus
-            uiState.controlsVisible && returnToTrackPanel == TvTrackPanel.AUDIO -> audioTrackFocus
-            uiState.controlsVisible && returnToTrackPanel == TvTrackPanel.SUBTITLES -> subtitleTrackFocus
+            uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.AUDIO -> audioTrackFocus
+            uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SUBTITLES -> subtitleTrackFocus
+            uiState.controlsVisible && returnToTrackPanel == TvPlayerPanel.SPEED -> speedControlFocus
             uiState.controlsVisible -> primaryControlFocus
             else -> playerFocus
         }
@@ -454,19 +464,25 @@ fun TvPlayerScreen(
                     subtitleTracks = subtitleTracks,
                     selectedAudioTrackId = selectedAudioTrackId,
                     selectedSubtitleTrackId = selectedSubtitleTrackId,
+                    playbackSpeed = playbackSpeed,
                     design = design,
                     primaryControlFocus = primaryControlFocus,
                     audioTrackFocus = audioTrackFocus,
                     subtitleTrackFocus = subtitleTrackFocus,
+                    speedControlFocus = speedControlFocus,
+                    onOpenSpeedPanel = {
+                        returnToTrackPanel = TvPlayerPanel.SPEED
+                        trackPanel = TvPlayerPanel.SPEED
+                    },
                     onOpenAudioTracks = {
-                        returnToTrackPanel = TvTrackPanel.AUDIO
+                        returnToTrackPanel = TvPlayerPanel.AUDIO
                         trackSelectionError = false
-                        trackPanel = TvTrackPanel.AUDIO
+                        trackPanel = TvPlayerPanel.AUDIO
                     },
                     onOpenSubtitleTracks = {
-                        returnToTrackPanel = TvTrackPanel.SUBTITLES
+                        returnToTrackPanel = TvPlayerPanel.SUBTITLES
                         trackSelectionError = false
-                        trackPanel = TvTrackPanel.SUBTITLES
+                        trackPanel = TvPlayerPanel.SUBTITLES
                     },
                     onBackTen = {
                         player.player.seekTo(
@@ -514,20 +530,33 @@ fun TvPlayerScreen(
                 )
             }
 
-            if (trackPanel != null) {
+            if (trackPanel == TvPlayerPanel.SPEED) {
+                TvSpeedSelectionPanel(
+                    playbackSpeed = playbackSpeed,
+                    focusRequester = trackPanelFocus,
+                    onSelect = { speed ->
+                        player.player.setPlaybackParameters(PlaybackParameters(speed))
+                        playbackSpeed = speed
+                        onPlaybackSpeedChanged()
+                        trackPanel = null
+                    },
+                    onBack = { trackPanel = null },
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            } else if (trackPanel != null) {
                 TvTrackSelectionPanel(
-                    title = if (trackPanel == TvTrackPanel.AUDIO) "Audio" else "Subtitles",
-                    tracks = if (trackPanel == TvTrackPanel.AUDIO) audioTracks else subtitleTracks,
-                    selectedId = if (trackPanel == TvTrackPanel.AUDIO) {
+                    title = if (trackPanel == TvPlayerPanel.AUDIO) "Audio" else "Subtitles",
+                    tracks = if (trackPanel == TvPlayerPanel.AUDIO) audioTracks else subtitleTracks,
+                    selectedId = if (trackPanel == TvPlayerPanel.AUDIO) {
                         selectedAudioTrackId
                     } else {
                         selectedSubtitleTrackId
                     },
-                    allowOff = trackPanel == TvTrackPanel.SUBTITLES,
+                    allowOff = trackPanel == TvPlayerPanel.SUBTITLES,
                     selectionFailed = trackSelectionError,
                     focusRequester = trackPanelFocus,
                     onSelect = { id ->
-                        val selected = if (trackPanel == TvTrackPanel.AUDIO) {
+                        val selected = if (trackPanel == TvPlayerPanel.AUDIO) {
                             id != null && onSelectAudioTrack(id)
                         } else {
                             onSelectSubtitleTrack(id)
@@ -639,10 +668,13 @@ private fun PlayerControls(
     subtitleTracks: List<MediaTrack>,
     selectedAudioTrackId: String?,
     selectedSubtitleTrackId: String?,
+    playbackSpeed: Float,
     design: TvPlayerDesign,
     primaryControlFocus: FocusRequester,
     audioTrackFocus: FocusRequester,
     subtitleTrackFocus: FocusRequester,
+    speedControlFocus: FocusRequester,
+    onOpenSpeedPanel: () -> Unit,
     onOpenAudioTracks: () -> Unit,
     onOpenSubtitleTracks: () -> Unit,
     onBackTen: () -> Unit,
@@ -951,7 +983,51 @@ private fun PlayerControls(
                         )
                     }
                 }
+                Button(
+                    onClick = onOpenSpeedPanel,
+                    modifier = Modifier.focusRequester(speedControlFocus),
+                ) {
+                    Text("Speed: ${playbackSpeed}x")
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun TvSpeedSelectionPanel(
+    playbackSpeed: Float,
+    focusRequester: FocusRequester,
+    onSelect: (Float) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = modifier
+                .widthIn(min = 420.dp, max = 620.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Playback speed", style = MaterialTheme.typography.headlineMedium)
+            listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                val selected = speed == playbackSpeed
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (selected) Modifier.focusRequester(focusRequester) else Modifier),
+                    onClick = { onSelect(speed) },
+                ) {
+                    if (selected) Icon(Icons.Filled.Check, contentDescription = null)
+                    Text("${speed}x")
+                }
+            }
+            Button(onClick = onBack) { Text("Back") }
         }
     }
 }
