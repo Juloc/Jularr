@@ -269,6 +269,24 @@ public sealed class WatchlistTests
         Assert.AreEqual(franchiseId, overridden.FranchiseId);
         Assert.IsTrue(overridden.IsExplicit);
 
+        var addressed = await watchlist.GetEffectivePageAsync(
+            account,
+            new PageRequest(),
+            visible,
+            CancellationToken.None,
+            inherited.Identity);
+        var targetItem = Assert.ContainsSingle(addressed.Items);
+        Assert.AreEqual("Override", targetItem.Title);
+        Assert.AreEqual(1L, addressed.TotalCount);
+
+        var hiddenTarget = await watchlist.GetEffectivePageAsync(
+            account,
+            new PageRequest(),
+            visible,
+            CancellationToken.None,
+            ignored.Identity);
+        Assert.IsEmpty(hiddenTarget.Items);
+
         var other = await watchlist.GetEffectivePageAsync(
             CurrentAccountContext.ForProfile("profile-b"),
             new PageRequest(),
@@ -276,6 +294,34 @@ public sealed class WatchlistTests
             CancellationToken.None);
         Assert.AreEqual("Secret", Assert.ContainsSingle(other.Items).Title);
         Assert.AreEqual(1L, other.TotalCount);
+    }
+
+    [TestMethod]
+    public async Task FollowedFranchises_ArePagedAndProfileScoped()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var franchises = new FranchiseStore(fixture.Db);
+        for (var i = 1; i <= 3; i++)
+        {
+            var item = Draft(i.ToString(), "Franchise " + i);
+            var id = await franchises.GetOrCreateBySeedAsync(item.Identity, CancellationToken.None);
+            await franchises.FollowAsync("profile-a", id, CancellationToken.None);
+        }
+
+        var first = await franchises.ListFollowedAsync(
+            "profile-a", new PageRequest(1, 2), CancellationToken.None);
+        var second = await franchises.ListFollowedAsync(
+            "profile-a", new PageRequest(2, 2), CancellationToken.None);
+        var otherProfile = await franchises.ListFollowedAsync(
+            "profile-b", new PageRequest(), CancellationToken.None);
+
+        Assert.AreEqual(2, first.Items.Count);
+        Assert.AreEqual(1, second.Items.Count);
+        Assert.AreEqual(3L, first.TotalCount);
+        Assert.AreEqual(true, first.HasMore);
+        Assert.AreEqual(false, second.HasMore);
+        Assert.IsEmpty(otherProfile.Items);
+        Assert.AreEqual(0L, otherProfile.TotalCount);
     }
 
     private static WatchlistDraft Draft(string externalId, string title) =>
