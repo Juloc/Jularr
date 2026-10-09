@@ -12,10 +12,10 @@ A Manga is one canonical `Work` (`WorkMediaType.Manga`); the library's own readi
 - Wanted: a Work without a structure, or with library files nothing is tied to, is wanted as a whole title; otherwise per unit. `WantedRequestSource` opens the request, the same request reopens while units are missing.
 - Admin: `MangaWorkAdminQuery` + `Pages/Admin/Manga/Work` (monitoring per Work, volume and chapter, Search now for the title or one unit, Manual Search, Retry, profile, history, files). Wanted rows and the library series page link here.
 
-## Not covered
+## Versions and upgrades
 
-Manga quality upgrades (a CBZ replacing a ZIP) are not implemented: the importer keeps both files and the reader would list the volume twice.
+Library files that hold exactly the same volumes or chapters (same `WorkUnitBindings` set, or for untied files the same volume/chapters in their name) are versions. `MangaVersionSelector` shows the best one by the Work's profile (`MangaChapters.SupersededById` points at the shown version; every reader query filters on it) and moves progress and bookmarks to it; nothing is deleted. `ReadingCoverageService` gives each unit its installed quality (`MangaFileQuality`) and `UpgradeWanted`; `MangaUpgradeAssessor` (Work/Volume/Chapter rows) feeds the shared `UpgradeWantedSource`; `ReadingWant.Upgrade*` lets the judge take only releases `UpgradePolicy.IsUpgrade` accepts, and the engine waits (`WaitForUpgradeAsync`) instead of failing when none exists. A release with no readable page is rejected and its placed copy removed. `ReleaseRequestPayload.GrabbedRelease` lets the Admin page show which units the running download holds.
 
 ## Tests
 
-`MangaReleaseCoverageTests` (parser and judge), `MangaLifecycleTests`, `MangaUnitCoverageTests` (volumes, chapters, ranges, overrides, existing library), `MangaManualSearchTests`, `MangaRecoveryTests`, `MangaAdminPageTests` (+ `MangaAdminPageHost`); the Manga half of `BookPdfAcquisitionTests.BookAcquisitionEnvironment` (`aniList:` argument) is their shared wiring.
+`MangaReleaseCoverageTests` (parser and judge), `MangaLifecycleTests`, `MangaUnitCoverageTests` (volumes, chapters, ranges, overrides, existing library), `MangaManualSearchTests`, `MangaRecoveryTests`, `MangaUpgradeTests`, `MangaVersionTests`, `MangaAdminPageTests` (+ `MangaAdminPageHost`); the Manga half of `BookPdfAcquisitionTests.BookAcquisitionEnvironment` (`aniList:` argument) is their shared wiring.
