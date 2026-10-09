@@ -335,6 +335,8 @@ public sealed class PlaybackDecisionEngineTests
         Assert.AreEqual(4_250, original.Quality.LimitKbps);
         Assert.AreEqual(PlaybackLimitSource.ServerEgress, original.Quality.LimitSource);
         Assert.AreEqual(PlaybackDeliveryMode.Transcode, original.Mode);
+        Assert.IsTrue(original.WhyNot(PlaybackDeliveryMode.DirectPlay)
+            .Any(reason => reason.Code == PlaybackReasonCodes.ServerEgressLimit));
 
         var lowerUserPreset = PlaybackAutoQuality.Resolve(
             PlaybackQualityPreset.Mbps2,
