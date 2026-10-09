@@ -50,6 +50,27 @@ class TvPlayerInteractionTest {
     }
 
     @Test
+    fun introAndRecapHaveIndependentServerApprovedSkipActions() {
+        val windows = listOf(
+            ClientMediaSegment("intro", startMs = 0, endMs = 90_000, canSkip = true),
+            ClientMediaSegment("recap", startMs = 100_000, endMs = 120_000, canSkip = true),
+        )
+
+        val intro = TvPlayerInteraction.activeSkipSegment(windows, 0)
+        val recap = TvPlayerInteraction.activeSkipSegment(windows, 100_000)
+
+        assertEquals("intro", intro?.kind)
+        assertEquals(90_000L, intro?.endMs)
+        assertEquals(R.string.tv_player_skip_intro, skipLabelRes(intro!!.kind))
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 90_000))
+
+        assertEquals("recap", recap?.kind)
+        assertEquals(120_000L, recap?.endMs)
+        assertEquals(R.string.tv_player_skip_recap, skipLabelRes(recap!!.kind))
+        assertEquals(null, TvPlayerInteraction.activeSkipSegment(windows, 120_000))
+    }
+
+    @Test
     fun enteringLearningPausesOnlyWhenPlaybackWasRunning() {
         val playing = TvPlayerInteraction.learnCurrentLine(
             TvPlayerUiState(controlsVisible = true),
