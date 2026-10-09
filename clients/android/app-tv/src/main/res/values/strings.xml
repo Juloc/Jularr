@@ -59,6 +59,11 @@
     <string name="tv_search_placeholder">Search titles</string>
     <string name="tv_search_empty_query">Start typing to search your library.</string>
     <string name="tv_search_no_results">No titles match “%1$s”.</string>
+    <string name="tv_search_heading">Search</string>
+    <string name="tv_search_description">Discover titles in your connected library.</string>
+    <string name="tv_search_extended_placeholder">Title, genre or keyword</string>
+    <string name="tv_search_results_count">%1$d results</string>
+    <string name="tv_search_empty_library">No matching titles of this type in the TV library.</string>
 
     <!-- Watchlist -->
     <string name="tv_watchlist_title">Watchlist</string>
