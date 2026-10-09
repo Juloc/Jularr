@@ -520,21 +520,6 @@ fun TvPlayerScreen(
                             player.player.seekTo(positionMs)
                         }
                     },
-                    onRepeatLine = {
-                        currentCue?.let { cue ->
-                            player.player.seekTo(cue.startMs.toLong())
-                            player.player.play()
-                        }
-                    },
-                    onLearn = {
-                        apply(
-                            TvPlayerInteraction.learnCurrentLine(
-                                state = uiState,
-                                isPlaying = player.player.isPlaying,
-                                wordCount = currentCue?.tokens?.size ?: 0,
-                            ),
-                        )
-                    },
                     onExit = onExit,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -544,7 +529,26 @@ fun TvPlayerScreen(
                 TvSettingsPanel(
                     focusRequester = trackPanelFocus,
                     playbackSpeed = playbackSpeed,
+                    hasSpeedOptions = playbackSpeeds.size > 1,
+                    canLearn = currentCue != null,
                     onOpenSpeed = { trackPanel = TvPlayerPanel.SPEED },
+                    onRepeatLine = {
+                        trackPanel = null
+                        currentCue?.let { cue ->
+                            player.player.seekTo(cue.startMs.toLong())
+                            player.player.play()
+                        }
+                    },
+                    onLearn = {
+                        trackPanel = null
+                        apply(
+                            TvPlayerInteraction.learnCurrentLine(
+                                state = uiState,
+                                isPlaying = player.player.isPlaying,
+                                wordCount = currentCue?.tokens?.size ?: 0,
+                            ),
+                        )
+                    },
                     onBack = { trackPanel = null },
                 )
             } else if (trackPanel == TvPlayerPanel.SPEED) {
