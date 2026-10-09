@@ -463,6 +463,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<ProfilePlaybackPreferences>(entity =>
         {
+            entity.ToTable("ProfilePlaybackPreferences", table =>
+            {
+                table.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleSizePercent", "\"SubtitleSizePercent\" BETWEEN 75 AND 200");
+                table.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleOffsetMs", "\"SubtitleOffsetMs\" BETWEEN -10000 AND 10000");
+            });
             entity.HasKey(x => x.ProfileId);
             entity.Property(x => x.ProfileId).HasMaxLength(80);
             entity.Property(x => x.PreferredAudioLanguage).HasMaxLength(16);
