@@ -7,7 +7,8 @@
     var linking = User.Identity?.IsAuthenticated == true;
     var linked = linking && Model.PlexLinked && !Model.HasVerifiedIdentity;
     var verified = Model.HasVerifiedIdentity;
-    var starting = !linked && !verified;
+    var starting = !linked && !verified && !Model.MediaFlowPending &&
+        (!linking || Model.PlexLinkEnabled);
     ViewData["Title"] = ui["account.plex.signIn"];
 }
 
@@ -64,6 +65,46 @@
                 <button class="button button-primary" type="submit">@ui["account.plex.create"]</button>
             </form>
         }
+    }
+
+    @if (linking && (Model.PlexMediaEnabled || Model.MediaConnection is not null))
+    {
+        <section class="panel">
+            <h2>@ui["account.plex.mediaTitle"]</h2>
+            <p>@ui["account.plex.mediaDescription"]</p>
+            @if (Model.MediaConnection is { } media)
+            {
+                <p role="status">@(media.IsUsable
+                    ? ui["account.plex.mediaConnected"]
+                    : ui["account.plex.mediaUnavailable"])</p>
+                <form method="post" asp-page-handler="DisconnectMedia" class="form-stack">
+                    <button class="button button-secondary" type="submit">
+                        @ui["account.plex.mediaDisconnect"]
+                    </button>
+                </form>
+            }
+            @if (Model.PlexMediaEnabled)
+            {
+                <form method="post" asp-page-handler="StartMedia" class="form-stack">
+                    <label asp-for="ConsentToPlexMedia">
+                        <input asp-for="ConsentToPlexMedia" type="checkbox" required />
+                        @ui["account.plex.mediaConsent"]
+                    </label>
+                    <button class="button button-primary" type="submit">
+                        @ui["account.plex.mediaConnect"]
+                    </button>
+                </form>
+            }
+        </section>
+    }
+
+    @if (Model.MediaFlowPending)
+    {
+        <p>
+            <a asp-page-handler="FinishMedia" asp-route-flow="@Model.Flow">
+                @ui["account.plex.check"]
+            </a>
+        </p>
     }
 
     @if (starting)
