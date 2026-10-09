@@ -158,6 +158,18 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.AreEqual(compatible.StoredFileId, plan.MediaFileId);
         Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, plan.Plan.Mode);
         Assert.AreEqual(compatible.StoredFileId, plan.Session!.MediaFileId);
+
+        var selectedSubtitle = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id),
+            "reader",
+            new PlaybackPlanInput(
+                null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback,
+                SubtitleStreamIndex: 3),
+            CancellationToken.None);
+
+        Assert.IsNotNull(selectedSubtitle);
+        Assert.AreEqual(incompatible.StoredFileId, selectedSubtitle.MediaFileId,
+            "Track indices belong to their source file; a different version must not silently change the selected track.");
     }
 
     [TestMethod]
