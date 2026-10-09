@@ -5,6 +5,8 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 ## Canonical responsibilities
 
 - `PlexResourceDiscoveryClient` enumerates owned and shared Plex Media Servers from the authenticated account's **official resources API**. It keeps each server access token internal and non-serializable, filters out non-server devices and non-HTTPS connections, and ranks local non-relay routes above relay routes. Discovery does not connect to arbitrary URLs or store secrets.
+- `PlexServerSelectionService` requires that an Admin-selected HTTPS endpoint appears in the discovered server's connection list, and re-reads the actual accessible Plex libraries using that server's grant **before approving specific movie/TV section IDs**. Invalid or inaccessible IDs are rejected; no guesswork.
+- `PlexServerGrantStore` persists the approved machine ID, endpoint and library IDs under `/data/integrations/plex-servers.json` with a Data Protection-encrypted server token. Server listing returns metadata only, and removing a grant deletes the encrypted local token. Simply discovering a server never writes a token.
 - `PlexLibraryClient` reads a **pre-approved HTTPS Plex Media Server endpoint** with a separately supplied access token. It lists movie/TV sections and paginates titles, requesting `includeGuids=1` to retrieve external provider IDs.
 - HTTP client registration disables redirects before credentialed requests are sent. URLs, section IDs, tokens and client identifiers are validated, responses are limited to 8 MiB, and each page to 200 items.
 - It accepts Plex GUID identifiers for TMDB, IMDb and TVDB only and ignores Plex-native title/ratingKey as evidence of Jularr identity. No filename, poster or title guessing.
@@ -15,10 +17,11 @@ Status: *read-only adapter / work matching only*. This **does not** enable the `
 
 1. Use the discovery adapter in the admin-scoped Plex server connection flow, alongside the existing Account-scoped Plex login identity and a new Profile-scoped media Connection. Add explicit user consent, secure grants and revocation in the existing provider architecture. Encrypted tokens and revocation only; Plex login must not automatically imply sync.
 2. Discover PMS resources using the authenticated Plex identity, verify server ownership or share permissions, and select exact machine IDs and libraries as Admin. Never accept a user-provided arbitrary server URL/token from a public route; test SSRF protections for the connection step. Do not expose token-bearing URLs to a browser.
-3. Build a bounded reconciliation service with checkpointed paging/backoff and a persistent mapping of server/machine+ratingKey+WorkId and verified IDs, guarded by library access permissions.
-4. At request time, *revalidate* that the signed-in user's Plex Connection can access the selected item. Only then expose `In Plex öffnen` as a secondary action in media details (#886), never as an alternate Request approval or Jularr Playback action.
-5. For episodes match the exact Plex episode and Jularr WorkEpisode; do not fall back to a series without explicitly labeling the fallback.
-6. Use provider-supported link patterns verified against a real Plex instance; do not invent a stable Plex deep-link contract.
-7. Test with a real configured Plex test server, movies, shows, episodes and shared-library users. Also check client UX on mobile/desktop/TV, access revocation, SSRF and redirect handling.
+3. Connect the confirmed server selection service to the existing **Admin → Providers** permissioned UI with a Plex authorization/consent flow and explicit server/library choice. The backend contracts exist, but no route currently invokes them; it cannot connect servers by itself.
+4. Build a bounded reconciliation service with checkpointed paging/backoff and a persistent mapping of server/machine+ratingKey+WorkId and verified IDs, guarded by library access permissions.
+5. At request time, *revalidate* that the signed-in user's Plex Connection can access the selected item. Only then expose `In Plex öffnen` as a secondary action in media details (#886), never as an alternate Request approval or Jularr Playback action.
+6. For episodes match the exact Plex episode and Jularr WorkEpisode; do not fall back to a series without explicitly labeling the fallback.
+7. Use provider-supported link patterns verified against a real Plex instance; do not invent a stable Plex deep-link contract.
+8. Test with a real configured Plex test server, movies, shows, episodes and shared-library users. Also check client UX on mobile/desktop/TV, access revocation, SSRF and redirect handling.
 
 The server adapter can be integrated separately from the Plex login branch #912. Both reuse the universal Work model, not another media catalog.
