@@ -17,11 +17,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -65,6 +68,18 @@ fun TvProfileScreen(
     onUpdatePlaybackPreferences: (ClientPlaybackPreferencesUpdate) -> Unit = {},
 ) {
     var selectedPanel by remember { mutableStateOf<TvSettingPanel?>(null) }
+    var lastPanel by remember { mutableStateOf<TvSettingPanel?>(null) }
+    val rowFocus = remember { TvSettingPanel.entries.associateWith { FocusRequester() } }
+    LaunchedEffect(selectedPanel) {
+        if (selectedPanel == null) {
+            lastPanel?.let { panel ->
+                runCatching { rowFocus.getValue(panel).requestFocus() }
+                lastPanel = null
+            }
+        } else {
+            lastPanel = selectedPanel
+        }
+    }
     val preferencesAvailable = playbackPreferences != null
     val context = LocalContext.current
     val accent = remember(context) { TvPlayerDesignLoader.load(context).accent }
@@ -99,24 +114,28 @@ fun TvProfileScreen(
                             stringResource(R.string.tv_settings_autoplay),
                             if (playbackPreferences.autoplayNext) stringResource(R.string.tv_settings_on)
                                 else stringResource(R.string.tv_settings_off),
+                            modifier = Modifier.focusRequester(rowFocus.getValue(TvSettingPanel.AUTOPLAY)),
                         ) { selectedPanel = TvSettingPanel.AUTOPLAY }
                     }
                     item {
                         TvSettingRow(
                             stringResource(R.string.tv_settings_subtitles),
                             displayTvLanguage(playbackPreferences.preferredSubtitleLanguage),
+                            modifier = Modifier.focusRequester(rowFocus.getValue(TvSettingPanel.SUBTITLE)),
                         ) { selectedPanel = TvSettingPanel.SUBTITLE }
                     }
                     item {
                         TvSettingRow(
                             stringResource(R.string.tv_settings_audio),
                             displayTvLanguage(playbackPreferences.preferredAudioLanguage),
+                            modifier = Modifier.focusRequester(rowFocus.getValue(TvSettingPanel.AUDIO)),
                         ) { selectedPanel = TvSettingPanel.AUDIO }
                     }
                     item {
                         TvSettingRow(
                             stringResource(R.string.tv_settings_speed),
                             "${playbackPreferences.defaultPlaybackSpeed}x",
+                            modifier = Modifier.focusRequester(rowFocus.getValue(TvSettingPanel.SPEED)),
                         ) { selectedPanel = TvSettingPanel.SPEED }
                     }
                 } else {
@@ -182,19 +201,31 @@ private fun TvSettingSectionTitle(title: String) {
 }
 
 @Composable
-private fun TvSettingRow(label: String, value: String?, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+private fun TvSettingRow(
+    label: String,
+    value: String?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Button(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label)
+            Text(
+                label,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             value?.let {
                 Text(
                     it,
+                    modifier = Modifier.weight(0.9f),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -251,7 +282,12 @@ private fun TvSettingOptions(
         }
     }.coerceAtLeast(0)
     val firstFocus = remember(selected) { FocusRequester() }
-    LaunchedEffect(selected) { runCatching { firstFocus.requestFocus() } }
+    val optionsState = rememberLazyListState()
+    LaunchedEffect(selected, currentIndex) {
+        optionsState.scrollToItem(currentIndex)
+        withFrameNanos { }
+        runCatching { firstFocus.requestFocus() }
+    }
 
     Column(
         modifier = modifier
@@ -274,6 +310,7 @@ private fun TvSettingOptions(
         if (busy) Text(stringResource(R.string.tv_settings_saving))
         if (!busy && error != null) Text(error, color = MaterialTheme.colorScheme.error)
         LazyColumn(
+            state = optionsState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.weight(1f, fill = false),
         ) {
