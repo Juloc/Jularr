@@ -338,6 +338,16 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             fileName != "index.m3u8");
     }
 
+    public bool HasReclaimableStalePaused(
+        PlaybackCostClass costClass, string profileId, bool sameProfileOnly)
+    {
+        var now = _time.GetUtcNow();
+        return _sessions.Values.Any(entry =>
+            (!sameProfileOnly || entry.ProfileId == profileId) &&
+            entry.CanReclaim(costClass, sameProfileOnly, now,
+                BudgetPruneIdleAfter + TimeSpan.FromSeconds(30)));
+    }
+
     public bool ReclaimStalePaused(PlaybackCostClass costClass, string profileId, bool sameProfileOnly)
     {
         lock (_gate)
@@ -346,7 +356,8 @@ public sealed class HlsPlaybackSessionManager : IDisposable
             var stale = _sessions.Values
                 .Where(entry =>
                     (!sameProfileOnly || entry.ProfileId == profileId) &&
-                    entry.CanReclaim(costClass, now, BudgetPruneIdleAfter + TimeSpan.FromSeconds(30)))
+                    entry.CanReclaim(costClass, sameProfileOnly, now,
+                        BudgetPruneIdleAfter + TimeSpan.FromSeconds(30)))
                 .OrderBy(entry => entry.LastAccessUtc)
                 .FirstOrDefault();
             if (stale is null || !_sessions.ContainsKey(stale.SessionId))
@@ -868,11 +879,12 @@ public sealed class HlsPlaybackSessionManager : IDisposable
         public DateTimeOffset CreatedAtUtc { get; } = createdAtUtc;
         public DateTimeOffset LastAccessUtc => new(Interlocked.Read(ref _lastAccessTicks), TimeSpan.Zero);
 
-        public bool CanReclaim(PlaybackCostClass requestedClass, DateTimeOffset now, TimeSpan minIdle)
+        public bool CanReclaim(
+            PlaybackCostClass requestedClass, bool sameProfileOnly, DateTimeOffset now, TimeSpan minIdle)
         {
             lock (_pacingGate)
             {
-                return costClass == requestedClass &&
+                return (sameProfileOnly || costClass == requestedClass) &&
                        _lease is not null &&
                        _paused &&
                        !Process.HasExited &&
