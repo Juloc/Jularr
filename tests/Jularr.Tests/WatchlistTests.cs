@@ -43,6 +43,20 @@ public sealed class WatchlistTests
             new[] { sequel.Identity.Key },
             (await watchlist.GetHiddenKeysAsync(profile, CancellationToken.None)).ToArray());
 
+        var manyRequestedKeys = Enumerable.Range(0, PageRequest.MaximumPageSize)
+            .Select(i => Draft((60000 + i).ToString(), "Other").Identity)
+            .Append(sequel.Identity)
+            .ToArray();
+        var visibleHidden = await watchlist.GetHiddenKeysForIdentitiesAsync(
+            CurrentAccountContext.ForProfile(profile),
+            manyRequestedKeys,
+            CancellationToken.None);
+        CollectionAssert.AreEqual(new[] { sequel.Identity.Key }, visibleHidden.ToArray());
+        Assert.IsEmpty(await watchlist.GetHiddenKeysForIdentitiesAsync(
+            CurrentAccountContext.ForProfile("profile-b"),
+            [sequel.Identity],
+            CancellationToken.None));
+
         await watchlist.RestoreAsync(profile, sequel.Identity, CancellationToken.None);
         var shownAgain = await watchlist.GetEffectiveAsync(profile, CancellationToken.None);
         Assert.AreEqual(2, shownAgain.Count, "Hiding a franchise work can be undone.");
