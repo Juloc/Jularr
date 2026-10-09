@@ -53,8 +53,14 @@ public sealed class PlexModel(
     private bool LinkEnabled =>
         configuration.GetValue<bool>("Plex:LinkEnabled");
 
-    public IActionResult OnGet()
+    public async Task<IActionResult> OnGetAsync(
+        CancellationToken cancellationToken)
     {
+        if (!await accountAuth.HasOwnerAsync(cancellationToken))
+        {
+            return RedirectToPage("/Account/Setup");
+        }
+
         if (!CanUsePlex)
         {
             return NotFound();
@@ -67,6 +73,11 @@ public sealed class PlexModel(
     public async Task<IActionResult> OnPostStartAsync(
         CancellationToken cancellationToken)
     {
+        if (!await accountAuth.HasOwnerAsync(cancellationToken))
+        {
+            return RedirectToPage("/Account/Setup");
+        }
+
         if (!CanUsePlex)
         {
             return NotFound();
