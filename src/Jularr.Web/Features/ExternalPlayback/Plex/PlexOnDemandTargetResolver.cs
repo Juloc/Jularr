@@ -1,4 +1,3 @@
-using System.Net;
 using System.Security.Claims;
 using Jularr.Web.Features.Auth;
 
@@ -63,6 +62,10 @@ public sealed class PlexOnDemandTargetResolver(
             {
                 continue;
             }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                continue;
+            }
 
             var grant = await grants.GetGrantAsync(
                 server.MachineIdentifier, cancellationToken);
@@ -84,9 +87,11 @@ public sealed class PlexOnDemandTargetResolver(
                         title,
                         cancellationToken);
                 }
-                catch (HttpRequestException e)
-                    when (e.StatusCode is HttpStatusCode.NotFound or
-                        HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized)
+                catch (HttpRequestException)
+                {
+                    continue;
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
                     continue;
                 }
@@ -100,16 +105,27 @@ public sealed class PlexOnDemandTargetResolver(
                         continue;
                     }
 
-                    var destination = await webDestination.ResolveAsync(
-                        caller,
-                        server.MachineIdentifier,
-                        match.Item.RatingKey,
-                        workId,
-                        clientIdentifier,
-                        cancellationToken);
-                    if (destination is not null)
+                    try
                     {
-                        return destination;
+                        var destination = await webDestination.ResolveAsync(
+                            caller,
+                            server.MachineIdentifier,
+                            match.Item.RatingKey,
+                            workId,
+                            clientIdentifier,
+                            cancellationToken);
+                        if (destination is not null)
+                        {
+                            return destination;
+                        }
+                    }
+                    catch (HttpRequestException)
+                    {
+                        continue;
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        continue;
                     }
                 }
             }
