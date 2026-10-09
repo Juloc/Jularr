@@ -318,6 +318,16 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
 
     public int Count => sessions.Count;
 
+    public int ActiveExternalDeliveries(Guid? replacingSessionId = null)
+    {
+        var since = time.GetUtcNow() - TimeSpan.FromSeconds(30);
+        return sessions.Values.Count(session =>
+            session.Id != replacingSessionId &&
+            session.LastSeenUtc >= since &&
+            session.Plan.Quality.Network is PlaybackNetworkClass.Remote or PlaybackNetworkClass.Metered or PlaybackNetworkClass.Unknown &&
+            session.Telemetry.Latest?.State is not PlaybackClientState.Paused and not PlaybackClientState.Ended);
+    }
+
     /// <summary>Legacy Anime/test compatibility overload. New playback orchestration supplies a canonical target.</summary>
     public PlaybackStreamSession Create(
         string profileId,
