@@ -146,14 +146,14 @@ data class WatchlistItem(
     val addedAtUtc: String?,
 )
 
-data class TvPlaybackPreferences(
+data class ClientPlaybackPreferences(
     val autoplayNext: Boolean,
     val preferredAudioLanguage: String?,
     val preferredSubtitleLanguage: String?,
     val defaultPlaybackSpeed: Double,
 )
 
-data class TvPlaybackPreferencesUpdate(
+data class ClientPlaybackPreferencesUpdate(
     val autoplayNext: Boolean? = null,
     val preferredAudioLanguage: String? = null,
     val preferredSubtitleLanguage: String? = null,
