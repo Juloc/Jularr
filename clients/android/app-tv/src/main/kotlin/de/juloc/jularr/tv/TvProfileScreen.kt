@@ -62,6 +62,7 @@ fun TvProfileScreen(
     onSignOut: () -> Unit,
     onChangeServer: () -> Unit,
     onSwitchAccount: (() -> Unit)? = null,
+    onSwitchProfile: (() -> Unit)? = null,
     playbackPreferences: ClientPlaybackPreferences? = null,
     busy: Boolean = false,
     error: String? = null,
@@ -150,12 +151,18 @@ fun TvProfileScreen(
                     TvSettingSectionTitle(stringResource(R.string.tv_settings_section_account))
                 }
                 item { TvSettingRow(stringResource(R.string.tv_profile_server_label), serverOrigin, onClick = onChangeServer) }
-                item {
-                    TvSettingRow(
-                        stringResource(R.string.tv_profile_switch_account),
-                        account.userName ?: account.profileId,
-                    ) {
-                        onSwitchAccount?.invoke()
+                if (onSwitchProfile != null) {
+                    item {
+                        TvSettingRow(stringResource(R.string.tv_profile_switch_profile), null, onClick = onSwitchProfile)
+                    }
+                }
+                if (onSwitchAccount != null) {
+                    item {
+                        TvSettingRow(
+                            stringResource(R.string.tv_profile_switch_account),
+                            account.userName,
+                            onClick = onSwitchAccount,
+                        )
                     }
                 }
                 item { TvSettingRow(stringResource(R.string.tv_profile_sign_out), null, onClick = onSignOut) }
