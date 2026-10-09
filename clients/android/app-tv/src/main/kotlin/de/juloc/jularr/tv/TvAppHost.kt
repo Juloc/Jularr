@@ -898,6 +898,7 @@ fun TvAppHost(
                             }
                             selected
                         },
+                        onPlaybackSpeedChanged = { pushCompanionState(force = true) },
                         onPositionChanged = { position, duration, isPlaying ->
                             currentPositionMs = position
                             currentDurationMs = duration
