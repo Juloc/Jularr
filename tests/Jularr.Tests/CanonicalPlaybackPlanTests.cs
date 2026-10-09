@@ -121,6 +121,46 @@ public sealed class CanonicalPlaybackPlanTests
     }
 
     [TestMethod]
+    public async Task CanonicalPlaybackPrefersCompatibleAnalyzedVersionOverLiveTranscode()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var movie = new Work
+        {
+            MediaType = WorkMediaType.Movie,
+            CanonicalTitle = "Multiple Video Versions"
+        };
+        fixture.Db.Works.Add(movie);
+        await fixture.Db.SaveChangesAsync();
+
+        var incompatible = await AttachAsync(
+            fixture, storage, movie.Id, null, "a-hevc.mkv", MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        var compatible = await AttachAsync(
+            fixture, storage, movie.Id, null, "b-h264.mp4", MediaProbeFixtures.H264Stereo);
+        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count);
+
+        await fixture.Inventory.EnsureAnalyzedAsync(incompatible.StoredFileId, CancellationToken.None);
+        await fixture.Inventory.EnsureAnalyzedAsync(compatible.StoredFileId, CancellationToken.None);
+
+        var planner = new PlaybackPlanService(
+            fixture.Db,
+            fixture.Inventory,
+            new PlaybackStreamSessionStore(TimeProvider.System),
+            PlaybackServerTestKit.Create().Capabilities,
+            canonicalStorage: storage);
+        var plan = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id),
+            "reader",
+            new PlaybackPlanInput(null, ClientKinds.Web, ChromeAgent, IPAddress.Loopback),
+            CancellationToken.None);
+
+        Assert.IsNotNull(plan);
+        Assert.AreEqual(compatible.StoredFileId, plan.MediaFileId);
+        Assert.AreEqual(PlaybackDeliveryMode.DirectPlay, plan.Plan.Mode);
+        Assert.AreEqual(compatible.StoredFileId, plan.Session!.MediaFileId);
+    }
+
+    [TestMethod]
     public async Task CanonicalBootstrapUsesTracksAndWorkEpisodeNavigation()
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
