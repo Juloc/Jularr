@@ -69,7 +69,6 @@ public sealed class PlexProfileConnectionStore
         await gate.WaitAsync(cancellationToken);
         try
         {
-            var previous = await ReadAsync(path, cancellationToken);
             var entry = new PersistedConnection(
                 plexUserId,
                 plexUserName ?? "",
