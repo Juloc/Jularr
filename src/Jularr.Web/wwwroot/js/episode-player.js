@@ -80,6 +80,7 @@
 
     const playbackSubtitle = root.querySelector("[data-playback-subtitle]");
     const subtitleCanvas = root.querySelector("[data-playback-subtitle-canvas]");
+    const subtitleStack = root.querySelector(".player-subtitle-stack");
     const primaryPositionedSubtitles = root.querySelector("[data-primary-positioned-subtitles]");
     const secondaryPositionedSubtitles = root.querySelector("[data-secondary-positioned-subtitles]");
     const secondaryPlaybackSubtitle = root.querySelector("[data-secondary-playback-subtitle]");
@@ -1360,6 +1361,7 @@
     let playbackCueKey = "";
     let secondaryCueKey = "";
     let subtitleRenderGeneration = 0;
+    let subtitleCanvasSizeKey = "";
     const playbackCueCache = new Map();
 
     const learningOverlayVisible = () =>
@@ -1382,11 +1384,14 @@
     const sizeSubtitleCanvas = () => {
         if (!subtitleCanvas || !stage.clientWidth || !stage.clientHeight ||
             !video.videoWidth || !video.videoHeight) {
-            return;
+            return false;
         }
 
         const width = stage.clientWidth;
         const height = stage.clientHeight;
+        const key = `${width}:${height}:${video.videoWidth}:${video.videoHeight}`;
+        if (key === subtitleCanvasSizeKey) return false;
+        subtitleCanvasSizeKey = key;
         const scale = Math.min(width / video.videoWidth, height / video.videoHeight);
         const imageWidth = video.videoWidth * scale;
         const imageHeight = video.videoHeight * scale;
@@ -1394,10 +1399,62 @@
         subtitleCanvas.style.top = `${(height - imageHeight) / 2}px`;
         subtitleCanvas.style.width = `${imageWidth}px`;
         subtitleCanvas.style.height = `${imageHeight}px`;
+        return true;
+    };
+
+    const resolveSubtitleCollisions = () => {
+        if (!subtitleCanvas?.getBoundingClientRect) return;
+        const canvas = subtitleCanvas.getBoundingClientRect();
+        const positions = layer => layer?.querySelectorAll
+            ? [...layer.querySelectorAll(".player-subtitle-positioned-cue")]
+            : [];
+        const primary = positions(primaryPositionedSubtitles);
+        const secondary = positions(secondaryPositionedSubtitles);
+        const gap = 6;
+        const overlaps = (left, right) =>
+            left.left < right.right + gap && left.right + gap > right.left &&
+            left.top < right.bottom + gap && left.bottom + gap > right.top;
+
+        const placed = primary.map(element => element.getBoundingClientRect());
+        for (const element of secondary) {
+            const original = element.getBoundingClientRect();
+            const height = original.height + gap;
+            for (const shift of [0, -1, 1, -2, 2, -3, 3]) {
+                const offset = shift * height;
+                const rect = {
+                    left: original.left, right: original.right,
+                    top: original.top + offset, bottom: original.bottom + offset
+                };
+                if (rect.top < canvas.top + gap || rect.bottom > canvas.bottom - gap) continue;
+                if (placed.some(other => overlaps(rect, other))) continue;
+                if (offset) element.style.transform += ` translateY(${offset}px)`;
+                placed.push(rect);
+                break;
+            }
+        }
+
+        if (!subtitleStack?.getBoundingClientRect) return;
+        subtitleStack.style.bottom = "";
+        const stageBox = stage.getBoundingClientRect();
+        let caption = subtitleStack.getBoundingClientRect();
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const blocker = [...primary, ...secondary]
+                .map(element => element.getBoundingClientRect())
+                .filter(rect => overlaps(rect, caption))
+                .sort((a, b) => b.bottom - a.bottom)[0];
+            if (!blocker) break;
+            const bottom = stageBox.bottom - blocker.top + gap;
+            const limit = Math.max(76, stageBox.height - caption.height - gap);
+            if (bottom > limit) break;
+            subtitleStack.style.bottom = `${Math.max(76, bottom)}px`;
+            caption = subtitleStack.getBoundingClientRect();
+        }
     };
 
     const renderPlaybackSubtitle = timeMs => {
-        sizeSubtitleCanvas();
+        const canvasChanged = sizeSubtitleCanvas();
+        const primaryCueBefore = playbackCueKey;
+        const secondaryCueBefore = secondaryCueKey;
         const render = (element, positionedLayer, trackId, trackCues, cachedKey) => {
             if (!element) return cachedKey;
 
@@ -1405,7 +1462,7 @@
                 ? design.activeCuesAt(trackCues, timeMs)
                 : [];
             const key = active.map(cue => `${cue.startMs}:${cue.endMs}:${cue.text}`).join("\u001f");
-            if (key === cachedKey) return key;
+            if (key === cachedKey && !canvasChanged) return key;
 
             if (typeof element.replaceChildren !== "function") {
                 element.textContent = active.map(cue => cue.text).join("\n");
@@ -1459,6 +1516,9 @@
             playbackTrackId(), playbackCues, playbackCueKey);
         secondaryCueKey = render(secondaryPlaybackSubtitle, secondaryPositionedSubtitles,
             secondaryTrackId(), secondaryPlaybackCues, secondaryCueKey);
+        if (primaryCueBefore !== playbackCueKey || secondaryCueBefore !== secondaryCueKey || canvasChanged) {
+            resolveSubtitleCollisions();
+        }
     };
 
     const loadSubtitleCues = async trackId => {
