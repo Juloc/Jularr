@@ -105,6 +105,7 @@ builder.Services.AddScoped<INotificationSink, InAppNotificationSink>();
 builder.Services.AddScoped<NotificationDispatcher>();
 builder.Services.AddScoped<IJularrEventPublisher, JularrEventPublisher>();
 builder.Services.AddScoped<OwnerAuthService>();
+builder.Services.AddScoped<AdminAccountService>();
 builder.Services.AddSingleton(services =>
     new Jularr.Web.Features.Plex.PlexIdentitySettingsStore(
         services.GetRequiredService<IConfiguration>()));
