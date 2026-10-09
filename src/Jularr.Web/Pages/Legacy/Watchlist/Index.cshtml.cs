@@ -33,7 +33,17 @@ public sealed class IndexModel(
 
     public long PageCount => Math.Max(1L, (TotalCount + PageRequest.DefaultPageSize - 1) / PageRequest.DefaultPageSize);
 
-    public IReadOnlyList<FranchiseSummary> Franchises { get; private set; } = [];
+    [BindProperty(SupportsGet = true, Name = "franchisePage")]
+    public int CurrentFranchisePage { get; set; } = 1;
+
+    public PageResult<FranchiseSummary> FranchisePage { get; private set; } =
+        PageResult<FranchiseSummary>.From([], new PageRequest());
+
+    public IReadOnlyList<FranchiseSummary> Franchises => FranchisePage.Items;
+
+    public long FranchisePageCount =>
+        Math.Max(1L, ((FranchisePage.TotalCount ?? 0) + PageRequest.DefaultPageSize - 1)
+            / PageRequest.DefaultPageSize);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -64,7 +74,18 @@ public sealed class IndexModel(
             return BadRequest();
         }
 
-        Franchises = await franchises.ListFollowedAsync(account.ProfileId, cancellationToken);
+        try
+        {
+            FranchisePage = await franchises.ListFollowedAsync(
+                account.ProfileId,
+                new PageRequest(CurrentFranchisePage),
+                cancellationToken);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return BadRequest();
+        }
+
         return Page();
     }
 
