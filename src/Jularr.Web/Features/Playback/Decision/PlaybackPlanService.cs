@@ -241,14 +241,11 @@ public sealed class PlaybackPlanService(
         var networkClass = PlaybackNetworkClassifier.Classify(input.RemoteAddress, input.Network);
         var previous = input.ReplacesSessionId is { } replaced ? sessions.Get(replaced, profileId) : null;
 
-        // What the replaced session's player reported (its buffer and the stalls of the last minute) is the evidence of how that
-        // delivery went and wins over the hints of the request, but only for the same title and only while it is fresh: another
-        // title's stalls say nothing about this one, and a stale or missing report leaves the request's own hints in charge.
-        // Throughput stays the request's hint because a player cannot measure the link while the browser is not fetching.
+        // Only fresh evidence from this same title can replace request hints; an idle browser has no measured receive rate.
         var evidence = previous is not null && previous.Target == target ? sessions.TelemetryEvidence(previous) : null;
         var network = new PlaybackNetworkConditions(
             networkClass,
-            input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null,
+            evidence?.ThroughputKbps ?? (input.Network?.ThroughputKbps is > 0 and <= 10_000_000 ? input.Network.ThroughputKbps : null),
             evidence?.BufferSeconds ?? (input.Network?.BufferSeconds is >= 0 and <= 3600 ? input.Network.BufferSeconds : null),
             evidence?.RecentStalls ?? Math.Clamp(input.Network?.RecentStalls ?? 0, 0, 100));
         var quality = input.Quality ?? PlaybackQualityPresets.DefaultFor(networkClass);
