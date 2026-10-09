@@ -113,7 +113,7 @@ public sealed class ReadingUnits(AppDbContext db)
     /// Ties a local unit to a canonical volume (a NovelVolume) or chapter (a MangaChapter) of the same Work. An owner mapping replaces any earlier binding of the
     /// local unit; an import-made one never replaces an owner's. Returns false when the units do not belong to the Work or the owner's mapping stands.
     /// </summary>
-    public async Task<bool> BindAsync(Guid workId, WorkUnitLocalKind localKind, string localId, Guid unitId, bool isOwnerMapping, CancellationToken cancellationToken)
+    public async Task<bool> TieAsync(Guid workId, WorkUnitLocalKind localKind, string localId, Guid unitId, bool isOwnerMapping, CancellationToken cancellationToken)
     {
         var volume = localKind == WorkUnitLocalKind.NovelVolume;
         var unitOfWork = volume

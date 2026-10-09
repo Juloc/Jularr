@@ -74,7 +74,7 @@ public sealed class ReadingUnitTests
         var local = await LocalVolumeAsync(db, novelId, 7);
         Assert.IsEmpty(await WantedAsync(db, work), "A local volume nothing ties to a unit keeps the Work whole, and it holds something.");
 
-        Assert.IsTrue(await units.BindAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, await VolumeIdAsync(db, work.Id, 2), isOwnerMapping: true, CancellationToken.None));
+        Assert.IsTrue(await units.TieAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, await VolumeIdAsync(db, work.Id, 2), isOwnerMapping: true, CancellationToken.None));
         var afterBinding = await WantedAsync(db, work);
         CollectionAssert.AreEquivalent(new[] { await VolumeIdAsync(db, work.Id, 1), await VolumeIdAsync(db, work.Id, 3) }, afterBinding.Select(item => item.Id).ToArray(), "Local number 7 was mapped to volume 2 by the owner, so volumes 1 and 3 remain.");
     }
@@ -115,15 +115,15 @@ public sealed class ReadingUnitTests
 
         var local = await LocalVolumeAsync(db, novelId, 1);
         var foreignLocal = await LocalVolumeAsync(db, otherNovelId, 1);
-        Assert.IsFalse(await units.BindAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, await VolumeIdAsync(db, other.Id, 1), true, CancellationToken.None), "A unit of another Work.");
-        Assert.IsFalse(await units.BindAsync(work.Id, WorkUnitLocalKind.NovelVolume, foreignLocal, await VolumeIdAsync(db, work.Id, 1), true, CancellationToken.None), "A local volume of another Work.");
+        Assert.IsFalse(await units.TieAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, await VolumeIdAsync(db, other.Id, 1), true, CancellationToken.None), "A unit of another Work.");
+        Assert.IsFalse(await units.TieAsync(work.Id, WorkUnitLocalKind.NovelVolume, foreignLocal, await VolumeIdAsync(db, work.Id, 1), true, CancellationToken.None), "A local volume of another Work.");
 
         var first = await VolumeIdAsync(db, work.Id, 1);
         var second = await VolumeIdAsync(db, work.Id, 2);
-        Assert.IsTrue(await units.BindAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, first, true, CancellationToken.None));
-        Assert.IsFalse(await units.BindAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, second, false, CancellationToken.None), "An import never replaces the owner's mapping.");
+        Assert.IsTrue(await units.TieAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, first, true, CancellationToken.None));
+        Assert.IsFalse(await units.TieAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, second, false, CancellationToken.None), "An import never replaces the owner's mapping.");
         Assert.AreEqual(first, (await db.WorkUnitBindings.AsNoTracking().SingleAsync(binding => binding.LocalId == local)).WorkVolumeId);
-        Assert.IsTrue(await units.BindAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, second, true, CancellationToken.None), "The owner can correct it.");
+        Assert.IsTrue(await units.TieAsync(work.Id, WorkUnitLocalKind.NovelVolume, local, second, true, CancellationToken.None), "The owner can correct it.");
         Assert.AreEqual(second, (await db.WorkUnitBindings.AsNoTracking().SingleAsync(binding => binding.LocalId == local)).WorkVolumeId);
     }
 
@@ -147,7 +147,7 @@ public sealed class ReadingUnitTests
         Assert.IsEmpty(await WantedAsync(db, work), "The local chapter is not tied to a unit, so the Work is whole and installed.");
 
         var chapterOne = (await db.WorkChapters.AsNoTracking().SingleAsync(chapter => chapter.ExternalId == "c1")).Id;
-        Assert.IsTrue(await units.BindAsync(work.Id, WorkUnitLocalKind.MangaChapter, chapterId, chapterOne, true, CancellationToken.None));
+        Assert.IsTrue(await units.TieAsync(work.Id, WorkUnitLocalKind.MangaChapter, chapterId, chapterOne, true, CancellationToken.None));
         var wanted = await WantedAsync(db, work);
         Assert.AreEqual(2, wanted.Count);
         Assert.IsFalse(wanted.Any(item => item.Id == chapterOne));

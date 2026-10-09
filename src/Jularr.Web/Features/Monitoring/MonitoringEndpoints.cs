@@ -79,7 +79,7 @@ public static class MonitoringEndpoints
         // The owner's mapping of a local light-novel volume or manga chapter to a canonical unit of the same Work; the Work is wanted again at once.
         group.MapPut("/works/{workId:guid}/reading-units/{localKind}/{localId}", async (Guid workId, WorkUnitLocalKind localKind, string localId, MapReadingUnitRequest request, ReadingUnits units, WantedReconciler wanted, CancellationToken cancellationToken) =>
         {
-            if (!await units.BindAsync(workId, localKind, localId, request.UnitId, isOwnerMapping: true, cancellationToken))
+            if (!await units.TieAsync(workId, localKind, localId, request.UnitId, isOwnerMapping: true, cancellationToken))
             {
                 return Results.NotFound();
             }
