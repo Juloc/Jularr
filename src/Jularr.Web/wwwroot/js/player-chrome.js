@@ -1,8 +1,4 @@
-// The player's own controls. episode-player.js owns sources, the (absolute) timeline, subtitles
-// and progress; this file only drives what the native <video controls> used to: play/pause,
-// volume, full screen, picture-in-picture, the settings menu, auto-hiding the chrome and taps on
-// the video (show/hide, double-tap seek). Every control exists once; there is deliberately no
-// second timeline and no native control bar.
+// The shared player chrome owns mouse, touch, keyboard and presentation controls; episode-player.js owns media and progress.
 (() => {
     const root = document.querySelector("[data-episode-player]");
     const stage = root?.querySelector("[data-player-chrome]");
@@ -109,12 +105,11 @@
     });
     for (const name of ["play", "pause", "ended", "emptied"]) video.addEventListener(name, renderPlayState);
 
-    // --- taps on the video (touch and mouse alike) --------------------------------------------
-    // A tap shows or hides the controls and never pauses. Double tap left/right seeks, repeated
-    // taps add up; double tap in the middle toggles full screen (player-gestures.js decides).
+    // Mouse clicks toggle playback; double-click opens fullscreen. Touch retains its separate tap/seek gestures.
     const seekSeconds = design.seekSeconds(root);
     const taps = window.JularrPlayerGestures?.createTapDecider({ backSeconds: seekSeconds.back, forwardSeconds: seekSeconds.forward });
-    const interactive = ".player-center button, .player-bottom, .player-settings, .player-learning-sheet, .post-play, " +
+    const mouseClicks = window.JularrPlayerGestures?.createMouseClickDecider();
+    const interactive = ".player-top, .player-center, .player-bottom, .player-settings, .player-learning-sheet, .post-play, " +
         ".player-error, .player-subtitle-bubble, .playback-preparation-actions, button, a, input, select, textarea, label, summary";
     const isSurface = target => target instanceof Element && !target.closest(interactive);
 
@@ -159,10 +154,27 @@
         }
     };
 
+    const handleMouseClick = (x, y) => {
+        if (!mouseClicks) {
+            togglePlay();
+            return;
+        }
+
+        const decision = mouseClicks.click(x, y, performance.now());
+        if (decision.action === "fullscreen") {
+            void presentation.toggleFullscreen();
+        } else {
+            if (decision.action === "playPauseAndWait") togglePlay();
+            window.setTimeout(() => {
+                if (mouseClicks.settle(performance.now()).action === "playPause") togglePlay();
+            }, mouseClicks.delayMs + 20);
+        }
+    };
+
     let press = null;
     stage.addEventListener("pointerdown", event => {
         press = null;
-        if (!event.isPrimary || event.button > 0) return;
+        if (!event.isPrimary || event.button !== 0) return;
         if (!isSurface(event.target)) {
             // Using a control keeps the controls up.
             show();
@@ -175,19 +187,23 @@
             return;
         }
 
-        press = { x: event.clientX, y: event.clientY, at: performance.now() };
+        press = { x: event.clientX, y: event.clientY, at: performance.now(), pointerId: event.pointerId, pointerType: event.pointerType };
     });
     stage.addEventListener("pointercancel", () => { press = null; });
     stage.addEventListener("pointerup", event => {
         const start = press;
         press = null;
-        if (!start || !event.isPrimary || video.hidden || !isSurface(event.target)) return;
-        // Drags, swipes and long presses are not taps.
+        if (!start || !event.isPrimary || start.pointerId !== event.pointerId ||
+            start.pointerType !== event.pointerType || video.hidden || !isSurface(event.target)) return;
         if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 16 || performance.now() - start.at > 600) return;
-        const rect = stage.getBoundingClientRect();
-        handleTap(rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0.5);
+
+        if (event.pointerType === "mouse") {
+            handleMouseClick(event.clientX, event.clientY);
+        } else {
+            const rect = stage.getBoundingClientRect();
+            handleTap(rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0.5);
+        }
     });
-    // Double-click on the video would select text or zoom; the tap logic above owns it.
     stage.addEventListener("dblclick", event => {
         if (isSurface(event.target)) event.preventDefault();
     });
@@ -440,7 +456,7 @@
 
     // --- keyboard (when focus is in the player and not in a form control) -------------------
     stage.addEventListener("keydown", event => {
-        if (event.target.closest("select, input:not([type=range]), textarea, .player-settings")) {
+        if (event.target.closest("select, input, textarea, [contenteditable], [role=textbox], .player-settings")) {
             if (event.key === "Escape" && settingsOpen()) {
                 event.preventDefault();
                 setSettings(false);

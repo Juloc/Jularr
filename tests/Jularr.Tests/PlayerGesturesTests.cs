@@ -3,11 +3,6 @@ using Jint;
 
 namespace Jularr.Tests;
 
-/// <summary>
-/// The video-surface tap rules of the web player (player-gestures.js): a single tap toggles the
-/// controls only after the double-tap window, double taps on the sides seek and add up, and the
-/// page wires taps (not clicks) to that decision.
-/// </summary>
 [TestClass]
 public sealed class PlayerGesturesTests
 {
@@ -72,13 +67,35 @@ public sealed class PlayerGesturesTests
     }
 
     [TestMethod]
-    public void TheVideoSurfaceUsesTheTapDecisionAndNeverPausesOnClick()
+    public void MouseSurfaceClickTogglesPlaybackAndDoubleClickOpensFullscreen()
+    {
+        var result = Run("""
+            const d = window.JularrPlayerGestures.createMouseClickDecider({ delayMs: 280, maxDistancePx: 18 });
+            const out = [];
+            out.push(d.click(200, 100, 0).action, d.settle(200).action, d.settle(300).action);
+            out.push(d.click(200, 100, 1000).action, d.click(208, 105, 1150).action, d.settle(1500).action);
+            out.push(d.click(0, 0, 2000).action, d.click(100, 0, 2100).action);
+            out.push(d.settle(2250).action, d.settle(2400).action);
+            out.join(",");
+            """);
+
+        Assert.AreEqual("wait,none,playPause,wait,fullscreen,none,wait,playPauseAndWait,none,playPause", result);
+    }
+
+    [TestMethod]
+    public void MousePointerAndTouchUseDistinctSurfaceControls()
     {
         var chrome = Read("src", "Jularr.Web", "wwwroot", "js", "player-chrome.js");
         Assert.IsFalse(Regex.IsMatch(chrome, @"video\.addEventListener\(\s*""(click|dblclick)"""),
-            "A click on the video must not toggle playback.");
+            "Video input must use one stage interaction owner.");
         StringAssert.Contains(chrome, "JularrPlayerGestures?.createTapDecider");
         StringAssert.Contains(chrome, "stage.addEventListener(\"pointerup\"");
+        StringAssert.Contains(chrome, "start.pointerType !== event.pointerType");
+        StringAssert.Contains(chrome, "if (event.pointerType === \"mouse\")");
+        StringAssert.Contains(chrome, "handleMouseClick(event.clientX, event.clientY)");
+        StringAssert.Contains(chrome, "mouseClicks.click(x, y, performance.now())");
+        StringAssert.Contains(chrome, "handleTap(rect.width > 0");
+        StringAssert.Contains(chrome, "select, input, textarea, [contenteditable], [role=textbox], .player-settings");
         StringAssert.Contains(chrome, "\"seekBack10\" : \"seekForward10\"");
 
         var page = EpisodePlayerSource.Read(PlayerControlsTests.RepositoryRoot());
