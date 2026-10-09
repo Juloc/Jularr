@@ -144,7 +144,7 @@ fun TvHomeScreen(
                                 text = listOfNotNull(
                                     featured.seasonYear?.toString(),
                                     featured.format,
-                                    "${featured.episodeCount} episodes",
+                                    stringResource(R.string.tv_anime_episode_count, featured.episodeCount),
                                 ).joinToString(" · "),
                                 color = Color.White.copy(alpha = 0.8f),
                                 style = MaterialTheme.typography.bodyLarge,
@@ -152,7 +152,7 @@ fun TvHomeScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White)
                                 Text(
-                                    " Details",
+                                    " " + stringResource(R.string.tv_home_hero_details),
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleMedium,
                                 )
@@ -185,7 +185,7 @@ fun TvHomeScreen(
             }
 
             if (series.isNotEmpty()) {
-                item(key = "series-title") { Text("Series & Anime", style = MaterialTheme.typography.titleLarge) }
+                item(key = "series-title") { Text(stringResource(R.string.tv_home_row_series), style = MaterialTheme.typography.titleLarge) }
                 item(key = "series-row") {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                         items(items = series, key = { it.id }) { anime ->
@@ -208,7 +208,7 @@ fun TvHomeScreen(
             }
 
             if (movies.isNotEmpty()) {
-                item(key = "movies-title") { Text("Films", style = MaterialTheme.typography.titleLarge) }
+                item(key = "movies-title") { Text(stringResource(R.string.tv_home_row_movies), style = MaterialTheme.typography.titleLarge) }
                 item(key = "movies-row") {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                         items(items = movies, key = { it.id }) { anime ->
@@ -234,14 +234,14 @@ fun TvHomeScreen(
                 item {
                     Text(
                         if (library.anime.isEmpty()) stringResource(R.string.tv_home_empty)
-                        else "No media of this type in the connected TV library.",
+                        else stringResource(R.string.tv_home_no_media_of_type),
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }
 
             item {
-                Button(onClick = onOpenSearch) { Text("Browse library / Search") }
+                Button(onClick = onOpenSearch) { Text(stringResource(R.string.tv_home_browse)) }
             }
         }
     }
@@ -257,7 +257,7 @@ private fun ContinueWatchingCard(
     val focusColor = rememberTvFocusColor()
     var focused by remember(item.episodeId) { mutableStateOf(false) }
     val cardShape = RoundedCornerShape(14.dp)
-    val cardBackground = if (focused) Color(0xFF2A1F60) else Color(0xFF121520)
+    val cardBackground = if (focused) focusColor.copy(alpha = 0.28f) else Color(0xFF121520)
 
     Box(
         modifier = Modifier
@@ -326,7 +326,7 @@ private fun ContinueWatchingCard(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .fillMaxWidth(progressFraction)
-                                .background(Color(0xFF7B61FF)),
+                                .background(focusColor),
                         )
                     }
                     Text(
