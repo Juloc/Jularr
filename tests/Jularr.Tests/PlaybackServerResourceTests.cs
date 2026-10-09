@@ -479,6 +479,19 @@ public sealed class PlaybackServerResourceTests
         Assert.IsTrue(cache.Manager.IsActive(parked.SessionId, "parked"));
 
         cache.Time.Advance(HlsPlaybackSessionManager.BudgetPruneIdleAfter + TimeSpan.FromSeconds(31));
+        var requesting = new PlaybackStreamSessionStore(cache.Time).Create(
+            "incoming",
+            new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid()),
+            Guid.NewGuid(),
+            "/media/new.mkv",
+            1400,
+            Transcode(Video()),
+            new PlaybackStreamSelections(
+                null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
+        Assert.IsNull(admission.Preflight(requesting.Plan, requesting.ProfileId, requesting));
+        Assert.IsTrue(cache.Manager.IsActive(parked.SessionId, "parked"),
+            "Advisory preflight must not evict a stream.");
+
         var incoming = admission.Admit(Transcode(Video()), "incoming");
 
         Assert.IsTrue(incoming.Admitted);
@@ -509,6 +522,35 @@ public sealed class PlaybackServerResourceTests
             PlaybackCostClass.SoftwareVideo, "other", sameProfileOnly: false));
         Assert.IsTrue(cache.Manager.IsActive(session.SessionId, session.ProfileId));
         Assert.AreEqual(1, cache.Slots.Active(PlaybackCostClass.SoftwareVideo));
+    }
+
+    [TestMethod]
+    public async Task AFullProfileMayReclaimItsOwnParkedRemuxSlot()
+    {
+        await using var cache = await CacheAsync(budgetBytes: 1L << 30);
+        var remuxLease = cache.Slots.TryAcquire(PlaybackCostClass.Remux, "same");
+        using var softwareLease = cache.Slots.TryAcquire(PlaybackCostClass.SoftwareVideo, "same");
+        using var audioLease = cache.Slots.TryAcquire(PlaybackCostClass.AudioOnly, "same");
+        Assert.IsNotNull(remuxLease);
+        Assert.IsNotNull(softwareLease);
+        Assert.IsNotNull(audioLease);
+
+        var parked = await cache.Manager.StartAsync(
+            Guid.NewGuid(), "same", 0, cache.Arguments, remuxLease, CancellationToken.None,
+            remainingDurationSeconds: 360, costClass: PlaybackCostClass.Remux);
+        cache.Processes[0].Report(new PlaybackTranscodeSample(4, 24, 34));
+        cache.Time.Advance(HlsPlaybackSessionManager.BudgetPruneIdleAfter + TimeSpan.FromSeconds(31));
+
+        var admission = new PlaybackAdmissionService(
+            cache.Kit.Settings, cache.Slots, cache.Kit.Hardware,
+            new PlaybackStreamSessionStore(cache.Time), cache.Manager);
+        var next = admission.Admit(Remux(), "same");
+
+        Assert.IsTrue(next.Admitted);
+        Assert.IsTrue(cache.Processes[0].Killed);
+        Assert.AreEqual(HlsSessionEndReason.Idle, cache.Manager.EndReason(parked.SessionId));
+        Assert.AreEqual(PlaybackTranscodeSlots.MaxPerProfile, cache.Slots.ActiveFor("same"));
+        next.Lease!.Dispose();
     }
 
     [TestMethod]
