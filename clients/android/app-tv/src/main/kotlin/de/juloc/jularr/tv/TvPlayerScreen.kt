@@ -124,6 +124,7 @@ fun TvPlayerScreen(
     var trackSelectionError by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(player.player.isPlaying) }
     var playbackEnded by remember { mutableStateOf(false) }
+    var scrubbing by remember { mutableStateOf(false) }
     var focusedLearningWord by remember { mutableStateOf(true) }
     var positionMs by remember { mutableStateOf(player.player.currentPosition.coerceAtLeast(0)) }
     var durationMs by remember { mutableStateOf(player.player.duration.takeIf { it > 0 } ?: 0L) }
@@ -230,12 +231,14 @@ fun TvPlayerScreen(
         controlsInteractionRevision,
         trackPanel,
         playbackError,
+        scrubbing,
     ) {
         if (uiState.controlsVisible &&
             uiState.learningLayer == TvLearningLayer.CLOSED &&
             !companionVisible &&
             trackPanel == null &&
             playbackError == null &&
+            !scrubbing &&
             isPlaying
         ) {
             delay(design.controlsAutoHideMs)
@@ -510,6 +513,7 @@ fun TvPlayerScreen(
                             player.player.play()
                         }
                     },
+                    onScrubActive = { scrubbing = it },
                     onSeekTo = { target ->
                         if (durationMs > 0) {
                             positionMs = target.coerceIn(0L, durationMs)
