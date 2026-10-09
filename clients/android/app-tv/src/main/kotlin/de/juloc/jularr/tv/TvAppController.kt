@@ -196,8 +196,21 @@ class TvAppController(
             )
         }
 
-    suspend fun selectSavedSession(session: TvSavedSession): TvAppSnapshot =
-        runBusy {
+    suspend fun selectSavedSession(session: TvSavedSession): TvAppSnapshot {
+        snapshot = snapshot.copy(
+            account = null,
+            library = null,
+            continueWatching = emptyList(),
+            watchlist = emptyList(),
+            playbackPreferences = null,
+            activity = emptyList(),
+            activityUsesContinueWatchingFallback = false,
+            anime = null,
+            episodePage = null,
+            episode = null,
+            storageDecision = null,
+        )
+        return runBusy {
             sessionStore?.setActiveSessionId(session.id)
             cookiesStore?.loadCookies(session.cookies)
             settings.origin = session.serverOrigin
@@ -222,6 +235,7 @@ class TvAppController(
                 error = null,
             )
         }
+    }
 
     fun openProfileSelect(): TvAppSnapshot {
         snapshot = snapshot.copy(
