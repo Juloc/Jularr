@@ -156,6 +156,43 @@ public sealed class VideoAdminPagesRenderTests
     }
 
     [TestMethod]
+    public async Task TheSeriesMediaPageNamesItsProviderIdentityAndMarksAnInstalledEpisodeThatStillWantsAnUpgrade()
+    {
+        await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", SeveranceFirst, SeveranceSecond, addEpisode: true);
+        await series.AttachFileAsync(series.EpisodeId);
+        await series.CreateApprovedAsync();
+        await using var host = await VideoAdminPageHost.CreateAsync(series);
+        var page = $"/Admin/Media/series/{series.Work.Id:D}";
+
+        var plain = await host.GetHtmlAsync(page);
+        StringAssert.Contains(plain, "href=\"https://www.themoviedb.org/tv/95396\"");
+        StringAssert.Contains(plain, "TMDB 95396");
+        Assert.IsFalse(plain.Contains("Upgrade wanted", StringComparison.Ordinal), "An installed episode that satisfies its profile is not an upgrade candidate.");
+
+        series.Get<Jularr.Web.Data.AppDbContext>().WantedItems.Add(new Jularr.Web.Features.Acquisition.Wanted.WantedItem { WorkId = series.Work.Id, TargetKind = Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Episode, TargetId = series.EpisodeId });
+        await series.Get<Jularr.Web.Data.AppDbContext>().SaveChangesAsync();
+        StringAssert.Contains(await host.GetHtmlAsync(page), "Upgrade wanted");
+    }
+
+    [TestMethod]
+    public async Task AFailedSeriesRequestIsExplainedOnTheMediaPageWithItsReason()
+    {
+        await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", SeveranceFirst, SeveranceSecond, addEpisode: true);
+        var request = await series.CreateApprovedAsync();
+        await series.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Failed, "Every release was rejected.", null, null, null, CancellationToken.None);
+        await using var host = await VideoAdminPageHost.CreateAsync(series);
+
+        var html = await host.GetHtmlAsync($"/Admin/Media/series/{series.Work.Id:D}");
+
+        StringAssert.Contains(html, "The last request failed: Every release was rejected.");
+        StringAssert.Contains(html, $"/Admin/ManualSearch?id={request.Id:D}&tab=history");
+
+        var page = $"/Admin/Media/series/{series.Work.Id:D}";
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=Retry", []));
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await series.Requests.GetAsync(request.Id, CancellationToken.None))!.Status, "Retry runs the request again through the shared path.");
+    }
+
+    [TestMethod]
     public async Task TheSeriesMediaPageListsSeasonsAndEpisodesAndSavesAScopeThatTheWantedPassFollows()
     {
         await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", SeveranceFirst, SeveranceSecond, addEpisode: true, addSecondEpisode: true);
@@ -172,7 +209,7 @@ public sealed class VideoAdminPagesRenderTests
         StringAssert.Contains(html, "Season 2");
         StringAssert.Contains(html, "Upcoming");
         StringAssert.Contains(html, $"/Admin/ManualSearch?id={request.Id:D}&unit={series.SecondEpisodeId:D}");
-        Assert.AreEqual(4, Regex.Matches(html, "/Admin/ManualSearch").Count, "The header and the phone action bar, the season and the one missing aired episode; the episode with a file and the upcoming one have none.");
+        Assert.AreEqual(5, Regex.Matches(html, "/Admin/ManualSearch").Count, "The header and the phone action bar, the request history, the season and the one missing aired episode; the episode with a file and the upcoming one have none.");
         StringAssert.Contains(html, "Monitor all episodes");
         StringAssert.Contains(html, "Monitor future episodes only");
         Assert.AreEqual(3, Regex.Matches(html, @"name=""episodeId""").Count);

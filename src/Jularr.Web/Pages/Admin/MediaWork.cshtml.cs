@@ -127,6 +127,41 @@ public sealed class MediaWorkModel(
         return Back(mediaKind, id);
     }
 
+    /// <summary>Runs the failed request of this Work again with the intent it was saved with, the same action as Retry on Requests.</summary>
+    public async Task<IActionResult> OnPostRetryAsync(string kind, long id, CancellationToken cancellationToken)
+    {
+        if (!VideoWorkLinks.TryParseAdminKind(kind, out var mediaKind) || !await IsEnabledAsync(mediaKind, cancellationToken) || !await details.CanAcquireAsync(mediaKind, id, cancellationToken))
+        {
+            return NotFound();
+        }
+
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (await details.FindFailedRequestAsync(mediaKind, id, cancellationToken) is not { } failed)
+        {
+            TempData["Error"] = Ui["admin.media.video.noRequest"];
+            return Back(mediaKind, id);
+        }
+
+        try
+        {
+            var outcome = await requests.RetryAsync(failed.Id, cancellationToken);
+            if (outcome == RequestRetryOutcome.NotRetryable)
+            {
+                TempData["Error"] = Ui["admin.media.video.conflict"];
+            }
+            else
+            {
+                TempData["Notice"] = Ui["admin.media.retried"];
+            }
+        }
+        catch (AcquisitionAccessDeniedException)
+        {
+            TempData["Error"] = Ui["admin.media.video.notAllowed"];
+        }
+
+        return Back(mediaKind, id);
+    }
+
     /// <summary>Forces one local file of this Work through the same analysis path the library uses for all of them.</summary>
     public async Task<IActionResult> OnPostReanalyzeFileAsync(
         string kind,
