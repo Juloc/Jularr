@@ -77,6 +77,35 @@ public sealed class PlexWorkMatcherTests
     }
 
     [TestMethod]
+    public async Task PlexShowMatchesAnimeUnlessSeriesIdentityIsAmbiguous()
+    {
+        await using var db = await MediaCoreTestSupport.CreateDbAsync();
+        var works = new WorkService(db);
+        var anime = await works.CreateWorkAsync(
+            WorkMediaType.Anime, "Anime", null, CancellationToken.None);
+        await works.LinkExternalIdentityAsync(
+            anime.Id, WorkMediaType.Anime, "tmdb", "300",
+            1.0, "confirmed", true, false,
+            MappingReviewState.Confirmed, CancellationToken.None);
+
+        var matcher = new PlexWorkMatcher(db);
+        var plex = Item("show", new PlexExternalId("tmdb", "300"));
+        Assert.AreEqual(
+            anime.Id, await matcher.ResolveWorkIdAsync(
+                plex, CancellationToken.None));
+
+        var series = await works.CreateWorkAsync(
+            WorkMediaType.Series, "Unrelated series", null, CancellationToken.None);
+        await works.LinkExternalIdentityAsync(
+            series.Id, WorkMediaType.Series, "tmdb", "300",
+            1.0, "confirmed", true, false,
+            MappingReviewState.Confirmed, CancellationToken.None);
+
+        Assert.IsNull(await matcher.ResolveWorkIdAsync(
+            plex, CancellationToken.None));
+    }
+
+    [TestMethod]
     public async Task PageMatching_ReturnsOneResultPerItemAndRejectsEpisodes()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
