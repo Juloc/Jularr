@@ -65,6 +65,63 @@ public sealed class SubtitleParserTests
     }
 
     [TestMethod]
+    public void AssLayoutPreservesSignsPositionAndDialogueStyle()
+    {
+        const string content = """
+            [Script Info]
+            PlayResX: 640
+            PlayResY: 360
+
+            [V4+ Styles]
+            Format: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Alignment
+            Style: Signs, Noto Sans, 24, &H00FF9900, -1, 0, 8
+            Style: Dialogue, Arial, 28, &H00FFFFFF, 0, 1, 2
+
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            Dialogue: 3,0:00:01.00,0:00:04.00,Signs,,0,0,0,,{\an7\pos(160,36)}駅前
+            Dialogue: 0,0:00:02.00,0:00:04.00,Dialogue,,0,0,0,,{\i1}ここで待って
+            """;
+
+        var cues = SubtitleParser.ParseAss(content);
+
+        Assert.AreEqual(2, cues.Count);
+        var sign = cues[0].Presentation!;
+        Assert.AreEqual("駅前", cues[0].Text);
+        Assert.AreEqual(7, sign.Alignment);
+        Assert.AreEqual(25d, sign.XPercent);
+        Assert.AreEqual(10d, sign.YPercent);
+        Assert.AreEqual(3, sign.Layer);
+        Assert.AreEqual("Noto Sans", sign.FontFamily);
+        Assert.AreEqual(24d, sign.FontSize);
+        Assert.AreEqual(true, sign.Bold);
+        Assert.AreEqual("#0099FF", sign.Color);
+
+        var dialogue = cues[1].Presentation!;
+        Assert.AreEqual(2, dialogue.Alignment);
+        Assert.IsNull(dialogue.XPercent);
+        Assert.AreEqual(0, dialogue.Layer);
+        Assert.AreEqual(true, dialogue.Italic);
+        Assert.AreEqual("ここで待って", cues[1].Text);
+    }
+
+    [TestMethod]
+    public void AssPositionWithoutCanvasCoordinatesFallsBackToAlignment()
+    {
+        const string content = """
+            [Events]
+            Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+            Dialogue: 0,0:00:01.00,0:00:02.00,Signs,,0,0,0,,{\an8\pos(100,10)}Title
+            """;
+        var cue = SubtitleParser.ParseAss(content).Single();
+
+        Assert.AreEqual("Title", cue.Text);
+        Assert.AreEqual(8, cue.Presentation?.Alignment);
+        Assert.IsNull(cue.Presentation?.XPercent);
+        Assert.IsNull(cue.Presentation?.YPercent);
+    }
+
+    [TestMethod]
     public void ParsesVttCuesSkippingMetadataBlocksAndRubyText()
     {
         const string content = """
