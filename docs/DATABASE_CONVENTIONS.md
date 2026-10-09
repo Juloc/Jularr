@@ -116,6 +116,54 @@ await db.Database.ExecuteSqlRawAsync(
 
 This example presumes the owner-approved `Accounts` target schema; do not copy it against current `OwnerAccounts` runtime without the separately authorized clean cut. Higher-level services must still enforce effective actor/target permission, DTO field allowlists, domain invariants, and transactional session effects. Static parameterized SQL is a **necessary**, not sufficient, protection.
 
+### Compact SQL parameter builder (approved design candidate; not yet implemented)
+
+Where a large number of hand-authored statements would otherwise repeat parameter boilerplate, implement **at most one small shared `SqlParams` helper** in the existing data infrastructure. Prefer Npgsql's built-in inference for ordinary non-null values; the helper adds **declared-type-safe null handling**, stable mappings for persisted `enum : byte` to PostgreSQL `smallint`, and a limited explicit override for database-specific types. This helper does **not** build or execute SQL, update arbitrary properties, determine permission, choose columns, create repositories or replace ordinary Npgsql/EF calls.
+
+Preferred call site:
+
+```csharp
+var parameters = SqlParams.From(data)
+    .Add(nameof(data.AccountId))
+    .Add(nameof(data.DisplayName))
+    .ToArray();
+
+await db.Database.ExecuteSqlRawAsync(
+    UpdateUserSql,
+    parameters,
+    cancellationToken);
+```
+
+For a parameter not originating in a DTO:
+
+```csharp
+var parameters = SqlParams.Create()
+    .Add("AccountId", accountId)
+    .ToArray();
+```
+
+Both yield **named, typed `NpgsqlParameter` objects** matching SQL placeholders `@AccountId` and `@DisplayName`. The original SQL constant remains static and fully formatted. The builder must not inspect SQL text or interpolate SQL syntax. The explicitly named property must exist on the transport DTO; cache reflected property metadata or compiled getters per concrete DTO type/property rather than repeatedly scanning types. Only properties explicitly listed via `.Add(nameof(data.Property))` are bound; **never** mass-bind the complete request object. A missing property, duplicate parameter or unsupported type fails immediately, without guessing.
+
+Minimum default CLR -> PostgreSQL mapping:
+
+| CLR declared property type | PostgreSQL parameter type |
+| --- | --- |
+| `long` / `long?` | `bigint` |
+| `int` / `int?` | `integer` |
+| `short`, `byte`, persisted `enum : byte` and nullable equivalents | `smallint` (convert enum value to numeric `short`) |
+| `string` | `text` by convention |
+| `bool` | `boolean` |
+| `Guid` | `uuid` |
+| `decimal` | `numeric` |
+| `float` / `double` | `real` / `double precision` |
+| UTC `DateTime`, UTC `DateTimeOffset` | `timestamptz` |
+| `DateOnly` / `TimeOnly` | `date` / `time` |
+| `byte[]` | `bytea` |
+
+Use `Nullable.GetUnderlyingType` and the **declared** generic/property type to determine `NpgsqlDbType` even when the value is null; set `DBNull.Value` rather than sending an untyped null. Validate/normalize UTC timestamps and enum storage conversions. Treat `citext`, `jsonb`, PostgreSQL arrays and any other column-specific type as explicit, reviewed overrides (e.g. `.Add(nameof(data.Json), NpgsqlDbType.Jsonb)`), **never** blindly interpret any `string` as JSON. Map only the limited set actually used, extend with tested cases; do not introduce a universal type-conversion framework or source generator prematurely.
+
+The helper only handles **parameters**; it is not a generic UPDATE builder. User and admin inputs continue to use distinct DTO allowlists and authorization, with one internal owner of the mutation rules. For PATCH requests, track **absent versus explicitly null** independently from SQL null mapping. Required tests: non-null + nullable values, every supported type, enum `: byte` coercion, explicit jsonb/citext override, escaped/untrusted content, rejected unknown/duplicate properties, and PostgreSQL execution. Keep the helper if it demonstrably reduces boilerplate; skip or simplify it if standard Npgsql `AddWithValue` is sufficient for a bounded service.
+
 The canonical Agent Control document is the source of truth when this summary and the central rules differ.
 
 Canonical Work identity (owner decision, mandatory):
