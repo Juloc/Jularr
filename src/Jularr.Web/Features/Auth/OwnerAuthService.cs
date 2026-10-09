@@ -191,6 +191,46 @@ public sealed class OwnerAuthService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task UnlinkExternalIdentityAsync(
+        string accountId,
+        string provider,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+        var normalizedProvider = provider?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedProvider))
+        {
+            throw new ArgumentException(
+                "An external identity provider is required.",
+                nameof(provider));
+        }
+
+        var account = await db.OwnerAccounts.SingleOrDefaultAsync(
+            x => x.Id == accountId && x.IsEnabled,
+            cancellationToken);
+        if (account is null)
+        {
+            throw new InvalidOperationException("The account is not available.");
+        }
+
+        if (string.IsNullOrEmpty(account.PasswordHash))
+        {
+            throw new InvalidOperationException(
+                "Set a local password before removing an external login method.");
+        }
+
+        var identity = await db.AccountLoginIdentities.SingleOrDefaultAsync(
+            x => x.AccountId == accountId && x.Provider == normalizedProvider,
+            cancellationToken);
+        if (identity is null)
+        {
+            return;
+        }
+
+        db.AccountLoginIdentities.Remove(identity);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<OwnerAccount> CreateExternalAccountAsync(
         string provider,
         string externalAccountId,
