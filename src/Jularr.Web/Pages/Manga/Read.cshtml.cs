@@ -116,6 +116,11 @@ public sealed class ReadModel(
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
 
         var repository = new MangaRepository(db);
+        if (await repository.GetSupersedingChapterIdAsync(id, cancellationToken) is { } shown)
+        {
+            return RedirectToPage(new { id = shown, page });
+        }
+
         var chapter = await repository.GetChapterAsync(id, cancellationToken);
         if (chapter is null)
         {

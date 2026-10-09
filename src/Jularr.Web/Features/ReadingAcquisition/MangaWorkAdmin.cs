@@ -5,13 +5,17 @@ using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
+using Jularr.Web.Features.Operations;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.ReadingAcquisition;
 
 public sealed record MangaIdentityAdmin(string Provider, string ExternalId, bool IsPrimary);
 
-public sealed record MangaLocalFile(Guid Id, double Number, int? VolumeNumber, string Name, int PageCount, string Format, string SourcePath);
+public sealed record MangaLocalFile(Guid Id, double Number, int? VolumeNumber, string Name, int PageCount, string Format, string SourcePath, bool Superseded = false);
+
+// What the running download of the open request holds: the release it was sent for and how far the download is.
+public sealed record MangaTransfer(AcquisitionRequestStatus Status, string Release, ReadingReleaseInfo Parsed, int? ProgressPercent);
 
 public sealed record MangaWorkAdminView(
     long WorkId,
@@ -32,8 +36,13 @@ public sealed record MangaWorkAdminView(
     string ProfileName,
     string? AssignedProfileId,
     IReadOnlyList<(string Id, string Name)> Profiles,
-    IReadOnlyList<MangaLocalFile> Files)
+    IReadOnlyList<MangaLocalFile> Files,
+    MangaTransfer? Transfer = null)
 {
+    public bool IsTransferring(ReadingVolumeUnit unit) => Transfer is { } transfer && transfer.Parsed.HoldsVolume(unit.Number) && (unit.State != ReadingCoverageState.Installed || unit.UpgradeWanted);
+
+    public bool IsTransferring(ReadingChapterUnit unit) => Transfer is { } transfer && transfer.Parsed.HoldsChapter(unit.Number) && (!unit.Installed || unit.UpgradeWanted);
+
     public bool RequestIsOpen => Request is { Status: not (AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed) };
 
     public bool RequestIsWaiting => Request is { Status: AcquisitionRequestStatus.Approved };
@@ -55,11 +64,11 @@ public sealed record MangaWorkAdminView(
 
     public bool CanSearch => (!RequestIsOpen || RequestIsWaiting)
         && (Coverage.HasStructure
-            ? Coverage.Volumes.Any(volume => volume.State != ReadingCoverageState.Installed) || Coverage.LooseChapters.Any(chapter => !chapter.Installed)
+            ? Coverage.Volumes.Any(volume => volume.State != ReadingCoverageState.Installed || volume.UpgradeWanted) || Coverage.LooseChapters.Any(chapter => !chapter.Installed || chapter.UpgradeWanted)
             : Coverage.LocalChapters == 0);
 }
 
-public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService coverage, AcquisitionAccessStore requests, QualityProfileStore? profiles = null)
+public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService coverage, AcquisitionAccessStore requests, QualityProfileStore? profiles = null, OperationStore? operations = null)
 {
     public async Task<MangaWorkAdminView?> GetAsync(long workId, CancellationToken cancellationToken)
     {
@@ -81,19 +90,15 @@ public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService 
             .FirstOrDefaultAsync(cancellationToken);
         var repository = new MangaRepository(db);
         var series = seriesId is { } id ? await repository.GetSeriesAsync(id, cancellationToken) : null;
-        var sources = seriesId is { } sourceId ? await repository.GetChapterSourcesAsync(sourceId, cancellationToken) : [];
-        var paths = sources.ToDictionary(source => source.Id, source => source.SourcePath);
-        var files = (series?.Chapters ?? [])
-            .Select(chapter => new MangaLocalFile(
-                chapter.Id,
-                chapter.Number,
-                chapter.VolumeNumber,
-                chapter.Title,
-                chapter.PageCount,
-                FormatOf(paths.GetValueOrDefault(chapter.Id), chapter.SourceKind),
-                paths.GetValueOrDefault(chapter.Id) ?? ""))
+        var rows = seriesId is { } sourceId
+            ? await db.Database.SqlQuery<FileRow>(
+                $"""SELECT "Id", "Number", "VolumeNumber", "Title", "PageCount", "SourcePath", "SourceKind", "SupersededById" FROM "MangaChapters" WHERE "SeriesId" = {sourceId.ToString()}""").ToListAsync(cancellationToken)
+            : [];
+        var files = rows
+            .Select(row => new MangaLocalFile(Guid.Parse(row.Id), row.Number, row.VolumeNumber, row.Title, row.PageCount, FormatOf(row.SourcePath, row.SourceKind), row.SourcePath, row.SupersededById is not null))
             .OrderBy(file => file.VolumeNumber ?? int.MaxValue)
             .ThenBy(file => file.Number)
+            .ThenBy(file => file.Superseded)
             .ToList();
 
         var identity = identities.FirstOrDefault();
@@ -123,7 +128,7 @@ public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService 
             work.Year,
             identities,
             seriesId,
-            files.FirstOrDefault()?.Id,
+            files.FirstOrDefault(file => !file.Superseded)?.Id,
             view,
             request,
             history,
@@ -131,7 +136,44 @@ public sealed class MangaWorkAdminQuery(AppDbContext db, ReadingCoverageService 
             profile?.Name ?? "",
             state?.WorkAssignments.GetValueOrDefault(workId.ToString("D")),
             [.. (state?.Profiles ?? []).Where(ServesManga).Select(item => (item.Id, item.Name))],
-            files);
+            files,
+            await TransferAsync(request, cancellationToken));
+    }
+
+    private sealed class FileRow
+    {
+        public string Id { get; set; } = "";
+
+        public double Number { get; set; }
+
+        public int? VolumeNumber { get; set; }
+
+        public string Title { get; set; } = "";
+
+        public int PageCount { get; set; }
+
+        public string SourcePath { get; set; } = "";
+
+        public string SourceKind { get; set; } = "";
+
+        public string? SupersededById { get; set; }
+    }
+
+    private async Task<MangaTransfer?> TransferAsync(AcquisitionRequest? request, CancellationToken cancellationToken)
+    {
+        if (request is not { Status: AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing })
+        {
+            return null;
+        }
+
+        var release = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request)).GrabbedRelease;
+        if (string.IsNullOrWhiteSpace(release))
+        {
+            return null;
+        }
+
+        var snapshot = operations is not null && request.OperationId is { } operationId ? await operations.GetAsync(operationId, cancellationToken) : null;
+        return new MangaTransfer(request.Status, release, ReadingReleaseParser.Parse(release), request.Status == AcquisitionRequestStatus.Downloading ? snapshot?.ProgressPercent : null);
     }
 
     public async Task<(string Provider, string ExternalId)?> IdentityAsync(long workId, CancellationToken cancellationToken)

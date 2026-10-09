@@ -20,6 +20,9 @@ public abstract record ReleaseRequestPayload
 
     public string? LastProblem { get; init; }
 
+    /// <summary>The title of the release most recently sent to the download client, so a page can say what a running download holds.</summary>
+    public string? GrabbedRelease { get; init; }
+
     /// <summary>
     /// Merges this payload (what a search computed from the request it read) into the payload stored now, so a field that another
     /// owner changed while the search ran is not written back stale. The default has no such fields and keeps this payload.
@@ -180,7 +183,8 @@ public sealed class ReleaseRequestTracker(
                 TriedReleases = triedReleases,
                 Searches = searches,
                 NextSearchUtc = null,
-                LastProblem = null
+                LastProblem = null,
+                GrabbedRelease = next.Title
             },
             cancellationToken);
 

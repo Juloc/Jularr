@@ -1,0 +1,18 @@
+@model Jularr.Web.Pages.Admin.Manga.MangaUnitTags
+<span class="admin-tag admin-tag-@Model.Tone">@Model.State</span>
+@if (Model.Quality is not null)
+{
+    <span class="admmd-lang admmd-lang-quiet">@Model.Quality</span>
+}
+@if (Model.UpgradeWanted)
+{
+    <span class="admin-tag admin-tag-warning">@Model.Ui["admin.manga.upgradeWanted"]</span>
+}
+@if (Model.Transfer is not null)
+{
+    <span class="admin-tag admin-tag-warning" data-manga-transfer>@Model.Transfer</span>
+}
+@if (!Model.Monitored)
+{
+    <span class="admin-tag">@Model.Ui["admin.media.monitoring.off"]</span>
+}
