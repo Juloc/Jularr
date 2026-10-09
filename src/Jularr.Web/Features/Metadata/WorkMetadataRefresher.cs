@@ -33,6 +33,9 @@ public sealed partial class WorkMetadataRefresher(
     /// <summary>How long fetched metadata counts as fresh before the spool refreshes it in the background.</summary>
     public static readonly TimeSpan StaleAfter = TimeSpan.FromDays(30);
 
+    /// <summary>How soon a Series that is still airing is looked at again: a new or rescheduled episode has to reach the library within the day.</summary>
+    public static readonly TimeSpan AiringRefreshInterval = TimeSpan.FromHours(12);
+
     /// <summary>When a title the provider does not know is asked about again (the negative result expires).</summary>
     public static readonly TimeSpan PermanentFailureRecheck = TimeSpan.FromDays(7);
 
@@ -92,10 +95,15 @@ public sealed partial class WorkMetadataRefresher(
         }
 
         WorkMetadataSnapshot snapshot;
+        var airing = false;
         try
         {
             var mediaType = claim.MediaType == WorkMediaType.Movie ? TmdbDiscoveryMediaType.Movie : TmdbDiscoveryMediaType.Series;
             snapshot = await tmdb.GetWorkMetadataAsync(mediaType, tmdbId, claim.Locale, cancellationToken);
+            if (mediaType == TmdbDiscoveryMediaType.Series)
+            {
+                airing = await tmdb.SyncSeriesStructureAsync(claim.WorkId, tmdbId, claim.Locale, cancellationToken);
+            }
         }
         catch (Exception exception) when (ProviderPause(exception) is { } pause)
         {
@@ -126,7 +134,7 @@ public sealed partial class WorkMetadataRefresher(
             return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Queued, null);
         }
 
-        await RecordAsync(claim, WorkMetadataRefreshStatus.Fresh, WorkMetadataRefreshPriority.Stale, 0, StaleAfter, lastError: null, cancellationToken);
+        await RecordAsync(claim, WorkMetadataRefreshStatus.Fresh, WorkMetadataRefreshPriority.Stale, 0, airing ? AiringRefreshInterval : StaleAfter, lastError: null, cancellationToken);
         return new WorkMetadataRunOutcome(WorkMetadataRefreshStatus.Fresh, null);
     }
 

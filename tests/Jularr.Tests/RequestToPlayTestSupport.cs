@@ -68,7 +68,8 @@ internal sealed class FakeTmdb : HttpMessageHandler
             original_name = name,
             original_language = "en",
             first_air_date = Day(firstAired),
-            seasons = seasons.Select(season => new { season_number = season.Season, name = $"Season {season.Season}" })
+            status = "Returning Series",
+            seasons = seasons.Select(season => new { season_number = season.Season, name = $"Season {season.Season}", episode_count = season.Episodes.Length })
         });
         foreach (var season in seasons)
         {
@@ -167,6 +168,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
     public string Downloads => Path.Combine(_environment.Directory.FullName, "downloads");
     public OperationStore Operations => new(Db);
     public IServiceProvider Services => _services;
+    public StorageAvailabilityCoordinator Storage { get; } = new();
     public AcquisitionAccessStore Requests => new(Db);
 
     public static async Task<VideoRequestToPlayWorld> CreateAsync(MediaAcquisitionKind kind, FakeTmdb tmdb)
@@ -324,7 +326,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
         var downloadClient = new SabnzbdDownloadClient(Sabnzbd);
         var bridge = new LegacyWorkBridge(Db, new WorkService(Db), new WorkStructureService(Db));
         var routing = new LibraryRootRoutingService(Db);
-        var availability = new LibraryRootAvailabilityService(Db, new StorageAvailabilityCoordinator());
+        var availability = new LibraryRootAvailabilityService(Db, Storage);
         var hardLinks = new FileSystemHardLinkCreator();
         var canonicalStorage = new CanonicalMediaStorageService(Db);
         var profileStore = new QualityProfileStore(new DirectoryInfo(Path.Combine(directory.FullName, "quality-profiles")), registry);

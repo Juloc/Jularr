@@ -20,7 +20,7 @@ namespace Jularr.Tests;
 /// monitoring survives a restart and progress is the profile's own. Each stage consumes what the previous one produced.
 /// </summary>
 [TestClass]
-public sealed class RequestToPlayTvTests
+public sealed partial class RequestToPlayTvTests
 {
     private const string SeveranceTmdb = "95396";
     private const string Viewer = VideoDetailPageTestHost.Profile;

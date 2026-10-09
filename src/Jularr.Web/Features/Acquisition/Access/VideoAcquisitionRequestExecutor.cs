@@ -481,6 +481,7 @@ public sealed partial class VideoAcquisitionEngine(
         }
 
         await DropSatisfiedPlaybackIntentAsync(request, payload, cancellationToken);
+        await wanted.ReconcileAsync(payload.WorkId, cancellationToken);
 
         if (request.Kind == MediaAcquisitionKind.Movie)
         {

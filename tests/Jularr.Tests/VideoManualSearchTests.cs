@@ -131,6 +131,22 @@ public sealed class VideoManualSearchTests
     }
 
     [TestMethod]
+    public async Task ForAnEpisodeManualRankOneIsTheReleaseAutomaticAcquisitionGrabs()
+    {
+        await using var automatic = await TvHostAsync();
+        var started = await automatic.StartAsync();
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, started.Status, started.StatusMessage);
+        var grabbed = automatic.Environment.Client.Grabs.Single().NzbName;
+
+        await using var manual = await TvHostAsync();
+        var request = await manual.CreateApprovedAsync();
+        var result = await manual.Get<VideoManualSearchService>().SearchAsync(request.Id, manual.SecondEpisodeId, refresh: true, CancellationToken.None);
+
+        Assert.AreEqual(grabbed, result!.Candidates.Single(candidate => candidate.Rank == 1).Title, "Rank 1 is the release the automatic search grabbed.");
+        Assert.IsTrue(result.Candidates.Where(candidate => candidate.Verdict == ManualSearchVerdict.Rejected).All(candidate => candidate.Rank is null && candidate.Reasons.Count > 0), "A rejected release has no rank but a reason.");
+    }
+
+    [TestMethod]
     public async Task SelectingACandidateSubmitsThroughTheSharedGrabPathExactlyOnce()
     {
         await using var host = await MovieHostAsync();
