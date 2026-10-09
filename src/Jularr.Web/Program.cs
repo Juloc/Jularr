@@ -127,6 +127,9 @@ builder.Services.AddSingleton(services =>
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerSelectionService>();
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerCatalogScanService>();
 builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWorkMatcher>();
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.ExternalPlayback.Plex.PlexProfileConnectionStore(
+        services.GetRequiredService<IDataProtectionProvider>()));
 
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
 // resolution/guard service consumed by the request experience (#597), permission-derived shell
