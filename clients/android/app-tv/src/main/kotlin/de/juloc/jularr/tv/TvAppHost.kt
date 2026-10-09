@@ -552,7 +552,7 @@ fun TvAppHost(
             discovered = discoveredServers,
             onConnect = { origin ->
                 launchSnapshot {
-                    cookies.clear()
+                    cookies.loadCookies(emptyMap())
                     controller.connect(origin)
                 }
             },
@@ -568,7 +568,6 @@ fun TvAppHost(
                 }
             },
             onChangeServer = {
-                cookies.clear()
                 snapshot = controller.changeServer()
             },
             pairingEnabled = snapshot.capabilities?.features?.devicePairing == true,
@@ -579,44 +578,33 @@ fun TvAppHost(
             },
         )
 
-        TvRoute.ProfileSelect -> {
-            val sessions = sessionStore?.getSessions().orEmpty()
-            Row(Modifier.fillMaxSize()) {
-                if (snapshot.account != null) {
-                    TvSidebar(
-                        selected = TvRoute.ProfileSelect,
-                        focusMemory = focusMemory,
-                        onSelect = { selected ->
-                            when (selected) {
-                                TvRoute.ProfileSelect -> Unit
-                                else -> launchSnapshot { controller.selectSidebarRoute(selected) }
-                            }
-                        },
-                    )
-                }
-                Box(Modifier.weight(1f).fillMaxHeight()) {
-                    TvProfileSelectScreen(
-                        sessions = sessions,
-                        activeSessionId = sessionStore?.getActiveSession()?.id,
-                        error = snapshot.error,
-                        onSelectSession = { session ->
-                            launchSnapshot { controller.selectSavedSession(session) }
-                        },
-                        onAddAccount = {
-                            cookies.clear()
-                            snapshot = controller.changeServer()
-                        },
-                        onSignOut = {
-                            launchSnapshot {
-                                val next = controller.signOut()
-                                cookies.clear()
-                                next
-                            }
-                        },
-                    )
-                }
-            }
-        }
+        TvRoute.AccountSelect -> TvAccountSelectScreen(
+            sessions = sessionStore?.getSessions().orEmpty(),
+            activeSessionId = sessionStore?.getActiveSession()?.id,
+            error = snapshot.error,
+            onSelectSession = { session ->
+                resetPlaybackRuntime()
+                launchSnapshot { controller.selectSavedSession(session) }
+            },
+            onAddAccount = {
+                resetPlaybackRuntime()
+                snapshot = controller.changeServer()
+            },
+            onSignOut = {
+                resetPlaybackRuntime()
+                launchSnapshot { controller.signOut() }
+            },
+        )
+
+        TvRoute.ProfileSelect -> TvMessageScreen(
+            title = stringResource(R.string.tv_profile_select_title),
+            message = snapshot.error ?: stringResource(R.string.tv_profile_select_unavailable),
+            action = stringResource(R.string.tv_profile_switch_account),
+            onAction = {
+                resetPlaybackRuntime()
+                snapshot = controller.openAccountSelect()
+            },
+        )
 
         TvRoute.Home, TvRoute.Watchlist, TvRoute.Settings -> Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -626,6 +614,7 @@ fun TvAppHost(
                     onSelect = { selected ->
                         if (selected != route) {
                             if (selected == TvRoute.ProfileSelect) {
+                                resetPlaybackRuntime()
                                 snapshot = controller.openProfileSelect()
                             } else {
                                 launchSnapshot { controller.selectSidebarRoute(selected) }
@@ -644,7 +633,7 @@ fun TvAppHost(
                                         ?: stringResource(R.string.tv_message_home_unavailable_body),
                                     action = stringResource(R.string.tv_action_sign_in),
                                     onAction = {
-                                        cookies.clear()
+                                        resetPlaybackRuntime()
                                         snapshot = controller.changeServer()
                                     },
                                 )
@@ -693,7 +682,7 @@ fun TvAppHost(
                                         ?: stringResource(R.string.tv_message_home_unavailable_body),
                                     action = stringResource(R.string.tv_action_sign_in),
                                     onAction = {
-                                        cookies.clear()
+                                        resetPlaybackRuntime()
                                         snapshot = controller.changeServer()
                                     },
                                 )
@@ -719,17 +708,20 @@ fun TvAppHost(
                                     onStartUpdateDownload = ::startUpdateDownload,
                                     onInstallUpdate = ::installUpdate,
                                     onSwitchAccount = {
+                                        resetPlaybackRuntime()
+                                        snapshot = controller.openAccountSelect()
+                                    },
+                                    onSwitchProfile = {
+                                        resetPlaybackRuntime()
                                         snapshot = controller.openProfileSelect()
                                     },
                                     onSignOut = {
                                         launchSnapshot {
-                                            val next = controller.signOut()
-                                            cookies.clear()
-                                            next
+                                            controller.signOut()
                                         }
                                     },
                                     onChangeServer = {
-                                        cookies.clear()
+                                        resetPlaybackRuntime()
                                         snapshot = controller.changeServer()
                                     },
                                 )
