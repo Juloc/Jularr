@@ -22,7 +22,7 @@ public sealed class PlexModel(
     MediaCapabilityStore capabilities,
     PlexAuthClient plex,
     SecurityEventLog securityEvents,
-    IConfiguration configuration) : PageModel
+    PlexIdentitySettingsStore settingsStore) : PageModel
 {
     private const string NonceCookie = "Jularr.Plex.Flow";
 
@@ -40,27 +40,28 @@ public sealed class PlexModel(
 
     public bool HasVerifiedIdentity { get; private set; }
     public bool PlexLinked { get; private set; }
+    private PlexIdentitySettings settings =
+        new(false, false, false, false, true, string.Empty);
+
     public bool AutoProvisionEnabled =>
-        configuration.GetValue<bool>("Plex:AutoProvisionEnabled");
-    public bool CanUsePlex =>
-        !string.IsNullOrWhiteSpace(ClientIdentifier)
-        && (LoginEnabled || LinkEnabled);
+        settings.CanLogin && settings.AutoProvisionEnabled;
+    public bool CanUsePlex => settings.CanLogin || settings.CanLink;
     public string? MessageKey { get; private set; }
+    private string ClientIdentifier => settings.ClientIdentifier;
+    private bool LoginEnabled => settings.CanLogin;
+    public bool PlexLinkEnabled => settings.CanLink;
+    private bool LinkEnabled => settings.CanLink;
 
-    private string ClientIdentifier =>
-        configuration["Plex:ClientIdentifier"]?.Trim() ?? string.Empty;
-
-    private bool LoginEnabled =>
-        configuration.GetValue<bool>("Plex:LoginEnabled");
-
-    public bool PlexLinkEnabled =>
-        configuration.GetValue<bool>("Plex:LinkEnabled");
-
-    private bool LinkEnabled => PlexLinkEnabled;
+    private async Task LoadSettingsAsync(CancellationToken cancellationToken)
+    {
+        settings = await settingsStore.GetAsync(cancellationToken);
+    }
 
     public async Task<IActionResult> OnGetAsync(
         CancellationToken cancellationToken)
     {
+        await LoadSettingsAsync(cancellationToken);
+
         if (!await accountAuth.HasOwnerAsync(cancellationToken))
         {
             return RedirectToPage("/Account/Setup");
@@ -86,6 +87,8 @@ public sealed class PlexModel(
     public async Task<IActionResult> OnPostStartAsync(
         CancellationToken cancellationToken)
     {
+        await LoadSettingsAsync(cancellationToken);
+
         if (!await accountAuth.HasOwnerAsync(cancellationToken))
         {
             return RedirectToPage("/Account/Setup");
@@ -181,6 +184,8 @@ public sealed class PlexModel(
     public async Task<IActionResult> OnGetFinishAsync(
         CancellationToken cancellationToken)
     {
+        await LoadSettingsAsync(cancellationToken);
+
         if (!CanUsePlex)
         {
             return NotFound();
@@ -280,6 +285,8 @@ public sealed class PlexModel(
     public async Task<IActionResult> OnPostCreateAsync(
         CancellationToken cancellationToken)
     {
+        await LoadSettingsAsync(cancellationToken);
+
         var attempt = await GetAttemptAsync(cancellationToken);
         if (attempt is null || attempt.VerifiedPlexAccountId is null)
         {
@@ -318,7 +325,7 @@ public sealed class PlexModel(
                 account.Id,
                 cancellationToken);
 
-            if (!configuration.GetValue("Plex:RequireApproval", true))
+            if (!settings.RequireApproval)
             {
                 await accountAuth.SetEnabledAsync(
                     account.Id,
@@ -345,6 +352,8 @@ public sealed class PlexModel(
     public async Task<IActionResult> OnGetLinkAsync(
         CancellationToken cancellationToken)
     {
+        await LoadSettingsAsync(cancellationToken);
+
         var attempt = await GetAttemptAsync(cancellationToken);
         if (attempt is null || attempt.VerifiedPlexAccountId is null
             || attempt.StartedAccountId is not null)
@@ -370,6 +379,8 @@ public sealed class PlexModel(
     public async Task<IActionResult> OnPostLinkAsync(
         CancellationToken cancellationToken)
     {
+        await LoadSettingsAsync(cancellationToken);
+
         var attempt = await GetAttemptAsync(cancellationToken);
         if (attempt is null || attempt.VerifiedPlexAccountId is null)
         {
@@ -420,6 +431,8 @@ public sealed class PlexModel(
     public async Task<IActionResult> OnPostUnlinkAsync(
         CancellationToken cancellationToken)
     {
+        await LoadSettingsAsync(cancellationToken);
+
         var accountId = OwnerAuthService.GetAccountId(User);
         if (accountId is null)
         {
