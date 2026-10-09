@@ -106,6 +106,40 @@ public sealed class ReleaseCalendarIntegrationTests
     }
 
     [TestMethod]
+    public async Task RefreshDue_UsesUniqueFollowedTargetsFromMultipleProfiles()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var watchlist = new WatchlistStore(fixture.Db);
+        var shared = new WatchlistIdentity(WatchlistMediaType.Anime, "anilist", "76001");
+        var ignored = new WatchlistIdentity(WatchlistMediaType.Anime, "anilist", "76002");
+
+        await watchlist.FollowAsync(
+            "profile-a",
+            new WatchlistDraft(shared, "Shared", Status: "RELEASING"),
+            CancellationToken.None);
+        await watchlist.FollowAsync(
+            "profile-b",
+            new WatchlistDraft(shared, "Shared", Status: null),
+            CancellationToken.None);
+        await watchlist.FollowAsync(
+            "profile-a",
+            new WatchlistDraft(ignored, "Ignored"),
+            CancellationToken.None);
+        await watchlist.UnfollowAsync("profile-a", ignored, CancellationToken.None);
+
+        fixture.Client.Responses.Enqueue(new AniListReleaseSchedule(
+            [new AniListReleaseMedia(76001, "ANIME", "RELEASING", 2026, 10, 1, null)],
+            [],
+            HasMoreAirings: false));
+
+        var result = await fixture.Refresher().RefreshDueAsync(CancellationToken.None);
+
+        Assert.AreEqual(1, result.Refreshed);
+        Assert.AreEqual(1, result.Requests);
+        CollectionAssert.AreEqual(new[] { 76001 }, fixture.Client.RequestedIds.Single().ToArray());
+    }
+
+    [TestMethod]
     public async Task ProviderFailuresKeepCachedDataAndBackOff()
     {
         await using var fixture = await Fixture.CreateAsync();
