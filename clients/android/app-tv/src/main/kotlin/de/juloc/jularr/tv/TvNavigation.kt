@@ -29,10 +29,14 @@ object TvNavigation {
     val sidebarRoutes: List<TvRoute> = listOf(TvRoute.Home, TvRoute.Watchlist)
     val bottomRoutes: List<TvRoute> = listOf(TvRoute.Settings, TvRoute.ProfileSelect)
 
-    fun initial(hasServerOrigin: Boolean, hasMultipleSessions: Boolean = false): TvNavigationState =
+    fun initial(
+        hasServerOrigin: Boolean,
+        hasMultipleSessions: Boolean = false,
+        hasSavedSessions: Boolean = false,
+    ): TvNavigationState =
         TvNavigationState(
             route = when {
-                hasMultipleSessions -> TvRoute.AccountSelect
+                hasMultipleSessions || (!hasServerOrigin && hasSavedSessions) -> TvRoute.AccountSelect
                 hasServerOrigin -> TvRoute.Login
                 else -> TvRoute.Setup
             },
