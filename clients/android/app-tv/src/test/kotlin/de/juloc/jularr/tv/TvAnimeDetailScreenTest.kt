@@ -57,8 +57,32 @@ class TvAnimeDetailScreenTest {
     }
 
     @Test
+    fun firstPlayableEpisodePrefersMainSeasonOverSpecials() {
+        val special = episode.copy(id = "special", seasonNumber = 0, number = 1)
+        val show = anime.copy(seasons = listOf(
+            Season(0, listOf(special)),
+            Season(1, listOf(episode)),
+        ))
+        assertEquals(episode.id, firstTvPlayableEpisode(show)?.id)
+        assertEquals(special.id, firstTvPlayableEpisode(show.copy(
+            seasons = listOf(Season(0, listOf(special))),
+        ))?.id)
+    }
+
+    @Test
+    fun newestIncompleteProgressIsPreferred() {
+        val old = progress().copy(updatedAtUtc = "2026-01-01T12:00:00Z")
+        val recent = progress().copy(
+            updatedAtUtc = "2026-10-09T13:00:00Z",
+            percent = 88,
+        )
+        assertEquals(88, currentAnimeResume(anime, listOf(old, recent))?.percent)
+    }
+
+    @Test
     fun completedOrUnstartedEpisodesHaveNoResumeAction() {
         assertNull(currentAnimeResume(anime, listOf(progress(percent = 0))))
         assertNull(currentAnimeResume(anime, listOf(progress(percent = 100))))
+        assertNull(currentAnimeResume(anime, listOf(progress().copy(resumePositionMs = 0L))))
     }
 }
