@@ -787,6 +787,18 @@ public sealed class PlaybackDecisionEngineTests
             PlaybackNetworkClass.Metered,
             PlaybackNetworkClassifier.Classify(IPAddress.Parse("203.0.113.9"), new PlaybackNetworkReport(SaveData: true)));
         Assert.AreEqual(PlaybackNetworkClass.Unknown, PlaybackNetworkClassifier.Classify(null, null));
+        Assert.AreEqual(
+            PlaybackNetworkClass.Unknown,
+            PlaybackNetworkClassifier.Classify(IPAddress.Parse("10.0.0.5"), null, hasUntrustedForwardedFor: true));
+        Assert.AreEqual(
+            PlaybackNetworkClass.Unknown,
+            PlaybackNetworkClassifier.Classify(IPAddress.Parse("203.0.113.9"), null, hasUntrustedForwardedFor: true));
+        Assert.AreEqual(
+            PlaybackNetworkClass.Metered,
+            PlaybackNetworkClassifier.Classify(
+                IPAddress.Parse("192.168.1.20"),
+                new PlaybackNetworkReport(SaveData: true),
+                hasUntrustedForwardedFor: true));
     }
 
     [TestMethod]
