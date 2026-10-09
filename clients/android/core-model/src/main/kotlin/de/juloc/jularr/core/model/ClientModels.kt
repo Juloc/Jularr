@@ -144,6 +144,23 @@ data class WatchlistItem(
     val availability: String,
     val detailsUrl: String?,
     val addedAtUtc: String?,
+    val localMediaId: String? = null,
+    val status: String? = null,
+    val format: String? = null,
+)
+
+data class ClientPlaybackPreferences(
+    val autoplayNext: Boolean,
+    val preferredAudioLanguage: String?,
+    val preferredSubtitleLanguage: String?,
+    val defaultPlaybackSpeed: Double,
+)
+
+data class ClientPlaybackPreferencesUpdate(
+    val autoplayNext: Boolean? = null,
+    val preferredAudioLanguage: String? = null,
+    val preferredSubtitleLanguage: String? = null,
+    val defaultPlaybackSpeed: Double? = null,
 )
 
 data class AnimeDetail(
