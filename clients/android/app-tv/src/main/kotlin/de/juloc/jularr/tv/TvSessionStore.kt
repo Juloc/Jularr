@@ -16,8 +16,6 @@ data class TvSavedSession(
     val id: String,
     val serverOrigin: String,
     val userName: String,
-    val role: String? = null,
-    val profileId: String? = null,
     val cookies: Map<String, String> = emptyMap(),
     val lastActiveAtMillis: Long = System.currentTimeMillis(),
 )
@@ -66,8 +64,6 @@ class TvSessionStore(context: Context) {
                         id = obj.getString("id"),
                         serverOrigin = obj.getString("serverOrigin"),
                         userName = obj.getString("userName"),
-                        role = obj.optString("role").takeIf { it.isNotBlank() },
-                        profileId = obj.optString("profileId").takeIf { it.isNotBlank() },
                         cookies = cookies,
                         lastActiveAtMillis = obj.optLong("lastActiveAtMillis", System.currentTimeMillis()),
                     ),
@@ -144,8 +140,6 @@ class TvSessionStore(context: Context) {
             obj.put("id", session.id)
             obj.put("serverOrigin", session.serverOrigin)
             obj.put("userName", session.userName)
-            obj.put("role", session.role ?: "")
-            obj.put("profileId", session.profileId ?: "")
             obj.put("lastActiveAtMillis", session.lastActiveAtMillis)
 
             val cookieObj = JSONObject()
