@@ -170,7 +170,8 @@ class TvAppController(
     suspend fun restoreConnection(): TvAppSnapshot =
         runBusy {
             val sessions = sessionStore?.getSessions().orEmpty()
-            val origin = settings.origin
+            val activeSession = sessionStore?.getActiveSession()
+            val origin = activeSession?.serverOrigin ?: settings.origin
                 ?: return@runBusy copy(
                     navigation = TvNavigation.changeServer(),
                     error = null,
@@ -186,7 +187,6 @@ class TvAppController(
                 )
             }
 
-            val activeSession = sessionStore?.getActiveSession()
             if (activeSession != null) {
                 cookiesStore?.loadCookies(activeSession.cookies)
                 val signedIn = runCatching { flow.restoreSession(capabilities) }.getOrNull()
