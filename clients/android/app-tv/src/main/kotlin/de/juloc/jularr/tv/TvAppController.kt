@@ -11,6 +11,8 @@ import de.juloc.jularr.core.model.DevicePairingPollResult
 import de.juloc.jularr.core.model.DevicePairingSession
 import de.juloc.jularr.core.model.PlaybackHistoryItem
 import de.juloc.jularr.core.model.WatchlistItem
+import de.juloc.jularr.core.model.TvPlaybackPreferences
+import de.juloc.jularr.core.model.TvPlaybackPreferencesUpdate
 
 data class TvAppSnapshot(
     val navigation: TvNavigationState,
@@ -26,6 +28,7 @@ data class TvAppSnapshot(
      */
     val activityUsesContinueWatchingFallback: Boolean = false,
     val watchlist: List<WatchlistItem> = emptyList(),
+    val playbackPreferences: TvPlaybackPreferences? = null,
     val anime: AnimeDetail? = null,
     val episodePage: TvEpisodePageData? = null,
     val episode: TvEpisodeBundle? = null,
@@ -94,6 +97,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
+                playbackPreferences = null,
                 storageDecision = null,
                 error = null,
             )
@@ -144,6 +148,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
+                playbackPreferences = null,
                 storageDecision = null,
                 error = null,
             )
@@ -207,6 +212,7 @@ class TvAppController(
                 library = signedIn.library,
                 continueWatching = signedIn.continueWatching,
                 watchlist = emptyList(),
+                playbackPreferences = null,
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 anime = null,
@@ -247,6 +253,14 @@ class TvAppController(
                     },
                 )
 
+                TvRoute.Settings -> {
+                    val preferences = runCatching { flow.loadPlaybackPreferences() }
+                    copy(
+                        playbackPreferences = preferences.getOrNull(),
+                        error = preferences.exceptionOrNull()?.message,
+                    )
+                }
+
                 TvRoute.Watchlist -> copy(
                     watchlist = if (capabilities?.features?.watchlist == true) {
                         flow.loadWatchlist()
@@ -264,6 +278,14 @@ class TvAppController(
                 episodePage = null,
                 episode = null,
                 storageDecision = null,
+                error = if (route == TvRoute.Settings) withContent.error else null,
+            )
+        }
+
+    suspend fun changePlaybackPreferences(update: TvPlaybackPreferencesUpdate): TvAppSnapshot =
+        runBusy {
+            copy(
+                playbackPreferences = flow.updatePlaybackPreferences(update),
                 error = null,
             )
         }
@@ -454,6 +476,7 @@ class TvAppController(
                 activity = emptyList(),
                 activityUsesContinueWatchingFallback = false,
                 watchlist = emptyList(),
+                playbackPreferences = null,
                 anime = null,
                 episodePage = null,
                 episode = null,
