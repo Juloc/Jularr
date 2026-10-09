@@ -100,6 +100,11 @@ public sealed record VideoEpisodeFlowSnapshot(
     Guid? PreviousWorkEpisodeId,
     Guid? NextWorkEpisodeId);
 
+public sealed record VideoResumeDemandCount(
+    long WorkId,
+    Guid? WorkEpisodeId,
+    long ResumeProfiles);
+
 public sealed record MediaPlaybackHistoryItem(
     Guid Id,
     WorkMediaType MediaType,
@@ -160,6 +165,49 @@ public sealed class VideoProgressService(AppDbContext db)
                 workIds.ToArray())
             .ToListAsync(cancellationToken);
         return [.. rows.Select(ToSnapshot)];
+    }
+
+    public async Task<IReadOnlyList<VideoResumeDemandCount>> GetRecentResumeDemandAsync(
+        IReadOnlyCollection<long> workIds,
+        DateTime sinceUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workIds);
+        if (sinceUtc.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException("The cutoff must be UTC.", nameof(sinceUtc));
+        }
+
+        var ids = workIds.Distinct().ToArray();
+        if (ids.Length > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(workIds));
+        }
+
+        if (ids.Length == 0)
+        {
+            return [];
+        }
+
+        return await db.Database.SqlQueryRaw<VideoResumeDemandCount>(
+                """
+                SELECT p."WorkId",
+                       p."WorkEpisodeId",
+                       COUNT(DISTINCT p."ProfileId") AS "ResumeProfiles"
+                FROM "MediaProgress" p
+                WHERE p."WorkId" = ANY({0})
+                  AND p."UpdatedAt" >= {1}
+                  AND p."IsCompleted" = FALSE
+                  AND p."PositionMs" >= {2}
+                  AND (p."DurationMs" IS NULL OR p."PositionMs" < p."DurationMs")
+                GROUP BY p."WorkId", p."WorkEpisodeId"
+                ORDER BY "ResumeProfiles" DESC, p."WorkId", p."WorkEpisodeId"
+                LIMIT 200
+                """,
+                ids,
+                sinceUtc,
+                MinimumResumeMs)
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<MediaProgressSnapshot?> UpdateAsync(
