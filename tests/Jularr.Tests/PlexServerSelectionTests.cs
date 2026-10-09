@@ -125,7 +125,10 @@ public sealed class PlexServerSelectionTests
             var store = new PlexServerGrantStore(
                 new EphemeralDataProtectionProvider(), TimeProvider.System,
                 directory);
-            using var http = CreateClient("different-machine-999");
+            var requested = new List<string>();
+            using var http = CreateClient(
+                "different-machine-999",
+                request => requested.Add(request.RequestUri!.AbsolutePath));
             var picker = new PlexServerSelectionService(
                 new PlexLibraryClient(http), store);
 
@@ -138,6 +141,8 @@ public sealed class PlexServerSelectionTests
                     Admin(), Candidate(), HttpsPlexServer, ["1"],
                     "jularr-client", CancellationToken.None));
 
+            CollectionAssert.AreEqual(
+                new[] { "/identity", "/identity" }, requested);
             Assert.AreEqual(0, (await store.ListAsync()).Count);
         }
         finally
@@ -233,8 +238,11 @@ public sealed class PlexServerSelectionTests
             "super-private-server-token",
             [new PlexServerConnection(HttpsPlexServer, true, false)]);
 
-    private static HttpClient CreateClient(string machineId = "machine-123456") => new(new Handler(request =>
+    private static HttpClient CreateClient(
+        string machineId = "machine-123456",
+        Action<HttpRequestMessage>? onRequest = null) => new(new Handler(request =>
     {
+        onRequest?.Invoke(request);
         Assert.AreEqual(HttpsPlexServer.Host, request.RequestUri!.Host);
         Assert.AreEqual("super-private-server-token",
             request.Headers.GetValues("X-Plex-Token").Single());
