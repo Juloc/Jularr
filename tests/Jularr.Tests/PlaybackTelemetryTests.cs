@@ -196,6 +196,67 @@ public sealed class PlaybackTelemetryTests
     }
 
     [TestMethod]
+    public async Task ManualWanBudget_OnlyCapsRemoteConcurrentPlaybackPlans()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var media = await fixture.AddMediaAsync("episode.mkv", new byte[4096]);
+        fixture.Runner.Returns(media.Path, MediaProbeFixtures.HevcTenBitHdrMultiAudio);
+        var clock = new ManualTimeProvider(s_start);
+        var sessions = new PlaybackStreamSessionStore(clock);
+        var kit = PlaybackServerTestKit.Create(clock);
+        try
+        {
+            var settings = await kit.Settings.SaveAsync(
+                PlaybackTranscodingSettings.Default with
+                {
+                    HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
+                    WanUploadBudgetKbps = 10_000
+                });
+            Assert.IsTrue(settings.Succeeded);
+
+            var planner = new PlaybackPlanService(fixture.Db, fixture.Inventory, sessions, kit.Capabilities);
+            var remote = new PlaybackPlanInput(
+                null,
+                "web",
+                "Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36",
+                IPAddress.Parse("203.0.113.9"),
+                Network: new PlaybackNetworkReport(ThroughputKbps: 30_000));
+
+            var first = (await planner.PlanAsync(media.EpisodeId!.Value, "viewer-one", remote, CancellationToken.None))!;
+            Assert.AreEqual(8_500, first.Plan.Quality.LimitKbps);
+            Assert.AreEqual(PlaybackLimitSource.ServerEgress, first.Plan.Quality.LimitSource);
+
+            var second = (await planner.PlanAsync(media.EpisodeId.Value, "viewer-two", remote, CancellationToken.None))!;
+            Assert.AreEqual(4_250, second.Plan.Quality.LimitKbps);
+            Assert.AreEqual(PlaybackLimitSource.ServerEgress, second.Plan.Quality.LimitSource);
+
+            var local = (await planner.PlanAsync(
+                media.EpisodeId.Value,
+                "viewer-local",
+                remote with { RemoteAddress = IPAddress.Loopback },
+                CancellationToken.None))!;
+            Assert.IsNull(local.Plan.Quality.LimitKbps);
+            Assert.AreEqual(PlaybackNetworkClass.Local, local.Plan.Quality.Network);
+
+            sessions.ReportTelemetry(first.Session!.Id, "viewer-one",
+                Report(Update(state: PlaybackClientState.Paused), clock.GetUtcNow()));
+            var third = (await planner.PlanAsync(media.EpisodeId.Value, "viewer-three", remote, CancellationToken.None))!;
+            Assert.AreEqual(4_250, third.Plan.Quality.LimitKbps);
+
+            clock.Advance(TimeSpan.FromSeconds(31));
+            var fresh = (await planner.PlanAsync(media.EpisodeId.Value, "viewer-four", remote, CancellationToken.None))!;
+            Assert.AreEqual(8_500, fresh.Plan.Quality.LimitKbps);
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public void AFloodOfReportsStillGivesTheRightEvidence()
     {
         var telemetry = new PlaybackSessionTelemetry();
