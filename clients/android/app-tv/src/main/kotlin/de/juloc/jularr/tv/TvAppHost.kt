@@ -580,7 +580,7 @@ fun TvAppHost(
 
         TvRoute.AccountSelect -> TvAccountSelectScreen(
             sessions = sessionStore?.getSessions().orEmpty(),
-            activeSessionId = sessionStore?.getActiveSession()?.id,
+            activeSessionId = if (snapshot.account != null) sessionStore?.getActiveSession()?.id else null,
             error = snapshot.error,
             onSelectSession = { session ->
                 resetPlaybackRuntime()
