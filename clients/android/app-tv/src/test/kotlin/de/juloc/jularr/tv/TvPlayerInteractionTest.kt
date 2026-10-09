@@ -28,6 +28,14 @@ class TvPlayerInteractionTest {
     }
 
     @Test
+    fun dedicatedMediaKeysDoNotToggleTheOppositeState() {
+        val state = TvPlayerUiState(controlsVisible = true)
+        assertEquals(listOf(TvPlayerEffect.PlayPlayback), TvPlayerInteraction.mediaPlay(state).effects)
+        assertEquals(listOf(TvPlayerEffect.PauseMediaPlayback), TvPlayerInteraction.mediaPause(state).effects)
+        assertEquals(listOf(TvPlayerEffect.TogglePlayback), TvPlayerInteraction.mediaPlayPause(state).effects)
+    }
+
+    @Test
     fun enteringLearningPausesOnlyWhenPlaybackWasRunning() {
         val playing = TvPlayerInteraction.learnCurrentLine(
             TvPlayerUiState(controlsVisible = true),
