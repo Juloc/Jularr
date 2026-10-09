@@ -1,0 +1,83 @@
+@page
+@model Jularr.Web.Pages.Account.PlexModel
+@{
+    ViewData["Title"] = "Plex account";
+    var linking = User.Identity?.IsAuthenticated == true;
+}
+
+<section class="auth-card">
+    <div class="auth-brand">
+        <partial name="_AppBrandMark" />
+    </div>
+
+    @if (Model.HasVerifiedIdentity)
+    {
+        <h1>Plex verified</h1>
+        <p>Choose how to use this Plex identity with Jularr.</p>
+
+        @if (linking)
+        {
+            <form method="post" asp-page-handler="Link" class="form-stack">
+                <input type="hidden" asp-for="Flow" />
+                <label asp-for="LocalPassword">
+                    Confirm your Jularr password
+                    <input asp-for="LocalPassword" type="password" autocomplete="current-password" />
+                </label>
+                <button class="button button-primary" type="submit">Link Plex to this Jularr account</button>
+            </form>
+        }
+        else
+        {
+            <p>
+                <a asp-page="/Account/Login"
+                   asp-route-returnUrl="@Url.Page("/Account/Plex", "Link", new { flow = Model.Flow })">
+                    I already have a Jularr account
+                </a>
+            </p>
+
+            @if (Model.AutoProvisionEnabled)
+            {
+                <form method="post" asp-page-handler="Create" class="form-stack">
+                    <input type="hidden" asp-for="Flow" />
+                    <label asp-for="UserName">
+                        New Jularr user name
+                        <input asp-for="UserName" maxlength="80" autocomplete="username" />
+                    </label>
+                    <button class="button button-primary" type="submit">Create my Jularr account</button>
+                </form>
+            }
+        }
+    }
+    else
+    {
+        <h1>@(linking ? "Link Plex to Jularr" : "Sign in with Plex")</h1>
+        <p>Plex authentication is handled by Plex. Jularr never asks for your Plex password.</p>
+        <form method="post" asp-page-handler="Start" class="form-stack">
+            <input type="hidden" asp-for="ReturnUrl" />
+            @if (linking)
+            {
+                <label asp-for="LocalPassword">
+                    Confirm your Jularr password
+                    <input asp-for="LocalPassword" type="password" autocomplete="current-password" />
+                </label>
+            }
+            <button class="button button-primary" type="submit">Continue with Plex</button>
+        </form>
+
+        @if (Model.Flow != Guid.Empty)
+        {
+            <p>
+                <a asp-page-handler="Finish" asp-route-flow="@Model.Flow">
+                    Check Plex authentication again
+                </a>
+            </p>
+        }
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.Message))
+    {
+        <div role="status" class="validation">@Model.Message</div>
+    }
+
+    <p><a asp-page="/Account/Login">Back to Jularr login</a></p>
+</section>
