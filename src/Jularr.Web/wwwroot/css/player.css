@@ -750,6 +750,8 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 
 /* A choice opened from the bar (Subtitles, Audio, Quality, Speed) lists its options instead of the whole panel; the rows that
    are not that choice are hidden by player-chrome.js and the options are built from the same select, so nothing is stored twice. */
+.player-options-group { display: grid; gap: 10px; min-width: 0; }
+.player-options-heading { font-size: 12px; font-weight: 700; color: var(--player-muted); }
 .player-options { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .player-option {
     min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px;
