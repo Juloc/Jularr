@@ -55,7 +55,7 @@ fun TvWatchlistScreen(
             content = {},
         )
 
-        entries.isEmpty() -> TvCenteredPanel(
+        entries.isEmpty() && page == 1 -> TvCenteredPanel(
             title = stringResource(R.string.tv_watchlist_title),
             description = stringResource(R.string.tv_watchlist_empty),
             content = {},
