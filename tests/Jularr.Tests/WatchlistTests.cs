@@ -95,7 +95,7 @@ public sealed class WatchlistTests
         Assert.AreEqual(ReleaseLocalState.Following, release.Local.State);
         Assert.IsNull(release.Local.Monitored);
         Assert.IsFalse(release.Local.InLibrary);
-        Assert.AreEqual($"/Watchlist#target-{followed.Identity.StableId:D}", release.DetailsUrl);
+        Assert.AreEqual(followed.Identity.WatchlistUrl, release.DetailsUrl);
         CollectionAssert.AreEquivalent(
             new[] { ReleaseMediaType.Anime, ReleaseMediaType.Manga, ReleaseMediaType.LightNovel },
             source.MediaTypes.ToArray(),
