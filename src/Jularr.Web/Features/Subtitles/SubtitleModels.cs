@@ -31,4 +31,19 @@ public sealed class SubtitleCue
     public string Text { get; set; } = "";
 }
 
-public sealed record SubtitleCueData(int StartMs, int EndMs, string Text);
+public sealed record SubtitleCueData(
+    int StartMs,
+    int EndMs,
+    string Text,
+    SubtitleCuePresentation? Presentation = null);
+
+public sealed record SubtitleCuePresentation(
+    int? Alignment = null,
+    double? XPercent = null,
+    double? YPercent = null,
+    int? Layer = null,
+    string? FontFamily = null,
+    double? FontSize = null,
+    bool? Bold = null,
+    bool? Italic = null,
+    string? Color = null);
