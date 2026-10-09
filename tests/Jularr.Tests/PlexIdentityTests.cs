@@ -79,6 +79,29 @@ public sealed class PlexIdentityTests
     }
 
     [TestMethod]
+    public async Task Unlink_RequiresAnotherWorkingSignInMethod()
+    {
+        await WithDatabaseAsync(async (db, service) =>
+        {
+            var local = await service.CreateUserAsync(
+                "local-user", "a sufficiently long password");
+            await service.LinkExternalIdentityAsync(local.Id, "plex", "abc");
+
+            await service.UnlinkExternalIdentityAsync(local.Id, "plex");
+
+            Assert.IsNull(await service.GetByExternalIdentityAsync("plex", "abc"));
+            Assert.IsNotNull(await service.ValidateCredentialsAsync(
+                "local-user", "a sufficiently long password"));
+
+            var external = await service.CreateExternalAccountAsync(
+                "plex", "only-plex", "plex-only", isEnabled: true);
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+                () => service.UnlinkExternalIdentityAsync(external.Id, "plex"));
+            Assert.AreEqual(1, await db.AccountLoginIdentities.CountAsync());
+        });
+    }
+
+    [TestMethod]
     public async Task DisabledExternalAccount_CannotSignIn()
     {
         await WithDatabaseAsync(async (_, service) =>
