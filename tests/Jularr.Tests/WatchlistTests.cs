@@ -395,15 +395,17 @@ public sealed class WatchlistTests
         await store.UnfollowAsync("profile-a", hidden.Identity, CancellationToken.None);
         await store.FollowAsync("profile-b", foreign, CancellationToken.None);
 
-        var selected = new[]
-        {
-            inherited.Identity,
-            hidden.Identity,
-            explicitOnly.Identity,
-            foreign.Identity,
-            Draft("missing", "Not followed").Identity,
-            inherited.Identity
-        };
+        // Force a second SQL batch: the matching keys come after more than 100 misses.
+        var selected = Enumerable.Range(0, PageRequest.MaximumPageSize + 5)
+            .Select(i => Draft("missing-" + i, "Not followed").Identity)
+            .Concat([
+                inherited.Identity,
+                hidden.Identity,
+                explicitOnly.Identity,
+                foreign.Identity,
+                inherited.Identity
+            ])
+            .ToArray();
         var result = await store.GetFollowedFranchiseIdsForKeysAsync(
             CurrentAccountContext.ForProfile("profile-a"),
             selected,
