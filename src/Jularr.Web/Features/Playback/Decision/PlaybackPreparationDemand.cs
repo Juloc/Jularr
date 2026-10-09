@@ -73,7 +73,7 @@ public static class PlaybackPreparationDemand
             return new(PlaybackPreparationVerdict.DemandTooWeak, 0, 0);
         }
 
-        var independentSignals = demand.ResumeProfiles + demand.UpNextProfiles;
+        var independentSignals = (long)demand.ResumeProfiles + demand.UpNextProfiles;
         if (independentSignals < 2 && demand.RecentLiveTranscodes < 3)
         {
             return new(PlaybackPreparationVerdict.DemandTooWeak, 0, 0);
@@ -101,7 +101,7 @@ public static class PlaybackPreparationDemand
         }
 
         var saved = expectedReuses * cost.SavedLiveEncodingMinutesPerView;
-        return expectedReuses >= 1.5 && saved >= cost.PreparationMinutes * 1.5
+        return double.IsFinite(saved) && expectedReuses >= 1.5 && saved >= cost.PreparationMinutes * 1.5
             ? new(PlaybackPreparationVerdict.Eligible, expectedReuses, saved)
             : new(PlaybackPreparationVerdict.InsufficientBenefit, expectedReuses, saved);
     }
