@@ -62,7 +62,12 @@ public sealed class PlexIdentityProviderSettings(
                     "requireApproval",
                     "admin.providers.plex.approval",
                     "admin.providers.plex.approvalHint",
-                    settings.RequireApproval)
+                    settings.RequireApproval),
+                new ProviderOptionField(
+                    "mediaConnectionEnabled",
+                    "admin.providers.plex.media",
+                    "admin.providers.plex.mediaHint",
+                    settings.MediaConnectionEnabled)
             ]
         };
     }
@@ -83,6 +88,7 @@ public sealed class PlexIdentityProviderSettings(
             Selected(fields, "linkEnabled"),
             Selected(fields, "autoProvisionEnabled"),
             Selected(fields, "requireApproval"),
+            Selected(fields, "mediaConnectionEnabled"),
             cancellationToken);
 
         return ProviderFeedback.Saved;
@@ -128,6 +134,7 @@ public sealed class PlexIdentityProviderSettings(
                 false,
                 false,
                 settings.RequireApproval,
+                false,
                 cancellationToken);
         }
     }
