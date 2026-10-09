@@ -280,14 +280,15 @@ public sealed class PlexModel(
 
         attempt.VerifiedPlexAccountId = verified.AccountId;
         await db.SaveChangesAsync(cancellationToken);
+        await mediaConnections.SaveVerifiedAsync(
+            accountId, verified.AccountId,
+            null, verified.AccessToken, cancellationToken);
+
         if (!await ConsumeAttemptAsync(attempt, cancellationToken))
         {
             return BadRequest();
         }
 
-        await mediaConnections.SaveVerifiedAsync(
-            accountId, verified.AccountId,
-            null, verified.AccessToken, cancellationToken);
         return RedirectToPage("/Account/Plex");
     }
 
