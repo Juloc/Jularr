@@ -1,0 +1,168 @@
+{
+  "capturedFrom": "GitHub code search default branch dev (2026-10-10)",
+  "rows": [
+    {
+      "term": "ExecuteSqlInterpolated",
+      "total": 7,
+      "paths": [
+        "src/Jularr.Web/Features/Monitoring/MonitoringCommands.cs",
+        "src/Jularr.Web/Features/Discovery/DiscoverySnapshotStore.cs",
+        "src/Jularr.Web/Features/Manga/MangaRepository.cs",
+        "src/Jularr.Web/Features/ReadingAcquisition/MangaVersions.cs",
+        "src/Jularr.Web/Features/Music/MusicLibraryService.cs",
+        "src/Jularr.Web/Features/MediaCore/WorkService.cs",
+        "src/Jularr.Web/Features/Subtitles/SubtitleImportService.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "DbConnection",
+      "total": 27,
+      "paths": [
+        "src/Jularr.Web/Features/Events/EventLogStore.cs",
+        "src/Jularr.Web/Features/Ai/AiModelCatalogStore.cs",
+        "src/Jularr.Web/Features/Performance/DatabaseDiagnostics.cs",
+        "src/Jularr.Web/Features/Mapping/MappingAuditStore.cs",
+        "src/Jularr.Web/Features/Franchises/MediaRelationStore.cs",
+        "src/Jularr.Web/Features/Notifications/NotificationSubscriptionStore.cs",
+        "src/Jularr.Web/Features/Appearance/InstanceAppearanceSettingsStore.cs",
+        "src/Jularr.Web/Features/Artwork/MediaArtworkAssetStore.cs",
+        "src/Jularr.Web/Features/Home/HomeLayoutStore.cs",
+        "src/Jularr.Web/Features/Ai/AiUsageStore.cs",
+        "src/Jularr.Web/Features/Branding/InstanceBrandingStore.cs",
+        "src/Jularr.Web/Features/Presentation/PresentationGroupStore.cs",
+        "src/Jularr.Web/Features/Localization/UiTranslationCatalogStore.cs",
+        "src/Jularr.Web/Features/Notifications/NotificationStore.cs",
+        "src/Jularr.Web/Features/Appearance/ProfileAppearanceStore.cs",
+        "src/Jularr.Web/Features/Franchises/FranchiseStore.cs",
+        "src/Jularr.Web/Features/Calendar/ReleaseCalendarCacheStore.cs",
+        "src/Jularr.Web/Features/Mapping/ProviderRoleAssignmentStore.cs",
+        "src/Jularr.Web/Features/Watchlist/WatchlistStore.cs",
+        "src/Jularr.Web/Features/Operations/OperationStore.cs",
+        "src/Jularr.Web/Features/ChapterArtwork/ChapterArtworkStore.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.cs",
+        "src/Jularr.Web/Features/Auth/AdminAccountService.cs",
+        "src/Jularr.Web/Features/Learning/LearningConfiguration.cs",
+        "src/Jularr.Web/Features/Search/MediaSearchQuery.cs",
+        "src/Jularr.Web/Features/Manga/MangaRepository.cs",
+        "src/Jularr.Web/Features/Calendar/AniListReleaseEventSource.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "BeginTransaction",
+      "total": 24,
+      "paths": [
+        "src/Jularr.Web/Data/DatabaseTransactions.cs",
+        "src/Jularr.Web/Pages/Admin/Capabilities/Manual.cshtml.cs",
+        "src/Jularr.Web/Features/Auth/OwnerAuthService.cs",
+        "src/Jularr.Web/Features/Ai/AiUsageStore.cs",
+        "src/Jularr.Web/Features/Novels/NovelVolumeContent.cs",
+        "src/Jularr.Web/Features/Manga/MangaRepository.cs",
+        "src/Jularr.Web/Features/MediaCore/WorkService.cs",
+        "src/Jularr.Web/Features/Books/BookCatalogPdfAnalysis.cs",
+        "src/Jularr.Web/Features/Calendar/ReleaseCalendarCacheStore.cs",
+        "src/Jularr.Web/Features/Acquisition/Wanted/RequestIntent.cs",
+        "src/Jularr.Web/Features/Novels/NovelEpubImportService.cs",
+        "src/Jularr.Web/Features/Metadata/WorkMetadataRefresher.cs",
+        "src/Jularr.Web/Features/Presentation/PresentationGroupStore.cs",
+        "src/Jularr.Web/Features/Library/MediaInventoryService.cs",
+        "src/Jularr.Web/Features/Performance/DatabaseDiagnostics.cs",
+        "src/Jularr.Web/Features/Storage/LibraryRootRoutingService.cs",
+        "src/Jularr.Web/Features/Subtitles/SubtitleImportService.cs",
+        "src/Jularr.Web/Features/Localization/UiTranslationCatalogStore.cs",
+        "src/Jularr.Web/Features/Learning/Courses/LearningCourseStore.cs",
+        "src/Jularr.Web/Features/Acquisition/Naming/AnimeRenameService.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.Queue.cs",
+        "src/Jularr.Web/Features/Media/Optimization/MediaContainerOptimizer.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.cs",
+        "src/Jularr.Web/Features/Storage/Reconciliation/LibraryReconciliationPlanService.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "ExecuteNonQueryAsync",
+      "total": 23,
+      "paths": [
+        "src/Jularr.Web/Features/Home/HomeLayoutStore.cs",
+        "src/Jularr.Web/Features/Appearance/ProfileAppearanceStore.cs",
+        "src/Jularr.Web/Features/Notifications/NotificationStore.cs",
+        "src/Jularr.Web/Features/Franchises/FranchiseStore.cs",
+        "src/Jularr.Web/Features/Presentation/PresentationGroupStore.cs",
+        "src/Jularr.Web/Features/Ai/AiModelCatalogStore.cs",
+        "src/Jularr.Web/Features/Mapping/MappingAuditStore.cs",
+        "src/Jularr.Web/Features/Events/EventLogStore.cs",
+        "src/Jularr.Web/Features/Learning/LearningConfiguration.cs",
+        "src/Jularr.Web/Features/Ai/AiUsageStore.cs",
+        "src/Jularr.Web/Features/Operations/OperationStore.cs",
+        "src/Jularr.Web/Features/Localization/UiTranslationCatalogStore.cs",
+        "src/Jularr.Web/Features/Franchises/MediaRelationStore.cs",
+        "src/Jularr.Web/Features/Artwork/MediaArtworkAssetStore.cs",
+        "src/Jularr.Web/Features/Mapping/ProviderRoleAssignmentStore.cs",
+        "src/Jularr.Web/Features/Branding/InstanceBrandingStore.cs",
+        "src/Jularr.Web/Features/Appearance/InstanceAppearanceSettingsStore.cs",
+        "src/Jularr.Web/Features/Watchlist/WatchlistStore.cs",
+        "src/Jularr.Web/Features/ChapterArtwork/ChapterArtworkStore.cs",
+        "src/Jularr.Web/Features/Notifications/NotificationSubscriptionStore.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.cs",
+        "src/Jularr.Web/Features/Performance/DatabaseDiagnostics.cs",
+        "src/Jularr.Web/Features/Calendar/ReleaseCalendarCacheStore.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "ExecuteReaderAsync",
+      "total": 28,
+      "paths": [
+        "src/Jularr.Web/Features/Auth/AdminAccountService.cs",
+        "src/Jularr.Web/Features/Ai/AiModelCatalogStore.cs",
+        "src/Jularr.Web/Features/Home/HomeLayoutStore.cs",
+        "src/Jularr.Web/Features/Branding/InstanceBrandingStore.cs",
+        "src/Jularr.Web/Features/Mapping/MappingAuditStore.cs",
+        "src/Jularr.Web/Features/Events/EventLogStore.cs",
+        "src/Jularr.Web/Features/Watchlist/WatchlistStore.cs",
+        "src/Jularr.Web/Features/Franchises/FranchiseStore.cs",
+        "src/Jularr.Web/Features/Operations/OperationStore.cs",
+        "src/Jularr.Web/Features/Ai/AiUsageStore.cs",
+        "src/Jularr.Web/Features/ChapterArtwork/ChapterArtworkStore.cs",
+        "src/Jularr.Web/Features/Franchises/MediaRelationStore.cs",
+        "src/Jularr.Web/Features/Artwork/MediaArtworkAssetStore.cs",
+        "src/Jularr.Web/Features/Presentation/PresentationGroupStore.cs",
+        "src/Jularr.Web/Features/Search/MediaSearchQuery.cs",
+        "src/Jularr.Web/Features/Appearance/InstanceAppearanceSettingsStore.cs",
+        "src/Jularr.Web/Features/Manga/MangaRepository.cs",
+        "src/Jularr.Web/Features/Localization/UiTranslationCatalogStore.cs",
+        "src/Jularr.Web/Features/Calendar/ReleaseCalendarCacheStore.cs",
+        "src/Jularr.Web/Features/Appearance/ProfileAppearanceStore.cs",
+        "src/Jularr.Web/Features/Notifications/NotificationSubscriptionStore.cs",
+        "src/Jularr.Web/Features/Notifications/NotificationStore.cs",
+        "src/Jularr.Web/Features/Calendar/AniListReleaseEventSource.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.Queue.cs",
+        "src/Jularr.Web/Features/Learning/LearningConfiguration.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.cs",
+        "src/Jularr.Web/Features/Performance/DatabaseDiagnostics.cs",
+        "src/Jularr.Web/Features/Mapping/ProviderRoleAssignmentStore.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "DbSet<",
+      "total": 1,
+      "paths": [
+        "src/Jularr.Web/Data/AppDbContext.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "SqlParams",
+      "total": 4,
+      "paths": [
+        "src/Jularr.Web/Data/SqlParams.cs",
+        "src/Jularr.Web/Data/Pagination.cs",
+        "src/Jularr.Web/Features/Watchlist/WatchlistStore.cs",
+        "src/Jularr.Web/Features/Franchises/FranchiseStore.cs"
+      ],
+      "truncated": false
+    }
+  ]
+}
