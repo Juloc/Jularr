@@ -22,6 +22,10 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
     protected abstract ServicePermission GetPermission(TParameters parameters, Type resultType);
     protected abstract ResourceTarget? GetResource(TParameters parameters);
     protected virtual IReadOnlyList<ResourceTarget> GetAdditionalResources(TParameters parameters) => [];
+    protected virtual void ValidateParameters(TParameters parameters)
+    {
+    }
+
     protected virtual IsolationLevel? GetTransaction(TParameters parameters) => null;
     protected abstract Task<IServiceOutput> ExecuteCoreAsync(TParameters parameters, TData data, Type resultType, ServiceContext context, CancellationToken cancellationToken);
 
@@ -48,6 +52,7 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
 
         var modules = GetInstanceModules(parameters) ?? throw new InvalidOperationException("The module requirement cannot be null.");
         await _runtime.Gate.RequireModulesAsync(modules, cancellationToken);
+        ValidateParameters(parameters);
 
         if (!definition.ResultTypes.Contains(resultType))
         {
