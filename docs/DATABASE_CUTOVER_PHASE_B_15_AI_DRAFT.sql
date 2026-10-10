@@ -77,6 +77,16 @@ CREATE TABLE "AiTaskRoutes" (
 
 -- Profile-owned personal AI configuration is separate from instance-wide
 -- AiServerProviders. Never store a raw personal API key in a relational row.
+CREATE TABLE "AiTranslationModeTypes" (
+    "Id" smallint NOT NULL,
+    "Key" text NOT NULL,
+    CONSTRAINT "PK_AiTranslationModeTypes" PRIMARY KEY ("Id"),
+    CONSTRAINT "UX_AiTranslationModeTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_AiTranslationModeTypes_Id" CHECK ("Id" BETWEEN 0 AND 255)
+);
+INSERT INTO "AiTranslationModeTypes" ("Id","Key") VALUES
+    (0,'efficient'),(1,'quality'),(2,'maximum');
+
 CREATE TABLE "AiProfileSettings" (
     "ProfileId" bigint NOT NULL,
     "ProviderKey" text NOT NULL DEFAULT 'server',
@@ -84,7 +94,7 @@ CREATE TABLE "AiProfileSettings" (
     "ModelId" text,
     "ImageModelId" text,
     "CredentialStorageKey" text,
-    "TranslationMode" smallint NOT NULL DEFAULT 0,
+    "AiTranslationModeTypeId" smallint NOT NULL DEFAULT 0,
     "ReasoningEffort" text,
     "ServiceTier" text,
     "MaxOutputTokens" integer,
@@ -102,7 +112,7 @@ CREATE TABLE "AiProfileSettings" (
     CONSTRAINT "FK_AiProfileSettings_Profiles"
         FOREIGN KEY ("ProfileId") REFERENCES "Profiles" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "CK_AiProfileSettings_Provider" CHECK ("ProviderKey" IN ('server','openai-compatible')),
-    CONSTRAINT "CK_AiProfileSettings_TranslationMode" CHECK ("TranslationMode" IN (0,1,2)),
+    CONSTRAINT "FK_AiProfileSettings_AiTranslationModeTypes" FOREIGN KEY ("AiTranslationModeTypeId") REFERENCES "AiTranslationModeTypes" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "CK_AiProfileSettings_MaxOutput" CHECK ("MaxOutputTokens" IS NULL OR "MaxOutputTokens" BETWEEN 1 AND 128000),
     CONSTRAINT "CK_AiProfileSettings_DailyBudget" CHECK ("DailyTokenBudget" IS NULL OR "DailyTokenBudget" BETWEEN 1 AND 1000000000),
     CONSTRAINT "CK_AiProfileSettings_SessionBudget" CHECK ("SessionTokenBudget" IS NULL OR "SessionTokenBudget" BETWEEN 1 AND 1000000000),
