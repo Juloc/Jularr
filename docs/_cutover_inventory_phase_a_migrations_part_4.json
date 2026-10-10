@@ -1,0 +1,200 @@
+[
+  {
+    "file": "20261009131500_ProfileSubtitleDisplayPreferences.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "AddCheckConstraint",
+      "AddCheckConstraint"
+    ],
+    "sql": [],
+    "size": 1978,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261009140000_ReadingUnitIdentity.cs",
+    "creates": [
+      "WorkUnitBindings"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex",
+      "AddCheckConstraint",
+      "CreateIndex",
+      "AddCheckConstraint",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 6665,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261009150000_AccountLoginIdentities.cs",
+    "creates": [
+      "AccountLoginIdentities",
+      "PlexLoginAttempts"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 3737,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261009150000_MusicRecordings.cs",
+    "creates": [
+      "MusicRecordings"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "AddForeignKey",
+      "Sql",
+      "DropColumn"
+    ],
+    "sql": [
+      " INSERT INTO \"MusicRecordings\" (\"Id\", \"MusicBrainzId\", \"Title\", \"Crea"
+    ],
+    "size": 4404,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261009160000_AudiobookEditionMetadata.cs",
+    "creates": [
+      "AudiobookEditionMetadata"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable"
+    ],
+    "sql": [],
+    "size": 2284,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261009170000_WorkAnimeClassification.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateIndex",
+      "Sql"
+    ],
+    "sql": [
+      " UPDATE \"Works\" SET \"MediaType\" = 1, \"IsAnime\" = TRUE WHERE \"MediaTyp"
+    ],
+    "size": 2079,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261009194000_RequestSubmissionUsage.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "Sql"
+    ],
+    "sql": [
+      " CREATE TABLE \"RequestSubmissionUsage\" ( \"Id\" BIGINT GENE"
+    ],
+    "size": 1415,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261010000000_WorkIdInt64.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql"
+    ],
+    "sql": [
+      " CREATE TABLE \"WorkIdMigrationMap\" ( \"OldId\" uuid",
+      " CREATE FUNCTION pg_temp.retype_work_column(tbl text, col text, toler",
+      " DO $$ DECLARE saved record; BEGIN ",
+      " SELECT pg_temp.retype_work_column('AcquisitionRequests', 'WorkId', t",
+      " ALTER TABLE \"WorkMonitoring\" ALTER COLUMN \"TargetId\" DROP NOT NULL; ",
+      " UPDATE \"AcquisitionRequests\" SET \"PayloadJson\" = pg_temp.remap_work_"
+    ],
+    "size": 21630,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261010100000_ReadingUnitBindingsCoverMany.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 2164,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261010200000_MangaChapterVersions.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "Sql"
+    ],
+    "sql": [
+      " ALTER TABLE \"MangaChapters\" ADD COLUMN \"SupersededById\" TEXT NULL "
+    ],
+    "size": 932,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261010300000_NovelVolumeEditions.cs",
+    "creates": [
+      "NovelVolumeEditions"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 2172,
+    "hasUp": true,
+    "hasDown": true
+  }
+]

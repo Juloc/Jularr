@@ -1,0 +1,317 @@
+[
+  {
+    "file": "20261002112130_AddReconciliationFileLinks.cs",
+    "creates": [
+      "LibraryReconciliationFileLinks"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 5518,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261002113129_AddReconciliationLogicalGroups.cs",
+    "creates": [
+      "LibraryReconciliationLogicalGroups"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "AddForeignKey"
+    ],
+    "sql": [],
+    "size": 3123,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261002113620_AddReconciliationReleaseMetadata.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey"
+    ],
+    "sql": [],
+    "size": 8684,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261002114518_AddReconciliationObservedFileState.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [],
+    "sql": [],
+    "size": 1176,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261002153437_AddReconciliationExecutionOperation.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [],
+    "sql": [],
+    "size": 818,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261002153945_AddReconciliationFilenameEvidenceOption.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [],
+    "sql": [],
+    "size": 854,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261003041810_AddReconciliationSourceFolderCleanup.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [],
+    "sql": [],
+    "size": 854,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261003175500_GamesFoundation.cs",
+    "creates": [
+      "GamePlatforms",
+      "Games",
+      "GameArtworks",
+      "GameExternalIdentities",
+      "GameTitles",
+      "GameReleases",
+      "GameReleaseFiles",
+      "GameReleaseHashes"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 13618,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261003190000_CanonicalVideoStorage.cs",
+    "creates": [
+      "MediaAssets"
+    ],
+    "drops": [],
+    "renames": [
+      "MediaFiles->StoredFiles",
+      "MediaAnalyses->MediaTechnicalAnalyses",
+      "MediaAnalysisStreams->MediaTracks"
+    ],
+    "ops": [
+      "RenameTable",
+      "RenameTable",
+      "RenameTable",
+      "RenameColumn",
+      "RenameColumn",
+      "RenameIndex",
+      "RenameIndex",
+      "RenameIndex",
+      "DropForeignKey",
+      "DropForeignKey",
+      "DropForeignKey",
+      "CreateTable",
+      "AddCheckConstraint",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey"
+    ],
+    "sql": [],
+    "size": 9326,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261004060000_CanonicalVideoProgress.cs",
+    "creates": [
+      "MediaProgress",
+      "MediaPlaybackHistory",
+      "ActiveSessions"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 9517,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261004152000_ReaderImagePreferences.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [],
+    "sql": [],
+    "size": 3063,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261004153500_ReaderPreferenceScopeIdentity.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropForeignKey",
+      "DropIndex",
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 2259,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261004154500_CanonicalMangaReaderPreferenceScopes.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql"
+    ],
+    "sql": [
+      " INSERT INTO \"Works\" ( \"Id\", \"MediaType\", \"CanonicalTitle",
+      " INSERT INTO \"WorkSourceLinks\" ( \"Id\", \"WorkId\", \"SourceK",
+      " UPDATE \"ReaderPreferences\" AS Target SET \"Re",
+      " UPDATE \"ReaderPreferences\" AS Target SET \"Re",
+      " UPDATE \"ReaderPreferences\" AS Preference SET \"ScopeKey\" = 'w"
+    ],
+    "size": 8733,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261004202500_LibraryRootContentRouting.cs",
+    "creates": [
+      "LibraryRootContentAssignments"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "AddCheckConstraint",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 2710,
+    "hasUp": true,
+    "hasDown": true
+  },
+  {
+    "file": "20261006002056_AddWorkMetadataAndArtwork.cs",
+    "creates": [
+      "WorkArtwork",
+      "WorkCredits",
+      "WorkLocalizedValues",
+      "WorkMetadataFacts",
+      "WorkMetadataRefreshes"
+    ],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex"
+    ],
+    "sql": [],
+    "size": 14171,
+    "hasUp": true,
+    "hasDown": true
+  }
+]
