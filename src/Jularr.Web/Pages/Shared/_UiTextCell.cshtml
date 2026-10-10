@@ -1,0 +1,5 @@
+@model UiTextCellModel
+<span class="ui-text-cell">
+    <span title="@Model.Text">@Model.Text</span>
+    @if (!string.IsNullOrEmpty(Model.Secondary)) { <small title="@Model.Secondary">@Model.Secondary</small> }
+</span>

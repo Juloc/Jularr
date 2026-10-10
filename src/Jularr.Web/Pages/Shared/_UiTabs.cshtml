@@ -1,0 +1,11 @@
+@model UiTabsModel
+<nav class="ui-tabs @Model.CssClass" aria-label="@Model.Label">
+    @foreach (var tab in Model.Items)
+    {
+        <a class="library-type-tab @(tab.IsActive ? "active" : "")" href="@tab.Href" aria-current="@(tab.IsActive ? "page" : null)">
+            @if (tab.Icon is not null) { <partial name="_AppIcon" model="tab.Icon" /> }
+            <span>@tab.Label</span>
+            @if (tab.Count is { } count) { <span class="ui-tab-count">@count</span> }
+        </a>
+    }
+</nav>

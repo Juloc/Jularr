@@ -1,0 +1,53 @@
+@page
+@model Jularr.Web.Pages.Admin.UiPlaygroundModel
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = "UI playground · Development only";
+    var tabs = new UiTabsModel("Preview sections", [new("Controls", "#controls", true), new("Rows and cards", "#renderers", false)]);
+    var fixtures = new UiTextCellModel[] { new("A compact row", "Secondary metadata"), new("A long value that must remain readable without stretching the row or overflowing the viewport", "Missing artwork") };
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/ui-playground.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/ui-popover.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-select.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-table.js" asp-append-version="true" defer></script>
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+    <script src="~/js/ui-playground.js" asp-append-version="true" defer></script>
+}
+<p class="muted">Developer-only presentation fixtures. No services, mutations or saved configuration.</p>
+<partial name="_UiTabs" model="tabs" />
+<div class="ui-split ui-playground" data-ui-playground>
+    <section class="panel ui-split-list" id="controls">
+        <form data-apply-label="@ui["common.apply"]" data-cancel-label="@ui["common.cancel"]">
+            <div class="ui-fields">
+                <label class="ui-field"><span>Single select</span><span class="ui-select-control"><select name="single" aria-label="Single select" data-ui-select><option value="one">First option</option><option value="two">Second option</option><option disabled>Disabled option</option>@foreach (var index in Enumerable.Range(3, 7)) { <option value="@index">Additional option @index</option> }</select></span></label>
+                <label class="ui-field"><span>Filter popover</span><span class="ui-select-control"><select name="tones" aria-label="Status filter" multiple data-ui-select><option value="">All states</option>@foreach (var tone in Enum.GetValues<UiTone>()) { <option value="@tone">@tone</option> }</select></span></label>
+                <label class="ui-field"><span>Required field</span><input class="ui-input" name="text" required placeholder="Enter a value" aria-describedby="fixture-help" /><small id="fixture-help">Help remains readable.</small></label>
+                <label class="ui-field"><span>Read-only</span><input class="ui-input" readonly value="Readable original value" /></label>
+            </div>
+            <fieldset class="ui-fields" disabled><legend>Inherited values</legend><label class="ui-field"><span>Inherited select</span><span class="ui-select-control"><select name="inherited" aria-label="Inherited select" data-ui-select><option>Standard</option></select></span></label><label class="ui-check"><input type="checkbox" checked />Inherited checkbox</label></fieldset>
+            <div class="ui-chip-group">
+                @foreach (var tone in Enum.GetValues<UiTone>()) { <label class="ui-check"><input type="checkbox" /><partial name="_UiStatusTag" model="new UiStatusTagModel(tone.ToString(), tone)" /></label> }
+            </div>
+            <div class="ui-playground-actions"><button class="button button-primary ui-pill-button ui-action-button" type="button"><partial name="_AdminIcon" model='"check"' /><span>@ui["admin.requests.approve"]</span></button><button class="button button-secondary ui-pill-button" type="reset">@ui["uiPlayground.reset"]</button><button class="button ui-pill-button" disabled>@ui["uiPlayground.busy"]</button></div>
+            <output data-ui-playground-output aria-live="polite">No filter changes</output>
+        </form>
+    </section>
+    <section class="panel ui-split-editor" id="renderers">
+        <button type="button" class="button button-secondary ui-split-back" data-ui-playground-back>@ui["common.back"]</button>
+        <div class="ui-chip-group">@foreach (var tone in Enum.GetValues<UiTone>()) { <partial name="_UiStatusTag" model='new UiStatusTagModel(tone.ToString(), tone, "check")' /> }</div>
+        <table class="ui-playground-table" data-ui-playground-table><thead><tr><th scope="col"><input class="ui-checkbox" type="checkbox" aria-label="Select all fixture rows" data-ui-select-all /></th><th scope="col">Text cell</th><th scope="col">Actions</th></tr></thead><tbody>
+            @foreach (var fixture in fixtures) {
+                <tr data-ui-row tabindex="0"><td><input class="ui-checkbox" type="checkbox" aria-label="Select @fixture.Text" data-ui-select-row /></td><td><partial name="_UiTextCell" model="fixture" /></td><td><details class="admin-menu"><summary class="admin-icon-button" aria-label="Row actions"><partial name="_AdminIcon" model='"more"' /></summary><div class="admin-menu-list"><a class="admin-menu-item" href="#controls">View controls</a><button class="admin-menu-item" type="button" disabled>@ui["uiPlayground.unavailableAction"]</button></div></details></td></tr>
+            }
+        </tbody></table>
+        <p data-ui-playground-selection aria-live="polite">0 selected</p>
+        <div class="ui-playground-cards"><partial name="_MediaCard" model='new MediaCardModel("Shared card", "No image placeholder", "#controls", 40, ProgressLabel: "40% prepared")' /></div>
+        <p class="empty-state">Empty state · No matching items</p>
+        <p class="validation" role="alert">Validation state · Check the required field.</p>
+    </section>
+</div>
+<button class="button ui-pill-button" type="button" data-ui-playground-editor>@ui["uiPlayground.previewEditor"]</button>

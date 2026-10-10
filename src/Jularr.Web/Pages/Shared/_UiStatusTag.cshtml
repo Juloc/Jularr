@@ -1,0 +1,5 @@
+@model UiStatusTagModel
+<span class="admin-tag admin-tag-soft admin-tag-@Model.Tone.ToString().ToLowerInvariant() @Model.CssClass" title="@Model.Label">
+    @if (Model.Icon is not null) { <partial name="/Pages/Admin/_AdminIcon.cshtml" model="Model.Icon" /> }
+    @Model.Label
+</span>

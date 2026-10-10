@@ -1154,6 +1154,23 @@ docs/mockups/<screen>/
 
 Only create platform images that are actually needed. `SPEC.md` contains the binding screen-specific requirements; `docs/UX.md` contains global/shared UX rules. Existing root-level mockup assets may remain temporarily until moved without losing binary history.
 
+### Shared presentation foundation (#930, Phase 1)
+
+`admin-controls.css` is the canonical presentation owner for selects/filter popovers, native checkboxes and checkbox chips, form fields, outline/soft status tags, pill/action buttons, section tabs, action menus and split-editor layouts. It uses the existing theme tokens; Clean/Original and Light/Dark share the same markup. Feature CSS only owns density, columns and domain-specific layouts.
+
+- `_UiTabs`, `_UiStatusTag` and `_UiTextCell` take presentation-only typed models from `UiControlModels.cs`. They never authorize, fetch or mutate data. `_AdminSectionLinks` still supplies already-authorized destinations; `_RequestTypeTag` keeps its existing media-kind/icon mapping. `_MediaCard` remains the existing card owner rather than acquiring a parallel card implementation.
+- `ui-select.js` progressively enhances `select[data-ui-select]` within `.ui-select-control`. The original named native control remains the submitted value and the no-JS fallback. Rich option markup comes from scoped `template[data-ui-select-option="control-name"][data-value]` elements. Each instance has its own stable IDs and abortable listeners.
+- `JularrSelect.init(root)` is idempotent; `dispose(root)` removes generated markup/listeners before a caller replaces content. Single selects dispatch native `change`. Multiselects keep pending native values, restore on Cancel, and emit one bubbling `ui:select-commit` with `{ values }` on Apply/light-dismiss/focus-leave only when changed. The page decides whether to navigate or submit; the control does not call services or invent URL state.
+- `ui-popover.js` owns viewport clamping, vertical flipping, mobile navigation clearance and start/end alignment. `admin-menu.js` keeps native disclosure fallback, adds top-layer placement and Arrow/Home/End/Escape keyboard behavior, and exposes matching `JularrMenu.init/dispose` lifecycle hooks.
+- `JularrTableSelection.init(element, onChanged)` in `ui-table.js` owns only current rendered rows, tri-state select-all, independent toggling and Shift ranges. Hooks are `data-ui-row`, `data-ui-select-row`, `data-ui-select-all`, and optional `data-ui-selection-clear`. Its returned instance exposes `clear/dispose`; eligibility, permissions, confirmations and bulk mutations remain feature-owned. It does not extrapolate selection to unrendered results.
+- `.ui-fields`, `.ui-field`, `.ui-check`, `.ui-chip-group` and `.ui-split` are opt-in shared building blocks. `.ui-split-editing` switches narrow layouts between list and editor; `.ui-split-wide` accommodates the Users table. Disabled interaction remains explicit without reducing an entire inherited fieldset's opacity.
+
+Production reuse is demonstrated by Requests (filters/tabs/selection/actions), Rules and both User rule-editor routes (fields/chips/selects/split), and Logs (select/action/tag/text cell). Assets remain page-scoped: there is no new global framework or unconditional Shell bundle. Existing action-menu consumers add only the shared placement dependency.
+
+The authorized `/Admin/UiPlayground` route exists only in Development (404 otherwise). It renders typed local fixtures through these production components, including missing-image cards, long row values, disabled/inherited fields, empty/validation/busy states and keyboard selection. Fixtures do not simulate backend mutations or populate the application database.
+
+Phase 1 deliberately supplies rendering and interaction extension points only. Service-bound DataList/ServiceForm, namespaced Page-state orchestration, ShellView and operation metadata wait for the **latest** #852 authorized Data/Service/Logic contracts, real pagination/continuation, sort allowlists and gate/error semantics. No provisional runtime, SQL, result-type metadata or frontend-owned paging contracts are introduced here.
+
 ## 34. Implementation gate
 
 A vertical slice may start only when:

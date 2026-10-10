@@ -1276,7 +1276,7 @@ main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 1
 }
 .admin-log-row:hover { background: var(--row-hover); }
 .admin-log-row time,
-.admin-log-row > span { color: var(--muted); }
+.admin-log-row > span:not(.admin-tag) { color: var(--muted); }
 .admin-log-row strong { font-size: 11px; }
 .admin-log-row p { margin: 0; overflow-wrap: anywhere; }
 .admin-log-warning { background: color-mix(in srgb, #d7aa45 9%, transparent); }
@@ -1290,7 +1290,7 @@ main > :is(.panel, .settings-grid) + :is(.panel, .settings-grid) { margin-top: 1
         gap: 3px 10px;
     }
     .admin-log-row strong,
-    .admin-log-row p { grid-column: 1 / -1; }
+    .admin-log-row p, .admin-log-row .ui-text-cell { grid-column: 1 / -1; }
 }
 
 @media (max-width: 520px) {
