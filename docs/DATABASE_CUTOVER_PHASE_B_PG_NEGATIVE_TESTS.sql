@@ -39,6 +39,7 @@ DECLARE
     other_work bigint;
     game_platform_id bigint;
     title_provider_id bigint;
+    person_id bigint;
     season_one bigint;
     episode_one bigint;
 BEGIN
@@ -169,6 +170,29 @@ BEGIN
     -- Positive control for progress subtype: one parent and matching detail.
     INSERT INTO "Works" ("MediaTypeId","CanonicalTitle")
     VALUES (1,'Phase B Work') RETURNING "Id" INTO work_id;
+    INSERT INTO "WorkMetadataFacts"
+        ("WorkId","FirstPublishedOn","RuntimeMs","CommunityRating",
+         "CommunityRatingCount","Certification","CertificationCountry",
+         "Studios","ProductionCountries")
+    VALUES (work_id,DATE '2025-01-01',3600000,8.5,40,'PG','US',
+            ARRAY['phase-b-studio'],ARRAY['US']);
+    BEGIN
+        UPDATE "WorkMetadataFacts" SET "CommunityRating" = 11
+        WHERE "WorkId" = work_id;
+        RAISE EXCEPTION 'Out-of-range community rating was accepted';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    INSERT INTO "People" ("DisplayName") VALUES ('Phase B Performer')
+    RETURNING "Id" INTO person_id;
+    INSERT INTO "MusicArtists" ("DisplayName","PersonId")
+    VALUES ('Phase B Solo Artist',person_id);
+    INSERT INTO "MusicArtists" ("DisplayName") VALUES ('Phase B Ensemble');
+    BEGIN
+        INSERT INTO "MusicArtists" ("DisplayName","PersonId")
+        VALUES ('Invalid Performer',-1);
+        RAISE EXCEPTION 'MusicArtists accepted an unknown PersonId';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
     INSERT INTO "Providers" ("Key") VALUES ('phase-b-title-source')
     RETURNING "Id" INTO title_provider_id;
     INSERT INTO "WorkTitles"
