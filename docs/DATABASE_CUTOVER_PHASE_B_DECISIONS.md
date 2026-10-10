@@ -13,7 +13,7 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | ID | Stand | Vor Gate B erforderlicher Nachweis |
 | --- | --- | --- |
 | B01 Types/Seeds | Alle bestehenden Kataloge definiert; keine freien Legacy-int-Mappings | C# byte, Manifest und statische Seeds identisch; neue erforderliche Kataloge erhalten denselben Nachweis |
-| B02 Account/Profile/Auth | Zweckgebundene Challenges, Account-Epoch, Rotation/Revoke, TOTP-/Recovery-Replay und Transfer physisch geprüft | Plex-Login/Linking und Medien-Consent nutzen getrennte feste Zwecke; konkrete Provider-Settings/-Grant-Lifecycle in B10 abschließen; WebAuthn-Protokollprüfung gehört in D |
+| B02 Account/Profile/Auth | Zweckgebundene Challenges, Account-Epoch, Rotation/Revoke, TOTP-/Recovery-Replay und Transfer physisch geprüft | Plex-Login/Linking und Medien-Consent nutzen getrennte feste Zwecke; Provider-Capability-Default-off und Zugriffstests in B10 ergänzt; Grant-Lifecycle weiterhin abschließen; WebAuthn-Protokollprüfung gehört in D |
 | B03 Progress/Offline | Total-Subtype, Cross-Work, Revision-CAS und Replay modelliert/getestet | Reader-Anchor-/Editionrevisionen, Completed-Provenienz und repräsentative Konflikt-/Concurrency-Fälle vollständig |
 | B04 Work Facts/Titel | Ein Work; explizite MetadataFacts, Titelprovenienz, Namespaces | Vollständige Medien-/Edition-/Credit-/Locale-Fakten und statische Title-Resolution-/Search-Queries |
 | B05 Music/Reader/AI | Keine Learning-Anforderung mehr; übrige Funktionen bleiben | Artists/Recordings, Reader-Inhalte/Bookmarks/Highlights sowie AI-/Translate-Persistenz vollständig; keine parallelen Roots |
@@ -21,7 +21,7 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | B07 Images | Feste ImageKinds und drei typisierte Target-FKs | Tatsächlich benötigte Targets/Pairings, Season-Artwork, Locale/Region/Manual-Override und Bild-Fallback-Query |
 | B08 Wanted/Arr/Acquisition/Import | Regeln, Profile, Indexer, Download-Bindings, Wanted-Coverage vorhanden | Request-/Monitoring-Policies, ReleaseAttempts/Provenienz, Import/Reconciliation und geplantes Migration Center |
 | B09 Notifications | Inbox, Quiet Hours/DST, Digest, Endpoints, Route-Revalidierung und parallele Gruppierung physisch geprüft | Reale Sink-/Secret-Konfig-Verträge und Recovery bei ungewissem externen Send-Ausgang; keine Fake-Verfügbarkeit |
-| B10 Provider | Verbindungen, Credentials-Referenzen und Grants vorhanden | Plex/Jellyfin Consent/Owner/Sections, Restart/Reconciliation; keine automatischen Watchlist-/Progress-Imports |
+| B10 Provider | Unabhängige Login-/Link-/Media-/Autoprovision-Flags default-off; aktuelle Profilzugehörigkeit und Provider-Freigaben statisch geprüft; Connections und Grants vorhanden | Plex/Jellyfin Consent/Owner/Sections, Credential-Revision, Restart/Reconciliation sowie realer Provider-Abgleich; keine automatischen Watchlist-/Progress-Imports |
 | B11 Media/Detection | Feste Track/Asset/Detector-Codes; konsistente Run-Ergebnisse | Probe-Invalidation/Analysefelder, Cache-Lifecycle, PlayableFile-SELECT und passende Indexpläne |
 | B12 Operations/Events | Gemeinsame Operations, Leases/Claims und Delivery-Versuche vorhanden | Retry/Cancellation/Restart/Retention sowie benötigte After-Commit-/Outbox-Effekte; keine externe I/O im DB-Tx |
 | B13 Account Groups | Neutrale Gruppen, Mitgliedschaft, UUID und Owner-Paging vorhanden | Gruppen bleiben Policy-Selektoren, keine Rollen oder automatische Rechte; D/E implementiert Verbraucher/UI |
