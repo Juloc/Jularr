@@ -79,3 +79,41 @@ ORDER BY
     highlight."Id" DESC
 LIMIT @PageSize
 OFFSET @Offset;
+
+-- Service PAGES:
+SELECT
+    work."PublicId" AS "WorkId",
+    edition."PublicId" AS "WorkEditionId",
+    content."ContentRevision",
+    page."PageIndex",
+    page."TextAnchor"
+FROM
+    "Accounts" AS account
+INNER JOIN
+    "AccountProfiles" AS membership
+        ON membership."AccountId" = account."Id"
+        AND membership."ProfileId" = @ActiveProfileId
+INNER JOIN
+    "WorkEditions" AS edition
+        ON edition."PublicId" = @WorkEditionPublicId
+INNER JOIN
+    "Works" AS work
+        ON work."Id" = edition."WorkId"
+INNER JOIN
+    "ReaderContent" AS content
+        ON content."WorkEditionId" = edition."Id"
+        AND content."WorkId" = edition."WorkId"
+        AND content."ContentRevision" = @ContentRevision
+INNER JOIN
+    "ReaderPages" AS page
+        ON page."ReaderContentId" = content."Id"
+WHERE
+    account."Id" = @ActorAccountId
+    AND account."IsEnabled" = TRUE
+    AND @StartPageIndex >= 0
+    AND @PageSize BETWEEN 1 AND 100
+    AND page."PageIndex" >= @StartPageIndex
+ORDER BY
+    page."PageIndex",
+    page."Id"
+LIMIT @PageSize;
