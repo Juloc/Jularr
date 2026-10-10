@@ -77,32 +77,27 @@ public sealed class PlexWorkMatcherTests
     }
 
     [TestMethod]
-    public async Task PlexShowMatchesAnimeUnlessSeriesIdentityIsAmbiguous()
+    public async Task PlexShowMatchesCanonicalSeriesClassifiedAsAnime()
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var works = new WorkService(db);
         var anime = await works.CreateWorkAsync(
-            WorkMediaType.Anime, "Anime", null, CancellationToken.None);
+            WorkMediaType.Series, "Anime", null, CancellationToken.None);
+        Assert.IsTrue(await works.SetAnimeClassificationAsync(
+            anime.Id, true, "owner", null, true, CancellationToken.None));
         Assert.IsTrue(await works.LinkExternalIdentityAsync(
-            anime.Id, WorkMediaType.Anime, "tmdb", "300",
+            anime.Id, WorkMediaType.Series, "tmdb", "300",
             1.0, "confirmed", true, false,
             MappingReviewState.Confirmed, CancellationToken.None));
 
         var matcher = new PlexWorkMatcher(db);
-        var plex = Item("show", new PlexExternalId("tmdb", "300"));
-        Assert.AreEqual(
-            anime.Id, await matcher.ResolveWorkIdAsync(
-                plex, CancellationToken.None));
-
-        var series = await works.CreateWorkAsync(
-            WorkMediaType.Series, "Unrelated series", null, CancellationToken.None);
-        Assert.IsTrue(await works.LinkExternalIdentityAsync(
-            series.Id, WorkMediaType.Series, "tmdb", "300",
-            1.0, "confirmed", true, false,
-            MappingReviewState.Confirmed, CancellationToken.None));
+        Assert.AreEqual(anime.Id, await matcher.ResolveWorkIdAsync(
+            Item("show", new PlexExternalId("tmdb", "300")),
+            CancellationToken.None));
 
         Assert.IsNull(await matcher.ResolveWorkIdAsync(
-            plex, CancellationToken.None));
+            Item("episode", new PlexExternalId("tmdb", "300")),
+            CancellationToken.None));
     }
 
     [TestMethod]
