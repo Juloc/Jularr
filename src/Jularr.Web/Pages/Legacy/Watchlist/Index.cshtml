@@ -15,6 +15,10 @@
     <header class="watchlist-header">
         <h1>@ui["watchlist.title"]</h1>
         <a class="button button-primary" href="/">@ui["watchlist.discover"]</a>
+        @if (Model.IsTargetView)
+        {
+            <a class="button" href="/Watchlist">@ui["watchlist.title"]</a>
+        }
     </header>
 
     @if (Model.TotalCount == 0)
@@ -117,7 +121,7 @@
         }
     }
 
-    @if (Model.Franchises.Count > 0)
+    @if ((Model.FranchisePage.TotalCount ?? 0) > 0)
     {
         <section class="watchlist-franchises">
             <h2>@ui["watchlist.franchises"]</h2>
@@ -142,6 +146,24 @@
                     </article>
                 }
             </div>
+            @if (Model.FranchisePageCount > 1)
+            {
+                <nav class="inline-actions" aria-label="@ui["admin.history.pagerAria"]">
+                    @if (Model.CurrentFranchisePage > 1)
+                    {
+                        <a class="button"
+                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage - 1)"
+                           rel="prev">@ui["admin.history.page.previous"]</a>
+                    }
+                    <span aria-current="page">@Model.CurrentFranchisePage / @Model.FranchisePageCount</span>
+                    @if (Model.CurrentFranchisePage < Model.FranchisePageCount)
+                    {
+                        <a class="button"
+                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage + 1)"
+                           rel="next">@ui["admin.history.page.next"]</a>
+                    }
+                </nav>
+            }
         </section>
     }
 </div>

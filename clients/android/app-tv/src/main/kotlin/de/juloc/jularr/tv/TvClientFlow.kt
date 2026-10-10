@@ -4,6 +4,7 @@ import de.juloc.jularr.core.api.JularrClientApi
 import de.juloc.jularr.core.api.ApiCompatibility
 import de.juloc.jularr.core.api.ClientApiCompatibility
 import de.juloc.jularr.core.api.ClientApiRoutes
+import de.juloc.jularr.core.api.WatchlistPage
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientCapabilities
@@ -129,6 +130,9 @@ class TvClientFlow(
 
     suspend fun loadWatchlist(): List<WatchlistItem> =
         requireApi().getWatchlist()
+
+    suspend fun loadWatchlistPage(page: Int): WatchlistPage =
+        requireApi().getWatchlistPage(page, 25)
 
     suspend fun loadAnime(animeId: String): AnimeDetail =
         requireApi().getAnime(animeId)

@@ -345,8 +345,17 @@ public sealed partial class IndexModel
         IReadOnlyDictionary<string, Guid?> followed = new Dictionary<string, Guid?>();
         try
         {
-            followed = (await watchlist.GetEffectiveAsync(account.ProfileId, cancellationToken))
-                .ToDictionary(item => item.Identity.Key, item => item.FranchiseId, StringComparer.Ordinal);
+            var visibleIdentities = list
+                .Select(item => WatchlistDraftInput.TryIdentity(
+                    item.Category, item.Provider, item.ExternalId, out var identity)
+                    ? identity
+                    : null)
+                .OfType<WatchlistIdentity>()
+                .ToArray();
+            followed = await watchlist.GetFollowedFranchiseIdsForKeysAsync(
+                account,
+                visibleIdentities,
+                cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

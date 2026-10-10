@@ -208,7 +208,10 @@ public abstract class VideoDetailPageModel(
         OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && hasRequestableTarget;
         if (detail.Request is { } identity && WatchlistDraftInput.TryIdentity(identity.Category, identity.Provider, identity.ExternalId, out var followed))
         {
-            IsOnWatchlist = (await watchlist.GetEffectiveKeysAsync(account.ProfileId, cancellationToken)).Contains(followed.Key);
+            IsOnWatchlist = (await watchlist.GetFollowedFranchiseIdsForKeysAsync(
+                account,
+                [followed],
+                cancellationToken)).ContainsKey(followed.Key);
         }
 
         if (detail.Request?.Open is { } open && ConsumerAcquisitionQuery.MayRead(open, account.ProfileId, policy.CanRequest, account.Can(JularrPolicies.AdminMedia)))

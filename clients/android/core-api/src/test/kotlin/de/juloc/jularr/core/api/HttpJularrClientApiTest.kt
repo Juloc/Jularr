@@ -1,6 +1,8 @@
 package de.juloc.jularr.core.api
 
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
@@ -8,6 +10,20 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
 
 class HttpJularrClientApiTest {
+    @Test
+    fun watchlistRouteRequiresBoundedPageSize() {
+        assertEquals(
+            "/api/client/v1/watchlist?page=3&pageSize=25",
+            ClientApiRoutes.watchlistPage(3, 25),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            ClientApiRoutes.watchlistPage(0, 25)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            ClientApiRoutes.watchlistPage(1, 101)
+        }
+    }
+
     @Test
     fun requestWorkIsDispatchedAwayFromTheCallerThread() {
         val callerThread = Thread.currentThread()

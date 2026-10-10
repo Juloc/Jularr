@@ -58,6 +58,11 @@ public sealed record WatchlistIdentity(
 
     public string Key => $"{WatchlistMediaTypeNames.ToStorage(MediaType)}:{ProviderKey}:{ExternalKey}";
 
+    public string WatchlistUrl =>
+        $"/Watchlist?mediaType={Uri.EscapeDataString(WatchlistMediaTypeNames.ToStorage(MediaType))}" +
+        $"&provider={Uri.EscapeDataString(ProviderKey)}" +
+        $"&externalId={Uri.EscapeDataString(ExternalKey)}#target-{StableId:D}";
+
     public Guid StableId
     {
         get
@@ -83,6 +88,11 @@ public sealed record WatchlistIdentity(
 /// Display data of a followed work. Library membership and links are never part of it: they
 /// are resolved when the work is shown (<see cref="WatchlistLibraryResolver"/>).
 /// </summary>
+public sealed record WatchlistReleaseSeed(
+    WatchlistMediaType MediaType,
+    string ExternalId,
+    string? Status);
+
 public sealed record WatchlistDraft(
     WatchlistIdentity Identity,
     string Title,

@@ -463,8 +463,11 @@ public sealed class AnimeModel(
             return;
         }
 
-        IsOnWatchlist = (await watchlist.GetEffectiveKeysAsync(currentAccount.ProfileId, cancellationToken))
-            .Contains(new WatchlistIdentity(WatchlistMediaType.Anime, matched.Provider, matched.ExternalId).Key);
+        var identity = new WatchlistIdentity(WatchlistMediaType.Anime, matched.Provider, matched.ExternalId);
+        IsOnWatchlist = (await watchlist.GetFollowedFranchiseIdsForKeysAsync(
+            currentAccount,
+            [identity],
+            cancellationToken)).ContainsKey(identity.Key);
 
         // Requesting more goes through the same request form Discover uses, and is offered only to
         // profiles whose capability for anime allows requesting (checked again when they submit).

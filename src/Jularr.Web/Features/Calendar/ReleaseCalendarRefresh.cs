@@ -214,20 +214,44 @@ public sealed class ReleaseCalendarRefresher(
             }
         }
 
-        foreach (var followed in await new WatchlistStore(db).GetEffectiveAcrossProfilesAsync(cancellationToken))
-        {
-            var workType = WorkMediaTypes.FromWatchlist(followed.Identity.MediaType);
-            if (!instance.IsEnabled(InstanceModuleMedia.For(workType))
-                || !followed.Identity.ProviderKey.Equals(AniListReleaseNormalizer.Provider, StringComparison.OrdinalIgnoreCase)
-                || !TryId(followed.Identity.ExternalKey, out var id))
+        WatchlistMediaType[] enabledTypes =
+        [
+            .. new[]
             {
-                continue;
+                WatchlistMediaType.Anime,
+                WatchlistMediaType.Manga,
+                WatchlistMediaType.LightNovel
+            }.Where(type => instance.IsEnabled(
+                InstanceModuleMedia.For(WorkMediaTypes.FromWatchlist(type))))
+        ];
+
+        var watchlist = new WatchlistStore(db);
+        WatchlistReleaseSeed? after = null;
+        while (enabledTypes.Length > 0)
+        {
+            var page = await watchlist.GetAniListReleaseSeedPageAsync(
+                enabledTypes,
+                after,
+                PageRequest.MaximumPageSize,
+                cancellationToken);
+
+            foreach (var followed in page)
+            {
+                if (TryId(followed.ExternalId, out var id))
+                {
+                    targets.Add(new AniListReleaseTarget(
+                        id,
+                        followed.Status,
+                        followed.MediaType is WatchlistMediaType.Manga or WatchlistMediaType.LightNovel));
+                }
             }
 
-            targets.Add(new AniListReleaseTarget(
-                id,
-                followed.Status,
-                followed.Identity.MediaType is WatchlistMediaType.Manga or WatchlistMediaType.LightNovel));
+            if (page.Count < PageRequest.MaximumPageSize)
+            {
+                break;
+            }
+
+            after = page[^1];
         }
 
         return targets;

@@ -12,6 +12,11 @@ object ClientApiRoutes {
     const val PlaybackHistory = "$Base/me/playback-history"
     const val Watchlist = "$Base/watchlist"
 
+    fun watchlistPage(page: Int, pageSize: Int): String {
+        require(page > 0 && pageSize in 1..100)
+        return "$Watchlist?page=$page&pageSize=$pageSize"
+    }
+
     fun anime(animeId: String) = "$Base/anime/$animeId"
     fun episode(episodeId: String) = "$Base/episodes/$episodeId"
     fun progress(episodeId: String) = "$Base/episodes/$episodeId/progress"
