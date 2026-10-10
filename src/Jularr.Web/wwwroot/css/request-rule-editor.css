@@ -8,7 +8,7 @@
 .rre-list-head, .rre-profile-name, .rre-editor-actions, .rre-profile-actions, .rre-user-row-head, .rre-user-context, .rre-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .rre-list-head { justify-content: space-between; margin-bottom: 16px; }
 .rre-profile { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-top: 1px solid var(--border); background: transparent; }
-.rre-profile.is-selected { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+.rre-profile.is-selected { background: var(--accent-soft); }
 .rre-user-row.is-selected { border-color: var(--accent); background: var(--accent-soft); }
 .rre-profile-select { display: grid; gap: 6px; min-width: 0; width: 100%; padding: 12px; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: start; font: inherit; cursor: pointer; }
 .rre-profile-summary { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 11px; }

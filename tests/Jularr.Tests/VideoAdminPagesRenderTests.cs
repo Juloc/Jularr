@@ -79,7 +79,9 @@ public sealed class VideoAdminPagesRenderTests
 
         StringAssert.Contains(html, $"href=\"/Library/Movie/{movie.Work.Id:D}\"");
         StringAssert.Contains(html, $"href=\"/Admin/Media/movie/{movie.Work.Id:D}\"");
-        Assert.AreEqual(1, Regex.Matches(html, @"admin-icon-label"">Search now</span>").Count);
+        Assert.AreEqual(1, Regex.Matches(html, "<button[^>]*title=\"Search now\"[^>]*>").Count);
+        var searchAction = Regex.Match(html, "<form[^>]*action=\"(?<action>/Admin/Requests[^\"]*handler=Approve[^\"]*)\"").Groups["action"].Value;
+        StringAssert.Contains(WebUtility.HtmlDecode(searchAction), $"id={request.Id:D}");
         StringAssert.Contains(html, $"href=\"/Admin/ManualSearch?id={request.Id:D}\"");
         Assert.IsFalse(html.Contains("/Search?q=", StringComparison.Ordinal), "View media never goes to a search.");
         StringAssert.Contains(html, "href=\"/Admin/Wanted\"");

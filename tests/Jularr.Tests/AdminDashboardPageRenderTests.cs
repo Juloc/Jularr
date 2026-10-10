@@ -79,7 +79,7 @@ public sealed class AdminDashboardPageRenderTests
         }
 
         Assert.IsTrue(
-            Regex.IsMatch(html, "<a class=\"admin-nav-item active\"[^>]*href=\"/Admin\""),
+            Regex.IsMatch(html, "<a class=\"nav-item active\"[^>]*href=\"/Admin\"[^>]*aria-current=\"page\""),
             "The admin navigation marks the dashboard as the current page.");
     }
 
@@ -309,7 +309,7 @@ public sealed class AdminDashboardPageRenderTests
         StringAssert.Contains(html, "Test media");
         StringAssert.Contains(html, "data-resource-gpu");
         Assert.IsFalse(html.Contains("Host CPU", StringComparison.Ordinal));
-        Assert.IsTrue(Regex.IsMatch(html, "<a class=\"admin-nav-item active\"[^>]*href=\"/Admin/Resources\""));
+        Assert.IsTrue(Regex.IsMatch(html, "<a class=\"nav-item active\"[^>]*href=\"/Admin/Resources\"[^>]*aria-current=\"page\""));
     }
 
     [TestMethod]

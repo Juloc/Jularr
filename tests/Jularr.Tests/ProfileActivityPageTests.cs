@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Features.Shell;
 using Microsoft.AspNetCore.Http;
@@ -59,7 +60,9 @@ public sealed class ProfileActivityPageTests
         var list = fixture.Attach(new ProfileIndexModel(fixture.Db, Account("user-a", isOwner: false), fixture.Shell), "user-a", isOwner: false);
         Assert.IsInstanceOfType<PageResult>(await list.OnGetAsync(null, CancellationToken.None));
         Assert.IsFalse(list.Links.Any(item => item.Id == "admin"));
-        CollectionAssert.Contains(list.Elsewhere.Select(item => item.Id).ToArray(), "watchlist", "Destinations outside the bottom bar are listed on Profile.");
+        var navigation = UiShellNavigation.Build("/", false, _ => false);
+        CollectionAssert.Contains(navigation.MobilePrimary.Select(item => item.Id).ToArray(), "watchlist", "Watchlist is reachable directly in the canonical bottom bar.");
+        Assert.IsFalse(list.Elsewhere.Any(item => item.Id == "watchlist"), "The Profile page must not duplicate bottom-bar destinations.");
 
         var owner = fixture.Attach(new ProfileIndexModel(fixture.Db, Account("owner", isOwner: true), fixture.Shell), "owner", isOwner: true);
         Assert.IsInstanceOfType<PageResult>(await owner.OnGetAsync("admin", CancellationToken.None));

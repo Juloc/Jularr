@@ -97,7 +97,7 @@ public sealed class AdminMediaDetailPageRenderTests
         StringAssert.Contains(html, "mode=Season");
         StringAssert.Contains(html, "href=\"/Library/Rename/");
         Assert.IsTrue(
-            Regex.IsMatch(html, "<a class=\"admin-nav-item[^\"]*\"[^>]*href=\"/Admin/Wanted\""),
+            Regex.IsMatch(html, "<a class=\"nav-item[^\"]*\"[^>]*href=\"/Admin/Wanted\""),
             "The admin navigation is part of the page.");
 
         // Panels: acquisition, mapping, activity.
