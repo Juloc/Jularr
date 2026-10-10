@@ -21,6 +21,7 @@ public sealed class SqlContext : IAsyncDisposable
     private long? _actorAccountId;
     private long? _activeProfileId;
     private bool _scopeInitialized;
+    private int _shortBatchActive;
     private bool _disposed;
 
     public SqlReadCommands ReadSql { get; }
@@ -124,28 +125,42 @@ public sealed class SqlContext : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(transactionalAccessCheck);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_connection is not null || _transaction is not null || _finished)
+        // Explicitly fail rather than allowing two concurrent batches to race while a
+        // connection is still being opened. One SqlContext never executes parallel SQL.
+        if (Interlocked.CompareExchange(ref _shortBatchActive, 1, 0) != 0)
         {
-            throw new InvalidOperationException("An Execute batch cannot start inside another transaction.");
+            throw new InvalidOperationException("Concurrent SQL batches on one context are forbidden.");
         }
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
-
-        await BeginAsync(SqlAccessMode.ReadWrite, IsolationLevel.ReadCommitted, timeout.Token);
 
         try
         {
-            await transactionalAccessCheck(timeout.Token);
-            var result = await action(timeout.Token);
-            await CommitAsync(timeout.Token);
-            return result;
+            if (_connection is not null || _transaction is not null || _finished)
+            {
+                throw new InvalidOperationException("An Execute batch cannot start inside another transaction.");
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
+
+            await BeginAsync(SqlAccessMode.ReadWrite, IsolationLevel.ReadCommitted, timeout.Token);
+
+            try
+            {
+                await transactionalAccessCheck(timeout.Token);
+                var result = await action(timeout.Token);
+                await CommitAsync(timeout.Token);
+                return result;
+            }
+            finally
+            {
+                // Commit and failures alike close the connection; failed batches roll back.
+                await CloseTransactionAsync();
+                _finished = false;
+            }
         }
         finally
         {
-            // A committed batch closes its connection; failed batches roll back on disposal.
-            await CloseTransactionAsync();
-            _finished = false;
+            Volatile.Write(ref _shortBatchActive, 0);
         }
     }
 
