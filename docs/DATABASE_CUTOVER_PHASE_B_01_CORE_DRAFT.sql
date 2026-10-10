@@ -92,12 +92,19 @@ CREATE TABLE "AccountPasskeys" (
     "CredentialId" bytea NOT NULL,
     "PublicKey" bytea NOT NULL,
     "SignatureCounter" bigint NOT NULL DEFAULT 0,
+    "Aaguid" uuid,
+    "Transports" text[] NOT NULL DEFAULT ARRAY[]::text[],
+    "BackupEligible" boolean,
+    "BackedUp" boolean,
+    "UserVerificationRequired" boolean,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "LastUsedAt" timestamptz,
     CONSTRAINT "PK_AccountPasskeys" PRIMARY KEY ("Id"),
     CONSTRAINT "FK_AccountPasskeys_Accounts" FOREIGN KEY ("AccountId") REFERENCES "Accounts" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "UX_AccountPasskeys_CredentialId" UNIQUE ("CredentialId"),
-    CONSTRAINT "CK_AccountPasskeys_SignatureCounter" CHECK ("SignatureCounter" >= 0)
+    CONSTRAINT "CK_AccountPasskeys_SignatureCounter" CHECK ("SignatureCounter" >= 0),
+    CONSTRAINT "CK_AccountPasskeys_BackupState"
+        CHECK ("BackedUp" IS DISTINCT FROM true OR "BackupEligible" IS TRUE)
 );
 CREATE INDEX "IX_AccountPasskeys_AccountId" ON "AccountPasskeys" ("AccountId");
 
@@ -205,10 +212,15 @@ CREATE TABLE "WorkTitles" (
     "Title" text NOT NULL,
     "IsOriginal" boolean NOT NULL DEFAULT false,
     "IsPreferred" boolean NOT NULL DEFAULT false,
+    "ProviderId" bigint,
+    "SourceReference" text,
+    "IsManualOverride" boolean NOT NULL DEFAULT false,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+    "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_WorkTitles" PRIMARY KEY ("Id"),
     CONSTRAINT "FK_WorkTitles_Works" FOREIGN KEY ("WorkId") REFERENCES "Works" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_WorkTitles_UiLocales" FOREIGN KEY ("UiLocaleId") REFERENCES "UiLocales" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_WorkTitles_Providers" FOREIGN KEY ("ProviderId") REFERENCES "Providers" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "CK_WorkTitles_Title" CHECK (length(btrim("Title")) > 0)
 );
 CREATE INDEX "IX_WorkTitles_WorkId_Locale" ON "WorkTitles" ("WorkId","UiLocaleId");
