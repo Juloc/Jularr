@@ -69,6 +69,11 @@ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
     BEGIN
+        UPDATE "AiProfileSettings" SET "AiTranslationModeTypeId"=255 WHERE "ProfileId"=profile_id;
+        RAISE EXCEPTION 'Unknown AI translation mode allowed';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+    BEGIN
         UPDATE "AiProfileSettings" SET "DailyTokenBudget"=0 WHERE "ProfileId"=profile_id;
         RAISE EXCEPTION 'Zero daily AI token budget accepted';
     EXCEPTION WHEN check_violation THEN NULL;
