@@ -244,6 +244,9 @@ public abstract class ReadingWorkModel(
                 ? Ui["admin.manga.transfer.importing"]
                 : transfer.ProgressPercent is { } percent ? Ui.Format("admin.manga.transfer.downloading", ("percent", percent)) : Ui["admin.manga.transfer.downloadingNoProgress"];
 
+    // A library file whose format nothing states has the quality key UNKNOWN-UNKNOWN; the page names it instead of showing the key.
+    public static string QualityLabel(string quality, UiTextBundle ui) => quality.Equals("UNKNOWN-UNKNOWN", StringComparison.OrdinalIgnoreCase) ? ui["admin.manga.quality.unknown"] : quality;
+
     public string RequestLabel(AcquisitionRequestStatus status) => Ui["requests.status." + AcquisitionAccessNames.Status(status)];
 
     public static bool Readable(string path) => path.Length > 0 && (System.IO.File.Exists(path) || Directory.Exists(path));

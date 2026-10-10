@@ -7,8 +7,6 @@
     var view = Model.View;
     var coverage = view.Coverage;
     var request = view.Request;
-    ViewData["Title"] = view.Title;
-
     string Initial() => string.IsNullOrWhiteSpace(view.Title) ? "?" : view.Title.Trim()[..1].ToUpperInvariant();
     string StateTone(ReadingCoverageState state) => state switch { ReadingCoverageState.Installed => "success", ReadingCoverageState.Partial => "warning", _ => "text" };
 
@@ -185,7 +183,7 @@
 
 <section class="admmd-groups admman-units" aria-labelledby="admman-units-title" data-admin-manga-units>
     <div class="admmd-toolbar admmd-toolbar-inline">
-        <h2 id="admman-units-title">@(coverage.Volumes.Count > 0 ? ui["admin.manga.volumes.heading"] : ui["admin.manga.chapters.heading"])</h2>
+        <h2 id="admman-units-title">@(coverage.Volumes.Count > 0 || view.IsNovel ? ui["admin.manga.volumes.heading"] : ui["admin.manga.chapters.heading"])</h2>
     </div>
     @if (!coverage.HasStructure)
     {
@@ -275,7 +273,7 @@
                             <span class="admmd-lang admmd-lang-quiet">@ui.Format(view.IsNovel ? "admin.novel.file.chapters" : "admin.manga.file.pages", ("count", file.Count))</span>
                             @if (view.IsNovel && file.Quality is not null)
                             {
-                                <span class="admmd-lang admmd-lang-quiet">@file.Quality</span>
+                                <span class="admmd-lang admmd-lang-quiet">@ReadingWorkModel.QualityLabel(file.Quality, ui)</span>
                             }
                             <span class="admin-tag admin-tag-@(readable ? "success" : "danger")">@(readable ? ui["admin.books.file.available"] : ui["admin.books.file.missing"])</span>
                             @if (file.Superseded)

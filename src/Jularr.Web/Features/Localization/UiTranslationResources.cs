@@ -2352,6 +2352,7 @@ public static class UiTranslationResources
         M("admin.manga.page.previous", "Previous", "Admin", "Button", "Goes to the previous page of a long Manga list.", "short action", 12),
         M("admin.manga.page.next", "Next", "Admin", "Button", "Goes to the next page of a long Manga list.", "short action", 12),
         M("admin.manga.page.of", "{page} of {pages}", "Admin", "Body", "Position in the page navigation of a long Manga list.", "short figure", 29, new Dictionary<string, string> { ["page"] = "Current page.", ["pages"] = "Number of pages." }),
+        M("admin.manga.quality.unknown", "No format stated", "Admin", "Status", "Quality tag of a library file whose format the release did not state, so a better labelled version still counts as an upgrade.", "compact status", 24),
         M("admin.novel.noIdentity", "This Light Novel has no AniList or Syosetu identity, so it cannot be searched.", "Admin", "Error", "Shown when Search now is used on a Light Novel Work without a trusted provider identity.", "short error", 90),
         M("admin.novel.search.running", "This Light Novel is already being searched, downloaded or imported.", "Admin", "Error", "Shown when Search now is used while the request of the Light Novel is running.", "short error", 80),
         M("admin.novel.profile.unknown", "That quality profile cannot take Light Novels.", "Admin", "Error", "Shown when the chosen quality profile does not allow EPUB.", "short error", 54),

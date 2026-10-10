@@ -2,7 +2,7 @@
 <span class="admin-tag admin-tag-@Model.Tone">@Model.State</span>
 @if (Model.Quality is not null)
 {
-    <span class="admmd-lang admmd-lang-quiet">@Model.Quality</span>
+    <span class="admmd-lang admmd-lang-quiet">@Jularr.Web.Pages.Admin.ReadingWorkModel.QualityLabel(Model.Quality, Model.Ui)</span>
 }
 @if (Model.UpgradeWanted)
 {

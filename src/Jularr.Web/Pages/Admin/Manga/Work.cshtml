@@ -1,5 +1,8 @@
 @page "{workId:long}"
 @model Jularr.Web.Pages.Admin.Manga.WorkModel
+@{
+    ViewData["Title"] = Model.View.Title;
+}
 @section Head {
     <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-media-detail.css" asp-append-version="true" />
