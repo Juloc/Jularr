@@ -418,7 +418,13 @@ internal static class SqlExecutor
 
         if (type.IsEnum)
         {
-            return Enum.ToObject(type, value);
+            var enumValue = Enum.ToObject(type, value);
+            if (!Enum.IsDefined(type, enumValue))
+            {
+                throw new InvalidOperationException($"SQL returned an undefined {type.Name} value.");
+            }
+
+            return enumValue;
         }
 
         if (type.IsInstanceOfType(value))
