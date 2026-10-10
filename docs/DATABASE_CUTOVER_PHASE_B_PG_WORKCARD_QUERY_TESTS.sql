@@ -31,7 +31,10 @@ WHERE w."CanonicalTitle" LIKE 'Phase B WorkCard %';
 -- Exactly 1000 root rows, without creating any media-file/album duplications.
 DO $assert$
 BEGIN
-    IF (SELECT count(*) FROM "WatchlistEntries" WHERE "ProfileId" = :fixture_profile_id) <> 1000 THEN
+    IF (SELECT count(*) FROM "WatchlistEntries" AS w
+        JOIN "Profiles" AS p ON p."Id" = w."ProfileId"
+        JOIN "Accounts" AS a ON a."Id" = p."OwnerAccountId"
+        WHERE a."Email" = 'phase-b-watchlist@example.invalid') <> 1000 THEN
         RAISE EXCEPTION 'Expected exactly 1000 local root rows';
     END IF;
 END $assert$;
