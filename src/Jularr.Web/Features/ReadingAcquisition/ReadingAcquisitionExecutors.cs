@@ -8,6 +8,7 @@ using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.ReadingDiscovery;
 using Jularr.Web.Features.ReadingSources;
@@ -236,7 +237,8 @@ public sealed class MangaAcquisitionRequestExecutor(
 public sealed class LightNovelAcquisitionRequestExecutor(
     ReadingAcquisitionEngine engine,
     NovelAniListProvider aniList,
-    NovelImportService webNovels) : IAcquisitionRequestExecutor
+    NovelImportService webNovels,
+    RequestWorkBinder? binder = null) : IAcquisitionRequestExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.LightNovel;
 
@@ -352,6 +354,11 @@ public sealed class LightNovelAcquisitionRequestExecutor(
         try
         {
             var workId = await webNovels.ImportWorkAsync(sourceUrl, cancellationToken);
+            if (binder is not null && await binder.BindImportedAsync(request, WorkSourceKind.NovelWork, workId, cancellationToken) is { } conflict)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Failed, conflict);
+            }
+
             return new AcquisitionExecution(
                 AcquisitionRequestStatus.Completed,
                 "Imported from Syosetu.",

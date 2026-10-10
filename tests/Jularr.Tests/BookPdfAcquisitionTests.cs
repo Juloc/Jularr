@@ -719,7 +719,7 @@ public sealed class BookPdfAcquisitionTests
         public OperationStore Operations => new(Db);
         public string FilesPath => Books.FilesPath;
 
-        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null, HttpMessageHandler? newznab = null, bool canonicalWorks = false, HttpMessageHandler? aniList = null, HttpMessageHandler? novelAniList = null)
+        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null, HttpMessageHandler? newznab = null, bool canonicalWorks = false, HttpMessageHandler? aniList = null, HttpMessageHandler? novelAniList = null, IEnumerable<Jularr.Web.Features.Novels.INovelSourceProvider>? novelSources = null)
         {
             // The Reading pipeline serves Manga and Light Novels together; a host that asks for one gets the shared part of both.
             aniList ??= novelAniList is null ? null : new UnreachableHandler();
@@ -829,7 +829,7 @@ public sealed class BookPdfAcquisitionTests
 
             if (novelAniList is not null)
             {
-                AddLightNovel(collection, db, root);
+                AddLightNovel(collection, db, root, novelSources ?? []);
                 collection.AddSingleton(new Jularr.Web.Features.Novels.NovelAniListProvider(new HttpClient(novelAniList, disposeHandler: false) { BaseAddress = new Uri("https://graphql.anilist.co/") }, Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.Novels.NovelAniListProvider>.Instance));
                 collection.AddSingleton<Jularr.Web.Features.Novels.INovelMetadataProvider>(provider => provider.GetRequiredService<Jularr.Web.Features.Novels.NovelAniListProvider>());
             }
@@ -903,7 +903,7 @@ public sealed class BookPdfAcquisitionTests
                     provider.GetRequiredService<QualityProfileStore>()));
 
         // The Light Novel half: EPUB import, the executor, Wanted, upgrades and edition selection, wired as Program.cs does it.
-        private static void AddLightNovel(ServiceCollection collection, AppDbContext db, string root)
+        private static void AddLightNovel(ServiceCollection collection, AppDbContext db, string root, IEnumerable<Jularr.Web.Features.Novels.INovelSourceProvider> novelSources)
         {
             var mapping = new DirectoryInfo(Path.Combine(root, "mapping"));
             collection.AddSingleton(new Jularr.Web.Features.Novels.NovelVolumeAssetStore(new DirectoryInfo(Path.Combine(root, "volumes"))));
@@ -914,7 +914,7 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton(new Jularr.Web.Features.MediaMapping.MediaMappingReviewStore(Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.MediaMapping.MediaMappingReviewStore>.Instance, mapping));
             collection.AddSingleton(new Jularr.Web.Features.MediaMapping.ReadingSegmentMappingStore(Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.MediaMapping.ReadingSegmentMappingStore>.Instance, mapping));
             collection.AddSingleton<Jularr.Web.Features.Novels.NovelMetadataService>();
-            collection.AddSingleton<IEnumerable<Jularr.Web.Features.Novels.INovelSourceProvider>>([]);
+            collection.AddSingleton(novelSources);
             collection.AddSingleton<Jularr.Web.Features.Novels.NovelImportService>();
             collection.AddSingleton<IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRegistration>();
             collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.NovelImportTies>();
