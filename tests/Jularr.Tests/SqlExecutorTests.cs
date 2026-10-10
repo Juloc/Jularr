@@ -42,6 +42,17 @@ public sealed class SqlExecutorTests
     }
 
     [TestMethod]
+    public async Task ReadScalar_KeywordNamedParameter_RemainsValidSelect()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadOnly);
+
+        var value = await context.ReadSql.ExecuteScalarAsync("SELECT @Update::bigint", new { Update = 7L });
+        Assert.AreEqual(7L, value);
+    }
+
+    [TestMethod]
     public async Task ReadRequired_UndefinedPersistedEnum_IsRejected()
     {
         await using var database = CreateDataSource();
