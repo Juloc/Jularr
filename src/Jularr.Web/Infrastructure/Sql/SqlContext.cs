@@ -20,6 +20,7 @@ public sealed class SqlContext : IAsyncDisposable
     private bool _finished;
     private long? _actorAccountId;
     private long? _activeProfileId;
+    private bool _scopeInitialized;
     private bool _disposed;
 
     public SqlReadCommands ReadSql { get; }
@@ -80,7 +81,7 @@ public sealed class SqlContext : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_actorAccountId.HasValue || _activeProfileId.HasValue)
+        if (_scopeInitialized)
         {
             throw new InvalidOperationException("The verified SQL caller scope cannot be replaced.");
         }
@@ -92,6 +93,7 @@ public sealed class SqlContext : IAsyncDisposable
 
         _actorAccountId = actorAccountId;
         _activeProfileId = activeProfileId;
+        _scopeInitialized = true;
     }
 
     public SqlLogicCommands RequireLogicSql()
