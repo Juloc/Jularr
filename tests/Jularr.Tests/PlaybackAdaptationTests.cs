@@ -28,10 +28,10 @@ public sealed class PlaybackAdaptationTests
         private long _sequence;
         private int _stalls;
 
-        public Harness(PlaybackPlan? plan = null, PlaybackAdaptationDirective? directive = null)
+        public Harness(PlaybackPlan? plan = null, PlaybackAdaptationDirective? directive = null, PlaybackTranscodingSettingsStore? settings = null)
         {
             Clock = new ManualTimeProvider(s_start);
-            Store = new PlaybackStreamSessionStore(Clock);
+            Store = new PlaybackStreamSessionStore(Clock, settings);
             Session = Store.Create(
                 Viewer,
                 new PlaybackVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), Guid.NewGuid()),
@@ -76,6 +76,51 @@ public sealed class PlaybackAdaptationTests
             progress(new PlaybackTranscodeSample(0.6, 20, 30));
             Clock.Advance(PlaybackTranscodeMeter.SustainedFor);
             progress(new PlaybackTranscodeSample(0.6, 20, 40));
+        }
+    }
+
+    [TestMethod]
+    public async Task MoreExternalViewers_TriggerServerBudgetAdviceOnExistingPlayback()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        try
+        {
+            var saved = await kit.Settings.SaveAsync(
+                PlaybackTranscodingSettings.Default with
+                {
+                    HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
+                    WanUploadBudgetKbps = 10_000,
+                    WanUploadMode = PlaybackWanUploadMode.Manual
+                });
+            Assert.IsTrue(saved.Succeeded);
+
+            var harness = new Harness(AutoPlan(delivered: 8_000, limit: 8_500), settings: kit.Settings);
+            harness.PlayUntil(20);
+            Assert.AreEqual(PlaybackAdaptationAdvice.None, harness.Advice.Decision.Advice);
+
+            var second = harness.Store.Create(
+                "second-remote",
+                PlaybackVideoTarget.Movie(987654),
+                Guid.NewGuid(),
+                "/media/other.mp4",
+                1400,
+                AutoPlan(delivered: 4_250, limit: 4_250),
+                new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
+            second.MarkDeliveryStarted();
+
+            var response = harness.Advice.Decision;
+            Assert.AreEqual(PlaybackAdaptationAdvice.StepDown, response.Advice);
+            Assert.AreEqual(PlaybackAdaptationReason.ServerEgress, response.Reason);
+            Assert.AreEqual(
+                PlaybackAdaptationReason.ServerEgress,
+                harness.Store.NextDirective(harness.Session, PlaybackAdaptationAdvice.StepDown).Reason);
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
         }
     }
 

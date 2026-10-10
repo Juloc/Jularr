@@ -65,7 +65,11 @@ public sealed record ClientPlaybackPlanResponse(
 /// Whether the server still runs the session's stream. <see cref="Reason"/> says why an ended one ended when the server knows;
 /// <see cref="Recoverable"/> is the server's verdict that planning the same mode again is sensible (an encoder crash is not).
 /// </summary>
-public sealed record ClientStreamSessionStatus(StreamSessionState State, HlsSessionEndReason? Reason, bool Recoverable);
+public sealed record ClientStreamSessionStatus(
+    StreamSessionState State,
+    HlsSessionEndReason? Reason,
+    bool Recoverable,
+    HlsPacingSnapshot? Pacing = null);
 
 [JsonConverter(typeof(SnakeCaseEnumConverter<StreamSessionState>))]
 public enum StreamSessionState
@@ -452,7 +456,9 @@ public static class ClientApiPlaybackPlanEndpoints
                             directory => PlaybackDeliveryCommand.Hls(session.SourcePath, session.Plan, start, directory, admitted.Encoder),
                             admitted.Lease,
                             token,
-                            session.BeginTranscodeRun(admitted.Encoder.Backend))).SessionId,
+                            session.BeginTranscodeRun(admitted.Encoder.Backend),
+                            remainingDurationSeconds: session.DurationSeconds is { } duration ? duration - start : null,
+                            costClass: admitted.CostClass)).SessionId,
                         session),
                     previous => manager.Stop(previous, session.ProfileId),
                     cancellationToken);
@@ -525,6 +531,14 @@ public static class ClientApiPlaybackPlanEndpoints
                 return Results.Text(PlaybackDeliveryCommand.StartAtBeginning(playlist), asset.ContentType);
             }
 
+            // Playlist reloads and init headers are not evidence of video consumption.
+            // GetAsset already validates exact segment names and the owning profile.
+            if (fileName.StartsWith("segment-", StringComparison.Ordinal) &&
+                fileName.EndsWith(".m4s", StringComparison.Ordinal))
+            {
+                session.MarkDeliveryStarted();
+            }
+
             manager.PruneBehind(hlsSessionId, currentAccount.ProfileId, fileName);
             return Results.File(asset.Path, asset.ContentType, enableRangeProcessing: asset.EnableRangeProcessing);
         });
@@ -545,9 +559,18 @@ public static class ClientApiPlaybackPlanEndpoints
             }
 
             httpContext.Response.Headers.CacheControl = "no-store";
-            if (session.HlsSessionId is not { } hlsSessionId || manager.IsActive(hlsSessionId, currentAccount.ProfileId))
+            if (session.HlsSessionId is not { } hlsSessionId)
             {
                 return Results.Ok(new ClientStreamSessionStatus(StreamSessionState.Active, null, Recoverable: false));
+            }
+
+            if (manager.IsActive(hlsSessionId, currentAccount.ProfileId))
+            {
+                // Only expose this profile's ephemeral HLS encoder evidence. Reading diagnostics
+                // does not touch session activity, start an encoder or reveal another viewer's state.
+                return Results.Ok(new ClientStreamSessionStatus(
+                    StreamSessionState.Active, null, Recoverable: false,
+                    manager.GetPacingSnapshot(hlsSessionId, currentAccount.ProfileId)));
             }
 
             // Only an ending the server chose for capacity reasons says nothing against the mode; an unknown reason or a crash does not.
@@ -753,7 +776,7 @@ public static class ClientApiPlaybackPlanEndpoints
         session.Plan.Transport switch
         {
             PlaybackTransport.File => new ClientPlaybackDelivery(
-                ClientApiRoutes.DirectContent(session.MediaFileId),
+                $"{ClientApiRoutes.DirectContent(session.MediaFileId)}?streamSessionId={session.Id:D}",
                 PlaybackTransport.File,
                 null,
                 SeekableWithinStream: true),
@@ -846,7 +869,8 @@ public static class ClientApiPlaybackPlanEndpoints
             request.FailedModes is { Count: > 0 } failed ? failed.Take(4).ToHashSet() : null,
             request.ReplacesSessionId,
             request.Wake,
-            followedAdvice);
+            followedAdvice,
+            HasUntrustedForwardedFor: httpContext.Request.Headers.ContainsKey("X-Forwarded-For"));
         return true;
     }
 
@@ -874,6 +898,7 @@ public static class ClientApiPlaybackPlanEndpoints
     // ActiveSession moves to the new one.
     private static async Task RetireReplacedSessionAsync(PlaybackStreamSession session, PlaybackStreamSessionStore sessions, ActiveSessionService activeSessions, CancellationToken cancellationToken)
     {
+        session.MarkDeliveryStarted();
         if (sessions.CompleteReplacement(session) is { } replacedId)
         {
             await activeSessions.OpenAsync(session.Id, session.ProfileId, session.MediaFileId, session.Plan.Mode.ToString(), session.Selections.ClientKind, replacedId, cancellationToken);

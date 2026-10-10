@@ -56,6 +56,33 @@ public sealed class MediaInventoryService(
             : await ToEntryAsync(db, analysis, cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, MediaInventoryEntry>> GetManyAsync(
+        IReadOnlyCollection<Guid> mediaFileIds,
+        CancellationToken cancellationToken)
+    {
+        if (mediaFileIds.Count == 0)
+        {
+            return new Dictionary<Guid, MediaInventoryEntry>();
+        }
+
+        var ids = mediaFileIds.Distinct().ToArray();
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var analyses = await db.MediaTechnicalAnalyses
+            .AsNoTracking()
+            .Where(analysis => ids.Contains(analysis.MediaFileId))
+            .ToListAsync(cancellationToken);
+        var streams = (await db.MediaTracks
+            .AsNoTracking()
+            .Where(track => ids.Contains(track.MediaFileId))
+            .ToListAsync(cancellationToken))
+            .ToLookup(track => track.MediaFileId);
+
+        return analyses.ToDictionary(
+            analysis => analysis.MediaFileId,
+            analysis => ToEntryFromRows(analysis, streams[analysis.MediaFileId]));
+    }
+
     public async Task<IReadOnlyList<MediaInventoryEntry>> ListAsync(
         Guid libraryRootId,
         CancellationToken cancellationToken)
@@ -553,7 +580,10 @@ public sealed class MediaInventoryService(
             analysis.ProbeVersion,
             analysis.AnalyzedAt,
             analysis.Diagnostic,
-            technical);
+            technical,
+            analysis.SourceSizeBytes,
+            analysis.SourceLastWriteTimeUtc,
+            analysis.SourceFingerprint);
 
     private static Freshness Evaluate(MediaTechnicalAnalysis? analysis, SourceIdentity observed)
     {

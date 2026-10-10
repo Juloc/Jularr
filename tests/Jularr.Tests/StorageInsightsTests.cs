@@ -200,6 +200,50 @@ public sealed class StorageInsightsTests
     }
 
     [TestMethod]
+    public async Task VerifiedPreparedCache_OnlyReclaimsUnregisteredOldOutputsAndWorkFiles()
+    {
+        using var scope = await Scope.CreateAsync();
+        var root = scope.AddRoot("Sources", scope.Dir("media"));
+        var directory = Path.Combine(scope.Layout.PlaybackCacheRoot, "prepared-v1");
+        var orphan = scope.WriteFile(
+            Path.Combine(directory, $"prepared-{Guid.NewGuid():N}-{new string('a', 24)}-mobile1080.mp4"),
+            120, TimeSpan.FromHours(12));
+        var attached = scope.WriteFile(
+            Path.Combine(directory, $"prepared-{Guid.NewGuid():N}-{new string('b', 24)}-mobile1080.mp4"),
+            90, TimeSpan.FromHours(12));
+        var workFile = scope.WriteFile(
+            Path.Combine(directory, "prepared.mp4.123456.tmp"),
+            70, TimeSpan.FromHours(12));
+        var fresh = scope.WriteFile(
+            Path.Combine(directory, $"prepared-{Guid.NewGuid():N}-{new string('c', 24)}-mobile1080.mp4"),
+            50, TimeSpan.FromMinutes(10));
+
+        scope.Db.StoredFiles.Add(new StoredFile
+        {
+            LibraryRootId = root.Id,
+            Path = attached,
+            SizeBytes = 90,
+            LastWriteTimeUtc = File.GetLastWriteTimeUtc(attached)
+        });
+        await scope.Db.SaveChangesAsync();
+
+        var report = await scope.Scanner.ScanAsync(CancellationToken.None);
+        var area = report.Usage.Single(item => item.Area == StorageCacheAreaKind.PreparedPlayback);
+        Assert.AreEqual(330, area.Bytes);
+        var candidates = report.Plan.For(StorageCacheAreaKind.PreparedPlayback);
+        CollectionAssert.AreEquivalent(new[] { orphan, workFile }, candidates.Select(item => item.Path).ToArray());
+        Assert.IsFalse(candidates.Any(item => item.Path == attached),
+            "The cache scanner cannot offer a registered reusable version for raw-file deletion.");
+
+        var result = await scope.Cleanup.CleanAsync([StorageCacheAreaKind.PreparedPlayback], CancellationToken.None);
+        Assert.AreEqual(2, result.Removed);
+        Assert.IsTrue(File.Exists(attached));
+        Assert.IsTrue(File.Exists(fresh));
+        Assert.IsFalse(File.Exists(orphan));
+        Assert.IsFalse(File.Exists(workFile));
+    }
+
+    [TestMethod]
     public async Task PreviewOnlyReadsAndDeletesNothing()
     {
         using var scope = await Scope.CreateAsync();

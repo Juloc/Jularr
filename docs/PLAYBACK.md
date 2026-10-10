@@ -65,3 +65,12 @@ The learning-text fallback order is **nearby text subtitle → embedded text sub
 If no usable subtitle is found, Jularr transcribes the preferred Japanese audio stream through `whisper.cpp`. The quantized multilingual small model is downloaded once into `/data/whisper`, verified, and reused. Generated SRT lives under `/data/transcription-cache` and is imported through the same subtitle/vocabulary pipeline; source media is never modified. ASS/SSA, SubRip and WebVTT text are supported by the learning parser. Image subtitle formats such as PGS/DVD/DVB do not require OCR for learning text because Whisper remains the final fallback.
 
 **Settings → Subtitles** shows ready/queued/processing/failed coverage, can prepare every episode that is still missing learning text, and can retry individual failures. Jimaku is optional: removing or never configuring the key does not disable the local Whisper fallback.
+
+
+## Trusted reverse proxies for network classification
+
+Jularr accepts `X-Forwarded-For` and `X-Forwarded-Proto` only from explicitly trusted reverse proxy addresses. Configure `JULARR_TRUSTED_PROXIES` as comma-separated IP addresses or CIDR prefixes for actual proxy **peers** (for example, `172.20.0.2,fd00:1234::2`). Loopback remains trusted by ASP.NET Core's default middleware policy. Do not allowlist an entire RFC1918 Docker/LAN subnet merely for convenience: unrelated LAN clients may otherwise forge their remote address.
+
+Without a trusted proxy, forwarded headers are ignored. Playback requests carrying unconsumed `X-Forwarded-For` are classified conservatively as unknown rather than assuming the private proxy address is the viewer's LAN address. Confirm each proxy hop you intentionally trust; if the client is remote but the proxy is private and not configured, Jularr must not grant LAN quality merely because the proxy has a local address.
+
+This policy protects the server's playback network classification. It does not measure the household/ISP upload. The optional Admin WAN budget is a cap on **Jularr outbound streaming** only; local traffic remains outside that cap.

@@ -31,6 +31,23 @@ public sealed class StreamSessionStatusEndpointTests
     }
 
     [TestMethod]
+    public void ActiveStatusCarriesOnlyOptionalHlsPacingEvidence()
+    {
+        var snapshot = new Jularr.Web.Features.Playback.HlsPacingSnapshot(
+            IsPaused: true, ProducedAheadSeconds: 16, TargetAheadSeconds: 30, LowWaterSeconds: 12);
+        var status = new Jularr.Web.Features.ClientApi.ClientStreamSessionStatus(
+            Jularr.Web.Features.ClientApi.StreamSessionState.Active, null, Recoverable: false, snapshot);
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            status, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        StringAssert.Contains(json, "\"pacing\":{");
+        StringAssert.Contains(json, "\"producedAheadSeconds\":16");
+        StringAssert.Contains(json, "\"targetAheadSeconds\":30");
+        Assert.IsNull(new Jularr.Web.Features.ClientApi.ClientStreamSessionStatus(
+            Jularr.Web.Features.ClientApi.StreamSessionState.Active, null, Recoverable: false).Pacing);
+    }
+
+    [TestMethod]
     public async Task AnHlsStreamTheServerNoLongerRunsIsReportedAsEnded()
     {
         await using var host = await VideoDetailPageTestHost.CreateAsync();
