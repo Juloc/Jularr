@@ -71,3 +71,15 @@ Die bisherige [Enum-Quellprüfung](DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md) hat u
 **Typ-/Seed-Übersicht:** [ENUM_SEED_MANIFEST.csv](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) zeigt alle **41** persistierten Type-Kataloge aus den Entwürfen, darunter fünf mit bisher nur vorgeschlagenen Seeds. B01 bleibt offen, bis die tatsächlichen `enum : byte`-Verträge und Seeds fachlich vereinbart sind.
 
 **Game-only-Zusatztest:** [PG18-CI #38074769345](https://github.com/Juloc/Jularr/actions/runs/38074769345) bestätigt, dass `GameReleases` nur eine `WorkVersion` einer `Works(MediaTypeId=7)` akzeptiert und eine falsche WorkId/WorkVersion-Kombination abweist. Der Wert **7 ist weiterhin ein vorgeschlagener Seed**, keine finale Enum-Zusage. B01 bleibt vor einer echten Baseline verbindlich. Kein neues Game-Root eingeführt; `WorkId` ist durch Composite-FK mit `WorkVersions.WorkId` verbunden.
+
+
+## Ergänzung Draft 11–12 (PR #947)
+
+**Zusatzstand auf eigenem Branch, NICHT Gate-B-Abnahme:** Die neu dokumentierten PostgreSQL-Drafts 11 und 12 erweitern den aus Phase A abgeleiteten Entwurf auf **168 CREATE-TABLE-Ziele**. Sie ergänzen den kanonischen Domänen-Event-Log, Event-Audience/Severity-Kataloge, profile/account-scope-verifizierte In-App-Empfänger, technische Zustellversuche und die identitätsgesicherte Mehrziel-Bindung eines Acquisition-Downloads. Die bestehende `Operations`-Queue bleibt der einzige ausführende Job-Owner. `WantedItems` verwendet weiterhin **den** vorhandenen `UX_WantedItems_ExactTarget`-Index; keine doppelte Unique-Struktur.
+
+- [Draft 11](DATABASE_CUTOVER_PHASE_B_11_EVENTS_DELIVERY_DRAFT.sql): 5 weitere Tabellen, Anpassung des bestehenden `Notifications`-Inboxes statt zweiter Benachrichtigungsquelle.
+- [Draft 12](DATABASE_CUTOVER_PHASE_B_12_ACQUISITION_COVERAGE_DRAFT.sql): 1 weitere Tabelle, zwei zusammengesetzte Work-FKs und Wiederverwendung der vorhandenen exakt-ein-Wanted-Ziel-Unique.
+- [PG Event Tests](DATABASE_CUTOVER_PHASE_B_PG_EVENTS_TESTS.sql), [PG Acquisition Coverage Tests](DATABASE_CUTOVER_PHASE_B_PG_ACQUISITION_COVERAGE_TESTS.sql), [1000-WorkCard Query Smoke/EXPLAIN](DATABASE_CUTOVER_PHASE_B_PG_WORKCARD_QUERY_TESTS.sql) sind dem isolierten CI-Scratch-Workflow hinzugefügt.
+- Das tabellenweise [Target-Manifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) berücksichtigt alle 168 Zieltabellen und die neue Shape des bestehenden `Notifications`-Inboxes; das [Enum-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) erfasst nun 43 Persistenzkataloge. **Aus vorhandenen Quell-Enums verifizierte Werte sind weiterhin keine automatische Freigabe der neuen `enum : byte`-Verträge.**
+
+**Weiterhin offen:** die 16 B01–B16-Gates im [Entscheidungsregister](DATABASE_CUTOVER_PHASE_B_DECISIONS.md), insb. alle Enum-Seed-Verträge, noch unmodellierte Fachanteile für Auth/AI/Learning/Direct Sources/Arr und externe Transport-Policies, realistische Zugriffs-/Laufzeittests sowie die nötigen Produktentscheidungen. Ein synthetischer WorkCard-`EXPLAIN` allein schließt B15 nicht. Die neue EF-Baseline bleibt Phase C und wurde nicht angelegt.
