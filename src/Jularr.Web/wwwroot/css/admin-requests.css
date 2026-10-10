@@ -189,9 +189,6 @@ a.admreq-title:hover { color: var(--accent-text); }
 .admreq-select-control[data-admreq-enhanced] > .admreq-select-rich { grid-template-columns: minmax(0, 1fr) 10px; }
 .admreq-select-rich > [data-admreq-select-value] { display: flex; align-items: center; gap: 5px; }
 .admreq-select-extra { flex: none; color: var(--accent-text); font-size: 11px; }
-.admreq-filter-apply[hidden] { display: none; }
-.admreq-filter-apply { display: flex; justify-content: end; }
-.admreq-filter-apply .button { min-height: 36px; padding-inline: 16px; border-radius: 999px; font-size: 12px; }
 .admreq-dropdown-foot { position: sticky; bottom: -6px; display: flex; justify-content: end; gap: 8px; margin: 6px -6px -6px; padding: 9px; border-top: 1px solid var(--border); background: var(--surface); }
 .admreq-dropdown-foot .button { min-height: 32px; padding: 5px 12px; border-radius: 999px; font-size: 11px; }
 .admreq-dropdown-multiple .admreq-dropdown-option { display: grid; grid-template-columns: 15px minmax(0, 1fr); justify-content: start; gap: 9px; }
@@ -234,7 +231,6 @@ a.admreq-title:hover { color: var(--accent-text); }
 .admreq-filter-dialog-head .admin-icon-button { width: 38px; height: 38px; border-radius: 50%; }
 .admreq-filter-dialog-foot { padding-top: 12px; border-top: 1px solid var(--border); }
 .admreq-filter-dialog-foot .text-link { color: var(--accent-text); font-size: 12px; font-weight: 700; }
-.admreq-filter-dialog-foot .button { margin-inline-start: auto; border-radius: 999px; }
 .admreq-filter-dialog .admreq-selects { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .admreq-filter-dialog .admreq-select-trigger { width: 100%; max-width: none; min-height: 44px; }
 

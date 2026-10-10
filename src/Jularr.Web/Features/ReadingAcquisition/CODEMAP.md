@@ -1,6 +1,6 @@
 # Manga and Light Novel acquisition
 
-A Manga is one canonical `Work` (`WorkMediaType.Manga`); the library's own reading unit is the legacy `MangaSeries` with its `MangaChapters` (raw tables, string ids). They meet through `WorkSourceLinks` (`MangaSeries`). Light Novels share the engine, parser, judge, Manual Search and import skeleton but not the unit model below.
+A Manga is one canonical `Work` (`WorkMediaType.Manga`); the library's own reading unit is the legacy `MangaSeries` with its `MangaChapters` (raw tables, string ids). They meet through `WorkSourceLinks` (`MangaSeries`). A Light Novel is a `Work` (`WorkMediaType.LightNovel`) whose library unit is the legacy `NovelWork` (EPUB series or a public web novel, both linked through `WorkSourceLinks`) with one `NovelVolume` per EPUB; it shares the engine, parser, judge, coverage, Wanted, upgrades, Manual Search and Admin page with Manga.
 
 ## Lifecycle owners
 
@@ -10,7 +10,7 @@ A Manga is one canonical `Work` (`WorkMediaType.Manga`); the library's own readi
 - Search: `MangaAcquisitionRequestExecutor` -> `ReadingAcquisitionEngine.TargetAsync` (aliases + `ReadingWant`: missing and held units) -> `AcquisitionCore` with `ReadingReleaseJudge`. Identity is judged before quality; releases covering more missing units win, held units cost, a release naming no volume or chapter is Ambiguous (manual review only). Manual Search (`ReadingManualSearchService`, `Pages/Admin/ReadingManualSearch`) builds the same target, so Rank 1 is what automatic acquisition grabs.
 - Import: `MangaCompletedDownloadImportAdapter` imports the files into the series, then `ReadingImportTies` ties every file the release brought to the volume or chapters it holds (`WorkUnitBindings`; one local file may cover several chapters or volumes) and reconciles Wanted.
 - Wanted: a Work without a structure, or with library files nothing is tied to, is wanted as a whole title; otherwise per unit. `WantedRequestSource` opens the request, the same request reopens while units are missing.
-- Admin: `MangaWorkAdminQuery` + `Pages/Admin/Manga/Work` (monitoring per Work, volume and chapter, Search now for the title or one unit, Manual Search, Retry, profile, history, files). Wanted rows and the library series page link here.
+- Admin: `ReadingWorkAdminQuery` + `Pages/Admin/ReadingWorkModel` + shared body `_ReadingWork`, served by `Pages/Admin/Manga/Work` and `Pages/Admin/Novels/Work` (monitoring per Work, volume and chapter, Search now for the title or one unit, Manual Search, Retry, profile, history, files/editions, web vs published sources). Wanted rows and the library series/work pages link here.
 
 ## Versions and upgrades
 
@@ -19,3 +19,10 @@ Library files that hold exactly the same volumes or chapters (same `WorkUnitBind
 ## Tests
 
 `MangaReleaseCoverageTests` (parser and judge), `MangaLifecycleTests`, `MangaUnitCoverageTests` (volumes, chapters, ranges, overrides, existing library), `MangaManualSearchTests`, `MangaRecoveryTests`, `MangaUpgradeTests`, `MangaVersionTests`, `MangaAdminPageTests` (+ `MangaAdminPageHost`); the Manga half of `BookPdfAcquisitionTests.BookAcquisitionEnvironment` (`aniList:` argument) is their shared wiring.
+
+## Light Novels
+
+- Volumes: AniList states published volumes (`ReadingStructureService` -> `WorkVolume`); `NovelEpubImportService.ImportFilesAsync` imports only the EPUBs a release brought, `NovelImportTies` ties each `NovelVolume` to the `WorkVolume` of its number, `ReadingCoverageService` reads them through `NovelVolumes` and `NovelVolumeEditions`. A web novel (`NovelVolumeKinds.Web`) never counts as a published volume.
+- Editions: every EPUB of a volume is a `NovelVolumeEdition` (quality from the release label: EPUB vs unlabelled). `LightNovelVersionSelector` shows the best one by the Work's profile through the chapter sync, so chapter ids, progress, bookmarks and notes survive; older files stay on disk and a damaged or inferior copy is removed. `LightNovelCompletedDownloadImportAdapter` is the import adapter, `LightNovelAcquisitionRequestExecutor` also imports a Syosetu (ncode) request directly and ties the web novel to the request's Work.
+- Safety: `LightNovelWebDirectSource` only offers an exact title plus matching author evidence; a web novel is never merged into a published edition by title.
+- Tests: `LightNovelLifecycleTests`, `LightNovelUpgradeTests`, `LightNovelWebTests`, `LightNovelAdminPageTests`, `LightNovelAcquisitionExecutorTests`.

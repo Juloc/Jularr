@@ -137,7 +137,6 @@
                     </select>
                 </div>
             </div>
-            <div class="admreq-filter-apply" data-admreq-filter-apply hidden><button class="button button-primary" type="submit">@ui["admin.requests.filters.apply"]</button></div>
             @foreach (var kind in Model.EnabledKinds)
             {
                 <template data-admreq-option-select="type" data-value="@AcquisitionAccessNames.Kind(kind)"><partial name="_RequestTypeTag" model="kind" /></template>
@@ -166,13 +165,12 @@
                     </button>
                 </div>
                 <div data-admreq-filter-dialog-content></div>
-                <div class="admreq-filter-dialog-foot">
-                    @if (filter.HasNarrowing)
-                    {
+                @if (filter.HasNarrowing)
+                {
+                    <div class="admreq-filter-dialog-foot">
                         <a class="text-link" href="@RequestsModel.Href(new AdminRequestFilter(filter.Tab))">@ui["admin.requests.filter.reset"]</a>
-                    }
-                    <button class="button button-primary" type="submit">@ui["admin.requests.filters.apply"]</button>
-                </div>
+                    </div>
+                }
             </dialog>
         </form>
     </div>

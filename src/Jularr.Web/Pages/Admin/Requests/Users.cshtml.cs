@@ -101,7 +101,7 @@ public sealed class UsersModel(AppDbContext db, OwnerAuthService accounts, Admin
             Directory = await directory.ReadUsersV1(User, new PageRequest(Math.Max(1, page), 50), cancellationToken, Query);
         }
 
-        SelectedUser = userId is null ? null : await accounts.GetAsync(userId, cancellationToken);
+        SelectedUser = userId is null ? Directory.Items.FirstOrDefault() : await accounts.GetAsync(userId, cancellationToken);
         if (SelectedUser is { } user)
         {
             EditableKinds = EnabledKinds.Where(kind => Capabilities.Resolve(user.Role, user.Id, AcquisitionAccessNames.WorkType(kind)) >= MediaCapability.Request).ToArray();

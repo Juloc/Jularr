@@ -97,7 +97,7 @@ function filterHarness(initialValues = []) {
         hasAttribute(name) { return this.attributes.has(name); }
         matches() { return this.open; }
         showPopover() { this.open = true; }
-        hidePopover() { this.open = false; }
+        hidePopover() { this.open = false; this.dispatchEvent({ type: 'toggle' }); }
         focus() {}
         getBoundingClientRect() { return { left: 20, top: 20, bottom: 60, width: 140 }; }
         offsetWidth = 180;
@@ -108,8 +108,6 @@ function filterHarness(initialValues = []) {
     form.dataset = { cancelLabel: 'Cancel', applyLabel: 'Apply' };
     form.submissions = 0;
     form.requestSubmit = () => form.submissions++;
-    const applyAll = new Element();
-    applyAll.hidden = true;
     const control = new Element();
     control.closest = selector => selector === 'form' ? form : null;
     const select = new Element();
@@ -120,7 +118,6 @@ function filterHarness(initialValues = []) {
     Object.defineProperty(select, 'selectedOptions', { get: () => select.options.filter(option => option.selected) });
     select.closest = () => control;
     form.querySelectorAll = selector => selector === 'select[multiple]' || selector === 'select' ? [select] : [];
-    form.querySelector = selector => selector === '[data-admreq-filter-apply]' ? applyAll : null;
     document.querySelector = selector => selector === '[data-admreq-filters]' ? form : null;
     document.querySelectorAll = selector => selector === 'select[data-admreq-custom-select]' ? [select] : [];
     document.createElement = () => new Element();
@@ -130,17 +127,16 @@ function filterHarness(initialValues = []) {
     const panel = control.children[1];
     const options = panel.children[0].children;
     const [cancel, apply] = panel.children[1].children;
-    return { form, select, panel, options, cancel, apply, applyAll, trigger: control.children[0] };
+    return { form, select, panel, options, cancel, apply, trigger: control.children[0] };
 }
 
 test('Multiple filters keep the popup open until Apply and submit all selected values', () => {
-    const { form, select, panel, options, apply, trigger, applyAll } = filterHarness();
+    const { form, select, panel, options, apply, trigger } = filterHarness();
     trigger.dispatchEvent({ type: 'click' });
     options[1].dispatchEvent({ type: 'click' });
     options[2].dispatchEvent({ type: 'click' });
     assert.equal(panel.open, true);
     assert.equal(form.submissions, 0);
-    assert.equal(applyAll.hidden, false);
     assert.deepEqual(select.selectedOptions.map(option => option.value), ['movie', 'tv']);
     assert.equal(options[1].children[0].className, 'admreq-dropdown-checkbox');
     assert.equal(options[1].getAttribute('aria-selected'), 'true');
@@ -149,7 +145,7 @@ test('Multiple filters keep the popup open until Apply and submit all selected v
 });
 
 test('Cancel restores the applied filter selection without submitting', () => {
-    const { form, select, panel, options, cancel, trigger, applyAll } = filterHarness(['movie']);
+    const { form, select, panel, options, cancel, trigger } = filterHarness(['movie']);
     trigger.dispatchEvent({ type: 'click' });
     options[1].dispatchEvent({ type: 'click' });
     options[2].dispatchEvent({ type: 'click' });
@@ -157,7 +153,23 @@ test('Cancel restores the applied filter selection without submitting', () => {
     assert.deepEqual(select.selectedOptions.map(option => option.value), ['movie']);
     assert.equal(form.submissions, 0);
     assert.equal(panel.open, false);
-    assert.equal(applyAll.hidden, true);
     assert.equal(options[1].getAttribute('aria-selected'), 'true');
     assert.equal(options[2].getAttribute('aria-selected'), 'false');
+});
+
+test('Leaving a multiselect commits its choices once without a second Apply button', () => {
+    const { form, options, panel, trigger } = filterHarness();
+    trigger.dispatchEvent({ type: 'click' });
+    options[1].dispatchEvent({ type: 'click' });
+    panel.hidePopover();
+    assert.equal(form.submissions, 1);
+    panel.dispatchEvent({ type: 'toggle' });
+    assert.equal(form.submissions, 1);
+});
+
+test('Closing an unchanged multiselect does not reload the queue', () => {
+    const { form, panel, trigger } = filterHarness(['movie']);
+    trigger.dispatchEvent({ type: 'click' });
+    panel.hidePopover();
+    assert.equal(form.submissions, 0);
 });

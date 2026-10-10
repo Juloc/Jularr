@@ -2,6 +2,7 @@ using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.ReadingDiscovery;
 using Jularr.Web.Features.ReadingSources;
@@ -10,7 +11,7 @@ namespace Jularr.Web.Features.ReadingAcquisition;
 
 // A public full-text copy of the light novel on a web source. Only a source explicitly marked as public full text and an exact title match qualify; previews,
 // shops and reference-only results stay discovery evidence and never reach acquisition.
-public sealed class LightNovelWebDirectSource(NovelImportService webNovels, ReadingCatalogSearchService catalogSearch, ReadingSourceSettingsStore sourceSettings) : IDirectSource
+public sealed class LightNovelWebDirectSource(NovelImportService webNovels, ReadingCatalogSearchService catalogSearch, ReadingSourceSettingsStore sourceSettings, RequestWorkBinder? binder = null) : IDirectSource
 {
     public const string SourceName = "web";
 
@@ -61,6 +62,11 @@ public sealed class LightNovelWebDirectSource(NovelImportService webNovels, Read
         var separator = offer.Key.IndexOf(':');
         var definition = ReadingSourceCatalog.GetRequired(offer.Key[..separator]);
         var workId = await webNovels.ImportWorkAsync(definition.DirectImportUrl!(offer.Key[(separator + 1)..]), cancellationToken);
+        if (binder is not null && await binder.BindImportedAsync(request, WorkSourceKind.NovelWork, workId, cancellationToken) is { } conflict)
+        {
+            return new AcquisitionExecution(AcquisitionRequestStatus.Failed, conflict);
+        }
+
         return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"Imported a public copy from {definition.Name}.", ResultUrl: $"/Novels/Work/{workId}");
     }
 
@@ -87,6 +93,10 @@ public sealed class LightNovelWebDirectSource(NovelImportService webNovels, Read
             .Concat(payload.Aliases ?? [])
             .Where(name => !string.IsNullOrWhiteSpace(name));
 
-        return names.Any(name => ReadingCatalogSearch.MatchScore(name, candidate) >= 1000);
+        // A title alone never makes a hosted text copy the published edition that was requested: the author the request names must be the copy's author too, and a
+        // request that names none (a published volume found by title) takes no web copy automatically.
+        return !string.IsNullOrWhiteSpace(payload.Author)
+            && ReadingReleaseJudge.Words(payload.Author).Overlaps(ReadingReleaseJudge.Words(candidate.Author))
+            && names.Any(name => ReadingCatalogSearch.MatchScore(name, candidate) >= 1000);
     }
 }

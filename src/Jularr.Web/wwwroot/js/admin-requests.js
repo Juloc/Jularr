@@ -11,6 +11,12 @@
     const filterForm = document.querySelector('[data-admreq-filters]');
     const selectionValue = select => [...select.selectedOptions].map(option => option.value).filter(Boolean).sort().join('\u0000');
     const initialFilters = new Map([...(filterForm?.querySelectorAll('select[multiple]') || [])].map(select => [select, selectionValue(select)]));
+    let filtersSubmitting = false;
+    const applyChangedFilters = () => {
+        if (filtersSubmitting || ![...initialFilters].some(([select, initial]) => selectionValue(select) !== initial)) return;
+        filtersSubmitting = true;
+        submitForm(filterForm);
+    };
     const filterGroup = filterForm?.querySelector('.admreq-selects');
     const filterRow = filterForm?.querySelector('.admreq-filter-row');
     const sortControl = filterForm?.querySelector('.admreq-sort-control');
@@ -41,6 +47,7 @@
             button.addEventListener('click', () => filterDialog.close());
         });
         filterDialog.addEventListener('close', () => {
+            closeCustomSelects();
             mobileFilterTrigger.setAttribute('aria-expanded', 'false');
             if (mobileFilters.matches) mobileFilterTrigger.focus();
         });
@@ -70,11 +77,7 @@
     });
     filterForm?.querySelectorAll('select').forEach(select => {
         select.addEventListener('change', () => {
-            if (select.multiple) {
-                const apply = filterForm.querySelector('[data-admreq-filter-apply]');
-                if (apply) apply.hidden = ![...initialFilters].some(([filter, initial]) => selectionValue(filter) !== initial);
-            }
-            else submitForm(filterForm);
+            if (!select.multiple || select.closest('[data-admreq-enhanced]')?.dataset.admreqEnhanced === undefined) submitForm(filterForm);
         });
     });
 
@@ -246,7 +249,10 @@
             apply.type = 'button';
             apply.className = 'button button-primary';
             apply.textContent = filterForm.dataset.applyLabel;
-            apply.addEventListener('click', () => submitForm(select.form));
+            apply.addEventListener('click', () => {
+                panel.hidePopover();
+                applyChangedFilters();
+            });
             footer.append(cancel, apply);
             panel.append(footer);
         }
@@ -297,7 +303,11 @@
                 trigger.focus();
             }
         });
-        panel.addEventListener('toggle', () => trigger.setAttribute('aria-expanded', String(panel.matches(':popover-open'))));
+        panel.addEventListener('toggle', () => {
+            const open = panel.matches(':popover-open');
+            trigger.setAttribute('aria-expanded', String(open));
+            if (select.multiple && !open) applyChangedFilters();
+        });
         select.addEventListener('change', syncSelect);
         select.form?.addEventListener('reset', () => queueMicrotask(syncSelect));
         select.tabIndex = -1;

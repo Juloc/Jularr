@@ -144,11 +144,11 @@ public sealed class MangaVersionSelector(AppDbContext db, QualityProfileStore pr
     }
 }
 
-// A Manga unit is upgradable while the best version it holds is below what its profile wants (a ZIP where the profile wants a CBZ). One assessor judges one kind
-// of queue row: the volumes, the chapters, or the Work itself while it has no structure.
-public sealed class MangaUpgradeAssessor(WantedTargetKind targetKind, ReadingCoverageService coverage, QualityProfileStore profiles) : IUpgradeAssessor
+// A Manga volume or chapter, or a Light Novel volume, is upgradable while the best version it holds is below what its profile wants (a ZIP where the profile wants a
+// CBZ). One assessor judges one kind of queue row: the volumes, the chapters, or the Work itself while it has no structure.
+public sealed class ReadingUpgradeAssessor(MediaAcquisitionKind kind, WantedTargetKind targetKind, ReadingCoverageService coverage, QualityProfileStore profiles) : IUpgradeAssessor
 {
-    public MediaAcquisitionKind Kind => MediaAcquisitionKind.Manga;
+    public MediaAcquisitionKind Kind => kind;
 
     public WantedTargetKind TargetKind => targetKind;
 
@@ -157,7 +157,7 @@ public sealed class MangaUpgradeAssessor(WantedTargetKind targetKind, ReadingCov
         var view = await coverage.LoadAsync(workId, cancellationToken);
         if (targetKind == WantedTargetKind.Work)
         {
-            var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Manga, workId, cancellationToken);
+            var profile = await profiles.ResolveAsync(kind, workId, cancellationToken);
             return !view.HasStructure && UpgradePolicy.Assess(profile, view.InstalledQuality).IsUpgradable ? held : [];
         }
 

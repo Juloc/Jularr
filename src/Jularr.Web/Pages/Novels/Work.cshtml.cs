@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaFacts;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.Operations;
@@ -10,6 +11,7 @@ using Jularr.Web.Features.Tracking;
 using Jularr.Web.Features.Watchlist;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages.Novels;
 
@@ -59,6 +61,7 @@ public sealed class WorkModel(
     public string SearchQuery { get; private set; } = "";
     public bool IsSearching { get; private set; }
     public bool IsOwner => account.IsOwner;
+    public long? ManageWorkId { get; private set; }
     public IReadOnlyList<FranchiseSummary> Franchises { get; private set; } = [];
     public IReadOnlyList<FranchiseRelationGroup> FranchiseGroups { get; private set; } = [];
     public IReadOnlyList<PresentationSection<NovelVolumeItem>> PresentationVolumeSections { get; private set; } = [];
@@ -81,6 +84,14 @@ public sealed class WorkModel(
         if (Detail is null)
         {
             return NotFound();
+        }
+
+        if (account.IsOwner)
+        {
+            ManageWorkId = await db.WorkSourceLinks.AsNoTracking()
+                .Where(link => link.SourceKind == WorkSourceKind.NovelWork && link.SourceId == id)
+                .Select(link => (long?)link.WorkId)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         Facts = MediaFactsStripModel.Create(

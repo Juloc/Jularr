@@ -135,11 +135,11 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
         }
     }
 
-    // Requesting a Book or Manga monitors it unless somebody already decided: that is what keeps a better format of a Book and the volumes still missing of a
-    // Manga wanted after the first import. An audiobook request says nothing about the Book, and a decision the owner made (also "off") is never overwritten.
+    // Requesting a Book, Manga or Light Novel monitors it unless somebody already decided: that is what keeps a better format of a Book and the volumes still missing of a
+    // Manga or Light Novel wanted after the first import. An audiobook request says nothing about the Book, and a decision the owner made (also "off") is never overwritten.
     private async Task MonitorRequestedWorkAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
-        if (kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga && monitoring is not null && monitoringState is not null && (await monitoringState.LoadAsync(workId, cancellationToken)).WorkDecision is null)
+        if (kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel && monitoring is not null && monitoringState is not null && (await monitoringState.LoadAsync(workId, cancellationToken)).WorkDecision is null)
         {
             await monitoring.SetWorkAsync(workId, true, cancellationToken, replaceChildren: false);
         }

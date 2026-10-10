@@ -21,17 +21,18 @@
             {
                 var resolved = rules.Resolve(account.Id, Model.RequestSettings.AutoApprovalRules);
                 var allowed = resolved.Values.Kinds.Where(kind => Model.EnabledKinds.Contains(kind) && Model.Capabilities.Resolve(account.Role, account.Id, AcquisitionAccessNames.WorkType(kind)) >= MediaCapability.Request);
-                <article class="rre-user-row @(account.Id == Model.SelectedUser?.Id ? "is-selected" : "")">
-                    <div class="rre-user-row-head"><partial name="/Pages/Admin/_RequestRequester.cshtml" model="account.UserName" /><span class="status-pill">@ui[AccountRoles.LabelKey(account.Role)]</span>
-                        <a class="button button-secondary" href="/Admin/Requests/Users?userId=@Uri.EscapeDataString(account.Id)&amp;q=@Uri.EscapeDataString(Model.Query)&amp;p=@Model.Directory.Page" data-rre-navigation>@ui["requestRules.edit"]</a>
+                <a class="rre-user-row @(account.Id == Model.SelectedUser?.Id ? "is-selected" : "")" href="/Admin/Requests/Users?userId=@Uri.EscapeDataString(account.Id)&amp;q=@Uri.EscapeDataString(Model.Query)&amp;p=@Model.Directory.Page" data-rre-navigation aria-current="@(account.Id == Model.SelectedUser?.Id ? "true" : null)">
+                    <div class="rre-user-row-head">
+                        <div class="rre-user-identity"><partial name="/Pages/Admin/_RequestRequester.cshtml" model="account.UserName" /><span class="status-pill">@ui[AccountRoles.LabelKey(account.Role)]</span>
+                            @if (!account.IsEnabled) { <span class="status-pill">@ui["admin.user.disabledPendingLabel"]</span> }
+                        </div>
                     </div>
-                    @if (!account.IsEnabled) { <span class="status-pill">@ui["admin.user.disabledPendingLabel"]</span> }
-                    <div class="rre-user-summary"><strong>@resolved.Profile.Name</strong><span class="muted">@(resolved.InheritsDefault ? ui["requestRules.inherited"] : ui["requestRules.assigned"])</span><span>@(resolved.Values.Limit is { } limit ? ui.Format("requestRules.limitSummary", ("count", limit), ("days", resolved.Values.PeriodDays)) : ui["requestRules.unlimited"])</span>
-                        <span>@ui[resolved.TransitionRules.Count > 0 ? "requestRules.transition" : resolved.Values.Approval == RequestApprovalMode.Automatic ? "requestRules.automatic" : "requestRules.manual"]</span>
+                    <div class="rre-user-summary"><span class="rre-user-profile"><strong>@resolved.Profile.Name</strong><span class="muted">@(resolved.InheritsDefault ? ui["requestRules.inherited"] : ui["requestRules.assigned"])</span></span><span>@(resolved.Values.Limit is { } limit ? ui.Format("requestRules.limitSummary", ("count", limit), ("days", resolved.Values.PeriodDays)) : ui["requestRules.unlimited"])</span>
+                        <span title="@(ui["requestRules.configuredApproval"] + ". " + ui["requestRules.effectiveApprovalHelp"])">@ui[resolved.TransitionRules.Count > 0 ? "requestRules.transition" : resolved.Values.Approval == RequestApprovalMode.Automatic ? "requestRules.automatic" : "requestRules.manual"]</span>
                         <span class="status-pill">@ui[resolved.Overrides.HasChanges ? "requestRules.custom" : "requestRules.inherited"]</span>
                     </div>
-                    <div class="rre-tags">@foreach (var kind in allowed) { <partial name="/Pages/Admin/_RequestTypeTag.cshtml" model="kind" /> }</div>
-                </article>
+                    <div class="rre-tags rre-user-media">@foreach (var kind in allowed) { <partial name="/Pages/Admin/_RequestTypeTag.cshtml" model="kind" /> }</div>
+                </a>
             }
             @if (Model.Directory.TotalCount > Model.Directory.PageSize)
             {
