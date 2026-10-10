@@ -35,7 +35,6 @@ BEGIN
         ('CK_NotificationDeliveries_ExactlyOneRecipient','c'),
         ('UX_Notifications_Event_Recipient','u'),
         ('UX_NotificationDeliveries_Event_Recipient_Channel','u'),
-        ('UX_WantedItems_ExactTarget','u'),
         ('FK_AcquisitionDownloadWantedItems_BindingWork','f'),
         ('FK_AcquisitionDownloadWantedItems_TargetWork','f')
     )
@@ -90,6 +89,19 @@ BEGIN
           AND i.indisunique AND i.indnullsnotdistinct
     ) THEN
         RAISE EXCEPTION 'MediaProgress needs its exact NULLS NOT DISTINCT uniqueness index';
+    END IF;
+
+    -- Existing wanted target uniqueness is implemented as a unique index,
+    -- not pg_constraint; assert its true null-equality semantics explicitly.
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_index AS ix
+        JOIN pg_class AS i ON i.oid = ix.indexrelid
+        WHERE ix.indrelid = '"WantedItems"'::regclass
+          AND i.relname = 'UX_WantedItems_ExactTarget'
+          AND ix.indisunique AND ix.indnullsnotdistinct
+    ) THEN
+        RAISE EXCEPTION 'WantedItems exact-target NULLS NOT DISTINCT unique index is missing';
     END IF;
 
     IF (
