@@ -129,6 +129,30 @@ public sealed class ServiceFoundationTests
     }
 
     [TestMethod]
+    public async Task ExecuteBatch_RechecksPermissionsAndBlocksSecondBatchBeforeSql()
+    {
+        await using var database = CreateDataSource();
+
+        await using (var setup = new SqlContext(database))
+        {
+            await setup.BeginAsync(SqlAccessMode.ReadWrite);
+            await setup.RequireLogicSql().ExecuteAsync("CREATE TABLE \"ServiceExecuteBatchProbe\" (\"Id\" bigint PRIMARY KEY)");
+            await setup.CommitAsync();
+        }
+
+        var gate = new TestGate { Area = ServiceArea.System, BlockSecondTransaction = true };
+        var service = new SystemBatchService(new ServiceRuntime(database, gate));
+
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
+            () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("blocked")));
+
+        await using var verify = new SqlContext(database);
+        await verify.BeginAsync(SqlAccessMode.ReadOnly);
+        Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\""));
+        CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction", "transaction" }, gate.Events.ToArray());
+    }
+
+    [TestMethod]
     public async Task ReadService_CannotObtainLogicWriteCapability()
     {
         await using var database = CreateDataSource();
@@ -270,6 +294,8 @@ public sealed class ServiceFoundationTests
     {
         public readonly List<string> Events = [];
         public bool BlockModule { get; init; }
+        public bool BlockSecondTransaction { get; init; }
+        private int _transactionChecks;
         public ServiceArea Area { get; init; } = ServiceArea.User;
 
         public Task RequireModulesAsync(ModuleRequirement modules, CancellationToken cancellationToken)
@@ -301,6 +327,11 @@ public sealed class ServiceFoundationTests
         {
             Events.Add("transaction");
             Assert.AreEqual("test-user", caller.PrincipalKey);
+            if (BlockSecondTransaction && ++_transactionChecks >= 2)
+            {
+                throw new UnauthorizedAccessException("Resource permission revoked between Execute batches.");
+            }
+
             return Task.CompletedTask;
         }
     }
