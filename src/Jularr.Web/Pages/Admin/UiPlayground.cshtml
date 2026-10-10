@@ -22,7 +22,7 @@
     <section class="panel ui-split-list" id="controls">
         <form data-apply-label="Apply" data-cancel-label="Cancel">
             <div class="ui-fields">
-                <label class="ui-field"><span>Single select</span><span class="ui-select-control"><select name="single" aria-label="Single select" data-ui-select><option value="one">First option</option><option value="two">Second option</option><option disabled>Disabled option</option></select></span></label>
+                <label class="ui-field"><span>Single select</span><span class="ui-select-control"><select name="single" aria-label="Single select" data-ui-select><option value="one">First option</option><option value="two">Second option</option><option disabled>Disabled option</option>@foreach (var index in Enumerable.Range(3, 7)) { <option value="@index">Additional option @index</option> }</select></span></label>
                 <label class="ui-field"><span>Filter popover</span><span class="ui-select-control"><select name="tones" aria-label="Status filter" multiple data-ui-select><option value="">All states</option>@foreach (var tone in Enum.GetValues<UiTone>()) { <option value="@tone">@tone</option> }</select></span></label>
                 <label class="ui-field"><span>Required field</span><input class="ui-input" name="text" required placeholder="Enter a value" aria-describedby="fixture-help" /><small id="fixture-help">Help remains readable.</small></label>
                 <label class="ui-field"><span>Read-only</span><input class="ui-input" readonly value="Readable original value" /></label>

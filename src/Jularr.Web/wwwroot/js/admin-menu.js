@@ -27,6 +27,7 @@
             };
             listen(menu, 'toggle', () => { if (menu.open) open(); else close(); });
             listen(document, 'click', event => { if (!menu.contains(event.target)) close(); });
+            listen(document, 'focusin', event => { if (menu.open && !menu.contains(event.target)) close(); });
             listen(panel, 'click', event => { if (event.target.closest('a[href], button:not(:disabled)')) close(); });
             listen(menu, 'keydown', event => {
                 if (event.key === 'Escape') { event.preventDefault(); close(true); }
@@ -35,7 +36,7 @@
                 open();
                 const items = [...panel.querySelectorAll('a[href], button:not(:disabled)')];
                 const index = items.indexOf(document.activeElement);
-                const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : index < 0 ? (event.key === 'ArrowUp' ? items.length - 1 : 0) : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
                 items[next]?.focus();
             });
             listen(document, 'keydown', event => { if (event.key === 'Escape' && menu.open) close(true); });

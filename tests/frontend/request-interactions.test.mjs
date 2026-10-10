@@ -85,7 +85,7 @@ test('Free numeric page size submits on Enter and rejects out-of-range values', 
     assert.equal(pageForm.submissions, 2);
 });
 
-function filterHarness(initialValues = []) {
+function filterHarness(initialValues = [], extraOptions = 0, withIcon = false) {
     class Element extends Target {
         children = [];
         attributes = new Map();
@@ -93,6 +93,8 @@ function filterHarness(initialValues = []) {
         open = false;
         classList = { add() {}, toggle() {} };
         append(...children) { this.children.push(...children); }
+        prepend(...children) { this.children.unshift(...children); }
+        contains(target) { return this === target || this.children.some(child => child.contains?.(target)); }
         replaceChildren(...children) { this.children = children; }
         remove() {}
         removeAttribute(name) { this.attributes.delete(name); }
@@ -102,7 +104,7 @@ function filterHarness(initialValues = []) {
         matches() { return this.open; }
         showPopover() { this.open = true; }
         hidePopover() { this.open = false; this.dispatchEvent({ type: 'toggle' }); }
-        focus() {}
+        focus() { document.activeElement = this; }
         getBoundingClientRect() { return { left: 20, top: 20, bottom: 60, width: 140 }; }
         offsetWidth = 180;
         offsetHeight = 200;
@@ -113,6 +115,9 @@ function filterHarness(initialValues = []) {
     form.submissions = 0;
     form.requestSubmit = () => form.submissions++;
     const control = new Element();
+    const icon = withIcon ? new Element() : null;
+    if (icon) icon.hidden = false;
+    control.querySelector = selector => selector === '.ui-select-icon' ? icon : null;
     control.closest = selector => selector === 'form' ? form : null;
     const select = new Element();
     select.multiple = true;
@@ -122,6 +127,7 @@ function filterHarness(initialValues = []) {
     select.setAttribute('aria-describedby', 'filter-help');
     select.setAttribute('aria-invalid', 'true');
     select.options = ['', 'movie', 'tv'].map(value => ({ value, textContent: value || 'Media type', selected: initialValues.includes(value) }));
+    for (let index = 0; index < extraOptions; index++) select.options.push({ value: `extra-${index}`, textContent: `Extra ${index}`, selected: false });
     Object.defineProperty(select, 'selectedOptions', { get: () => select.options.filter(option => option.selected) });
     select.closest = () => control;
     const dispatch = select.dispatchEvent.bind(select);
@@ -135,9 +141,12 @@ function filterHarness(initialValues = []) {
     const window = new Element();
     vm.runInNewContext(source, { document, window, AbortController, MutationObserver: class { observe() {} disconnect() {} }, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } }, Event: class { constructor(type) { this.type = type; } } });
     const panel = control.children[1];
-    const options = panel.children[0].children;
-    const [cancel, apply] = panel.children[1].children;
-    return { document, window, control, form, select, panel, options, cancel, apply, trigger: control.children[0] };
+    const searchable = select.options.length > 8;
+    const searchBox = searchable ? panel.children[0] : null;
+    const options = panel.children[searchable ? 1 : 0].children;
+    panel.querySelectorAll = selector => selector === '[role="option"]' ? options : [];
+    const [cancel, apply] = panel.children[searchable ? 2 : 1].children;
+    return { document, window, control, form, select, panel, options, searchBox, icon, cancel, apply, trigger: control.children[0] };
 }
 
 test('Select initialization is idempotent and disposal removes document listeners', () => {
@@ -157,6 +166,27 @@ test('Enhanced selects preserve validation and help semantics on the visible tri
     assert.equal(trigger.getAttribute('aria-describedby'), 'filter-help');
     assert.equal(trigger.getAttribute('aria-invalid'), 'true');
     assert.equal(trigger.getAttribute('aria-required'), 'true');
+});
+
+test('Select disposal restores the native fallback icon visibility', () => {
+    const { window, document, icon } = filterHarness([], 0, true);
+    icon.hidden = true;
+    window.JularrSelect.dispose(document);
+    assert.equal(icon.hidden, false);
+});
+
+test('Searchable selects reopen in search and arrows skip hidden or disabled choices', () => {
+    const { document, trigger, panel, searchBox, options } = filterHarness([], 7);
+    trigger.dispatchEvent({ type: 'click' });
+    assert.equal(document.activeElement, searchBox);
+    options[0].hidden = true;
+    options[1].disabled = true;
+    searchBox.dispatchEvent({ type: 'keydown', key: 'ArrowDown', preventDefault() {} });
+    assert.equal(document.activeElement, options[2]);
+    panel.hidePopover();
+    options.forEach(option => { option.hidden = true; });
+    trigger.dispatchEvent({ type: 'click' });
+    assert.equal(document.activeElement, searchBox, 'An empty search must remain editable after reopening.');
 });
 
 test('Multiple filters keep the popup open until Apply and submit all selected values', () => {
@@ -201,4 +231,17 @@ test('Closing an unchanged multiselect does not reload the queue', () => {
     trigger.dispatchEvent({ type: 'click' });
     panel.hidePopover();
     assert.equal(form.submissions, 0);
+});
+
+test('Keyboard focus leaving a multiselect commits once and closes the popup', () => {
+    const { document, form, panel, options, trigger } = filterHarness();
+    trigger.dispatchEvent({ type: 'click' });
+    options[1].dispatchEvent({ type: 'click' });
+    document.dispatchEvent({ type: 'focusin', target: options[1] });
+    assert.equal(panel.open, true);
+    document.dispatchEvent({ type: 'focusin', target: new Target() });
+    assert.equal(panel.open, false);
+    assert.equal(form.submissions, 1);
+    document.dispatchEvent({ type: 'focusin', target: new Target() });
+    assert.equal(form.submissions, 1);
 });

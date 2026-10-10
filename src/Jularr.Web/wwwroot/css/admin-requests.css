@@ -317,7 +317,3 @@ a.admreq-title:hover { color: var(--accent-text); }
     .admreq-actions:not(:has(> form:first-child, > a.admreq-action)) { grid-template-columns: 38px 38px; }
     .admreq-actions .admin-icon-button, .admreq-details-button { width: 38px; min-width: 38px; height: 38px; min-height: 38px; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-    .ui-select-chevron { transition: none; }
-}

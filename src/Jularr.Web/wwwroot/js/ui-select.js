@@ -43,6 +43,7 @@
             chevron.className = 'ui-select-chevron';
             chevron.setAttribute('aria-hidden', 'true');
             const filterIcon = control.querySelector('.ui-select-icon');
+            const originalIconHidden = filterIcon?.hidden;
             if (filterIcon) {
                 trigger.append(filterIcon);
             }
@@ -77,11 +78,12 @@
                 else target.textContent = option?.textContent.trim() || '';
                 return Boolean(template);
             };
+            let searchBox;
             if (options.length > 8) {
-                const searchBox = document.createElement('input');
+                searchBox = document.createElement('input');
                 searchBox.type = 'search';
                 searchBox.className = 'ui-select-search';
-                searchBox.placeholder = select.getAttribute('aria-label') || '';
+                searchBox.placeholder = label;
                 searchBox.setAttribute('aria-label', searchBox.placeholder);
                 listen(searchBox, 'input', () => {
                     const query = searchBox.value.trim().toLocaleLowerCase();
@@ -143,6 +145,12 @@
                 });
                 listbox.append(optionButton);
                 return optionButton;
+            });
+            if (searchBox) listen(searchBox, 'keydown', event => {
+                if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+                event.preventDefault();
+                const visible = optionButtons.filter(button => !button.hidden && !button.disabled);
+                (event.key === 'ArrowUp' ? visible.at(-1) : visible[0])?.focus();
             });
 
             const syncSelect = () => {
@@ -219,7 +227,7 @@
                 const selectedIndex = options.findIndex(option => option.value === select.value);
                 const selectedButton = optionButtons[selectedIndex];
                 const focusTarget = selectedButton && !selectedButton.disabled && !selectedButton.hidden ? selectedButton : optionButtons.find(button => !button.disabled && !button.hidden);
-                focusTarget?.focus();
+                (searchBox || focusTarget)?.focus();
             });
             listen(document, 'scroll', event => {
                 if (!event.target.closest?.('[data-ui-select-panel]')) positionPanel();
@@ -259,7 +267,10 @@
                 disabledObserver.disconnect();
                 panel.remove();
                 trigger.remove();
-                if (filterIcon) control.prepend(filterIcon);
+                if (filterIcon) {
+                    filterIcon.hidden = originalIconHidden;
+                    control.prepend(filterIcon);
+                }
                 if (originalAriaHidden === null || originalAriaHidden === undefined) select.removeAttribute('aria-hidden');
                 else select.setAttribute('aria-hidden', originalAriaHidden);
                 if (originalTabIndex === null || originalTabIndex === undefined) select.removeAttribute('tabindex');
@@ -271,6 +282,9 @@
                 if (!event.target.closest('[data-ui-select-enhanced], [data-ui-select-panel]')) {
                     if (panel.matches(':popover-open')) panel.hidePopover();
                 }
+            });
+            listen(document, 'focusin', event => {
+                if (panel.matches(':popover-open') && !control.contains(event.target)) panel.hidePopover();
             });
             listen(document, 'keydown', event => {
                 if (event.key === 'Escape' && panel.matches(':popover-open')) {

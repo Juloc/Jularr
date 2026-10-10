@@ -45,17 +45,21 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(playground, "class=\"ui-text-cell\"");
         StringAssert.Contains(playground, "class=\"admin-tag admin-tag-soft admin-tag-success");
         StringAssert.Contains(playground, "ui-table.js");
-        foreach (var path in new[] { "/Admin/Requests", "/Admin/Requests/Settings", "/Admin/Requests/Users" })
+        foreach (var path in new[] { "/Admin/Requests", "/Admin/Requests/Settings", "/Admin/Requests/Users", "/Admin/Logs" })
         {
             var html = await development.GetHtmlAsync(path, true);
             StringAssert.Contains(html, "ui-select.js");
             StringAssert.Contains(html, "ui-popover.js");
-            StringAssert.Contains(html, "class=\"ui-tabs");
+            if (path.StartsWith("/Admin/Requests", StringComparison.Ordinal))
+            {
+                StringAssert.Contains(html, "class=\"ui-tabs");
+            }
             if (path != "/Admin/Requests")
             {
                 Assert.IsFalse(html.Contains("/js/admin-requests.js", StringComparison.Ordinal), "Rule and user editors must not load queue interactions.");
             }
         }
+        Assert.AreEqual(HttpStatusCode.Forbidden, await development.GetStatusAsync("/Admin/Logs", false));
     }
 
     [TestMethod]
