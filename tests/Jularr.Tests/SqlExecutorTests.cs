@@ -102,6 +102,26 @@ public sealed class SqlExecutorTests
     }
 
     [TestMethod]
+    public async Task RequiredAndOptionalRowReads_DistinguishNotFoundFromDuplicateRows()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadOnly);
+
+        const string emptySql = "SELECT 1::bigint AS \"Id\" WHERE FALSE";
+        var optional = await context.ReadSql.ReadOptionalAsync<SingleId>(emptySql, new { });
+        Assert.IsNull(optional);
+
+        await Assert.ThrowsExactlyAsync<KeyNotFoundException>(
+            () => context.ReadSql.ReadRequiredAsync<SingleId>(emptySql, new { }));
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => context.ReadSql.ReadRequiredAsync<SingleId>(
+                "SELECT \"Values\".\"Id\" FROM (VALUES (1::bigint), (2::bigint)) AS \"Values\"(\"Id\")",
+                new { }));
+    }
+
+    [TestMethod]
     public async Task ReadPage_UsesValidatedPaginationAndMapsJsonChildren()
     {
         await using var database = CreateDataSource();
