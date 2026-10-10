@@ -4,9 +4,7 @@
     "creates": [
       "LibraryReconciliationFileLinks"
     ],
-    "drops": [
-      "LibraryReconciliationFileLinks"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -16,33 +14,30 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 5518
+    "size": 5518,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002113129_AddReconciliationLogicalGroups.cs",
     "creates": [
       "LibraryReconciliationLogicalGroups"
     ],
-    "drops": [
-      "LibraryReconciliationLogicalGroups"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
       "CreateIndex",
       "CreateIndex",
-      "AddForeignKey",
-      "DropForeignKey",
-      "DropTable",
-      "DropIndex",
-      "DropColumn"
+      "AddForeignKey"
     ],
     "sql": [],
-    "size": 3123
+    "size": 3123,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002113620_AddReconciliationReleaseMetadata.cs",
@@ -57,75 +52,56 @@
       "AddForeignKey",
       "AddForeignKey",
       "AddForeignKey",
-      "AddForeignKey",
-      "DropForeignKey",
-      "DropForeignKey",
-      "DropForeignKey",
-      "DropForeignKey",
-      "DropIndex",
-      "DropIndex",
-      "DropIndex",
-      "DropIndex",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn"
+      "AddForeignKey"
     ],
     "sql": [],
-    "size": 8684
+    "size": 8684,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002114518_AddReconciliationObservedFileState.cs",
     "creates": [],
     "drops": [],
     "renames": [],
-    "ops": [
-      "DropColumn",
-      "DropColumn"
-    ],
+    "ops": [],
     "sql": [],
-    "size": 1176
+    "size": 1176,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002153437_AddReconciliationExecutionOperation.cs",
     "creates": [],
     "drops": [],
     "renames": [],
-    "ops": [
-      "DropColumn"
-    ],
+    "ops": [],
     "sql": [],
-    "size": 818
+    "size": 818,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002153945_AddReconciliationFilenameEvidenceOption.cs",
     "creates": [],
     "drops": [],
     "renames": [],
-    "ops": [
-      "DropColumn"
-    ],
+    "ops": [],
     "sql": [],
-    "size": 854
+    "size": 854,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261003041810_AddReconciliationSourceFolderCleanup.cs",
     "creates": [],
     "drops": [],
     "renames": [],
-    "ops": [
-      "DropColumn"
-    ],
+    "ops": [],
     "sql": [],
-    "size": 854
+    "size": 854,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261003175500_GamesFoundation.cs",
@@ -139,16 +115,7 @@
       "GameReleaseFiles",
       "GameReleaseHashes"
     ],
-    "drops": [
-      "GameArtworks",
-      "GameExternalIdentities",
-      "GameReleaseFiles",
-      "GameReleaseHashes",
-      "GameTitles",
-      "GameReleases",
-      "GamePlatforms",
-      "Games"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -170,34 +137,23 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 13618
+    "size": 13618,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261003190000_CanonicalVideoStorage.cs",
     "creates": [
       "MediaAssets"
     ],
-    "drops": [
-      "MediaAssets"
-    ],
+    "drops": [],
     "renames": [
       "MediaFiles->StoredFiles",
       "MediaAnalyses->MediaTechnicalAnalyses",
-      "MediaAnalysisStreams->MediaTracks",
-      "StoredFiles->MediaFiles",
-      "MediaTechnicalAnalyses->MediaAnalyses",
-      "MediaTracks->MediaAnalysisStreams"
+      "MediaAnalysisStreams->MediaTracks"
     ],
     "ops": [
       "RenameTable",
@@ -220,29 +176,12 @@
       "AddForeignKey",
       "AddForeignKey",
       "AddForeignKey",
-      "AddForeignKey",
-      "DropForeignKey",
-      "DropTable",
-      "DropCheckConstraint",
-      "DropForeignKey",
-      "DropForeignKey",
-      "DropForeignKey",
-      "DropIndex",
-      "DropColumn",
-      "RenameColumn",
-      "RenameColumn",
-      "RenameIndex",
-      "RenameIndex",
-      "RenameIndex",
-      "RenameTable",
-      "RenameTable",
-      "RenameTable",
-      "AddForeignKey",
-      "AddForeignKey",
       "AddForeignKey"
     ],
     "sql": [],
-    "size": 9326
+    "size": 9326,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261004060000_CanonicalVideoProgress.cs",
@@ -251,11 +190,7 @@
       "MediaPlaybackHistory",
       "ActiveSessions"
     ],
-    "drops": [
-      "ActiveSessions",
-      "MediaPlaybackHistory",
-      "MediaProgress"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -274,32 +209,23 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 9517
+    "size": 9517,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261004152000_ReaderImagePreferences.cs",
     "creates": [],
     "drops": [],
     "renames": [],
-    "ops": [
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn"
-    ],
+    "ops": [],
     "sql": [],
-    "size": 3063
+    "size": 3063,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261004153500_ReaderPreferenceScopeIdentity.cs",
@@ -309,15 +235,12 @@
     "ops": [
       "DropForeignKey",
       "DropIndex",
-      "DropColumn",
-      "Sql",
-      "CreateIndex",
-      "AddForeignKey"
+      "DropColumn"
     ],
-    "sql": [
-      " UPDATE \"ReaderPreferences\" AS Preference SET \"WorkId\" = subs"
-    ],
-    "size": 2259
+    "sql": [],
+    "size": 2259,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261004154500_CanonicalMangaReaderPreferenceScopes.cs",
@@ -329,7 +252,6 @@
       "Sql",
       "Sql",
       "Sql",
-      "Sql",
       "Sql"
     ],
     "sql": [
@@ -337,31 +259,29 @@
       " INSERT INTO \"WorkSourceLinks\" ( \"Id\", \"WorkId\", \"SourceK",
       " UPDATE \"ReaderPreferences\" AS Target SET \"Re",
       " UPDATE \"ReaderPreferences\" AS Target SET \"Re",
-      " UPDATE \"ReaderPreferences\" AS Preference SET \"ScopeKey\" = 'w",
-      " UPDATE \"ReaderPreferences\" AS Preference SET \"ScopeKey\" = "
+      " UPDATE \"ReaderPreferences\" AS Preference SET \"ScopeKey\" = 'w"
     ],
-    "size": 8733
+    "size": 8733,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261004202500_LibraryRootContentRouting.cs",
     "creates": [
       "LibraryRootContentAssignments"
     ],
-    "drops": [
-      "LibraryRootContentAssignments"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "AddCheckConstraint",
       "CreateTable",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropCheckConstraint",
-      "DropColumn"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 2710
+    "size": 2710,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261006002056_AddWorkMetadataAndArtwork.cs",
@@ -372,13 +292,7 @@
       "WorkMetadataFacts",
       "WorkMetadataRefreshes"
     ],
-    "drops": [
-      "WorkArtwork",
-      "WorkCredits",
-      "WorkLocalizedValues",
-      "WorkMetadataFacts",
-      "WorkMetadataRefreshes"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -393,14 +307,11 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 14171
+    "size": 14171,
+    "hasUp": true,
+    "hasDown": true
   }
 ]
