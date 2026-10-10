@@ -42,6 +42,8 @@ Current explicit owner/user product decisions are the highest product authority.
 
 The central compact runtime policy is binding. Jularr additionally requires:
 
+**When a task touches new Backend Service/Data/Logic boundaries, SQL execution/transactions, User/Admin/System operations, or service-bound UI, consult [docs/SERVICE_DATA_LOGIC_ARCHITECTURE.md](docs/SERVICE_DATA_LOGIC_ARCHITECTURE.md) for the current owner-approved CLEAN-CUT TARGET.** This is a task-relevant reference, **not** mandatory reading for unrelated tasks. The old Store-first/colocated DTO snippets in issues and legacy docs do not override it; existing runtime may still use legacy paths before the coordinated cutover. New target: separate Data V1 DTO files, Service V1 SELECT+gates+workflow files, role/version-neutral Logic mutations, shared neutral SqlContext with Read-only/read-write transaction modes and GetOperationKind. Always coordinate schema changes under #880; do not start a reset/blanket migration merely by reading this doc.
+
 - Keep the modular monolith and one canonical owner per responsibility. No parallel state/config/business-rule path.
 - Extend the current owner before adding a service, store, helper, interface, factory, provider, manager, handler, configuration path or dependency.
 - New or intentionally touched C# follows current Microsoft/.NET naming/layout, four spaces, Allman braces and the repository line-width rules.
