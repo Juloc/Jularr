@@ -71,7 +71,7 @@ public sealed class ServiceFoundationTests
         }
 
         var gate = new TestGate { Area = ServiceArea.Admin };
-        var service = new AccountWriteService(new ServiceRuntime(database, gate));
+        var service = new AccountWriteService(new ServiceRuntime(database, gate), new AccountWorkflowLogic());
 
         var error = await Assert.ThrowsExactlyAsync<PostgresException>(
             () => service.ExecuteAsync<AccountResult>(new AccountParameters(5), new AccountData("test", Duplicate: true)));
@@ -100,7 +100,7 @@ public sealed class ServiceFoundationTests
         }
     }
 
-    private sealed class AccountWriteService(ServiceRuntime runtime) : AdminService<AccountParameters, AccountData>(runtime)
+    private sealed class AccountWriteService(ServiceRuntime runtime, AccountWorkflowLogic logic) : AdminService<AccountParameters, AccountData>(runtime)
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
 
@@ -114,16 +114,25 @@ public sealed class ServiceFoundationTests
 
         protected override async Task<IServiceOutput> ExecuteCoreAsync(AccountParameters parameters, AccountData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
         {
-            await context.Logic.Sql.ExecuteAsync("INSERT INTO \"ServiceFoundationProbe\" (\"Id\", \"Name\") VALUES (@AccountId, @Name)", parameters, data, cancellationToken);
-            await context.Logic.Sql.ExecuteAsync("UPDATE \"ServiceFoundationProbe\" SET \"Name\" = @Name WHERE \"Id\" = @AccountId", parameters, data, cancellationToken);
+            await logic.CreateAsync(context.Logic, parameters, data, cancellationToken);
+            await logic.UpdateAsync(context.Logic, parameters, data, cancellationToken);
 
             if (data.Duplicate)
             {
-                await context.Logic.Sql.ExecuteAsync("INSERT INTO \"ServiceFoundationProbe\" (\"Id\", \"Name\") VALUES (@AccountId, @Name)", parameters, data, cancellationToken);
+                await logic.CreateAsync(context.Logic, parameters, data, cancellationToken);
             }
 
             return new AccountResult(parameters.AccountId, data.Name);
         }
+    }
+
+    private sealed class AccountWorkflowLogic
+    {
+        public Task<int> CreateAsync(LogicContext context, AccountParameters parameters, AccountData data, CancellationToken cancellationToken)
+            => context.Sql.ExecuteAsync("INSERT INTO \"ServiceFoundationProbe\" (\"Id\", \"Name\") VALUES (@AccountId, @Name)", parameters, data, cancellationToken);
+
+        public Task<int> UpdateAsync(LogicContext context, AccountParameters parameters, AccountData data, CancellationToken cancellationToken)
+            => context.Sql.ExecuteAsync("UPDATE \"ServiceFoundationProbe\" SET \"Name\" = @Name WHERE \"Id\" = @AccountId", parameters, data, cancellationToken);
     }
 
     private sealed class TestGate : IServiceGate
