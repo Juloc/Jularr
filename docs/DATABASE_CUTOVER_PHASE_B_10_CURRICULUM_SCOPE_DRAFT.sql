@@ -16,7 +16,7 @@ ALTER TABLE "CurriculumLevels"
         UNIQUE ("Id","CurriculumBlueprintId");
 
 ALTER TABLE "CurriculumChapters"
-    ADD COLUMN "CurriculumBlueprintId" uuid NOT NULL,
+    ADD COLUMN "CurriculumBlueprintId" bigint NOT NULL,
     ADD CONSTRAINT "UX_CurriculumChapters_Id_Blueprint"
         UNIQUE ("Id","CurriculumBlueprintId"),
     ADD CONSTRAINT "FK_CurriculumChapters_LevelBlueprint"
@@ -25,7 +25,7 @@ ALTER TABLE "CurriculumChapters"
         ON DELETE RESTRICT;
 
 ALTER TABLE "CurriculumLessons"
-    ADD COLUMN "CurriculumBlueprintId" uuid NOT NULL,
+    ADD COLUMN "CurriculumBlueprintId" bigint NOT NULL,
     ADD CONSTRAINT "UX_CurriculumLessons_Id_Blueprint"
         UNIQUE ("Id","CurriculumBlueprintId"),
     ADD CONSTRAINT "FK_CurriculumLessons_ChapterBlueprint"
@@ -34,7 +34,7 @@ ALTER TABLE "CurriculumLessons"
         ON DELETE RESTRICT;
 
 ALTER TABLE "CurriculumExercises"
-    ADD COLUMN "CurriculumBlueprintId" uuid NOT NULL,
+    ADD COLUMN "CurriculumBlueprintId" bigint NOT NULL,
     ADD CONSTRAINT "UX_CurriculumExercises_Id_Blueprint"
         UNIQUE ("Id","CurriculumBlueprintId"),
     ADD CONSTRAINT "FK_CurriculumExercises_LessonBlueprint"
@@ -48,7 +48,7 @@ ALTER TABLE "SharedCourseInstances"
         UNIQUE ("Id","CurriculumBlueprintId");
 
 ALTER TABLE "SharedCourseExerciseContent"
-    ADD COLUMN "CurriculumBlueprintId" uuid NOT NULL,
+    ADD COLUMN "CurriculumBlueprintId" bigint NOT NULL,
     ADD CONSTRAINT "FK_SharedCourseExerciseContent_InstanceBlueprint"
         FOREIGN KEY ("SharedCourseInstanceId","CurriculumBlueprintId")
         REFERENCES "SharedCourseInstances" ("Id","CurriculumBlueprintId")
@@ -61,7 +61,7 @@ ALTER TABLE "SharedCourseExerciseContent"
 -- LearnerCourse's ProfileId is already bound by Profiles FK and its Id/ProfileId
 -- unique constraint in part 05. This adds the pinned published blueprint.
 ALTER TABLE "LearnerCourses"
-    ADD COLUMN "CurriculumBlueprintId" uuid NOT NULL,
+    ADD COLUMN "CurriculumBlueprintId" bigint NOT NULL,
     ADD CONSTRAINT "UX_LearnerCourses_Id_Blueprint"
         UNIQUE ("Id","CurriculumBlueprintId"),
     ADD CONSTRAINT "FK_LearnerCourses_InstanceBlueprint"
@@ -72,7 +72,7 @@ ALTER TABLE "LearnerCourses"
 -- Every progress target belongs to the learner's pinned Blueprint.
 -- The existing CHECK(num_nonnulls(...)=1) remains authoritative for target count.
 ALTER TABLE "LearnerCourseProgress"
-    ADD COLUMN "CurriculumBlueprintId" uuid NOT NULL,
+    ADD COLUMN "CurriculumBlueprintId" bigint NOT NULL,
     ADD CONSTRAINT "FK_LearnerCourseProgress_CourseBlueprint"
         FOREIGN KEY ("LearnerCourseId","CurriculumBlueprintId")
         REFERENCES "LearnerCourses" ("Id","CurriculumBlueprintId")
@@ -95,7 +95,7 @@ ALTER TABLE "LearnerCourseProgress"
         ON DELETE RESTRICT;
 
 ALTER TABLE "LearnerExerciseAttempts"
-    ADD COLUMN "CurriculumBlueprintId" uuid NOT NULL,
+    ADD COLUMN "CurriculumBlueprintId" bigint NOT NULL,
     ADD CONSTRAINT "FK_LearnerExerciseAttempts_CourseBlueprint"
         FOREIGN KEY ("LearnerCourseId","CurriculumBlueprintId")
         REFERENCES "LearnerCourses" ("Id","CurriculumBlueprintId")
@@ -109,7 +109,7 @@ ALTER TABLE "LearnerExerciseAttempts"
 -- If a Curriculum lesson is specified, it MUST be scoped to the matching
 -- LearnerCourse's Blueprint; never accept a cross-course lesson silently.
 ALTER TABLE "LearningActivitySessions"
-    ADD COLUMN "CurriculumBlueprintId" uuid,
+    ADD COLUMN "CurriculumBlueprintId" bigint,
     ADD CONSTRAINT "CK_LearningActivitySessions_CurriculumBlueprintScope"
         CHECK (
             ("LearnerCourseId" IS NULL AND "CurriculumBlueprintId" IS NULL

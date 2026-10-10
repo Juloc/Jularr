@@ -8,18 +8,18 @@ DECLARE
     account_id bigint;
     locale_id bigint;
     profile_id bigint;
-    blueprint_one uuid;
-    blueprint_two uuid;
-    level_one uuid;
-    level_two uuid;
-    chapter_one uuid;
-    chapter_two uuid;
-    lesson_one uuid;
-    lesson_two uuid;
-    exercise_one uuid;
-    exercise_two uuid;
-    shared_one uuid;
-    enrollment_one uuid;
+    blueprint_one bigint;
+    blueprint_two bigint;
+    level_one bigint;
+    level_two bigint;
+    chapter_one bigint;
+    chapter_two bigint;
+    lesson_one bigint;
+    lesson_two bigint;
+    exercise_one bigint;
+    exercise_two bigint;
+    shared_one bigint;
+    enrollment_one bigint;
     progress_id bigint;
     work_id bigint;
     work_for_image bigint;
@@ -38,6 +38,8 @@ DECLARE
     version_two bigint;
     other_work bigint;
     game_platform_id bigint;
+    title_provider_id bigint;
+    person_id bigint;
     season_one bigint;
     episode_one bigint;
 BEGIN
@@ -51,6 +53,22 @@ BEGIN
     RETURNING "Id" INTO profile_id;
     INSERT INTO "AccountProfiles" ("AccountId","ProfileId")
     VALUES (account_id,profile_id);
+
+    IF (SELECT "IsLearningEnabled" FROM "Profiles" WHERE "Id" = profile_id) THEN
+        RAISE EXCEPTION 'Learning must be off for new Profiles by default';
+    END IF;
+    INSERT INTO "AccountPasskeys"
+        ("AccountId","CredentialId","PublicKey","Aaguid","Transports",
+         "BackupEligible","BackedUp","UserVerificationRequired")
+    VALUES (account_id,decode('0101','hex'),decode('0202','hex'),
+            '00000000-0000-0000-0000-000000000001',ARRAY['internal'],true,true,true);
+    BEGIN
+        INSERT INTO "AccountPasskeys"
+            ("AccountId","CredentialId","PublicKey","BackupEligible","BackedUp")
+        VALUES (account_id,decode('0303','hex'),decode('0404','hex'),false,true);
+        RAISE EXCEPTION 'Backed-up ineligible credential was accepted';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
 
     INSERT INTO "CurriculumBlueprints" ("Key","Version")
     VALUES ('ci-blueprint-one',1) RETURNING "Id" INTO blueprint_one;
@@ -152,6 +170,40 @@ BEGIN
     -- Positive control for progress subtype: one parent and matching detail.
     INSERT INTO "Works" ("MediaTypeId","CanonicalTitle")
     VALUES (1,'Phase B Work') RETURNING "Id" INTO work_id;
+    INSERT INTO "WorkMetadataFacts"
+        ("WorkId","FirstPublishedOn","RuntimeMs","CommunityRating",
+         "CommunityRatingCount","Certification","CertificationCountry",
+         "Studios","ProductionCountries")
+    VALUES (work_id,DATE '2025-01-01',3600000,8.5,40,'PG','US',
+            ARRAY['phase-b-studio'],ARRAY['US']);
+    BEGIN
+        UPDATE "WorkMetadataFacts" SET "CommunityRating" = 11
+        WHERE "WorkId" = work_id;
+        RAISE EXCEPTION 'Out-of-range community rating was accepted';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    INSERT INTO "People" ("DisplayName") VALUES ('Phase B Performer')
+    RETURNING "Id" INTO person_id;
+    INSERT INTO "MusicArtists" ("DisplayName","PersonId")
+    VALUES ('Phase B Solo Artist',person_id);
+    INSERT INTO "MusicArtists" ("DisplayName") VALUES ('Phase B Ensemble');
+    BEGIN
+        INSERT INTO "MusicArtists" ("DisplayName","PersonId")
+        VALUES ('Invalid Performer',-1);
+        RAISE EXCEPTION 'MusicArtists accepted an unknown PersonId';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+    INSERT INTO "Providers" ("Key") VALUES ('phase-b-title-source')
+    RETURNING "Id" INTO title_provider_id;
+    INSERT INTO "WorkTitles"
+        ("WorkId","Title","ProviderId","SourceReference","IsManualOverride")
+    VALUES (work_id,'Phase B Title',title_provider_id,'test-source-title',false);
+    BEGIN
+        INSERT INTO "WorkTitles" ("WorkId","Title","ProviderId")
+        VALUES (work_id,'Invalid title source',-1);
+        RAISE EXCEPTION 'WorkTitles accepted an unknown source provider';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
     INSERT INTO "MediaProgress"
         ("ProfileId","WorkId","ProgressPositionTypeId")
     VALUES (profile_id,work_id,1)

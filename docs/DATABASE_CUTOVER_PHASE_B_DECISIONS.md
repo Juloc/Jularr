@@ -2,6 +2,21 @@
 
 **Status: OPEN.** Die zwölf PostgreSQL-DDL-Draftabschnitte (168 Target-Tabellen) sind keine freigegebene Baseline. Dieser Registereintrag verhindert, dass ein Agent unbemerkt fehlende Fachfunktionen durch schöne, aber noch nicht vollständig abgenommene Target-Tabellen ersetzt. Keine 1:1-Migration der Legacy-Tabellen.
 
+**Gezielte Bereinigung (10.10.2026):** Die rein internen UUID-Roots
+für AcquisitionIndexers, AcquisitionDownloadClients und
+Curriculum*/SharedCourseInstances/LearnerCourses sind gemäß dem freigegebenen
+`bigint`-Grundsatz auf Identity/`bigint` umgestellt; dazugehörige FKs,
+Scratch-Tests und das Tabellenmanifest wurden angepasst. Die ursprüngliche
+Ausnahmebegründung „war bereits UUID im Altcode“ allein reicht bei einem
+Greenfield-Clean-Cut nicht aus. Echte ClientEvent-/Idempotenz-UUIDs bleiben.
+`WorkTitles` hat nun eigene Titelprovenienz und manuelle Override-Metadaten;
+`AccountPasskeys` führt AAGUID/Transports/Backup-/UV-Felder;
+`Profiles.IsLearningEnabled` hält die ausdrücklich vereinbarte opt-in-Einstellung
+(default Off). Noch fehlende Inhaltsrestriktionen, Auth-/Titelauflösungs-/Consent-
+Semantik und vollständige Work-Facts sind **weiterhin B02/B04/B05-Blocker**.
+Nicht erforderliche `AccountPermissions`/`ImageGenerationPresets` bleiben
+bedingt, statt ohne nachgewiesene Nutzung erfunden zu werden.
+
 | ID / Priorität | Entscheidung, **vor finaler DDL** | Vorhandene Quelle / Risikobereich | Bereits vorgeschlagen, NICHT beschlossen | Abnahme |
 | --- | --- | --- | --- | --- |
 | B01 / BLOCKER | **Enum-Codes und Seeds**: Für alle persistierten \`enum : byte\` echte feste Werte für MediaTypes, Roles, ProgressPositionTypes, Segment-Types/Source, ImageTypes/TargetKind, DetectionTypes/Statuses, OperationStatusTypes, MediaTrackTypes, MediaAssetTypes, FileRoles, Relations/Classification und RequestStatus abstimmen. | \`CLEAN_CUT_DATABASE.md §2\`, vorhandene C# Enums, #943 ServiceOperationType; alte Codes werden **nicht** als Target vorausgesetzt | Im DDL sind \`1/2/3\` teils als Vorschlag und einige Typentabellen unbesetzt markiert | Expliziter seed manifest + C# byte Enum genau gleich, Fremdschlüsseltest |

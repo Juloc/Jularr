@@ -1,5 +1,15 @@
 # Phase B — statischer SQL-Entwurfscheck (ohne PostgreSQL-Ausführung)
 
+**Neuer Korrektur-Scope (noch ohne nachgewiesenen grünen CI-Lauf):**
+Die ursprünglich dokumentierten 162 Tabellen/782 Spalten beziehen sich auf die
+älteren Abschnitte 01–10. Der aktuelle 01–12-Entwurf enthält 168 Tabellen.
+Internen Curriculum-/Acquisition-Schlüsseltypen wurden auf bigint normalisiert;
+Passkey-, WorkTitle- und Profil-Learning-Felder ergänzt. Neue isolierte Assertions
+und positive/negative Testfälle prüfen diese Regeln. Frühere grüne CI-Läufe
+belegen **nicht** diese noch ungeprüfte Änderung; die CI-Abnahme muss am
+Korrektur-PR-Head erneut erfolgen.
+
+
 **Stand 10.10.2026:** zehn aufeinander aufbauende Entwurfsdateien 01–10 auf Branch `docs/cutoff-phase-b-schema-20261010`, **nicht** in eine laufende DB eingespielt. Dieser Prüfstand ist textbasiert und ersetzt **keinen** PostgreSQL-, EF-, Sicherheits- oder Query-Performance-Test.
 
 | Statische Prüfung | Ergebnis |

@@ -36,7 +36,11 @@ BEGIN
         ('UX_Notifications_Event_Recipient','u'),
         ('UX_NotificationDeliveries_Event_Recipient_Channel','u'),
         ('FK_AcquisitionDownloadWantedItems_BindingWork','f'),
-        ('FK_AcquisitionDownloadWantedItems_TargetWork','f')
+        ('FK_AcquisitionDownloadWantedItems_TargetWork','f'),
+        ('FK_WorkTitles_Providers','f'),
+        ('CK_AccountPasskeys_BackupState','c'),
+        ('CK_WorkMetadataFacts_CommunityRating','c'),
+        ('FK_MusicArtists_People','f')
     )
     SELECT string_agg(r.name,', ' ORDER BY r.name)
     INTO missing
@@ -138,6 +142,50 @@ BEGIN
         RAISE EXCEPTION 'Curriculum/Learner cross-blueprint FKs are missing';
     END IF;
 
-    RAISE NOTICE 'Phase B structural invariants present. Next run actual rejection/rollback/integration tests.';
+    IF EXISTS (
+        SELECT 1
+        FROM (VALUES
+            ('CurriculumBlueprints','Id'),
+            ('CurriculumLevels','Id'),
+            ('CurriculumChapters','Id'),
+            ('CurriculumLessons','Id'),
+            ('CurriculumExercises','Id'),
+            ('SharedCourseInstances','Id'),
+            ('LearnerCourses','Id'),
+            ('AcquisitionIndexers','Id'),
+            ('AcquisitionDownloadClients','Id'),
+            ('AcquisitionDownloadBindings','AcquisitionDownloadClientId'),
+            ('LearningActivitySessions','LearnerCourseId')
+        ) AS expected(table_name,column_name)
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM pg_attribute AS a
+            JOIN pg_class AS t ON t.oid = a.attrelid
+            WHERE t.relname = expected.table_name
+              AND a.attname = expected.column_name
+              AND a.atttypid = 'bigint'::regtype
+              AND NOT a.attisdropped
+        )
+    ) THEN
+        RAISE EXCEPTION 'Canonical internal curriculum/acquisition IDs must be bigint';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute AS a
+        WHERE a.attrelid = '"Profiles"'::regclass AND a.attname = 'IsLearningEnabled'
+          AND a.atttypid = 'boolean'::regtype AND a.attnotnull
+    ) THEN
+        RAISE EXCEPTION 'Profiles must store explicit Learning module opt-in';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute AS a
+        WHERE a.attrelid = '"AccountPasskeys"'::regclass
+          AND a.attname = 'Transports' AND a.atttypid = 'text[]'::regtype
+    ) THEN
+        RAISE EXCEPTION 'Passkey transports must be a typed PostgreSQL text array';
+    END IF;
+
+        RAISE NOTICE 'Phase B structural invariants present. Next run actual rejection/rollback/integration tests.';
 END $phase_b$;
 ROLLBACK;

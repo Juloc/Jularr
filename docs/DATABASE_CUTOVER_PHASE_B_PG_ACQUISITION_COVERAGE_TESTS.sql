@@ -10,7 +10,7 @@ DECLARE
   wanted_b bigint;
   op bigint;
   op_b bigint;
-  client uuid;
+  client bigint;
   binding bigint;
   binding_b bigint;
 BEGIN
