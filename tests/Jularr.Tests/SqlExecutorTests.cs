@@ -93,10 +93,18 @@ public sealed class SqlExecutorTests
             () => context.ReadSql.ExecuteScalarAsync("SELECT @Missing", new { Id = 1 }));
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-            () => context.ReadSql.ExecuteScalarAsync("SELECT @Name", new { Name = "one" }, CancellationToken.None));
+            () => context.ReadSql.ExecuteScalarAsync("SELECT @ActorAccountId", new { ActorAccountId = 1L }));
+    }
+
+    [TestMethod]
+    public async Task TwoDtoObjectsWithSameParameter_AreRejected()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadWrite);
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-            () => context.ReadSql.ExecuteScalarAsync("SELECT @ActorAccountId", new { ActorAccountId = 1L }));
+            () => context.RequireLogicSql().ExecuteAsync("SELECT @Name", new { Name = "first" }, new { Name = "second" }));
     }
 
     [TestMethod]
