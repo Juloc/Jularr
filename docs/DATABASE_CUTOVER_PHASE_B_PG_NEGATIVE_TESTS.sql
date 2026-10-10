@@ -134,7 +134,7 @@ BEGIN
     BEGIN
         INSERT INTO "AccountSessions"
             ("AccountId","ActiveProfileId","TokenHash","ExpiresAt")
-        VALUES (account_id,other_profile_id,decode('deadbeef','hex'),now()+interval '1 day');
+        VALUES (account_id,other_profile_id,decode(repeat('de',32),'hex'),now()+interval '1 day');
         RAISE EXCEPTION 'Cross-account Profile was accepted as active session';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;

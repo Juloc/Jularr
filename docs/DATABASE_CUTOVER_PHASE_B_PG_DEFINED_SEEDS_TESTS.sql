@@ -5,6 +5,15 @@ DECLARE
 BEGIN
     WITH expected(target_table, id, key) AS (
         VALUES
+            ('AuthChallengePurposeTypes', 1, 'email_verification'),
+            ('AuthChallengePurposeTypes', 2, 'password_reset'),
+            ('AuthChallengePurposeTypes', 3, 'totp_enrollment'),
+            ('AuthChallengePurposeTypes', 4, 'totp_sign_in'),
+            ('AuthChallengePurposeTypes', 5, 'passkey_enrollment'),
+            ('AuthChallengePurposeTypes', 6, 'passkey_sign_in'),
+            ('AuthChallengePurposeTypes', 7, 'external_login'),
+            ('AuthChallengePurposeTypes', 8, 'external_link'),
+            ('AuthChallengePurposeTypes', 9, 'provider_media_consent'),
             ('AccountRoleTypes', 1, 'owner'),
             ('AccountRoleTypes', 2, 'user'),
             ('AccountRoleTypes', 3, 'media_manager'),
@@ -152,6 +161,12 @@ BEGIN
             ('WorkMediaClassificationTypes', 1, 'anime')
     ),
     actual(target_table, id, key) AS (
+        SELECT
+            'AuthChallengePurposeTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "AuthChallengePurposeTypes" AS catalog
+        UNION ALL
         SELECT
             'AccountRoleTypes',
             catalog."Id",

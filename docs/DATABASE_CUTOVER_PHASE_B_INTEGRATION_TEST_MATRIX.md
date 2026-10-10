@@ -7,9 +7,10 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 
 | Prüfung | Garantie / Abgrenzung |
 | --- | --- |
-| Frischer Bootstrap aller zehn DDL-Dateien | Vollständiger aktueller Target-Satz, nicht alte Migrationen |
+| Frischer Bootstrap aller elf DDL-Dateien | Vollständiger aktueller Target-Satz, nicht alte Migrationen |
 | Katalogassertions | FKs/CHECKs/DEFERRABLE/NULLS NOT DISTINCT; ausdrücklich keine Learning-Tabellen oder Profil-Learning-Spalte |
-| Defined Seeds / Type Catalogs | 28 Byte-/smallint-Kataloge, 145 exakt definierte Codes, unbekannte FK-Werte und Bereichs-/Blank-Key-Ablehnung |
+| Defined Seeds / Type Catalogs | 29 Byte-/smallint-Kataloge, 154 exakt definierte Codes, unbekannte FK-Werte und Bereichs-/Blank-Key-Ablehnung |
+| Auth Lifecycle | Hash-/Purpose-/Account-Grenzen, Expiry, Rollback/Replay, Credential-Epoch, TOTP/Recovery, Transfer und zwei parallele Rotation-/Recovery-Sessions |
 | Account/Profile/Groups | Owner-Membership, fremde AccountSession-Profile, neutrale Gruppen, eindeutige Namen, RESTRICT und Owner-Paging |
 | Assets/Files/Game/Playback | Identische Work-/Version-/Asset-/File-Zuordnung; Game-only und Multidisc-FKs |
 | Progress/Reader | Genau ein Positionstyp, Reader-/Edition-/Work-Zuordnung, nullable Dimensionspaare, Revision/CAS und Offline-Replay |
@@ -31,6 +32,6 @@ Wiedereinführung gehört zum [späteren Plan](DATABASE_CUTOVER_DEFERRED_LEARNIN
 nicht zu reservierten Testfixtures der Baseline.
 
 Noch offen sind die vollständigen in-scope Fachverträge, weiteren statischen
-Auth-/Search-/Reader-/Playable-/Arr-/Jobs-/Admin-Queries und repräsentativen
+Search-/Reader-/Playable-/Arr-/Jobs-/Admin-Queries und repräsentativen
 Leistungs-/Isolationstests. EF gehört in C, Runtime/Consumer in D/E und
 vollständige Release-/E2E-Abnahme in F. Kein vorzeitiges Gate-B-GO.

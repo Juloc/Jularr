@@ -4,8 +4,8 @@ Status: OPEN. Maßgeblich ist der aktuelle Owner-Auftrag vom 10.10.2026:
 Cutover ohne Learning. Frühere Learning-Blocker sind bewusst aus dem Scope
 genommen, nicht technisch als fertig erklärt.
 
-Aktueller Entwurf: zehn DDL-Dateien, 137 Tabellen, 28 feste Type-Kataloge mit
-145 expliziten Byte-Codes und 19 öffentlichen Ressourcen-UUIDs. Counts sind
+Aktueller Entwurf: elf DDL-Dateien, 139 Tabellen, 29 feste Type-Kataloge mit
+154 expliziten Byte-Codes und 22 öffentlichen Ressourcen-UUIDs. Counts sind
 Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime.
 
 ## Aktuelle Abnahmematrix
@@ -13,7 +13,7 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | ID | Stand | Vor Gate B erforderlicher Nachweis |
 | --- | --- | --- |
 | B01 Types/Seeds | Alle bestehenden Kataloge definiert; keine freien Legacy-int-Mappings | C# byte, Manifest und statische Seeds identisch; neue erforderliche Kataloge erhalten denselben Nachweis |
-| B02 Account/Profile/Auth | Account/Profile-Trennung, Owner-Link, Sessions, Passkey-Metadaten vorhanden | Recovery/TOTP/Challenge-Zwecke, Rotation/Revoke/Transfer und geplantes Plex-Login/Linking vollständig abgleichen |
+| B02 Account/Profile/Auth | Zweckgebundene Challenges, Account-Epoch, Rotation/Revoke, TOTP-/Recovery-Replay und Transfer physisch geprüft | Plex-Login/Linking und Medien-Consent nutzen getrennte feste Zwecke; konkrete Provider-Settings/-Grant-Lifecycle in B10 abschließen; WebAuthn-Protokollprüfung gehört in D |
 | B03 Progress/Offline | Total-Subtype, Cross-Work, Revision-CAS und Replay modelliert/getestet | Reader-Anchor-/Editionrevisionen, Completed-Provenienz und repräsentative Konflikt-/Concurrency-Fälle vollständig |
 | B04 Work Facts/Titel | Ein Work; explizite MetadataFacts, Titelprovenienz, Namespaces | Vollständige Medien-/Edition-/Credit-/Locale-Fakten und statische Title-Resolution-/Search-Queries |
 | B05 Music/Reader/AI | Keine Learning-Anforderung mehr; übrige Funktionen bleiben | Artists/Recordings, Reader-Inhalte/Bookmarks/Highlights sowie AI-/Translate-Persistenz vollständig; keine parallelen Roots |
@@ -26,7 +26,7 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | B12 Operations/Events | Gemeinsame Operations, Leases/Claims und Delivery-Versuche vorhanden | Retry/Cancellation/Restart/Retention sowie benötigte After-Commit-/Outbox-Effekte; keine externe I/O im DB-Tx |
 | B13 Account Groups | Neutrale Gruppen, Mitgliedschaft, UUID und Owner-Paging vorhanden | Gruppen bleiben Policy-Selektoren, keine Rollen oder automatische Rechte; D/E implementiert Verbraucher/UI |
 | B14 Config/Calendar/Discovery | Keine Learning-Einstellungen im Target | Alle übrigen echten Settings/Rules/Schedules/Discovery-Fakten ihrem kanonischen Owner zuordnen; kein EAV |
-| B15 Typed Reads/Indizes | Watchlist/Continue/Groups/Inbox sowie Claim/CAS und Inbox-Logic statisch | Fehlende Auth-, Reader-, Playable-, Search-, Arr-/Jobs-Reads und repräsentative EXPLAIN-/Berechtigungsbelege |
+| B15 Typed Reads/Indizes | Watchlist/Continue/Groups/Inbox/Auth sowie Claim/CAS, Auth- und Inbox-Logic statisch | Fehlende Reader-, Playable-, Search-, Arr-/Jobs-Reads und repräsentative EXPLAIN-/Berechtigungsbelege |
 | B16 Physische DDL | Nur isolierter PostgreSQL 18; aktuelle Fassung erneut prüfen | Reproduzierbarer frischer Bootstrap, Seeds/FKs/CHECKs und fokussierte Integritäts-/Rollback-/Isolationstests |
 
 ## Verbindliche Grenzen

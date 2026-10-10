@@ -1,5 +1,18 @@
 namespace Jularr.DatabaseCutover.Target;
 
+public enum AuthChallengePurpose : byte
+{
+    EmailVerification = 1,
+    PasswordReset = 2,
+    TotpEnrollment = 3,
+    TotpSignIn = 4,
+    PasskeyEnrollment = 5,
+    PasskeySignIn = 6,
+    ExternalLogin = 7,
+    ExternalLink = 8,
+    ProviderMediaConsent = 9
+}
+
 public enum AccountRole : byte
 {
     Owner = 1,

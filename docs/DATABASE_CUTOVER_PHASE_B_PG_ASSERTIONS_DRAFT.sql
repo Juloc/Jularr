@@ -25,6 +25,12 @@ BEGIN
 
     WITH required_constraint(name, kind) AS (
         VALUES
+        ('FK_AccountAuthChallenges_Purpose','f'),
+        ('CK_AccountAuthChallenges_Account','c'),
+        ('CK_AccountSessions_Hash','c'),
+        ('FK_AccountExternalAuthFlows_ChallengePurpose','f'),
+        ('CK_AccountExternalAuthFlows_ReturnPath','c'),
+        ('CK_AccountTotpFactors_Step','c'),
         ('FK_Profiles_OwnerAccountProfiles','f'),
         ('FK_MediaAssets_WorkVersions','f'),
         ('FK_StoredFiles_MediaAssets','f'),

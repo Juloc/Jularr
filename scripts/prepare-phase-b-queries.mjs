@@ -73,7 +73,25 @@ for (const [index, query] of queries.entries())
     writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`), query.declaration + sql + ';\n');
 }
 
+const authQueries = [
+    ['auth_session', 'Service SESSION:', 'Service SESSIONS:', 'bytea,timestamptz', ['TokenHash', 'Now']],
+    ['auth_sessions', 'Service SESSIONS:', 'Logic ROTATE:', 'bigint,integer,bigint', ['ActorAccountId', 'PageSize', 'Offset']],
+    ['auth_rotate', 'Logic ROTATE:', 'Logic CHALLENGE:', 'bigint,bytea,bytea,bigint,timestamptz,timestamptz', ['ActorAccountId', 'OldTokenHash', 'NewTokenHash', 'ExpectedRotationRevision', 'Now', 'NewExpiresAt']],
+    ['auth_challenge', 'Logic CHALLENGE:', 'Logic RECOVERY:', 'uuid,bytea,smallint,bigint,timestamptz,bigint,bigint', ['ChallengePublicId', 'BrowserTokenHash', 'PurposeTypeId', 'ActorAccountId', 'Now', 'ProviderId', 'ActiveProfileId']],
+    ['auth_recovery', 'Logic RECOVERY:', 'Logic TOTP:', 'bigint,bytea,timestamptz', ['ActorAccountId', 'CodeHash', 'Now']],
+    ['auth_totp', 'Logic TOTP:', 'Logic INVALIDATE:', 'bigint,bigint,bigint', ['ActorAccountId', 'FactorId', 'VerifiedStep']],
+    ['auth_invalidate', 'Logic INVALIDATE:', null, 'bigint,bigint,timestamptz', ['ActorAccountId', 'ExpectedCredentialRevision', 'Now']]
+].map(([name, start, end, types, parameters]) => ({
+    name,
+    file: 'DATABASE_CUTOVER_PHASE_B_AUTH_QUERIES_DRAFT.sql',
+    start: `-- ${start}`,
+    end: end ? `-- ${end}` : null,
+    declaration: `PREPARE phase_b_${name}(${types}) AS\n`,
+    parameters
+}));
+
 for (const query of [
+    ...authQueries,
     {
         name: 'groups',
         file: 'DATABASE_CUTOVER_PHASE_B_ADMIN_QUERIES_DRAFT.sql',

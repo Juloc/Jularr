@@ -11,7 +11,7 @@ später eine eigene Freigabe.
 
 ## Aktueller Umfang
 
-Neun DDL-Dateien, in dieser Reihenfolge:
+Elf DDL-Dateien, in dieser Reihenfolge:
 
 1. [01 Core](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql)
 2. [02 Progress/Media](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql)
@@ -23,17 +23,18 @@ Neun DDL-Dateien, in dieser Reihenfolge:
 8. [12 Acquisition Coverage](DATABASE_CUTOVER_PHASE_B_12_ACQUISITION_COVERAGE_DRAFT.sql)
 9. [14 Public IDs](DATABASE_CUTOVER_PHASE_B_14_PUBLIC_RESOURCE_IDS_DRAFT.sql)
 10. [15 Notification Lifecycle](DATABASE_CUTOVER_PHASE_B_15_NOTIFICATION_LIFECYCLE_DRAFT.sql)
+11. [16 Auth Lifecycle](DATABASE_CUTOVER_PHASE_B_16_AUTH_LIFECYCLE_DRAFT.sql)
 
 Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
 nicht als leere oder optionale Baseline-Dateien behalten.
 
-Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 137
-Target-Tabellen. Die 28 bestehenden Type-Kataloge haben 145 feste Codes in
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 139
+Target-Tabellen. Die 29 bestehenden Type-Kataloge haben 154 feste Codes in
 [C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
 [Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
 Der Verifier lehnt undefinierte Kataloge ab. Keine Übernahme alter int-Enumcodes.
 
-19 adressierbare Ressourcen besitzen separate öffentliche UUIDs. Interne
+22 adressierbare Ressourcen besitzen separate öffentliche UUIDs. Interne
 Ressourcen-PKs, FKs und Joins bleiben bigint/C# long. Öffentliche Identität ist
 keine Berechtigung; Session-/Reset-/Refresh-/Capability-Secrets bleiben unabhängig
 davon kryptografisch zufällig und gehasht bzw. geschützt.
@@ -67,8 +68,13 @@ offen. Keine vollständige Anwendungssuite oder aktive DB-Änderung.
 
 Der [Notification-Vertrag](DATABASE_CUTOVER_PHASE_B_NOTIFICATION_CONTRACT.md) enthält
 Ruhezeiten/DST, Digest, geschützte Endpoints und aktuelle Route-Revalidierung.
-Zehn DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
+Elf DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
 Zielpersistenz, keinen existierenden externen Transport oder Runtime-Cutover.
+
+Der [Auth-Vertrag](DATABASE_CUTOVER_PHASE_B_AUTH_CONTRACT.md) ergänzt feste
+Challenge-Zwecke, Credential-Epoch, Session-CAS, TOTP-/Recovery-Replay und
+browsergebundenen Plex-Consent. Hash-Lookup und Self-Session-Paging nutzen ihre
+Indizes; zwei reale Sessions bestätigen genau einen Rotation-/Recovery-Gewinner.
 
 [DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md) nennt verbleibende Fach- und
 Query-Anforderungen. Nicht alle übrigen Funktionsverträge sind abgeschlossen.
