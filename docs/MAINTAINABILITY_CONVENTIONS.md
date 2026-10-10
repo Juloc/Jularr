@@ -35,65 +35,39 @@ A competent developer should be able to predict where behavior lives before sear
 
 ## 3. Required backend boundary
 
-The target dependency direction is:
+For the PostgreSQL clean cut, the **owner-approved Data/Service/Logic
+contract supersedes the old Store/Persistence diagram**:
 
 ```text
-Frontend / native client
+API / Razor / worker / native transport
         ↓
-API / Razor / transport
-        ↓
-Authorization / user-context boundary
-        ↓
-Domain / application core
-        ↓
-Store / persistence
-        ↓
-PostgreSQL
+Service.User|Admin|System.<Entity>.V1
+        ├── authorized static SELECT using the shared SqlContext
+        └── Logic.<Entity> for all database mutations
+                   ↓
+           shared SqlContext / transaction
+                   ↓
+              PostgreSQL
+
+Data: separate typed/versioned request, response and internal contracts
 ```
 
-### Store / persistence
+- Service resolves caller, profile, capabilities and use-case authority; it
+  owns static SQL reads and coordinates transactions across multiple Logic
+  operations. User, Admin and System read projections are separate.
+- Logic alone owns INSERT/UPDATE/DELETE, mutation locks, invariants and
+  database changes. It does not make unrestricted policy decisions for a caller.
+- The same SqlContext/transaction spans coordinated Service and Logic work.
+  `GetOperationType()` identifies the operation type; actual READ work uses a
+  PostgreSQL READ ONLY transaction.
+- Data holds typed contracts, not a second persistence owner.
+- **No Store/Repository layer** is introduced for the cutover. Older Store
+  references describe the pre-cutover runtime, not the target architecture.
+- Razor and API entry points call the canonical Service through DI and never
+  duplicate SQL, authorization or mutations.
 
-Persistence components:
-
-- own SQL and persistence mapping;
-- know PostgreSQL/data concerns;
-- do not own HTTP/Razor/UI behavior;
-- do not decide Owner/Admin/User permissions;
-- do not become a second business-rule owner.
-
-### Domain / application core
-
-Domain/application code:
-
-- owns business invariants and reusable business operations;
-- validates domain state;
-- is role-agnostic: it does not decide that a caller is Owner/Admin/User;
-- receives explicit actor/profile/resource data when business behavior genuinely depends on them;
-- can be called safely from authorized HTTP flows, background work or other canonical entry points.
-
-### Authorization / user-context boundary
-
-The authorization boundary:
-
-- resolves the current actor/profile and effective capabilities;
-- verifies that actor may execute the use case;
-- passes explicit IDs/data to the lower operation;
-- never relies on hidden/disabled UI as authorization.
-
-Do not create an `AuthorizedXService` wrapper for every trivial operation merely to make a diagram symmetrical. Use the simplest clear boundary that keeps permission logic above role-agnostic domain/persistence behavior.
-
-### API / Razor / transport
-
-Endpoints/pages:
-
-- authenticate and authorize;
-- validate transport/request shape;
-- call the canonical use case/read model;
-- translate canonical results/errors into HTTP/UI;
-- do not duplicate domain rules;
-- do not become a second persistence owner.
-
-New/touched Razor Pages and API handlers MUST NOT add direct database access when a canonical Store/Query owner should own it.
+Do not create forwarding layers, parallel queries or fallback persistence
+paths to preserve the old structure. Port by functional responsibility in D/E.
 
 ## 4. Resource identity
 
@@ -129,9 +103,9 @@ coordinated client cutover (Phase E).
 
 ## 5. SQL-first persistence for new/touched paths
 
-For Jularr, the target persistence style is explicit, parameterized PostgreSQL SQL behind the owning Store/Persistence component.
+For Jularr, the target persistence style is explicit, parameterized PostgreSQL SQL: authorized SELECTs in Service and all mutations in Logic, using the same SqlContext.
 
-- Do not add new EF-heavy persistence paths when an explicit Store/SQL path is appropriate.
+- Do not create a Store/Repository or new EF-heavy persistence path when the canonical Service/Logic SQL path is appropriate.
 - Existing EF paths are migrated incrementally when intentionally touched; do not perform a bulk conversion solely for style.
 - Raw SQL MUST be parameterized.
 - Keep filtering, joins, grouping, sorting and pagination in PostgreSQL where it is the correct execution engine.
@@ -189,7 +163,7 @@ Rules:
 - resource first;
 - resource ID directly after the resource;
 - subresource/action after the ID;
-- normal resource IDs use the normal numeric ID;
+- outward resource routes use public UUIDs or a separately approved opaque resource key; internal bigint IDs stay inside the backend;
 - do not introduce action-first forms such as `/books/read/{guid}` when the action belongs to one resource;
 - transport shape does not determine domain ownership.
 
@@ -246,7 +220,7 @@ C# formatting/naming/line-width rules remain the canonical Agent Control C# conv
 - Do not use `null` interchangeably for "not found", "forbidden", "invalid", "not loaded" and "failed".
 - Known finite states use enums/typed values rather than magic strings.
 - External provider strings stay at adapter boundaries unless Jularr deliberately owns that vocabulary.
-- Numeric IDs stay numeric unless an external contract provides a concrete reason otherwise.
+- Internal PK/FK/joins remain bigint/long; outward resource IDs, provider IDs and authentication secrets follow their separate explicit contracts.
 
 ## 12. Time, collections, concurrency and idempotency
 
@@ -355,7 +329,7 @@ A change should be understandable to a human reviewer.
 Before implementation, every agent regardless of capability level must be able to answer:
 
 1. What feature/domain owns this responsibility?
-2. What existing Store/service/query/component already owns the nearest equivalent behavior?
+2. What existing Service/Logic/query/component already owns the nearest equivalent behavior?
 3. Is this a read, mutation, policy decision, transport concern or persistence concern?
 4. What IDs/data contracts does the canonical owner use?
 5. Which business rule is authoritative?
