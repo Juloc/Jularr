@@ -19,7 +19,7 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 | Events/Notifications | Profile-/Admin-Audience, Category-Policy, Recurrence/Replay/Dismissal, Commit-Zählerintegrität und zwei parallele Gruppierungs-Sessions |
 | Zyklische Lifecycles | Pflicht-Owner und alle drei Progress-Subtypen: Orphans verboten, explizite Deletes im selben Tx erlaubt, keine Cascade |
 | Notification Lifecycle | Cross-Midnight/DST, Critical-/In-App-Bypass, Digest-Routes/Disable-Auflösung, kein Leer-/Doppeltiming, Endpoint-/Session-/Email-/Rollen-Revoke |
-| Watchlist/Continue/Groups/Inbox/Reader Reads | Statische typisierte PREPAREs, Autorisierung vor Root-Paging, deterministische Seiten, Membership-Entzug; Reader Bookmarks/Highlights mit Work-Isolation, Page-Limits und EXPLAIN |
+| Watchlist/Continue/Groups/Inbox/Reader Reads | Statische typisierte PREPAREs, Autorisierung vor Root-Paging, deterministische Seiten, Membership-Entzug; Reader Bookmarks/Highlights/Pages mit Work-/Revisions-Isolation, Page-Limits und EXPLAIN |
 | Worker Claims | Zwei reale PostgreSQL-Sessions, SKIP LOCKED, Retry-Fälligkeit und keine Doppelvergabe |
 | Öffentliche IDs | Separate UUID-Adresse, interne bigint-FKs; PublicId gewährt keine Berechtigung |
 
