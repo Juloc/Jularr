@@ -42,6 +42,42 @@ public sealed class SqlExecutorTests
     }
 
     [TestMethod]
+    public async Task TypedPostgresArrays_AreBoundFromCompleteDto()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadOnly);
+
+        var count = await context.ReadSql.ExecuteScalarAsync(
+            "SELECT cardinality(@Ids::bigint[])", new { Ids = new long[] { 11, 13, 17 } });
+        Assert.AreEqual(3, count);
+
+        var names = await context.ReadSql.ExecuteScalarAsync(
+            "SELECT array_to_string(@Names::text[], ',')", new { Names = new[] { "one", "two" } });
+        Assert.AreEqual("one,two", names);
+
+        var empty = await context.ReadSql.ExecuteScalarAsync(
+            "SELECT COALESCE(cardinality(@Ids::bigint[]), 0)", new { Ids = (long[]?)null });
+        Assert.AreEqual(0, empty);
+    }
+
+    [TestMethod]
+    public async Task TypedPostgresArrays_RejectWrongCastAndUnsupportedElementType()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadOnly);
+
+        await Assert.ThrowsExactlyAsync<ArgumentException>(
+            () => context.ReadSql.ExecuteScalarAsync(
+                "SELECT cardinality(@Ids::integer[])", new { Ids = new long[] { 1, 2 } }));
+
+        await Assert.ThrowsExactlyAsync<NotSupportedException>(
+            () => context.ReadSql.ExecuteScalarAsync(
+                "SELECT cardinality(@Ids)", new { Ids = new DateTime[] { DateTime.UtcNow } }));
+    }
+
+    [TestMethod]
     public async Task ReadScalar_KeywordNamedParameter_RemainsValidSelect()
     {
         await using var database = CreateDataSource();
