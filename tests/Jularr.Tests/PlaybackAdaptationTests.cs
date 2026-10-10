@@ -89,7 +89,8 @@ public sealed class PlaybackAdaptationTests
                 PlaybackTranscodingSettings.Default with
                 {
                     HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
-                    WanUploadBudgetKbps = 10_000
+                    WanUploadBudgetKbps = 10_000,
+                    WanUploadMode = PlaybackWanUploadMode.Manual
                 });
             Assert.IsTrue(saved.Succeeded);
 
@@ -97,7 +98,7 @@ public sealed class PlaybackAdaptationTests
             harness.PlayUntil(20);
             Assert.AreEqual(PlaybackAdaptationAdvice.None, harness.Advice.Decision.Advice);
 
-            harness.Store.Create(
+            var second = harness.Store.Create(
                 "second-remote",
                 PlaybackVideoTarget.Movie(987654),
                 Guid.NewGuid(),
@@ -105,6 +106,7 @@ public sealed class PlaybackAdaptationTests
                 1400,
                 AutoPlan(delivered: 4_250, limit: 4_250),
                 new PlaybackStreamSelections(null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
+            second.MarkDeliveryStarted();
 
             var response = harness.Advice.Decision;
             Assert.AreEqual(PlaybackAdaptationAdvice.StepDown, response.Advice);
