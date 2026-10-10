@@ -316,8 +316,11 @@ public sealed class PlexModel(
         }
 
         if (!await ConsumeAttemptAsync(
-            attempt, cancellationToken, "media-final"))
+            attempt, CancellationToken.None, "media-final"))
         {
+            await mediaConnections.DisconnectMatchingAsync(
+                accountId, verified.AccountId, verified.AccessToken,
+                CancellationToken.None);
             return BadRequest();
         }
 
@@ -333,6 +336,10 @@ public sealed class PlexModel(
             return Forbid();
         }
 
+        await db.PlexLoginAttempts
+            .Where(x => x.StartedAccountId == accountId &&
+                (x.Purpose == "media" || x.Purpose == "media-final"))
+            .ExecuteDeleteAsync(cancellationToken);
         await mediaConnections.DisconnectAsync(
             accountId, cancellationToken);
         return RedirectToPage("/Account/Plex");
