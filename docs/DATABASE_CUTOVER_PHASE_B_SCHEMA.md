@@ -81,6 +81,14 @@ Die Highlight-Sortierung hat einen Profilindex; ReaderPage-Reads binden die
 öffentliche Edition-ID und exakte ContentRevision. Content-Delivery/Playable
 bleibt offen.
 
+Die [Provider-Policy-SELECTs](DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql)
+trennen Login-, Linking- und Media-Consent-Challenges anhand ihrer festen
+Purpose-Codes. Vier Provider-Freigaben sind unabhängig und standardmäßig FALSE.
+Media-Connections werden nur für aktivierte Provider und gegen die aktuelle
+Account/Profile-Mitgliedschaft gelesen; CredentialsStorageKey wird nicht in
+Client-DTOs oder diesen SELECTs projiziert. [PG-Testset](DATABASE_CUTOVER_PHASE_B_PG_PROVIDER_POLICY_TESTS.sql).
+Server-Grants, reale externe Credentials und Reconciliation sind noch offen.
+
 Der [Auth-Vertrag](DATABASE_CUTOVER_PHASE_B_AUTH_CONTRACT.md) ergänzt feste
 Challenge-Zwecke, Credential-Epoch, Session-CAS, TOTP-/Recovery-Replay und
 browsergebundenen Plex-Consent. Hash-Lookup und Self-Session-Paging nutzen ihre
