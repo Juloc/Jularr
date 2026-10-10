@@ -57,7 +57,7 @@ public sealed class SqlContextTests
             Assert.AreEqual(2L, await context.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"SqlContextCommitProbe\""));
 
             await context.CommitAsync();
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(context.CommitAsync);
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => context.CommitAsync());
         }
 
         await using var verify = new SqlContext(database);
