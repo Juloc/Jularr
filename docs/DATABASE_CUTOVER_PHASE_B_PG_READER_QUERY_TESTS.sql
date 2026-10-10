@@ -3,6 +3,7 @@ BEGIN;
 SET LOCAL statement_timeout = '20s';
 \i /tmp/phase_b_reader_bookmarks_prepared.sql
 \i /tmp/phase_b_reader_highlights_prepared.sql
+\i /tmp/phase_b_reader_pages_prepared.sql
 
 INSERT INTO "UiLocales" ("Locale", "Name")
 VALUES ('phase-b-reader-queries', 'Phase B reader') RETURNING "Id" AS locale_id \gset
@@ -39,7 +40,7 @@ INSERT INTO "ReaderBookmarks" ("ProfileId", "ReaderContentId", "TextLocator", "C
 VALUES (:profile_id, :content_id, '{"paragraph":1}', now() - INTERVAL '2 minutes')
 RETURNING "PublicId" AS older_bookmark_id \gset
 INSERT INTO "ReaderBookmarks" ("ProfileId", "ReaderContentId", "TextLocator", "CreatedAt")
-VALUES (:profile_id, :content_id, '{"paragraph":2,"text":"quote''; --"}', now() - INTERVAL '1 minute')
+VALUES (:profile_id, :content_id, '{"paragraph":2,"text":"testwert"}', now() - INTERVAL '1 minute')
 RETURNING "PublicId" AS newest_bookmark_id \gset
 INSERT INTO "ReaderBookmarks" ("ProfileId", "ReaderContentId", "TextLocator")
 VALUES (:profile_id, :other_content_id, '{"paragraph":3}');
