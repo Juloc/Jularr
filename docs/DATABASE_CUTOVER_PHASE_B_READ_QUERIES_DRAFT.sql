@@ -161,3 +161,19 @@ FROM claimed
 WHERE operation."Id" = claimed."Id"
 RETURNING operation."Id", operation."OperationKindKey",
     operation."Input", operation."AttemptCount";
+
+-- 4. Logic-only bounded optimistic checkpoint revision gate (B03).
+-- This UPDATE is one statement INSIDE a shared SQL transaction containing
+-- the corresponding Time/Reading/Game detail mutation and immutable
+-- MediaProgressCheckpointEvents row. The service must check the event ID first,
+-- then claim this exact expected revision; no stale writer may overwrite newer
+-- progress or Completed state. Event replay returns its prior result, not DML.
+-- @ActiveProfileId must come from validated ServiceContext, never raw DTO.
+-- 0 updated rows = conflict/not found; the caller may not treat it as success.
+UPDATE "MediaProgress" AS progress
+SET "Revision" = progress."Revision" + 1,
+    "LastActivityAt" = now()
+WHERE progress."Id" = @MediaProgressId
+  AND progress."ProfileId" = @ActiveProfileId
+  AND progress."Revision" = @ExpectedRevision
+RETURNING progress."Id", progress."Revision";
