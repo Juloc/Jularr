@@ -8,9 +8,16 @@ namespace Jularr.Tests;
 public sealed class SqlContextTests
 {
     [TestMethod]
-    public async Task ReadOnly_RejectsDdl_AndDoesNotLeakToNextTransaction()
+    public async Task ReadOnly_RejectsSequenceMutation_AndDoesNotLeakToNextTransaction()
     {
         await using var database = CreateDataSource();
+
+        await using (var setup = new SqlContext(database))
+        {
+            await setup.BeginAsync(SqlAccessMode.ReadWrite);
+            await setup.RequireLogicSql().ExecuteAsync("CREATE SEQUENCE \"SqlContextReadOnlySequence\"");
+            await setup.CommitAsync();
+        }
 
         await using (var read = new SqlContext(database))
         {
@@ -20,7 +27,7 @@ public sealed class SqlContextTests
             Assert.ThrowsExactly<InvalidOperationException>(() => read.RequireLogicSql());
 
             var error = await Assert.ThrowsExactlyAsync<PostgresException>(
-                () => read.ReadSql.ExecuteScalarAsync("CREATE TEMP TABLE \"SqlContextReadOnlyProbe\" (\"Id\" integer)"));
+                () => read.ReadSql.ExecuteScalarAsync("SELECT nextval('\\"SqlContextReadOnlySequence\\"')"));
 
             Assert.AreEqual("25006", error.SqlState);
         }
@@ -33,6 +40,28 @@ public sealed class SqlContextTests
             await write.RequireLogicSql().ExecuteAsync("CREATE TEMP TABLE \"SqlContextWriteProbe\" (\"Id\" integer)");
             await write.CommitAsync();
         }
+    }
+
+    [TestMethod]
+    public async Task ReadFacade_RejectsMutatingCommandsEvenDuringReadWriteTransaction()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadWrite);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => context.ReadSql.ExecuteScalarAsync("UPDATE \"Accounts\" SET \"Id\" = 1 RETURNING \"Id\""));
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => context.ReadSql.ExecuteScalarAsync("WITH \"Deleted\" AS (DELETE FROM \"Accounts\" RETURNING \"Id\") SELECT * FROM \"Deleted\""));
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => context.ReadSql.ExecuteScalarAsync("SELECT 1; DELETE FROM \"Accounts\""));
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => context.ReadSql.ExecuteScalarAsync("SELECT * FROM \"Accounts\" FOR UPDATE"));
+
+        Assert.AreEqual("UPDATE", await context.ReadSql.ExecuteScalarAsync("SELECT 'UPDATE'::text /* DROP TABLE \"Accounts\" */"));
     }
 
     [TestMethod]
