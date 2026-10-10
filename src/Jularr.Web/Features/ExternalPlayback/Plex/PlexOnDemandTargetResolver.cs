@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Jularr.Web.Features.Auth;
 
 namespace Jularr.Web.Features.ExternalPlayback.Plex;
@@ -58,7 +59,8 @@ public sealed class PlexOnDemandTargetResolver(
                     clientIdentifier,
                     cancellationToken);
             }
-            catch (HttpRequestException)
+            catch (Exception error)
+                when (error is HttpRequestException or InvalidDataException or JsonException)
             {
                 continue;
             }
@@ -87,7 +89,8 @@ public sealed class PlexOnDemandTargetResolver(
                         title,
                         cancellationToken);
                 }
-                catch (HttpRequestException)
+                catch (Exception error)
+                when (error is HttpRequestException or InvalidDataException or JsonException)
                 {
                     continue;
                 }
@@ -119,7 +122,8 @@ public sealed class PlexOnDemandTargetResolver(
                             return destination;
                         }
                     }
-                    catch (HttpRequestException)
+                    catch (Exception error)
+                when (error is HttpRequestException or InvalidDataException or JsonException)
                     {
                         continue;
                     }
