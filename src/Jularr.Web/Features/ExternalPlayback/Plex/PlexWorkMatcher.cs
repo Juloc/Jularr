@@ -42,7 +42,8 @@ public sealed class PlexWorkMatcher(AppDbContext db)
             WorkMediaType[] mediaTypes = item.Type switch
             {
                 "movie" => [WorkMediaType.Movie],
-                "show" => [WorkMediaType.Series, WorkMediaType.Anime],
+                // Anime is a classification of Series, never a separate Work media type.
+                "show" => [WorkMediaType.Series],
                 _ => []
             };
 
