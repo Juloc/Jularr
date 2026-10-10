@@ -2,6 +2,34 @@
 
 **Stand: IN ARBEIT / NICHT FREIGEGEBEN (10.10.2026).** Keine produktive Datenbank, Migration oder laufende `dev`-Installation wurde verändert. Dieser Entwurf verwendet ausschließlich eine **neue, leere** PostgreSQL-Datenbank als spätere Testbasis. Weder alte IDs noch alte Spalten oder die 56 historischen Migrationen werden übernommen.
 
+## Korrekturabgleich zum freigegebenen Zielmodell (10.10.2026)
+
+Die 12 Entwurfsabschnitte enthalten weiterhin **168 Zieltabellen** (kein neuer kanonischer Root).
+Im korrigierten Schema sind interne Acquisition-Indexer/-Downloadclient- und
+Curriculum-/SharedCourse-/LearnerCourse-IDs **bigint** und nicht mehr UUID;
+UUID bleibt für echte Ereignis-/Client-Idempotenz- und technische Identifier.
+`Profiles.IsLearningEnabled` ist gemäß `LEARNING_V2.md` ein eigenständiges,
+standardmäßig ausgeschaltetes persönliches Modul-Gate, unabhängig vom Instanz-Gate.
+`WorkTitles` erfasst ProviderId/SourceReference/manuellen Override direkt bei der
+maßgeblichen Titelfassung. `AccountPasskeys` enthält AAGUID, Transport- und
+Credential-Backup-/User-Verification-Metadaten. Das Manifest und die isolierten
+SQL-Tests wurden entsprechend erweitert; **die neuen Änderungen gelten erst
+nach einem erfolgreichen CI-Lauf als validiert**.
+
+Nicht stillschweigend hinzugefügt wurden die ursprünglich **optionalen**
+`AccountPermissions` und `ImageGenerationPresets`. Weiterhin offene
+Produkt-/Feldabdeckung: allgemeine Profil-/Contentrestriktionen und weitere
+Modulpräferenzen, detaillierte WebAuthn-/Session-Policies, getypte Medienfacts,
+AI-/Learning-Scopes, Acquisition-/Provider-Policies. Eine identische Person und
+ein Musik-Act dürfen nicht versehentlich doppelt als dieselbe Identität behandelt
+werden: `People` sind persönliche Credits, `MusicArtists` sind musikalische
+Acts einschließlich Gruppen. Ob ein expliziter Cross-Reference-Link benötigt wird,
+entscheidet die tatsächlich verwendete Credits-/Metadata-Funktion.
+
+Ältere Zählstände der Abschnitte 01–10 in diesem laufenden Dokument sind
+historische Zwischenstände; der aktuelle Tabellenstand wird aus dem
+[Target-Manifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) bestimmt.
+
 ## Quellen und Umsetzung
 
 - Fachlich maßgeblich: [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md) §2, §3 und §8.
