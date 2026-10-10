@@ -271,6 +271,15 @@ public sealed class CanonicalPlaybackPlanTests
             PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None);
         Assert.IsNull(orphaned,
             "A surviving prepared rendition is not allowed to masquerade as the missing source file.");
+
+        // Even a future/unknown renderer version remains cache data, not a fallback
+        // original or an installed version. Only its playback eligibility may evolve.
+        version.Source = "jularr-prepared:v2";
+        await fixture.Db.SaveChangesAsync();
+        Assert.AreEqual(0, (await storage.ListVideoFilesAsync(movie.Id, CancellationToken.None)).Count);
+        Assert.IsNull(await storage.ResolveVideoAsync(movie.Id, null, CancellationToken.None));
+        Assert.IsNull(await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None));
     }
 
     [DataTestMethod]

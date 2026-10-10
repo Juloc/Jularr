@@ -82,7 +82,14 @@ public sealed record CanonicalPlayableFile(
 /// </summary>
 public sealed class CanonicalMediaStorageService(AppDbContext db)
 {
-    public const string PreparedVideoVersionSource = "jularr-prepared:v1";
+    // Every recipe version is a disposable playback derivative, never a canonical original.
+    // A new recipe must be explicitly approved by the playback eligibility verifier, but it
+    // must already be excluded from installed releases and original fallback.
+    public const string PreparedVideoVersionPrefix = "jularr-prepared:";
+    public const string PreparedVideoVersionSource = PreparedVideoVersionPrefix + "v1";
+
+    public static bool IsPreparedVideoSource(string? source) =>
+        source?.StartsWith(PreparedVideoVersionPrefix, StringComparison.Ordinal) == true;
     private const string LocalVideoVersionPrefix = "video-file:";
     private const string LocalAudioVersionPrefix = "audio-file:";
 
@@ -397,7 +404,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
             join version in db.WorkVersions.AsNoTracking() on asset.WorkVersionId equals version.Id
             where asset.Kind == MediaAssetKind.Video && asset.WorkId == workId &&
-                  (version.Source == null || version.Source != PreparedVideoVersionSource)
+                  (version.Source == null || !version.Source.StartsWith(PreparedVideoVersionPrefix))
             orderby file.Path
             select new InstalledVideoFile(file.Id, asset.WorkEpisodeId, file.Path, version.Quality))
         .ToListAsync(cancellationToken);
@@ -449,7 +456,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         Guid? workEpisodeId,
         CancellationToken cancellationToken) =>
         (await ResolveVideoCandidatesAsync(workId, workEpisodeId, cancellationToken))
-            .FirstOrDefault(candidate => candidate.VersionSource != PreparedVideoVersionSource);
+            .FirstOrDefault(candidate => !IsPreparedVideoSource(candidate.VersionSource));
 
     public async Task<IReadOnlyList<CanonicalPlayableFile>> ResolveVideoCandidatesAsync(
         long workId,
@@ -464,7 +471,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
             where asset.Kind == MediaAssetKind.Video &&
                   asset.WorkId == workId &&
                   asset.WorkEpisodeId == workEpisodeId
-            orderby version.Source == PreparedVideoVersionSource, file.Path
+            orderby version.Source != null && version.Source.StartsWith(PreparedVideoVersionPrefix), file.Path
             select new CanonicalPlayableFile(
                 asset.Id,
                 file.Id,

@@ -228,7 +228,7 @@ public sealed class PlaybackPlanService(
         // Never treat a prepared derivative as the source of truth if the real original
         // is gone. A stale derivative must not silently become an independently playable cut.
         if (candidates.Count > 0 &&
-            candidates[0].VersionSource == CanonicalMediaStorageService.PreparedVideoVersionSource)
+            CanonicalMediaStorageService.IsPreparedVideoSource(candidates[0].VersionSource))
         {
             return null;
         }
