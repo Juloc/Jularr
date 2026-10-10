@@ -1,7 +1,7 @@
 # Jularr PostgreSQL Clean-Cut: ausführbarer Masterplan
 
 **Status: freigegebene Architektur, IMPLEMENTIERUNGSPLAN – NICHT ausgeführt (10.10.2026).**
-**Master-Issue:** [#880](https://github.com/Juloc/Jularr/issues/880). **Backend-Fundament:** [#942](https://github.com/Juloc/Jularr/issues/942). **Architektur:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md). **Verbindliches fachliches Zielschema:** [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md), **SQL-Regeln:** [DATABASE_CONVENTIONS.md](DATABASE_CONVENTIONS.md), **Frontend:** #930, **WorkCards:** #925, **Fehler:** #853.
+**Master-Issue:** [#880](https://github.com/Juloc/Jularr/issues/880) (dieser Issue ist der Ausführungs-Tracker; dieses Dokument enthält die vollständigen Arbeitsanweisungen). **Backend-Fundament:** [#942](https://github.com/Juloc/Jularr/issues/942). **Architektur:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md). **Verbindliches fachliches Zielschema:** [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md), **SQL-Regeln:** [DATABASE_CONVENTIONS.md](DATABASE_CONVENTIONS.md), **Frontend:** #930, **WorkCards:** #925, **Fehler:** #853.
 
 > **Agent-Anweisung:** Dies ist ein sequenzieller, eigenständig abarbeitbarer Plan. Führe die Phasen in Reihenfolge aus. Arbeite an einem klar koordinierten Scope gemäß AGENTS.md und .agent/project.yaml. Nutze echte Repository-Dateien/Tests als Beleg; Häkchen nur nach tatsächlich bestandenem Gate. Erfinde weder vorhandene Features noch Zielspalten, Routes oder Testresultate. **Stoppe die betroffene Phase bei fehlender Produktentscheidung oder fehlender Freigabe für einen destruktiven Schritt; nicht als stillen Kompromiss lösen.** Andere unabhängige Phasen dürfen vorbereitet werden. Schreibe nach jeder Phase einen kurzen GitHub-Status zu #880 mit Commit/PR, Testergebnis, offenen Risiken und Gate. Keine ungefragten Deployments, Releases, Merges von Fremd-Branches oder Löschung von Nutzdaten. Kein fiktiver Background-Fortschritt.
 
@@ -109,7 +109,7 @@ Die Fachentscheidungen in `CLEAN_CUT_DATABASE.md` sind bindend, aber **kein fert
 
 **Gate F:** Sämtliche Tests nachweislich erfolgreich; Schema-/Client-Integrations-Freeze; Rollback-/Neuinstallationspfad real getestet. Nicht abgenommene produkt-/featurekritische Funktion => **kein Cutover**.
 
-## Phase G – Ein einziges autorisiertes Cutover-Fenster (DESKRUKTIV)
+## Phase G – Ein einziges autorisiertes Cutover-Fenster (DESTRUKTIV)
 
 **STOP-SCHRANKE:** Diesen Abschnitt **erst nach expliziter Benutzerfreigabe** für konkrete Testinstanz, Datenbank/Volume und Umfang ausführen. Keine Freigabe allein aus diesem Dokument, vorherigen Go-Aussagen, PR-Merge oder test-only-Annahme ableiten.
 
