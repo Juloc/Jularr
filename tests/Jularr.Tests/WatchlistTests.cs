@@ -455,15 +455,18 @@ public sealed class WatchlistTests
         var franchises = new FranchiseStore(fixture.Db);
         var seed = Draft("30001", "First");
         var hidden = Draft("30002", "Ignored in profile A");
+        var hiddenEverywhere = Draft("30008", "Ignored by every follower");
         var franchiseId = await franchises.GetOrCreateBySeedAsync(
             seed.Identity,
             CancellationToken.None);
         await franchises.UpsertMemberAsync(franchiseId, seed, null, true, CancellationToken.None);
         await franchises.UpsertMemberAsync(franchiseId, hidden, "SEQUEL", false, CancellationToken.None);
+        await franchises.UpsertMemberAsync(franchiseId, hiddenEverywhere, "SIDE_STORY", false, CancellationToken.None);
         await franchises.FollowAsync("profile-a", franchiseId, CancellationToken.None);
 
         await watchlist.FollowAsync("profile-a", seed with { Status = "NOT_YET_RELEASED" }, CancellationToken.None);
         await watchlist.UnfollowAsync("profile-a", hidden.Identity, CancellationToken.None);
+        await watchlist.UnfollowAsync("profile-a", hiddenEverywhere.Identity, CancellationToken.None);
         await watchlist.FollowAsync("profile-b", seed with { Status = null }, CancellationToken.None);
         await watchlist.FollowAsync("profile-b", hidden, CancellationToken.None);
         await watchlist.FollowAsync("profile-a", Draft("30003", "Third"), CancellationToken.None);
