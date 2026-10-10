@@ -151,8 +151,8 @@ public static class PlaybackTranscodingSettingsRules
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps), PlaybackSettingsIssueCode.WanUploadBudgetInvalid));
         }
 
-        if (settings.PreparedCacheBudgetBytes < MinPreparedCacheBudgetBytes ||
-            settings.PreparedCacheBudgetBytes > MaxPreparedCacheBudgetBytes)
+        if (settings.PreparedCacheBudgetBytes < PlaybackTranscodingSettings.MinPreparedCacheBudgetBytes ||
+            settings.PreparedCacheBudgetBytes > PlaybackTranscodingSettings.MaxPreparedCacheBudgetBytes)
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.PreparedCacheBudgetBytes), PlaybackSettingsIssueCode.PreparedCacheBudgetInvalid));
         }

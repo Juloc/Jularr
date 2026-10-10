@@ -169,7 +169,7 @@ public sealed class TranscodingModel(
 
         if (!store.Current.PreparedRenditionsEnabled)
         {
-            return Conflict();
+            return new StatusCodeResult(StatusCodes.Status409Conflict);
         }
 
         var preparation = HttpContext.RequestServices.GetRequiredService<
@@ -178,7 +178,7 @@ public sealed class TranscodingModel(
             workId, workEpisodeId, cancellationToken);
         if (operationId is null)
         {
-            return Conflict();
+            return new StatusCodeResult(StatusCodes.Status409Conflict);
         }
 
         TempData["Status"] = Ui["admin.transcoding.preparationQueued"];
