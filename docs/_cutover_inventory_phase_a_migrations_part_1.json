@@ -46,51 +46,7 @@
       "LearningCardReviews",
       "MediaAnalysisStreams"
     ],
-    "drops": [
-      "AcquisitionApiKeys",
-      "AcquisitionHistory",
-      "AiSentenceExplanationCache",
-      "AnimeLocalMetadata",
-      "AnimeMetadata",
-      "BookFiles",
-      "EpisodeMediaSegments",
-      "EpisodePlaybackHistory",
-      "EpisodeProgress",
-      "EpisodeSegmentDetectionStates",
-      "EpisodeTerms",
-      "LearningCardReviews",
-      "LearningContexts",
-      "LearningPreferences",
-      "LearningVariants",
-      "MediaAnalysisStreams",
-      "NovelAnimeMappings",
-      "NovelBookmarks",
-      "NovelBookmarkTombstones",
-      "NovelHighlights",
-      "NovelProgress",
-      "NovelTranslations",
-      "OwnerAccounts",
-      "ProfilePlaybackPreferences",
-      "ReaderPreferences",
-      "SubtitleCues",
-      "SubtitleLanguageProfileItems",
-      "SubtitleProfileAssignments",
-      "BookEditions",
-      "LearningCards",
-      "MediaAnalyses",
-      "NovelChapters",
-      "SubtitleTracks",
-      "SubtitleLanguageProfiles",
-      "LearningCourses",
-      "LearningUnits",
-      "MediaFiles",
-      "NovelVolumes",
-      "Terms",
-      "Episodes",
-      "LibraryRoots",
-      "NovelWorks",
-      "Anime"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -209,115 +165,14 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable"
+      "Sql"
     ],
     "sql": [
-      " CREATE TABLE \"\"AccountSessionStates\"\" ( \"\"AccountId\"\" TEXT NOT NULL CONSTRAINT \"",
-      "DROP TABLE IF EXISTS \"\"UiProfileThemes\"\" CASCADE;\"); migrationBuilder.Sql",
-      "DROP TABLE IF EXISTS \"\"UiTranslations\"\" CASCADE;\"); migrationBuilder.Sql(",
-      "DROP TABLE IF EXISTS \"\"UiLocales\"\" CASCADE;\"); migrationBuilder.Sql(@\"DRO",
-      "DROP TABLE IF EXISTS \"\"ReleaseCalendarSources\"\" CASCADE;\"); migrationBuil",
-      "DROP TABLE IF EXISTS \"\"ProfileWatchlistPreferences\"\" CASCADE;\"); migratio",
-      "DROP TABLE IF EXISTS \"\"PresentationGroups\"\" CASCADE;\"); migrationBuilder.",
-      "DROP TABLE IF EXISTS \"\"Operations\"\" CASCADE;\"); migrationBuilder.Sql(@\"DR",
-      "DROP TABLE IF EXISTS \"\"Notifications\"\" CASCADE;\"); migrationBuilder.Sql(@",
-      "DROP TABLE IF EXISTS \"\"MediaArtworkAssets\"\" CASCADE;\"); migrationBuilder.",
-      "DROP TABLE IF EXISTS \"\"MangaBookmarks\"\" CASCADE;\"); migrationBuilder.Sql(",
-      "DROP TABLE IF EXISTS \"\"MangaChapters\"\" CASCADE;\"); migrationBuilder.Sql(@",
-      "DROP TABLE IF EXISTS \"\"MangaSeries\"\" CASCADE;\"); migrationBuilder.Sql(@\"D",
-      "DROP TABLE IF EXISTS \"\"LearningCapabilityOverrides\"\" CASCADE;\"); migratio",
-      "DROP TABLE IF EXISTS \"\"InstanceAppearanceSettings\"\" CASCADE;\"); migration",
-      "DROP TABLE IF EXISTS \"\"FranchiseMembers\"\" CASCADE;\"); migrationBuilder.Sq",
-      "DROP TABLE IF EXISTS \"\"Events\"\" CASCADE;\"); migrationBuilder.Sql(@\"DROP T",
-      "DROP TABLE IF EXISTS \"\"ChapterArtworkWorkSettings\"\" CASCADE;\"); migration",
-      "DROP TABLE IF EXISTS \"\"AnimeMappingAuditEntries\"\" CASCADE;\"); migrationBu",
-      "DROP TABLE IF EXISTS \"\"AiModelCatalogs\"\" CASCADE;\"); migrationBuilder.Sql",
-      "DROP TABLE IF EXISTS \"\"AcquisitionAccessPolicies\"\" CASCADE;\"); migrationB"
+      " CREATE TABLE \"\"AccountSessionStates\"\" ( \"\"AccountId\"\" TEXT NOT NULL CONSTRAINT \""
     ],
-    "size": 123266
+    "size": 123266,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260929041524_MediaCoreFoundation.cs",
@@ -335,20 +190,7 @@
       "WorkEpisodes",
       "WorkChapters"
     ],
-    "drops": [
-      "WorkChapters",
-      "WorkEpisodes",
-      "WorkExternalIdentities",
-      "WorkFieldProvenance",
-      "WorkRelations",
-      "WorkSourceLinks",
-      "WorkTitles",
-      "WorkVersions",
-      "WorkVolumes",
-      "WorkSeasons",
-      "WorkEditions",
-      "Works"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -385,41 +227,30 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 24036
+    "size": 24036,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260929092936_WorkIdentityChanges.cs",
     "creates": [
       "WorkIdentityChanges"
     ],
-    "drops": [
-      "WorkIdentityChanges"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 2530
+    "size": 2530,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260929115624_MovieTvFoundation.cs",
@@ -427,10 +258,7 @@
       "Movies",
       "TvSeries"
     ],
-    "drops": [
-      "Movies",
-      "TvSeries"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -441,20 +269,14 @@
       "Sql",
       "Sql",
       "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "DropTable",
-      "DropTable"
+      "Sql"
     ],
     "sql": [
-      "ALTER TABLE \"\"AcquisitionAccessPolicies\"\" DROP COLUMN IF EXISTS \"\"UserAddMode\"\";\"); ",
-      "ALTER TABLE \"\"AcquisitionAccessPolicies\"\" ADD COLUMN IF NOT EXISTS \"\"UserAddMode\"\" TE"
+      "ALTER TABLE \"\"AcquisitionAccessPolicies\"\" DROP COLUMN IF EXISTS \"\"UserAddMode\"\";\"); "
     ],
-    "size": 6566
+    "size": 6566,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260929124445_LearningV3CurriculumFoundation.cs",
@@ -469,17 +291,7 @@
       "LearnerCourseProgress",
       "CurriculumExercises"
     ],
-    "drops": [
-      "CurriculumExercises",
-      "LearnerCourseItemDeltas",
-      "LearnerCourseProgress",
-      "CurriculumLessons",
-      "LearnerCourses",
-      "CurriculumChapters",
-      "SharedCourseInstances",
-      "CurriculumLevels",
-      "CurriculumBlueprints"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -508,19 +320,12 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 18139
+    "size": 18139,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260929150053_AudiobookFoundation.cs",
@@ -529,11 +334,7 @@
       "AudiobookFiles",
       "AudiobookProgress"
     ],
-    "drops": [
-      "AudiobookFiles",
-      "AudiobookProgress",
-      "Audiobooks"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -547,17 +348,12 @@
       "Sql",
       "Sql",
       "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
-      "DropTable",
-      "DropTable",
-      "DropTable"
+      "Sql"
     ],
     "sql": [],
-    "size": 8904
+    "size": 8904,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260929171337_CollectionsFoundation.cs",
@@ -565,10 +361,7 @@
       "Collections",
       "CollectionItems"
     ],
-    "drops": [
-      "CollectionItems",
-      "Collections"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -576,12 +369,12 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 4329
+    "size": 4329,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260930111106_OperationActorAndHistoryIndex.cs",
@@ -589,14 +382,14 @@
     "drops": [],
     "renames": [],
     "ops": [
-      "Sql",
       "Sql"
     ],
     "sql": [
-      " ALTER TABLE \"Operations\" ADD COLUMN IF NOT EXISTS \"ActorProfileId\" T",
-      " DROP INDEX IF EXISTS \"IX_Operations_History_FinishedAtUtc\"; "
+      " ALTER TABLE \"Operations\" ADD COLUMN IF NOT EXISTS \"ActorProfileId\" T"
     ],
-    "size": 1342
+    "size": 1342,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20260930163000_AddOperationPriority.cs",
@@ -604,14 +397,14 @@
     "drops": [],
     "renames": [],
     "ops": [
-      "Sql",
       "Sql"
     ],
     "sql": [
-      " ALTER TABLE \"Operations\" ADD COLUMN IF NOT EXISTS \"Priority\" bigint ",
-      " ALTER TABLE \"Operations\" DROP COLUMN IF EXISTS \"Priority\"; "
+      " ALTER TABLE \"Operations\" ADD COLUMN IF NOT EXISTS \"Priority\" bigint "
     ],
-    "size": 992
+    "size": 992,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002062139_AddLibraryReconciliationPlans.cs",
@@ -619,33 +412,30 @@
       "LibraryReconciliationPlans",
       "LibraryReconciliationPlanItems"
     ],
-    "drops": [
-      "LibraryReconciliationPlanItems",
-      "LibraryReconciliationPlans"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
       "CreateTable",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 5101
+    "size": 5101,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002080402_AddExplicitlyIgnoredReconciliationItems.cs",
     "creates": [],
     "drops": [],
     "renames": [],
-    "ops": [
-      "DropColumn"
-    ],
+    "ops": [],
     "sql": [],
-    "size": 855
+    "size": 855,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002090725_AddReconciliationEpisodeAssignments.cs",
@@ -654,13 +444,12 @@
     "renames": [],
     "ops": [
       "CreateIndex",
-      "AddForeignKey",
-      "DropForeignKey",
-      "DropIndex",
-      "DropColumn"
+      "AddForeignKey"
     ],
     "sql": [],
-    "size": 1760
+    "size": 1760,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002100802_AddReconciliationVolumeAssignments.cs",
@@ -669,13 +458,12 @@
     "renames": [],
     "ops": [
       "CreateIndex",
-      "AddForeignKey",
-      "DropForeignKey",
-      "DropIndex",
-      "DropColumn"
+      "AddForeignKey"
     ],
     "sql": [],
-    "size": 1752
+    "size": 1752,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002110504_AddReconciliationChapterAssignments.cs",
@@ -684,23 +472,22 @@
     "renames": [],
     "ops": [
       "CreateIndex",
-      "AddForeignKey",
-      "DropForeignKey",
-      "DropIndex",
-      "DropColumn"
+      "AddForeignKey"
     ],
     "sql": [],
-    "size": 1760
+    "size": 1760,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261002110834_AddReconciliationOrganizationMode.cs",
     "creates": [],
     "drops": [],
     "renames": [],
-    "ops": [
-      "DropColumn"
-    ],
+    "ops": [],
     "sql": [],
-    "size": 830
+    "size": 830,
+    "hasUp": true,
+    "hasDown": true
   }
 ]
