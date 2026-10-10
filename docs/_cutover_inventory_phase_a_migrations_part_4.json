@@ -6,22 +6,19 @@
     "renames": [],
     "ops": [
       "AddCheckConstraint",
-      "AddCheckConstraint",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn"
+      "AddCheckConstraint"
     ],
     "sql": [],
-    "size": 1978
+    "size": 1978,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261009140000_ReadingUnitIdentity.cs",
     "creates": [
       "WorkUnitBindings"
     ],
-    "drops": [
-      "WorkUnitBindings"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -32,19 +29,12 @@
       "CreateIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropIndex",
-      "DropCheckConstraint",
-      "DropIndex",
-      "DropCheckConstraint",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn",
-      "DropColumn"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 6665
+    "size": 6665,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261009150000_AccountLoginIdentities.cs",
@@ -52,31 +42,26 @@
       "AccountLoginIdentities",
       "PlexLoginAttempts"
     ],
-    "drops": [
-      "PlexLoginAttempts",
-      "AccountLoginIdentities"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
       "CreateIndex",
       "CreateTable",
       "CreateIndex",
-      "CreateIndex",
-      "DropTable",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 3737
+    "size": 3737,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261009150000_MusicRecordings.cs",
     "creates": [
       "MusicRecordings"
     ],
-    "drops": [
-      "MusicRecordings"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
@@ -84,35 +69,29 @@
       "CreateIndex",
       "AddForeignKey",
       "Sql",
-      "DropColumn",
-      "Sql",
-      "DropForeignKey",
-      "DropTable",
-      "DropIndex",
-      "DropColumn",
       "DropColumn"
     ],
     "sql": [
-      " INSERT INTO \"MusicRecordings\" (\"Id\", \"MusicBrainzId\", \"Title\", \"Crea",
-      " UPDATE \"WorkTracks\" track SET \"MusicBrainzRecordingId\" = recording.\""
+      " INSERT INTO \"MusicRecordings\" (\"Id\", \"MusicBrainzId\", \"Title\", \"Crea"
     ],
-    "size": 4404
+    "size": 4404,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261009160000_AudiobookEditionMetadata.cs",
     "creates": [
       "AudiobookEditionMetadata"
     ],
-    "drops": [
-      "AudiobookEditionMetadata"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
-      "CreateTable",
-      "DropTable"
+      "CreateTable"
     ],
     "sql": [],
-    "size": 2284
+    "size": 2284,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261009170000_WorkAnimeClassification.cs",
@@ -121,16 +100,14 @@
     "renames": [],
     "ops": [
       "CreateIndex",
-      "Sql",
-      "Sql",
-      "DropIndex",
-      "DropColumn"
+      "Sql"
     ],
     "sql": [
-      " UPDATE \"Works\" SET \"MediaType\" = 1, \"IsAnime\" = TRUE WHERE \"MediaTyp",
-      "UPDATE \"Works\" SET \"MediaType\" = 2 WHERE \"IsAnime\" AND \"MediaType\" = 1;\"\"\"); "
+      " UPDATE \"Works\" SET \"MediaType\" = 1, \"IsAnime\" = TRUE WHERE \"MediaTyp"
     ],
-    "size": 2079
+    "size": 2079,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261009194000_RequestSubmissionUsage.cs",
@@ -138,14 +115,14 @@
     "drops": [],
     "renames": [],
     "ops": [
-      "Sql",
       "Sql"
     ],
     "sql": [
-      " CREATE TABLE \"RequestSubmissionUsage\" ( \"Id\" BIGINT GENE",
-      "DROP TABLE \"RequestSubmissionUsage\";\"\"\"); } } "
+      " CREATE TABLE \"RequestSubmissionUsage\" ( \"Id\" BIGINT GENE"
     ],
-    "size": 1415
+    "size": 1415,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261010000000_WorkIdInt64.cs",
@@ -153,10 +130,6 @@
     "drops": [],
     "renames": [],
     "ops": [
-      "Sql",
-      "Sql",
-      "Sql",
-      "Sql",
       "Sql",
       "Sql",
       "Sql",
@@ -171,12 +144,11 @@
       " DO $$ DECLARE saved record; BEGIN ",
       " SELECT pg_temp.retype_work_column('AcquisitionRequests', 'WorkId', t",
       " ALTER TABLE \"WorkMonitoring\" ALTER COLUMN \"TargetId\" DROP NOT NULL; ",
-      " UPDATE \"AcquisitionRequests\" SET \"PayloadJson\" = pg_temp.remap_work_",
-      " DROP TABLE IF EXISTS \"WorkIdMigrationMap\"; CREATE TA",
-      " CREATE FUNCTION pg_temp.retype_work_column_back(tbl text, col text, ",
-      " SELECT pg_temp.retype_work_column_back('AcquisitionRequests', 'WorkI"
+      " UPDATE \"AcquisitionRequests\" SET \"PayloadJson\" = pg_temp.remap_work_"
     ],
-    "size": 21630
+    "size": 21630,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261010100000_ReadingUnitBindingsCoverMany.cs",
@@ -187,14 +159,12 @@
       "DropIndex",
       "CreateIndex",
       "CreateIndex",
-      "CreateIndex",
-      "DropIndex",
-      "DropIndex",
-      "DropIndex",
       "CreateIndex"
     ],
     "sql": [],
-    "size": 2164
+    "size": 2164,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261010200000_MangaChapterVersions.cs",
@@ -202,30 +172,29 @@
     "drops": [],
     "renames": [],
     "ops": [
-      "Sql",
       "Sql"
     ],
     "sql": [
-      " ALTER TABLE \"MangaChapters\" ADD COLUMN \"SupersededById\" TEXT NULL ",
-      "ALTER TABLE \"MangaChapters\" DROP COLUMN \"SupersededById\";\"\"\"); } } } "
+      " ALTER TABLE \"MangaChapters\" ADD COLUMN \"SupersededById\" TEXT NULL "
     ],
-    "size": 932
+    "size": 932,
+    "hasUp": true,
+    "hasDown": true
   },
   {
     "file": "20261010300000_NovelVolumeEditions.cs",
     "creates": [
       "NovelVolumeEditions"
     ],
-    "drops": [
-      "NovelVolumeEditions"
-    ],
+    "drops": [],
     "renames": [],
     "ops": [
       "CreateTable",
-      "CreateIndex",
-      "DropTable"
+      "CreateIndex"
     ],
     "sql": [],
-    "size": 2172
+    "size": 2172,
+    "hasUp": true,
+    "hasDown": true
   }
 ]
