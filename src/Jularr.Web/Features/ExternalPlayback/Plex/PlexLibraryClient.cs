@@ -263,8 +263,11 @@ public sealed class PlexLibraryClient(HttpClient client)
         request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", identifier);
         request.Headers.TryAddWithoutValidation("X-Plex-Token", token);
 
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(client.Timeout);
+
         using var response = await client.SendAsync(
-            request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         if (response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.MovedPermanently
             or HttpStatusCode.RedirectMethod or HttpStatusCode.TemporaryRedirect
             or HttpStatusCode.PermanentRedirect)
@@ -273,10 +276,10 @@ public sealed class PlexLibraryClient(HttpClient client)
         }
 
         response.EnsureSuccessStatusCode();
-        await response.Content.LoadIntoBufferAsync(MaxResponseBytes, cancellationToken);
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await response.Content.LoadIntoBufferAsync(MaxResponseBytes, timeout.Token);
+        await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
         return await JsonDocument.ParseAsync(
-            stream, cancellationToken: cancellationToken);
+            stream, cancellationToken: timeout.Token);
     }
 
     private static PlexLibraryItem? ToItem(JsonElement item)
