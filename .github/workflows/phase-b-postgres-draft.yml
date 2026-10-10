@@ -91,7 +91,7 @@ jobs:
           })) sql = sql.replaceAll(name, value);
           if (sql.includes('@')) throw Error('Unbound placeholder in canonical SELECT');
           fs.writeFileSync('/tmp/phase_b_watchlist_prepared.sql',
-            'PREPARE phase_b_watchlist(bigint,text,integer,integer) AS\\n' + sql + ';\\n');
+            'PREPARE phase_b_watchlist(bigint,text,integer,integer) AS\n' + sql + ';\n');
           NODE
 
       - name: Execute WorkCard SELECT against 1000 scratch root rows
