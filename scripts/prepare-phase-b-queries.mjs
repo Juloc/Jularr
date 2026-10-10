@@ -259,3 +259,20 @@ for (const query of providerQueries)
     writeFileSync(resolve(outputDirectory, 'phase_b_' + query.name + '_prepared.sql'),
         'PREPARE phase_b_' + query.name + '(' + query.types + ') AS\n' + sql + '\n');
 }
+
+const acquisitionFile = readFileSync(fileURLToPath(new URL('../docs/DATABASE_CUTOVER_PHASE_B_ACQUISITION_QUERIES_DRAFT.sql', import.meta.url)), 'utf8').trim();
+let acquisitionSql = acquisitionFile.slice(acquisitionFile.indexOf('SELECT'));
+for (const [index, name] of ['ActorAccountId', 'ActiveProfileId', 'PageSize', 'Offset'].entries())
+{
+    if (!acquisitionSql.includes('@' + name))
+    {
+        throw new Error('Missing request history parameter @' + name);
+    }
+    acquisitionSql = acquisitionSql.replaceAll('@' + name, '$' + (index + 1));
+}
+if (acquisitionSql.includes('@'))
+{
+    throw new Error('Unexpected dynamic request history SQL parameter');
+}
+writeFileSync(resolve(outputDirectory, 'phase_b_acquisition_requests_prepared.sql'),
+    'PREPARE phase_b_acquisition_requests(bigint,bigint,integer,bigint) AS\n' + acquisitionSql + '\n');
