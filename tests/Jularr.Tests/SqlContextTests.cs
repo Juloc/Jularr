@@ -27,7 +27,7 @@ public sealed class SqlContextTests
             Assert.ThrowsExactly<InvalidOperationException>(() => read.RequireLogicSql());
 
             var error = await Assert.ThrowsExactlyAsync<PostgresException>(
-                () => read.ReadSql.ExecuteScalarAsync("SELECT nextval('\\"SqlContextReadOnlySequence\\"')"));
+                () => read.ReadSql.ExecuteScalarAsync("SELECT nextval('\"SqlContextReadOnlySequence\"')"));
 
             Assert.AreEqual("25006", error.SqlState);
         }
