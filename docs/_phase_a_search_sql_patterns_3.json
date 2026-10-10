@@ -1,0 +1,118 @@
+{
+  "capturedFrom": "GitHub code search default branch dev (2026-10-10)",
+  "rows": [
+    {
+      "term": "MapGet",
+      "total": 15,
+      "paths": [
+        "src/Jularr.Web/Features/Pairing/DiscoveryEndpoints.cs",
+        "src/Jularr.Web/Features/ReaderThemes/ReaderThemeEndpoints.cs",
+        "src/Jularr.Web/Features/Acquisition/Api/AcquisitionApiEndpoints.cs",
+        "src/Jularr.Web/Features/Storage/FolderBrowse/FolderBrowseEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflineLibraryEndpoints.cs",
+        "src/Jularr.Web/Features/Ai/AiActivityEndpoints.cs",
+        "src/Jularr.Web/Features/Branding/BrandingEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflineMediaPackageEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflineEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiEndpoints.cs",
+        "src/Jularr.Web/Features/Monitoring/MonitoringEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiPlaybackPlanEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflinePrefetch.cs",
+        "src/Jularr.Web/Features/PlaybackSessions/PlaybackSessionEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiPlaybackIntentEndpoints.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "MapPost",
+      "total": 14,
+      "paths": [
+        "src/Jularr.Web/Features/Pairing/DevicePairingEndpoints.cs",
+        "src/Jularr.Web/Features/Acquisition/Api/AcquisitionApiEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflinePackageEndpoints.cs",
+        "src/Jularr.Web/Features/Learning/LanguageAssistance/LanguageInspectorEndpoints.cs",
+        "src/Jularr.Web/Features/PlaybackSessions/PlaybackSessionEndpoints.cs",
+        "src/Jularr.Web/Features/Ai/AiActivityEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflineLibraryEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflineEndpoints.cs",
+        "src/Jularr.Web/Features/Monitoring/MonitoringEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiEndpoints.cs",
+        "src/Jularr.Web/Features/Storage/FolderBrowse/FolderBrowseEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiOfflinePrefetch.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiPlaybackIntentEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiPlaybackPlanEndpoints.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "MapPut",
+      "total": 5,
+      "paths": [
+        "src/Jularr.Web/Features/Monitoring/MonitoringEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiEndpoints.cs",
+        "src/Jularr.Web/Features/Acquisition/Api/AcquisitionApiEndpoints.cs",
+        "src/Jularr.Web/Features/PlaybackSessions/PlaybackSessionEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiPlaybackPlanEndpoints.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "MapDelete",
+      "total": 4,
+      "paths": [
+        "src/Jularr.Web/Features/Monitoring/MonitoringEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiEndpoints.cs",
+        "src/Jularr.Web/Features/PlaybackSessions/PlaybackSessionEndpoints.cs",
+        "src/Jularr.Web/Features/ClientApi/ClientApiPlaybackPlanEndpoints.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "MapPatch",
+      "total": 0,
+      "paths": [],
+      "truncated": false
+    },
+    {
+      "term": "AddHostedService",
+      "total": 3,
+      "paths": [
+        "src/Jularr.Web/Program.cs",
+        "src/Jularr.Web/Features/Calendar/ReleaseCalendarRegistration.cs",
+        "src/Jularr.Web/Features/Playback/Decision/PlaybackDecisionRegistration.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "BackgroundService",
+      "total": 18,
+      "paths": [
+        "src/Jularr.Web/Features/Tracking/AniListSyncService.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/LibraryWorkBackfillService.cs",
+        "src/Jularr.Web/Features/Pairing/DiscoveryBeaconService.cs",
+        "src/Jularr.Web/Features/Media/Optimization/MediaOptimizationQueue.cs",
+        "src/Jularr.Web/Features/Playback/Transcoding/PlaybackServerResourceService.cs",
+        "src/Jularr.Web/Features/Ai/AiUsageStore.cs",
+        "src/Jularr.Web/Features/Library/LibraryStartupScanService.cs",
+        "src/Jularr.Web/Features/Franchises/FranchiseRefreshService.cs",
+        "src/Jularr.Web/Infrastructure/BackgroundJobQueue.cs",
+        "src/Jularr.Web/Features/Library/LibraryWatchService.cs",
+        "src/Jularr.Web/Features/Admin/StackResourceTelemetry.cs",
+        "src/Jularr.Web/Features/ChapterArtwork/ChapterArtworkAutoGenerator.cs",
+        "src/Jularr.Web/Features/Calendar/ReleaseCalendarRefresh.cs",
+        "src/Jularr.Web/Features/Metadata/WorkMetadataRefreshService.cs",
+        "src/Jularr.Web/Features/Operations/SabnzbdOperationMonitor.cs",
+        "src/Jularr.Web/Features/Acquisition/Health/AcquisitionHealthCheckService.cs",
+        "src/Jularr.Web/Features/Acquisition/Wanted/WantedAcquisitionService.cs",
+        "src/Jularr.Web/Program.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "IHostedService",
+      "total": 0,
+      "paths": [],
+      "truncated": false
+    }
+  ]
+}
