@@ -90,6 +90,31 @@ BEGIN
         RAISE EXCEPTION 'Core target tables missing from current_schema()';
     END IF;
 
+    -- Blueprint membership cannot be satisfied by a Lesson/Exercise from a
+    -- different published Course. These composite constraints are mandatory.
+    IF (
+        SELECT count(*) FROM pg_constraint
+        WHERE contype='f' AND conname IN (
+            'FK_CurriculumChapters_LevelBlueprint',
+            'FK_CurriculumLessons_ChapterBlueprint',
+            'FK_CurriculumExercises_LessonBlueprint',
+            'FK_SharedCourseExerciseContent_InstanceBlueprint',
+            'FK_SharedCourseExerciseContent_ExerciseBlueprint',
+            'FK_LearnerCourses_InstanceBlueprint',
+            'FK_LearnerCourseProgress_CourseBlueprint',
+            'FK_LearnerCourseProgress_LevelBlueprint',
+            'FK_LearnerCourseProgress_ChapterBlueprint',
+            'FK_LearnerCourseProgress_LessonBlueprint',
+            'FK_LearnerCourseProgress_ExerciseBlueprint',
+            'FK_LearnerExerciseAttempts_CourseBlueprint',
+            'FK_LearnerExerciseAttempts_ExerciseBlueprint',
+            'FK_LearningActivitySessions_LearnerCourseBlueprint',
+            'FK_LearningActivitySessions_LessonBlueprint'
+        )
+    ) <> 15 THEN
+        RAISE EXCEPTION 'Curriculum/Learner cross-blueprint FKs are missing';
+    END IF;
+
     RAISE NOTICE 'Phase B structural invariants present. Next run actual rejection/rollback/integration tests.';
 END $phase_b$;
 ROLLBACK;
