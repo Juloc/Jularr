@@ -179,6 +179,17 @@ internal static class SqlReadGuard
                 }
             }
 
+            if (sql[index] == '@' && index + 1 < sql.Length && IsNameStart(sql[index + 1]))
+            {
+                index += 2;
+                while (index < sql.Length && IsNameChar(sql[index]))
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
             if (IsNameStart(sql[index]))
             {
                 var start = index++;
