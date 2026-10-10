@@ -248,7 +248,7 @@ und unbekannte Unit. EXPLAIN mit 1.003 Kontexten nutzt den Profil/Unit/CreatedAt
 Id-Index und liest für die erste Seite nur 25 Root-Zeilen; Details folgen danach.
 Gate B bleibt für die übrigen fachlichen und vollständigen Query-Verträge offen.
 
-## B01/B06 – geplante Notifications-Verträge aus PR #842
+## B01/B09 – geplante Notifications-Verträge aus PR #842
 
 Der direkte Abgleich mit `planning/notifications-ux-20261004` umfasst die
 kanonischen Events-/Notifications-Modelle sowie Persistenz, Audience,
@@ -280,4 +280,4 @@ Type-Katalog- und Struktur-Suites bestanden. Events prüfen jetzt echte Seeds
 statt CI-Ersatzwerte, spezifische Category-Policy-FKs und die richtige
 StorageProblem-Kategorie 8. 23 weitere Kataloge bleiben offen.
 Geplante Quiet-Hours-/Digest-/Endpoint-Persistenz und Inbox-Recurrence sind
-damit nicht automatisch fertig; sie bleiben konkrete B06-Arbeitspunkte.
+damit nicht automatisch fertig; sie bleiben konkrete B09-Arbeitspunkte.

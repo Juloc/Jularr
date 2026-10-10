@@ -2,7 +2,30 @@
 
 **Stand: IN ARBEIT / NICHT FREIGEGEBEN (10.10.2026).** Keine produktive Datenbank, Migration oder laufende `dev`-Installation wurde verändert. Dieser Entwurf verwendet ausschließlich eine **neue, leere** PostgreSQL-Datenbank als spätere Testbasis. Weder alte IDs noch alte Spalten oder die 56 historischen Migrationen werden übernommen.
 
-## Korrekturabgleich zum freigegebenen Zielmodell (10.10.2026)
+## Aktueller Prüfstand
+
+14 DDL-Abschnitte, 175 Target-Tabellen, 46 Type-Kataloge und 22 separate öffentliche
+Ressourcen-UUIDs. Interne Ressourcen-PKs/FKs und Joins bleiben bigint; Secrets
+bleiben unabhängig davon kryptografisch zufällig und gehasht/geschützt.
+23 Type-Kataloge mit 112 Codes besitzen jetzt explizite C#-byte-Verträge,
+identische Seeds sowie lokale PostgreSQL- und CI-Nachweise. 23 Kataloge sind
+noch offen. Diese Zahlen sind kein Gate-B-Abschluss.
+
+Account Groups ist durch aktuellen Owner-Auftrag eingeschlossen; seine neutrale
+Foundation und der paginierte Owner-Read sind geprüft. Persönliche Learning-
+Kontexte besitzen Profilzuordnung, typisierte Inhaltsreferenzen und einen
+berechtigungsgeprüften paginierten Read. Bestehende Kursoptionen sind erhalten.
+Geplante Notifications-Verträge wurden direkt mit PR #842 abgeglichen;
+Category/Audience/Severity sind jetzt durch einen Composite-FK gekoppelt.
+
+Die verbleibenden Fach-/Seed- und vollständigen Query-Nachweise stehen in
+[DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md). Insbesondere Quiet-Hours-/
+Digest-/Endpoint-Persistenz, Inbox-Recurrence und weitere Auth-/Provider-/
+Work-Facts bleiben offen. Keine Runtime-Portierung, EF-Baseline oder aktive
+DB-Neuanlage wird dadurch als abgeschlossen bezeichnet. Die folgenden
+Zwischenstände dokumentieren die Entwicklung, nicht den aktuellen Gesamtumfang.
+
+## Früherer Korrekturabgleich zum Zielmodell (10.10.2026)
 
 Die 12 Entwurfsabschnitte enthalten weiterhin **168 Zieltabellen** (kein neuer kanonischer Root).
 Im korrigierten Schema sind interne Acquisition-Indexer/-Downloadclient- und
