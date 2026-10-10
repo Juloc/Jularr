@@ -37,7 +37,7 @@ Jularr.Data/
   Profiles/Profiles.cs
 Jularr.Service/
   Core/Service.cs, ServiceRuntime.cs, ServiceGate.cs, ServiceContext.cs
-  Core/ServiceOperationKind.cs, UserListService.cs, AdminListService.cs
+  Core/ServiceOperationType.cs, UserListService.cs, AdminListService.cs
   User/Watchlist/V1/Watchlist.cs        # ReadWatchlistV1 + UpdateWatchlistV1
   User/Accounts/V1/Accounts.cs          # ReadAccountV1, UpdateAccountV1
   User/Profiles/V1/Profiles.cs          # ReadProfileV1, UpdateProfileV1
@@ -60,10 +60,10 @@ Jularr.Web/
 
 `AccountId` adressiert eine Login-Identität, `ProfileId` eine persönliche Profilidentität. **Kein `ReadUserV1(AccountId)`** als mehrdeutige Account-/Profilfunktion; `ReadAccountV1`/`ReadProfileV1` sind sinnvolle Beispiele, keine automatisch einzuführenden Funktionen. Ein Owner/Admin verwendet User-Services auf normalen Seiten, Admin-Services nur im Admin-Bereich. System-Services nur durch vertrauenswürdige Worker/Operation-Claims. Keine Rollen in Logic-Namen; gemeinsame Domaininvarianten sind nicht pro Rolle dupliziert.
 
-## 3. OperationKind, Gates, Rückgabetypen und automatische Transaktion
+## 3. OperationType, Gates, Rückgabetypen und automatische Transaktion
 
 Jede registrierte `Service<TParameters,TData>`-Operation besitzt folgende beim Startup validierte Metadaten:
-- `GetOperationKind()` liefert genau `Read`, `Create`, `Update`, `Delete` oder `Execute`. `GetServiceType` wird nicht verwendet: User/Admin/System ist bereits die **Area**, OperationKind ist die **Art** der Aktion.
+- `GetOperationType()` liefert genau `Read`, `Create`, `Update`, `Delete` oder `Execute`. `GetServiceType` wird nicht verwendet: User/Admin/System ist bereits die **Area**, OperationType ist die **Art** der Aktion.
 - `GetResultTypes()` gibt eine endliche Menge tatsächlich erlaubter erfolgreicher `IServiceOutput`-DTO-Typen mit **exakt einem Default**. Klassen-Generic `TResult` gibt es nicht. `ExecuteAsync<TOutput>` erlaubt nur bereits deklarierte Resulttypen; Clients können niemals beliebige CLR-Klassennamen bestimmen. Private Outputvarianten erfordern entsprechende zusätzliche Permission.
 - `GetInstanceModules(parameters)` mit explizitem None/All/Any; dynamische Medienmodule ggf. nach kleiner autorisierter Resource-Metadatenprüfung; Modul-Aus stoppt Services und Worker, nicht bloß die Navigation.
 - `GetPermission(parameters, resultType)` und `GetResource(parameters)` bzw. bei mehreren beeinflussten Ressourcen ein expliziter Multi-Target-Zugriffsvertrag. Jeder betroffene Target erhält einen Gate-/Race-Check. Kein primärer Account als pauschale Berechtigung für Profile, Sessions, LibraryRoots etc.
@@ -72,7 +72,7 @@ Jede registrierte `Service<TParameters,TData>`-Operation besitzt folgende beim S
 
 **Zentraler nicht überschreibbarer Ausführungsweg:** erforderliche Module zuerst -> Parameter-/Result-Metadaten validieren -> Actor/Session/Profile/Worker oder eng definierte Auth/Public-Caller-Policy -> Permission/Resource-Scopes -> ein neutraler SQL-Kontext -> automatisch Modus und optionale Transaktion eröffnen -> race-sensitive Rechte wieder prüfen -> alle Logic-Schritte bzw. die reine Read-Abfrage awaiten -> Result prüfen -> **ein Commit durch die Service-Basis**. Bei Fehler/Cancellation Rollback/Dispose. Standardfehler werden zentral erzeugt/übersetzt, kein GetErrorTypes und keine manuellen Routine-NotFound-Throws.
 
-| OperationKind | Zugriff | Default-Transaktion |
+| OperationType | Zugriff | Default-Transaktion |
 | --- | --- | --- |
 | Read | C# nur `ReadSql` UND PostgreSQL-Transaktion ausdrücklich `READ ONLY` | Kurz, ohne DML/Write-Locks/Seiteneffekte |
 | Create / Update / Delete | Schreibzugriff ausschließlich in Logic | Eine kurze `READ COMMITTED READ WRITE`-Transaktion für alle Logic-Schritte, ggf. begründet anderes Isolation-Level |
@@ -119,7 +119,7 @@ Ein fachliches SELECT pro paginierter outward Rootliste einschließlich benötig
 
 ## 8. Verbindliche Umsetzungsgates und Reihenfolge
 
-1. **Architektur-/Compile-Gates:** Data-V1 und Service-V1 je eine Entity-Datei pro Area; separate Data.<Entity> und Logic.<Entity> ohne V1/Area; kein zirkuläres `Logic -> Service`, kein `Web/API -> Logic`, keine schreibenden SQLs oder Seiteneffekte in Service. OperationKind, GetResultTypes (genau ein Default), Modul-/Permission-/SortKeys-Metadaten beim Startup validieren.
+1. **Architektur-/Compile-Gates:** Data-V1 und Service-V1 je eine Entity-Datei pro Area; separate Data.<Entity> und Logic.<Entity> ohne V1/Area; kein zirkuläres `Logic -> Service`, kein `Web/API -> Logic`, keine schreibenden SQLs oder Seiteneffekte in Service. OperationType, GetResultTypes (genau ein Default), Modul-/Permission-/SortKeys-Metadaten beim Startup validieren.
 2. **Echte PostgreSQL-Tests:** READ ONLY weist DML/FOR UPDATE ab und Read-Mode leakt nicht auf die nächste Pool-Nutzung; mehrere Logic-Schritte nutzen identische Connection/Tx; Failure bei Schritt 2/3 rollt alle SQL-Änderungen zurück; Scope-/Profile-/Account-/Ressourcenrechte auch bei Concurrency.
 3. **SQL-DTO-Mapping/Performance:** ganzes Parameters/Data-Objekt, nur verwendete SQL-Parameter; TypeMapping null/enum/array/jsonb/citext/reservierte Werte, Strings/Quotes/Kommentare/Casts; bindungs-/pool-sicher; ein SQL-Statement mit verschachtelten sortierten Kindern, gemessene Query-Pläne auf repräsentativen PostgreSQL-Daten, Read-only-Tx-Overhead auf schwachem Server.
 4. **Fachfälle:** Account vs Profile eindeutig, User-/Admin-Field-Allowlist, PATCH „nicht gesendet vs null vs Wert“, universal Domaininvarianten, Sessions/Permissions/Audit im gemeinsamen Tx. Queue/Direct/Force/Worker-Cancel/Restart; Client-/Frontend-/Admin-Consumer-Tests.
