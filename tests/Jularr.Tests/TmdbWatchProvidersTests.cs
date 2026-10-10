@@ -50,7 +50,10 @@ public sealed class TmdbWatchProvidersTests
             movie.Id, WorkMediaType.Movie, "DE", CancellationToken.None);
 
         Assert.IsNotNull(german);
-        Assert.AreEqual(german, again);
+        Assert.IsNotNull(again);
+        Assert.AreEqual(german.WatchPage, again.WatchPage);
+        CollectionAssert.AreEqual(
+            german.Offers.ToArray(), again.Offers.ToArray());
         Assert.AreEqual("DE", german.Region);
         Assert.AreEqual("JustWatch", german.Attribution);
         Assert.AreEqual("www.themoviedb.org", german.WatchPage.Host);
