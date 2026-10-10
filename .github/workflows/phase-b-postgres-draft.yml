@@ -103,6 +103,10 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_PROVIDER_POLICY_TESTS.sql
 
+      - name: Verify bounded user Request history authorization
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_ACQUISITION_QUERY_TESTS.sql
+
 
       - name: Verify authentication lifecycle, replay, purpose and session isolation
         run: |
