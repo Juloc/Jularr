@@ -80,3 +80,14 @@ Die tatsächlichen alten C#-Werte und der korrigierte AccountRole-Entwurf stehen
 - **B15 Continue:** Die unveränderte Service-SELECT-Struktur aus `DATABASE_CUTOVER_PHASE_B_READ_QUERIES_DRAFT.sql` wird als typisierte Prepared Query mit zwei getrennten Testprofilen ausgeführt. Die Tests sichern Reihenfolge, Offset, Profiltrennung und das Ausblenden abgeschlossener Einträge; ein `EXPLAIN (ANALYZE, BUFFERS)` prüft die tatsächliche PostgreSQL-Ausführung. Dies ersetzt **nicht** Query-Plan-Belege für alle fachlichen Lastprofile und Autorisierungs-Gates.
 - **B12 Operations:** Exakt die bestehende Logic-only-Claim-Query wird in **zwei PostgreSQL-Sessions** ausgeführt: ein gesperrter Pending-Job muss übersprungen werden, freie fällige Jobs dürfen je einmal geclaimt werden, ein zukünftiger Job bleibt Pending, nach Freigabe wird der zuvor gesperrte Job genau einmal geclaimt. Die Testumgebung ist die **wegwerfbare** CI-DB `phase_b_scratch`. Dieser Claim-Test ersetzt **nicht** endgültige Retry-/Cancellation-/Outbox-Produktverträge.
 - Beide Belege gehören zu PR #948, einem ausdrücklich separaten Teil-PR in die Phase-B-Branch, und schließen weder Gate B noch den späteren Cutover vorzeitig.
+
+
+## Stand nach Learning-Scopes (13) und öffentlichen IDs (14)
+
+**Korrigierter DDL-Zwischenstand:** 14 SQL-Abschnitte, **173 Target-Tabellen** und **46 Type-Kataloge**, noch keine finale Baseline. Die fünf Learning-Zieltabelle und drei Type-Kataloge sind in TABLE_MANIFEST/ENUM_SEED_MANIFEST ergänzt. Neu hinzugekommene `PublicId uuid`-Spalten auf 16 tatsächlich nach außen adressierbaren Entitäten werden im selben Tabellenmanifest geführt; **alle** internen `Id`-/FK-/Composite-Key-`bigint` bleiben erhalten. PostgreSQL wird mit einem isolierten positiven/negativen Public-ID-Test validiert.
+
+**Normativer Owner-Vorrang:** öffentliche Ressourcenidentität ist nicht die SQL-`Id` und nicht das Sicherheitstoken. Die Regel `Works.Id bigint` bleibt intern; `Works.PublicId uuid` ist die öffentliche Adresse. Login-/Recovery-/Refresh-/Invite-/Pairing-/Capability-Secrets sind kryptografisch zufällige Tokens mit Hash/Secret-Store, Scope, Expiry, Rotation und Revocation. Provider-IDs bleiben externe Namespaces. Alte numerische Client-Routen werden erst koordiniert in **Phase E** ersetzt; kein ungetestetes Breaking-Change in der alten laufenden dev-Version.
+
+Die Client-/API- und echte Service-Berechtigungsnachweise werden in D/E getestet. Public UUIDs bieten keine Zugriffsberechtigung. **Keine** künstliche Permission-Proxy-Tabelle und **kein** SQL-Join über PublicId.
+
+**Noch offen:** die restlichen Typ-/Seed-Verträge (B01), finale Profile-/Auth-/AI-/Arr-/Provider-/Import-Verträge und integrale Query-/Permission-Lasttests. Die Anzahl 173 ist kein festgeschriebener Sollwert und kein Gate-B-Abnahmebeweis. EF-Baseline gehört nach Gate B in Phase C.

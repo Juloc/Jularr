@@ -114,3 +114,14 @@ Die bisherige [Enum-Quellprüfung](DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md) hat u
 - Das tabellenweise [Target-Manifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) berücksichtigt alle 168 Zieltabellen und die neue Shape des bestehenden `Notifications`-Inboxes; das [Enum-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) erfasst nun 43 Persistenzkataloge. **Aus vorhandenen Quell-Enums verifizierte Werte sind weiterhin keine automatische Freigabe der neuen `enum : byte`-Verträge.**
 
 **Weiterhin offen:** die 16 B01–B16-Gates im [Entscheidungsregister](DATABASE_CUTOVER_PHASE_B_DECISIONS.md), insb. alle Enum-Seed-Verträge, noch unmodellierte Fachanteile für Auth/AI/Learning/Direct Sources/Arr und externe Transport-Policies, realistische Zugriffs-/Laufzeittests sowie die nötigen Produktentscheidungen. Ein synthetischer WorkCard-`EXPLAIN` allein schließt B15 nicht. Die neue EF-Baseline bleibt Phase C und wurde nicht angelegt.
+
+
+## Stand nach Learning-Scopes (13) und öffentlichen IDs (14)
+
+**Korrigierter DDL-Zwischenstand:** 14 SQL-Abschnitte, **173 Target-Tabellen** und **46 Type-Kataloge**, noch keine finale Baseline. Die fünf Learning-Zieltabelle und drei Type-Kataloge sind in TABLE_MANIFEST/ENUM_SEED_MANIFEST ergänzt. Neu hinzugekommene `PublicId uuid`-Spalten auf 16 tatsächlich nach außen adressierbaren Entitäten werden im selben Tabellenmanifest geführt; **alle** internen `Id`-/FK-/Composite-Key-`bigint` bleiben erhalten. PostgreSQL wird mit einem isolierten positiven/negativen Public-ID-Test validiert.
+
+**Normativer Owner-Vorrang:** öffentliche Ressourcenidentität ist nicht die SQL-`Id` und nicht das Sicherheitstoken. Die Regel `Works.Id bigint` bleibt intern; `Works.PublicId uuid` ist die öffentliche Adresse. Login-/Recovery-/Refresh-/Invite-/Pairing-/Capability-Secrets sind kryptografisch zufällige Tokens mit Hash/Secret-Store, Scope, Expiry, Rotation und Revocation. Provider-IDs bleiben externe Namespaces. Alte numerische Client-Routen werden erst koordiniert in **Phase E** ersetzt; kein ungetestetes Breaking-Change in der alten laufenden dev-Version.
+
+Die Client-/API- und echte Service-Berechtigungsnachweise werden in D/E getestet. Public UUIDs bieten keine Zugriffsberechtigung. **Keine** künstliche Permission-Proxy-Tabelle und **kein** SQL-Join über PublicId.
+
+**Noch offen:** die restlichen Typ-/Seed-Verträge (B01), finale Profile-/Auth-/AI-/Arr-/Provider-/Import-Verträge und integrale Query-/Permission-Lasttests. Die Anzahl 173 ist kein festgeschriebener Sollwert und kein Gate-B-Abnahmebeweis. EF-Baseline gehört nach Gate B in Phase C.

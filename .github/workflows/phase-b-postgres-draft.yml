@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for id in $(seq -w 1 13); do
+          for id in $(seq -w 1 14); do
             files=(docs/DATABASE_CUTOVER_PHASE_B_${id}_*_DRAFT.sql)
             if [ "${#files[@]}" -ne 1 ]; then
               printf 'Expected one DDL draft for phase %s; found %s\n' "$id" "${#files[@]}" >&2
@@ -152,6 +152,10 @@ jobs:
       - name: Verify Learning profile/media/work/content scope invariants
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_LEARNING_SCOPE_TESTS.sql
+
+      - name: Verify distinct public resource identity and internal FKs
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_PUBLIC_IDS_TESTS.sql
 
       - name: Check the target table count and schema isolation
         shell: bash
