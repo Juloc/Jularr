@@ -104,10 +104,14 @@ public sealed class PlexLibraryClient(HttpClient client)
             return new PlexLibraryPage(total, 0, []);
         }
 
+        if (items.GetArrayLength() > pageSize)
+        {
+            throw new InvalidDataException("Plex exceeded the requested item page size.");
+        }
+
         var entries = items.EnumerateArray()
             .Select(ToItem)
-            .Where(item => item is not null)
-            .Cast<PlexLibraryItem>()
+            .OfType<PlexLibraryItem>()
             .ToArray();
 
         return new PlexLibraryPage(total, items.GetArrayLength(), entries);
@@ -192,20 +196,29 @@ public sealed class PlexLibraryClient(HttpClient client)
             return null;
         }
 
-        // PMS can report librarySectionID on the MediaContainer itself,
-        // not on every Metadata entry. Accept either documented location.
+        // An exact item must not claim a different section from its container.
         var containerSection = GetNumericId(container, "librarySectionID");
-        // A conflicting duplicate rating key must not produce a playback target.
         var matches = entries.EnumerateArray()
             .Select(ToItem)
-            .Where(item => item?.RatingKey == ratingKey)
-            .Select(item => item! with
-            {
-                LibrarySectionId = item!.LibrarySectionId ?? containerSection
-            })
+            .OfType<PlexLibraryItem>()
+            .Where(item => item.RatingKey == ratingKey)
             .Take(2)
             .ToArray();
-        return matches.Length == 1 ? matches[0] : null;
+        if (matches.Length != 1 ||
+            container.TryGetProperty("librarySectionID", out _) && containerSection is null)
+        {
+            return null;
+        }
+
+        var item = matches[0];
+        if (item.LibrarySectionId is { } itemSection &&
+            containerSection is { } parentSection &&
+            !string.Equals(itemSection, parentSection, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return item with { LibrarySectionId = item.LibrarySectionId ?? containerSection };
     }
 
     private async Task<JsonDocument> GetJsonAsync(
