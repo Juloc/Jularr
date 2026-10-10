@@ -22,6 +22,7 @@ DECLARE
     enrollment_one uuid;
     progress_id bigint;
     work_id bigint;
+    work_for_image bigint;
     other_account_id bigint;
     other_profile_id bigint;
     image_id bigint;
@@ -144,6 +145,7 @@ BEGIN
     RETURNING "Id" INTO progress_id;
     INSERT INTO "TimeProgressPositions" ("MediaProgressId","PositionMs")
     VALUES (progress_id,1200);
+    work_for_image := work_id;
 
     -- Negative #5: Work with a time progress parent but no matching detail
     -- cannot satisfy the DEFERRABLE total-subtype FK at COMMIT.
@@ -191,15 +193,15 @@ BEGIN
     VALUES ('phase-b-ci-image','image/png') RETURNING "Id" INTO image_id;
     INSERT INTO "ImageAssignments"
         ("ImageId","ImageTypeId","ImageTargetKindTypeId","WorkId")
-    VALUES (image_id,1,1,work_id);
+    VALUES (image_id,1,1,work_for_image);
     INSERT INTO "WorkChapters" ("WorkId","OrderIndex","DisplayName")
-    VALUES (work_id,1,'CI chapter') RETURNING "Id" INTO chapter_id;
+    VALUES (work_for_image,1,'CI chapter') RETURNING "Id" INTO chapter_id;
 
     -- Negative #7: exactly one image target, even if both targets exist.
     BEGIN
         INSERT INTO "ImageAssignments"
             ("ImageId","ImageTypeId","ImageTargetKindTypeId","WorkId","WorkChapterId")
-        VALUES (image_id,1,1,work_id,chapter_id);
+        VALUES (image_id,1,1,work_for_image,chapter_id);
         RAISE EXCEPTION 'ImageAssignment with two targets was accepted';
     EXCEPTION WHEN check_violation THEN NULL;
     END;
