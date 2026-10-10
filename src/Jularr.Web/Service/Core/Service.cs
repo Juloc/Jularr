@@ -93,11 +93,19 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
             await sql.BeginAsync(mode, isolation ?? IsolationLevel.ReadCommitted, cancellationToken);
         }
 
-        var context = new ServiceContext(caller, sql);
+        var canMutate = definition.OperationType != ServiceOperationType.Read;
+        var context = new ServiceContext(caller, sql, canMutate);
 
-        if (needsTransaction && definition.OperationType is ServiceOperationType.Create or ServiceOperationType.Update or ServiceOperationType.Delete or ServiceOperationType.Execute)
+        if (canMutate && needsTransaction)
         {
             await _runtime.Gate.RequireTransactionalAccessAsync(caller, permission, targets, context.Logic, cancellationToken);
+        }
+        else if (definition.OperationType == ServiceOperationType.Execute)
+        {
+            // The outer Execute can perform non-DB work. Every separate SQL batch must
+            // recheck the same affected resources inside its own short transaction.
+            context.Logic.SetTransactionalAccessCheck(
+                (logic, token) => _runtime.Gate.RequireTransactionalAccessAsync(caller, permission, targets, logic, token));
         }
 
         var result = await ExecuteCoreAsync(parameters, data, resultType, context, cancellationToken);
