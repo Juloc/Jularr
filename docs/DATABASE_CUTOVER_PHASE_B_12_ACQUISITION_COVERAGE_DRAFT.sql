@@ -5,10 +5,9 @@
 -- No separate release scheduler or per-unit duplicate download operation.
 BEGIN;
 
+-- Draft 04 already owns UX_WantedItems_ExactTarget as a NULLS NOT DISTINCT
+-- unique index. Do not define another index/constraint for the same exact fact.
 ALTER TABLE "WantedItems"
-    ADD CONSTRAINT "UX_WantedItems_ExactTarget" UNIQUE NULLS NOT DISTINCT
-        ("WorkId","WorkSeasonId","WorkEpisodeId","WorkVolumeId",
-         "WorkChapterId","WorkTrackId","WorkEditionId"),
     ADD CONSTRAINT "UX_WantedItems_Id_WorkId" UNIQUE ("Id","WorkId");
 
 ALTER TABLE "AcquisitionDownloadBindings"
