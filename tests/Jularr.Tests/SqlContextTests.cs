@@ -23,7 +23,7 @@ public sealed class SqlContextTests
         {
             await read.BeginAsync(SqlAccessMode.ReadOnly);
 
-            Assert.AreEqual("on", await read.ReadSql.ExecuteScalarAsync("SHOW transaction_read_only"));
+            Assert.AreEqual("on", await read.ReadSql.ExecuteScalarAsync("SELECT current_setting('transaction_read_only')"));
             Assert.ThrowsExactly<InvalidOperationException>(() => read.RequireLogicSql());
 
             var error = await Assert.ThrowsExactlyAsync<PostgresException>(
@@ -35,7 +35,7 @@ public sealed class SqlContextTests
         await using (var write = new SqlContext(database))
         {
             await write.BeginAsync(SqlAccessMode.ReadWrite);
-            Assert.AreEqual("off", await write.ReadSql.ExecuteScalarAsync("SHOW transaction_read_only"));
+            Assert.AreEqual("off", await write.ReadSql.ExecuteScalarAsync("SELECT current_setting('transaction_read_only')"));
 
             await write.RequireLogicSql().ExecuteAsync("CREATE TEMP TABLE \"SqlContextWriteProbe\" (\"Id\" integer)");
             await write.CommitAsync();
