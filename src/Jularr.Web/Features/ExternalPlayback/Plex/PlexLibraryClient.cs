@@ -321,7 +321,12 @@ public sealed class PlexLibraryClient(HttpClient client)
         if (item.TryGetProperty("Guid", out var guids) &&
             guids.ValueKind == JsonValueKind.Array)
         {
-            foreach (var guid in guids.EnumerateArray().Take(64))
+            if (guids.GetArrayLength() > 64)
+            {
+                return null;
+            }
+
+            foreach (var guid in guids.EnumerateArray())
             {
                 if (guid.ValueKind != JsonValueKind.Object)
                 {
