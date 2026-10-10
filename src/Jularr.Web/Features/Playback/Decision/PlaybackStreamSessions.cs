@@ -339,6 +339,12 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
 
     public int Count => sessions.Count;
 
+    public int ActiveRecentDeliveries()
+    {
+        var since = time.GetUtcNow() - TimeSpan.FromSeconds(30);
+        return sessions.Values.Count(session => session.Replacing is null && session.HasRecentDelivery(since));
+    }
+
     public int ActiveExternalDeliveries(Guid? replacingSessionId = null)
     {
         var since = time.GetUtcNow() - TimeSpan.FromSeconds(30);

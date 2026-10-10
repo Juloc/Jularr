@@ -155,6 +155,36 @@ public sealed class TranscodingModel(
         return RedirectToPage();
     }
 
+    /// <summary>Owner-approved one-off preparation; this cannot queue jobs while the policy is Off.</summary>
+    public async Task<IActionResult> OnPostPrepareAsync(
+        long workId,
+        Guid? workEpisodeId,
+        CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        if (workId <= 0 || workEpisodeId == Guid.Empty)
+        {
+            return BadRequest();
+        }
+
+        if (!store.Current.PreparedRenditionsEnabled)
+        {
+            return Conflict();
+        }
+
+        var preparation = HttpContext.RequestServices.GetRequiredService<
+            Jularr.Web.Features.Playback.PlaybackPreparationService>();
+        var operationId = await preparation.QueueVerifiedAsync(
+            workId, workEpisodeId, cancellationToken);
+        if (operationId is null)
+        {
+            return Conflict();
+        }
+
+        TempData["Status"] = Ui["admin.transcoding.preparationQueued"];
+        return RedirectToPage();
+    }
+
     private void ReadContainerOutbound()
     {
         var sample = resources.GetSnapshot().Current;

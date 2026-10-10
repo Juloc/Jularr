@@ -80,6 +80,53 @@ public sealed class PlaybackWanBudgetTests
     }
 
     [TestMethod]
+    public async Task PreparedRenditionPolicy_IsOffByDefaultAndSurvivesRestart()
+    {
+        var kit = PlaybackServerTestKit.Create();
+        try
+        {
+            var defaults = PlaybackTranscodingSettings.Default;
+            Assert.IsFalse(defaults.PreparedRenditionsEnabled);
+            Assert.IsTrue(defaults.InPreparationWindow(DateTimeOffset.Parse("2026-10-10T02:00:00Z")));
+            Assert.IsFalse(defaults.InPreparationWindow(DateTimeOffset.Parse("2026-10-10T12:00:00Z")));
+
+            var valid = await kit.Settings.SaveAsync(defaults with
+            {
+                HlsCachePath = Path.Combine(kit.DataRoot, "hls"),
+                PreparedRenditionsEnabled = true,
+                PreparedCacheBudgetBytes = 32L << 30,
+                PreparationStartHourUtc = 21,
+                PreparationEndHourUtc = 5
+            });
+            Assert.IsTrue(valid.Succeeded);
+            var persisted = await new PlaybackTranscodingSettingsStore(kit.DataRoot).LoadAsync();
+            Assert.IsTrue(persisted.PreparedRenditionsEnabled);
+            Assert.AreEqual(32L << 30, persisted.PreparedCacheBudgetBytes);
+            Assert.IsTrue(persisted.InPreparationWindow(DateTimeOffset.Parse("2026-10-10T23:00:00Z")));
+            Assert.IsFalse(persisted.InPreparationWindow(DateTimeOffset.Parse("2026-10-10T12:00:00Z")));
+
+            var invalidWindow = await kit.Settings.SaveAsync(
+                persisted with { PreparationStartHourUtc = 2, PreparationEndHourUtc = 2 });
+            Assert.IsFalse(invalidWindow.Succeeded);
+            Assert.AreEqual(PlaybackSettingsIssueCode.PreparationWindowInvalid, invalidWindow.Issues.Single().Code);
+
+            var invalidBudget = await kit.Settings.SaveAsync(
+                persisted with { PreparedCacheBudgetBytes = 0 });
+            Assert.IsFalse(invalidBudget.Succeeded);
+            Assert.AreEqual(PlaybackSettingsIssueCode.PreparedCacheBudgetInvalid, invalidBudget.Issues.Single().Code);
+            Assert.IsTrue(kit.Settings.Current.PreparedRenditionsEnabled,
+                "A rejected maintenance policy cannot silently switch speculative work off or on.");
+        }
+        finally
+        {
+            if (Directory.Exists(kit.DataRoot))
+            {
+                Directory.Delete(kit.DataRoot, recursive: true);
+            }
+        }
+    }
+
+    [TestMethod]
     public void DirectFileAttribution_RequiresOwningProfileAndMatchingSessionMedia()
     {
         var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-09T12:00:00Z"));

@@ -1,5 +1,9 @@
 using System.Collections.Concurrent;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Admin;
+using Jularr.Web.Features.Operations;
+using Jularr.Web.Features.Playback.Decision;
+using Jularr.Web.Features.Playback.Transcoding;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -78,6 +82,9 @@ public sealed class PlaybackPreparationTracker
 
     public void MarkReady(Guid mediaFileId, PlaybackPreparationKind kind) =>
         states[(mediaFileId, kind)] = new PlaybackPreparationState(PlaybackPreparationStatus.Ready);
+
+    public void Forget(Guid mediaFileId, PlaybackPreparationKind kind) =>
+        states.TryRemove((mediaFileId, kind), out _);
 
     public void MarkFailed(Guid mediaFileId, PlaybackPreparationKind kind, string message) =>
         states[(mediaFileId, kind)] = new PlaybackPreparationState(
@@ -263,9 +270,21 @@ public sealed class PlaybackPreparationService(
     MediaInventoryService mediaInventory,
     PlaybackPreparationTracker tracker,
     MediaProcessRunner processRunner,
-    ILogger<PlaybackPreparationService> logger)
+    ILogger<PlaybackPreparationService> logger,
+    BackgroundJobQueue jobs,
+    CanonicalMediaStorageService canonicalStorage,
+    IMediaProbeRunner probeRunner,
+    PlaybackTranscodingSettingsStore settings,
+    PlaybackTranscodeSlots slots,
+    PlaybackStreamSessionStore sessions,
+    HlsPlaybackSessionManager hls,
+    TimeProvider time)
 {
     private static readonly TimeSpan PreparationTimeout = TimeSpan.FromHours(6);
+    private const string VerifiedRecipe = "mobile1080";
+    private const int MaxPreparedEntries = 128;
+    private static readonly string VerifiedRoot = Path.Combine(PlaybackCache.RootPath, "prepared-v1");
+
 
     public async Task PrepareAsync(
         Guid episodeId,
@@ -410,6 +429,264 @@ public sealed class PlaybackPreparationService(
                 "Could not prepare playback cache for {MediaPath}.",
                 media.Path);
         }
+    }
+
+    /// <summary>
+    /// Owner/manual entry point. The existing bounded Maintenance operation queue is the only
+    /// producer scheduler. Duplicate requests for the same canonical source coalesce while queued.
+    /// No work is queued when the Admin policy is Off.
+    /// </summary>
+    public async ValueTask<Guid?> QueueVerifiedAsync(
+        long workId,
+        Guid? workEpisodeId,
+        CancellationToken cancellationToken)
+    {
+        if (workId <= 0 || workEpisodeId == Guid.Empty)
+        {
+            throw new ArgumentOutOfRangeException(nameof(workId));
+        }
+
+        var policy = settings.Current;
+        if (!policy.PreparedRenditionsEnabled || !policy.TranscodingEnabled ||
+            !policy.InPreparationWindow(time.GetUtcNow()))
+        {
+            return null;
+        }
+
+        var original = await canonicalStorage.ResolveVideoAsync(workId, workEpisodeId, cancellationToken);
+        if (original is null ||
+            !tracker.TryQueue(original.StoredFileId, PlaybackPreparationKind.ServerH264Transcode))
+        {
+            return null;
+        }
+
+        try
+        {
+            return await jobs.QueueAsync(
+                new OperationDescriptor(
+                    "playback-verified-preparation",
+                    "Playback",
+                    "Prepare reusable video rendition",
+                    Subject: workId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Lane: OperationLane.Maintenance,
+                    Retryable: false,
+                    Priority: OperationPriority.Low),
+                async (operation, services, token) =>
+                {
+                    try
+                    {
+                        await services.GetRequiredService<PlaybackPreparationService>()
+                            .PrepareVerifiedAsync(workId, workEpisodeId, operation, token);
+                    }
+                    finally
+                    {
+                        tracker.Forget(original.StoredFileId, PlaybackPreparationKind.ServerH264Transcode);
+                    }
+                },
+                cancellationToken);
+        }
+        catch
+        {
+            tracker.Forget(original.StoredFileId, PlaybackPreparationKind.ServerH264Transcode);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Conservative V1: prepare only SDR 1080p H.264 with zero subtitle tracks and at most
+    /// one AAC/MP3 audio track. Unknown/multiple tracks, HDR and different cuts remain live
+    /// fallback: this cannot compromise timestamp, track or resume equivalence.
+    /// </summary>
+    private async Task PrepareVerifiedAsync(
+        long workId,
+        Guid? workEpisodeId,
+        OperationExecutionContext operation,
+        CancellationToken cancellationToken)
+    {
+        var policy = settings.Current;
+        if (!CanPrepareNow(policy))
+        {
+            throw new InvalidOperationException("Video preparation is not allowed while playback is active or outside the maintenance window.");
+        }
+
+        var source = await canonicalStorage.ResolveVideoAsync(workId, workEpisodeId, cancellationToken)
+            ?? throw new InvalidOperationException("The canonical source is no longer installed.");
+        var entry = await mediaInventory.EnsureAnalyzedAsync(source.StoredFileId, cancellationToken);
+        if (entry is not { Status: MediaAnalysisStatus.Succeeded, Technical: { } technical } ||
+            entry.SourceFingerprint is not { Length: 64 } sourceFingerprint ||
+            technical.Video is not { StreamIndex: 0, Width: > 0, Height: >= 1080 } video ||
+            !string.Equals(video.DynamicRange, "SDR", StringComparison.OrdinalIgnoreCase) ||
+            technical.DurationSeconds is not (> 120 and < 86400) ||
+            technical.SubtitleStreams.Count != 0 ||
+            technical.AudioStreams.Count > 1 ||
+            (technical.AudioStreams.Count == 1 &&
+             (technical.AudioStreams[0].Index != 1 ||
+              technical.AudioStreams[0].Codec is not ("aac" or "mp3"))) ||
+            string.Equals(video.Codec, "h264", StringComparison.OrdinalIgnoreCase) &&
+            video.Height <= 1080)
+        {
+            throw new InvalidOperationException("The source is not eligible for the safe SDR 1080p recipe.");
+        }
+
+        var expectedBytes = (long)Math.Ceiling(technical.DurationSeconds.Value * 750_000d);
+        if (expectedBytes <= 0 || expectedBytes > policy.PreparedCacheBudgetBytes)
+        {
+            throw new InvalidOperationException("The expected output would exceed the prepared cache budget.");
+        }
+
+        Directory.CreateDirectory(VerifiedRoot);
+        // Count and measure only Jularr's own flat cache, not any source or NAS root.
+        long existingBytes = 0;
+        var count = 0;
+        foreach (var prepared in Directory.EnumerateFiles(VerifiedRoot, "*.mp4", SearchOption.TopDirectoryOnly))
+        {
+            if (++count > MaxPreparedEntries)
+            {
+                throw new InvalidOperationException("The prepared cache has reached its bounded entry limit.");
+            }
+
+            existingBytes = checked(existingBytes + new FileInfo(prepared).Length);
+        }
+
+        if (existingBytes > policy.PreparedCacheBudgetBytes - expectedBytes ||
+            !HasReservedFreeSpace(expectedBytes, policy.FreeSpaceFloorBytes))
+        {
+            throw new InvalidOperationException("The prepared cache has insufficient quota or reserved free disk space.");
+        }
+
+        var outputName = $"prepared-{source.StoredFileId:N}-{sourceFingerprint[..24]}-{VerifiedRecipe}.mp4";
+        var path = Path.Combine(VerifiedRoot, outputName);
+        if (File.Exists(path))
+        {
+            if ((await canonicalStorage.ResolveVideoCandidatesAsync(
+                    workId, workEpisodeId, cancellationToken)).Any(candidate =>
+                        candidate.Path == path &&
+                        candidate.VersionSource == CanonicalMediaStorageService.PreparedVideoVersionSource))
+            {
+                return;
+            }
+
+            throw new InvalidOperationException("An unregistered prepared output already exists; cleanup is required.");
+        }
+
+        var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        using var slot = slots.TryAcquire(PlaybackCostClass.SoftwareVideo)
+            ?? throw new InvalidOperationException("An interactive transcode has priority over preparation.");
+        try
+        {
+            if (!CanPrepareNow(policy, ownedSlot: true))
+            {
+                throw new InvalidOperationException("An interactive playback started before preparation.");
+            }
+
+            await operation.ReportAsync(0, "Preparing verified SDR video", cancellationToken: cancellationToken);
+            var args = new List<string>
+            {
+                "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+                "-i", Path.GetFullPath(source.Path),
+                "-map", "0:v:0", "-map", "0:a:0?",
+                "-sn", "-dn",
+                "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "22", "-maxrate", "6000k", "-bufsize", "12000k",
+                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "copy",
+                "-movflags", "+faststart", "-f", "mp4", temporaryPath
+            };
+            var result = await RunYieldingToPlaybackAsync(args, cancellationToken);
+            if (result is null || result.ExitCode != 0 ||
+                !File.Exists(temporaryPath) || new FileInfo(temporaryPath).Length <= 0)
+            {
+                throw new InvalidDataException("FFmpeg failed to produce a complete prepared version.");
+            }
+
+            var actualBytes = new FileInfo(temporaryPath).Length;
+            if (actualBytes > policy.PreparedCacheBudgetBytes - existingBytes ||
+                !HasReservedFreeSpace(0, policy.FreeSpaceFloorBytes))
+            {
+                throw new InvalidOperationException("The generated rendition exceeds the cache quota or free-space reserve.");
+            }
+
+            var decode = await processRunner.RunAsync(
+                "ffmpeg",
+                ["-hide_banner", "-loglevel", "error", "-nostdin",
+                 "-ss", "10", "-i", temporaryPath, "-frames:v", "2", "-an", "-f", "null", "-"],
+                TimeSpan.FromMinutes(2), cancellationToken);
+            if (decode?.ExitCode != 0)
+            {
+                throw new InvalidDataException("The prepared video failed representative decoding.");
+            }
+
+            // The source is only read. The verified output is moved atomically on the managed
+            // cache filesystem before the canonical publisher attaches a Version/Asset/File.
+            if (!CanPrepareNow(settings.Current, ownedSlot: true) ||
+                !HasReservedFreeSpace(0, settings.Current.FreeSpaceFloorBytes))
+            {
+                throw new InvalidOperationException("Preparation lost its idle or disk headroom.");
+            }
+
+            File.Move(temporaryPath, path, overwrite: false);
+            try
+            {
+                var published = await canonicalStorage.PublishVerifiedPreparedVideoAsync(
+                    source, entry, path, VerifiedRoot, VerifiedRecipe, probeRunner, cancellationToken);
+                await mediaInventory.EnsureAnalyzedAsync(published.StoredFileId, cancellationToken);
+                await operation.ReportAsync(100, "Verified video version available", cancellationToken: cancellationToken);
+            }
+            catch
+            {
+                TryDelete(path);
+                throw;
+            }
+        }
+        finally
+        {
+            TryDelete(temporaryPath);
+        }
+    }
+
+    private bool CanPrepareNow(PlaybackTranscodingSettings policy, bool ownedSlot = false) =>
+        policy.PreparedRenditionsEnabled &&
+        policy.TranscodingEnabled &&
+        policy.InPreparationWindow(time.GetUtcNow()) &&
+        sessions.ActiveRecentDeliveries() == 0 &&
+        hls.ActiveSessions == 0 &&
+        slots.Active(PlaybackCostClass.SoftwareVideo) <= (ownedSlot ? 1 : 0) &&
+        slots.Active(PlaybackCostClass.HardwareVideo) == 0;
+
+    private static bool HasReservedFreeSpace(long expectedBytes, long floorBytes)
+    {
+        var available = AdminServerLoad.VolumeSpace(VerifiedRoot).Free;
+        return available is { } bytes && bytes >= expectedBytes &&
+               bytes - expectedBytes >= floorBytes;
+    }
+
+    private async Task<MediaProcessResult?> RunYieldingToPlaybackAsync(
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
+        using var active = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var running = processRunner.RunAsync("ffmpeg", arguments, PreparationTimeout, active.Token);
+        while (!running.IsCompleted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.WhenAny(running, Task.Delay(TimeSpan.FromSeconds(1), cancellationToken));
+            if (!CanPrepareNow(settings.Current, ownedSlot: true))
+            {
+                active.Cancel();
+                try
+                {
+                    await running;
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
+                throw new InvalidOperationException("Interactive playback or maintenance policy interrupted preparation.");
+            }
+        }
+
+        return await running;
     }
 
     private static void TryDelete(string path)

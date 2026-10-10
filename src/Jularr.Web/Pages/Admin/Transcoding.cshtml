@@ -189,3 +189,26 @@
         </div>
     </section>
 </form>
+<form method="post" asp-page-handler="Prepare" class="admset-form" aria-labelledby="prepared-manual-title">
+    <section class="admset-section">
+        <div class="admset-head">
+            <div>
+                <h2 id="prepared-manual-title">@ui["admin.transcoding.prepareNowTitle"]</h2>
+                <p>@ui["admin.transcoding.prepareNowHint"]</p>
+            </div>
+        </div>
+        <div class="admset-fields">
+            <div class="admset-field">
+                <label for="prepared-work-id">@ui["admin.transcoding.prepareWorkId"]</label>
+                <input id="prepared-work-id" name="workId" type="number" inputmode="numeric" min="1" required />
+            </div>
+            <div class="admset-field">
+                <label for="prepared-episode-id">@ui["admin.transcoding.prepareEpisodeId"]</label>
+                <input id="prepared-episode-id" name="workEpisodeId" type="text" autocomplete="off" />
+            </div>
+        </div>
+        <button type="submit" class="admset-save" disabled="@(!Model.PreparedRenditionsEnabled)">
+            @ui["admin.transcoding.prepareNow"]
+        </button>
+    </section>
+</form>
