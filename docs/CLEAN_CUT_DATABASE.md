@@ -2,7 +2,7 @@
 
 **Status:** Owner-approved **target-state contract**, 2026-10-09. **Not implemented**. The current `dev` schema and runtime remain operational until a separately authorized atomic cutover.
 
-**Service/Data/Logic target:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md) is binding for the new namespaces, Select-only Services, Logic-owned mutations, shared transactions, OperationKind, DTO files and SQL execution. This document remains the owner of the SCHEMA. Older Store/DTO/service examples elsewhere are not authoritative for the future runtime.
+**Service/Data/Logic target:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md) is binding for the new namespaces, Select-only Services, Logic-owned mutations, shared transactions, OperationType, DTO files and SQL execution. This document remains the owner of the SCHEMA. Older Store/DTO/service examples elsewhere are not authoritative for the future runtime.
 
 **DB-cutover execution:** [DATABASE_CUTOVER_EXECUTION_PLAN.md](DATABASE_CUTOVER_EXECUTION_PLAN.md) is the step-by-step agent plan for inventory, closing exact DDL gaps, building an isolated fresh baseline, updating every consumer, verifying the complete runtime and requesting a separate destructive reset approval. The schema rules in THIS document govern each target table; the execution document does not silently settle any still-open schema choices.
 
