@@ -215,3 +215,47 @@ for (const query of readerQueries)
 ${sql}
 `);
 }
+
+const providerFile = readFileSync(fileURLToPath(new URL('../docs/DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql', import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
+const providerQueries = [
+    {
+        name: 'provider_flow',
+        start: '-- Service FLOW_PERMISSION:',
+        end: '-- Service PROFILE_MEDIA:',
+        types: 'text,smallint',
+        parameters: ['ProviderKey', 'PurposeTypeId']
+    },
+    {
+        name: 'provider_profile_media',
+        start: '-- Service PROFILE_MEDIA:',
+        end: null,
+        types: 'bigint,bigint,text',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'ProviderKey']
+    }
+];
+
+for (const query of providerQueries)
+{
+    const start = providerFile.indexOf(query.start);
+    const end = query.end ? providerFile.indexOf(query.end) : providerFile.length;
+    if (start < 0 || end <= start)
+    {
+        throw new Error('Canonical provider query is missing: ' + query.name);
+    }
+
+    let sql = providerFile.slice(start, end).trim();
+    for (const [index, name] of query.parameters.entries())
+    {
+        if (!sql.includes('@' + name))
+        {
+            throw new Error('Missing provider parameter @' + name);
+        }
+        sql = sql.replaceAll('@' + name, '$' + (index + 1));
+    }
+    if (sql.includes('@'))
+    {
+        throw new Error('Unbound provider SQL parameter: ' + query.name);
+    }
+    writeFileSync(resolve(outputDirectory, 'phase_b_' + query.name + '_prepared.sql'),
+        'PREPARE phase_b_' + query.name + '(' + query.types + ') AS\n' + sql + '\n');
+}
