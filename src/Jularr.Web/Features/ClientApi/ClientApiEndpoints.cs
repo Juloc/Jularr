@@ -534,9 +534,12 @@ public static class ClientApiEndpoints
 
         group.MapGet("/media/{mediaFileId:guid}/content", async (
             Guid mediaFileId,
+            Guid? streamSessionId,
             PlaybackService playbackService,
             MediaAvailabilityService mediaAvailability,
+            PlaybackStreamSessionStore sessions,
             CurrentAccountContext currentAccount,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             var availability = await mediaAvailability.CheckMediaAsync(
@@ -572,6 +575,23 @@ public static class ClientApiEndpoints
                 return NotFound(
                     "media_not_found",
                     "The requested media file is unavailable.");
+            }
+
+            if (streamSessionId is { } playbackId)
+            {
+                // The file-result executor finalizes range/conditional status later.
+                // Only a successfully started 200/206 response is playback activity.
+                httpContext.Response.OnStarting(() =>
+                {
+                    if (httpContext.Response.StatusCode is
+                        StatusCodes.Status200OK or StatusCodes.Status206PartialContent)
+                    {
+                        sessions.MarkDirectContentRequested(
+                            playbackId, currentAccount.ProfileId, mediaFileId);
+                    }
+
+                    return Task.CompletedTask;
+                });
             }
 
             return Results.File(

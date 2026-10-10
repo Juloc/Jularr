@@ -763,7 +763,7 @@ public static class ClientApiPlaybackPlanEndpoints
         session.Plan.Transport switch
         {
             PlaybackTransport.File => new ClientPlaybackDelivery(
-                ClientApiRoutes.DirectContent(session.MediaFileId),
+                $"{ClientApiRoutes.DirectContent(session.MediaFileId)}?streamSessionId={session.Id:D}",
                 PlaybackTransport.File,
                 null,
                 SeekableWithinStream: true),

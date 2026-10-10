@@ -455,6 +455,25 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
         return true;
     }
 
+    /// <summary>
+    /// A direct file request belongs to a playback session only when the authenticated
+    /// profile, physical file and chosen File transport all agree. An old bootstrap URL
+    /// without a session id still works, but cannot affect WAN attribution.
+    /// </summary>
+    public bool MarkDirectContentRequested(Guid sessionId, string profileId, Guid mediaFileId)
+    {
+        var session = Peek(sessionId, profileId);
+        if (session is null || session.MediaFileId != mediaFileId ||
+            session.Plan.Transport != PlaybackTransport.File)
+        {
+            return false;
+        }
+
+        session.MarkDeliveryStarted();
+        session.Touch(time.GetUtcNow());
+        return true;
+    }
+
     /// <summary>The runtime evidence the session's player reported, as of now; null when it never reported.</summary>
     public PlaybackTelemetryEvidence? TelemetryEvidence(PlaybackStreamSession session) => session.Telemetry.Evidence(time.GetUtcNow());
 

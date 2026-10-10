@@ -1,3 +1,4 @@
+using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Playback.Decision;
 using Jularr.Web.Features.Playback.Transcoding;
 using static Jularr.Tests.PlaybackTestPlans;
@@ -76,6 +77,33 @@ public sealed class PlaybackWanBudgetTests
                 Directory.Delete(kit.DataRoot, recursive: true);
             }
         }
+    }
+
+    [TestMethod]
+    public void DirectFileAttribution_RequiresOwningProfileAndMatchingSessionMedia()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-10-09T12:00:00Z"));
+        var sessions = new PlaybackStreamSessionStore(clock);
+        var mediaId = Guid.NewGuid();
+        var plan = Transcode(Video(), PlaybackTransport.File) with
+        {
+            Mode = PlaybackDeliveryMode.DirectPlay,
+            Quality = new PlaybackQualityResolution(
+                PlaybackQualityPreset.Auto, PlaybackNetworkClass.Remote,
+                8_000, PlaybackLimitSource.Network, 12_000, 8_000)
+        };
+        var session = sessions.Create(
+            "viewer", PlaybackVideoTarget.Movie(1), mediaId, "/media/movie.mp4", 1400,
+            plan, new PlaybackStreamSelections(
+                null, null, false, PlaybackQualityPreset.Auto, PlaybackModePreference.Auto, "web"));
+
+        Assert.IsFalse(sessions.MarkDirectContentRequested(session.Id, "other", mediaId));
+        Assert.IsFalse(sessions.MarkDirectContentRequested(session.Id, "viewer", Guid.NewGuid()));
+        Assert.AreEqual(0, sessions.ActiveExternalDeliveries());
+        Assert.IsTrue(sessions.MarkDirectContentRequested(session.Id, "viewer", mediaId));
+        Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
+        StringAssert.Contains(ClientApiPlaybackPlanEndpoints.Delivery(session)!.Url,
+            $"?streamSessionId={session.Id:D}");
     }
 
     [TestMethod]
