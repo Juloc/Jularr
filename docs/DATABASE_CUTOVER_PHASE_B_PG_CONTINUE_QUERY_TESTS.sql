@@ -54,24 +54,67 @@ END $fixture$;
 \i /tmp/phase_b_continue_prepared.sql
 SELECT "Id" AS profile_a FROM "Profiles" WHERE "DisplayName"='Continue A' \gset
 SELECT "Id" AS profile_b FROM "Profiles" WHERE "DisplayName"='Continue B' \gset
+SELECT "OwnerAccountId" AS account_a FROM "Profiles" WHERE "Id" = :profile_a \gset
+SELECT "OwnerAccountId" AS account_b FROM "Profiles" WHERE "Id" = :profile_b \gset
 
 -- The SAME source SELECT from READ_QUERIES_DRAFT is executed via PREPARE.
 -- First expected A item, second A item after offset, and first B item must
 -- be distinct and never leak another profile or completed records.
-SELECT "Id" AS expected_first_a FROM "Works"
+SELECT "PublicId" AS expected_first_a FROM "Works"
 WHERE "CanonicalTitle"='Phase B Continue A 1' \gset
-SELECT "Id" AS expected_second_a FROM "Works"
+SELECT "PublicId" AS expected_second_a FROM "Works"
 WHERE "CanonicalTitle"='Phase B Continue A 2' \gset
-SELECT "Id" AS expected_first_b FROM "Works"
+SELECT "PublicId" AS expected_first_b FROM "Works"
 WHERE "CanonicalTitle"='Phase B Continue B 1' \gset
-EXECUTE phase_b_continue(:profile_a,1,0) \gset
-SELECT 1 / CASE WHEN :WorkId::bigint = :expected_first_a::bigint AND :Revision::bigint=1 THEN 1 ELSE 0 END;
-EXECUTE phase_b_continue(:profile_a,1,1) \gset
-SELECT 1 / CASE WHEN :WorkId::bigint = :expected_second_a::bigint THEN 1 ELSE 0 END;
-EXECUTE phase_b_continue(:profile_b,1,0) \gset
-SELECT 1 / CASE WHEN :WorkId::bigint = :expected_first_b::bigint THEN 1 ELSE 0 END;
+EXECUTE phase_b_continue(:account_a,:profile_a,1,0) \gset
+SELECT 1 / CASE WHEN :'WorkId'::uuid = :'expected_first_a'::uuid AND :Revision::bigint=1 THEN 1 ELSE 0 END;
+EXECUTE phase_b_continue(:account_a,:profile_a,1,1) \gset
+SELECT 1 / CASE WHEN :'WorkId'::uuid = :'expected_second_a'::uuid THEN 1 ELSE 0 END;
+EXECUTE phase_b_continue(:account_b,:profile_b,1,0) \gset
+SELECT 1 / CASE WHEN :'WorkId'::uuid = :'expected_first_b'::uuid THEN 1 ELSE 0 END;
 
-EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_continue(:profile_a,25,0);
+EXECUTE phase_b_continue(:account_a,:profile_b,25,0);
+SELECT 1 / CASE WHEN :ROW_COUNT::bigint = 0 THEN 1 ELSE 0 END;
+
+BEGIN;
+INSERT INTO "AccountProfiles" ("AccountId", "ProfileId")
+VALUES (:account_b, :profile_a);
+EXECUTE phase_b_continue(:account_b,:profile_a,1,0) \gset
+SELECT 1 / CASE WHEN :'WorkId'::uuid = :'expected_first_a'::uuid THEN 1 ELSE 0 END;
+DELETE FROM "AccountProfiles"
+WHERE "AccountId" = :account_b AND "ProfileId" = :profile_a;
+EXECUTE phase_b_continue(:account_b,:profile_a,25,0);
+SELECT 1 / CASE WHEN :ROW_COUNT::bigint = 0 THEN 1 ELSE 0 END;
+UPDATE "Accounts" SET "IsEnabled" = false WHERE "Id" = :account_a;
+EXECUTE phase_b_continue(:account_a,:profile_a,25,0);
+SELECT 1 / CASE WHEN :ROW_COUNT::bigint = 0 THEN 1 ELSE 0 END;
+ROLLBACK;
+
+BEGIN;
+SELECT "Id" AS unit_work_id FROM "Works"
+WHERE "CanonicalTitle" = 'Phase B Continue A 1' \gset
+INSERT INTO "WorkTracks" ("WorkId", "OrderIndex", "DisplayName")
+VALUES (:unit_work_id, 0, 'Continue public track')
+RETURNING "Id" AS unit_track_id, "PublicId" AS unit_track_public_id \gset
+UPDATE "MediaProgress"
+SET "WorkTrackId" = :unit_track_id
+WHERE "ProfileId" = :profile_a AND "WorkId" = :unit_work_id;
+EXECUTE phase_b_continue(:account_a,:profile_a,1,0) \gset
+SELECT 1 / CASE WHEN :'WorkTrackId'::uuid = :'unit_track_public_id'::uuid THEN 1 ELSE 0 END;
+INSERT INTO "WorkEditions" ("WorkId", "Name")
+VALUES (:unit_work_id, 'Continue public edition')
+RETURNING "Id" AS unit_edition_id, "PublicId" AS unit_edition_public_id \gset
+UPDATE "MediaProgress"
+SET "WorkTrackId" = NULL, "WorkEditionId" = :unit_edition_id
+WHERE "ProfileId" = :profile_a AND "WorkId" = :unit_work_id;
+EXECUTE phase_b_continue(:account_a,:profile_a,1,0) \gset
+SELECT 1 / CASE WHEN :'WorkEditionId'::uuid = :'unit_edition_public_id'::uuid THEN 1 ELSE 0 END;
+SELECT "PublicId" AS expected_progress_public_id FROM "MediaProgress"
+WHERE "ProfileId" = :profile_a AND "WorkId" = :unit_work_id \gset
+SELECT 1 / CASE WHEN :'MediaProgressId'::uuid = :'expected_progress_public_id'::uuid THEN 1 ELSE 0 END;
+ROLLBACK;
+
+EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_continue(:account_a,:profile_a,25,0);
 -- Verify that exactly five uncompleted rows exist for A and three for B.
 DO $verify$
 BEGIN

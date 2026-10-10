@@ -91,3 +91,27 @@ Die tatsächlichen alten C#-Werte und der korrigierte AccountRole-Entwurf stehen
 Die Client-/API- und echte Service-Berechtigungsnachweise werden in D/E getestet. Public UUIDs bieten keine Zugriffsberechtigung. **Keine** künstliche Permission-Proxy-Tabelle und **kein** SQL-Join über PublicId.
 
 **Noch offen:** die restlichen Typ-/Seed-Verträge (B01), finale Profile-/Auth-/AI-/Arr-/Provider-/Import-Verträge und integrale Query-/Permission-Lasttests. Die Anzahl 173 ist kein festgeschriebener Sollwert und kein Gate-B-Abnahmebeweis. EF-Baseline gehört nach Gate B in Phase C.
+
+## B03/B15 – Account-Scope und öffentliche Read-Referenzen
+
+Watchlist und Continue prüfen den serverseitigen `ActorAccountId` gegen
+`AccountProfiles` und einen aktivierten `Accounts`-Datensatz im selben statischen
+SQL, vor der Pagination. Der Progress-CAS prüft dieselbe aktuelle Mitgliedschaft
+vor dem Update. Profilfreigabe, Freigabeentzug, deaktivierter Account und fremder
+Account mit gültiger Profil-ID sind als tatsächliche Rückgabe-/Affected-row-Fälle
+geprüft; die Service-/Permission-Gates aus D bleiben zusätzlich erforderlich.
+
+Beide outward SELECTs liefern öffentliche UUIDs für Work, Bilder, Progress und
+optionale Units. `WorkTracks`, `WorkEditions` und `MediaProgress` erhalten dazu
+ebenfalls `PublicId`; interne Schlüssel und sämtliche Joins bleiben `bigint`.
+Die insgesamt 19 PublicId-Verträge verändern weder Tokens noch die Tabellenzahl.
+Die psql-PREPAREs werden lokal und in CI durch denselben
+`scripts/prepare-phase-b-queries.mjs` aus den kanonischen SELECTs erstellt.
+
+**Lokaler Nachweis:** PostgreSQL 18.6, isolierter Container ohne veröffentlichte
+Ports oder persistente Volumes. Zwei frische Datenbanken mit DDL 01–14 aufgebaut;
+die zweite enthält alle Änderungen dieses Abschnitts. Katalog-, Negativ-, Event-,
+WorkCard-, Continue-, Acquisition-, Progress-CAS-, Learning- und Public-ID-Suites
+bestanden. Worker-SKIP-LOCKED mit zwei getrennten Sessions ebenfalls bestanden.
+EXPLAIN ANALYZE/BUFFERS für 1.000 synthetische Watchlist-Roots und Continue liegt
+vor; das ist noch keine repräsentative Lastabnahme. Gate B bleibt offen.

@@ -27,6 +27,18 @@ ALTER TABLE "WorkChapters"
     ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
     ADD CONSTRAINT "UX_WorkChapters_PublicId" UNIQUE ("PublicId");
 
+ALTER TABLE "WorkTracks"
+    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
+    ADD CONSTRAINT "UX_WorkTracks_PublicId" UNIQUE ("PublicId");
+
+ALTER TABLE "WorkEditions"
+    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
+    ADD CONSTRAINT "UX_WorkEditions_PublicId" UNIQUE ("PublicId");
+
+ALTER TABLE "MediaProgress"
+    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
+    ADD CONSTRAINT "UX_MediaProgress_PublicId" UNIQUE ("PublicId");
+
 ALTER TABLE "Images"
     ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
     ADD CONSTRAINT "UX_Images_PublicId" UNIQUE ("PublicId");
