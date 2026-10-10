@@ -26,7 +26,7 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | B12 Operations/Events | Gemeinsame Operations, Leases/Claims und Delivery-Versuche vorhanden | Retry/Cancellation/Restart/Retention sowie benötigte After-Commit-/Outbox-Effekte; keine externe I/O im DB-Tx |
 | B13 Account Groups | Neutrale Gruppen, Mitgliedschaft, UUID und Owner-Paging vorhanden | Gruppen bleiben Policy-Selektoren, keine Rollen oder automatische Rechte; D/E implementiert Verbraucher/UI |
 | B14 Config/Calendar/Discovery | Keine Learning-Einstellungen im Target | Alle übrigen echten Settings/Rules/Schedules/Discovery-Fakten ihrem kanonischen Owner zuordnen; kein EAV |
-| B15 Typed Reads/Indizes | Watchlist/Continue/Groups/Inbox/Auth, Reader-Bookmarks/-Highlights/-Pages sowie Claim/CAS, Auth- und Inbox-Logic statisch; profilautorisierte Reader-Tests + EXPLAIN ergänzt | Weiter fehlende Reader-Content-Delivery-/Playable-/Search-/Arr-/Jobs-Reads und repräsentative EXPLAIN-/Berechtigungsbelege |
+| B15 Typed Reads/Indizes | Watchlist/Continue/Groups/Inbox/Auth, Reader-Bookmarks/-Highlights/-Pages und profilgebundene AcquisitionRequest-History sowie Claim/CAS, Auth- und Inbox-Logic statisch; profilautorisierte Reader-Tests + EXPLAIN ergänzt | Weiter fehlende Reader-Content-Delivery-/Playable-/Search-/Arr-Detail-/Jobs-Reads und repräsentative EXPLAIN-/Berechtigungsbelege |
 | B16 Physische DDL | Nur isolierter PostgreSQL 18; aktuelle Fassung erneut prüfen | Reproduzierbarer frischer Bootstrap, Seeds/FKs/CHECKs und fokussierte Integritäts-/Rollback-/Isolationstests |
 
 ## Verbindliche Grenzen
