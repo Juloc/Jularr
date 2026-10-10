@@ -166,6 +166,28 @@ public sealed class PlexLibraryAdapterTests
     }
 
     [TestMethod]
+    public async Task OversizedGuidListCannotHideConflictingIdentity()
+    {
+        var guids = Enumerable.Range(1, 65)
+            .Select(id => new { id = $"tmdb://{id}" })
+            .ToArray();
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            MediaContainer = new
+            {
+                totalSize = 1,
+                Metadata = new[] { new { ratingKey = "734", type = "movie", Guid = guids } }
+            }
+        });
+        using var client = new HttpClient(new Handler(_ => Json(payload)));
+
+        var page = await new PlexLibraryClient(client).GetItemsAsync(
+            Server, "private-token", "instance-123", "1", 0, 10, CancellationToken.None);
+        Assert.AreEqual(0, page.Items.Count);
+        Assert.AreEqual(1, page.ReturnedSize);
+    }
+
+    [TestMethod]
     public async Task LibraryPageRejectsServerResponseLargerThanPageSize()
     {
         using var client = new HttpClient(new Handler(_ => Json(
