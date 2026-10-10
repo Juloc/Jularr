@@ -69,6 +69,28 @@ public sealed class SqlExecutorTests
     }
 
     [TestMethod]
+    public async Task ReadPage_RecognizesLowerCaseReservedSqlPlaceholders()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadOnly);
+
+        const string sql = """
+            SELECT "Values"."Id"
+            FROM (VALUES (10::bigint), (20::bigint), (30::bigint)) AS "Values"("Id")
+            ORDER BY "Values"."Id"
+            LIMIT @pagesize
+            OFFSET @offset
+            """;
+
+        var result = await context.ReadSql.ReadPageAsync<SingleId>(sql, new { Page = 2, PageSize = 2 });
+        Assert.AreEqual(1, result.Items.Count);
+        Assert.AreEqual(30L, result.Items[0].Id);
+    }
+
+    private sealed record SingleId(long Id);
+
+    [TestMethod]
     public async Task Write_UsesParametersAndDataFromSameContext()
     {
         await using var database = CreateDataSource();
