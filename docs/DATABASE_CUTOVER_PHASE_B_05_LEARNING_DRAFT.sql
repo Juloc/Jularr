@@ -141,6 +141,7 @@ CREATE TABLE "LearnerCourses" (
     "SharedCourseInstanceId" uuid NOT NULL,
     "EnrolledAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_LearnerCourses" PRIMARY KEY ("Id"),
+    CONSTRAINT "UX_LearnerCourses_Id_ProfileId" UNIQUE ("Id","ProfileId"),
     CONSTRAINT "FK_LearnerCourses_Profiles" FOREIGN KEY ("ProfileId") REFERENCES "Profiles" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_LearnerCourses_SharedCourseInstances" FOREIGN KEY ("SharedCourseInstanceId") REFERENCES "SharedCourseInstances" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "UX_LearnerCourses_Profile_Instance" UNIQUE ("ProfileId","SharedCourseInstanceId")
