@@ -197,12 +197,10 @@ public sealed class PlexLibraryClient(HttpClient client)
             return null;
         }
 
-        // An exact item must not claim a different section from its container.
         var containerSection = GetNumericId(container, "librarySectionID");
         var matches = entries.EnumerateArray()
-            .Select(ToItem)
-            .OfType<PlexLibraryItem>()
-            .Where(item => item.RatingKey == ratingKey)
+            .Where(entry => entry.ValueKind == JsonValueKind.Object &&
+                GetString(entry, "ratingKey") == ratingKey)
             .Take(2)
             .ToArray();
         if (matches.Length != 1 ||
@@ -211,17 +209,11 @@ public sealed class PlexLibraryClient(HttpClient client)
             return null;
         }
 
-        var item = matches[0];
-        if (entries.EnumerateArray()
-                .Any(entry => entry.ValueKind == JsonValueKind.Object &&
-                    GetString(entry, "ratingKey") == ratingKey &&
-                    entry.TryGetProperty("librarySectionID", out _) &&
-                    GetNumericId(entry, "librarySectionID") is null))
-        {
-            return null;
-        }
-
-        if (item.LibrarySectionId is { } itemSection &&
+        var raw = matches[0];
+        var item = ToItem(raw);
+        if (item is null ||
+            raw.TryGetProperty("librarySectionID", out _) && item.LibrarySectionId is null ||
+            item.LibrarySectionId is { } itemSection &&
             containerSection is { } parentSection &&
             !string.Equals(itemSection, parentSection, StringComparison.Ordinal))
         {
