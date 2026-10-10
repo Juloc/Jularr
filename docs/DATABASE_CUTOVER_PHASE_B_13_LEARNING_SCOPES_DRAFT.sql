@@ -4,8 +4,6 @@
 -- This stores preferences, never alternative card/FSRS/progress facts.
 BEGIN;
 
--- New explicit byte enum bindings use the source-proven values and spellings.
--- Approval of new C# : byte bindings is a separate Gate B/B01 requirement.
 CREATE TABLE "LearningModeTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
@@ -14,8 +12,12 @@ CREATE TABLE "LearningModeTypes" (
     CONSTRAINT "CK_LearningModeTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_LearningModeTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
-INSERT INTO "LearningModeTypes" ("Id","Key") VALUES
-    (0,'off'),(1,'language_tools'),(2,'study'),(3,'custom');
+INSERT INTO "LearningModeTypes" ("Id", "Key")
+VALUES
+    (0, 'off'),
+    (1, 'language_tools'),
+    (2, 'study'),
+    (3, 'custom');
 
 CREATE TABLE "LearningCapabilityTypes" (
     "Id" smallint NOT NULL,
@@ -25,21 +27,22 @@ CREATE TABLE "LearningCapabilityTypes" (
     CONSTRAINT "CK_LearningCapabilityTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_LearningCapabilityTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
-INSERT INTO "LearningCapabilityTypes" ("Id","Key") VALUES
-    (1,'language_lookup'),
-    (2,'reading_aids'),
-    (3,'translation'),
-    (4,'ai_explanations'),
-    (5,'vocabulary'),
-    (6,'reviews'),
-    (7,'sentence_practice'),
-    (8,'script_trainer'),
-    (9,'progress'),
-    (10,'home_widget'),
-    (11,'content_metrics'),
-    (12,'preparation_suggestions'),
-    (13,'player_tools'),
-    (14,'reader_tools');
+INSERT INTO "LearningCapabilityTypes" ("Id", "Key")
+VALUES
+    (1, 'language_lookup'),
+    (2, 'reading_aids'),
+    (3, 'translation'),
+    (4, 'ai_explanations'),
+    (5, 'vocabulary'),
+    (6, 'reviews'),
+    (7, 'sentence_practice'),
+    (8, 'script_trainer'),
+    (9, 'progress'),
+    (10, 'home_widget'),
+    (11, 'content_metrics'),
+    (12, 'preparation_suggestions'),
+    (13, 'player_tools'),
+    (14, 'reader_tools');
 
 -- Learning's Anime / Novel / Book / Manga scope classification is NOT
 -- interchangeable with Works.MediaTypeId: Anime is a classification of series.
@@ -51,8 +54,12 @@ CREATE TABLE "LearningMediaScopeTypes" (
     CONSTRAINT "CK_LearningMediaScopeTypes_Id" CHECK ("Id" BETWEEN 1 AND 255),
     CONSTRAINT "CK_LearningMediaScopeTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
-INSERT INTO "LearningMediaScopeTypes" ("Id","Key") VALUES
-    (1,'anime'),(2,'novel'),(3,'book'),(4,'manga');
+INSERT INTO "LearningMediaScopeTypes" ("Id", "Key")
+VALUES
+    (1, 'anime'),
+    (2, 'novel'),
+    (3, 'book'),
+    (4, 'manga');
 
 -- Profile scope: all nullable targets absent.
 -- Media scope: only LearningMediaScopeTypeId filled.

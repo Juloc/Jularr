@@ -47,7 +47,10 @@ BEGIN
     INSERT INTO "AccountRoleTypes" ("Id", "Key")
     VALUES (0, 'phase-b-byte-min'), (255, 'phase-b-byte-max');
     INSERT INTO "AcquisitionRuleFieldTypes" ("Id", "Key")
-    VALUES (0, 'phase-b-byte-min'), (255, 'phase-b-byte-max');
+    VALUES (255, 'phase-b-byte-max');
+    IF NOT EXISTS (SELECT 1 FROM "AcquisitionRuleFieldTypes" WHERE "Id" = 0 AND "Key" = 'raw_title') THEN
+        RAISE EXCEPTION 'The zero-valued RawTitle target seed is missing';
+    END IF;
 
     FOREACH invalid_id IN ARRAY ARRAY[-1, 256]::smallint[]
     LOOP

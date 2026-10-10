@@ -7,6 +7,9 @@ on:
     paths:
       - "docs/DATABASE_CUTOVER_PHASE_B_*.sql"
       - "scripts/prepare-phase-b-queries.mjs"
+      - "scripts/verify-phase-b-type-contracts.mjs"
+      - "docs/DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs"
+      - "docs/DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv"
       - ".github/workflows/phase-b-postgres-draft.yml"
   workflow_dispatch:
 
@@ -65,6 +68,11 @@ jobs:
       - name: Verify catalog invariants in read-only transaction
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_ASSERTIONS_DRAFT.sql
+
+      - name: Verify defined target byte enums against manifest and exact DDL seeds
+        run: |
+          node scripts/verify-phase-b-type-contracts.mjs
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_DEFINED_SEEDS_TESTS.sql
 
       - name: Exercise positive and expected-negative relational integrity cases
         run: |

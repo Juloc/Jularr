@@ -186,3 +186,28 @@ unberechtigte Actor. EXPLAIN mit 1.000 Gruppen und 5.001 Memberships verwendet
 UX_AccountGroups_Name und PK_AccountGroupAccounts; kein zusätzlicher Blindindex.
 Das ist eine geprüfte B13-Foundation, keine abgeschlossene D/E-UI-Migration und
 keine Freigabe der übrigen Gate-B-Punkte.
+
+## B01 – explizite Zielverträge für 18 Type-Kataloge
+
+18 fachlich nachvollziehbare Kataloge besitzen jetzt explizite C#-`byte`-Enums
+mit 94 festgelegten Codes, identische statische DDL-Seeds und einen abgeglichenen
+Seed-Manifest-Eintrag. Der kompilierbare Vertrag steht unter
+`DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs`; er ist noch kein portierter
+Runtime-Consumer. Die Quellen sind je Katalog im Manifest angegeben.
+Die neuen Work-Mediencodes sind Zielcodes, keine automatische Übernahme alter
+`int`-Enums. Gleiches gilt für erstmals numerisch definierte Variant-Rollen
+und -Quellen. C installiert diese Seeds, D/E portiert sämtliche betroffenen
+Consumer auf exakt diesen Vertrag; eine Legacy-ID-Konvertierung ist nicht geplant.
+
+Ein Node-Prüfer gleicht C#-Werte, Manifest und DDL exakt ab. Die PostgreSQL-Suite
+prüft alle 94 tatsächlichen Seed-Zeilen einschließlich unerwarteter Zusatzwerte
+und drei spezifische Acquisition-Rule-FKs. Tests verwenden für diese Kataloge
+keine künstlichen Ersatz-Seeds mehr. Die Indexer-Allowlist zählt ausschließlich
+`IsAllowed=true`; reine Preferred-/Fallback-Einträge schränken sie nicht ein.
+
+**Lokaler Nachweis:** Frischer Bootstrap 01–14 auf PostgreSQL 18.6; Struktur-,
+Seed-, Type-Grenz-, Acquisition-, allgemeine Negativ- und Learning-Scope-Suites
+bestanden. Der unabhängige Zwei-Verbindungs-SKIP-LOCKED-Test besteht mit den
+echten OperationStatus-Seeds. Alle 18 Ziel-Enums separat mit .NET 10 kompiliert.
+Kein vollständiger Web-Build, keine EF-Baseline und kein aktiver DB-Reset.
+28 Kataloge bleiben fachlich offen; B01 und Gate B sind deshalb nicht geschlossen.

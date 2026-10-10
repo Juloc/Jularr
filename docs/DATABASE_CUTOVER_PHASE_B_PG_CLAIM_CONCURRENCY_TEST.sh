@@ -10,8 +10,6 @@ ready=/tmp/phase_b_claim_lock_ready
 rm -f "$ready"
 
 psql -X -v ON_ERROR_STOP=1 <<'SQL'
-INSERT INTO "OperationStatusTypes" ("Id","Key")
-VALUES (1,'ci-pending'),(2,'ci-running');
 INSERT INTO "Operations"
  ("OperationKindKey","OperationStatusTypeId","IdempotencyKey","NextAttemptAt")
 VALUES
