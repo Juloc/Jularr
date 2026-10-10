@@ -4,6 +4,8 @@ Jularr uses the canonical Juloc database and persistence conventions defined in 
 
 **Binding clean-cut target:** [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md) defines the owner-approved target schema and rules for future feature designs. It is a planning contract; the existing database remains authoritative for current runtime code until the coordinated cutover.
 
+**Binding Service/Data/Logic target:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md) is the canonical specification for new `Data.<Area>.<Entity>.V1` contracts, SELECT-only `Service.<Area>.<Entity>.V1`, role/version-neutral `Logic.<Entity>` write/side-effect ownership, `GetOperationKind()`, shared SQL context and database-enforced READ ONLY. Current `SqlParams` and EF snippets below describe existing or former implementation practices, not the new automatic whole-DTO SqlExecutor. Neither the new runtime nor the clean database baseline is implemented.
+
 These rules are mandatory for all new SQL/persistence code and whenever existing persistence code is intentionally changed. Existing untouched persistence code does not require a bulk rewrite.
 
 Jularr-specific non-negotiable defaults:
@@ -32,10 +34,10 @@ Jularr-specific non-negotiable defaults:
 3. With **more than one table** in the query, **qualify every column** with its real table name (or a clear explicitly declared alias if unavoidable): in `SELECT`, `ON`, `WHERE`, `SET` expressions, `GROUP BY`, `ORDER BY` and `RETURNING`. Prefer the actual table name for unambiguous review; a multi-table query must never have naked `Id`, `Status` or `WorkId` columns.
 4. PostgreSQL owns the dialect: use `"Accounts"`, `"Id"`, not SQL Server three-part names such as `Main.dbo.Accounts`. PascalCase identifiers require PostgreSQL double-quoting. Parameters use `@Name`, **never** quoted SQL literals derived from input.
 5. Static SQL query variants may be separate named constants for genuinely different shapes. Do not build table names, column names, schema names, `ORDER BY` fragments, joins, or `WHERE` clauses by arbitrary string concatenation/interpolation; choose a reviewed static variant instead. Pagination sizes/filters/sort values are bound parameters; choosing from a fixed set of static SQL variants is acceptable.
-6. SQL may live **directly in its owning feature service** when that service owns the data access; do not add a Store/Repository merely to pass calls through. The Razor Page calls the same backend method as HTTP endpoints through DI, without an HTTP round trip. Public user/admin operations own different READ projections and authorizations; shared internal mutation code handles common invariants and SQL UPDATE. A generic unrestricted `UpdateUser(Data)` exposed to API callers is forbidden.
+6. **Only pure static SELECT SQL may live directly in its owning read Service** when that Service owns the authorized projection. **All INSERT/UPDATE/DELETE/UPSERT/MERGE, SELECT FOR UPDATE and other durable changes/side effects belong to the one area- and version-neutral `Logic.<Entity>` owner** and are called through approved User/Admin/System Service operations. One Service may compose multiple Logic actions in one centrally owned transaction. Never create Store/Repository forwarding layers merely for a trivial SELECT; never generate SQL text from user DTOs. Razor calls authorized Service via DI without self-HTTP; API endpoints are thin adapters. Separate Account and Profile identity and restrict editable User/Admin fields explicitly.
 7. Include focused tests for parameter values containing quotes/metacharacters, SQL correctness, authorization, query cardinality and all affected write invariants. The real database constraint remains the last line of defense against concurrent writes.
 
-**Example: one-table READ** (`UserAccountService.ReadUserV1`):
+**Historical EF/raw-SQL READ syntax example (NOT the new Service/Data/Logic interface; conceptually `ReadAccountV1`, not ambiguous `ReadUserV1`):**
 
 ```csharp
 private const string ReadAccountSql = """
@@ -116,7 +118,7 @@ await db.Database.ExecuteSqlRawAsync(
 
 This example presumes the owner-approved `Accounts` target schema; do not copy it against current `OwnerAccounts` runtime without the separately authorized clean cut. Higher-level services must still enforce effective actor/target permission, DTO field allowlists, domain invariants, and transactional session effects. Static parameterized SQL is a **necessary**, not sufficient, protection.
 
-### Compact SQL parameter builder (implemented)
+### Compact SQL parameter builder (CURRENTLY IMPLEMENTED; historical call-site pattern)
 
 When hand-authored statements would otherwise repeat parameter boilerplate, use the small shared `SqlParams` helper in `src/Jularr.Web/Data/SqlParams.cs`, covered by `tests/Jularr.Tests/SqlParamsTests.cs`. Prefer Npgsql's built-in inference for ordinary non-null values; the helper adds **declared-type-safe null handling**, stable mappings for persisted `enum : byte` to PostgreSQL `smallint`, and a limited explicit override for database-specific types. This helper does **not** build or execute SQL, update arbitrary properties, determine permission, choose columns, create repositories or replace ordinary Npgsql/EF calls.
 
@@ -142,7 +144,7 @@ var parameters = SqlParams.Create()
     .ToArray();
 ```
 
-Both yield **named, typed `NpgsqlParameter` objects** matching SQL placeholders `@AccountId` and `@DisplayName`. The original SQL constant remains static and fully formatted. The builder must not inspect SQL text or interpolate SQL syntax. The explicitly named property must exist on the transport DTO; the implementation caches reflected public property metadata per concrete DTO type/property instead of repeatedly discovering the property. Only properties explicitly listed via `.Add(nameof(data.Property))` are bound; **never** mass-bind the complete request object. A missing property, duplicate parameter or unsupported type fails immediately, without guessing.
+Both yield **named, typed `NpgsqlParameter` objects** matching SQL placeholders `@AccountId` and `@DisplayName`. The original SQL constant remains static and fully formatted. The builder must not inspect SQL text or interpolate SQL syntax. The explicitly named property must exist on the transport DTO; the implementation caches reflected public property metadata per concrete DTO type/property instead of repeatedly discovering the property. **In the CURRENTLY IMPLEMENTED `SqlParams` helper**, only explicitly named `.Add(nameof(data.Property))` properties are bound; do not use this as a requirement to keep verbose `.Add()` chains in the new architecture. **TARGET:** `SqlExecutor` accepts the entire typed `parameters` and optional `data` object at the call site but binds ONLY placeholders actually referenced in fixed static SQL, with validated and cached SQL/DTO plans and server-owned reserved scope values. Neither mode blindly binds every DTO property or generates SQL. Missing names, duplicate/ambiguous parameter names, unsupported types and reserved scope collisions fail fast.
 
 Minimum default CLR -> PostgreSQL mapping:
 
@@ -229,7 +231,7 @@ An allowed alternate sort by creation date uses its own static SQL with `ORDER B
 
 ### Implemented reusable pagination types
 
-The shared implementation lives in `src/Jularr.Web/Data/Pagination.cs` and is covered by `tests/Jularr.Tests/PaginationTests.cs`. Its `ToSqlParameters()` now reuses `SqlParams.From(this)`; there is no second parameter-creation framework. Use it for new or intentionally updated list operations; older endpoints are **not yet automatically migrated** just because the helper exists.
+The **currently implemented** shared pagination helper lives in `src/Jularr.Web/Data/Pagination.cs` and is covered by `tests/Jularr.Tests/PaginationTests.cs`. Its `ToSqlParameters()` uses the existing `SqlParams.From(this)`. At the planned cutover, the single `PageRequest`/`PageResult<T>` contract moves under a neutral Data/Common owner and the SqlExecutor binds validated `PageSize`/`Offset` from that contract without a second pagination framework. Use it for new or intentionally updated list operations; older endpoints are **not yet automatically migrated** just because the helper exists.
 
 ```csharp
 var paging = new PageRequest(page, pageSize);
@@ -247,7 +249,7 @@ The `ReadUsersSql` constant is the fixed, formatted `SELECT ... ORDER BY ... LIM
 
 ### Other shared API / database correctness practices
 
-1. **Explicit outward DTOs and field allowlists.** Do not expose EF/domain entities, credentials, internal state or secret fields directly. User and Admin `ReadUserV1` may use **different SELECT projections** and access checks. Public `UpdateUserV1` accepts only permitted change fields; shared internal mutation owner performs read-for-update if required, verifies invariants and writes in one transaction.
+1. **Explicit outward DTOs and field allowlists.** Do not expose EF/domain entities, credentials, internal state or secret fields directly. User and Admin `ReadAccountV1` may use **different SELECT projections** and access checks; separate `ReadProfileV1` targets Profile identity. Public `UpdateAccountV1` accepts only permitted change fields; shared internal mutation owner performs read-for-update if required, verifies invariants and writes in one transaction.
 2. **HTTP/API and Razor use the same backend operation.** Direct DI call from Razor, HTTP wrapper for remote clients; no internal HTTP loop. Keep `/api/v1/account` for the own-account singleton; list routes (e.g. `/api/v1/admin/accounts`) take paging.
 3. **Validate at the boundary, verify again at the mutation owner and let PostgreSQL enforce structural invariants.** For PATCH, distinguish omitted fields from explicit null; no arbitrary client-selected columns. Use typed operation-specific DTOs; keep AccountId and ProfileId distinct.
 4. **Optimistic concurrency where user edits may race** (version/check in UPDATE and conflict result), or `FOR UPDATE` / appropriate isolation for short transactional state transitions. Never hold transactions over network I/O/filesystem/AI. Idempotency keys protect repeatable external mutations where retries can duplicate effects.
