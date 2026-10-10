@@ -207,6 +207,34 @@ public sealed class PlexLibraryAdapterTests
     }
 
     [TestMethod]
+    public async Task ServerTimeoutAlsoCancelsResponseBody()
+    {
+        using var client = new HttpClient(new Handler(_ =>
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StallingContent()
+            }))
+        {
+            Timeout = TimeSpan.FromMilliseconds(150)
+        };
+        using var outer = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var timedOut = false;
+        try
+        {
+            await new PlexLibraryClient(client).GetSectionsAsync(
+                Server, "private-token", "instance-123", outer.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            timedOut = true;
+        }
+
+        Assert.IsTrue(timedOut);
+        Assert.IsFalse(outer.IsCancellationRequested);
+    }
+
+    [TestMethod]
     public async Task RejectsRedirectedPlexResponses()
     {
         using var client = new HttpClient(new Handler(_ =>
@@ -224,6 +252,24 @@ public sealed class PlexLibraryAdapterTests
         {
             Content = new StringContent(content, Encoding.UTF8, "application/json")
         };
+
+    private sealed class StallingContent : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(
+            Stream stream, TransportContext? context) =>
+            Task.Delay(TimeSpan.FromSeconds(10));
+
+        protected override Task SerializeToStreamAsync(
+            Stream stream, TransportContext? context,
+            CancellationToken cancellationToken) =>
+            Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
 
     private sealed class Handler(
         Func<HttpRequestMessage, HttpResponseMessage> respond)
