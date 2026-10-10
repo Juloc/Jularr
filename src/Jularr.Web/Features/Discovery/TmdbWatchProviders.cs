@@ -67,17 +67,13 @@ public sealed partial class TmdbDiscoveryProvider
 
         var type = mediaType == WorkMediaType.Movie ? "movie" : "tv";
         var key = $"tmdb:watch:{type}:{normalizedId}:{region}";
-        return await cache.GetOrFetchAsync(
+        var response = await cache.GetOrFetchAsync(
             key,
             TimeSpan.FromHours(3),
-            async ct =>
-            {
-                var response = await GetJsonAsync<JsonElement>(
-                    $"{type}/{normalizedId}/watch/providers", [], ct);
-                return ReadWatchAvailability(
-                    response, type, normalizedId, region);
-            },
+            ct => GetJsonAsync<JsonElement>(
+                `${type}/${normalizedId}/watch/providers`, [], ct),
             cancellationToken);
+        return ReadWatchAvailability(response, type, normalizedId, region);
     }
 
     internal static TmdbWatchAvailability? ReadWatchAvailability(
