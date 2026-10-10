@@ -8,6 +8,7 @@
 - Ergebnis aus Phase A: 19 Fachverantwortungen in [PR #945](https://github.com/Juloc/Jularr/pull/945), alter Live-Katalog nur zur Funktionskontrolle (152 Anwendungstabellen/56 Migrationen), nicht als DDL-Schablone.
 - Backend-Grenzen: [SERVICE_DATA_LOGIC_ARCHITECTURE.md](https://github.com/Juloc/Jularr/blob/docs/service-data-logic-contract-20261010/docs/SERVICE_DATA_LOGIC_ARCHITECTURE.md), #852/#942. Auth-/Profilrechte bleiben im Service-Gate; **nur Logic schreibt**. Service-Read hat echte PostgreSQL-READ-ONLY-Transaktion.
 - Konkreter Entwurf: [01_CORE_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql), [02_PROGRESS_MEDIA_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql) und [03_MEDIA_DETAILS_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_03_MEDIA_DETAILS_DRAFT.sql), in dieser Reihenfolge. **Beides sind DDL-DRAFTS, KEINE freigegebene ausführbare EF-Baseline.** Die Dateien enthalten bewusst vorläufige Felder und Semantik und dürfen nicht auf `dev` ausgeführt werden.
+- Erste **statische SQL-Queryformen** (noch kein PostgreSQL-EXPLAIN): [Watchlist WorkCard mit paginiertem Root + unabhängigen begrenzten LATERAL-Kindern; Continue; atomarer Operations-Claim](DATABASE_CUTOVER_PHASE_B_READ_QUERIES_DRAFT.sql). Read-SQL gehört in autorisierte Services, Claim-DML nur in Logic.
 - Offene B-Entscheidungen und tatsächliche Abdeckungslücken: [DATABASE_CUTOVER_PHASE_B_DECISIONS.md](DATABASE_CUTOVER_PHASE_B_DECISIONS.md).
 
 ## Was jetzt physisch entworfen ist
