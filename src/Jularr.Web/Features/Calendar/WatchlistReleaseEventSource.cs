@@ -44,13 +44,15 @@ public sealed class WatchlistReleaseEventSource(
 
         // Read a bounded SQL page at a time, including franchise inheritance and ignores.
         // Only release events, not every followed work, are kept in the result.
-        for (var pageNumber = 1; ; pageNumber++)
+        WatchlistItem? after = null;
+        while (true)
         {
             var page = await watchlist.GetEffectivePageAsync(
                 currentAccount,
-                new PageRequest(pageNumber, PageRequest.MaximumPageSize),
+                new PageRequest(pageSize: PageRequest.MaximumPageSize),
                 visibleTypes,
-                cancellationToken);
+                cancellationToken,
+                after: after);
 
             var followed = page.Items
                 .Where(item => item.Identity.ProviderKey == AniListReleaseNormalizer.Provider)
@@ -112,6 +114,8 @@ public sealed class WatchlistReleaseEventSource(
             {
                 break;
             }
+
+            after = page.Items[^1];
         }
 
         return events;
