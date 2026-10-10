@@ -14,9 +14,9 @@ internal static class SqlReadGuard
         ArgumentException.ThrowIfNullOrWhiteSpace(sql);
 
         var tokens = Tokenize(sql);
-        if (tokens.Count == 0 || tokens[0] is not ("SELECT" or "WITH" or "SHOW"))
+        if (tokens.Count == 0 || tokens[0] is not ("SELECT" or "WITH"))
         {
-            throw new InvalidOperationException("ReadSql accepts SELECT/WITH queries and read-only SHOW diagnostics only.");
+            throw new InvalidOperationException("ReadSql accepts pure SELECT queries and read-only WITH queries only.");
         }
 
         for (var index = 0; index < tokens.Count; index++)
@@ -27,7 +27,7 @@ internal static class SqlReadGuard
                 throw new InvalidOperationException($"ReadSql cannot execute the '{token}' command.");
             }
 
-            if (token == "FOR" && index + 1 < tokens.Count && tokens[index + 1] is "UPDATE" or "SHARE" or "KEY" or "NO")
+            if (token == "FOR" && index + 1 < tokens.Count && tokens[index + 1] is ("UPDATE" or "SHARE" or "KEY" or "NO"))
             {
                 throw new InvalidOperationException("ReadSql cannot acquire explicit row write locks.");
             }
