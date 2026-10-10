@@ -127,6 +127,12 @@ public sealed class PlexLibraryAdapterTests
               {"ratingKey":"734","title":"Dune","type":"movie","librarySectionID":"invalid",
                "Guid":[{"id":"tmdb://438631"}]}
             ]}}
+            """,
+            """
+            {"MediaContainer":{"librarySectionID":1,"Metadata":[
+              {"ratingKey":"734","title":"Dune","type":"movie","Guid":[{"id":"tmdb://438631"}]},
+              {"ratingKey":"734","type":"unsupported"}
+            ]}}
             """
         };
 
