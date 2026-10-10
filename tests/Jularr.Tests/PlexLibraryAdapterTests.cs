@@ -100,6 +100,56 @@ public sealed class PlexLibraryAdapterTests
     }
 
     [TestMethod]
+    public async Task ExactItemRejectsConflictingOrMalformedSectionClaims()
+    {
+        var responses = new[]
+        {
+            """
+            {"MediaContainer":{"librarySectionID":2,"Metadata":[
+              {"ratingKey":"734","title":"Dune","type":"movie","librarySectionID":1,
+               "Guid":[{"id":"tmdb://438631"}]}
+            ]}}
+            """,
+            """
+            {"MediaContainer":{"librarySectionID":"invalid","Metadata":[
+              {"ratingKey":"734","title":"Dune","type":"movie","librarySectionID":1,
+               "Guid":[{"id":"tmdb://438631"}]}
+            ]}}
+            """,
+            """
+            {"MediaContainer":{"librarySectionID":1,"Metadata":[
+              {"ratingKey":"734","title":"Dune","type":"movie","Guid":[{"id":"tmdb://438631"}]},
+              {"ratingKey":"734","title":"Dune","type":"movie","Guid":[{"id":"tmdb://438631"}]}
+            ]}}
+            """
+        };
+
+        foreach (var response in responses)
+        {
+            using var client = new HttpClient(new Handler(_ => Json(response)));
+            var item = await new PlexLibraryClient(client).GetItemAsync(
+                Server, "private-token", "instance-123", "734", CancellationToken.None);
+            Assert.IsNull(item);
+        }
+    }
+
+    [TestMethod]
+    public async Task LibraryPageRejectsServerResponseLargerThanPageSize()
+    {
+        using var client = new HttpClient(new Handler(_ => Json(
+            """
+            {"MediaContainer":{"totalSize":3,"Metadata":[
+              {"ratingKey":"1","type":"movie"},
+              {"ratingKey":"2","type":"movie"},
+              {"ratingKey":"3","type":"movie"}
+            ]}}
+            """)));
+        await Assert.ThrowsExactlyAsync<InvalidDataException>(() =>
+            new PlexLibraryClient(client).GetItemsAsync(
+                Server, "private-token", "instance-123", "1", 0, 2, CancellationToken.None));
+    }
+
+    [TestMethod]
     public async Task RejectsUnsafePathsAndCredentialsBeforeNetwork()
     {
         var calls = 0;
