@@ -41,9 +41,9 @@ public sealed class SqlContext : IAsyncDisposable
             throw new ArgumentOutOfRangeException(nameof(mode));
         }
 
-        if (_transaction is not null)
+        if (_transaction is not null || _connection is not null || _finished)
         {
-            throw new InvalidOperationException("A SQL transaction has already been started.");
+            throw new InvalidOperationException("A SQL transaction has already been started or completed.");
         }
 
         var connection = await _database.OpenConnectionAsync(cancellationToken);
@@ -115,6 +115,64 @@ public sealed class SqlContext : IAsyncDisposable
         _finished = true;
     }
 
+    internal async Task<TResult> RunShortWriteBatchAsync<TResult>(
+        Func<CancellationToken, Task<TResult>> action,
+        Func<CancellationToken, Task> transactionalAccessCheck,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        ArgumentNullException.ThrowIfNull(transactionalAccessCheck);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_connection is not null || _transaction is not null || _finished)
+        {
+            throw new InvalidOperationException("An Execute batch cannot start inside another transaction.");
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+
+        await BeginAsync(SqlAccessMode.ReadWrite, IsolationLevel.ReadCommitted, timeout.Token);
+
+        try
+        {
+            await transactionalAccessCheck(timeout.Token);
+            var result = await action(timeout.Token);
+            await CommitAsync(timeout.Token);
+            return result;
+        }
+        finally
+        {
+            // A committed batch closes its connection; failed batches roll back on disposal.
+            await CloseTransactionAsync();
+            _finished = false;
+        }
+    }
+
+    private async ValueTask CloseTransactionAsync()
+    {
+        var transaction = _transaction;
+        var connection = _connection;
+        _transaction = null;
+        _connection = null;
+        _mode = null;
+
+        try
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
+        finally
+        {
+            if (connection is not null)
+            {
+                await connection.DisposeAsync();
+            }
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -124,20 +182,7 @@ public sealed class SqlContext : IAsyncDisposable
 
         _disposed = true;
 
-        try
-        {
-            if (_transaction is not null)
-            {
-                await _transaction.DisposeAsync();
-            }
-        }
-        finally
-        {
-            if (_connection is not null)
-            {
-                await _connection.DisposeAsync();
-            }
-        }
+        await CloseTransactionAsync();
     }
 
     private void RequireActive()
