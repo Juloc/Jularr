@@ -107,6 +107,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<BookEdition> BookEditions => Set<BookEdition>();
     public DbSet<BookFile> BookFiles => Set<BookFile>();
     public DbSet<NovelVolume> NovelVolumes => Set<NovelVolume>();
+    public DbSet<NovelVolumeEdition> NovelVolumeEditions => Set<NovelVolumeEdition>();
     public DbSet<NovelChapter> NovelChapters => Set<NovelChapter>();
     public DbSet<NovelTranslation> NovelTranslations => Set<NovelTranslation>();
     public DbSet<NovelProgress> NovelProgress => Set<NovelProgress>();
@@ -602,6 +603,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasOne<NovelWork>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.WorkId, x.Number }).IsUnique();
             entity.HasIndex(x => new { x.WorkId, x.SourceKey }).IsUnique();
+        });
+
+        modelBuilder.Entity<NovelVolumeEdition>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ContentHash).HasMaxLength(64);
+            entity.Property(x => x.FileName).HasMaxLength(500);
+            entity.Property(x => x.StoragePath).HasMaxLength(2048);
+            entity.Property(x => x.Quality).HasMaxLength(40);
+            entity.HasOne<NovelVolume>().WithMany().HasForeignKey(x => x.VolumeId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.VolumeId, x.ContentHash }).IsUnique();
         });
 
         modelBuilder.Entity<NovelChapter>(entity =>

@@ -76,7 +76,12 @@ internal sealed class MangaAdminPageHost : IAsyncDisposable
                     collection.AddSingleton(services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>());
                     collection.AddSingleton(services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaVersionSelector>());
                     collection.AddSingleton(services.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>());
-                    collection.AddScoped<Jularr.Web.Features.ReadingAcquisition.MangaWorkAdminQuery>();
+                    if (services.GetService<Jularr.Web.Features.ReadingAcquisition.LightNovelVersionSelector>() is { } novelVersions)
+                    {
+                        collection.AddSingleton(novelVersions);
+                    }
+
+                    collection.AddScoped<Jularr.Web.Features.ReadingAcquisition.ReadingWorkAdminQuery>();
                 })
                 .Configure(app =>
                 {

@@ -487,6 +487,20 @@ public sealed class WatchlistStore(AppDbContext db)
                     AND "Ignored"."Provider" = "Effective"."Provider"
                     AND "Ignored"."ExternalId" = "Effective"."ExternalId"
             )
+            AND (
+                @AfterTitle IS NULL
+                OR (
+                    LOWER("Effective"."Title"),
+                    "Effective"."MediaType",
+                    "Effective"."Provider",
+                    "Effective"."ExternalId"
+                ) > (
+                    LOWER(@AfterTitle),
+                    @AfterMediaType,
+                    @AfterProvider,
+                    @AfterExternalId
+                )
+            )
         ORDER BY
             LOWER("Effective"."Title") ASC,
             "Effective"."MediaType" ASC,
@@ -555,7 +569,8 @@ public sealed class WatchlistStore(AppDbContext db)
         PageRequest paging,
         IReadOnlyCollection<WatchlistMediaType> visibleTypes,
         CancellationToken cancellationToken,
-        WatchlistIdentity? target = null)
+        WatchlistIdentity? target = null,
+        WatchlistItem? after = null)
     {
         ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(paging);
@@ -581,6 +596,12 @@ public sealed class WatchlistStore(AppDbContext db)
                         : WatchlistMediaTypeNames.ToStorage(target.MediaType))
                     .Add("TargetProvider", target?.ProviderKey)
                     .Add("TargetExternalId", target?.ExternalKey)
+                    .Add("AfterTitle", after?.Title)
+                    .Add("AfterMediaType", after is null
+                        ? (string?)null
+                        : WatchlistMediaTypeNames.ToStorage(after.Identity.MediaType))
+                    .Add("AfterProvider", after?.Identity.ProviderKey)
+                    .Add("AfterExternalId", after?.Identity.ExternalKey)
                     .ToArray())
                 {
                     command.Parameters.Add(parameter);
@@ -599,7 +620,7 @@ public sealed class WatchlistStore(AppDbContext db)
                 }
             }
 
-            if (totalCount is null)
+            if (totalCount is null && after is null)
             {
                 await using var command = connection.CreateCommand();
                 command.CommandText = CountEffectiveSql;
@@ -620,6 +641,8 @@ public sealed class WatchlistStore(AppDbContext db)
                     await command.ExecuteScalarAsync(cancellationToken),
                     CultureInfo.InvariantCulture);
             }
+
+            totalCount ??= 0;
 
             return PageResult<WatchlistItem>.From(
                 items,

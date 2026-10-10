@@ -293,7 +293,7 @@ public static class ReadingReleaseJudge
         {
             safety = "format is not supported by the Manga importer";
         }
-        else if (target.Kind == MediaAcquisitionKind.LightNovel && parsed.Format is ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbz or ReadingReleaseFormat.Cbr)
+        else if (target.Kind == MediaAcquisitionKind.LightNovel && parsed.Format is ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbz or ReadingReleaseFormat.Cbr or ReadingReleaseFormat.Zip)
         {
             safety = "format is not supported by the Light Novel importer";
         }

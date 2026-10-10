@@ -8,6 +8,7 @@ using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.ReadingDiscovery;
 using Jularr.Web.Features.ReadingSources;
@@ -72,14 +73,14 @@ public sealed class ReadingAcquisitionEngine(
 
         // A Manga that is in the library is searched again only for a better version of what it holds, and only a better one is taken. With a structure the judge
         // already limits the releases to the missing units and genuine upgrades; without one the installed quality decides.
-        var installed = target.Want is null && coverage is not null && request.Kind == MediaAcquisitionKind.Manga && request.WorkId is { } workId
+        var installed = target.Want is null && coverage is not null && request.WorkId is { } workId
             ? await coverage.InstalledQualityAsync(workId, cancellationToken)
             : null;
         if (installed is not null)
         {
             if (!UpgradePolicy.Assess(profile, installed).IsUpgradable)
             {
-                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"The Manga is in the library as {installed}.");
+                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"The {(request.Kind == MediaAcquisitionKind.Manga ? "Manga" : "Light Novel")} is in the library as {installed}.");
             }
 
             grabbable = [.. grabbable.Where(release => release.Candidate.Type != AcquisitionType.DirectImport && release.Score is { } score && UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey))];
@@ -90,7 +91,7 @@ public sealed class ReadingAcquisitionEngine(
                 request,
                 payload,
                 [.. grabbable.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
-                "The Manga is in the library and no better version is known yet.",
+                $"The {(request.Kind == MediaAcquisitionKind.Manga ? "Manga" : "Light Novel")} is in the library and no better version is known yet.",
                 cancellationToken) is { } waiting)
         {
             return waiting;
@@ -105,7 +106,7 @@ public sealed class ReadingAcquisitionEngine(
     public async Task<ReadingAcquisitionTarget> TargetAsync(AcquisitionRequest request, ReadingRequestPayload payload, bool refreshStructure, CancellationToken cancellationToken)
     {
         var target = ToTarget(request.Kind, payload);
-        if (request.Kind != MediaAcquisitionKind.Manga || coverage is null || request.WorkId is not { } workId)
+        if (coverage is null || request.WorkId is not { } workId)
         {
             return target;
         }
@@ -236,7 +237,8 @@ public sealed class MangaAcquisitionRequestExecutor(
 public sealed class LightNovelAcquisitionRequestExecutor(
     ReadingAcquisitionEngine engine,
     NovelAniListProvider aniList,
-    NovelImportService webNovels) : IAcquisitionRequestExecutor
+    NovelImportService webNovels,
+    RequestWorkBinder? binder = null) : IAcquisitionRequestExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.LightNovel;
 
@@ -352,6 +354,11 @@ public sealed class LightNovelAcquisitionRequestExecutor(
         try
         {
             var workId = await webNovels.ImportWorkAsync(sourceUrl, cancellationToken);
+            if (binder is not null && await binder.BindImportedAsync(request, WorkSourceKind.NovelWork, workId, cancellationToken) is { } conflict)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Failed, conflict);
+            }
+
             return new AcquisitionExecution(
                 AcquisitionRequestStatus.Completed,
                 "Imported from Syosetu.",

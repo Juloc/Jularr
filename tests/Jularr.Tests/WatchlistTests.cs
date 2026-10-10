@@ -360,6 +360,34 @@ public sealed class WatchlistTests
     }
 
     [TestMethod]
+    public async Task EffectiveReadCursor_TraversesEqualTitlesWithoutRepeats()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var store = new WatchlistStore(fixture.Db);
+        foreach (var id in new[] { "301", "302", "303" })
+        {
+            await store.FollowAsync("profile-a", Draft(id, "Same"), CancellationToken.None);
+        }
+
+        await store.FollowAsync("profile-b", Draft("400", "Same"), CancellationToken.None);
+
+        var account = CurrentAccountContext.ForProfile("profile-a");
+        var types = new[] { WatchlistMediaType.Anime };
+        var request = new PageRequest(pageSize: 1);
+        var first = await store.GetEffectivePageAsync(account, request, types, CancellationToken.None);
+        var second = await store.GetEffectivePageAsync(account, request, types, CancellationToken.None, after: first.Items[^1]);
+        var third = await store.GetEffectivePageAsync(account, request, types, CancellationToken.None, after: second.Items[^1]);
+
+        CollectionAssert.AreEqual(
+            new[] { "301", "302", "303" },
+            first.Items.Concat(second.Items).Concat(third.Items)
+                .Select(item => item.Identity.ExternalKey).ToArray());
+        Assert.AreEqual(true, first.HasMore);
+        Assert.AreEqual(true, second.HasMore);
+        Assert.AreEqual(false, third.HasMore);
+    }
+
+    [TestMethod]
     public async Task FollowedFranchises_ArePagedAndProfileScoped()
     {
         await using var fixture = await Fixture.CreateAsync();
