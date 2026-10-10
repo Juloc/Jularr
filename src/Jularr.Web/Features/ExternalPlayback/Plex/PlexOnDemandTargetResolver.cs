@@ -90,7 +90,7 @@ public sealed class PlexOnDemandTargetResolver(
                         cancellationToken);
                 }
                 catch (Exception error)
-                when (error is HttpRequestException or InvalidDataException or JsonException)
+                    when (error is HttpRequestException or InvalidDataException or JsonException)
                 {
                     continue;
                 }
@@ -123,7 +123,7 @@ public sealed class PlexOnDemandTargetResolver(
                         }
                     }
                     catch (Exception error)
-                when (error is HttpRequestException or InvalidDataException or JsonException)
+                        when (error is HttpRequestException or InvalidDataException or JsonException)
                     {
                         continue;
                     }
