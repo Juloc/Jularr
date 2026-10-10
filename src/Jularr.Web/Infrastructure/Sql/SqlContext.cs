@@ -1,4 +1,5 @@
 using System.Data;
+using Jularr.Web.Data;
 using Npgsql;
 
 namespace Jularr.Infrastructure.Sql;
@@ -17,6 +18,8 @@ public sealed class SqlContext : IAsyncDisposable
     private NpgsqlTransaction? _transaction;
     private SqlAccessMode? _mode;
     private bool _finished;
+    private long? _actorAccountId;
+    private long? _activeProfileId;
     private bool _disposed;
 
     public SqlReadCommands ReadSql { get; }
@@ -73,6 +76,24 @@ public sealed class SqlContext : IAsyncDisposable
         }
     }
 
+    internal void SetAuthorizedScope(long? actorAccountId, long? activeProfileId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_actorAccountId.HasValue || _activeProfileId.HasValue)
+        {
+            throw new InvalidOperationException("The verified SQL caller scope cannot be replaced.");
+        }
+
+        if (actorAccountId is <= 0 || activeProfileId is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(actorAccountId));
+        }
+
+        _actorAccountId = actorAccountId;
+        _activeProfileId = activeProfileId;
+    }
+
     public SqlLogicCommands RequireLogicSql()
     {
         RequireActive();
@@ -127,7 +148,7 @@ public sealed class SqlContext : IAsyncDisposable
         }
     }
 
-    private NpgsqlCommand CreateCommand(string sql, bool write)
+    private NpgsqlCommand CreateCommand(string sql, bool write, object? parameters = null, object? data = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sql);
         RequireActive();
@@ -137,8 +158,32 @@ public sealed class SqlContext : IAsyncDisposable
             throw new InvalidOperationException("Write commands require a read-write transaction.");
         }
 
-        return new NpgsqlCommand(sql, _connection!, _transaction);
+        var command = new NpgsqlCommand(sql, _connection!, _transaction);
+        try
+        {
+            if (parameters is not null)
+            {
+                command.Parameters.AddRange(SqlExecutor.Bind(sql, parameters, data, _actorAccountId, _activeProfileId));
+            }
+            else if (data is not null)
+            {
+                throw new InvalidOperationException("An SQL data object requires a parameters object.");
+            }
+            else if (sql.Contains('@'))
+            {
+                command.Parameters.AddRange(SqlExecutor.Bind(sql, new NoSqlParameters(), null, _actorAccountId, _activeProfileId));
+            }
+
+            return command;
+        }
+        catch
+        {
+            command.Dispose();
+            throw;
+        }
     }
+
+    private sealed record NoSqlParameters;
 
     public sealed class SqlReadCommands(SqlContext context)
     {
@@ -146,6 +191,57 @@ public sealed class SqlContext : IAsyncDisposable
         {
             await using var command = context.CreateCommand(sql, false);
             return await command.ExecuteScalarAsync(cancellationToken);
+        }
+
+        public async Task<object?> ExecuteScalarAsync(string sql, object parameters, CancellationToken cancellationToken = default)
+        {
+            await using var command = context.CreateCommand(sql, false, parameters);
+            return await command.ExecuteScalarAsync(cancellationToken);
+        }
+
+        public async Task<T?> ReadOptionalAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
+        {
+            await using var command = context.CreateCommand(sql, false, parameters);
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return default;
+            }
+
+            var result = SqlExecutor.MapRow<T>(reader);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                throw new InvalidOperationException("A required single-row query returned multiple results.");
+            }
+
+            return result;
+        }
+
+        public async Task<T> ReadRequiredAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
+        {
+            var result = await ReadOptionalAsync<T>(sql, parameters, cancellationToken);
+            return result is null ? throw new KeyNotFoundException("The required database resource was not found.") : result;
+        }
+
+        public async Task<PageResult<T>> ReadPageAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
+        {
+            var request = SqlExecutor.GetPageRequest(parameters);
+            await using var command = context.CreateCommand(sql, false, parameters);
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+            var items = new List<T>();
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (items.Count >= request.PageSize)
+                {
+                    throw new InvalidOperationException("The paged SQL query exceeded its declared PageSize.");
+                }
+
+                items.Add(SqlExecutor.MapRow<T>(reader));
+            }
+
+            return PageResult<T>.From(items, request);
         }
     }
 
@@ -155,6 +251,37 @@ public sealed class SqlContext : IAsyncDisposable
         {
             await using var command = context.CreateCommand(sql, true);
             return await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public async Task<int> ExecuteAsync(string sql, object parameters, CancellationToken cancellationToken = default)
+        {
+            await using var command = context.CreateCommand(sql, true, parameters);
+            return await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public async Task<int> ExecuteAsync(string sql, object parameters, object data, CancellationToken cancellationToken = default)
+        {
+            await using var command = context.CreateCommand(sql, true, parameters, data);
+            return await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public async Task<T> ReadForUpdateAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
+        {
+            await using var command = context.CreateCommand(sql, true, parameters);
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                throw new KeyNotFoundException("The required database resource was not found.");
+            }
+
+            var result = SqlExecutor.MapRow<T>(reader);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                throw new InvalidOperationException("The locked query returned multiple rows.");
+            }
+
+            return result;
         }
     }
 }
