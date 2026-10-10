@@ -73,6 +73,31 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_EVENTS_TESTS.sql
 
+      - name: Prepare canonical static Watchlist WorkCard SELECT
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('docs/DATABASE_CUTOVER_PHASE_B_READ_QUERIES_DRAFT.sql', 'utf8');
+          const start = source.indexOf('WITH "PageRoots" AS MATERIALIZED');
+          const end = source.indexOf('-- 2. Bounded Continue list');
+          if (start < 0 || end <= start) throw Error('Watchlist SELECT not found');
+          let sql = source.slice(start, end).trim().replace(/;$/, '');
+          for (const [name, value] of Object.entries({
+            '@ActiveProfileId': '$1',
+            '@UiLocale': '$2',
+            '@PageSize': '$3',
+            '@Offset': '$4'
+          })) sql = sql.replaceAll(name, value);
+          if (sql.includes('@')) throw Error('Unbound placeholder in canonical SELECT');
+          fs.writeFileSync('/tmp/phase_b_watchlist_prepared.sql',
+            'PREPARE phase_b_watchlist(bigint,text,integer,integer) AS\\n' + sql + ';\\n');
+          NODE
+
+      - name: Execute WorkCard SELECT against 1000 scratch root rows
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_WORKCARD_QUERY_TESTS.sql
+
       - name: Check the target table count and schema isolation
         shell: bash
         run: |
