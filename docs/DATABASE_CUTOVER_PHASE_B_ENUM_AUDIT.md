@@ -20,3 +20,5 @@
 4. Typ-Tabellen ohne Seed **nicht** als einsatzfähiges Schema bezeichnen; fehlende Seeds und Prerequisites im Manifest bis zur fachlichen Signatur markieren.
 
 **Kein allgemeiner Produktentscheid aus historischen Quell-Enumnummern abgeleitet.** Nur eindeutig belegte Sourcewerte stehen oben. Vor echten PostgreSQL-/EF-Tests kann Gate B nicht grün werden.
+
+**Vollständige Ziel-Type-Inventur:** [DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) erfasst **alle 41** in den zehn DDL-Entwürfen vorgesehenen `...Types`-Tabellen. Nur **fünf** davon besitzen im aktuellen Entwurf überhaupt vorgeschlagene `(Id,Key)`-Seeds; die übrigen sind ausdrücklich **nicht einsatzbereit**, bis echte Byte-Enum-/statische-Katalog-Werte definiert sind. Der Audit alter C#-Werte oben ist ein Beleg, keine automatische Zielseed-Freigabe.
