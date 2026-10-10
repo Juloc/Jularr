@@ -43,15 +43,3 @@ public sealed class ServiceContext
         Logic = new LogicContext(sql);
     }
 }
-
-public sealed class LogicContext
-{
-    private readonly SqlContext _sql;
-
-    internal LogicContext(SqlContext sql)
-    {
-        _sql = sql;
-    }
-
-    public SqlContext.SqlLogicCommands Sql => _sql.RequireLogicSql();
-}
