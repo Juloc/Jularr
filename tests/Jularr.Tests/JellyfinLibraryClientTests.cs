@@ -25,27 +25,50 @@ public sealed class JellyfinLibraryClientTests
             requested.Add((path, token));
             return request.RequestUri.AbsolutePath switch
             {
-                "/jellyfin/System/Info/Public" => Json($$"""
-                    {"Id":"{{ServerId:N}}","ServerName":"Local Jellyfin"}
-                    """),
-                "/jellyfin/Users/Me" => Json($$"""
-                    {"Id":"{{ViewerId:N}}","Name":"Profile"}
-                    """),
+                "/jellyfin/System/Info/Public" =>
+                    Json(System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        Id = ServerId.ToString("N"),
+                        ServerName = "Local Jellyfin"
+                    })),
+                "/jellyfin/Users/Me" =>
+                    Json(System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        Id = ViewerId.ToString("N"),
+                        Name = "Profile"
+                    })),
                 var p when p.EndsWith("/Views", StringComparison.Ordinal) =>
-                    Json($$"""
-                    {"Items":[{"Id":"{{MoviesId:N}}","Name":"Movies","CollectionType":"movies"},
-                              {"Id":"{{SeriesId:N}}","Name":"Series","CollectionType":"tvshows"}]}
-                    """),
+                    Json(System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        Items = new[]
+                        {
+                            new { Id = MoviesId.ToString("N"), Name = "Movies", CollectionType = "movies" },
+                            new { Id = SeriesId.ToString("N"), Name = "Series", CollectionType = "tvshows" }
+                        }
+                    })),
                 var p when p.EndsWith("/Items", StringComparison.Ordinal) =>
-                    Json($$"""
-                    {"TotalRecordCount":1,"Items":[{"Id":"{{MovieId:N}}","Type":"Movie",
-                      "Name":"Example","ProviderIds":{"Tmdb":"550","Imdb":"tt0137523"}}]}
-                    """),
+                    Json(System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        TotalRecordCount = 1,
+                        Items = new[]
+                        {
+                            new
+                            {
+                                Id = MovieId.ToString("N"),
+                                Type = "Movie",
+                                Name = "Example",
+                                ProviderIds = new { Tmdb = "550", Imdb = "tt0137523" }
+                            }
+                        }
+                    })),
                 var p when p.EndsWith($"/Items/{MovieId:N}", StringComparison.Ordinal) =>
-                    Json($$"""
-                    {"Id":"{{MovieId:N}}","Type":"Movie","Name":"Example",
-                     "ProviderIds":{"Tmdb":"550","Imdb":"tt0137523"}}
-                    """),
+                    Json(System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        Id = MovieId.ToString("N"),
+                        Type = "Movie",
+                        Name = "Example",
+                        ProviderIds = new { Tmdb = "550", Imdb = "tt0137523" }
+                    })),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound)
             };
         });
@@ -126,9 +149,13 @@ public sealed class JellyfinLibraryClientTests
             new JellyfinLibraryClient(redirectHttp).GetViewerAsync(
                 new Uri("https://jellyfin.example/"), "token", CancellationToken.None));
 
-        using var mismatchedHttp = Client(_ => Json($$"""
-            {"Id":"{{SeriesId:N}}","Type":"Movie","Name":"Wrong item"}
-            """));
+        using var mismatchedHttp = Client(_ => Json(
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                Id = SeriesId.ToString("N"),
+                Type = "Movie",
+                Name = "Wrong item"
+            })));
         var mismatched = await new JellyfinLibraryClient(mismatchedHttp).GetItemAsync(
             new Uri("https://jellyfin.example/"), "token",
             ViewerId, MovieId, CancellationToken.None);
