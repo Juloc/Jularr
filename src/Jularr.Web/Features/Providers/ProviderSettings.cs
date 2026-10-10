@@ -5,7 +5,8 @@ namespace Jularr.Web.Features.Providers;
 
 public enum ProviderFamily
 {
-    Metadata
+    Metadata,
+    Identity
 }
 
 public enum ProviderConnectionState
@@ -42,6 +43,8 @@ public enum ProviderFeedback
 }
 
 /// <summary>A masked, write-only field of a provider: it only says whether a value is saved and never carries it.</summary>
+public sealed record ProviderOptionField(string Name, string LabelKey, string HintKey, bool Enabled);
+
 public sealed record ProviderSecretField(string Name, string LabelKey, string HintKey, int MaxLength, bool HasSavedValue);
 
 /// <summary>Why Setup cannot finish while the provider is unusable, in the keys of the text shown and the action that turns the dependent features off.</summary>
@@ -72,6 +75,8 @@ public sealed record ProviderView(
     DateTimeOffset? LastFailureUtc,
     ProviderBlocking? Blocking)
 {
+    public IReadOnlyList<ProviderOptionField> Options { get; init; } = [];
+
     public string Initials => DisplayName.Length <= 4 ? DisplayName : DisplayName[..4];
 }
 

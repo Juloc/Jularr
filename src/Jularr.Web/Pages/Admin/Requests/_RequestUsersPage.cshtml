@@ -15,9 +15,9 @@
     {
         <section class="panel rre-list rre-users-list" aria-label="@ui["admin.users.accounts"]">
             <form method="get" class="rre-user-search" data-rre-navigation><input type="search" name="q" maxlength="80" value="@Model.Query" aria-label="@ui["requestRules.searchUsers"]" placeholder="@ui["requestRules.searchUsers"]" /><button class="button button-secondary" type="submit"><partial name="_AppIcon" model="@("search")" /><span class="sr-only">@ui["common.search"]</span></button></form>
-            <p class="muted">@ui["admin.users.accounts"] · @Model.Directory.Total</p>
-            @if (Model.Directory.Accounts.Count == 0) { <div class="empty-state"><strong>@ui[Model.Query.Length > 0 ? "requestRules.noMatchingUsers" : "admin.users.noAccounts"]</strong></div> }
-            @foreach (var account in Model.Directory.Accounts)
+            <p class="muted">@ui["admin.users.accounts"] · @Model.Directory.TotalCount</p>
+            @if (Model.Directory.Items.Count == 0) { <div class="empty-state"><strong>@ui[Model.Query.Length > 0 ? "requestRules.noMatchingUsers" : "admin.users.noAccounts"]</strong></div> }
+            @foreach (var account in Model.Directory.Items)
             {
                 var resolved = rules.Resolve(account.Id, Model.RequestSettings.AutoApprovalRules);
                 var allowed = resolved.Values.Kinds.Where(kind => Model.EnabledKinds.Contains(kind) && Model.Capabilities.Resolve(account.Role, account.Id, AcquisitionAccessNames.WorkType(kind)) >= MediaCapability.Request);
@@ -33,12 +33,12 @@
                     <div class="rre-tags">@foreach (var kind in allowed) { <partial name="/Pages/Admin/_RequestTypeTag.cshtml" model="kind" /> }</div>
                 </article>
             }
-            @if (Model.Directory.Total > Model.Directory.PageSize)
+            @if (Model.Directory.TotalCount > Model.Directory.PageSize)
             {
                 <nav class="rre-pagination" aria-label="@ui["admin.users.accounts"]">
                     @if (Model.Directory.Page > 1) { <a class="button button-secondary" href="?q=@Uri.EscapeDataString(Model.Query)&amp;p=@(Model.Directory.Page - 1)" data-rre-navigation><partial name="_AppIcon" model="@("chevronLeft")" /></a> }
-                    <span>@Model.Directory.Page / @((Model.Directory.Total + Model.Directory.PageSize - 1) / Model.Directory.PageSize)</span>
-                    @if (Model.Directory.Page * Model.Directory.PageSize < Model.Directory.Total) { <a class="button button-secondary" href="?q=@Uri.EscapeDataString(Model.Query)&amp;p=@(Model.Directory.Page + 1)" data-rre-navigation><partial name="_AppIcon" model="@("chevronRight")" /></a> }
+                    <span>@Model.Directory.Page / @((Model.Directory.TotalCount + Model.Directory.PageSize - 1) / Model.Directory.PageSize)</span>
+                    @if (Model.Directory.HasMore == true) { <a class="button button-secondary" href="?q=@Uri.EscapeDataString(Model.Query)&amp;p=@(Model.Directory.Page + 1)" data-rre-navigation><partial name="_AppIcon" model="@("chevronRight")" /></a> }
                 </nav>
             }
         </section>

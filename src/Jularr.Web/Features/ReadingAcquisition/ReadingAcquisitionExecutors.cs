@@ -32,7 +32,10 @@ public sealed class ReadingAcquisitionEngine(
     DownloadClientStore downloadClients,
     AcquisitionCore core,
     QualityProfileStore? profiles = null,
-    RequestWorkBinder? binder = null)
+    RequestWorkBinder? binder = null,
+    ReadingCoverageService? coverage = null,
+    ReadingStructureService? structure = null,
+    ReleaseRequestTracker? tracker = null)
 {
     public const string OperationKind = "reading-usenet-download";
 
@@ -51,7 +54,11 @@ public sealed class ReadingAcquisitionEngine(
         // A request made before the Work binding, or one whose identity could not be resolved then, is bound now; the profile below is the Work's.
         request = binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken);
         var payload = ReadPayload(request, initialTarget);
-        var target = ToTarget(request.Kind, payload);
+        var target = await TargetAsync(request, payload, refreshStructure: payload.Searches == 0, cancellationToken);
+        if (target.Want is { IsEmpty: true })
+        {
+            return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "Nothing is missing: every wanted volume and chapter is in the library.");
+        }
 
         // Without Usenet configured only a direct source (a public web copy) can serve the request.
         var usenetProblem = !await indexers.HasEnabledIndexerAsync(cancellationToken)
@@ -62,9 +69,59 @@ public sealed class ReadingAcquisitionEngine(
         var profile = profiles is null ? ReadingQualityProfiles.For(request.Kind) : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
         var search = await core.SearchAsync(ReadingReleaseJudge.Plan(target), profile, new SearchOptions(), cancellationToken);
         var grabbable = search.Grabbable.Where(release => usenetProblem is null || release.Candidate.Type == AcquisitionType.DirectImport).ToArray();
+
+        // A Manga that is in the library is searched again only for a better version of what it holds, and only a better one is taken. With a structure the judge
+        // already limits the releases to the missing units and genuine upgrades; without one the installed quality decides.
+        var installed = target.Want is null && coverage is not null && request.Kind == MediaAcquisitionKind.Manga && request.WorkId is { } workId
+            ? await coverage.InstalledQualityAsync(workId, cancellationToken)
+            : null;
+        if (installed is not null)
+        {
+            if (!UpgradePolicy.Assess(profile, installed).IsUpgradable)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"The Manga is in the library as {installed}.");
+            }
+
+            grabbable = [.. grabbable.Where(release => release.Candidate.Type != AcquisitionType.DirectImport && release.Score is { } score && UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey))];
+        }
+
+        if ((installed is not null || target.Want is { HasMissing: false }) && tracker is not null
+            && await tracker.WaitForUpgradeAsync(
+                request,
+                payload,
+                [.. grabbable.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
+                "The Manga is in the library and no better version is known yet.",
+                cancellationToken) is { } waiting)
+        {
+            return waiting;
+        }
+
         return grabbable.Length == 0 && usenetProblem is not null
             ? new AcquisitionExecution(AcquisitionRequestStatus.Failed, usenetProblem)
             : await GrabAsync(request, payload, grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
+    }
+
+    // Manual Search builds its target here too, so it ranks releases exactly as the automatic search does.
+    public async Task<ReadingAcquisitionTarget> TargetAsync(AcquisitionRequest request, ReadingRequestPayload payload, bool refreshStructure, CancellationToken cancellationToken)
+    {
+        var target = ToTarget(request.Kind, payload);
+        if (request.Kind != MediaAcquisitionKind.Manga || coverage is null || request.WorkId is not { } workId)
+        {
+            return target;
+        }
+
+        if (refreshStructure && structure is not null)
+        {
+            await structure.RefreshAsync(workId, cancellationToken);
+        }
+
+        var aliases = structure is null ? [] : await structure.AliasesAsync(workId, cancellationToken);
+        var wholeTitleAsked = await coverage.WholeTitleAskedAsync(request.Id, cancellationToken);
+        return target with
+        {
+            Aliases = [.. (target.Aliases ?? []).Concat(aliases).Where(alias => !string.IsNullOrWhiteSpace(alias) && !alias.Equals(target.Title, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase)],
+            Want = await coverage.WantAsync(workId, wholeTitleAsked, payload.RequestedVolume, payload.RequestedChapterStart, payload.RequestedChapterEnd, cancellationToken)
+        };
     }
 
     // Runs the shared grab over the releases (best first); Manual Search passes the one the owner selected.

@@ -73,8 +73,8 @@ internal static class WantedSql
             WHERE link."WorkId" = work."Id" AND link."SourceKind" = 7)
         """;
 
-    // A Light Novel or Manga Work is wanted unit by unit only when provider-identified volumes (Light Novel) or chapters (Manga) exist and every local unit it holds
-    // is tied to a canonical one; until then (units unknown, or local content nothing ties to a unit) it is wanted as a whole, so owned content is never fetched again.
+    // A Light Novel or Manga Work is wanted unit by unit only when provider-identified volumes (Light Novel) or volumes or chapters (Manga) exist and every local unit it
+    // holds is tied to a canonical one; until then (units unknown, or local content nothing ties to a unit) it is wanted as a whole, so owned content is never fetched again.
     private const string UnitWorks =
         """
         unit_works AS (
@@ -89,7 +89,8 @@ internal static class WantedSql
                             WHERE link."WorkId" = work."Id" AND link."SourceKind" = 1
                               AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound WHERE bound."LocalKind" = 0 AND bound."LocalId" = onhand."Id"::text))
                     ELSE
-                        EXISTS (SELECT 1 FROM "WorkChapters" unit WHERE unit."WorkId" = work."Id" AND unit."ExternalId" IS NOT NULL)
+                        (EXISTS (SELECT 1 FROM "WorkVolumes" unit WHERE unit."WorkId" = work."Id" AND unit."ExternalId" IS NOT NULL)
+                         OR EXISTS (SELECT 1 FROM "WorkChapters" unit WHERE unit."WorkId" = work."Id" AND unit."ExternalId" IS NOT NULL))
                         AND NOT EXISTS (
                             SELECT 1 FROM "WorkSourceLinks" link JOIN "MangaChapters" onhand ON onhand."SeriesId" = link."SourceId"::text
                             WHERE link."WorkId" = work."Id" AND link."SourceKind" = 3
@@ -139,7 +140,9 @@ internal static class WantedSql
               AND (COALESCE(decision."Monitored", FALSE)
                    OR EXISTS (SELECT 1 FROM open_request_targets asked WHERE asked."TargetKind" = 4 AND asked."TargetId" = edition."Id"))
         ),
-        -- The identified volumes (Light Novel) and chapters (Manga) of a unit-addressed Work: a volume decision covers its chapters, then the Work's decision, a relation or a request.
+        -- The identified volumes (Light Novel, Manga) and chapters (Manga) of a unit-addressed Work: a volume decision covers its chapters, then the Work's decision, a relation or a request.
+        -- A Manga volume is installed when a file is tied to it or every chapter it consists of is; a chapter inside a monitored volume is not wanted on its own, the volume is.
+        -- A request for the whole title wants every Manga unit except one the owner switched off.
         intended_units AS (
             SELECT unit."WorkId", work."MediaType", 2::smallint AS "TargetKind", unit."Id" AS "TargetId",
                    EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "NovelVolumes" onhand ON onhand."Id"::text = bound."LocalId"
@@ -154,19 +157,40 @@ internal static class WantedSql
                    OR EXISTS (SELECT 1 FROM open_request_targets asked
                               WHERE (asked."TargetKind" = 2 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."WorkId" = unit."WorkId")))
             UNION ALL
+            SELECT unit."WorkId", work."MediaType", 2::smallint, unit."Id",
+                   EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
+                           WHERE bound."LocalKind" = 1 AND bound."WorkVolumeId" = unit."Id")
+                   OR (EXISTS (SELECT 1 FROM "WorkChapters" part WHERE part."VolumeId" = unit."Id" AND part."ExternalId" IS NOT NULL)
+                       AND NOT EXISTS (
+                           SELECT 1 FROM "WorkChapters" part WHERE part."VolumeId" = unit."Id" AND part."ExternalId" IS NOT NULL
+                             AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
+                                             WHERE bound."LocalKind" = 1 AND bound."WorkChapterId" = part."Id")))
+            FROM "WorkVolumes" unit
+            JOIN unit_works ON unit_works."WorkId" = unit."WorkId" AND unit_works."MediaType" = @manga
+            JOIN "Works" work ON work."Id" = unit."WorkId"
+            LEFT JOIN "WorkMonitoring" own ON own."TargetId" = unit."Id"
+            LEFT JOIN "WorkMonitoring" whole ON whole."Kind" = 0 AND whole."WorkId" = unit."WorkId"
+            WHERE unit."ExternalId" IS NOT NULL
+              AND (COALESCE(own."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))
+                   OR EXISTS (SELECT 1 FROM open_request_targets asked
+                              WHERE (asked."TargetKind" = 2 AND asked."TargetId" = unit."Id")
+                                 OR (asked."TargetKind" = 0 AND asked."WorkId" = unit."WorkId" AND own."Monitored" IS DISTINCT FROM FALSE)))
+            UNION ALL
             SELECT unit."WorkId", work."MediaType", 3::smallint, unit."Id",
                    EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
-                           WHERE bound."LocalKind" = 1 AND bound."WorkChapterId" = unit."Id")
+                           WHERE bound."LocalKind" = 1 AND (bound."WorkChapterId" = unit."Id" OR (unit."VolumeId" IS NOT NULL AND bound."WorkVolumeId" = unit."VolumeId")))
             FROM "WorkChapters" unit
             JOIN unit_works ON unit_works."WorkId" = unit."WorkId" AND unit_works."MediaType" = @manga
             JOIN "Works" work ON work."Id" = unit."WorkId"
+            LEFT JOIN "WorkVolumes" parent ON parent."Id" = unit."VolumeId" AND parent."ExternalId" IS NOT NULL
             LEFT JOIN "WorkMonitoring" own ON own."TargetId" = unit."Id"
             LEFT JOIN "WorkMonitoring" volume ON volume."TargetId" = unit."VolumeId"
             LEFT JOIN "WorkMonitoring" whole ON whole."Kind" = 0 AND whole."WorkId" = unit."WorkId"
             WHERE unit."ExternalId" IS NOT NULL
-              AND (COALESCE(own."Monitored", volume."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))
+              AND ((COALESCE(own."Monitored", volume."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))
+                    AND (parent."Id" IS NULL OR NOT COALESCE(volume."Monitored", whole."Monitored", EXISTS (SELECT 1 FROM monitored_relation relation WHERE relation."WorkId" = unit."WorkId"))))
                    OR EXISTS (SELECT 1 FROM open_request_targets asked
-                              WHERE (asked."TargetKind" = 3 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."WorkId" = unit."WorkId")))
+                              WHERE (asked."TargetKind" = 3 AND asked."TargetId" = unit."Id") OR (asked."TargetKind" = 0 AND asked."WorkId" = unit."WorkId" AND parent."Id" IS NULL AND own."Monitored" IS DISTINCT FROM FALSE)))
         ),
         intended AS (
             SELECT * FROM intended_works
@@ -264,6 +288,27 @@ internal static class WantedSql
         LIMIT 1
         """;
 
+    // Whether the library holds the Manga volume or chapter a queue row names (the row of an installed unit is an upgrade the request that fetched it continues); a
+    // Light Novel volume row is never installed here.
+    private const string MangaVolumeItemInstalled =
+        """
+        (work."MediaType" = @manga AND item."TargetKind" = 2 AND (
+            EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId" WHERE bound."LocalKind" = 1 AND bound."WorkVolumeId" = item."TargetId")
+            OR (EXISTS (SELECT 1 FROM "WorkChapters" part WHERE part."VolumeId" = item."TargetId" AND part."ExternalId" IS NOT NULL)
+                AND NOT EXISTS (
+                    SELECT 1 FROM "WorkChapters" part WHERE part."VolumeId" = item."TargetId" AND part."ExternalId" IS NOT NULL
+                      AND NOT EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
+                                      WHERE bound."LocalKind" = 1 AND bound."WorkChapterId" = part."Id")))))
+        """;
+
+    private const string MangaChapterItemInstalled =
+        """
+        (work."MediaType" = @manga AND item."TargetKind" = 3 AND
+            EXISTS (SELECT 1 FROM "WorkUnitBindings" bound JOIN "MangaChapters" onhand ON onhand."Id" = bound."LocalId"
+                    WHERE bound."LocalKind" = 1 AND (bound."WorkChapterId" = item."TargetId"
+                       OR bound."WorkVolumeId" = (SELECT chapter."VolumeId" FROM "WorkChapters" chapter WHERE chapter."Id" = item."TargetId"))))
+        """;
+
     public const string WorksWithoutOpenRequest =
         $$"""
         SELECT DISTINCT work."Id" AS "Value"
@@ -273,7 +318,7 @@ internal static class WantedSql
         WHERE work."Id" > @after
           AND (item."TargetKind" = 4) = @editions
           AND NOT EXISTS ({{RequestOf}} AND request."Status" IN ('pending', 'approved', 'searching', 'downloading', 'importing'))
-          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} WHEN 2 THEN FALSE WHEN 3 THEN FALSE ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
+          AND (NOT (CASE item."TargetKind" WHEN 1 THEN {{EpisodeInstalled}} WHEN 4 THEN {{AudiobookInstalled}} WHEN 2 THEN {{MangaVolumeItemInstalled}} WHEN 3 THEN {{MangaChapterItemInstalled}} ELSE {{WorkInstalled}} END) OR NOT EXISTS ({{RequestOf}}))
         ORDER BY 1
         LIMIT @limit
         """;

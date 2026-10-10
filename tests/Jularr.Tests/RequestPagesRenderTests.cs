@@ -147,6 +147,7 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(queue, "action=\"/Admin/Search\"");
         StringAssert.Contains(queue, "data-admin-search-preview");
         var consumer = await host.GetHtmlAsync("/Requests", asOwner: false);
+        StringAssert.Contains(consumer, "action=\"/\"");
         Assert.IsFalse(consumer.Contains("data-admin-search-preview", StringComparison.Ordinal));
     }
 
@@ -176,12 +177,17 @@ public sealed class RequestPagesRenderTests
         }
 
         var users = await host.GetHtmlAsync("/Admin/Requests/Users", asOwner: true);
+        Assert.IsFalse(users.Contains("admin.requests.section.users", StringComparison.Ordinal));
         foreach (var name in new[] { "Directory Owner", "Directory User", "Directory Pending" })
         {
             StringAssert.Contains(users, name);
         }
 
         StringAssert.Contains(users, "Disabled / pending");
+        var filtered = await host.GetHtmlAsync("/Admin/Requests/Users?q=pending", asOwner: true);
+        StringAssert.Contains(filtered, "Directory Pending");
+        Assert.IsFalse(filtered.Contains("Directory Owner", StringComparison.Ordinal));
+        Assert.AreEqual(HttpStatusCode.BadRequest, await host.GetStatusAsync("/Admin/Requests/Users?p=2147483647", asOwner: true));
         var unmatched = await host.GetHtmlAsync("/Admin/Requests/Users?q=unmatched-account", asOwner: true);
         StringAssert.Contains(unmatched, "No matching users.");
         Assert.IsFalse(unmatched.Contains("No accounts yet", StringComparison.Ordinal));
@@ -373,11 +379,12 @@ public sealed class RequestPagesRenderTests
         Assert.IsFalse(all.Contains("admreq-search-menu", StringComparison.Ordinal));
         StringAssert.Contains(all, "data-admreq-option-select=\"type\"");
         StringAssert.Contains(all, "data-admreq-option-select=\"lang\"");
-        StringAssert.Contains(all, "data-admreq-option-select=\"status\"");
+        Assert.IsFalse(all.Contains("data-admreq-option-select=\"status\"", StringComparison.Ordinal));
+        Assert.IsFalse(all.Contains("<select name=\"status\"", StringComparison.Ordinal));
         StringAssert.Contains(all, "data-admreq-option-select=\"by\"");
         StringAssert.Contains(all, "data-admreq-option-select=\"sort\"");
         StringAssert.Contains(all, "admreq-language-flag");
-        Assert.AreEqual(4, System.Text.RegularExpressions.Regex.Matches(all, "<select name=\"(?:type|lang|status|by)\" multiple").Count);
+        Assert.AreEqual(3, System.Text.RegularExpressions.Regex.Matches(all, "<select name=\"(?:type|lang|by)\" multiple").Count);
         StringAssert.Contains(all, "admreq-cell-modified");
         StringAssert.Contains(all, "admreq-cell-profile");
         StringAssert.Contains(all, "admreq-cell-coverage");
@@ -422,6 +429,9 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(pageSizeForm, "name=\"status\" value=\"pending\"");
         StringAssert.Contains(pageSizeForm, "name=\"by\" value=\"test-profile\"");
         StringAssert.Contains(pageSizeForm, "name=\"q\" value=\"Pending Show\"");
+        var paged = await host.GetHtmlAsync("/Admin/Requests?size=2&p=2", asOwner: true);
+        StringAssert.Contains(paged, "class=\"button admreq-page-button button-primary active\"");
+        StringAssert.Contains(paged, "aria-current=\"page\">2</a>");
     }
 
     [TestMethod]
@@ -572,6 +582,7 @@ public sealed class RequestPagesRenderTests
                         services.AddSingleton<ViteAssetManifest>();
                         services.AddScoped<CurrentAccountContext>();
                         services.AddScoped<OwnerAuthService>();
+                        services.AddScoped<AdminAccountService>();
                         services.AddSingleton<Microsoft.AspNetCore.Identity.IPasswordHasher<OwnerAccount>, Microsoft.AspNetCore.Identity.PasswordHasher<OwnerAccount>>();
                         services.AddSingleton(capabilities);
                         services.AddSingleton<Jularr.Web.Features.Instance.IInstanceModuleService>(new Jularr.Web.Features.Instance.InstanceModuleStore(data.FullName));

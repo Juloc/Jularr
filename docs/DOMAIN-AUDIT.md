@@ -1,6 +1,6 @@
 # Jularr domain audit
 
-Status: planning. Companion to `DOMAIN.md`. No destructive migration is authorized by this document alone.
+Status: **historical domain audit, not the currently approved cutover mechanism**. The owner-approved target is [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md). Its Games-as-Works and fresh-baseline/no-backfill decisions supersede the older staged legacy migration directions below. No destructive migration is authorized by this document alone.
 
 Classification:
 - **KEEP** — concept already belongs in the canonical model.

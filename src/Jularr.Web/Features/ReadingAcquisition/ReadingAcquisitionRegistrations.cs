@@ -54,20 +54,20 @@ public static class ReadingQualityProfiles
     public const string DefaultMangaId = "manga-cbz";
     public const string DefaultLightNovelId = "lightnovel-epub";
 
-    public static QualityProfile CreateDefaultManga() => Create(DefaultMangaId, "Manga", "CBZ");
+    public static QualityProfile CreateDefaultManga() => Create(DefaultMangaId, "Manga", "CBZ", upgrade: true);
 
     public static QualityProfile CreateDefaultLightNovel() => Create(DefaultLightNovelId, "Light Novels", "EPUB");
 
     public static QualityProfile For(MediaAcquisitionKind kind) => kind == MediaAcquisitionKind.LightNovel ? CreateDefaultLightNovel() : CreateDefaultManga();
 
-    private static QualityProfile Create(string id, string name, string preferred) =>
+    private static QualityProfile Create(string id, string name, string preferred, bool upgrade = false) =>
         new(
             id,
             name,
             [preferred, "ZIP", "UNKNOWN-UNKNOWN"],
             [preferred, "ZIP", "UNKNOWN-UNKNOWN"],
-            UpgradeAllowed: false,
-            UpgradeCutoffQuality: null,
+            UpgradeAllowed: upgrade,
+            UpgradeCutoffQuality: upgrade ? preferred : null,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],

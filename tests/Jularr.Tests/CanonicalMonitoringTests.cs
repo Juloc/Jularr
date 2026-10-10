@@ -103,7 +103,14 @@ public sealed class CanonicalMonitoringTests
             CREATE TRIGGER fail_monitoring_delete BEFORE DELETE ON "WorkMonitoring" FOR EACH ROW EXECUTE FUNCTION fail_monitoring_delete();
             """);
 
-        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => commands.SetWorkAsync(series.WorkId, true, CancellationToken.None));
+        try
+        {
+            await Assert.ThrowsAsync<Npgsql.PostgresException>(() => commands.SetWorkAsync(series.WorkId, true, CancellationToken.None));
+        }
+        finally
+        {
+            await db.Database.ExecuteSqlRawAsync("DROP TRIGGER IF EXISTS fail_monitoring_delete ON \"WorkMonitoring\"; DROP FUNCTION IF EXISTS fail_monitoring_delete();");
+        }
 
         var workDecisions = await db.Database.SqlQuery<int>($"""SELECT COUNT(*)::int AS "Value" FROM "WorkMonitoring" WHERE "Kind" = 0 AND "WorkId" = {series.WorkId}""").SingleAsync();
         Assert.AreEqual(0, workDecisions, "The Work's own decision was written before the episode decisions could be replaced, so it must have been rolled back with them.");

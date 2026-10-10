@@ -2,123 +2,352 @@
 @model Jularr.Web.Pages.Admin.Books.WorkModel
 @using Jularr.Web.Features.Acquisition.Access
 @using Jularr.Web.Features.Books
+@using Jularr.Web.Features.Storage
 @{
     var ui = Model.Ui;
     var view = Model.View;
+    var detail = view.Detail;
+    var request = detail.BookRequest;
     ViewData["Title"] = view.Title;
+
+    string Bytes(long value) => StorageHealth.FormatBytes(value);
+    string Initial() => string.IsNullOrWhiteSpace(view.Title) ? "?" : view.Title.Trim()[..1].ToUpperInvariant();
+    (string Label, string? Url) ProviderOf(BookIdentityAdmin identity)
+    {
+        var id = identity.ExternalId;
+        if (identity.Provider.Equals("isbn", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("ISBN " + id, null);
+        }
+
+        return id switch
+        {
+            _ when id.StartsWith("ol:", StringComparison.OrdinalIgnoreCase) => ("Open Library " + id[3..], $"https://openlibrary.org/works/{Uri.EscapeDataString(id[3..])}"),
+            _ when id.StartsWith("gb:", StringComparison.OrdinalIgnoreCase) => ("Google Books " + id[3..], $"https://books.google.com/books?id={Uri.EscapeDataString(id[3..])}"),
+            _ => (id, null)
+        };
+    }
+
+    var openRequest = request is not null && request.Status is not (AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed);
+    var failed = request is { Status: AcquisitionRequestStatus.Failed };
+    var waiting = request is { Status: AcquisitionRequestStatus.Approved };
+    var canSearch = (!openRequest || waiting) && !(view.Book.Installed && !detail.BelowCutoff);
+    var languages = string.Join(", ", detail.Languages.Select(code => code.ToUpperInvariant()));
+    var unreadable = detail.Editions.SelectMany(edition => edition.Files).Where(file => !file.Exists).Select(file => file.Name).ToList();
 }
 @section Head {
     <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-media-detail.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/admin-music.css" asp-append-version="true" />
 }
 @section Scripts {
     <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
 }
 
-<header class="page-header">
-    <div>
-        <h1>@view.Title</h1>
-        @if (view.Year is { } year)
-        {
-            <p>@year</p>
-        }
-    </div>
-</header>
-
 <partial name="_AdminSectionLinks" />
 
 @if (Model.Notice is not null)
 {
-    <p class="admset-notice" role="status">@Model.Notice</p>
+    <p class="admmd-notice" role="status">@Model.Notice</p>
 }
 @if (Model.Error is not null)
 {
-    <p class="admset-notice" role="alert">@Model.Error</p>
+    <p class="admmd-notice admmd-notice-error" role="alert">@Model.Error</p>
 }
 
-<div class="admmusic">
-    @foreach (var (heading, audiobook, state) in new[] { (ui["admin.books.book"], false, view.Book), (ui["admin.books.audiobook"], true, view.Audiobook) })
-    {
-        <section class="admset-section" aria-label="@heading">
-            <div class="admset-head"><div><h2>@heading</h2></div></div>
-            <div class="admmusic-tags">
-                <span class="admin-tag admin-tag-@(state.Installed ? "success" : state.Wanted ? "warning" : "text")">@Model.StateLabel(state)</span>
-                @if (state.RequestStatus is { } status)
+<section class="admmd-hero" aria-labelledby="admmd-title">
+    <div class="admmd-poster" aria-hidden="true">
+        @if (detail.HasCover && detail.LibraryBookId is { } coverId)
+        {
+            <img src="/Books/Cover/@coverId" alt="" decoding="async" data-initial="@Initial()" onerror="this.replaceWith(Object.assign(document.createElement('span'), { textContent: this.dataset.initial }))" />
+        }
+        else
+        {
+            <span>@Initial()</span>
+        }
+    </div>
+    <div class="admmd-hero-main">
+        <div class="admmd-hero-top">
+            <div class="admmd-titles">
+                <h1 id="admmd-title">@view.Title</h1>
+                <p class="admmd-meta">
+                    @string.Join(" · ", new[] { detail.Author, view.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture) }.Where(part => !string.IsNullOrEmpty(part)))
+                </p>
+                @if (detail.Identities.Count > 0)
                 {
-                    <span class="admin-tag admin-tag-text">@Model.RequestLabel(status)</span>
+                    <p class="admmd-meta">
+                        @foreach (var (identity, index) in detail.Identities.Select((identity, index) => (identity, index)))
+                        {
+                            var (label, url) = ProviderOf(identity);
+                            @if (index > 0)
+                            {
+                                <span> · </span>
+                            }
+
+                            @if (url is not null)
+                            {
+                                <a class="text-link" href="@url" target="_blank" rel="noopener noreferrer">@label</a>
+                            }
+                            else
+                            {
+                                <span>@label</span>
+                            }
+                        }
+                    </p>
                 }
             </div>
-            @if (state.RequestMessage is not null)
-            {
-                <p class="admset-hint">@state.RequestMessage</p>
-            }
-            @if (audiobook)
-            {
-                @if (Model.AudiobookDetails is { } details)
-                {
-                    <dl class="admset-facts">
-                        @if (details.Narrators.Length > 0)
-                        {
-                            <dt>@ui["admin.books.narrators"]</dt>
-                            <dd>@string.Join(", ", details.Narrators)</dd>
-                        }
-                        @if (details.DurationSeconds is { } seconds)
-                        {
-                            <dt>@ui["admin.books.duration"]</dt>
-                            <dd>@TimeSpan.FromSeconds(seconds).ToString(seconds >= 3600 ? @"h:mm:ss" : @"m:ss")</dd>
-                        }
-                        @if (details.Asin is not null)
-                        {
-                            <dt>ASIN</dt>
-                            <dd>@details.Asin</dd>
-                        }
-                        <dt>@ui["admin.books.source"]</dt>
-                        <dd>@if (details.SourceUrl is { } source && Uri.TryCreate(source, UriKind.Absolute, out var sourceUri) && sourceUri.Scheme == Uri.UriSchemeHttps) { <a class="text-link" href="@sourceUri" rel="noopener noreferrer">@details.Provider</a> } else { @details.Provider }</dd>
-                    </dl>
-                }
-                <p><a class="button" asp-page="Work" asp-route-workId="@view.WorkId" asp-route-find="true">@ui["admin.books.findRecording"]</a></p>
-                @if (Model.Candidates is { } candidates)
-                {
-                    @if (candidates.Count == 0)
-                    {
-                        <p class="admset-hint">@ui["admin.books.noRecordings"]</p>
-                    }
-                    else
-                    {
-                        <ul class="admset-list">
-                            @foreach (var candidate in candidates)
-                            {
-                                <li>
-                                    <strong>@candidate.Title</strong>
-                                    <span class="admset-hint">@string.Join(", ", new[] { string.Join(" & ", candidate.Authors), candidate.Language, candidate.Narrators.Count > 0 ? string.Join(", ", candidate.Narrators) : null }.Where(part => !string.IsNullOrEmpty(part)))</span>
-                                    <form method="post" asp-page-handler="UseMetadata" asp-route-workId="@view.WorkId">
-                                        <input type="hidden" name="provider" value="@candidate.Provider" />
-                                        <input type="hidden" name="externalId" value="@candidate.ExternalId" />
-                                        <button class="button" type="submit">@ui["admin.books.useRecording"]</button>
-                                    </form>
-                                </li>
-                            }
-                        </ul>
-                    }
-                }
-            }
-            <div class="admset-actions">
-                <form method="post" asp-page-handler="Monitor" asp-route-workId="@view.WorkId">
-                    <input type="hidden" name="audiobook" value="@audiobook.ToString().ToLowerInvariant()" />
-                    <input type="hidden" name="monitored" value="@((!state.Monitored).ToString().ToLowerInvariant())" />
-                    <button class="admmusic-toggle @(state.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(state.Monitored ? "true" : "false")">
+            <div class="admmd-hero-actions">
+                <form method="post" asp-page-handler="Monitor" asp-route-workId="@view.WorkId" class="admmd-monitor-form">
+                    <input type="hidden" name="audiobook" value="false" />
+                    <input type="hidden" name="monitored" value="@((!view.Book.Monitored).ToString().ToLowerInvariant())" />
+                    <button class="admmd-toggle @(view.Book.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(view.Book.Monitored ? "true" : "false")">
                         <span class="admin-switch" aria-hidden="true"></span>
-                        <span>@(state.Monitored ? ui["admin.music.monitored"] : ui["admin.music.unmonitored"])</span>
+                        @(view.Book.Monitored ? ui["admin.media.monitored"] : ui["admin.media.monitor"])
                     </button>
                 </form>
-                @if (audiobook && !state.Installed && (state.RequestStatus is null or AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed))
+                @if (canSearch)
+                {
+                    <form method="post" asp-page-handler="Search" asp-route-workId="@view.WorkId" class="admmd-desktop-only">
+                        <button class="button button-primary" type="submit">@ui["admin.media.action.automatic"]</button>
+                    </form>
+                }
+                @if ((waiting || failed) && canSearch)
+                {
+                    <a class="button admmd-desktop-only" asp-page="/Admin/BookManualSearch" asp-route-id="@request!.Id">@ui["admin.wanted.manualSearch"]</a>
+                }
+                <details class="admin-menu">
+                    <summary class="admin-icon-button" aria-label="@ui["admin.media.more"]"><partial name="_AdminIcon" model='"more"' /><span class="admin-icon-label">@ui["admin.media.more"]</span></summary>
+                    <div class="admin-menu-list">
+                        @if (detail.LibraryBookId is { } libraryId)
+                        {
+                            <a class="admin-menu-item" href="/Books/Library/@libraryId">@ui["admin.media.openLibrary"]</a>
+                        }
+                        @if (detail.FirstChapterId is { } chapterId)
+                        {
+                            <a class="admin-menu-item" href="/Books/Read/@chapterId">@ui["admin.books.read"]</a>
+                        }
+                        @if (request is not null)
+                        {
+                            <a class="admin-menu-item" asp-page="/Admin/BookManualSearch" asp-route-id="@request.Id" asp-route-tab="history">@ui["admin.media.requestHistory"]</a>
+                        }
+                    </div>
+                </details>
+            </div>
+        </div>
+        <dl class="admmd-stats">
+            <div class="admmd-stat"><dt>@ui["admin.books.stat.status"]</dt><dd>@Model.StateLabel(view.Book, detail.UpgradeWanted)</dd></div>
+            <div class="admmd-stat"><dt>@ui["admin.books.stat.formats"]</dt><dd>@(detail.Formats.Count == 0 ? "—" : string.Join(", ", detail.Formats))</dd></div>
+            <div class="admmd-stat"><dt>@ui["admin.media.stat.languages"]</dt><dd>@(languages.Length == 0 ? "—" : languages)</dd></div>
+            <div class="admmd-stat"><dt>@ui["admin.media.stat.storage"]</dt><dd>@Bytes(detail.SizeBytes)</dd></div>
+            <div class="admmd-stat"><dt>@ui["library.acquisitionPanel.qualityProfile"]</dt><dd>@detail.ProfileName</dd></div>
+        </dl>
+        @if (request is not null && openRequest)
+        {
+            <p class="admmd-note">
+                @ui["requests.status." + AcquisitionAccessNames.Status(request.Status)]@(string.IsNullOrWhiteSpace(request.StatusMessage) ? "" : " · " + request.StatusMessage)
+                @if (request.OperationId is { } operationId)
+                {
+                    <a class="text-link" asp-page="/Admin/Operation" asp-route-id="@operationId">@ui["admin.media.downloadDetails"]</a>
+                }
+                <a class="text-link" asp-page="/Admin/BookManualSearch" asp-route-id="@request.Id" asp-route-tab="history">@ui["admin.media.requestHistory"]</a>
+            </p>
+        }
+    </div>
+</section>
+
+@if (unreadable.Count > 0)
+{
+    <p class="admmd-notice admmd-notice-error" role="alert">@ui.Format("admin.books.storageOffline", ("files", string.Join(", ", unreadable)))</p>
+}
+@if (failed)
+{
+    <p class="admmd-note" role="status">
+        @ui.Format("admin.media.requestFailed", ("message", string.IsNullOrWhiteSpace(request!.StatusMessage) ? ui["requests.status.failed"] : request.StatusMessage))
+        <a class="text-link" asp-page="/Admin/BookManualSearch" asp-route-id="@request.Id" asp-route-tab="history">@ui["admin.media.requestHistory"]</a>
+        @if (request.OperationId is { } failedOperation)
+        {
+            <a class="text-link" asp-page="/Admin/Operation" asp-route-id="@failedOperation">@ui["admin.media.downloadDetails"]</a>
+        }
+    </p>
+    <form method="post" asp-page-handler="Retry" asp-route-workId="@view.WorkId" class="admmd-note">
+        <button class="button" type="submit">@ui["admin.requests.retry"]</button>
+    </form>
+}
+
+<section class="admmd-groups" aria-labelledby="admmd-editions-title" data-admin-book-editions>
+    <div class="admmd-toolbar admmd-toolbar-inline">
+        <h2 id="admmd-editions-title">@ui["admin.books.editions.heading"]</h2>
+    </div>
+    @if (detail.Editions.Count == 0)
+    {
+        <p class="admmd-message muted" data-admin-media-empty>@ui["admin.books.editions.none"]</p>
+    }
+    else
+    {
+        <ul class="admmd-episodes">
+            @foreach (var edition in detail.Editions)
+            {
+                <li>
+                    <details class="admmd-ep" open>
+                        <summary class="admmd-edition-row">
+                            <span class="admmd-ep-title">
+                                <span class="admmd-ep-name"><strong>@(string.IsNullOrWhiteSpace(edition.Title) ? view.Title : edition.Title)</strong></span>
+                                <small>@string.Join(" · ", new[] { edition.Publisher, edition.Isbn is null ? null : "ISBN " + edition.Isbn }.Where(part => !string.IsNullOrEmpty(part)))</small>
+                            </span>
+                            <span class="admmd-ep-langs"><span class="admmd-lang">@edition.Language.ToUpperInvariant()</span></span>
+                        </summary>
+                        <div class="admmd-ep-body">
+                            @if (edition.Files.Count == 0)
+                            {
+                                <p class="admmd-none">@ui["admin.media.noFiles"]</p>
+                            }
+                            else
+                            {
+                                <ul class="admmd-files">
+                                    @foreach (var file in edition.Files)
+                                    {
+                                        <li class="admmd-file">
+                                            <div class="admmd-file-head">
+                                                <strong class="admmd-file-name">@file.Name</strong>
+                                                <span class="admmd-file-tags">
+                                                    <span class="admmd-lang">@file.Format</span>
+                                                    <span class="admin-tag admin-tag-@(file.Exists ? "success" : "danger")">@(file.Exists ? ui["admin.books.file.available"] : ui["admin.books.file.missing"])</span>
+                                                    <span class="admmd-lang admmd-lang-quiet">@Bytes(file.SizeBytes)</span>
+                                                </span>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(file.Location))
+                                            {
+                                                <p class="admmd-path">@file.Location</p>
+                                            }
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    </details>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+<div class="admmd-panels">
+    <section class="admmd-panel" aria-labelledby="admmd-profile-title">
+        <h2 id="admmd-profile-title">@ui["library.acquisitionPanel.qualityProfile"]</h2>
+        <form method="post" asp-page-handler="Profile" asp-route-workId="@view.WorkId" class="admmd-form">
+            <label class="admmd-field">
+                <span>@ui["library.acquisitionPanel.qualityProfile"]</span>
+                <select name="profileId">
+                    <option value="" selected="@(detail.AssignedProfileId is null)">@ui["admin.media.video.defaultProfile"]</option>
+                    @foreach (var (profileId, profileName) in detail.Profiles)
+                    {
+                        <option value="@profileId" selected="@profileId.Equals(detail.AssignedProfileId, StringComparison.OrdinalIgnoreCase)">@profileName</option>
+                    }
+                </select>
+            </label>
+            <button class="button" type="submit">@ui["common.save"]</button>
+        </form>
+    </section>
+
+    @if (Model.AudiobooksEnabled)
+    {
+        var audio = view.Audiobook;
+        <section class="admmd-panel" aria-labelledby="admmd-audio-title" data-admin-book-audiobook>
+            <h2 id="admmd-audio-title">@ui["admin.books.audiobook"]</h2>
+            <p class="admmd-panel-facts">
+                <span class="admin-tag admin-tag-@(audio.Installed ? "success" : audio.Wanted ? "warning" : "text")">@Model.StateLabel(audio)</span>
+                @if (audio.RequestStatus is { } status)
+                {
+                    <span class="admin-tag">@Model.RequestLabel(status)</span>
+                }
+            </p>
+            @if (audio.RequestMessage is not null)
+            {
+                <p class="admmd-note">@audio.RequestMessage</p>
+            }
+            @if (Model.AudiobookDetails is { } details)
+            {
+                <dl class="admset-facts">
+                    @if (details.Narrators.Length > 0)
+                    {
+                        <dt>@ui["admin.books.narrators"]</dt>
+                        <dd>@string.Join(", ", details.Narrators)</dd>
+                    }
+                    @if (details.DurationSeconds is { } seconds)
+                    {
+                        <dt>@ui["admin.books.duration"]</dt>
+                        <dd>@TimeSpan.FromSeconds(seconds).ToString(seconds >= 3600 ? @"h:mm:ss" : @"m:ss")</dd>
+                    }
+                    @if (details.Asin is not null)
+                    {
+                        <dt>ASIN</dt>
+                        <dd>@details.Asin</dd>
+                    }
+                    <dt>@ui["admin.books.source"]</dt>
+                    <dd>@if (details.SourceUrl is { } source && Uri.TryCreate(source, UriKind.Absolute, out var sourceUri) && sourceUri.Scheme == Uri.UriSchemeHttps) { <a class="text-link" href="@sourceUri" rel="noopener noreferrer">@details.Provider</a> } else { @details.Provider }</dd>
+                </dl>
+            }
+            <div class="admmd-panel-links">
+                <form method="post" asp-page-handler="Monitor" asp-route-workId="@view.WorkId" class="admmd-monitor-form">
+                    <input type="hidden" name="audiobook" value="true" />
+                    <input type="hidden" name="monitored" value="@((!audio.Monitored).ToString().ToLowerInvariant())" />
+                    <button class="admmd-toggle @(audio.Monitored ? "is-on" : "")" type="submit" role="switch" aria-checked="@(audio.Monitored ? "true" : "false")">
+                        <span class="admin-switch" aria-hidden="true"></span>
+                        @(audio.Monitored ? ui["admin.media.monitored"] : ui["admin.media.monitor"])
+                    </button>
+                </form>
+                @if (!audio.Installed && (audio.RequestStatus is null or AcquisitionRequestStatus.Completed or AcquisitionRequestStatus.Rejected or AcquisitionRequestStatus.Failed))
                 {
                     <form method="post" asp-page-handler="RequestAudiobook" asp-route-workId="@view.WorkId">
                         <button class="button button-primary" type="submit">@ui["admin.books.requestAudiobook"]</button>
                     </form>
                 }
+                <a class="button" asp-page="Work" asp-route-workId="@view.WorkId" asp-route-find="true">@ui["admin.books.findRecording"]</a>
             </div>
+            @if (Model.Candidates is { } candidates)
+            {
+                @if (candidates.Count == 0)
+                {
+                    <p class="admmd-note">@ui["admin.books.noRecordings"]</p>
+                }
+                else
+                {
+                    <ul class="admmd-list">
+                        @foreach (var candidate in candidates)
+                        {
+                            <li>
+                                <strong>@candidate.Title</strong>
+                                <span>@string.Join(", ", new[] { string.Join(" & ", candidate.Authors), candidate.Language, candidate.Narrators.Count > 0 ? string.Join(", ", candidate.Narrators) : null }.Where(part => !string.IsNullOrEmpty(part)))</span>
+                                <form method="post" asp-page-handler="UseMetadata" asp-route-workId="@view.WorkId">
+                                    <input type="hidden" name="provider" value="@candidate.Provider" />
+                                    <input type="hidden" name="externalId" value="@candidate.ExternalId" />
+                                    <button class="button" type="submit">@ui["admin.books.useRecording"]</button>
+                                </form>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
         </section>
     }
 </div>
+
+@if (canSearch)
+{
+    <nav class="admmd-bar" aria-label="@ui["admin.media.acquisition.heading"]">
+        @if (canSearch)
+        {
+            <form method="post" asp-page-handler="Search" asp-route-workId="@view.WorkId">
+                <button class="button button-primary" type="submit">@ui["admin.media.action.automatic"]</button>
+            </form>
+        }
+        @if (waiting || failed)
+        {
+            <a class="button" asp-page="/Admin/BookManualSearch" asp-route-id="@request!.Id">@ui["admin.wanted.manualSearch"]</a>
+        }
+        @if (detail.LibraryBookId is { } barLibrary)
+        {
+            <a class="button" href="/Books/Library/@barLibrary">@ui["admin.media.openLibrary"]</a>
+        }
+    </nav>
+}

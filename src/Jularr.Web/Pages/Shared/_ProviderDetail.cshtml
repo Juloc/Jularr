@@ -82,6 +82,38 @@
             }
         }
 
+        @if (provider.Options.Count > 0 && !provider.ExternallyManaged)
+        {
+            <div class="admset-fields">
+                @foreach (var option in provider.Options)
+                {
+                    <div class="admset-field">
+                        <label class="prov-enabled" for="provider-@key-@option.Name">
+                            <input id="provider-@key-@option.Name"
+                                   type="checkbox"
+                                   name="@option.Name"
+                                   value="true"
+                                   checked="@option.Enabled" />
+                            <span>@ui[option.LabelKey]</span>
+                        </label>
+                        <span class="admset-hint">@ui[option.HintKey]</span>
+                    </div>
+                }
+            </div>
+        }
+        @if (provider.Options.Count > 0 && provider.ExternallyManaged)
+        {
+            <dl class="prov-facts">
+                @foreach (var option in provider.Options)
+                {
+                    <div>
+                        <dt>@ui[option.LabelKey]</dt>
+                        <dd>@(option.Enabled ? ui["common.yes"] : ui["common.no"])</dd>
+                    </div>
+                }
+            </dl>
+        }
+
         <dl class="prov-facts">
             <div>
                 <dt>@ui["admin.providers.fact.source"]</dt>

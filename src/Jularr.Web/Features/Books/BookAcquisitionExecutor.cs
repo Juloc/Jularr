@@ -21,7 +21,11 @@ namespace Jularr.Web.Features.Books;
 public sealed record BookRequestPayload(
     string CatalogId,
     string Title,
-    string? Author) : ReleaseRequestPayload;
+    string? Author,
+    string? Language = null,
+    string? Isbn = null,
+    int? Year = null,
+    IReadOnlyList<string>? Identities = null) : ReleaseRequestPayload;
 
 /// <summary>
 /// Automatic Books acquisition on the shared core: the free catalog edition, enabled OPDS catalogs and every enabled Usenet indexer are searched
@@ -47,7 +51,7 @@ public sealed class BookAcquisitionExecutor(
         request = binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken);
         var payload = ReadPayload(request);
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Book, request.WorkId, cancellationToken);
-        var search = await core.SearchAsync(BookReleaseSelector.Plan(payload.Title, payload.Author, payload.CatalogId), profile, new SearchOptions(), cancellationToken);
+        var search = await core.SearchAsync(BookReleaseSelector.Plan(payload.Title, payload.Author, payload.CatalogId, payload.Language, payload.Isbn), profile, new SearchOptions(), cancellationToken);
 
         // A Usenet release needs an indexer and a download client; without them only a direct edition can serve the request.
         var usenetConfigured = await indexers.HasEnabledIndexerAsync(cancellationToken) && (await downloadClients.LoadAllAsync(cancellationToken)).Any(entry => entry.Enabled);
@@ -83,14 +87,36 @@ public sealed class BookAcquisitionExecutor(
             grabbable = better;
         }
 
-        return await core.GrabAsync(
+        return await BindDirectImportAsync(
+            binder,
             request,
-            payload,
-            grabbable,
-            BookReleaseSelector.ToResult(search).FailureMessage,
-            new GrabTarget(OperationKind, "Download Book", payload.Title, MediaAcquisitionKind.Book, string.Empty),
-            cancellationToken,
-            searchUnavailable: search.Search.EveryIndexerFailed);
+            await core.GrabAsync(
+                request,
+                payload,
+                grabbable,
+                BookReleaseSelector.ToResult(search).FailureMessage,
+                new GrabTarget(OperationKind, "Download Book", payload.Title, MediaAcquisitionKind.Book, string.Empty),
+                cancellationToken,
+                searchUnavailable: search.Search.EveryIndexerFailed),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// A direct or free edition is imported by its own source, not by the completed-download importer, so nothing has tied the new library entry to the
+    /// request's Work yet. This does it, with the same conflict rule as a download import: an entry that belongs to another title is reported, never switched.
+    /// </summary>
+    public static async Task<AcquisitionExecution> BindDirectImportAsync(RequestWorkBinder? binder, AcquisitionRequest request, AcquisitionExecution execution, CancellationToken cancellationToken)
+    {
+        const string LibraryPrefix = "/Books/Library/";
+        if (binder is null || execution.Status != AcquisitionRequestStatus.Completed || execution.ResultUrl is not { } url || !url.StartsWith(LibraryPrefix, StringComparison.Ordinal)
+            || !Guid.TryParse(url[LibraryPrefix.Length..], out var novelId))
+        {
+            return execution;
+        }
+
+        return await binder.BindImportedAsync(request, Jularr.Web.Features.MediaCore.WorkSourceKind.NovelWork, novelId, cancellationToken) is { } conflict
+            ? new AcquisitionExecution(AcquisitionRequestStatus.Failed, conflict)
+            : execution;
     }
 
     public static BookRequestPayload ReadPayload(AcquisitionRequest request)
@@ -128,6 +154,9 @@ public sealed class BookWantedRequestHandler(
 /// <summary>One indexer result as the book selector judged it; <see cref="Score"/> 0 means rejected.</summary>
 public sealed record RankedBookRelease(AcquisitionCandidate Release, int Score, string? RejectedBecause)
 {
+    /// <summary>The position among the releases that can be taken, in the order automatic acquisition grabs by; null for a rejected one.</summary>
+    public int? Rank { get; init; }
+
     /// <summary>The selection's evaluation this row shows, which a grab hands to the core; null for rows built without a search.</summary>
     public ReleaseEvaluation<BookMatch>? Evaluation { get; init; }
 

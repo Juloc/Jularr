@@ -607,10 +607,11 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 }
 .player-round-button:hover { background: rgba(0,0,0,.5); transform: scale(1.05); }
 .player-round-button .player-icon { width: 30px; height: 30px; }
-/* The seek step sits inside the arrow of the seek icon (its circle is centred slightly below the middle of the viewBox). */
-.player-round-button > span {
-    position: absolute; inset: 0; display: grid; place-items: center; padding-top: 3px;
-    font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; pointer-events: none;
+.player-round-button.player-round-seek .player-icon { width: 34px; height: 34px; }
+.player-round-seek .player-seek-count {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, calc(-50% + 3px));
+    font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums; pointer-events: none;
 }
 /* Previous and Next episode: secondary to the seek and play buttons in the transport group. */
 .player-round-step { width: 44px; height: 44px; text-decoration: none; }
@@ -699,6 +700,13 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
     width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: var(--accent);
 }
 .player-timeline:disabled { cursor: default; opacity: .6; }
+.player-panel .player-volume-slider:focus-visible { outline: none; }
+.player-volume-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 2px var(--player-popup-bg), 0 0 0 4px var(--player-focus);
+}
+.player-volume-slider:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 2px var(--player-popup-bg), 0 0 0 4px var(--player-focus);
+}
 
 /* Settings panel inside the player: a bottom sheet on a phone, an anchored panel above the bar on larger stages. It never
    takes the theme's field colours: the stage is a dark surface in both themes, so its controls read from the player tokens. */

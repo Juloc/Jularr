@@ -164,7 +164,10 @@ public sealed class EpisodeModel(
                 cancellationToken);
         }
 
-        Playback = await playbackService.GetSnapshotAsync(id, cancellationToken);
+        Playback = await playbackService.GetSnapshotAsync(
+            id,
+            cancellationToken,
+            includeLearningCues: ShowLearningSubtitle);
         LocalProgress = await episodeProgressService.GetAsync(id, cancellationToken);
         Flow = await episodeProgressService.GetFlowAsync(id, cancellationToken);
         await LoadSidePanelAsync(header.AnimeId, id, cancellationToken);
@@ -178,10 +181,13 @@ public sealed class EpisodeModel(
         {
             var preferences = Flow?.Preferences
                 ?? await episodeProgressService.GetPreferencesAsync(cancellationToken);
+            var hasLearningCues = ShowLearningSubtitle && Playback.Cues.Count > 0;
             Controls = PlayerControls.Build(
                 playbackMedia,
-                Playback.Cues.Count > 0 && ShowLearningSubtitle,
-                await FindLearningSourceStreamIndexAsync(id, playbackMedia.SourcePath, cancellationToken),
+                hasLearningCues,
+                hasLearningCues
+                    ? await FindLearningSourceStreamIndexAsync(id, playbackMedia.SourcePath, cancellationToken)
+                    : null,
                 preferences);
         }
 

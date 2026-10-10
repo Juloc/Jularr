@@ -73,7 +73,8 @@ public sealed class PlayerDesignTests
         StringAssert.Contains(learningScript, "actions.learnCurrentCue");
         StringAssert.Contains(episodeScript, "window.JularrPlayerLearning.renderCue");
         StringAssert.Contains(episodeScript, "design.actions.repeatCurrentCue");
-        StringAssert.Contains(episodeScript, "learningResumeOnClose");
+        StringAssert.Contains(learningScript, "learningResumeOnClose");
+        StringAssert.Contains(episodeScript, "JularrPlayerLearning?.attachInspector");
     }
 
     [TestMethod]
@@ -103,7 +104,14 @@ public sealed class PlayerDesignTests
             StringAssert.Contains(stage, selector);
         }
         StringAssert.Contains(player, "data?.textContent || \"[]\"");
+        var requiredNodes = player[player.IndexOf("if (!video || !stage", StringComparison.Ordinal)..];
+        requiredNodes = requiredNodes[..requiredNodes.IndexOf("return;", StringComparison.Ordinal)];
+        Assert.IsFalse(requiredNodes.Contains("!overlay", StringComparison.Ordinal));
+        Assert.IsFalse(requiredNodes.Contains("!data", StringComparison.Ordinal));
         StringAssert.Contains(player, "if (!overlay || !window.JularrPlayerLearning) return;");
+        StringAssert.Contains(player, "const learningRoot = window.JularrPlayerLearning ? root : null;");
+        StringAssert.Contains(player, "learningRoot?.querySelector(\"[data-word-inspector]\")");
+        StringAssert.Contains(player, "learningRoot?.querySelector(\"[data-cue-data]\")");
     }
 
     [TestMethod]
@@ -190,11 +198,155 @@ public sealed class PlayerDesignTests
         var episodeScript = File.ReadAllText(
             Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
 
-        StringAssert.Contains(episodeScript, "window.JularrLanguageInspector");
-        StringAssert.Contains(episodeScript, "sharedInspector.open(");
-        StringAssert.Contains(episodeScript, "sharedInspector.addEventListener(\"open\"");
-        StringAssert.Contains(episodeScript, "sharedInspector.addEventListener(\"close\"");
-        StringAssert.Contains(episodeScript, "sharedInspector.addEventListener(\"statechange\"");
+        var learningScript = File.ReadAllText(
+            Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-learning-design.js"));
+
+        Assert.IsFalse(episodeScript.Contains("window.JularrLanguageInspector", StringComparison.Ordinal));
+        StringAssert.Contains(learningScript, "window.JularrLanguageInspector");
+        StringAssert.Contains(learningScript, "sharedInspector.open(");
+        StringAssert.Contains(learningScript, "sharedInspector.addEventListener(\"open\"");
+        StringAssert.Contains(learningScript, "sharedInspector.addEventListener(\"close\"");
+        StringAssert.Contains(learningScript, "sharedInspector.addEventListener(\"statechange\"");
+    }
+
+    [TestMethod]
+    public void LearningInspectorEvents_DoNotChangeBaseTransportOrPlayback()
+    {
+        var root = FindRepositoryRoot();
+        var scripts = Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js");
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(5)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(File.ReadAllText(Path.Combine(scripts, "player-design.js")));
+        engine.Execute(File.ReadAllText(Path.Combine(scripts, "player-learning-design.js")));
+        engine.Execute("""
+            var HTMLElement = function HTMLElement() {};
+            var makeElement = () => ({
+                hidden: true, textContent: "", listeners: {},
+                querySelectorAll() { return []; },
+                addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); },
+                emit(type, event) { (this.listeners[type] || []).forEach(listener => listener(event)); },
+                focus() {}
+            });
+            var root = makeElement(), overlay = makeElement(), inspector = makeElement();
+            var video = {
+                paused: false, ended: false, pauses: 0, plays: 0,
+                pause() { this.paused = true; this.pauses++; },
+                play() { this.paused = false; this.plays++; return { catch() {} }; }
+            };
+            var handlers = {};
+            window.JularrLanguageInspector = {
+                available: true,
+                addEventListener(type, handler) { handlers[type] = handler; },
+                open(text, context) { this.last = { text, context }; }
+            };
+            var cue = { startMs: 1500, tokens: [{ surface: "駅", canonical: "駅", state: "New" }] };
+            var redraws = 0;
+            var learning = window.JularrPlayerLearning.attachInspector({
+                root, overlay, inspector, video, design: window.JularrPlayerDesign,
+                learningKicker: makeElement(), word: makeElement(), reading: makeElement(),
+                meaning: makeElement(), state: makeElement(), replay: makeElement(),
+                closeLearning: makeElement(),
+                getCues: () => [cue],
+                getActiveIndex: () => 0,
+                renderActiveCue: () => redraws++
+            });
+            root.emit(window.JularrPlayerDesign.actionEvent, {
+                detail: { action: "openWord", cue, token: cue.tokens[0] }
+            });
+            handlers.open();
+            handlers.statechange({ detail: { text: "駅", state: "Known" } });
+            handlers.close();
+            """);
+
+        Assert.AreEqual("駅", engine.Evaluate("window.JularrLanguageInspector.last.text").ToString());
+        Assert.AreEqual("1500", engine.Evaluate("String(window.JularrLanguageInspector.last.context.cueStartMs)").ToString());
+        Assert.AreEqual("Known", engine.Evaluate("cue.tokens[0].state").ToString());
+        Assert.AreEqual("1", engine.Evaluate("String(redraws)").ToString());
+        Assert.AreEqual("1,1", engine.Evaluate("[video.pauses, video.plays].join(',')").ToString());
+        Assert.AreEqual("false", engine.Evaluate("String(learning.isSheetOpen())").ToString());
+        Assert.AreEqual("1500", engine.Evaluate("String(learning.selectedCueStartMs())").ToString());
+        Assert.AreEqual("playPause", engine.Evaluate("window.JularrPlayerDesign.actions.playPause").ToString());
+
+        engine.Execute("""
+            window.JularrLanguageInspector.available = false;
+            var fallbackRoot = makeElement(), fallbackOverlay = makeElement(), fallbackSheet = makeElement();
+            var fallbackVideo = {
+                paused: false, ended: false, pauses: 0, plays: 0,
+                pause() { this.paused = true; this.pauses++; },
+                play() { this.paused = false; this.plays++; return { catch() {} }; }
+            };
+            var fallback = window.JularrPlayerLearning.attachInspector({
+                root: fallbackRoot, overlay: fallbackOverlay, video: fallbackVideo, inspector: fallbackSheet,
+                design: window.JularrPlayerDesign,
+                learningKicker: makeElement(), word: makeElement(), reading: makeElement(),
+                meaning: makeElement(), state: makeElement(), replay: makeElement(),
+                closeLearning: makeElement(), getCues: () => [cue],
+                getActiveIndex: () => 0, renderActiveCue: () => {}
+            });
+            fallbackRoot.emit(window.JularrPlayerDesign.actionEvent, {
+                detail: { action: "learnCurrentCue", cue }
+            });
+            var sheetOpened = fallback.isSheetOpen();
+            fallbackRoot.emit(window.JularrPlayerDesign.actionEvent, {
+                detail: { action: "closeOverlay" }
+            });
+            """);
+        Assert.AreEqual("true", engine.Evaluate("String(sheetOpened)").ToString());
+        Assert.AreEqual("false", engine.Evaluate("String(fallback.isSheetOpen())").ToString());
+        Assert.AreEqual("1,1", engine.Evaluate("[fallbackVideo.pauses, fallbackVideo.plays].join(',')").ToString());
+    }
+
+    [TestMethod]
+    public void BasePlayerActions_KeepSeekingAndRepeatingWithoutLearning()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "episode-player.js"));
+        var start = source.IndexOf("    root.addEventListener(design.actionEvent, event => {",
+            source.IndexOf("    const learningInspector =", StringComparison.Ordinal), StringComparison.Ordinal);
+        var end = source.IndexOf("    root.querySelectorAll(\"[data-player-controls]", start, StringComparison.Ordinal);
+        Assert.IsTrue(start >= 0 && end > start);
+
+        var engine = new Engine(options => options.TimeoutInterval(TimeSpan.FromSeconds(5)));
+        engine.Execute("var window = globalThis;");
+        engine.Execute(File.ReadAllText(Path.Combine(root, "src", "Jularr.Web", "wwwroot", "js", "player-design.js")));
+        engine.Execute("""
+            var calls = [];
+            var listeners = {};
+            var root = {
+                addEventListener(type, listener) { listeners[type] = listener; },
+                emit(action, detail = {}) {
+                    listeners[window.JularrPlayerDesign.actionEvent]({ detail: { action, ...detail } });
+                }
+            };
+            var design = window.JularrPlayerDesign;
+            var learningInspector = null;
+            var currentLineStartMs = () => 1200;
+            var seekBase = () => 10;
+            var seekSeconds = { back: 10, forward: 30 };
+            var seekToAbsolute = (at) => calls.push(at);
+            """);
+        engine.Execute(source[start..end]);
+        Assert.AreEqual("1.2,0,40,7.5", engine.Evaluate("""
+            (() => {
+                root.emit("repeatCurrentCue");
+                root.emit("seekBack10");
+                root.emit("seekForward10");
+                root.emit("seekTo", { seconds: 7.5 });
+                root.emit("seekTo", { seconds: NaN });
+                return calls.join(",");
+            })()
+            """).ToString());
+        Assert.AreEqual("1.2,0,40,7.5,1.5", engine.Evaluate("""
+            (() => {
+                learningInspector = {
+                    isSheetOpen: () => true,
+                    selectedCueStartMs: () => 1500,
+                    close: () => {}
+                };
+                root.emit("repeatCurrentCue");
+                return calls.join(",");
+            })()
+            """).ToString());
     }
 
     [TestMethod]

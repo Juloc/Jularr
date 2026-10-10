@@ -1,0 +1,21 @@
+# Manga and Light Novel acquisition
+
+A Manga is one canonical `Work` (`WorkMediaType.Manga`); the library's own reading unit is the legacy `MangaSeries` with its `MangaChapters` (raw tables, string ids). They meet through `WorkSourceLinks` (`MangaSeries`). Light Novels share the engine, parser, judge, Manual Search and import skeleton but not the unit model below.
+
+## Lifecycle owners
+
+- Request: Discover (`Pages/Manga/Index`) -> `AcquisitionRequestService` (AniList id, title, native title). `RequestWorkBinder` resolves the one Work and monitors a requested Manga unless the owner decided.
+- Structure: `ReadingStructureService.RefreshAsync` asks AniList (`MangaAniListService.GetAsync`) and creates `WorkVolume` rows (else `WorkChapter` rows) with provider identities through `ReadingUnits`; it also adds the native and English titles as aliases and ties library files that name their volume or chapters. First search and the Admin page's "Update from AniList" call it.
+- Coverage: `ReadingCoverageService` is the one calculation of installed / partial / missing / wanted per volume and chapter (a volume is installed when a library file is tied to it or all its chapters are; a chapter inside a monitored volume is covered by the volume). `WantedSql` (`intended_units`) applies the same rules; `MangaUnitCoverageTests.AssertWantedMatchesCoverageAsync` keeps them equal.
+- Search: `MangaAcquisitionRequestExecutor` -> `ReadingAcquisitionEngine.TargetAsync` (aliases + `ReadingWant`: missing and held units) -> `AcquisitionCore` with `ReadingReleaseJudge`. Identity is judged before quality; releases covering more missing units win, held units cost, a release naming no volume or chapter is Ambiguous (manual review only). Manual Search (`ReadingManualSearchService`, `Pages/Admin/ReadingManualSearch`) builds the same target, so Rank 1 is what automatic acquisition grabs.
+- Import: `MangaCompletedDownloadImportAdapter` imports the files into the series, then `ReadingImportTies` ties every file the release brought to the volume or chapters it holds (`WorkUnitBindings`; one local file may cover several chapters or volumes) and reconciles Wanted.
+- Wanted: a Work without a structure, or with library files nothing is tied to, is wanted as a whole title; otherwise per unit. `WantedRequestSource` opens the request, the same request reopens while units are missing.
+- Admin: `MangaWorkAdminQuery` + `Pages/Admin/Manga/Work` (monitoring per Work, volume and chapter, Search now for the title or one unit, Manual Search, Retry, profile, history, files). Wanted rows and the library series page link here.
+
+## Versions and upgrades
+
+Library files that hold exactly the same volumes or chapters (same `WorkUnitBindings` set, or for untied files the same volume/chapters in their name) are versions. `MangaVersionSelector` shows the best one by the Work's profile (`MangaChapters.SupersededById` points at the shown version; every reader query filters on it) and moves progress and bookmarks to it; nothing is deleted. `ReadingCoverageService` gives each unit its installed quality (`MangaFileQuality`) and `UpgradeWanted`; `MangaUpgradeAssessor` (Work/Volume/Chapter rows) feeds the shared `UpgradeWantedSource`; `ReadingWant.Upgrade*` lets the judge take only releases `UpgradePolicy.IsUpgrade` accepts, and the engine waits (`WaitForUpgradeAsync`) instead of failing when none exists. A release with no readable page is rejected and its placed copy removed. `ReleaseRequestPayload.GrabbedRelease` lets the Admin page show which units the running download holds.
+
+## Tests
+
+`MangaReleaseCoverageTests` (parser and judge), `MangaLifecycleTests`, `MangaUnitCoverageTests` (volumes, chapters, ranges, overrides, existing library), `MangaManualSearchTests`, `MangaRecoveryTests`, `MangaUpgradeTests`, `MangaVersionTests`, `MangaAdminPageTests` (+ `MangaAdminPageHost`); the Manga half of `BookPdfAcquisitionTests.BookAcquisitionEnvironment` (`aniList:` argument) is their shared wiring.

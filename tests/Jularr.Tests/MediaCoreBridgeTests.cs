@@ -31,7 +31,8 @@ public sealed class MediaCoreBridgeTests
         var query = new WorkQueryService(db);
         Assert.AreEqual(first, await query.ResolveWorkForSourceAsync(WorkSourceKind.Anime, anime.Id, CancellationToken.None));
         var work = await query.GetWorkAsync(first, CancellationToken.None);
-        Assert.AreEqual(WorkMediaType.Anime, work!.MediaType);
+        Assert.AreEqual(WorkMediaType.Series, work!.MediaType);
+        Assert.IsTrue(work.IsAnime, "Anime is now classified on a Series work, not a separate media type.");
     }
 
     [TestMethod]

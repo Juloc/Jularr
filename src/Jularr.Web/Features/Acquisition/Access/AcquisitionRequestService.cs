@@ -102,7 +102,7 @@ public sealed partial class AcquisitionRequestService(
         // A new request is the durable decision at which a Book, Light Novel or Manga gets its canonical Work; an unresolvable identity stays unbound.
         if (workBinder is not null && draft.WorkId is null && RequestWorkBinder.Applies(draft.Kind))
         {
-            draft = draft with { WorkId = await workBinder.ResolveAsync(draft.Kind, draft.Provider, draft.ExternalId, draft.Title, cancellationToken) };
+            draft = draft with { WorkId = await workBinder.ResolveAsync(draft.Kind, draft.Provider, draft.ExternalId, draft.Title, cancellationToken, RequestWorkBinder.AlsoKnownAs(draft.Kind, draft.PayloadJson)) };
         }
 
         var status = AcquisitionRequestStatus.Approved;

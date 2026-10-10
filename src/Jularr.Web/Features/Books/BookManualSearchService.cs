@@ -93,12 +93,16 @@ public sealed class BookManualSearchService(
                 "The selected release is no longer an eligible Book release.");
         }
 
-        var execution = await core.GrabAsync(
+        var execution = await BookAcquisitionExecutor.BindDirectImportAsync(
+            binder,
             request,
-            payload,
-            [selected.Evaluation!],
-            result.FailureMessage,
-            new GrabTarget(BookAcquisitionExecutor.OperationKind, "Download Book", payload.Title, MediaAcquisitionKind.Book, string.Empty),
+            await core.GrabAsync(
+                request,
+                payload,
+                [selected.Evaluation!],
+                result.FailureMessage,
+                new GrabTarget(BookAcquisitionExecutor.OperationKind, "Download Book", payload.Title, MediaAcquisitionKind.Book, string.Empty),
+                cancellationToken),
             cancellationToken);
 
         await requests.UpdateStatusAsync(
@@ -164,7 +168,7 @@ public sealed class BookManualSearchService(
     {
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Book, request.WorkId, cancellationToken);
         var options = new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = refresh };
-        return BookReleaseSelector.ToResult(await core.SearchAsync(BookReleaseSelector.Plan(payload.Title, payload.Author, payload.CatalogId), profile, options, cancellationToken));
+        return BookReleaseSelector.ToResult(await core.SearchAsync(BookReleaseSelector.Plan(payload.Title, payload.Author, payload.CatalogId, payload.Language, payload.Isbn), profile, options, cancellationToken));
     }
 
     private async Task<AcquisitionRequest> RequireRequestAsync(

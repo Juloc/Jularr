@@ -29,6 +29,8 @@ Primary tabs:
 
 Counts may be shown as small neutral pills.
 
+All includes completed requests. Status tabs are the visible lifecycle filter; do not add a redundant Status dropdown or Season filter.
+
 ## Request information
 
 Each request shows:
@@ -72,7 +74,7 @@ Use:
 - Admin sidebar
 - state tabs
 - search
-- filters for media type, language, status, requester
+- filters for media type, language and requester
 - request table
 - pagination
 
@@ -86,7 +88,7 @@ Recommended columns:
 
 ## Mobile layout
 
-Use large stacked request cards with:
+Use compact request rows with:
 - artwork
 - title/unit
 - media type

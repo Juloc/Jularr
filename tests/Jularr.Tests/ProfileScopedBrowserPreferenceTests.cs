@@ -20,7 +20,7 @@ public sealed class ProfileScopedBrowserPreferenceTests
     }
 
     [TestMethod]
-    public void PlayerPreferenceIsProfileScoped()
+    public void PlayerQualityPreferenceIsProfileScoped()
     {
         var root = FindRepositoryRoot();
         var script = File.ReadAllText(Path.Combine(
@@ -33,7 +33,7 @@ public sealed class ProfileScopedBrowserPreferenceTests
 
         StringAssert.Contains(
             script,
-            "jularr.profile.${profileId}.playbackMode");
+            "jularr.profile.${profileId}.qualityPreset");
         Assert.IsFalse(
             script.Contains(
                 "\"jularr.playbackMode\"",

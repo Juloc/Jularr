@@ -142,6 +142,11 @@
         body.set("title", item.title);
         if (item.author) body.set("author", item.author);
         if (item.coverImageUrl) body.set("coverImageUrl", item.coverImageUrl);
+        // The edition and provider evidence of the result travels with the request: it matches releases and finds the one canonical Work of the book.
+        if (item.language) body.set("language", item.language);
+        if (item.isbn) body.set("isbn", item.isbn);
+        if (item.year) body.set("year", String(item.year));
+        for (const identity of item.identities || []) body.append("identities", identity);
         body.set("__RequestVerificationToken", token);
         try {
             const response = await fetch(dialog.dataset.addUrl, {

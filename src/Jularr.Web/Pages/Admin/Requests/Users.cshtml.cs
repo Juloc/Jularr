@@ -11,11 +11,11 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace Jularr.Web.Pages.Admin.Requests;
 
 [Authorize(Policy = JularrPolicies.AdminSystem)]
-public sealed class UsersModel(AppDbContext db, OwnerAuthService accounts, AcquisitionRequestSettingsStore settings, MediaCapabilityStore capabilities,
+public sealed class UsersModel(AppDbContext db, OwnerAuthService accounts, AdminAccountService directory, AcquisitionRequestSettingsStore settings, MediaCapabilityStore capabilities,
     IInstanceModuleService instanceModules, QualityProfileStore qualityProfiles) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
-    public LocalAccountPage Directory { get; private set; } = new([], 0, 1, 50);
+    public PageResult<LocalAccountSummary> Directory { get; private set; } = new([], 1, 50, 0);
     public LocalAccountSummary? SelectedUser { get; private set; }
     public AcquisitionRequestSettings RequestSettings { get; private set; } = AcquisitionRequestSettings.Default;
     public MediaCapabilityPolicy Capabilities { get; private set; } = MediaCapabilityPolicy.Default;
@@ -28,6 +28,11 @@ public sealed class UsersModel(AppDbContext db, OwnerAuthService accounts, Acqui
 
     public async Task<IActionResult> OnGetAsync(string? userId, string? q, int p, CancellationToken cancellationToken)
     {
+        if (p > PageRequest.MaximumOffset / 50 + 1)
+        {
+            return BadRequest();
+        }
+
         await LoadAsync(userId, q, p, cancellationToken);
         if (userId is not null && SelectedUser is null || IsUserSettings && SelectedUser is null)
         {
@@ -45,6 +50,11 @@ public sealed class UsersModel(AppDbContext db, OwnerAuthService accounts, Acqui
 
     public async Task<IActionResult> OnPostSaveUserAsync(string userId, string? q, int p, CancellationToken cancellationToken)
     {
+        if (p > PageRequest.MaximumOffset / 50 + 1)
+        {
+            return BadRequest();
+        }
+
         await LoadAsync(userId, q, p, cancellationToken);
         if (SelectedUser is null)
         {
@@ -88,7 +98,7 @@ public sealed class UsersModel(AppDbContext db, OwnerAuthService accounts, Acqui
         EnabledKinds = Enum.GetValues<MediaAcquisitionKind>().Where(kind => instance.IsEnabled(AcquisitionInstanceModules.For(kind))).ToArray();
         if (!IsUserSettings)
         {
-            Directory = await accounts.ListPageAsync(Query, page, cancellationToken);
+            Directory = await directory.ReadUsersV1(User, new PageRequest(Math.Max(1, page), 50), cancellationToken, Query);
         }
 
         SelectedUser = userId is null ? null : await accounts.GetAsync(userId, cancellationToken);

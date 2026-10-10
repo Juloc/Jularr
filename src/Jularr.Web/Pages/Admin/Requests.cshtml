@@ -110,17 +110,6 @@
                 </select>
                 </div>
                 <div class="admreq-select-control">
-                <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AdminIcon" model='"alert"' /></span>
-                <select name="status" multiple aria-label="@ui["admin.requests.filter.status"]" data-admreq-custom-select>
-                    <option value="">@ui["admin.requests.filter.status"]</option>
-                    @foreach (var value in Enum.GetValues<AcquisitionRequestStatus>())
-                    {
-                        var valueName = AcquisitionAccessNames.Status(value);
-                        <option value="@valueName" selected="@(filter.Statuses?.Contains(value) == true)">@ui["requests.status." + valueName]</option>
-                    }
-                </select>
-                </div>
-                <div class="admreq-select-control">
                 <span class="admreq-filter-icon" aria-hidden="true"><partial name="_AppIcon" model='"users"' /></span>
                 <select name="by" multiple aria-label="@ui["admin.requests.filter.requester"]" data-admreq-custom-select>
                     <option value="">@ui["admin.requests.filter.requester"]</option>
@@ -160,12 +149,6 @@
             @foreach (var (id, name) in Model.Requesters)
             {
                 <template data-admreq-option-select="by" data-value="@id"><partial name="_RequestRequester" model="name" /></template>
-            }
-            @foreach (var value in Enum.GetValues<AcquisitionRequestStatus>())
-            {
-                var name = AcquisitionAccessNames.Status(value);
-                var approval = value is AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Rejected;
-                <template data-admreq-option-select="status" data-value="@name"><span class="admreq-badge @(approval ? "admreq-approval admreq-approval-" + name : "admreq-media admreq-media-" + name)"><partial name="_RequestStatusIcon" model='@(value == AcquisitionRequestStatus.Rejected || value == AcquisitionRequestStatus.Failed ? "rejected" : value == AcquisitionRequestStatus.Approved || value == AcquisitionRequestStatus.Completed ? "completed" : "pending")' />@ui["requests.status." + name]</span></template>
             }
             @foreach (var value in new[] { "newest", "oldest", "modified", "title", "requester" })
             {
@@ -520,7 +503,7 @@
                     }
                     @foreach (var pageNumber in Enumerable.Range(Math.Max(1, queue.Page - 2), Math.Min(queue.PageCount, queue.Page + 2) - Math.Max(1, queue.Page - 2) + 1))
                     {
-                        <a class="button admreq-page-button @(pageNumber == queue.Page ? "active" : "")" href="@RequestsModel.Href(filter with { Page = pageNumber })" aria-current="@(pageNumber == queue.Page ? "page" : null)">@pageNumber</a>
+                        <a class="button admreq-page-button @(pageNumber == queue.Page ? "button-primary active" : "")" href="@RequestsModel.Href(filter with { Page = pageNumber })" aria-current="@(pageNumber == queue.Page ? "page" : null)">@pageNumber</a>
                     }
                     @if (queue.HasNext)
                     {

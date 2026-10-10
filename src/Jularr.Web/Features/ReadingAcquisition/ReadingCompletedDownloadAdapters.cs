@@ -3,8 +3,10 @@ using Jularr.Web.Features.Library;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Data;
+using Microsoft.EntityFrameworkCore;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Manga;
@@ -33,7 +35,9 @@ public sealed class MangaCompletedDownloadImportAdapter(
     ReadingNamingProfileStore? namingStore = null,
     ReadingCoverArtwork? coverArtwork = null,
     LibraryRootRoutingService? routing = null,
-    RequestWorkBinder? binder = null)
+    RequestWorkBinder? binder = null,
+    WantedReconciler? wanted = null,
+    MangaVersionSelector? versions = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     public MediaAcquisitionKind Kind =>
@@ -44,6 +48,7 @@ public sealed class MangaCompletedDownloadImportAdapter(
         CancellationToken cancellationToken)
     {
         CompletedDownloadPlacement? placement = null;
+        string? placedCopy = null;
         try
         {
             var repository = new MangaRepository(db);
@@ -120,6 +125,11 @@ public sealed class MangaCompletedDownloadImportAdapter(
             var mode = settings.ModeFor(MediaAcquisitionKind.Manga);
             placement = new CompletedDownloadPlacement(releaseTarget, mode);
 
+            if (sourceExists && !File.Exists(releaseTarget) && !Directory.Exists(releaseTarget))
+            {
+                placedCopy = releaseTarget;
+            }
+
             if (sourceExists)
             {
                 new MangaLibraryPlacement(new ImportFileTransfer(hardLinks)).Place(
@@ -147,6 +157,13 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 importSource,
                 cancellationToken,
                 existing?.Id);
+
+            // A release without a single readable page (a damaged archive) is rejected, so it can neither replace nor hide the version the library already reads.
+            if (!(await repository.GetChapterSourcesAsync(imported.SeriesId, cancellationToken)).Any(chapter => StoragePaths.AreSame(chapter.SourcePath, releaseTarget) || StoragePaths.IsBelow(chapter.SourcePath, releaseTarget)))
+            {
+                await RemoveUnreadableCopyAsync(placedCopy, cancellationToken);
+                return CompletedDownloadImportResult.RejectRelease("The downloaded release holds no readable manga pages.", placement);
+            }
 
             string? metadataWarning = null;
             if (existing is null && aniListId is not null)
@@ -193,6 +210,21 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 return CompletedDownloadImportResult.NeedsReview(conflict, placement);
             }
 
+            // What the release brought is tied to the volumes and chapters it holds, and Wanted drops what is now in the library.
+            if (acquisition?.WorkId is { } workId)
+            {
+                await new ReadingImportTies(db, new ReadingUnits(db)).TieAsync(workId, imported.SeriesId, releaseTarget, cancellationToken);
+                if (versions is not null)
+                {
+                    await versions.ReselectAsync(workId, cancellationToken);
+                }
+
+                if (wanted is not null)
+                {
+                    await wanted.ReconcileAsync(workId, cancellationToken);
+                }
+            }
+
             return CompletedDownloadImportResult.Completed(
                 $"Imported {imported.ChapterCount} Manga chapter(s).{metadataWarning}",
                 $"/Manga/Series/{imported.SeriesId}",
@@ -232,9 +264,40 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 exception,
                 "Downloaded Manga release '{SourcePath}' was unsuitable.",
                 request.SourcePath);
+            await RemoveUnreadableCopyAsync(placedCopy, cancellationToken);
             return CompletedDownloadImportResult.RejectRelease(
                 "Downloaded release could not be imported as Manga.",
                 placement);
+        }
+    }
+
+    // The copy this import placed in the library is removed only while no library entry reads anything of it, so a damaged release never leaves junk beside a
+    // working version and a partly readable one is never cut off from its entries.
+    private async Task RemoveUnreadableCopyAsync(string? placedCopy, CancellationToken cancellationToken)
+    {
+        if (placedCopy is null || await db.Database.SqlQuery<int>(
+                $"""
+                SELECT COUNT(*)::int AS "Value" FROM "MangaChapters"
+                WHERE "SourcePath" = {placedCopy} OR left("SourcePath", {placedCopy.Length + 1}) IN ({placedCopy + "/"}, {placedCopy + "\\"})
+                """).SingleAsync(cancellationToken) > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(placedCopy))
+            {
+                Directory.Delete(placedCopy, recursive: true);
+            }
+            else if (File.Exists(placedCopy))
+            {
+                File.Delete(placedCopy);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "The unreadable Manga copy '{Path}' could not be removed.", placedCopy);
         }
     }
 
