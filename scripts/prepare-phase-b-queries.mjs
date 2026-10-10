@@ -162,6 +162,7 @@ for (const query of [
     writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`), query.declaration + sql + '\n');
 }
 
+
 const readerFile = readFileSync(fileURLToPath(new URL('../docs/DATABASE_CUTOVER_PHASE_B_READER_QUERIES_DRAFT.sql', import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
 const readerQueries = [
     {
