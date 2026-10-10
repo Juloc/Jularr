@@ -1,23 +1,20 @@
-# Phase B – statischer DDL-Check
+# Phase B – statischer DDL-Check (acht SQL-Entwürfe)
 
-**Status: statische Syntax-/Referenzprüfung bestanden; KEIN PostgreSQL-Lauf und KEINE Gate-B-Freigabe.** Alle Ergebnisse beziehen sich auf die 6 reinen Entwurfsdateien im Branch `docs/cutoff-phase-b-schema-20261010`.
+**Status:** Die **statischen** FK-/Objekt-/Namensprüfungen liefern keinen Fehler. **Kein PostgreSQL-Lauf, kein EF-Snapshot und KEINE Gate-B-Freigabe.** Die Ergebnisse beziehen sich nur auf SQL-Text aus dem Branch `docs/cutoff-phase-b-schema-20261010`.
 
-| Check | Ergebnis |
-|---|---:|
-| Zieltabellen | 123 |
-| Erfasste Spalten | 577 |
-| Composite-/Einzel-FK-Deklarationen | 188 |
-| Unbekannte Tabellen oder Spalten in FK-Zielen | 0 |
-| Doppelte Tabellen-/Spalten-/Constraint-/Indexnamen | 0 |
-| Grob ungepaarte SQL-Quotes/Klammern | 0 |
+| Prüfgegenstand | Ergebnis |
+| --- | ---: |
+| Zieltabellen (`CREATE TABLE`) | **152** |
+| Erfasste einfache Spaltendeklarationen | **718** |
+| FK-Deklarationen inkl. `ALTER TABLE ... ADD CONSTRAINT` | **222** |
+| Unbekannte FK-Zieltabellen | **0** |
+| FK-Zielspalten ohne passend deklariertes `PRIMARY KEY`/`UNIQUE` | **0** |
+| Doppelte Tabellennamen | **0** |
+| Doppelte Spaltennamen innerhalb der Tabelle | **0** |
+| Doppelte Constraint- oder Indexnamen | **0** |
 
-- `docs/DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql`: 45 CREATE TABLE, 71 terminierte Statements
-- `docs/DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql`: 36 CREATE TABLE, 63 terminierte Statements
-- `docs/DATABASE_CUTOVER_PHASE_B_03_MEDIA_DETAILS_DRAFT.sql`: 10 CREATE TABLE, 16 terminierte Statements
-- `docs/DATABASE_CUTOVER_PHASE_B_04_MONITORING_NOTIFICATIONS_DRAFT.sql`: 9 CREATE TABLE, 16 terminierte Statements
-- `docs/DATABASE_CUTOVER_PHASE_B_05_LEARNING_DRAFT.sql`: 18 CREATE TABLE, 22 terminierte Statements
-- `docs/DATABASE_CUTOVER_PHASE_B_06_OFFLINE_PROVIDER_DRAFT.sql`: 5 CREATE TABLE, 9 terminierte Statements
+**Dateiumfang:** 01 Core 45 Tabellen; 02 Progress/Media 36; 03 Media/Music 10; 04 Monitoring/Notifications 9; 05 Learning Curriculum 18; 06 Offline/Provider 5; 07 Acquisition Profiles/Indexers 17; 08 Learning Unit/Card/FSRS 12. Alle acht Drafts sind im [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) erfasst.
 
-**Fehler:** Keine im begrenzten statischen Prüfumfang.
+**Genauigkeitsgrenze:** Das Verfahren liest `CREATE TABLE`, benannte Constraints, `REFERENCES`, einfache Typ-Deklarationen und benannte Indizes. Es ist **kein PostgreSQL-Parser**, keine Prüfung der typgleichen FK-Spalten, Index-Selektivität, `GENERATED ALWAYS`-Auswertbarkeit, zirkulärer `DEFERRABLE`-FK-Semantik, Seed-IDs oder Autorisierungsmodelle. Auch CHECK-Expressions, mehrphasige `ALTER`-Verknüpfungen und dynamische SQL-Syntax sind nicht vollständig geprüft.
 
-Diese Prüfung **kennt keine PostgreSQL-Semantik** und kann weder Typauflösung noch dynamische Prozeduren, deferrable zirkuläre FK, Generated Columns, Indexkosten, Seeds oder Transaktionssicherheit bestätigen. Echte PostgreSQL-Tests und `EXPLAIN (ANALYZE, BUFFERS)` bleiben erforderlich. Neue Features aus Monitoring, Learning, Provider und Notifications sind als Draft abgebildet, nicht als schon implementierte SQL-/Client-Operationen abgenommen.
+**Vor Gate B zwingend:** Die finale Gesamt-DDL auf isolierter frischer PostgreSQL-Zielversion anwenden und Constraints durch negative/positive Transaktionstests bestätigen; echte `enum : byte`-Seeds und DTO-Typen abgleichen; WorkCard-/Continue-/Acquisition-/Learning-SELECTs mit Testdaten ausführen und `EXPLAIN (ANALYZE, BUFFERS)` auswerten; vor finaler Baseline offene Product-Entscheidungen und persistente Funktionslücken schließen. Das ist **nicht** die aktive dev-Datenbank. Ein destruktiver Cutover gehört nach separater Genehmigung zu Phase G.
