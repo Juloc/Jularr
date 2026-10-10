@@ -106,6 +106,8 @@ jobs:
           const source = fs.readFileSync('docs/DATABASE_CUTOVER_PHASE_B_READ_QUERIES_DRAFT.sql', 'utf8');
           const section2 = source.indexOf('-- 2. Bounded Continue list');
           const section3 = source.indexOf('-- 3. Logic-only short transaction');
+          const section4 = source.indexOf('-- 4. Logic-only bounded optimistic checkpoint');
+          if (section4 <= section3) throw Error('Progress CAS section missing');
           if (section2 < 0 || section3 <= section2) throw Error('Missing canonical queries');
           function compile(sql, bindings) {
             let result = sql.trim().replace(/;$/, '');
@@ -117,13 +119,18 @@ jobs:
             source.slice(source.indexOf('SELECT',section2),section3),
             { '@ActiveProfileId':'$1', '@PageSize':'$2', '@Offset':'$3' });
           const claimSql = compile(
-            source.slice(source.indexOf('WITH claimed AS',section3)),
+            source.slice(source.indexOf('WITH claimed AS',section3),section4),
             { '@PendingStatusTypeId':'$1', '@RunningStatusTypeId':'$2',
               '@BatchSize':'$3', '@TrustedWorkerKey':'$4' });
           fs.writeFileSync('/tmp/phase_b_continue_prepared.sql',
             'PREPARE phase_b_continue(bigint,integer,integer) AS\n' + continueSql + ';\n');
           fs.writeFileSync('/tmp/phase_b_claim_prepared.sql',
             'PREPARE phase_b_claim(smallint,smallint,integer,text) AS\n' + claimSql + ';\n');
+          const casSql = compile(
+            source.slice(source.indexOf('UPDATE "MediaProgress" AS progress',section4)),
+            { '@MediaProgressId':'$1', '@ActiveProfileId':'$2', '@ExpectedRevision':'$3' });
+          fs.writeFileSync('/tmp/phase_b_progress_cas_prepared.sql',
+            'PREPARE phase_b_progress_cas(bigint,bigint,bigint) AS\n' + casSql + ';\n');
           NODE
 
       - name: Execute profile-scoped Continue and verify pagination on scratch database
@@ -133,6 +140,10 @@ jobs:
       - name: Verify multi-target Wanted acquisition integrity
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_ACQUISITION_COVERAGE_TESTS.sql
+
+      - name: Verify scoped optimistic offline progress checkpoint and replay
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_PROGRESS_CAS_TESTS.sql
 
       - name: Verify independent workers SKIP LOCKED and retry eligibility
         run: |
