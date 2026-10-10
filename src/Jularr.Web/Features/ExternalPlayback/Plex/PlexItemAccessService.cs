@@ -73,6 +73,7 @@ public sealed class PlexItemAccessService(
         // Plex must explicitly name the library the item currently belongs to.
         // Missing/unknown section or a conflicting identity is not sufficient.
         if (item?.LibrarySectionId is not { } sectionId ||
+            !grant.Server.LibrarySectionIds.Contains(sectionId, StringComparer.Ordinal) ||
             !visible.Any(section => section.Id == sectionId))
         {
             return false;
