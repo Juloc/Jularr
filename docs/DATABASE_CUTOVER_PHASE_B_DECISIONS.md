@@ -1,6 +1,6 @@
 # Phase B — offene Schemaentscheidungen und konkrete Nacharbeiten
 
-**Status: OPEN.** Die zwölf PostgreSQL-DDL-Draftabschnitte (168 Target-Tabellen) sind keine freigegebene Baseline. Dieser Registereintrag verhindert, dass ein Agent unbemerkt fehlende Fachfunktionen durch schöne, aber noch nicht vollständig abgenommene Target-Tabellen ersetzt. Keine 1:1-Migration der Legacy-Tabellen.
+**Status: OPEN.** Die 14 PostgreSQL-DDL-Abschnitte enthalten aktuell 175 Target-Tabellen und 46 Type-Kataloge. Dies ist keine freigegebene Baseline. Fehlende Fachfunktionen dürfen nicht durch eine Tabellenzahl als abgeschlossen gelten. Keine 1:1-Migration der Legacy-Tabellen.
 
 **Gezielte Bereinigung (10.10.2026):** Die rein internen UUID-Roots
 für AcquisitionIndexers, AcquisitionDownloadClients und
@@ -31,7 +31,7 @@ bedingt, statt ohne nachgewiesene Nutzung erfunden zu werden.
 | B10 / BLOCKER | **Plex/Jellyfin und externe Identitäten**: #920 trennt Owner-verwaltete Plex Server Grants, profilbezogene Zustimmung/Provider-Verbindungen, Login-PIN-Purpose und idempotentes resumierbares Catalog-Mapping; #937 Jellyfin Read-Adapter. Welche Grants und non-secret checkpoints in DB, welche verschlüsselten Secrets in /data? | PR #920/#937, Auth/Plex-Login vs Medienrechte | \`Providers\`, \`WorkExternalIdentities\`, \`AccountExternalLogins\` sind voneinander getrennt; MediaConnections derzeit **nicht** modelliert | Profilzustimmung, sichtbare Library-Sections, Credentials geschützt, Reconciliation/Restart, kein automatischer Watchlist/Progress Sync |
 | B11 / HIGH | **Library/Media Analyse/Tracks/Detection**: MediaTechnicalAnalyses, audio/subtitle track kinds, asset-version membership, Trailer/sprite cache lifetime, Video/Audio detector results incl. successful NoMatch. | Player, Reader, Library, Detection/Timeline | Asset/File/Track + Segments/Chapters/DetectionRuns als Prototype | Typ-/Source-Seeds, extra Analysefelder, representative PlayableSelect-Query und Hot-index plans |
 | B12 / HIGH | **Durable Operations/Outbox/Events/Scan**: status/retry/claim/cancellation, bounded Queue vs Direct & independent Force, Notification-Dispatch, Account-Revocation after-commit effects, retention. | #852/#880/CLEAN_CUT, #842 notifications | \`Operations\` minimal status+lease+input; OperationLogs; keine zweite Queue | Eindeutige Claim- und Retry-Tests, eventuell Outbox im gemeinsamen DB-Tx, kein NAS-Transaktions-Claim |
-| B13 / HIGH | **Account-Groups**: PR #761 fügt AccountGroups und Membership hinzu, aber kein eigenständiges Berechtigungssystem. Wird dieses Feature vor Schemafreeze Bestandteil des Cutovers? | PR #761 noch offen, Owner-Wahl erforderlich | *Keine* Groups-Tabelle ins Target ohne Integration/Produktentscheid | Bei GO eigene Accounts-FK/Composite Membership, keine Shadow-Rollen; bei defer dokumentierte separate spätere Migration |
+| B13 / HIGH | **Account-Groups**: Owner hat die Einbeziehung der geplanten Funktion ausdrücklich beauftragt. Gruppen sind neutrale Policy-Selektoren, keine neuen Rollen oder automatisch erteilten Rechte. | PR #761; aktueller Owner-Auftrag | AccountGroups + AccountGroupAccounts im Target, Name-Unique, interne bigint-/öffentliche UUID-Identität, RESTRICT-FKs und paginierter Owner-Read geprüft | Physische Foundation geprüft; Service/Logic, Admin-UI und konkrete Feature-Policy-Verbraucher folgen in D/E |
 | B14 / HIGH | **Extra Config/Calendar/Discovery/Search/Settings**: bestehende Settings/Schedule/Presentation/SubtitlePolicy-, Events-/Monitoring-Daten mit eigener Fachverantwortung, ohne generische EAV-Settings; konkret relevante persistente Funktionen aufnehmen. | Live-Phase-A Domänen, Admin UI #944, neues Discovery im Worktree | Basis-Works/Locales vorhanden, aber **nicht** alle Einstellungen/Rules/Calendar gespeichert | Funktionsmatrix zeigt Source-of-Truth je Feature oder ausdrücklich reinen Derived Cache |
 | B15 / TEST | **Typed Read-Queries + Indizes**: Page=1/Size25 max100, autorisierter Profilfilter vor Root-Paging, WorkCard LATERAL/JSON children, SortKey static, CoverId/BannerId/Audio/Sub languages, Continue, playable selection. | \`CLEAN_CUT_DATABASE.md §8.3/§8.4\`, Service-Contract #852 | gezielte Candidate Indexes in Draft, Trigram index only if real search | echter seeded PostgreSQL EXPLAIN (ANALYZE, BUFFERS) und SQL-result/permission/assertions; kein NAS/provider in GET |
 | B16 / TEST | **Neue EF-Baseline/PG-Kompatibilität**: PostgreSQL-Syntax gegen Zielversion, deferrable circular FK + generated FK columns, raw SQL + EF ModelSnapshot, type mapping, fresh install twice; keine Alt-Kette. | Phase C nach Gate B | Die DDL 01–12 auf isolierter PostgreSQL-18-CI ausgeführt, aber keine finale EF-Baseline/Anwendungsabnahme | PSQL-Prototyp auf isolierter DB, erst nach fachlicher Freigabe EF Greenfield-Migration in C |
@@ -151,3 +151,38 @@ negative/zu große IDs und leere Keys in zwei Domänen. Die bestehende Ablehnung
 von Learning-Media-Scope 0 wird ebenfalls geprüft. B01 bleibt für die fachliche
 Festlegung der tatsächlichen Keys und Seed-Werte offen; diese physische
 Absicherung ist keine Seed-Freigabe und schließt Gate B nicht.
+
+## B13 – Account Groups im Cutover-Ziel
+
+Der aktuelle Owner-Auftrag nimmt Account Groups und relevante geplante Features
+und Fixes in das Cutover-Ziel auf; die bisherige Include/Defer-Frage ist entschieden.
+Die Foundation aus PR #761 wird fachlich übernommen, nicht dessen Store-Schicht,
+String-PKs, unpaginierter Read oder Cascade-Workflow.
+
+`AccountGroups` besitzt einen internen `bigint`-PK und eine öffentliche UUID.
+`Name citext` mit UNIQUE hält die case-insensitive Namensidentität direkt im
+kanonischen PostgreSQL-Owner statt einen zweiten NormalizedName-Fakt zu speichern.
+Namen werden in Logic getrimmt und auf 1–80 Zeichen geprüft; der DB-CHECK sichert
+die Länge und äußere ASCII-Leerzeichen zusätzlich ab. `AccountGroupAccounts`
+verwendet einen Composite-PK und zwei RESTRICT-FKs. Entfernen von Mitgliedschaften
+und Gruppe gehört zusammen in die Logic-Transaktion, nicht in Cascade-Trigger.
+
+Mitgliedschaft verändert keine AccountRole und erteilt allein keine Permission.
+Die bestehende AdminSystem-Grenze ist Owner-only. Auch der statische Ziel-Read
+prüft den aktuellen aktivierten Owner vor Root-Paging, liefert öffentliche
+Gruppen-UUIDs und zählt Mitglieder nur für die ausgewählte Seite. DTO: Guid Id,
+string Name, long MemberCount, UTC CreatedAt. Kein gesamtes Member-Array.
+Der Service reserviert ActorAccountId und validiert die gemeinsamen Page-Budgets.
+Logic verbietet Owner-Mitgliedschaften wie die bestehende Foundation; diese
+rollenabhängige Anwendungsinvariante wird in D mit echten Service-Transaktionen
+geprüft, nicht durch einen zweiten gespeicherten Rollenwert modelliert.
+
+**Lokaler Nachweis:** Frischer Bootstrap 01–14 auf isoliertem PostgreSQL 18.6.
+Groups-, Katalog-, allgemeine Negativ- und Public-ID-Suites bestanden. Die neue
+Suite prüft case-insensitive Namensduplikate, fünf ungültige Namen, doppelte und
+verwaiste Memberships, RESTRICT-Deletes, Rollback bei zweitem Write-Fehler,
+erste/zweite/letzte/leere Seite und User/MediaManager/unbekannt/deaktiviert als
+unberechtigte Actor. EXPLAIN mit 1.000 Gruppen und 5.001 Memberships verwendet
+UX_AccountGroups_Name und PK_AccountGroupAccounts; kein zusätzlicher Blindindex.
+Das ist eine geprüfte B13-Foundation, keine abgeschlossene D/E-UI-Migration und
+keine Freigabe der übrigen Gate-B-Punkte.

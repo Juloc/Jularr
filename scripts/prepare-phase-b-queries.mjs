@@ -72,3 +72,19 @@ for (const [index, query] of queries.entries())
 
     writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`), query.declaration + sql + ';\n');
 }
+
+let groupsSql = readFileSync(fileURLToPath(new URL('../docs/DATABASE_CUTOVER_PHASE_B_ADMIN_QUERIES_DRAFT.sql', import.meta.url)), 'utf8').replaceAll('\r\n', '\n').trim();
+for (const [index, parameter] of ['ActorAccountId', 'PageSize', 'Offset'].entries())
+{
+    const placeholder = `@${parameter}`;
+    if (!groupsSql.includes(placeholder))
+    {
+        throw new Error(`Canonical Groups query is missing ${placeholder}.`);
+    }
+    groupsSql = groupsSql.replaceAll(placeholder, `$${index + 1}`);
+}
+if (groupsSql.includes('@'))
+{
+    throw new Error('Unbound SQL placeholder in canonical Groups query.');
+}
+writeFileSync(resolve(outputDirectory, 'phase_b_groups_prepared.sql'), 'PREPARE phase_b_groups(bigint,integer,bigint) AS\n' + groupsSql + '\n');

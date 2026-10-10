@@ -10,6 +10,7 @@ DECLARE
 BEGIN
     FOR source_table IN SELECT item.name FROM (VALUES
             ('Accounts'),
+            ('AccountGroups'),
             ('Profiles'),
             ('Works'),
             ('WorkEpisodes'),
