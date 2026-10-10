@@ -130,13 +130,13 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_CONTINUE_QUERY_TESTS.sql
 
-      - name: Verify independent workers SKIP LOCKED and retry eligibility
-        run: |
-          bash docs/DATABASE_CUTOVER_PHASE_B_PG_CLAIM_CONCURRENCY_TEST.sh
-
       - name: Verify multi-target Wanted acquisition integrity
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_ACQUISITION_COVERAGE_TESTS.sql
+
+      - name: Verify independent workers SKIP LOCKED and retry eligibility
+        run: |
+          bash docs/DATABASE_CUTOVER_PHASE_B_PG_CLAIM_CONCURRENCY_TEST.sh
 
       - name: Check the target table count and schema isolation
         shell: bash
