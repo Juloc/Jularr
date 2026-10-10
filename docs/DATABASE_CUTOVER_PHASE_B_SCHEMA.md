@@ -89,6 +89,12 @@ Account/Profile-Mitgliedschaft gelesen; CredentialsStorageKey wird nicht in
 Client-DTOs oder diesen SELECTs projiziert. [PG-Testset](DATABASE_CUTOVER_PHASE_B_PG_PROVIDER_POLICY_TESTS.sql).
 Server-Grants, reale externe Credentials und Reconciliation sind noch offen.
 
+[Profilautorisierte AcquisitionRequest-READs](DATABASE_CUTOVER_PHASE_B_ACQUISITION_QUERIES_DRAFT.sql)
+geben Request-/Work-/Operation-PublicIds als begrenzte, deterministische
+History aus. Berechtigungen werden vor Paging geprüft; der aktuelle Request-
+SQL-Test verifiziert Zugriff, Freigabe/Entzug, deaktivierte Accounts und EXPLAIN.
+Acquisition-Reconciliation und weitere Arr-Reads sind weiter offen.
+
 Der [Auth-Vertrag](DATABASE_CUTOVER_PHASE_B_AUTH_CONTRACT.md) ergänzt feste
 Challenge-Zwecke, Credential-Epoch, Session-CAS, TOTP-/Recovery-Replay und
 browsergebundenen Plex-Consent. Hash-Lookup und Self-Session-Paging nutzen ihre
