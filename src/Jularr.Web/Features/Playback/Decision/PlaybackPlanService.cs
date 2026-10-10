@@ -259,7 +259,8 @@ public sealed class PlaybackPlanService(
                 var originalsAndSelected = await mediaInventory.GetManyAsync(
                     [candidates[0].StoredFileId, selected.StoredFileId], cancellationToken);
                 if (input.Wake &&
-                    File.Exists(candidates[0].Path) && File.Exists(selected.Path) &&
+                    PlaybackPreparedRenditionEligibility.IsPhysicalFileCurrent(candidates[0]) &&
+                    PlaybackPreparedRenditionEligibility.IsPhysicalFileCurrent(selected) &&
                     originalsAndSelected.TryGetValue(candidates[0].StoredFileId, out var originAnalysis) &&
                     originalsAndSelected.TryGetValue(selected.StoredFileId, out var renditionAnalysis) &&
                     PlaybackPreparedRenditionEligibility.IsEligible(
@@ -305,7 +306,8 @@ public sealed class PlaybackPlanService(
                 if (!analyses.TryGetValue(candidate.StoredFileId, out var analysis) ||
                     analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical } ||
                     (candidate.StoredFileId != source.StoredFileId &&
-                     (!input.Wake || !File.Exists(source.Path) || !File.Exists(candidate.Path) ||
+                     (!input.Wake || !PlaybackPreparedRenditionEligibility.IsPhysicalFileCurrent(source) ||
+                      !PlaybackPreparedRenditionEligibility.IsPhysicalFileCurrent(candidate) ||
                       !PlaybackPreparedRenditionEligibility.IsEligible(source, sourceAnalysis, candidate, analysis))))
                 {
                     continue;
@@ -593,6 +595,27 @@ public sealed class PlaybackPlanService(
 internal static class PlaybackPreparedRenditionEligibility
 {
     public const string PreparedVersionSource = CanonicalMediaStorageService.PreparedVideoVersionSource;
+
+    // A database probe is only fresh for the recorded physical file. Cache eviction, partial
+    // corruption or a source replacement may happen before inventory reconciliation. Use only
+    // when a player requested Wake=true: metadata-only page reads must not stat a sleeping NAS.
+    public static bool IsPhysicalFileCurrent(CanonicalPlayableFile file)
+    {
+        try
+        {
+            var info = new FileInfo(file.Path);
+            // PostgreSQL stores timestamps at microsecond precision; FileInfo may have
+            // sub-microsecond ticks. Only tolerate that serialization round-off.
+            return info.Exists && info.Length == file.SizeBytes &&
+                   Math.Abs((info.LastWriteTimeUtc - file.LastWriteTimeUtc).Ticks) < 10;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or
+                ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 
     public static bool IsEligible(
         CanonicalPlayableFile original,

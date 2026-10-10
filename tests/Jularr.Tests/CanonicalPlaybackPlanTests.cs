@@ -228,6 +228,23 @@ public sealed class CanonicalPlaybackPlanTests
             File.Move(temporarilyMissing, earlierPath);
         }
 
+        // Even while the output path exists, its bytes may be stale or truncated.
+        // Do not reuse the old ffprobe data of a physically replaced prepared file.
+        File.Move(earlierPath, temporarilyMissing);
+        try
+        {
+            File.WriteAllBytes(earlierPath, [0x00, 0x01, 0x02]);
+            var corruptPrepared = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, corruptPrepared.MediaFileId,
+                "A modified prepared cache file must not replace an intact original.");
+        }
+        finally
+        {
+            File.Delete(earlierPath);
+            File.Move(temporarilyMissing, earlierPath);
+        }
+
         // A source removed on disk, but not yet detached by a library scan, cannot
         // turn a prepared cache file into the sole playable version of that Work.
         var originalPath = original.Path;
