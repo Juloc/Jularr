@@ -65,6 +65,10 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_ASSERTIONS_DRAFT.sql
 
+      - name: Exercise positive and expected-negative relational integrity cases
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_NEGATIVE_TESTS.sql
+
       - name: Check the target table count and schema isolation
         shell: bash
         run: |
