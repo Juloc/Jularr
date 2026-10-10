@@ -189,6 +189,9 @@ public sealed class ServiceFoundationTests
 
         protected override async Task<IServiceOutput> ExecuteCoreAsync(AccountParameters parameters, AccountData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
         {
+            // A long Execute operation must never inherit a database transaction.
+            Assert.ThrowsExactly<InvalidOperationException>(() => _ = context.Logic.Sql);
+
             await context.Logic.ExecuteBatchAsync(async (logic, token) =>
             {
                 await logic.Sql.ExecuteAsync("INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (1)", token);
