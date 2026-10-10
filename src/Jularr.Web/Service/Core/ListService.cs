@@ -1,3 +1,5 @@
+using Jularr.Web.Data;
+
 namespace Jularr.Service.Core;
 
 public sealed record ServiceSortKey<TSort>
@@ -24,6 +26,13 @@ public abstract class UserListService<TParameters, TSort>(ServiceRuntime runtime
 
     protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
     protected abstract TSort? GetRequestedSort(TParameters parameters);
+    protected abstract PageRequest GetPageRequest(TParameters parameters);
+
+    protected sealed override void ValidateParameters(TParameters parameters)
+    {
+        _ = GetPageRequest(parameters);
+        _ = ResolveSortKey(parameters);
+    }
 
     public override void ValidateDefinition()
     {
@@ -71,6 +80,13 @@ public abstract class AdminListService<TParameters, TSort>(ServiceRuntime runtim
 
     protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
     protected abstract TSort? GetRequestedSort(TParameters parameters);
+    protected abstract PageRequest GetPageRequest(TParameters parameters);
+
+    protected sealed override void ValidateParameters(TParameters parameters)
+    {
+        _ = GetPageRequest(parameters);
+        _ = ResolveSortKey(parameters);
+    }
 
     public override void ValidateDefinition()
     {
