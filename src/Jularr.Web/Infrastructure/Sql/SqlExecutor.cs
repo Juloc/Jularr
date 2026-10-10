@@ -118,7 +118,7 @@ internal static class SqlExecutor
         return [.. result];
     }
 
-    private static PageRequest GetPageRequest(object parameters)
+    internal static PageRequest GetPageRequest(object parameters)
     {
         if (parameters is PageRequest request)
         {
