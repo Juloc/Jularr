@@ -7,7 +7,7 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 
 | Prüfung | Garantie / Abgrenzung |
 | --- | --- |
-| Frischer Bootstrap aller neun DDL-Dateien | Vollständiger aktueller Target-Satz, nicht alte Migrationen |
+| Frischer Bootstrap aller zehn DDL-Dateien | Vollständiger aktueller Target-Satz, nicht alte Migrationen |
 | Katalogassertions | FKs/CHECKs/DEFERRABLE/NULLS NOT DISTINCT; ausdrücklich keine Learning-Tabellen oder Profil-Learning-Spalte |
 | Defined Seeds / Type Catalogs | 28 Byte-/smallint-Kataloge, 145 exakt definierte Codes, unbekannte FK-Werte und Bereichs-/Blank-Key-Ablehnung |
 | Account/Profile/Groups | Owner-Membership, fremde AccountSession-Profile, neutrale Gruppen, eindeutige Namen, RESTRICT und Owner-Paging |
@@ -17,6 +17,7 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 | Wanted/Acquisition | Exact-Target-Unique, Cross-Work-Ablehnung, Pack-Coverage und Download-Bindings |
 | Events/Notifications | Profile-/Admin-Audience, Category-Policy, Recurrence/Replay/Dismissal, Commit-Zählerintegrität und zwei parallele Gruppierungs-Sessions |
 | Zyklische Lifecycles | Pflicht-Owner und alle drei Progress-Subtypen: Orphans verboten, explizite Deletes im selben Tx erlaubt, keine Cascade |
+| Notification Lifecycle | Cross-Midnight/DST, Critical-/In-App-Bypass, Digest-Routes/Disable-Auflösung, kein Leer-/Doppeltiming, Endpoint-/Session-/Email-/Rollen-Revoke |
 | Watchlist/Continue/Groups/Inbox Reads | Statische typisierte PREPAREs, Autorisierung vor Root-Paging, deterministische Seiten und Rollen-/Membership-Entzug |
 | Worker Claims | Zwei reale PostgreSQL-Sessions, SKIP LOCKED, Retry-Fälligkeit und keine Doppelvergabe |
 | Öffentliche IDs | Separate UUID-Adresse, interne bigint-FKs; PublicId gewährt keine Berechtigung |

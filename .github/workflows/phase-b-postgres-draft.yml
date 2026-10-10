@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for id in 01 02 03 04 06 07 11 12 14; do
+          for id in 01 02 03 04 06 07 11 12 14 15; do
             files=(docs/DATABASE_CUTOVER_PHASE_B_${id}_*_DRAFT.sql)
             if [ "${#files[@]}" -ne 1 ]; then
               printf 'Expected one DDL draft for phase %s; found %s\n' "$id" "${#files[@]}" >&2
@@ -97,6 +97,7 @@ jobs:
 
       - name: Verify notification recurrence, replay, dismissal and scoped pagination
         run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_NOTIFICATION_LIFECYCLE_TESTS.sql
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_NOTIFICATION_QUERY_TESTS.sql
           bash docs/DATABASE_CUTOVER_PHASE_B_PG_NOTIFICATION_CONCURRENCY_TEST.sh
 
@@ -135,7 +136,7 @@ jobs:
           count="$(psql -X -A -t -v ON_ERROR_STOP=1 -c \
             "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public' AND c.relname NOT LIKE 'pg_%'")"
           echo "Target draft tables: $count"
-          if [ "$count" -ne 131 ]; then
-            echo "Expected 131 proposed Phase B tables; unexpected DDL drift" >&2
+          if [ "$count" -ne 137 ]; then
+            echo "Expected 137 proposed Phase B tables; unexpected DDL drift" >&2
             exit 1
           fi

@@ -26,6 +26,7 @@ BEGIN
             ('ReaderBookmarks'),
             ('ReaderHighlights'),
             ('Notifications'),
+            ('NotificationPushEndpoints'),
             ('LibraryRoots')
         ) AS item(name)
     LOOP

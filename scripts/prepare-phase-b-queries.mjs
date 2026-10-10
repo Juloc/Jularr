@@ -102,6 +102,18 @@ for (const query of [
         start: '-- Logic RECORD:',
         declaration: 'PREPARE phase_b_inbox_record(bigint,bigint,uuid) AS\n',
         parameters: ['NotificationId', 'RecipientProfileId', 'EventId']
+    },
+    {
+        name: 'notification_schedule',
+        file: 'DATABASE_CUTOVER_PHASE_B_NOTIFICATION_SCHEDULING_QUERY_DRAFT.sql',
+        declaration: 'PREPARE phase_b_notification_schedule(bigint,timestamptz) AS\n',
+        parameters: ['NotificationDeliveryId', 'Now']
+    },
+    {
+        name: 'notification_route',
+        file: 'DATABASE_CUTOVER_PHASE_B_NOTIFICATION_ROUTE_QUERY_DRAFT.sql',
+        declaration: 'PREPARE phase_b_notification_route(bigint,timestamptz,smallint[],text[]) AS\n',
+        parameters: ['NotificationDeliveryId', 'Now', 'AvailableChannels', 'AvailablePushTransports']
     }
 ])
 {

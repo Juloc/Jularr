@@ -4,8 +4,8 @@ Status: OPEN. Maßgeblich ist der aktuelle Owner-Auftrag vom 10.10.2026:
 Cutover ohne Learning. Frühere Learning-Blocker sind bewusst aus dem Scope
 genommen, nicht technisch als fertig erklärt.
 
-Aktueller Entwurf: neun DDL-Dateien, 131 Tabellen, 28 feste Type-Kataloge mit
-145 expliziten Byte-Codes und 18 öffentlichen Ressourcen-UUIDs. Counts sind
+Aktueller Entwurf: zehn DDL-Dateien, 137 Tabellen, 28 feste Type-Kataloge mit
+145 expliziten Byte-Codes und 19 öffentlichen Ressourcen-UUIDs. Counts sind
 Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime.
 
 ## Aktuelle Abnahmematrix
@@ -20,7 +20,7 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | B06 Games/File Chain | Game-only und Work/Version/Asset/File-Composite-FKs vorhanden | Genuine Plattform-/Release-/Multidisc-/Hash-Funktionen erhalten; Typ 7 ist jetzt expliziter Game-Byte-Vertrag |
 | B07 Images | Feste ImageKinds und drei typisierte Target-FKs | Tatsächlich benötigte Targets/Pairings, Season-Artwork, Locale/Region/Manual-Override und Bild-Fallback-Query |
 | B08 Wanted/Arr/Acquisition/Import | Regeln, Profile, Indexer, Download-Bindings, Wanted-Coverage vorhanden | Request-/Monitoring-Policies, ReleaseAttempts/Provenienz, Import/Reconciliation und geplantes Migration Center |
-| B09 Notifications | Category-/Audience-Policy, Inbox-Recurrence, Dismissal, Replay und parallele Gruppierung geprüft | Quiet Hours, Digest, Endpoints, Retry/Sinks und übrige geplante Persistenz |
+| B09 Notifications | Inbox, Quiet Hours/DST, Digest, Endpoints, Route-Revalidierung und parallele Gruppierung physisch geprüft | Reale Sink-/Secret-Konfig-Verträge und Recovery bei ungewissem externen Send-Ausgang; keine Fake-Verfügbarkeit |
 | B10 Provider | Verbindungen, Credentials-Referenzen und Grants vorhanden | Plex/Jellyfin Consent/Owner/Sections, Restart/Reconciliation; keine automatischen Watchlist-/Progress-Imports |
 | B11 Media/Detection | Feste Track/Asset/Detector-Codes; konsistente Run-Ergebnisse | Probe-Invalidation/Analysefelder, Cache-Lifecycle, PlayableFile-SELECT und passende Indexpläne |
 | B12 Operations/Events | Gemeinsame Operations, Leases/Claims und Delivery-Versuche vorhanden | Retry/Cancellation/Restart/Retention sowie benötigte After-Commit-/Outbox-Effekte; keine externe I/O im DB-Tx |

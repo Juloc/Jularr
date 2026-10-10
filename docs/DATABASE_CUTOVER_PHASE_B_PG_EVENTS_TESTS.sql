@@ -28,7 +28,7 @@ BEGIN
 
     INSERT INTO "NotificationSubscriptions" (
         "ProfileId", "NotificationEventCategoryTypeId", "IsEnabled", "NotificationTimingTypeId")
-    VALUES (profile_id, 1, true, 2);
+    VALUES (profile_id, 1, true, 1);
     INSERT INTO "NotificationSubscriptionChannels" (
         "ProfileId", "NotificationEventCategoryTypeId", "NotificationChannelTypeId")
     VALUES (profile_id, 1, 1), (profile_id, 1, 2), (profile_id, 1, 3);
