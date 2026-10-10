@@ -22,19 +22,29 @@ public static class ReleaseLibraryLinks
     /// <summary>Manga series and light novels of the library that are matched to AniList.</summary>
     public static async Task<IReadOnlyList<ReadingReleaseLink>> LoadReadingLinksAsync(
         AppDbContext db,
+        bool includeManga,
+        bool includeLightNovels,
         CancellationToken cancellationToken)
     {
         var links = new List<ReadingReleaseLink>();
-        var novels = await db.NovelWorks
-            .AsNoTracking()
-            .Where(work =>
-                work.MetadataProvider == AniListReleaseNormalizer.Provider &&
-                work.MetadataExternalId != null &&
-                work.SourceProvider != BookCatalogService.ImportedBookProvider)
-            .Select(work => new { work.Id, Title = work.MetadataTitle ?? work.Title, work.CoverImageUrl, work.MetadataExternalId, work.MetadataStatus })
-            .ToListAsync(cancellationToken);
-        links.AddRange(novels.Select(work => new ReadingReleaseLink(
-            ReleaseMediaType.LightNovel, work.Id, work.Title, work.CoverImageUrl, work.MetadataExternalId!, work.MetadataStatus)));
+        if (includeLightNovels)
+        {
+            var novels = await db.NovelWorks
+                .AsNoTracking()
+                .Where(work =>
+                    work.MetadataProvider == AniListReleaseNormalizer.Provider &&
+                    work.MetadataExternalId != null &&
+                    work.SourceProvider != BookCatalogService.ImportedBookProvider)
+                .Select(work => new { work.Id, Title = work.MetadataTitle ?? work.Title, work.CoverImageUrl, work.MetadataExternalId, work.MetadataStatus })
+                .ToListAsync(cancellationToken);
+            links.AddRange(novels.Select(work => new ReadingReleaseLink(
+                ReleaseMediaType.LightNovel, work.Id, work.Title, work.CoverImageUrl, work.MetadataExternalId!, work.MetadataStatus)));
+        }
+
+        if (!includeManga)
+        {
+            return links;
+        }
 
         var connection = db.Database.GetDbConnection();
         var openedHere = connection.State != ConnectionState.Open;
@@ -123,7 +133,11 @@ public sealed class AniListReleaseEventSource(
             var starts = releases.Where(release => release.Kind == ReleaseKind.SeriesStart).ToLookup(release => release.ExternalId);
             if (starts.Count > 0)
             {
-                foreach (var link in await ReleaseLibraryLinks.LoadReadingLinksAsync(db, cancellationToken))
+                foreach (var link in await ReleaseLibraryLinks.LoadReadingLinksAsync(
+                    db,
+                    query.Wants(ReleaseMediaType.Manga),
+                    query.Wants(ReleaseMediaType.LightNovel),
+                    cancellationToken))
                 {
                     if (!query.Wants(link.MediaType, link.MediaId))
                     {

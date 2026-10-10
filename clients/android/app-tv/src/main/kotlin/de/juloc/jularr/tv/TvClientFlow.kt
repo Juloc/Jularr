@@ -22,7 +22,6 @@ import de.juloc.jularr.core.model.PlaybackHistoryItem
 import de.juloc.jularr.core.model.PlayerBootstrap
 import de.juloc.jularr.core.model.RootAvailability
 import de.juloc.jularr.core.model.TermStateResult
-import de.juloc.jularr.core.model.WatchlistItem
 
 class TvClientFlow(
     private val apiFactory: (String) -> JularrClientApi,
@@ -127,9 +126,6 @@ class TvClientFlow(
 
     suspend fun loadPlaybackHistory(): List<PlaybackHistoryItem> =
         requireApi().getPlaybackHistory()
-
-    suspend fun loadWatchlist(): List<WatchlistItem> =
-        requireApi().getWatchlist()
 
     suspend fun loadWatchlistPage(page: Int): WatchlistPage =
         requireApi().getWatchlistPage(page, 25)

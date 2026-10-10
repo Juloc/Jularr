@@ -124,9 +124,6 @@ class HttpJularrClientApi(
             .getJSONArray("items")
             .mapObjects { it.toPlaybackHistoryItem() }
 
-    override suspend fun getWatchlist(): List<WatchlistItem> =
-        getWatchlistPage().items
-
     override suspend fun getWatchlistPage(page: Int, pageSize: Int): WatchlistPage {
         val json = requestJson("GET", ClientApiRoutes.watchlistPage(page, pageSize))
         return WatchlistPage(

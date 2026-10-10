@@ -201,16 +201,17 @@ public sealed class ReleaseCalendarRefresher(
             }
         }
 
-        foreach (var reading in await ReleaseLibraryLinks.LoadReadingLinksAsync(db, cancellationToken))
+        var mangaEnabled = instance.IsEnabled(InstanceModule.Manga);
+        var novelEnabled = instance.IsEnabled(InstanceModule.Novel);
+        if (mangaEnabled || novelEnabled)
         {
-            if (!instance.IsEnabled(ReleaseInstanceModules.For(reading.MediaType)))
+            foreach (var reading in await ReleaseLibraryLinks.LoadReadingLinksAsync(
+                db, mangaEnabled, novelEnabled, cancellationToken))
             {
-                continue;
-            }
-
-            if (TryId(reading.ExternalId, out var id))
-            {
-                targets.Add(new AniListReleaseTarget(id, reading.Status, true));
+                if (TryId(reading.ExternalId, out var id))
+                {
+                    targets.Add(new AniListReleaseTarget(id, reading.Status, true));
+                }
             }
         }
 

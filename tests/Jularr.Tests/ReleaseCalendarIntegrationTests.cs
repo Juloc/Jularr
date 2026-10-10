@@ -106,6 +106,24 @@ public sealed class ReleaseCalendarIntegrationTests
     }
 
     [TestMethod]
+    public async Task ReadingLinks_OnlyLoadRequestedMediaTypes()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var novelId = await fixture.AddNovelAsync();
+
+        var novelOnly = await ReleaseLibraryLinks.LoadReadingLinksAsync(
+            fixture.Db, includeManga: false, includeLightNovels: true, cancellationToken: CancellationToken.None);
+        var link = Assert.ContainsSingle(novelOnly);
+        Assert.AreEqual(ReleaseMediaType.LightNovel, link.MediaType);
+        Assert.AreEqual(novelId, link.MediaId);
+
+        Assert.IsEmpty(await ReleaseLibraryLinks.LoadReadingLinksAsync(
+            fixture.Db, includeManga: false, includeLightNovels: false, cancellationToken: CancellationToken.None));
+        Assert.IsEmpty(await ReleaseLibraryLinks.LoadReadingLinksAsync(
+            fixture.Db, includeManga: true, includeLightNovels: false, cancellationToken: CancellationToken.None));
+    }
+
+    [TestMethod]
     public async Task RefreshDue_UsesUniqueFollowedTargetsFromMultipleProfiles()
     {
         await using var fixture = await Fixture.CreateAsync();

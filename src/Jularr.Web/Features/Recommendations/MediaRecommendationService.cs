@@ -165,13 +165,15 @@ public sealed class MediaRecommendationService(
 
         // Process SQL pages independently: even a very large watchlist never becomes
         // one unbounded database result or one unbounded relation lookup.
-        for (var pageNumber = 1; ; pageNumber++)
+        WatchlistItem? after = null;
+        while (true)
         {
             var page = await watchlist.GetEffectivePageAsync(
                 account,
-                new PageRequest(pageNumber, PageRequest.MaximumPageSize),
+                new PageRequest(pageSize: PageRequest.MaximumPageSize),
                 visibleTypes,
-                cancellationToken);
+                cancellationToken,
+                after: after);
 
             var pending = new List<(WatchlistItem Seed, WatchlistDraft Target, string GroupKey)>();
             foreach (var item in page.Items)
@@ -252,6 +254,8 @@ public sealed class MediaRecommendationService(
             {
                 break;
             }
+
+            after = page.Items[^1];
         }
 
         return links;
