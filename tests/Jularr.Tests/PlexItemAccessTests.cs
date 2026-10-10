@@ -28,6 +28,7 @@ public sealed class PlexItemAccessTests
 
             var server = new Uri("https://plex.example:32400/");
             var tokenLog = new List<(string Path, string Token)>();
+            Action? duringExactLookup = null;
             using var http = new HttpClient(new Handler(request =>
             {
                 var path = request.RequestUri!.AbsolutePath;
@@ -48,6 +49,11 @@ public sealed class PlexItemAccessTests
                 if (token != "viewer-token")
                 {
                     return new HttpResponseMessage(HttpStatusCode.Forbidden);
+                }
+
+                if (path.StartsWith("/library/metadata/", StringComparison.Ordinal))
+                {
+                    duringExactLookup?.Invoke();
                 }
 
                 return path switch
@@ -110,6 +116,23 @@ public sealed class PlexItemAccessTests
                 .Where(x => x.Path.StartsWith("/library/metadata/",
                     StringComparison.Ordinal))
                 .All(x => x.Token == "viewer-token"));
+
+            // A server revocation in the middle of a verified item lookup
+            // must invalidate the handoff, not just future lookups.
+            duringExactLookup = () => grants.RemoveAsync(
+                "machine-123456").GetAwaiter().GetResult();
+            Assert.IsFalse(await check.IsAccessibleMatchAsync(
+                viewer, "machine-123456", "44",
+                movie.Id, "jularr-instance"));
+
+            await new PlexServerSelectionService(client, grants).ApproveAsync(
+                Principal(AccountRole.Owner, "owner-profile"),
+                candidate, server, ["1"], "jularr-instance", CancellationToken.None);
+            duringExactLookup = () => personal.DisconnectAsync(
+                "viewer-profile").GetAwaiter().GetResult();
+            Assert.IsFalse(await check.IsAccessibleMatchAsync(
+                viewer, "machine-123456", "44",
+                movie.Id, "jularr-instance"));
         }
         finally
         {
