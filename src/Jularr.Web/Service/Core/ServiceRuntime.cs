@@ -38,6 +38,7 @@ public sealed class ServiceContext
     internal ServiceContext(ServiceCaller caller, SqlContext sql)
     {
         Access = caller;
+        sql.SetAuthorizedScope(caller.AccountId, caller.ProfileId);
         ReadSql = sql.ReadSql;
         Logic = new LogicContext(sql);
     }
