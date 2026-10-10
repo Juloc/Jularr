@@ -1,0 +1,78 @@
+# Runs ONLY the Phase-B draft DDL in an isolated disposable PostgreSQL service.
+# Never connects to dev/production databases, mounts NAS files or uses repository secrets.
+name: Phase B PostgreSQL draft validation
+
+on:
+  pull_request:
+    paths:
+      - "docs/DATABASE_CUTOVER_PHASE_B_*.sql"
+      - ".github/workflows/phase-b-postgres-draft.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-target-drafts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: phase_b_ci
+          POSTGRES_PASSWORD: phase_b_ci_only
+          POSTGRES_DB: phase_b_scratch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U phase_b_ci -d phase_b_scratch"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: phase_b_ci
+      PGPASSWORD: phase_b_ci_only
+      PGDATABASE: phase_b_scratch
+    steps:
+      - name: Checkout exactly this draft branch
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Bootstrap all Phase B DDL drafts on EMPTY isolated database
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for id in $(seq -w 1 10); do
+            files=(docs/DATABASE_CUTOVER_PHASE_B_${id}_*_DRAFT.sql)
+            if [ "${#files[@]}" -ne 1 ]; then
+              printf 'Expected one DDL draft for phase %s; found %s\n' "$id" "${#files[@]}" >&2
+              exit 1
+            fi
+            echo "::group::Run ${files[0]} on disposable PostgreSQL"
+            psql -X -v ON_ERROR_STOP=1 -f "${files[0]}"
+            echo "::endgroup::"
+          done
+
+      - name: Verify catalog invariants in read-only transaction
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_ASSERTIONS_DRAFT.sql
+
+      - name: Check the target table count and schema isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(psql -X -A -t -v ON_ERROR_STOP=1 -c \
+            "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public' AND c.relname NOT LIKE 'pg_%'")"
+          echo "Target draft tables: $count"
+          if [ "$count" -ne 162 ]; then
+            echo "Expected 162 proposed Phase B tables; unexpected DDL drift" >&2
+            exit 1
+          fi
