@@ -54,7 +54,9 @@ CREATE TABLE "MediaTechnicalAnalyses" (
     CONSTRAINT "PK_MediaTechnicalAnalyses" PRIMARY KEY ("MediaAssetId"),
     CONSTRAINT "FK_MediaTechnicalAnalyses_MediaAssets" FOREIGN KEY ("MediaAssetId") REFERENCES "MediaAssets" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "CK_MediaTechnicalAnalyses_Duration" CHECK ("DurationMs" IS NULL OR "DurationMs" >= 0),
-    CONSTRAINT "CK_MediaTechnicalAnalyses_Dimensions" CHECK (("Width" IS NULL AND "Height" IS NULL) OR ("Width" > 0 AND "Height" > 0)),
+    CONSTRAINT "CK_MediaTechnicalAnalyses_Dimensions" CHECK (
+        ("Width" IS NULL AND "Height" IS NULL)
+        OR ("Width" IS NOT NULL AND "Height" IS NOT NULL AND "Width" > 0 AND "Height" > 0)),
     CONSTRAINT "CK_MediaTechnicalAnalyses_Bitrate" CHECK ("BitRateBps" IS NULL OR "BitRateBps" >= 0)
 );
 

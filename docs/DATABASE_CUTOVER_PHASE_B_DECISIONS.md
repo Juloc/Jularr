@@ -115,3 +115,22 @@ WorkCard-, Continue-, Acquisition-, Progress-CAS-, Learning- und Public-ID-Suite
 bestanden. Worker-SKIP-LOCKED mit zwei getrennten Sessions ebenfalls bestanden.
 EXPLAIN ANALYZE/BUFFERS für 1.000 synthetische Watchlist-Roots und Continue liegt
 vor; das ist noch keine repräsentative Lastabnahme. Gate B bleibt offen.
+
+## B03/B11 – Reader-Work und Dimensionspaare
+
+`ReaderContent(WorkEditionId, WorkId)` ist jetzt durch Composite-FK an die
+Edition gebunden. `ReadingProgressPositions(MediaProgressId, WorkId)` referenziert
+den tatsächlichen Progress-Work; `(ReaderContentId, WorkId)` referenziert denselben
+Content-Work. Fremdcontent, falsch bezeichnete Editions und spätere Work-Wechsel
+werden relational abgelehnt. Keine neue Reader-/Progress-Wahrheit und kein Trigger.
+
+Die Dimensions-CHECKs von Images und MediaTechnicalAnalyses erlauben entweder
+zwei unbekannte Werte oder zwei strikt positive bekannte Werte. Ein einzelner
+NULL-Wert besteht den CHECK nicht mehr durch die SQL-UNKNOWN-Semantik.
+
+**Lokaler Nachweis:** DDL 01–14 erneut vollständig auf einer frischen isolierten
+PostgreSQL-18.6-DB aufgebaut. Alle bisherigen SQL-Suites plus Reader-Integrität
+bestanden. Die neue Suite prüft vier spezifische Cross-Work-FK-Ablehnungen,
+zulässigen Contentwechsel innerhalb desselben Works sowie je sechs ungültige
+Dimensionspaare gegen beide Tabellen. Constraint-Namen werden geprüft.
+Gate B bleibt offen für die übrigen Fach-/Seed- und vollständigen Query-Verträge.

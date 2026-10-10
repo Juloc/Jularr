@@ -70,6 +70,10 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_NEGATIVE_TESTS.sql
 
+      - name: Verify Reader Work membership and nullable dimensions
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_READER_INTEGRITY_TESTS.sql
+
       - name: Test event audience isolation and delivery attempts
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_EVENTS_TESTS.sql
