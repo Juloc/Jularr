@@ -25,16 +25,18 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
     protected virtual IsolationLevel? GetTransaction(TParameters parameters) => null;
     protected abstract Task<IServiceOutput> ExecuteCoreAsync(TParameters parameters, TData data, Type resultType, ServiceContext context, CancellationToken cancellationToken);
 
-    public void ValidateDefinition() => _ = _definition.Value;
+    public virtual void ValidateDefinition() => _ = _definition.Value;
 
     public Task<IServiceOutput> ExecuteAsync(TParameters parameters, TData data, CancellationToken cancellationToken = default)
     {
+        ValidateDefinition();
         var definition = _definition.Value;
         return RunAsync(parameters, data, definition.DefaultResultType, definition, cancellationToken);
     }
 
     public async Task<TOutput> ExecuteAsync<TOutput>(TParameters parameters, TData data, CancellationToken cancellationToken = default) where TOutput : IServiceOutput
     {
+        ValidateDefinition();
         var definition = _definition.Value;
         return (TOutput)await RunAsync(parameters, data, typeof(TOutput), definition, cancellationToken);
     }
