@@ -22,6 +22,7 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 | Notification Lifecycle | Cross-Midnight/DST, Critical-/In-App-Bypass, Digest-Routes/Disable-Auflösung, kein Leer-/Doppeltiming, Endpoint-/Session-/Email-/Rollen-Revoke |
 | Watchlist/Continue/Groups/Inbox/Reader Reads | Statische typisierte PREPAREs, Autorisierung vor Root-Paging, deterministische Seiten, Membership-Entzug; Reader Bookmarks/Highlights/Pages mit Work-/Revisions-Isolation, Page-Limits und EXPLAIN |
 | Worker Claims | Zwei reale PostgreSQL-Sessions, SKIP LOCKED, Retry-Fälligkeit und keine Doppelvergabe |
+| AcquisitionRequest history | Profilautorisiertes SQL-Paging, öffentliche Request/Work/Operation-IDs, genau begrenzte Ergebnisse, Sharing/Entzug/Disable, EXPLAIN (ANALYZE, BUFFERS) |
 | Öffentliche IDs | Separate UUID-Adresse, interne bigint-FKs; PublicId gewährt keine Berechtigung |
 
 Negative Fälle prüfen erwartete SQLSTATE-/Constraint-Bedeutung; Fixtures rollen
