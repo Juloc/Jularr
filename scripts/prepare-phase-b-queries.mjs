@@ -161,3 +161,43 @@ for (const query of [
     }
     writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`), query.declaration + sql + '\n');
 }
+
+const readerFile = readFileSync(fileURLToPath(new URL('../docs/DATABASE_CUTOVER_PHASE_B_READER_QUERIES_DRAFT.sql', import.meta.url)), 'utf8').replaceAll('\r\n', '\n');
+const readerQueries = [
+    {
+        name: 'reader_bookmarks',
+        start: '-- Service BOOKMARKS:',
+        end: '-- Service HIGHLIGHTS:'
+    },
+    {
+        name: 'reader_highlights',
+        start: '-- Service HIGHLIGHTS:',
+        end: null
+    }
+];
+
+for (const query of readerQueries)
+{
+    const start = readerFile.indexOf(query.start);
+    const end = query.end ? readerFile.indexOf(query.end) : readerFile.length;
+    if (start < 0 || end <= start)
+    {
+        throw new Error(`Canonical ${query.name} section is missing or out of order.`);
+    }
+
+    let sql = readerFile.slice(start, end).trim();
+    for (const [index, name] of ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId', 'PageSize', 'Offset'].entries())
+    {
+        if (!sql.includes(`@${name}`))
+        {
+            throw new Error(`Canonical ${query.name} query is missing @${name}.`);
+        }
+        sql = sql.replaceAll(`@${name}`, `$${index + 1}`);
+    }
+    if (sql.includes('@'))
+    {
+        throw new Error(`Unbound SQL placeholder in canonical ${query.name} query.`);
+    }
+    writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`),
+        'PREPARE phase_b_' + query.name + '(bigint,bigint,uuid,integer,bigint) AS\n' + sql + '\n');
+}
