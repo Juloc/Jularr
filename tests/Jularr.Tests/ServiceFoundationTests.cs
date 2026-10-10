@@ -140,7 +140,7 @@ public sealed class ServiceFoundationTests
 
         protected override async Task<IServiceOutput> ExecuteCoreAsync(AccountParameters parameters, NoData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
         {
-            var mode = await context.ReadSql.ExecuteScalarAsync("SHOW transaction_read_only", cancellationToken);
+            var mode = await context.ReadSql.ExecuteScalarAsync("SELECT current_setting('transaction_read_only')", cancellationToken);
             var actorId = await context.ReadSql.ExecuteScalarAsync("SELECT @ActorAccountId::bigint", cancellationToken);
             var profileId = await context.ReadSql.ExecuteScalarAsync("SELECT @ActiveProfileId::bigint", cancellationToken);
 
