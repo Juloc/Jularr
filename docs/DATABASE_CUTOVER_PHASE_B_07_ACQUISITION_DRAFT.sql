@@ -192,7 +192,7 @@ CREATE TABLE "AcquisitionDownloadBindings" (
     CONSTRAINT "FK_AcquisitionDownloadBindings_Operations" FOREIGN KEY ("OperationId") REFERENCES "Operations" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_AcquisitionDownloadBindings_Clients" FOREIGN KEY ("AcquisitionDownloadClientId") REFERENCES "AcquisitionDownloadClients" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_AcquisitionDownloadBindings_Kinds" FOREIGN KEY ("AcquisitionKindTypeId") REFERENCES "AcquisitionKindTypes" ("Id") ON DELETE RESTRICT,
-    CONSTRAINT "FK_AcquisitionDownloadBindings_Requests" FOREIGN KEY ("AcquisitionRequestId") REFERENCES "AcquisitionRequests" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_AcquisitionDownloadBindings_Requests" FOREIGN KEY ("AcquisitionRequestId","WorkId") REFERENCES "AcquisitionRequests" ("Id","WorkId") ON DELETE RESTRICT,
     CONSTRAINT "FK_AcquisitionDownloadBindings_Works" FOREIGN KEY ("WorkId") REFERENCES "Works" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "UX_AcquisitionDownloadBindings_OperationId" UNIQUE ("OperationId")
 );
