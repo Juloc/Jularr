@@ -2,6 +2,7 @@ using Jularr.Data.Common;
 using Jularr.Infrastructure.Sql;
 using Jularr.Service.Core;
 using Jularr.Tests.Infrastructure;
+using Jularr.Web.Data;
 using Npgsql;
 
 namespace Jularr.Tests;
@@ -60,6 +61,23 @@ public sealed class ServiceFoundationTests
     }
 
     [TestMethod]
+    public async Task UserList_InvalidSortAndPage_FailBeforeCallerOrDatabase()
+    {
+        await using var database = CreateDataSource();
+        var gate = new TestGate();
+        var service = new AccountListService(new ServiceRuntime(database, gate));
+
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
+            () => service.ExecuteAsync<AccountResult>(new ListParameters(1, 25, (ListSort)255)));
+        CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+
+        gate.Events.Clear();
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
+            () => service.ExecuteAsync<AccountResult>(new ListParameters(1, 101, ListSort.AccountId)));
+        CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+    }
+
+    [TestMethod]
     public async Task AdminWrite_MultipleLogicCallsRollbackOnLateFailure()
     {
         await using var database = CreateDataSource();
@@ -81,6 +99,33 @@ public sealed class ServiceFoundationTests
         await verify.BeginAsync(SqlAccessMode.ReadOnly);
         Assert.AreEqual(0L, await verify.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"ServiceFoundationProbe\""));
         CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction" }, gate.Events.ToArray());
+    }
+
+    private enum ListSort : byte
+    {
+        AccountId,
+        DisplayName
+    }
+
+    private sealed record ListParameters(int Page, int PageSize, ListSort? Sort);
+
+    private sealed class AccountListService(ServiceRuntime runtime) : UserListService<ListParameters, ListSort>(runtime)
+    {
+        protected override IReadOnlyList<ServiceSortKey<ListSort>> GetSortKeys() =>
+        [
+            ServiceSortKey<ListSort>.Default(ListSort.AccountId),
+            ServiceSortKey<ListSort>.Additional(ListSort.DisplayName)
+        ];
+
+        protected override ListSort? GetRequestedSort(ListParameters parameters) => parameters.Sort;
+        protected override PageRequest GetPageRequest(ListParameters parameters) => new(parameters.Page, parameters.PageSize);
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+        protected override ModuleRequirement GetInstanceModules(ListParameters parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ListParameters parameters, Type resultType) => new("accounts.list");
+        protected override ResourceTarget? GetResource(ListParameters parameters) => null;
+
+        protected override Task<IServiceOutput> ExecuteCoreAsync(ListParameters parameters, NoData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
+            => Task.FromResult<IServiceOutput>(new AccountResult(1, "test"));
     }
 
     private sealed class AccountReadService(ServiceRuntime runtime) : UserReadService<AccountParameters>(runtime)
