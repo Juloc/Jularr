@@ -35,6 +35,10 @@ Die neuen DDL-Dateien 04–06 ergänzen Monitoring/Wanted/RequestTargets und Not
 
 **Ownerentscheidungen bündeln:** Wenn B01–B10 durch bestehende Produktanweisungen/Quellcode vollständig entscheidbar sind, fachlich dokumentieren und weitermachen. Nur **echte** Produkt-Alternativen separat zur Freigabe benennen, nicht für technische Standardfelder reflexartig fragen. Kein Gate B „grün“ trotz ungelöster Fähigkeit.
 
+## Belegte Enum-Quellwerte
+
+Die tatsächlichen alten C#-Werte und der korrigierte AccountRole-Entwurf stehen in [DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md](DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md). Das neue Target-Seed-Manifest und die Byte-Umstellung müssen in B01 gesondert bestätigt werden.
+
 ## Konkrete Korrekturen vor Freigabe
 
 - **Learning:** `LearningCourses` (persönliche Vokabel-/FSRS-Kurse) sind fachlich etwas anderes als `LearnerCourses` (Enrollment einer veröffentlichten Curriculum-Instanz). Beide verwenden denselben `LearningUnits`- und `LearningCards`-Owner. Curriculum muss seine tatsächlichen Unit-Links und Profile-Scope-/Gamification-Daten noch nachweisbar integrieren; kein zweiter FSRS-Datenbestand.
