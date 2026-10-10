@@ -10,17 +10,8 @@ DECLARE
     event_id uuid;
     admin_event_id uuid;
     delivery_id bigint;
+    rejected_constraint text;
 BEGIN
-    -- Draft-only codes from the existing JularrEventAudience and Severity source.
-    -- Their final enum : byte manifest remains B01, not inferred by this test.
-    INSERT INTO "EventAudienceTypes" ("Id","Key","RequiresProfile")
-    VALUES (1,'profile',true),(2,'admin',false);
-    INSERT INTO "EventSeverityTypes" ("Id","Key")
-    VALUES (1,'info'),(2,'warning'),(3,'critical');
-    INSERT INTO "NotificationEventCategoryTypes" ("Id","Key")
-    VALUES (1,'download-grabbed');
-    INSERT INTO "NotificationChannelTypes" ("Id","Key")
-    VALUES (1,'in-app');
     INSERT INTO "UiLocales" ("Locale","Name")
     VALUES ('phase-b-events','Phase B Events') RETURNING "Id" INTO locale_id;
     INSERT INTO "Accounts" ("Email","DisplayName","AccountRoleTypeId")
@@ -34,6 +25,41 @@ BEGIN
     RETURNING "Id" INTO other_profile_id;
     INSERT INTO "AccountProfiles" ("AccountId","ProfileId")
     VALUES (account_id,profile_id),(account_id,other_profile_id);
+
+    INSERT INTO "NotificationSubscriptions" (
+        "ProfileId", "NotificationEventCategoryTypeId", "IsEnabled", "NotificationTimingTypeId")
+    VALUES (profile_id, 1, true, 2);
+    INSERT INTO "NotificationSubscriptionChannels" (
+        "ProfileId", "NotificationEventCategoryTypeId", "NotificationChannelTypeId")
+    VALUES (profile_id, 1, 1), (profile_id, 1, 2), (profile_id, 1, 3);
+    INSERT INTO "NotificationProfileChannels" ("ProfileId", "NotificationChannelTypeId", "IsEnabled")
+    VALUES (profile_id, 2, false);
+    IF (SELECT count(*) FROM "NotificationSubscriptionChannels" AS channel
+        WHERE channel."ProfileId" = profile_id AND channel."NotificationEventCategoryTypeId" = 1) <> 3 THEN
+        RAISE EXCEPTION 'Profile-wide gate erased selected event channels';
+    END IF;
+    BEGIN
+        INSERT INTO "NotificationProfileChannels" ("ProfileId", "NotificationChannelTypeId")
+        VALUES (other_profile_id, 2);
+        RAISE EXCEPTION 'Push route implicitly enabled without explicit profile intent';
+    EXCEPTION WHEN not_null_violation THEN NULL;
+    END;
+    BEGIN
+        INSERT INTO "NotificationSubscriptionChannels" (
+            "ProfileId", "NotificationEventCategoryTypeId", "NotificationChannelTypeId")
+        VALUES (other_profile_id, 1, 1);
+        RAISE EXCEPTION 'Selected channel without its parent event preference was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN
+        GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
+        IF rejected_constraint <> 'FK_NotificationSubscriptionChannels_NotificationSubscriptions' THEN RAISE; END IF;
+    END;
+    BEGIN
+        UPDATE "NotificationSubscriptions" SET "NotificationTimingTypeId" = 254 WHERE "ProfileId" = profile_id;
+        RAISE EXCEPTION 'Unknown notification timing was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN
+        GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
+        IF rejected_constraint <> 'FK_NotificationSubscriptions_NotificationTimingTypes' THEN RAISE; END IF;
+    END;
 
     INSERT INTO "Events"
         ("NotificationEventCategoryTypeId","EventAudienceTypeId",
@@ -52,9 +78,28 @@ BEGIN
     BEGIN
         INSERT INTO "Events"
             ("NotificationEventCategoryTypeId","EventAudienceTypeId","EventSeverityTypeId","ProfileId","MessageKey")
-        VALUES (1,2,1,profile_id,'bad-admin-profile');
+        VALUES (8,2,3,profile_id,'bad-admin-profile');
         RAISE EXCEPTION 'Admin event accepted a Profile target';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    BEGIN
+        INSERT INTO "Events" (
+            "NotificationEventCategoryTypeId", "EventAudienceTypeId", "EventSeverityTypeId", "MessageKey")
+        VALUES (1, 2, 1, 'bad-category-audience');
+        RAISE EXCEPTION 'DownloadGrabbed incorrectly widened its audience to Admin';
+    EXCEPTION WHEN foreign_key_violation THEN
+        GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
+        IF rejected_constraint <> 'FK_Events_CategoryPolicy' THEN RAISE; END IF;
+    END;
+    BEGIN
+        INSERT INTO "Events" (
+            "NotificationEventCategoryTypeId", "EventAudienceTypeId", "EventSeverityTypeId", "ProfileId", "MessageKey")
+        VALUES (1, 1, 3, profile_id, 'bad-category-severity');
+        RAISE EXCEPTION 'DownloadGrabbed incorrectly changed its severity to Critical';
+    EXCEPTION WHEN foreign_key_violation THEN
+        GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
+        IF rejected_constraint <> 'FK_Events_CategoryPolicy' THEN RAISE; END IF;
     END;
 
     -- A canonical Profile event is visible only in its own Profile inbox.
@@ -132,7 +177,7 @@ BEGIN
 
     INSERT INTO "Events"
         ("NotificationEventCategoryTypeId","EventAudienceTypeId","EventSeverityTypeId","MessageKey")
-    VALUES (1,2,3,'notifications.event.storageProblem')
+    VALUES (8,2,3,'notifications.event.storageProblem')
     RETURNING "Id" INTO admin_event_id;
     INSERT INTO "Notifications" ("EventId","AccountId")
     VALUES (admin_event_id,account_id);

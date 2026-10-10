@@ -1,7 +1,7 @@
 -- PHASE B, WORKING DRAFT 04: monitoring intent, Wanted, request intent and notifications.
 -- Based on Features/Monitoring/CODEMAP.md, Acquisition/Wanted/CODEMAP.md,
 -- docs/mockups/admin-notifications/SPEC.md and open notification PR #842.
--- No live-DB change; type seed IDs and exact transport policies NOT approved.
+-- No live-DB change; remaining non-notification seed contracts are tracked in B01.
 -- Run after parts 01..03 ONLY against an isolated disposable PostgreSQL database.
 BEGIN;
 
@@ -90,11 +90,24 @@ CREATE INDEX "IX_WantedItems_CreatedAt" ON "WantedItems" ("CreatedAt","Id");
 CREATE TABLE "NotificationEventCategoryTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
+    "EventAudienceTypeId" smallint NOT NULL,
+    "EventSeverityTypeId" smallint NOT NULL,
     CONSTRAINT "PK_NotificationEventCategoryTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_NotificationEventCategoryTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "UX_NotificationEventCategoryTypes_Policy" UNIQUE ("Id", "EventAudienceTypeId", "EventSeverityTypeId"),
     CONSTRAINT "CK_NotificationEventCategoryTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_NotificationEventCategoryTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
+INSERT INTO "NotificationEventCategoryTypes" ("Id", "Key", "EventAudienceTypeId", "EventSeverityTypeId")
+VALUES
+    (1, 'download_grabbed', 1, 1),
+    (2, 'download_failed', 1, 2),
+    (3, 'import_completed', 1, 1),
+    (4, 'import_failed', 1, 2),
+    (5, 'release_available', 1, 1),
+    (6, 'request_approved', 1, 1),
+    (7, 'request_denied', 1, 1),
+    (8, 'storage_problem', 2, 3);
 CREATE TABLE "NotificationChannelTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
@@ -103,6 +116,11 @@ CREATE TABLE "NotificationChannelTypes" (
     CONSTRAINT "CK_NotificationChannelTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_NotificationChannelTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
+INSERT INTO "NotificationChannelTypes" ("Id", "Key")
+VALUES
+    (1, 'in_app'),
+    (2, 'push'),
+    (3, 'email');
 CREATE TABLE "NotificationTimingTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
@@ -111,6 +129,10 @@ CREATE TABLE "NotificationTimingTypes" (
     CONSTRAINT "CK_NotificationTimingTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_NotificationTimingTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
+INSERT INTO "NotificationTimingTypes" ("Id", "Key")
+VALUES
+    (1, 'immediate'),
+    (2, 'digest');
 CREATE TABLE "NotificationSubscriptions" (
     "ProfileId" bigint NOT NULL,
     "NotificationEventCategoryTypeId" smallint NOT NULL,
@@ -134,7 +156,7 @@ CREATE TABLE "NotificationSubscriptionChannels" (
 CREATE TABLE "NotificationProfileChannels" (
     "ProfileId" bigint NOT NULL,
     "NotificationChannelTypeId" smallint NOT NULL,
-    "IsEnabled" boolean NOT NULL DEFAULT true,
+    "IsEnabled" boolean NOT NULL,
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_NotificationProfileChannels" PRIMARY KEY ("ProfileId","NotificationChannelTypeId"),
     CONSTRAINT "FK_NotificationProfileChannels_Profiles" FOREIGN KEY ("ProfileId") REFERENCES "Profiles" ("Id") ON DELETE RESTRICT,

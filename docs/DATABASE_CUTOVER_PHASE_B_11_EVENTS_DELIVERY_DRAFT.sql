@@ -2,7 +2,7 @@
 -- Source: existing EventLogStore/JularrEventModels and approved admin-notifications/SPEC.md.
 -- Apply ONLY after Parts 01..10 to a NEW disposable PostgreSQL scratch database.
 -- No second scheduler/queue: long-running or retryable dispatch uses Operations.
--- Exact new persisted byte enum codes remain part of B01 approval; no production seed here.
+-- Event/category byte codes and occurrence policy are fixed by the B01 target contract.
 BEGIN;
 
 CREATE TABLE "EventAudienceTypes" (
@@ -25,6 +25,22 @@ CREATE TABLE "EventSeverityTypes" (
     CONSTRAINT "CK_EventSeverityTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 
+INSERT INTO "EventAudienceTypes" ("Id", "Key", "RequiresProfile")
+VALUES
+    (1, 'profile', true),
+    (2, 'admin', false);
+INSERT INTO "EventSeverityTypes" ("Id", "Key")
+VALUES
+    (1, 'info'),
+    (2, 'warning'),
+    (3, 'critical');
+
+ALTER TABLE "NotificationEventCategoryTypes"
+    ADD CONSTRAINT "FK_NotificationEventCategoryTypes_EventAudienceTypes"
+        FOREIGN KEY ("EventAudienceTypeId") REFERENCES "EventAudienceTypes" ("Id") ON DELETE RESTRICT,
+    ADD CONSTRAINT "FK_NotificationEventCategoryTypes_EventSeverityTypes"
+        FOREIGN KEY ("EventSeverityTypeId") REFERENCES "EventSeverityTypes" ("Id") ON DELETE RESTRICT;
+
 -- Event Id is public/distributed for replay protection; UUID is a documented
 -- exception to ordinary internal bigint identities. This is the sole event log.
 -- MessageParams are localization parameters, not arbitrary persisted business state.
@@ -43,8 +59,8 @@ CREATE TABLE "Events" (
     "DedupKey" text,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_Events" PRIMARY KEY ("Id"),
-    CONSTRAINT "FK_Events_NotificationEventCategoryTypes" FOREIGN KEY ("NotificationEventCategoryTypeId")
-        REFERENCES "NotificationEventCategoryTypes" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_Events_CategoryPolicy" FOREIGN KEY ("NotificationEventCategoryTypeId", "EventAudienceTypeId", "EventSeverityTypeId")
+        REFERENCES "NotificationEventCategoryTypes" ("Id", "EventAudienceTypeId", "EventSeverityTypeId") ON DELETE RESTRICT,
     CONSTRAINT "FK_Events_EventAudienceTypes" FOREIGN KEY ("EventAudienceTypeId","HasProfileAudience")
         REFERENCES "EventAudienceTypes" ("Id","RequiresProfile") ON DELETE RESTRICT,
     CONSTRAINT "FK_Events_EventSeverityTypes" FOREIGN KEY ("EventSeverityTypeId")

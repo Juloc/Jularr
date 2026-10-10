@@ -247,3 +247,37 @@ leere Seite, fremdes Profil, Sharing, Widerruf, deaktivierter/unbekannter Actor
 und unbekannte Unit. EXPLAIN mit 1.003 Kontexten nutzt den Profil/Unit/CreatedAt/
 Id-Index und liest für die erste Seite nur 25 Root-Zeilen; Details folgen danach.
 Gate B bleibt für die übrigen fachlichen und vollständigen Query-Verträge offen.
+
+## B01/B06 – geplante Notifications-Verträge aus PR #842
+
+Der direkte Abgleich mit `planning/notifications-ux-20261004` umfasst die
+kanonischen Events-/Notifications-Modelle sowie Persistenz, Audience,
+Delivery-/Inbox-Lebenszyklen und Datenschutz aus dem Target-Model und
+`NOTIFICATIONS.md`. Die fünf bestehenden Type-Kataloge erhalten explizite
+Ziel-`byte`-Enums und 18 feste Codes: acht Kategorien, Profile/Admin-Audience,
+Info/Warning/Critical, InApp/Push/Email und Immediate/Digest. Digest ist kein
+Kanal; Webhook/Home Assistant bleiben Integrationstransporte.
+
+Die Category-Seed-Zeile definiert ihre feste Audience und Severity. Ein echter
+Composite-FK verhindert Kategorie-Vorkommen mit erweiterter Audience oder
+abweichender Severity. Profile-Audience erfordert zusätzlich ein Profil;
+Admin-Audience verbietet es. Ein normaler Account wird dadurch nicht zum
+Admin-Recipient; der berechtigte Recipient wird weiterhin serverseitig bestimmt
+und aktuelle Admin-Rechte müssen beim Read und vor externem Send geprüft werden.
+
+Die Profile-Kanalzeile benötigt jetzt eine explizite IsEnabled-Entscheidung.
+Kein pauschales DB-Default aktiviert Push/E-Mail. No-row-Auflösung bleibt
+InApp=true und Push/Email=false; Event-Selektionen und globale Kanal-Gates
+bleiben getrennt. Event-Defaults sind Enabled + InApp + Immediate.
+Digest ist nur für DownloadGrabbed, ImportCompleted, ReleaseAvailable,
+RequestApproved und RequestDenied erlaubt. Die zentrale Logic validiert diese
+Policy vor Writes; der Service-Resolver kombiniert Event-Auswahl, Profile-Gate,
+Event-Support und reale Transportverfügbarkeit. Keine doppelte Store-Schicht.
+
+**Lokaler Nachweis:** 23 Ziel-Enums mit 112 Codes kompiliert und gegen Manifest/
+DDL abgeglichen; frischer PostgreSQL-18.6-Bootstrap 01–14. Seed-, Event-,
+Type-Katalog- und Struktur-Suites bestanden. Events prüfen jetzt echte Seeds
+statt CI-Ersatzwerte, spezifische Category-Policy-FKs und die richtige
+StorageProblem-Kategorie 8. 23 weitere Kataloge bleiben offen.
+Geplante Quiet-Hours-/Digest-/Endpoint-Persistenz und Inbox-Recurrence sind
+damit nicht automatisch fertig; sie bleiben konkrete B06-Arbeitspunkte.

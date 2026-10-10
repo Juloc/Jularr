@@ -59,14 +59,26 @@ for (const line of read('DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv').trim(
         throw new Error(`Manifest disagrees with ${enumName}.`);
     }
 
-    const statements = [...ddl.matchAll(new RegExp(`INSERT INTO "${cells[0]}" \\("Id",\\s*"Key"\\)\\s*VALUES\\s*([\\s\\S]*?);`, 'g'))];
+    const policyColumns = cells[0] === 'EventAudienceTypes' ? ',\\s*"RequiresProfile"'
+        : cells[0] === 'NotificationEventCategoryTypes' ? ',\\s*"EventAudienceTypeId",\\s*"EventSeverityTypeId"' : '';
+    const statements = [...ddl.matchAll(new RegExp(`INSERT INTO "${cells[0]}" \\("Id",\\s*"Key"${policyColumns}\\)\\s*VALUES\\s*([\\s\\S]*?);`, 'g'))];
     if (statements.length !== 1)
     {
         throw new Error(`Expected one static seed statement for ${cells[0]}.`);
     }
-    const rowPattern = /\(\s*(\d+)\s*,\s*'([^']*)'\s*\)/g;
-    const actual = [...statements[0][1].matchAll(rowPattern)].map(match => ({ id: Number(match[1]), key: match[2] }));
-    if (statements[0][1].replace(rowPattern, '').replace(/[\s,]/g, '') !== '' || JSON.stringify(actual) !== JSON.stringify(members))
+    const rowPattern = /\(\s*(\d+)\s*,\s*'([^']*)'((?:\s*,\s*(?:true|false|\d+))*)\s*\)/g;
+    const actual = [...statements[0][1].matchAll(rowPattern)].map(match => ({
+        id: Number(match[1]),
+        key: match[2],
+        policy: match[3].split(',').slice(1).map(value => value.trim())
+    }));
+    const expected = members.map(member => ({
+        ...member,
+        policy: cells[0] === 'EventAudienceTypes' ? [member.id === 1 ? 'true' : 'false']
+            : cells[0] === 'NotificationEventCategoryTypes'
+                ? [member.id === 8 ? '2' : '1', member.id === 8 ? '3' : [2, 4].includes(member.id) ? '2' : '1'] : []
+    }));
+    if (statements[0][1].replace(rowPattern, '').replace(/[\s,]/g, '') !== '' || JSON.stringify(actual) !== JSON.stringify(expected))
     {
         throw new Error(`DDL seeds disagree with ${enumName}.`);
     }

@@ -98,7 +98,25 @@ BEGIN
             ('LearningMediaScopeTypes', 1, 'anime'),
             ('LearningMediaScopeTypes', 2, 'novel'),
             ('LearningMediaScopeTypes', 3, 'book'),
-            ('LearningMediaScopeTypes', 4, 'manga')
+            ('LearningMediaScopeTypes', 4, 'manga'),
+            ('NotificationEventCategoryTypes', 1, 'download_grabbed'),
+            ('NotificationEventCategoryTypes', 2, 'download_failed'),
+            ('NotificationEventCategoryTypes', 3, 'import_completed'),
+            ('NotificationEventCategoryTypes', 4, 'import_failed'),
+            ('NotificationEventCategoryTypes', 5, 'release_available'),
+            ('NotificationEventCategoryTypes', 6, 'request_approved'),
+            ('NotificationEventCategoryTypes', 7, 'request_denied'),
+            ('NotificationEventCategoryTypes', 8, 'storage_problem'),
+            ('EventAudienceTypes', 1, 'profile'),
+            ('EventAudienceTypes', 2, 'admin'),
+            ('EventSeverityTypes', 1, 'info'),
+            ('EventSeverityTypes', 2, 'warning'),
+            ('EventSeverityTypes', 3, 'critical'),
+            ('NotificationChannelTypes', 1, 'in_app'),
+            ('NotificationChannelTypes', 2, 'push'),
+            ('NotificationChannelTypes', 3, 'email'),
+            ('NotificationTimingTypes', 1, 'immediate'),
+            ('NotificationTimingTypes', 2, 'digest')
     ),
     actual(target_table, id, key) AS (
         SELECT
@@ -208,6 +226,36 @@ BEGIN
             catalog."Id",
             catalog."Key"
         FROM "LearningMediaScopeTypes" AS catalog
+        UNION ALL
+        SELECT
+            'NotificationEventCategoryTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "NotificationEventCategoryTypes" AS catalog
+        UNION ALL
+        SELECT
+            'EventAudienceTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "EventAudienceTypes" AS catalog
+        UNION ALL
+        SELECT
+            'EventSeverityTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "EventSeverityTypes" AS catalog
+        UNION ALL
+        SELECT
+            'NotificationChannelTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "NotificationChannelTypes" AS catalog
+        UNION ALL
+        SELECT
+            'NotificationTimingTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "NotificationTimingTypes" AS catalog
     )
     SELECT
         string_agg(discrepancy.target_table || ':' || discrepancy.id::text || ':' || discrepancy.key, ', ' ORDER BY discrepancy.target_table, discrepancy.id)
@@ -243,6 +291,17 @@ BEGIN
     ) AS discrepancy;
     IF mismatch IS NOT NULL THEN
         RAISE EXCEPTION 'Defined target seeds mismatch: %', mismatch;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM "EventAudienceTypes" AS audience
+        WHERE audience."RequiresProfile" IS DISTINCT FROM (audience."Id" = 1)
+    ) OR EXISTS (
+        SELECT 1 FROM "NotificationEventCategoryTypes" AS category
+        WHERE (category."EventAudienceTypeId", category."EventSeverityTypeId") IS DISTINCT FROM
+            (CASE WHEN category."Id" = 8 THEN 2 ELSE 1 END,
+             CASE WHEN category."Id" = 8 THEN 3 WHEN category."Id" IN (2, 4) THEN 2 ELSE 1 END)
+    ) THEN
+        RAISE EXCEPTION 'Seeded event audience or category policy mismatch';
     END IF;
 END $target_seed_contract$;
 ROLLBACK;

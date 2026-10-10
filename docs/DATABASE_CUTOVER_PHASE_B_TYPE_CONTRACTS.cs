@@ -165,3 +165,41 @@ public enum LearningMediaScope : byte
     Book = 3,
     Manga = 4
 }
+
+public enum EventCategory : byte
+{
+    DownloadGrabbed = 1,
+    DownloadFailed = 2,
+    ImportCompleted = 3,
+    ImportFailed = 4,
+    ReleaseAvailable = 5,
+    RequestApproved = 6,
+    RequestDenied = 7,
+    StorageProblem = 8
+}
+
+public enum EventAudience : byte
+{
+    Profile = 1,
+    Admin = 2
+}
+
+public enum EventSeverity : byte
+{
+    Info = 1,
+    Warning = 2,
+    Critical = 3
+}
+
+public enum NotificationChannel : byte
+{
+    InApp = 1,
+    Push = 2,
+    Email = 3
+}
+
+public enum NotificationTiming : byte
+{
+    Immediate = 1,
+    Digest = 2
+}
