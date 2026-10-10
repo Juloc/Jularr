@@ -167,6 +167,41 @@ public sealed class PlexProfileConnectionStore
         }
     }
 
+    public async Task<bool> DisconnectMatchingAsync(
+        string profileId,
+        string plexUserId,
+        string verifiedAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        var path = PathFor(profileId);
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var saved = await ReadAsync(path, cancellationToken);
+            if (saved is null ||
+                !string.Equals(saved.PlexUserId, plexUserId, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var token = ProtectedSecrets.Read(protector, saved.ProtectedToken);
+            if (token is null ||
+                !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(token),
+                    System.Text.Encoding.UTF8.GetBytes(verifiedAccessToken)))
+            {
+                return false;
+            }
+
+            File.Delete(path);
+            return true;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private async Task<PersistedConnection?> ReadAsync(
         string path,
         CancellationToken cancellationToken)
