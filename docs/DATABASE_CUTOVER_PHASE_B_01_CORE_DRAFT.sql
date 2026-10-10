@@ -53,6 +53,7 @@ CREATE TABLE "Profiles" (
     "DisplayName" text NOT NULL,
     "UiLocaleId" bigint NOT NULL,
     "PinHash" text,
+    "IsLearningEnabled" boolean NOT NULL DEFAULT false,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_Profiles" PRIMARY KEY ("Id"),
