@@ -42,6 +42,19 @@ public sealed class SqlExecutorTests
     }
 
     [TestMethod]
+    public async Task ReadRequired_UndefinedPersistedEnum_IsRejected()
+    {
+        await using var database = CreateDataSource();
+        await using var context = new SqlContext(database);
+        await context.BeginAsync(SqlAccessMode.ReadOnly);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            () => context.ReadSql.ReadRequiredAsync<Result>(
+                "SELECT 1::bigint AS \"Id\", 'bad'::text AS \"Name\", 250::smallint AS \"State\"",
+                new { }));
+    }
+
+    [TestMethod]
     public async Task ReadPage_UsesValidatedPaginationAndMapsJsonChildren()
     {
         await using var database = CreateDataSource();
