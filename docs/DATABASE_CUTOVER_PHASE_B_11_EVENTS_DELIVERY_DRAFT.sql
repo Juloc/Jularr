@@ -52,6 +52,7 @@ CREATE TABLE "Events" (
     CONSTRAINT "FK_Events_Operations" FOREIGN KEY ("RelatedOperationId")
         REFERENCES "Operations" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "UX_Events_Id_ProfileId" UNIQUE ("Id","ProfileId"),
+    CONSTRAINT "UX_Events_Id_Audience" UNIQUE ("Id","HasProfileAudience"),
     CONSTRAINT "CK_Events_MessageKey" CHECK (length(btrim("MessageKey")) BETWEEN 1 AND 240),
     CONSTRAINT "CK_Events_MessageParams" CHECK (
         jsonb_typeof("MessageParams") = 'object' AND octet_length("MessageParams"::text) <= 16384),
@@ -68,12 +69,15 @@ ALTER TABLE "Notifications"
     ALTER COLUMN "AccountId" DROP NOT NULL,
     ADD COLUMN "ProfileId" bigint,
     ADD COLUMN "EventId" uuid NOT NULL,
+    ADD COLUMN "HasProfileRecipient" boolean GENERATED ALWAYS AS ("ProfileId" IS NOT NULL) STORED,
     ADD CONSTRAINT "FK_Notifications_Profiles"
         FOREIGN KEY ("ProfileId") REFERENCES "Profiles" ("Id") ON DELETE RESTRICT,
     ADD CONSTRAINT "FK_Notifications_Events"
         FOREIGN KEY ("EventId") REFERENCES "Events" ("Id") ON DELETE RESTRICT,
     ADD CONSTRAINT "FK_Notifications_ProfileEvents"
         FOREIGN KEY ("EventId","ProfileId") REFERENCES "Events" ("Id","ProfileId") ON DELETE RESTRICT,
+    ADD CONSTRAINT "FK_Notifications_EventsAudience"
+        FOREIGN KEY ("EventId","HasProfileRecipient") REFERENCES "Events" ("Id","HasProfileAudience") ON DELETE RESTRICT,
     ADD CONSTRAINT "CK_Notifications_ExactlyOneRecipient"
         CHECK (num_nonnulls("ProfileId","AccountId") = 1),
     ADD CONSTRAINT "UX_Notifications_Event_Recipient"
@@ -88,6 +92,7 @@ CREATE TABLE "NotificationDeliveries" (
     "EventId" uuid NOT NULL,
     "ProfileId" bigint,
     "AccountId" bigint,
+    "HasProfileRecipient" boolean GENERATED ALWAYS AS ("ProfileId" IS NOT NULL) STORED,
     "NotificationChannelTypeId" smallint NOT NULL,
     "OperationId" bigint,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
@@ -97,6 +102,8 @@ CREATE TABLE "NotificationDeliveries" (
         REFERENCES "Events" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_NotificationDeliveries_ProfileEvents" FOREIGN KEY ("EventId","ProfileId")
         REFERENCES "Events" ("Id","ProfileId") ON DELETE RESTRICT,
+    CONSTRAINT "FK_NotificationDeliveries_EventsAudience" FOREIGN KEY ("EventId","HasProfileRecipient")
+        REFERENCES "Events" ("Id","HasProfileAudience") ON DELETE RESTRICT,
     CONSTRAINT "FK_NotificationDeliveries_Profiles" FOREIGN KEY ("ProfileId")
         REFERENCES "Profiles" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_NotificationDeliveries_Accounts" FOREIGN KEY ("AccountId")
