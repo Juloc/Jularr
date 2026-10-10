@@ -55,6 +55,7 @@ public sealed class PlexLibraryClient(HttpClient client)
         }
 
         return sections.EnumerateArray()
+            .Where(section => section.ValueKind == JsonValueKind.Object)
             .Select(section => new PlexLibrarySection(
                 GetString(section, "key"),
                 GetString(section, "title"),
@@ -211,6 +212,15 @@ public sealed class PlexLibraryClient(HttpClient client)
         }
 
         var item = matches[0];
+        if (entries.EnumerateArray()
+                .Any(entry => entry.ValueKind == JsonValueKind.Object &&
+                    GetString(entry, "ratingKey") == ratingKey &&
+                    entry.TryGetProperty("librarySectionID", out _) &&
+                    GetNumericId(entry, "librarySectionID") is null))
+        {
+            return null;
+        }
+
         if (item.LibrarySectionId is { } itemSection &&
             containerSection is { } parentSection &&
             !string.Equals(itemSection, parentSection, StringComparison.Ordinal))
@@ -278,12 +288,26 @@ public sealed class PlexLibraryClient(HttpClient client)
         response.EnsureSuccessStatusCode();
         await response.Content.LoadIntoBufferAsync(MaxResponseBytes, timeout.Token);
         await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
-        return await JsonDocument.ParseAsync(
+        var document = await JsonDocument.ParseAsync(
             stream, cancellationToken: timeout.Token);
+        if (document.RootElement.ValueKind != JsonValueKind.Object ||
+            !document.RootElement.TryGetProperty("MediaContainer", out var container) ||
+            container.ValueKind != JsonValueKind.Object)
+        {
+            document.Dispose();
+            throw new InvalidDataException("Plex returned an invalid media document.");
+        }
+
+        return document;
     }
 
     private static PlexLibraryItem? ToItem(JsonElement item)
     {
+        if (item.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
         var ratingKey = GetString(item, "ratingKey");
         var mediaType = GetString(item, "type");
         if (string.IsNullOrWhiteSpace(ratingKey) ||
@@ -297,8 +321,13 @@ public sealed class PlexLibraryClient(HttpClient client)
         if (item.TryGetProperty("Guid", out var guids) &&
             guids.ValueKind == JsonValueKind.Array)
         {
-            foreach (var guid in guids.EnumerateArray())
+            foreach (var guid in guids.EnumerateArray().Take(64))
             {
+                if (guid.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
                 var raw = GetString(guid, "id");
                 var index = raw.IndexOf("://", StringComparison.Ordinal);
                 if (index <= 0 || index > 32)
