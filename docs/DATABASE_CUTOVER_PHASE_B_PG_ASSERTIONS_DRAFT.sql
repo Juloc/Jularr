@@ -1,5 +1,5 @@
 -- READ-ONLY STRUCTURAL ASSERTIONS FOR FRESH, ISOLATED PHASE-B TARGET DATABASE ONLY.
--- Execute after DRAFTS 01..09, NEVER on the current dev or production DB.
+-- Execute after DRAFTS 01..11, NEVER on the current dev or production DB.
 -- This checks actual PostgreSQL catalog constraints, NOT merely SQL text.
 -- It does NOT substitute insertion rejection tests or an EXPLAIN/EF baseline.
 BEGIN TRANSACTION READ ONLY;
@@ -26,7 +26,15 @@ BEGIN
         ('CK_ImageAssignments_OneTarget','c'),
         ('CK_ImageAssignments_ValidKind','c'),
         ('CK_MediaProgress_TargetCount','c'),
-        ('UX_LearningActivityEvents_Profile_Event_Kind','u')
+        ('UX_LearningActivityEvents_Profile_Event_Kind','u'),
+        ('FK_Events_EventAudienceTypes','f'),
+        ('FK_Notifications_EventsAudience','f'),
+        ('FK_NotificationDeliveries_EventsAudience','f'),
+        ('FK_NotificationDeliveryAttempts_NotificationDeliveries','f'),
+        ('CK_Notifications_ExactlyOneRecipient','c'),
+        ('CK_NotificationDeliveries_ExactlyOneRecipient','c'),
+        ('UX_Notifications_Event_Recipient','u'),
+        ('UX_NotificationDeliveries_Event_Recipient_Channel','u')
     )
     SELECT string_agg(r.name,', ' ORDER BY r.name)
     INTO missing
