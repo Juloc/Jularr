@@ -101,6 +101,43 @@ public sealed class ServiceFoundationTests
         CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction" }, gate.Events.ToArray());
     }
 
+    [TestMethod]
+    public async Task ExecuteWithoutOuterTransaction_UsesShortBatchesWithIndependentRollback()
+    {
+        await using var database = CreateDataSource();
+
+        await using (var setup = new SqlContext(database))
+        {
+            await setup.BeginAsync(SqlAccessMode.ReadWrite);
+            await setup.RequireLogicSql().ExecuteAsync("CREATE TABLE \"ServiceExecuteBatchProbe\" (\"Id\" bigint PRIMARY KEY)");
+            await setup.CommitAsync();
+        }
+
+        var gate = new TestGate { Area = ServiceArea.System };
+        var service = new SystemBatchService(new ServiceRuntime(database, gate));
+
+        var error = await Assert.ThrowsExactlyAsync<PostgresException>(
+            () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("batch")));
+        Assert.AreEqual("23505", error.SqlState);
+
+        await using var verify = new SqlContext(database);
+        await verify.BeginAsync(SqlAccessMode.ReadOnly);
+        Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\""));
+        Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync("SELECT \"Id\" FROM \"ServiceExecuteBatchProbe\""));
+
+        CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction", "transaction" }, gate.Events.ToArray());
+    }
+
+    [TestMethod]
+    public async Task ReadService_CannotObtainLogicWriteCapability()
+    {
+        await using var database = CreateDataSource();
+        var service = new ReadWithForbiddenLogicService(new ServiceRuntime(database, new TestGate()));
+
+        var result = await service.ExecuteAsync<AccountResult>(new AccountParameters(6));
+        Assert.AreEqual("blocked", result.Name);
+    }
+
     private enum ListSort : byte
     {
         AccountId,
@@ -126,6 +163,47 @@ public sealed class ServiceFoundationTests
 
         protected override Task<IServiceOutput> ExecuteCoreAsync(ListParameters parameters, NoData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
             => Task.FromResult<IServiceOutput>(new AccountResult(1, "test"));
+    }
+
+    private sealed class ReadWithForbiddenLogicService(ServiceRuntime runtime) : UserReadService<AccountParameters>(runtime)
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+        protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.read");
+        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
+
+        protected override Task<IServiceOutput> ExecuteCoreAsync(AccountParameters parameters, NoData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
+        {
+            Assert.ThrowsExactly<InvalidOperationException>(() => _ = context.Logic);
+            return Task.FromResult<IServiceOutput>(new AccountResult(parameters.AccountId, "blocked"));
+        }
+    }
+
+    private sealed class SystemBatchService(ServiceRuntime runtime) : SystemService<AccountParameters, AccountData>(runtime)
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+        protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.system.execute");
+        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
+
+        protected override async Task<IServiceOutput> ExecuteCoreAsync(AccountParameters parameters, AccountData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
+        {
+            await context.Logic.ExecuteBatchAsync(async (logic, token) =>
+            {
+                await logic.Sql.ExecuteAsync("INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (1)", token);
+                return true;
+            }, cancellationToken);
+
+            await context.Logic.ExecuteBatchAsync(async (logic, token) =>
+            {
+                await logic.Sql.ExecuteAsync("INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (2)", token);
+                await logic.Sql.ExecuteAsync("INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (2)", token);
+                return true;
+            }, cancellationToken);
+
+            return new AccountResult(parameters.AccountId, data.Name);
+        }
     }
 
     private sealed class AccountReadService(ServiceRuntime runtime) : UserReadService<AccountParameters>(runtime)
