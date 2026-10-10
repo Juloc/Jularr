@@ -643,6 +643,8 @@ internal static class PlaybackPreparedRenditionEligibility
                 claimedSource != original.StoredFileId ||
                 !root.TryGetProperty("sourceFingerprint", out var storedFingerprint) ||
                 !string.Equals(storedFingerprint.GetString(), fingerprint, StringComparison.Ordinal) ||
+                !root.TryGetProperty("outputFingerprint", out var outputFingerprint) ||
+                !string.Equals(outputFingerprint.GetString(), candidateAnalysis.SourceFingerprint, StringComparison.Ordinal) ||
                 !root.TryGetProperty("recipeVersion", out var recipe) ||
                 !recipe.TryGetInt32(out var recipeVersion) || recipeVersion != 1 ||
                 !root.TryGetProperty("verifiedOutput", out var verified) ||

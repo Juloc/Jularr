@@ -161,6 +161,8 @@ public sealed class CanonicalPlaybackPlanTests
         var sourceAnalysis = (await fixture.Inventory.GetManyAsync(
             [original.StoredFileId], CancellationToken.None))[original.StoredFileId];
         Assert.IsNotNull(sourceAnalysis.SourceFingerprint);
+        var candidateFingerprint = await MediaInventoryService.TryComputeFingerprintAsync(candidate.Path, CancellationToken.None);
+        Assert.IsNotNull(candidateFingerprint);
         var externallySerialized = System.Text.Json.JsonSerializer.Serialize(sourceAnalysis);
         Assert.IsFalse(externallySerialized.Contains("SourceFingerprint", StringComparison.Ordinal));
         Assert.IsFalse(externallySerialized.Contains("SourceSizeBytes", StringComparison.Ordinal));
@@ -172,6 +174,7 @@ public sealed class CanonicalPlaybackPlanTests
         {
             sourceStoredFileId = original.StoredFileId,
             sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            outputFingerprint = candidateFingerprint,
             recipeVersion = 1,
             verifiedOutput = true
         });
@@ -294,7 +297,22 @@ public sealed class CanonicalPlaybackPlanTests
         version.Notes = System.Text.Json.JsonSerializer.Serialize(new
         {
             sourceStoredFileId = original.StoredFileId,
+            sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            outputFingerprint = new string('0', 64),
+            recipeVersion = 1,
+            verifiedOutput = true
+        });
+        await fixture.Db.SaveChangesAsync();
+        var corruptProvenance = (await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+        Assert.AreEqual(original.StoredFileId, corruptProvenance.MediaFileId,
+            "A prepared version with the wrong output fingerprint must not be reused.");
+
+        version.Notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = original.StoredFileId,
             sourceFingerprint = new string('0', 64),
+            outputFingerprint = candidateFingerprint,
             recipeVersion = 1,
             verifiedOutput = true
         });
@@ -313,6 +331,7 @@ public sealed class CanonicalPlaybackPlanTests
         {
             sourceStoredFileId = original.StoredFileId,
             sourceFingerprint = sourceAnalysis.SourceFingerprint,
+            outputFingerprint = candidateFingerprint,
             recipeVersion = 2,
             verifiedOutput = true
         });
@@ -336,6 +355,71 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.IsNull(await storage.ResolveVideoAsync(movie.Id, null, CancellationToken.None));
         Assert.IsNull(await planner.PlanAsync(
             PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task PreparedVideoPublication_RequiresVerifiedOutputAndKeepsOriginalAsInstalledRelease()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var storage = new CanonicalMediaStorageService(fixture.Db);
+        var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Prepared Release" };
+        fixture.Db.Works.Add(movie);
+        await fixture.Db.SaveChangesAsync();
+
+        var hevcStereo = MediaProbeFixtures.H264Stereo
+            .Replace("\"codec_name\": \"h264\"", "\"codec_name\": \"hevc\"", StringComparison.Ordinal)
+            .Replace("\"profile\": \"High\"", "\"profile\": \"Main\"", StringComparison.Ordinal)
+            .Replace("\"format_name\": \"mov,mp4,m4a,3gp,3g2,mj2\"",
+                     "\"format_name\": \"matroska,webm\"", StringComparison.Ordinal);
+        var source = await AttachAsync(
+            fixture, storage, movie.Id, null, "source.mkv", hevcStereo);
+        var sourceAnalysis = await fixture.Inventory.EnsureAnalyzedAsync(
+            source.StoredFileId, CancellationToken.None);
+        Assert.IsNotNull(sourceAnalysis);
+
+        var cacheRoot = Path.Combine(fixture.TempRoot, "prepared-cache");
+        Directory.CreateDirectory(cacheRoot);
+        var output = Path.Combine(cacheRoot, "mobile-1080.mp4");
+        await File.WriteAllBytesAsync(output, new byte[3072]);
+
+        var missingProbe = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            storage.PublishVerifiedPreparedVideoAsync(
+                source, sourceAnalysis, output, cacheRoot, "mobile1080",
+                fixture.Runner, CancellationToken.None));
+        Assert.IsNotNull(missingProbe);
+        Assert.AreEqual(1, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count,
+            "Failed ffprobe must not publish any prepared Version.");
+
+        fixture.Runner.Returns(output, MediaProbeFixtures.H264Stereo);
+        var prepared = await storage.PublishVerifiedPreparedVideoAsync(
+            source, sourceAnalysis, output, cacheRoot, "mobile1080",
+            fixture.Runner, CancellationToken.None);
+        Assert.AreEqual(CanonicalMediaStorageService.PreparedVideoVersionSource, prepared.VersionSource);
+        Assert.AreNotEqual(source.StoredFileId, prepared.StoredFileId);
+        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count);
+        var installed = await storage.ListVideoFilesAsync(movie.Id, CancellationToken.None);
+        Assert.AreEqual(1, installed.Count);
+        Assert.AreEqual(source.StoredFileId, installed[0].StoredFileId);
+
+        var same = await storage.PublishVerifiedPreparedVideoAsync(
+            source, sourceAnalysis, output, cacheRoot, "mobile1080",
+            fixture.Runner, CancellationToken.None);
+        Assert.AreEqual(prepared.StoredFileId, same.StoredFileId,
+            "Publishing one recipe twice must return the existing canonical derivative.");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            storage.PublishVerifiedPreparedVideoAsync(
+                source, sourceAnalysis, source.Path, cacheRoot, "unsafe",
+                fixture.Runner, CancellationToken.None));
+
+        File.Delete(source.Path);
+        await File.WriteAllBytesAsync(source.Path, new byte[512]);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            storage.PublishVerifiedPreparedVideoAsync(
+                source, sourceAnalysis, output, cacheRoot, "sourcechanged",
+                fixture.Runner, CancellationToken.None));
+        Assert.AreEqual(2, (await storage.ResolveVideoCandidatesAsync(movie.Id, null, CancellationToken.None)).Count,
+            "Stale original bytes cannot create a second derivative.");
     }
 
     [DataTestMethod]
@@ -372,6 +456,8 @@ public sealed class CanonicalPlaybackPlanTests
         var originalAnalysis = await fixture.Inventory.EnsureAnalyzedAsync(original.StoredFileId, CancellationToken.None);
         await fixture.Inventory.EnsureAnalyzedAsync(other.StoredFileId, CancellationToken.None);
         Assert.IsNotNull(originalAnalysis!.SourceFingerprint);
+        var otherFingerprint = await MediaInventoryService.TryComputeFingerprintAsync(other.Path, CancellationToken.None);
+        Assert.IsNotNull(otherFingerprint);
 
         var version = await fixture.Db.WorkVersions.FindAsync(other.WorkVersionId);
         Assert.IsNotNull(version);
@@ -380,6 +466,7 @@ public sealed class CanonicalPlaybackPlanTests
         {
             sourceStoredFileId = original.StoredFileId,
             sourceFingerprint = originalAnalysis.SourceFingerprint,
+            outputFingerprint = otherFingerprint,
             recipeVersion = 1,
             verifiedOutput = true
         });

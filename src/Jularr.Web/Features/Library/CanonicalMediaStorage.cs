@@ -397,6 +397,242 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         return result;
     }
 
+    /// <summary>
+    /// Publishes a completed, probed, source-linked derivative through the canonical Version/Asset/File
+    /// owner in one database commit. The caller must use the Maintenance operation for encoding and
+    /// place only finished output inside Jularr's managed prepared-cache root before calling this.
+    /// Nothing is visible during conversion; a failed verification never creates any Version.
+    /// </summary>
+    public async Task<CanonicalPlayableFile> PublishVerifiedPreparedVideoAsync(
+        CanonicalPlayableFile source,
+        MediaInventoryEntry sourceAnalysis,
+        string preparedPath,
+        string managedCacheRoot,
+        string recipeKey,
+        IMediaProbeRunner probeRunner,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(sourceAnalysis);
+        ArgumentNullException.ThrowIfNull(probeRunner);
+        if (string.IsNullOrWhiteSpace(recipeKey) || recipeKey.Length > 32 ||
+            recipeKey.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-'))
+        {
+            throw new ArgumentException("The recipe identifier must be a short alphanumeric key.", nameof(recipeKey));
+        }
+
+        var root = NormalizeRoot(managedCacheRoot);
+        if (root.Length < 2 || string.Equals(
+                root, NormalizeRoot(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(managedCacheRoot))!),
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The prepared cache cannot use a filesystem root.");
+        }
+
+        var path = System.IO.Path.GetFullPath(preparedPath);
+        if (!path.StartsWith(root + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+            !string.Equals(System.IO.Path.GetExtension(path), ".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("A prepared file must stay inside the managed cache.");
+        }
+
+        var sourceVersion = await db.WorkVersions.AsNoTracking()
+            .SingleOrDefaultAsync(version => version.Id == source.WorkVersionId &&
+                                             version.WorkId == source.WorkId, cancellationToken);
+        var sourceFile = await db.StoredFiles.AsNoTracking()
+            .SingleOrDefaultAsync(file => file.Id == source.StoredFileId &&
+                                           file.Path == source.Path, cancellationToken);
+        if (sourceVersion is null || sourceFile is null ||
+            sourceVersion.Source == PreparedVideoVersionSource ||
+            sourceFile.SizeBytes != source.SizeBytes ||
+            sourceFile.LastWriteTimeUtc != source.LastWriteTimeUtc ||
+            sourceAnalysis.MediaFileId != source.StoredFileId ||
+            sourceAnalysis.Status != MediaAnalysisStatus.Succeeded ||
+            sourceAnalysis.ProbeVersion != MediaInventoryService.CurrentProbeVersion ||
+            sourceAnalysis.SourceSizeBytes != source.SizeBytes ||
+            sourceAnalysis.SourceLastWriteTimeUtc != source.LastWriteTimeUtc ||
+            sourceAnalysis.SourceFingerprint is not { Length: 64 } sourceFingerprint ||
+            sourceAnalysis.Technical is not { } sourceTechnical)
+        {
+            throw new InvalidOperationException("The prepared file does not have a current canonical source.");
+        }
+
+        var original = new FileInfo(source.Path);
+        var output = new FileInfo(path);
+        if (!original.Exists || original.Length != source.SizeBytes ||
+            Math.Abs((original.LastWriteTimeUtc - source.LastWriteTimeUtc).Ticks) >= 10 ||
+            !output.Exists || output.Length == 0 ||
+            string.Equals(source.Path, path, StringComparison.Ordinal) ||
+            !string.Equals(
+                await MediaInventoryService.TryComputeFingerprintAsync(source.Path, cancellationToken),
+                sourceFingerprint,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The original or prepared output is missing or changed.");
+        }
+
+        var probe = await probeRunner.ProbeAsync(path, cancellationToken);
+        if (probe.Status != MediaProbeRunStatus.Completed)
+        {
+            throw new InvalidDataException("The prepared output did not pass ffprobe.");
+        }
+
+        MediaTechnicalInfo preparedTechnical;
+        try
+        {
+            preparedTechnical = MediaProbeParser.Parse(probe.Output);
+        }
+        catch (System.Text.Json.JsonException exception)
+        {
+            throw new InvalidDataException("The prepared output probe was invalid.", exception);
+        }
+
+        var sourceTracks = sourceTechnical.Streams.Where(track =>
+            track.Kind is MediaTrackKind.Audio or MediaTrackKind.Subtitle).ToArray();
+        var outputTracks = preparedTechnical.Streams.Where(track =>
+            track.Kind is MediaTrackKind.Audio or MediaTrackKind.Subtitle).ToArray();
+        if (sourceTechnical.DurationSeconds is not > 0 ||
+            preparedTechnical.DurationSeconds is not > 0 ||
+            Math.Abs(sourceTechnical.DurationSeconds.Value - preparedTechnical.DurationSeconds.Value) > 0.25 ||
+            sourceTechnical.Video is not { Width: > 0, Height: > 0 } sourceVideo ||
+            preparedTechnical.Video is not { Width: > 0, Height: > 0 } outputVideo ||
+            !string.Equals(sourceVideo.DynamicRange, outputVideo.DynamicRange, StringComparison.OrdinalIgnoreCase) ||
+            Math.Abs((double)sourceVideo.Width.Value / sourceVideo.Height.Value -
+                     (double)outputVideo.Width.Value / outputVideo.Height.Value) > 0.02 ||
+            sourceTracks.Length != outputTracks.Length ||
+            !sourceTracks.Zip(outputTracks).All(pair =>
+                pair.First.Kind == pair.Second.Kind &&
+                pair.First.Index == pair.Second.Index &&
+                string.Equals(pair.First.Language, pair.Second.Language, StringComparison.OrdinalIgnoreCase) &&
+                pair.First.IsDefault == pair.Second.IsDefault &&
+                pair.First.IsForced == pair.Second.IsForced &&
+                pair.First.Channels == pair.Second.Channels &&
+                string.Equals(pair.First.Title, pair.Second.Title, StringComparison.Ordinal) &&
+                (pair.First.Kind != MediaTrackKind.Subtitle ||
+                 string.Equals(pair.First.Codec, pair.Second.Codec, StringComparison.OrdinalIgnoreCase))))
+        {
+            throw new InvalidDataException("The prepared output changed the source timeline or track identity.");
+        }
+
+        output.Refresh();
+        if (!output.Exists || output.Length == 0)
+        {
+            throw new IOException("The verified output disappeared before publication.");
+        }
+
+        var outputFingerprint = await MediaInventoryService.TryComputeFingerprintAsync(path, cancellationToken);
+        if (outputFingerprint is not { Length: 64 })
+        {
+            throw new IOException("The prepared output cannot be fingerprinted.");
+        }
+
+        var versionKey = $"prepared:v1:{source.StoredFileId:N}:{sourceFingerprint[..32]}:{recipeKey}";
+        var notes = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            sourceStoredFileId = source.StoredFileId,
+            sourceFingerprint,
+            outputFingerprint,
+            recipeVersion = 1,
+            recipeKey,
+            verifiedOutput = true
+        });
+
+        // Another job may have published the same source/recipe. Reuse the canonical row only
+        // if it still points to these exact bytes; never adopt an unrelated existing path.
+        var existing = await (
+            from version in db.WorkVersions.AsNoTracking()
+            join asset in db.MediaAssets.AsNoTracking() on version.Id equals asset.WorkVersionId
+            join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
+            where version.WorkId == source.WorkId && version.VersionKey == versionKey &&
+                  asset.WorkEpisodeId == source.WorkEpisodeId && asset.Kind == MediaAssetKind.Video
+            select new { version, asset, file })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (existing is not null)
+        {
+            if (existing.version.Source != PreparedVideoVersionSource ||
+                existing.version.Notes != notes ||
+                existing.file.Path != path ||
+                existing.file.SizeBytes != output.Length ||
+                Math.Abs((existing.file.LastWriteTimeUtc - output.LastWriteTimeUtc).Ticks) >= 10)
+            {
+                throw new InvalidOperationException("An incompatible prepared version already exists.");
+            }
+
+            return new CanonicalPlayableFile(
+                existing.asset.Id, existing.file.Id, source.WorkId, source.WorkEpisodeId,
+                existing.version.Id, existing.file.Path, existing.file.SizeBytes,
+                existing.file.LastWriteTimeUtc, existing.version.Source, existing.version.Notes);
+        }
+
+        if (await db.StoredFiles.AnyAsync(file => file.Path == path, cancellationToken))
+        {
+            throw new InvalidOperationException("The prepared cache path belongs to another StoredFile.");
+        }
+
+        // Prepared roots are recorded but not enabled for import scans. The real original
+        // always stays on its existing storage; the disposable cache is a separate root.
+        var libraryRoots = await db.LibraryRoots.ToListAsync(cancellationToken);
+        if (libraryRoots.Any(candidate => candidate.IsEnabled &&
+            (string.Equals(NormalizeRoot(candidate.Path), root, StringComparison.Ordinal) ||
+             root.StartsWith(NormalizeRoot(candidate.Path) + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+             NormalizeRoot(candidate.Path).StartsWith(root + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal))))
+        {
+            throw new InvalidOperationException("The prepared cache may not overlap an enabled media library.");
+        }
+
+        var cacheRoot = libraryRoots.FirstOrDefault(candidate =>
+            string.Equals(NormalizeRoot(candidate.Path), root, StringComparison.Ordinal));
+        if (cacheRoot is null)
+        {
+            cacheRoot = new LibraryRoot
+            {
+                Name = "Prepared playback cache",
+                Path = root,
+                IsEnabled = false
+            };
+            db.LibraryRoots.Add(cacheRoot);
+        }
+        else if (cacheRoot.IsEnabled)
+        {
+            throw new InvalidOperationException("An enabled media library cannot be a prepared cache root.");
+        }
+
+        var versionRow = new WorkVersion
+        {
+            WorkId = source.WorkId,
+            VersionKey = versionKey,
+            UnitKey = sourceVersion.UnitKey,
+            Source = PreparedVideoVersionSource,
+            Notes = notes
+        };
+        var mediaAsset = new MediaAsset
+        {
+            WorkId = source.WorkId,
+            WorkEpisodeId = source.WorkEpisodeId,
+            Kind = MediaAssetKind.Video,
+            WorkVersionId = versionRow.Id
+        };
+        var stored = new StoredFile
+        {
+            MediaAssetId = mediaAsset.Id,
+            LibraryRootId = cacheRoot.Id,
+            Path = path,
+            SizeBytes = output.Length,
+            LastWriteTimeUtc = output.LastWriteTimeUtc
+        };
+
+        db.WorkVersions.Add(versionRow);
+        db.MediaAssets.Add(mediaAsset);
+        db.StoredFiles.Add(stored);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return new CanonicalPlayableFile(
+            mediaAsset.Id, stored.Id, source.WorkId, source.WorkEpisodeId,
+            versionRow.Id, stored.Path, stored.SizeBytes, stored.LastWriteTimeUtc,
+            versionRow.Source, versionRow.Notes);
+    }
+
     /// <summary>Every video file of the Work with the quality its Version recorded; episodes are told apart by <see cref="InstalledVideoFile.WorkEpisodeId"/>, a Movie has none.</summary>
     public async Task<IReadOnlyList<InstalledVideoFile>> ListVideoFilesAsync(long workId, CancellationToken cancellationToken) =>
         await (
