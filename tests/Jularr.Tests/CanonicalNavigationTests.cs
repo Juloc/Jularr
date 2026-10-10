@@ -161,7 +161,7 @@ public sealed partial class CanonicalNavigationTests
         var root = Path.Combine(RepositoryRoot(), "src", "Jularr.Web");
         var navigation = File.ReadAllText(Path.Combine(root, "Pages", "Shared", "_AppNavigation.cshtml"));
         var search = File.ReadAllText(Path.Combine(root, "Pages", "Shared", "_AppSearch.cshtml"));
-        
+
         Assert.IsFalse(navigation.Contains("/Discover", StringComparison.Ordinal), "The header search stays on every page, Discover included.");
         StringAssert.Contains(search, "Context.Request.Query[\"q\"]");
         Assert.IsFalse(File.ReadAllText(Path.Combine(root, "Pages", "Index.cshtml")).Contains("class=\"dc-search\"", StringComparison.Ordinal), "The page has no search field of its own.");
