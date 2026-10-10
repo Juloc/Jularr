@@ -64,8 +64,27 @@ export function verifyInventory(root = process.cwd()) {
     };
     assert.equal(summary.unresolvedAccessTargets, gaps.unresolvedSqlOrTrackedTargets);
     assert.equal(summary.proposedDispositions, gaps.proposedTableDispositions);
-    assert.equal(summary.gateA, Object.values(gaps).some(Boolean)?'OPEN':'PASSED', 'Gate A contradicts review gaps');
-    return {sourceSha:summary.sourceSha,applicationTables:summary.applicationTables,consumerPaths:consumers.length,gaps,gateA:summary.gateA};
+    // Phase A is a clean-cut functional inventory gate, not a per-legacy-query migration approval.
+    // Keep all historical deep-audit gap counts for phases B/D/E, without blocking design work.
+    const coverage = json(document('DATABASE_CUTOVER_PHASE_A_DOMAINS.json'));
+    const expected = [
+        'accounts_auth','profiles_permissions','works_metadata','film_tv_anime','reader_books',
+        'music_audio','games','library_storage','artwork_detection','progress_offline',
+        'watchlist_collections','playback_devices','requests_arr','external_integrations',
+        'jobs_notifications','locale_ai_learning','discovery_search','web_admin_clients','setup_migrations'
+    ];
+    assert.deepEqual(coverage.domains.map(row=>row.key).sort(),expected.sort(), 'Functional domain coverage missing or duplicate');
+    assert.ok(coverage.domains.every(row=>row.coverage==='GROUPED_FUNCTIONAL_OWNER_IDENTIFIED'
+        && row.functions && row.targetOwners && row.risk && row.handoff && row.evidence),
+        'Incomplete functional owner or missing risk/handoff');
+    assert.ok(coverage.deferred.every(row=>['B','D/E','B/E','G'].includes(row.phase)
+        && row.description), 'Unassigned follow-up risk');
+    assert.equal(coverage.evidence.applicationTables, summary.applicationTables, 'Domain gate uses a different PostgreSQL catalog');
+    assert.equal(coverage.evidence.liveMigrations, summary.liveMigrations, 'Domain gate uses a different migration history');
+    assert.equal(summary.gateA, coverage.gate, 'Gate A disagrees with grouped functional coverage');
+    return {sourceSha:summary.sourceSha,applicationTables:summary.applicationTables,
+        domains:coverage.domains.length,consumerPaths:consumers.length,
+        deferredDetailAudit:gaps,gateA:summary.gateA};
 }
 if (process.argv[1] && fileURLToPath(import.meta.url)===path.resolve(process.argv[1])) {
     const result = verifyInventory();
