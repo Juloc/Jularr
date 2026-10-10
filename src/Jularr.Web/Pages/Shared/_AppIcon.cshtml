@@ -4,6 +4,16 @@
      fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     @switch (Model)
     {
+        case "copy":
+            <rect x="8" y="8" width="12" height="12" rx="2" />
+            <path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" />
+            break;
+        case "default":
+            <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z" />
+            break;
+        case "delete":
+            <path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14M10 10v6M14 10v6" />
+            break;
         case "home":
             <path d="M3.5 10.5 12 3.5l8.5 7" />
             <path d="M5.5 9v11h4.75v-6h3.5v6h4.75V9" />
@@ -23,7 +33,7 @@
             <path d="m16.2 5.4 3.3-.8 2.9 14.6-3.3.8z" />
             break;
         case "watchlist":
-            <path d="m12 3.8 2.45 4.96 5.47.8-3.96 3.86.93 5.45L12 16.3l-4.89 2.57.93-5.45-3.96-3.86 5.47-.8z" />
+            <path d="M6 3.5h12v17l-6-4-6 4Z" />
             break;
         case "calendar":
             <rect x="3.5" y="5" width="17" height="15.5" rx="2" />

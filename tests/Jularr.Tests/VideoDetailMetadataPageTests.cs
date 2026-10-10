@@ -512,7 +512,7 @@ public sealed class VideoDetailMetadataPageTests
         Assert.AreEqual(1, await store.EnqueueAsync(requested.Id, "en", WorkMetadataRefreshPriority.Interactive, now, CancellationToken.None), "A real promotion is a change.");
         Assert.AreEqual(0, await store.EnqueueAsync(requested.Id, "en", WorkMetadataRefreshPriority.Interactive, now, CancellationToken.None), "The same promotion again changes nothing.");
         Assert.AreEqual(0, await store.EnqueueAsync(requested.Id, "en", WorkMetadataRefreshPriority.Requested, now, CancellationToken.None), "A lower priority never demotes.");
-        Assert.AreEqual(0, await store.EnqueueAsync(Guid.NewGuid(), "en", WorkMetadataRefreshPriority.Interactive, now, CancellationToken.None), "An unknown Work is not spooled.");
+        Assert.AreEqual(0, await store.EnqueueAsync(Random.Shared.NextInt64(1, long.MaxValue), "en", WorkMetadataRefreshPriority.Interactive, now, CancellationToken.None), "An unknown Work is not spooled.");
     }
 
     [TestMethod]

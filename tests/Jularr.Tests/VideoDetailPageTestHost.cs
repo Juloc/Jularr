@@ -156,7 +156,10 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddSingleton(new DownloadClientSelector(clientStore, health));
                     services.AddScoped<DownloadClientSubmissionService>();
                     services.AddScoped<ReleaseRequestTracker>();
+                    services.AddScoped<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
                     services.AddScoped<VideoRequestWorkResolver>();
+                    services.AddMonitoringForTests();
+                    services.AddScoped<WantedReconciler>();
                     services.AddScoped<VideoAcquisitionEngine>();
                     services.AddInstantPlay();
                     services.AddSingleton<IMediaProbeRunner>(probe);

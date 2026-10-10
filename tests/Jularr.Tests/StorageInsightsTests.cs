@@ -390,9 +390,10 @@ public sealed class StorageInsightsTests
         public void AddMovieFile(LibraryRoot root, string title, long bytes)
         {
             var work = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = title };
+            Db.Works.Add(work);
+            Db.SaveChanges();
             var version = new WorkVersion { WorkId = work.Id, VersionKey = $"video-file:{title}" };
             var asset = new MediaAsset { WorkId = work.Id, WorkVersionId = version.Id, Kind = MediaAssetKind.Video };
-            Db.Works.Add(work);
             Db.WorkVersions.Add(version);
             Db.MediaAssets.Add(asset);
             Db.MediaFiles.Add(new MediaFile

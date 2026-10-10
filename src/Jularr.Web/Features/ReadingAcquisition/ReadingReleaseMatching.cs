@@ -4,6 +4,7 @@ using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Selection;
 
@@ -25,7 +26,61 @@ public sealed record ReadingReleaseInfo(
     double? ChapterStart,
     double? ChapterEnd,
     string? Language,
-    bool IsCompleteOrBatch);
+    bool IsCompleteOrBatch,
+    int? VolumeEnd = null)
+{
+    private bool Everything => VolumeNumber is null && ChapterStart is null && IsCompleteOrBatch;
+
+    public bool HoldsVolume(int volume) => Everything || (VolumeNumber is { } first && volume >= first && volume <= (VolumeEnd ?? first));
+
+    public bool HoldsChapter(double chapter) => Everything || (ChapterStart is { } first && chapter >= first && chapter <= (ChapterEnd ?? first));
+}
+
+// What a Work still lacks and already holds, as volume and chapter numbers; present only when the Work has a provider-identified structure. A held unit whose
+// installed quality the profile still wants better (Upgrade*, with that quality) is wanted again, but only by a release that is better by the profile's upgrade policy.
+public sealed record ReadingWant(
+    IReadOnlyList<int> Volumes,
+    IReadOnlyList<double> Chapters,
+    IReadOnlyList<int> HeldVolumes,
+    IReadOnlyList<double> HeldChapters)
+{
+    public IReadOnlyDictionary<int, string?> UpgradeVolumes { get; init; } = new Dictionary<int, string?>();
+
+    public IReadOnlyDictionary<double, string?> UpgradeChapters { get; init; } = new Dictionary<double, string?>();
+
+    public QualityProfile? Profile { get; init; }
+
+    public bool IsEmpty => Volumes.Count == 0 && Chapters.Count == 0 && UpgradeVolumes.Count == 0 && UpgradeChapters.Count == 0;
+
+    public bool HasMissing => Volumes.Count > 0 || Chapters.Count > 0;
+
+    public int Total => Volumes.Count + Chapters.Count + UpgradeVolumes.Count + UpgradeChapters.Count;
+
+    public (int Wanted, int Unwanted) Cover(ReadingReleaseInfo release, string? quality)
+    {
+        var (holds, contains) = Spans(release);
+        var upgraded = UpgradeVolumes.Count(unit => holds(unit.Key) && Improves(unit.Value, quality)) + UpgradeChapters.Count(unit => contains(unit.Key) && Improves(unit.Value, quality));
+        var held = HeldVolumes.Count(unit => holds(unit)) + HeldChapters.Count(unit => contains(unit));
+        return (Volumes.Count(unit => holds(unit)) + Chapters.Count(unit => contains(unit)) + upgraded, Math.Max(0, held - upgraded));
+    }
+
+    // The installed quality of the first unit a release holds that is only wanted for an upgrade, or null when it holds none.
+    public string? UpgradeTargetOf(ReadingReleaseInfo release)
+    {
+        var (holds, contains) = Spans(release);
+        return UpgradeVolumes.Where(unit => holds(unit.Key)).Select(unit => unit.Value).Concat(UpgradeChapters.Where(unit => contains(unit.Key)).Select(unit => unit.Value)).FirstOrDefault();
+    }
+
+    public bool OverlapsUpgrade(ReadingReleaseInfo release)
+    {
+        var (holds, contains) = Spans(release);
+        return UpgradeVolumes.Keys.Any(unit => holds(unit)) || UpgradeChapters.Keys.Any(unit => contains(unit));
+    }
+
+    private bool Improves(string? installed, string? candidate) => Profile is not null && UpgradePolicy.IsUpgrade(Profile, installed, candidate);
+
+    private static (Func<int, bool> Holds, Func<double, bool> Contains) Spans(ReadingReleaseInfo release) => (release.HoldsVolume, release.HoldsChapter);
+}
 
 public sealed record ReadingAcquisitionTarget(
     MediaAcquisitionKind Kind,
@@ -35,46 +90,12 @@ public sealed record ReadingAcquisitionTarget(
     int? RequestedVolume = null,
     double? RequestedChapterStart = null,
     double? RequestedChapterEnd = null,
-    IReadOnlyList<string>? PreferredLanguages = null);
-
-public sealed record RankedReadingRelease(
-    ProwlarrReleaseCandidate Release,
-    ReadingReleaseInfo Parsed,
-    int Score,
-    string? RejectedBecause)
-{
-    /// <summary>What the shared selection engine concluded: identity confidence, decision, the profile score and every reason.</summary>
-    public CandidateEvaluation? Selection { get; init; }
-}
-
-/// <summary>Every release judged by the shared selection engine, best first, and in words why the best one wins.</summary>
-public sealed record ReadingRanking(IReadOnlyList<RankedReadingRelease> Ranked, string? WinnerReason);
-
-public sealed record ReadingUsenetSearchResult(
-    IReadOnlyList<string> Queries,
-    IReadOnlyList<RankedReadingRelease> Ranked,
-    IReadOnlyList<IndexerSearchWarning> Warnings,
-    bool UsedCategoryFallback)
-{
-    /// <summary>The complete search with its per-indexer outcomes, provenance and trace; Manual Search reports from it.</summary>
-    public AcquisitionSearchResult? Search { get; init; }
-
-    public string? WinnerReason { get; init; }
-
-    public ProwlarrReleaseCandidate? Picked =>
-        Ranked.FirstOrDefault(candidate => candidate.Score > 0)?.Release;
-
-    public string FailureMessage =>
-        Ranked.Count == 0
-            ? Warnings.Count > 0
-                ? $"No release found on the indexers ({Warnings[0].IndexerName}: {Warnings[0].Message})."
-                : "No release found on the indexers."
-            : "No suitable release matched the requested title, format, volume, chapter or language.";
-}
+    IReadOnlyList<string>? PreferredLanguages = null,
+    ReadingWant? Want = null);
 
 public static partial class ReadingReleaseParser
 {
-    [GeneratedRegex(@"(?:^|[\s._\-\[\(])(?:vol(?:ume)?\.?\s*|v)(?<value>\d{1,3})(?:\b|[\s._\-\]\)])", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?:^|[\s._\-\[\(])(?:vol(?:ume)?s?\.?\s*|v)(?<value>\d{1,3})(?:\s*(?:-|–|—|to)\s*(?:vol(?:ume)?s?\.?\s*|v)?(?<end>\d{1,3})(?!\d))?(?:\b|[\s._\-\]\)])", RegexOptions.IgnoreCase)]
     private static partial Regex VolumeRegex();
 
     [GeneratedRegex(@"(?:^|[\s._\-\[\(])(?:ch(?:apter)?\.?\s*|c)(?<start>\d{1,4}(?:\.\d+)?)(?:\s*(?:-|–|—|to)\s*(?:ch(?:apter)?\.?\s*|c)?(?<end>\d{1,4}(?:\.\d+)?))?", RegexOptions.IgnoreCase)]
@@ -100,11 +121,18 @@ public static partial class ReadingReleaseParser
                             : ReadingReleaseFormat.Unknown;
 
         int? volume = null;
+        int? volumeEnd = null;
         var volumeMatch = VolumeRegex().Match(value);
         if (volumeMatch.Success &&
             int.TryParse(volumeMatch.Groups["value"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedVolume))
         {
             volume = parsedVolume;
+            if (volumeMatch.Groups["end"].Success &&
+                int.TryParse(volumeMatch.Groups["end"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedVolumeEnd) &&
+                parsedVolumeEnd > parsedVolume)
+            {
+                volumeEnd = parsedVolumeEnd;
+            }
         }
 
         double? chapterStart = null;
@@ -124,6 +152,7 @@ public static partial class ReadingReleaseParser
 
         var language = DetectLanguage(lower);
         var completeOrBatch =
+            volumeEnd is not null ||
             ContainsToken(lower, "complete") ||
             ContainsToken(lower, "completed") ||
             ContainsToken(lower, "batch") ||
@@ -146,7 +175,8 @@ public static partial class ReadingReleaseParser
             chapterStart,
             chapterEnd,
             language,
-            completeOrBatch);
+            completeOrBatch,
+            volumeEnd);
     }
 
     private static string? DetectLanguage(string lower)
@@ -192,7 +222,7 @@ public static partial class ReadingReleaseParser
     }
 }
 
-public static class ReadingReleaseSelector
+public static class ReadingReleaseJudge
 {
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -200,42 +230,33 @@ public static class ReadingReleaseSelector
         "le", "la", "les", "de", "no", "to"
     };
 
-    /// <summary>
-    /// Every release judged for the target and ordered by the shared selection engine: identity and format gates first, then the format tier of
-    /// the profile, then the preference points of the request (exact volume, batch, chapter, language order, author), then the shared tiebreaks.
-    /// </summary>
-    public static IReadOnlyList<RankedReadingRelease> Rank(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
-        ReadingAcquisitionTarget target,
-        QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null,
-        DateTimeOffset? wantedSince = null) =>
-        Evaluate(releases, target, profile, reliability, wantedSince).Ranked;
+    // The one scale the Manga and Light Novel pages show: a base, a step per format tier and the request's preference points, minus the storage cost; 0 when refused.
+    public static int DisplayScore(ReleaseEvaluation<ReadingReleaseInfo> evaluation) =>
+        evaluation.Selection.IsSelectable && evaluation.Candidate.InternalDownloadUri is not null
+            ? Math.Max(1, 100 + (3 - Math.Min(evaluation.Selection.QualityRank, 3)) * 10 + evaluation.Selection.PreferenceScore - evaluation.Selection.Candidate.Coverage.Cost)
+            : 0;
 
-    public static ReadingRanking Evaluate(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
-        ReadingAcquisitionTarget target,
-        QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null,
-        DateTimeOffset? wantedSince = null)
-    {
-        var judged = releases
-            .GroupBy(release => release.Identity, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => ToJudgement(group.First(), target), StringComparer.Ordinal);
-        var now = DateTimeOffset.UtcNow;
-        var selection = ReleaseSelectionEngine.Select(profile ?? ReadingQualityProfiles.For(target.Kind), new SelectionContext(now, wantedSince ?? now), [.. judged.Values.Select(item => item.Candidate)], reliability);
-        return new ReadingRanking([.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))], selection.WinnerReason);
-    }
+    public static string? RejectedBecause(ReleaseEvaluation<ReadingReleaseInfo> evaluation) =>
+        DisplayScore(evaluation) > 0
+            ? null
+            : evaluation.Selection.Reasons.FirstOrDefault(reason => reason.Kind == SelectionReasonKind.Safety)?.Detail
+              ?? (evaluation.Selection.Candidate.Identity.Confidence == IdentityConfidence.Conflict
+                  ? evaluation.Selection.Candidate.Identity.Detail
+                  : string.Join("; ", evaluation.Selection.Score?.RejectionReasons ?? []));
 
-    public static RankedReadingRelease Judge(
-        ProwlarrReleaseCandidate release,
-        ReadingAcquisitionTarget target,
-        QualityProfile? profile = null) =>
-        Rank([release], target, profile)[0];
+    // The search facts and identity judge of one Manga or Light Novel target for the shared acquisition core.
+    public static MediaSearchPlan<ReadingReleaseInfo> Plan(ReadingAcquisitionTarget target) =>
+        new(
+            new SearchIntent(target.Kind, target.Title)
+            {
+                Aliases = target.Aliases ?? [],
+                Creator = target.Author,
+                Volume = target.RequestedVolume ?? (target.Want is { Volumes: [var only], Chapters.Count: 0 } ? only : null),
+                Chapter = target.RequestedChapterStart is { } chapter ? (decimal)chapter : null
+            },
+            release => Judge(release, target));
 
-    private sealed record ReadingJudgement(ProwlarrReleaseCandidate Release, ReadingReleaseInfo Parsed, SelectionCandidate Candidate);
-
-    private static ReadingJudgement ToJudgement(ProwlarrReleaseCandidate release, ReadingAcquisitionTarget target)
+    public static ReleaseJudgement<ReadingReleaseInfo> Judge(AcquisitionCandidate release, ReadingAcquisitionTarget target)
     {
         var parsed = ReadingReleaseParser.Parse(release.Title);
         var names = new[] { target.Title }
@@ -248,6 +269,16 @@ public static class ReadingReleaseSelector
             .Select(NormalizeLanguage)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray() ?? [];
+
+        // A direct source found the candidate for this very request, and a public full-text copy holds every volume of the series.
+        if (release.Type == AcquisitionType.DirectImport)
+        {
+            var direct = release.Offer!.IdentityIsExact ? ReleaseIdentityEvidence.Exact("PublicCopy", "A public full-text copy of the requested title.") : ReleaseIdentityEvidence.Strong("Title", "The title matches.");
+            return new ReleaseJudgement<ReadingReleaseInfo>(parsed, ReadingReleaseEvidenceParser.Instance.Parse(release.Title), direct, SelectionCoverage.Single, null)
+            {
+                ContextScore = target.RequestedVolume is null ? 12 : 24
+            };
+        }
 
         string? safety = null;
         if (release.InternalDownloadUri is null)
@@ -262,7 +293,7 @@ public static class ReadingReleaseSelector
         {
             safety = "format is not supported by the Manga importer";
         }
-        else if (target.Kind == MediaAcquisitionKind.LightNovel && parsed.Format is ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbz or ReadingReleaseFormat.Cbr)
+        else if (target.Kind == MediaAcquisitionKind.LightNovel && parsed.Format is ReadingReleaseFormat.Pdf or ReadingReleaseFormat.Cbz or ReadingReleaseFormat.Cbr or ReadingReleaseFormat.Zip)
         {
             safety = "format is not supported by the Light Novel importer";
         }
@@ -272,10 +303,23 @@ public static class ReadingReleaseSelector
         }
 
         var releaseChapterEnd = parsed.ChapterEnd ?? parsed.ChapterStart;
+        var want = target.Want is { IsEmpty: false } known ? known : null;
         ReleaseIdentityEvidence identity;
         if (!names.Any(name => TitleMatches(release.Title, name)))
         {
             identity = ReleaseIdentityEvidence.Conflict("TitleDoesNotMatch", "title does not match");
+        }
+        else if (target.Want is { IsEmpty: true })
+        {
+            identity = ReleaseIdentityEvidence.Conflict("NothingMissing", "nothing is missing");
+        }
+        else if (want is not null && preferredLanguages.Length > 0 && parsed.Language is { } wantedLanguage && !preferredLanguages.Contains(wantedLanguage, StringComparer.OrdinalIgnoreCase))
+        {
+            identity = ReleaseIdentityEvidence.Conflict("LanguageNotAllowed", $"release language '{wantedLanguage}' is not allowed");
+        }
+        else if (want is not null)
+        {
+            identity = UnitIdentity(parsed, want);
         }
         else if (target.RequestedVolume is { } requestedVolume && parsed.VolumeNumber is { } releaseVolume && requestedVolume != releaseVolume)
         {
@@ -300,7 +344,15 @@ public static class ReadingReleaseSelector
         }
 
         var context = 0;
-        if (target.RequestedVolume is { } wantedVolume && parsed.VolumeNumber == wantedVolume)
+        var coverage = SelectionCoverage.Single;
+        if (want is not null)
+        {
+            // Covering more of what is missing wins, and every unit the library already holds is a download nobody needs.
+            var (covered, unwanted) = want.Cover(parsed, ReadingReleaseEvidenceParser.QualityOf(parsed.Format));
+            coverage = new SelectionCoverage(covered, want.Total, unwanted);
+            context += Math.Min(covered, 12) * 6 - Math.Min(unwanted, 10) * 4;
+        }
+        else if (target.RequestedVolume is { } wantedVolume && parsed.VolumeNumber == wantedVolume)
         {
             context += 24;
         }
@@ -309,7 +361,7 @@ public static class ReadingReleaseSelector
             context += 12;
         }
 
-        if (target.RequestedChapterStart is { } wantedChapter && parsed.ChapterStart is { } chapterStart && wantedChapter >= chapterStart && wantedChapter <= releaseChapterEnd)
+        if (want is null && target.RequestedChapterStart is { } wantedChapter && parsed.ChapterStart is { } chapterStart && wantedChapter >= chapterStart && wantedChapter <= releaseChapterEnd)
         {
             context += 20;
         }
@@ -332,36 +384,40 @@ public static class ReadingReleaseSelector
             > 100L * 1024 * 1024 * 1024 when target.Kind == MediaAcquisitionKind.Manga => 10,
             _ => 0
         };
-        var candidate = new SelectionCandidate(
-            release.Identity,
-            ReadingReleaseEvidenceParser.Instance.Parse(release.Title),
-            release.SizeBytes,
-            release.Indexer,
-            release.Sources.FirstOrDefault()?.Priority ?? 0,
-            release.PublishedAt,
-            identity,
-            SelectionCoverage.Single with { Cost = cost })
+        return new ReleaseJudgement<ReadingReleaseInfo>(parsed, ReadingReleaseEvidenceParser.Instance.Parse(release.Title), identity, coverage with { Cost = cost }, safety)
         {
-            SafetyRejection = safety,
-            ContextScore = context
+            ContextScore = context,
+            Languages = parsed.Language is { } statedLanguage ? [statedLanguage] : null
         };
-        return new ReadingJudgement(release, parsed, candidate);
     }
 
-    private static RankedReadingRelease ToRanked(CandidateEvaluation evaluation, ReadingJudgement judged)
+    // Which of the wanted units a release holds: one that names no volume, chapter or batch cannot be told apart from any other, and one that holds
+    // nothing that is missing is a download nobody needs.
+    private static ReleaseIdentityEvidence UnitIdentity(ReadingReleaseInfo parsed, ReadingWant want)
     {
-        if (!evaluation.IsSelectable)
+        if (parsed.VolumeNumber is null && parsed.ChapterStart is null && !parsed.IsCompleteOrBatch)
         {
-            var because = evaluation.Reasons.FirstOrDefault(reason => reason.Kind == SelectionReasonKind.Safety)?.Detail
-                          ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict
-                              ? evaluation.Candidate.Identity.Detail
-                              : evaluation.Reasons.FirstOrDefault(reason => reason.Code == "WaitingForFallbackTier")?.Detail ?? string.Join("; ", evaluation.Score?.RejectionReasons ?? []));
-            return new RankedReadingRelease(judged.Release, judged.Parsed, 0, because) { Selection = evaluation };
+            return ReleaseIdentityEvidence.Ambiguous("UnnamedUnit", "the release names no volume, chapter or batch");
         }
 
-        // The displayed score keeps one scale: a base, a step per format tier and the request's preference points, minus the storage cost.
-        var tierPoints = (3 - Math.Min(evaluation.QualityRank, 3)) * 10;
-        return new RankedReadingRelease(judged.Release, judged.Parsed, Math.Max(1, 100 + tierPoints + evaluation.PreferenceScore - evaluation.Candidate.Coverage.Cost), null) { Selection = evaluation };
+        var (covered, _) = want.Cover(parsed, ReadingReleaseEvidenceParser.QualityOf(parsed.Format));
+        if (covered > 0)
+        {
+            return parsed.VolumeNumber is not null || parsed.ChapterStart is not null
+                ? ReleaseIdentityEvidence.Exact("VolumeOrChapter", "The release names a volume or chapter that is wanted.")
+                : ReleaseIdentityEvidence.Strong("CompleteSeries", "A complete set that holds wanted units.");
+        }
+
+        if (want.OverlapsUpgrade(parsed))
+        {
+            return ReleaseIdentityEvidence.Conflict("NotAnUpgrade", $"not better than the installed {want.UpgradeTargetOf(parsed) ?? "version"}");
+        }
+
+        return parsed.VolumeNumber is { } volume
+            ? ReleaseIdentityEvidence.Conflict("WrongVolume", parsed.VolumeEnd is { } end ? $"volumes {volume}-{end} are not wanted" : $"volume {volume} is not wanted")
+            : parsed.ChapterStart is { } chapter
+                ? ReleaseIdentityEvidence.Conflict("WrongChapter", parsed.ChapterEnd is { } last && last != chapter ? $"chapters {chapter:0.##}-{last:0.##} are not wanted" : $"chapter {chapter:0.##} is not wanted")
+                : ReleaseIdentityEvidence.Conflict("NothingWanted", "the set holds nothing that is missing");
     }
 
     internal static bool TitleMatches(string releaseTitle, string expectedTitle)
@@ -434,46 +490,5 @@ public static class ReadingReleaseSelector
         }
 
         return lower;
-    }
-}
-
-/// <summary>
-/// Searches the indexers for one Manga or Light Novel target through the shared planner: the author + title (Light Novels), the
-/// title with the requested volume or chapter and the aliases, in the reading categories and, when too little matches, once more
-/// without a category.
-/// </summary>
-public static class ReadingUsenetSearch
-{
-    public static async Task<ReadingUsenetSearchResult> SearchAsync(
-        IndexerSearchCoordinator indexers,
-        ReadingAcquisitionTarget target,
-        CancellationToken cancellationToken,
-        SearchOptions? options = null,
-        QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null,
-        DateTimeOffset? wantedSince = null)
-    {
-        var effectiveProfile = profile ?? ReadingQualityProfiles.For(target.Kind);
-        var intent = new SearchIntent(target.Kind, target.Title)
-        {
-            Aliases = target.Aliases ?? [],
-            Creator = target.Author,
-            Volume = target.RequestedVolume,
-            Chapter = target.RequestedChapterStart is { } chapter ? (decimal)chapter : null
-        };
-        var result = await indexers.SearchAsync(
-            intent,
-            (options ?? new SearchOptions()).WithSourcePolicy(effectiveProfile.SourcePolicy) with { UsableCount = releases => ReadingReleaseSelector.Rank(releases, target, profile, reliability, wantedSince).Count(ranked => ranked.Score > 0) },
-            cancellationToken);
-        var ranking = ReadingReleaseSelector.Evaluate(result.Releases, target, profile, reliability, wantedSince);
-        return new ReadingUsenetSearchResult(
-            [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
-            ranking.Ranked,
-            result.Warnings,
-            result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0))
-        {
-            Search = result,
-            WinnerReason = ranking.WinnerReason
-        };
     }
 }

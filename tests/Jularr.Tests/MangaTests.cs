@@ -315,7 +315,7 @@ public sealed class MangaTests
     {
         var root = TempDirectory();
         var database = Path.Combine(root, "jularr.db");
-        var workId = Guid.NewGuid();
+        var workId = Random.Shared.NextInt64(1, long.MaxValue);
 
         try
         {

@@ -4,6 +4,7 @@ using Jularr.Web.Features.Discovery;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.InstantPlay;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Playback;
 using Jularr.Web.Features.Progress;
 using Jularr.Web.Ui;
@@ -36,7 +37,7 @@ public sealed record VideoDetailEpisode(
     int? ResumePercent);
 
 /// <summary>A canonical relation of the Work. <see cref="Href"/> is null when the related Work has no consumer page yet.</summary>
-public sealed record VideoDetailRelated(Guid WorkId, WorkMediaType MediaType, string Title, int? Year, string GroupKey, string? Href);
+public sealed record VideoDetailRelated(long WorkId, WorkMediaType MediaType, string Title, int? Year, string GroupKey, string? Href);
 
 /// <summary>What the shared Request flow needs to ask for this Work: the provider identity the dialog posts, and the open request if one exists.</summary>
 public sealed record VideoDetailRequest(MediaAcquisitionKind Kind, string Category, string Provider, string ExternalId, AcquisitionRequest? Open);
@@ -48,7 +49,7 @@ public sealed record VideoDetailRequest(MediaAcquisitionKind Kind, string Catego
 /// fetched it.
 /// </summary>
 public sealed record VideoDetail(
-    Guid WorkId,
+    long WorkId,
     WorkMediaType MediaType,
     string Title,
     string? NativeTitle,
@@ -75,16 +76,16 @@ public sealed record VideoDetail(
 /// The one read model behind the Movie and Series detail pages. A fixed number of set-based queries, whatever the
 /// episode count: Work, titles, provider identity, files, tracks, episodes, progress, relations, the open request and the persisted
 /// metadata. It never calls a provider and never writes: missing metadata is left null for the page to omit.
-/// Request state per episode comes from the shared request payload through <see cref="VideoRequestSelection"/>, so
-/// the page and the acquisition executor agree on what a request covers.
+/// Request state per episode follows the canonical monitoring of the Work, so
+/// the page and the acquisition executor agree on what is wanted.
 /// </summary>
-public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore requests, VideoProgressService progress, TimeProvider clock)
+public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore requests, VideoProgressService progress, MonitoringResolver monitoring, TimeProvider clock)
 {
     private static readonly List<string> GroupOrder = [.. FranchiseLabels.RelationGroupOrder];
 
     /// <summary>The detail of one Work, or null when the Work does not exist or is not of <paramref name="mediaType"/>.</summary>
     /// <param name="visibleMediaTypes">The media types the profile may browse; related Works of other types are not shown.</param>
-    public async Task<VideoDetail?> GetAsync(string profileId, Guid workId, WorkMediaType mediaType, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
+    public async Task<VideoDetail?> GetAsync(string profileId, long workId, WorkMediaType mediaType, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
     {
         var work = await db.Works.AsNoTracking().Where(x => x.Id == workId && x.MediaType == mediaType).Select(x => new { x.CanonicalTitle, x.Year }).SingleOrDefaultAsync(cancellationToken);
         if (work is null)
@@ -132,7 +133,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             versions = [.. movieFiles.Select(file => ToVersion(file, tracks.Where(x => x.FileId == file.FileId)))];
             movieProgress = snapshots.FirstOrDefault(x => x.WorkEpisodeId is null);
             var now = clock.GetUtcNow();
-            var openFacts = open is null ? null : OpenRequestFacts.ForMovie(open, now.UtcDateTime);
+            var openFacts = open is null ? null : OpenRequestFacts.ForMovie(open, await monitoring.LoadAsync(workId, cancellationToken), now.UtcDateTime);
             playback = new MoviePlaybackFacts(workId, tmdbId is not null, openFacts, versions.Count > 0, movieProgress, work.Year is null || work.Year <= now.Year);
         }
         else
@@ -175,7 +176,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         return row is null ? LibraryLanguagePreference.None : LibraryLanguagePreference.From(row.PreferredAudioLanguage, row.PreferredSubtitleLanguage);
     }
 
-    private async Task<IReadOnlyList<VideoDetailRelated>> LoadRelatedAsync(Guid workId, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<VideoDetailRelated>> LoadRelatedAsync(long workId, IReadOnlyCollection<WorkMediaType> visibleMediaTypes, CancellationToken cancellationToken)
     {
         var rows = await (
             from relation in db.WorkRelations.AsNoTracking()
@@ -183,9 +184,10 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
             join other in db.Works.AsNoTracking() on (relation.FromWorkId == workId ? relation.ToWorkId : relation.FromWorkId) equals other.Id
             join link in db.WorkSourceLinks.AsNoTracking().Where(x => x.SourceKind == WorkSourceKind.Anime) on other.Id equals link.WorkId into animeLinks
             from animeLink in animeLinks.DefaultIfEmpty()
-            select new RelatedRow(other.Id, other.MediaType, other.CanonicalTitle, other.Year, relation.RelationType, relation.FromWorkId == workId, (Guid?)animeLink.SourceId))
+            select new RelatedRow(other.Id, other.IsAnime && other.MediaType == WorkMediaType.Series && animeLink != null ? WorkMediaType.Anime : other.MediaType, other.CanonicalTitle, other.Year, relation.RelationType, relation.FromWorkId == workId, (Guid?)animeLink.SourceId))
             .ToListAsync(cancellationToken);
 
+        // A classified title with a legacy Anime record is an Anime here (its page is keyed by that record) and follows the Anime visibility; any other is an ordinary Movie or Series.
         // Both directions of an edge are stored; an incoming edge reads from this Work's side through the inverse relation, and when
         // a Work is related twice the edge this Work declared wins, so the group never depends on row order.
         return
@@ -205,7 +207,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
     private static string? RelatedHref(RelatedRow row) => row.MediaType switch
     {
         WorkMediaType.Movie or WorkMediaType.Series => LibraryBrowse.DetailHref(row.MediaType, row.WorkId),
-        WorkMediaType.Anime => row.AnimeId is { } animeId ? LibraryBrowse.DetailHref(WorkMediaType.Anime, animeId) : null,
+        WorkMediaType.Anime => row.AnimeId is { } animeId ? LibraryBrowse.AnimeDetailHref(animeId) : null,
         _ => null
     };
 
@@ -225,7 +227,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         tracks.Where(x => x.Kind == kind).Select(x => PlaybackLanguages.Normalize(x.Language)).Where(x => x is not null && x != PlaybackLanguages.SubtitlesOff).Select(x => x!).ToHashSet(StringComparer.Ordinal);
 
     private async Task<(IReadOnlyList<VideoDetailEpisode> Episodes, SeriesPlaybackFacts Playback)> LoadEpisodesAsync(
-        Guid workId,
+        long workId,
         bool hasRequestIdentity,
         IReadOnlyList<FileRow> files,
         IReadOnlyList<TrackRow> tracks,
@@ -246,7 +248,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var tracksByEpisode = tracks.Where(x => x.WorkEpisodeId is not null).ToLookup(x => x.WorkEpisodeId!.Value);
         var progressByEpisode = snapshots.Where(x => x.WorkEpisodeId is not null).ToDictionary(x => x.WorkEpisodeId!.Value);
         var now = clock.GetUtcNow().UtcDateTime;
-        var selection = open is null ? null : VideoRequestSelection.For(open, workId, now);
+        var view = open is null ? null : await monitoring.LoadAsync(workId, cancellationToken);
+        var activeEpisodeId = open is null ? null : VideoRequestPayload.Of(open, workId, open.Title, null).ActiveWorkEpisodeId;
         var units = new List<SeriesUnit>(rows.Count);
 
         var episodes = rows.Select(row =>
@@ -259,8 +262,8 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
 
                 // A request covers the title as a whole; only the episodes its scope includes show its state, and while
                 // it is downloading only the episode the executor is on is "Downloading" (the rest wait as "Requested").
-                var requestStatus = selection is not null && selection.Includes(row.Id, row.SeasonId, row.AiredAt) ? open!.Status : (AcquisitionRequestStatus?)null;
-                if (requestStatus is AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing && selection!.Payload.ActiveWorkEpisodeId is { } active && active != row.Id)
+                var requestStatus = view is not null && view.IsMonitored(row.Id, row.SeasonId) ? open!.Status : (AcquisitionRequestStatus?)null;
+                if (requestStatus is AcquisitionRequestStatus.Downloading or AcquisitionRequestStatus.Importing && activeEpisodeId is { } active && active != row.Id)
                 {
                     requestStatus = AcquisitionRequestStatus.Approved;
                 }
@@ -285,7 +288,7 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
         var progress = snapshots
             .Where(x => x.WorkEpisodeId is not null && x.UpdatedAt is not null)
             .ToDictionary(x => x.WorkEpisodeId!.Value, x => new EpisodeProgressState(x.WorkEpisodeId!.Value, x.PositionMs, x.IsCompleted, x.UpdatedAt!.Value));
-        var openFacts = open is null ? null : OpenRequestFacts.ForSeries(open, selection!, rows.Select(x => (x.Id, x.SeasonId, x.AiredAt)), now);
+        var openFacts = open is null ? null : OpenRequestFacts.ForSeries(open, view!, rows.Select(x => (x.Id, x.SeasonId, x.AiredAt)), now);
         return (episodes, new SeriesPlaybackFacts(workId, hasRequestIdentity, openFacts, units, progress));
     }
 
@@ -295,5 +298,5 @@ public sealed class VideoDetailQuery(AppDbContext db, AcquisitionAccessStore req
 
     private sealed record EpisodeRow(Guid Id, Guid? SeasonId, int SeasonNumber, int Number, string? Title, DateTime? AiredAt);
 
-    private sealed record RelatedRow(Guid WorkId, WorkMediaType MediaType, string Title, int? Year, WorkRelationType Relation, bool Outgoing, Guid? AnimeId);
+    private sealed record RelatedRow(long WorkId, WorkMediaType MediaType, string Title, int? Year, WorkRelationType Relation, bool Outgoing, Guid? AnimeId);
 }

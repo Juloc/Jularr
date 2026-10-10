@@ -69,7 +69,7 @@ public abstract class VideoDetailPageModel(
     public bool? IsOnWatchlist { get; private set; }
 
     /// <summary>The route of this page with the view state the viewer chose (season, sort, layout), so a personal-state action returns to the same view.</summary>
-    public IDictionary<string, string> PageRoute(Guid workId)
+    public IDictionary<string, string> PageRoute(long workId)
     {
         var route = new Dictionary<string, string> { ["workId"] = workId.ToString() };
         foreach (var key in ViewStateKeys)
@@ -121,12 +121,13 @@ public abstract class VideoDetailPageModel(
     /// The explicit playback intent of the hero action (Start watching, Watch now) until the in-place control sends it: a local target
     /// opens the player, a missing one is acquired or attached to its request, and the page shows the request's state again.
     /// </summary>
-    public async Task<IActionResult> OnPostStartAsync(Guid workId, Guid? episodeId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostStartAsync(long workId, Guid? episodeId, CancellationToken cancellationToken)
     {
         // The same guard as the read: the Work must be of this page's media type and the type visible to the profile, so a page of a
         // visible type cannot be used to start the acquisition of a Work of a hidden one.
         var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
-        if (!access.IsVisible(MediaType) || !await db.Works.AsNoTracking().AnyAsync(x => x.Id == workId && x.MediaType == MediaType, cancellationToken))
+        var isAnime = await db.Works.AsNoTracking().Where(x => x.Id == workId && x.MediaType == MediaType).Select(x => (bool?)x.IsAnime).SingleOrDefaultAsync(cancellationToken);
+        if (isAnime is null || !access.IsWorkVisible(MediaType, isAnime.Value))
         {
             return NotFound();
         }
@@ -151,13 +152,13 @@ public abstract class VideoDetailPageModel(
     }
 
     /// <summary>Puts the title on the profile's watchlist. Idempotent: following it again changes nothing.</summary>
-    public async Task<IActionResult> OnPostFollowAsync(Guid workId, CancellationToken cancellationToken) => await SetFollowAsync(workId, follow: true, cancellationToken);
+    public async Task<IActionResult> OnPostFollowAsync(long workId, CancellationToken cancellationToken) => await SetFollowAsync(workId, follow: true, cancellationToken);
 
     /// <summary>Takes the title off the profile's watchlist. Idempotent: a title that is not on it stays off.</summary>
-    public async Task<IActionResult> OnPostUnfollowAsync(Guid workId, CancellationToken cancellationToken) => await SetFollowAsync(workId, follow: false, cancellationToken);
+    public async Task<IActionResult> OnPostUnfollowAsync(long workId, CancellationToken cancellationToken) => await SetFollowAsync(workId, follow: false, cancellationToken);
 
     // The follow is built from the stored title and provider identity, never from what the browser sends, and only for a Work of this page's media type that the profile may open.
-    private async Task<IActionResult> SetFollowAsync(Guid workId, bool follow, CancellationToken cancellationToken)
+    private async Task<IActionResult> SetFollowAsync(long workId, bool follow, CancellationToken cancellationToken)
     {
         var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
         var detail = await query.GetAsync(account.ProfileId, workId, MediaType, access.VisibleMediaTypes, cancellationToken);
@@ -179,7 +180,7 @@ public abstract class VideoDetailPageModel(
     }
 
     /// <returns>False when there is no such Work of this page's media type.</returns>
-    protected async Task<bool> LoadAsync(Guid workId, CancellationToken cancellationToken)
+    protected async Task<bool> LoadAsync(long workId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
@@ -207,7 +208,10 @@ public abstract class VideoDetailPageModel(
         OffersRequest = policy.AllowsRequest && detail.Request is { Open: null } && hasRequestableTarget;
         if (detail.Request is { } identity && WatchlistDraftInput.TryIdentity(identity.Category, identity.Provider, identity.ExternalId, out var followed))
         {
-            IsOnWatchlist = (await watchlist.GetEffectiveKeysAsync(account.ProfileId, cancellationToken)).Contains(followed.Key);
+            IsOnWatchlist = (await watchlist.GetFollowedFranchiseIdsForKeysAsync(
+                account,
+                [followed],
+                cancellationToken)).ContainsKey(followed.Key);
         }
 
         if (detail.Request?.Open is { } open && ConsumerAcquisitionQuery.MayRead(open, account.ProfileId, policy.CanRequest, account.Can(JularrPolicies.AdminMedia)))
@@ -226,7 +230,7 @@ public abstract class VideoDetailPageModel(
     /// an unknown Work is a 404 before this point). A queue failure must not take the page down, so it is logged and the page renders
     /// without it; stale metadata is refreshed by the spool on its own schedule.
     /// </summary>
-    private async Task PromoteMetadataRefreshAsync(Guid workId, WorkMetadataView? metadata, CancellationToken cancellationToken)
+    private async Task PromoteMetadataRefreshAsync(long workId, WorkMetadataView? metadata, CancellationToken cancellationToken)
     {
         if (metadata?.RefreshedAt is not null)
         {

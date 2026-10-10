@@ -2,7 +2,10 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Instance;
+using Jularr.Web.Features.Monitoring;
+using Jularr.Web.Features.Storage;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Library;
@@ -32,7 +35,8 @@ public sealed record AdminVideoEpisode(
     bool IsUpcoming,
     bool Monitored,
     AdminMediaState State,
-    IReadOnlyList<AdminVideoFile> Files)
+    IReadOnlyList<AdminVideoFile> Files,
+    bool UpgradeWanted = false)
 {
     public long SizeBytes => Files.Sum(file => file.SizeBytes);
 }
@@ -76,19 +80,28 @@ public sealed record AdminVideoAcquisition(
     public bool CanManualSearch => CanSearchNow && OpenRequest is not null;
 }
 
+/// <summary>The metadata provider identity that names the Work, with the provider's own page when it has one.</summary>
+public sealed record AdminVideoProvider(string Name, string ExternalId, string? Url);
+
 /// <summary>The scope of the TV monitoring as the Request dialog names it; <see cref="VideoMonitoringService.OffScope"/> when nothing is wanted.</summary>
 public sealed record AdminVideoMonitoring(bool Monitored, string Scope, bool MonitorFuture);
 
 public sealed record AdminVideoMediaDetail(
     MediaAcquisitionKind Kind,
-    Guid WorkId,
+    long WorkId,
     string Title,
     int? Year,
     AdminVideoMonitoring Monitoring,
     AdminVideoAcquisition Acquisition,
     IReadOnlyList<AdminVideoVersion> Versions,
-    IReadOnlyList<AdminVideoSeason> Seasons)
+    IReadOnlyList<AdminVideoSeason> Seasons,
+    AdminVideoProvider? Provider = null,
+    AcquisitionRequest? EndedRequest = null,
+    IReadOnlyList<string>? OfflineRoots = null)
 {
+    /// <summary>The names of the library roots holding this Work's files that cannot be read right now.</summary>
+    public IReadOnlyList<string> UnavailableRoots => OfflineRoots ?? [];
+
     public IEnumerable<AdminVideoEpisode> Episodes => Seasons.SelectMany(season => season.Episodes);
 
     /// <summary>
@@ -122,13 +135,17 @@ public sealed record AdminVideoMediaDetail(
 public sealed class AdminVideoMediaService(
     AppDbContext db,
     VideoMonitoringService monitoring,
+    MonitoringResolver monitoringState,
+    VideoRequestScopeResolver scopes,
     QualityProfileStore profiles,
+    AcquisitionAccessStore requests,
     IEnumerable<IAcquisitionRequestExecutor> executors,
     TimeProvider clock,
-    IInstanceModuleService? instanceModules = null)
+    IInstanceModuleService? instanceModules = null,
+    LibraryRootAvailabilityService? rootAvailability = null)
 {
     /// <summary>The detail of one Work, or null when it does not exist or is not a Work of <paramref name="kind"/>.</summary>
-    public async Task<AdminVideoMediaDetail?> LoadAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    public async Task<AdminVideoMediaDetail?> LoadAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         var type = VideoWorkLinks.WorkType(kind);
         var work = await db.Works.AsNoTracking().Where(x => x.Id == workId && x.MediaType == type).Select(x => new { x.CanonicalTitle, x.Year }).SingleOrDefaultAsync(cancellationToken);
@@ -155,6 +172,7 @@ public sealed class AdminVideoMediaService(
                     file.Id,
                     file.Path,
                     file.SizeBytes,
+                    RootId = root.Id,
                     RootName = root.Name,
                     RootPath = root.Path,
                     analysis.Width,
@@ -186,11 +204,15 @@ public sealed class AdminVideoMediaService(
 
         var open = await monitoring.FindOpenRequestAsync(kind, workId, cancellationToken);
         var payload = open is null ? null : VideoRequestPayload.Of(open, workId, work.CanonicalTitle, work.Year);
+        var view = await monitoringState.LoadAsync(workId, cancellationToken);
         var profile = await profiles.ResolveAsync(kind, workId, cancellationToken);
         var profileState = await profiles.LoadAsync(cancellationToken);
+        var provider = await ProviderOfAsync(kind, workId, cancellationToken);
+        var ended = open is null && provider is not null ? await EndedRequestAsync(kind, provider, cancellationToken) : null;
+        var offline = await OfflineRootsAsync(files.Select(row => (row.RootId, row.RootName)).Distinct(), cancellationToken);
         var acquisition = new AdminVideoAcquisition(
             await CanAcquireAsync(kind, workId, cancellationToken),
-            open?.Status == AcquisitionRequestStatus.Approved && payload!.Monitored,
+            open?.Status == AcquisitionRequestStatus.Approved && view.IsAnyMonitored,
             open,
             profile.Id,
             profile.Name,
@@ -204,7 +226,7 @@ public sealed class AdminVideoMediaService(
                 workId,
                 work.CanonicalTitle,
                 work.Year,
-                new AdminVideoMonitoring(payload?.Monitored == true, "", false),
+                new AdminVideoMonitoring(view.IsAnyMonitored, "", false),
                 acquisition,
                 [
                     .. fileRows
@@ -212,7 +234,10 @@ public sealed class AdminVideoMediaService(
                         .Select(group => new AdminVideoVersion(group.Key, group.First().VersionQuality, group.First().ReleaseGroup, [.. group.Select(row => row.File)]))
                         .OrderByDescending(version => version.SizeBytes)
                 ],
-                []);
+                [],
+                provider,
+                ended,
+                offline);
         }
 
         return new AdminVideoMediaDetail(
@@ -220,15 +245,19 @@ public sealed class AdminVideoMediaService(
             workId,
             work.CanonicalTitle,
             work.Year,
-            TvMonitoring(payload),
+            TvMonitoring(await scopes.ChoiceOfAsync(workId, cancellationToken)),
             acquisition,
             [],
-            await LoadSeasonsAsync(workId, open, fileRows.Where(row => row.WorkEpisodeId is not null).ToLookup(row => row.WorkEpisodeId!.Value, row => row.File), cancellationToken));
+            await LoadSeasonsAsync(workId, open ?? ended, view, fileRows.Where(row => row.WorkEpisodeId is not null).ToLookup(row => row.WorkEpisodeId!.Value, row => row.File), cancellationToken),
+            provider,
+            ended,
+            offline);
     }
 
     private async Task<IReadOnlyList<AdminVideoSeason>> LoadSeasonsAsync(
-        Guid workId,
+        long workId,
         AcquisitionRequest? open,
+        WorkMonitoringView view,
         ILookup<Guid, AdminVideoFile> files,
         CancellationToken cancellationToken)
     {
@@ -240,8 +269,11 @@ public sealed class AdminVideoMediaService(
             .Select(x => new { x.Id, x.SeasonId, x.SeasonNumber, x.EpisodeNumber, x.Title, x.AiredAt })
             .ToListAsync(cancellationToken);
 
-        var selection = open is null ? null : VideoRequestSelection.For(open, workId);
-        var payload = selection?.Payload;
+        var payload = open is null ? null : VideoRequestPayload.Of(open, workId, open.Title, null);
+        var wantedEpisodes = (await db.WantedItems.AsNoTracking()
+            .Where(item => item.WorkId == workId && item.TargetKind == WantedTargetKind.Episode && item.TargetId != null)
+            .Select(item => item.TargetId!.Value)
+            .ToListAsync(cancellationToken)).ToHashSet();
         var now = clock.GetUtcNow().UtcDateTime;
         var episodes = episodeRows.Select(row =>
         {
@@ -255,9 +287,10 @@ public sealed class AdminVideoMediaService(
                 row.Title,
                 row.AiredAt,
                 upcoming,
-                selection?.Includes(row.Id, row.SeasonId, row.AiredAt) == true,
+                view.IsMonitored(row.Id, row.SeasonId),
                 local.Count > 0 ? AdminMediaState.Available : ActiveState(open, payload, row.Id),
-                local);
+                local,
+                local.Count > 0 && wantedEpisodes.Contains(row.Id));
         }).ToList();
 
         return
@@ -277,24 +310,74 @@ public sealed class AdminVideoMediaService(
                 AcquisitionRequestStatus.Searching => AdminMediaState.Searching,
                 AcquisitionRequestStatus.Downloading => AdminMediaState.Downloading,
                 AcquisitionRequestStatus.Importing => AdminMediaState.Importing,
+                AcquisitionRequestStatus.Failed => AdminMediaState.Failed,
                 _ => AdminMediaState.Missing
             }
             : AdminMediaState.Missing;
 
-    private static AdminVideoMonitoring TvMonitoring(VideoRequestPayload? payload)
+    private async Task<AdminVideoProvider?> ProviderOfAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
-        if (payload is not { Monitored: true })
+        var type = VideoWorkLinks.WorkType(kind);
+        var identity = await db.WorkExternalIdentities.AsNoTracking()
+            .Where(x => x.WorkId == workId && x.MediaType == type)
+            .OrderByDescending(x => x.IsPrimary)
+            .Select(x => new { x.Provider, x.ExternalId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (identity is null)
+        {
+            return null;
+        }
+
+        var tmdb = identity.Provider.Equals("tmdb", StringComparison.OrdinalIgnoreCase);
+        return new AdminVideoProvider(
+            tmdb ? "TMDB" : identity.Provider.ToUpperInvariant(),
+            identity.ExternalId,
+            tmdb ? $"https://www.themoviedb.org/{(kind == MediaAcquisitionKind.Movie ? "movie" : "tv")}/{Uri.EscapeDataString(identity.ExternalId)}" : null);
+    }
+
+    /// <summary>The latest request of the Work when it ended in failure and nothing else is open: what the page explains and Retry runs again.</summary>
+    public async Task<AcquisitionRequest?> FindFailedRequestAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken) =>
+        await monitoring.FindOpenRequestAsync(kind, workId, cancellationToken) is null && await ProviderOfAsync(kind, workId, cancellationToken) is { } provider
+            ? await EndedRequestAsync(kind, provider, cancellationToken)
+            : null;
+
+    private async Task<AcquisitionRequest?> EndedRequestAsync(MediaAcquisitionKind kind, AdminVideoProvider provider, CancellationToken cancellationToken) =>
+        await requests.FindLatestAsync(kind, provider.Name.ToLowerInvariant(), provider.ExternalId, cancellationToken) is { Status: AcquisitionRequestStatus.Failed } latest ? latest : null;
+
+    /// <summary>The roots of the Work's files that report themselves unreadable; the probe is the cached health check, it never wakes storage.</summary>
+    private async Task<IReadOnlyList<string>> OfflineRootsAsync(IEnumerable<(Guid Id, string Name)> roots, CancellationToken cancellationToken)
+    {
+        if (rootAvailability is null)
+        {
+            return [];
+        }
+
+        var offline = new List<string>();
+        foreach (var (id, name) in roots)
+        {
+            if (await rootAvailability.CheckAsync(id, force: false, cancellationToken) is { IsAvailable: false })
+            {
+                offline.Add(name);
+            }
+        }
+
+        return offline;
+    }
+
+    private static AdminVideoMonitoring TvMonitoring(VideoRequestScopeChoice? choice)
+    {
+        if (choice is null)
         {
             return new AdminVideoMonitoring(false, VideoMonitoringService.OffScope, false);
         }
 
-        var scope = payload.Scope switch
+        var scope = choice.Scope switch
         {
             VideoRequestScope.AllCurrentAndFuture => "all",
             VideoRequestScope.FutureOnly => "future",
             _ => "custom"
         };
-        return new AdminVideoMonitoring(true, scope, payload.MonitorFuture);
+        return new AdminVideoMonitoring(true, scope, choice.MonitorFuture);
     }
 
     private static List<string> Languages(IEnumerable<TrackRow> tracks, MediaTrackKind kind) =>
@@ -303,7 +386,7 @@ public sealed class AdminVideoMediaService(
     private sealed record TrackRow(Guid FileId, MediaTrackKind Kind, string Language);
 
     /// <summary>Whether the Work can be acquired at all: its modules are on, an executor exists for the kind and a provider identity names it.</summary>
-    public async Task<bool> CanAcquireAsync(MediaAcquisitionKind kind, Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> CanAcquireAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
     {
         var type = VideoWorkLinks.WorkType(kind);
         if (instanceModules is not null)

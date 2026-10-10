@@ -13,7 +13,7 @@ namespace Jularr.Web.Pages.Artwork;
 /// </summary>
 public sealed class WorkModel(WorkMetadataStore store, WorkArtworkCache cache, IAppShellService appShell) : PageModel
 {
-    public async Task<IActionResult> OnGetAsync(Guid workId, long artworkId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(long workId, long artworkId, CancellationToken cancellationToken)
     {
         if (await store.FindArtworkFileAsync(workId, artworkId, cancellationToken) is not { } variant)
         {

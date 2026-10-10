@@ -53,6 +53,7 @@ public sealed class PlaybackReplanTests
         {
             var fixture = await MediaInventoryFixture.CreateAsync();
             var media = await fixture.AddMediaAsync("episode.mp4", new byte[4096]);
+            await fixture.BridgeEpisodeAsync(media);
             media.SizeBytes = 3_600_000_000;
             await fixture.Db.SaveChangesAsync();
             fixture.Runner.Returns(media.Path, probe ?? MediaProbeFixtures.H264Stereo);
@@ -174,7 +175,7 @@ public sealed class PlaybackReplanTests
         await using var rig = await Rig.CreateAsync(withHardware: false);
         var playing = await rig.PlanAsync(quality: PlaybackQualityPreset.Mbps4);
         rig.RunHealthy(playing.Session!);
-        var other = rig.Store.Create("other", Guid.NewGuid(), Guid.NewGuid(), "/media/other.mkv", 1400, PlaybackTestPlans.Transcode(PlaybackTestPlans.Video()), playing.Session!.Selections);
+        var other = rig.Store.Create("other", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/other.mkv", 1400, PlaybackTestPlans.Transcode(PlaybackTestPlans.Video()), playing.Session!.Selections);
         rig.RunTooSlow(other);
 
         var higher = await rig.PlanAsync(replaces: playing.Session.Id, followed: PlaybackAdaptationAdvice.StepUp, quality: PlaybackQualityPreset.Auto);
@@ -332,6 +333,7 @@ public sealed class PlaybackReplanTests
 
         rig.RunTooSlow(same.Session!);
         var otherMedia = await rig.Fixture.AddMediaAsync("other.mp4", new byte[4096]);
+        await rig.Fixture.BridgeEpisodeAsync(otherMedia);
         otherMedia.SizeBytes = 3_600_000_000;
         await rig.Fixture.Db.SaveChangesAsync();
         rig.Fixture.Runner.Returns(otherMedia.Path, MediaProbeFixtures.H264Stereo);

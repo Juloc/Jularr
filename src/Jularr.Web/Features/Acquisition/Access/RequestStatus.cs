@@ -75,7 +75,7 @@ public sealed class RequestStatusQuery(
         catch (Exception exception) when (exception is DbException or FormatException)
         {
             logger.LogWarning(exception, "The state of request {RequestId} could not be read.", request.Id);
-            row = new RequestRowView(request, ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), null, false, null, false, clock.GetUtcNow().UtcDateTime), null);
+            row = new RequestRowView(request, ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), false, null, false, null, false, clock.GetUtcNow().UtcDateTime), null);
             unavailable = true;
         }
 
@@ -142,7 +142,7 @@ public sealed class RequestStatusQuery(
         }
 
         return request.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
-            ? VideoRequestPayload.Parse(request.PayloadJson) is { WorkId: var workId } && workId != Guid.Empty ? VideoWorkLinks.DetailPath(request.Kind, workId) : null
+            ? VideoRequestPayload.Parse(request.PayloadJson) is { WorkId: var workId } && workId != 0 ? VideoWorkLinks.DetailPath(request.Kind, workId) : null
             : request.LocalResultPath;
     }
 

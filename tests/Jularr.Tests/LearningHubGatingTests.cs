@@ -360,6 +360,21 @@ public sealed class LearningHubGatingTests
     }
 
     [TestMethod]
+    public void EpisodePlayer_LearningOff_SkipsCueAndLearningSourceQueries()
+    {
+        var page = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Pages", "Library", "Episode.cshtml.cs"));
+        var playback = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Features", "Playback", "PlaybackService.cs"));
+
+        StringAssert.Contains(page, "includeLearningCues: ShowLearningSubtitle");
+        StringAssert.Contains(page, "var hasLearningCues = ShowLearningSubtitle && Playback.Cues.Count > 0;");
+        StringAssert.Contains(page, "? await FindLearningSourceStreamIndexAsync(");
+        StringAssert.Contains(playback, "var cues = includeLearningCues");
+        StringAssert.Contains(playback, ": [];");
+    }
+
+    [TestMethod]
     public void EpisodePageHostsTheSharedLanguageInspectorForItsScope()
     {
         // #233 player hook: Episode.cshtml renders the shared inspector partial

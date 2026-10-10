@@ -7,8 +7,8 @@ namespace Jularr.Web.Features.MediaCore;
 
 /// <summary>What a <see cref="WorkService.MergeWorksAsync"/> moved from the absorbed work onto the survivor (#432).</summary>
 public sealed record WorkMergeResult(
-    Guid TargetWorkId,
-    Guid SourceWorkId,
+    long TargetWorkId,
+    long SourceWorkId,
     int SourceLinks,
     int Identities,
     int Titles,
@@ -45,6 +45,27 @@ public sealed class WorkService(AppDbContext db)
     }
 
     /// <summary>
+    /// Classifies a Movie or Series Work as Anime (or not). The evidence goes into the field provenance <c>classification.anime</c>, so a provider mapping never
+    /// overrides an owner's decision; returns false when a stronger source already decided. Only the classification changes, never the Work's identity or structure.
+    /// </summary>
+    public async Task<bool> SetAnimeClassificationAsync(long workId, bool isAnime, string source, string? providerExternalId, bool isManualOverride, CancellationToken cancellationToken)
+    {
+        var work = await db.Set<Work>().FirstOrDefaultAsync(item => item.Id == workId && (item.MediaType == WorkMediaType.Movie || item.MediaType == WorkMediaType.Series), cancellationToken)
+            ?? throw new InvalidOperationException("Only a Movie or Series Work can be classified as Anime.");
+        if (!await SetFieldProvenanceAsync(workId, AnimeClassificationField, source, providerExternalId, 1.0, isManualOverride, MappingProviders.AniList, cancellationToken))
+        {
+            return false;
+        }
+
+        work.IsAnime = isAnime;
+        work.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public const string AnimeClassificationField = "classification.anime";
+
+    /// <summary>
     /// Resolves the work a provider identity already points at, or creates a new work and links the
     /// identity. Idempotent: the same (media type, provider, external id) always returns the same work.
     /// </summary>
@@ -70,7 +91,7 @@ public sealed class WorkService(AppDbContext db)
             .Select(x => x.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (existing != Guid.Empty)
+        if (existing != 0)
         {
             return await db.Set<Work>().FirstAsync(x => x.Id == existing, cancellationToken);
         }
@@ -89,7 +110,7 @@ public sealed class WorkService(AppDbContext db)
     /// and this returns <c>false</c>. A manual identity is never downgraded by a non-manual upsert.
     /// </summary>
     public async Task<bool> LinkExternalIdentityAsync(
-        Guid workId,
+        long workId,
         WorkMediaType mediaType,
         string provider,
         string externalId,
@@ -163,7 +184,7 @@ public sealed class WorkService(AppDbContext db)
         WorkMediaType mediaType,
         string provider,
         string externalId,
-        Guid targetWorkId,
+        long targetWorkId,
         string actor,
         string evidence,
         CancellationToken cancellationToken)
@@ -241,6 +262,7 @@ public sealed class WorkService(AppDbContext db)
         var title = string.IsNullOrWhiteSpace(newTitle) ? normalizedExternalId : newTitle.Trim();
         var work = new Work { MediaType = mediaType, CanonicalTitle = title };
         db.Set<Work>().Add(work);
+        await db.SaveChangesAsync(cancellationToken);
 
         identity.WorkId = work.Id;
         identity.IsPrimary = true;
@@ -274,7 +296,7 @@ public sealed class WorkService(AppDbContext db)
     /// so any later provider refresh is blocked from overwriting it by the precedence ladder. Returns
     /// true when the pin was applied (a manual override always wins).
     /// </summary>
-    public Task<bool> SetManualFieldOverrideAsync(Guid workId, string fieldKey, CancellationToken cancellationToken) =>
+    public Task<bool> SetManualFieldOverrideAsync(long workId, string fieldKey, CancellationToken cancellationToken) =>
         SetFieldProvenanceAsync(
             workId, fieldKey, MetadataFieldSources.Owner,
             providerExternalId: null, confidence: null, isManualOverride: true,
@@ -290,8 +312,8 @@ public sealed class WorkService(AppDbContext db)
     /// rest of the core uses (manual overrides win; a provider identity never collides across works).
     /// </summary>
     public async Task<WorkMergeResult> MergeWorksAsync(
-        Guid targetWorkId,
-        Guid sourceWorkId,
+        long targetWorkId,
+        long sourceWorkId,
         string actor,
         CancellationToken cancellationToken)
     {
@@ -327,6 +349,8 @@ public sealed class WorkService(AppDbContext db)
             summary: $"Merged \"{source.CanonicalTitle}\" into \"{target.CanonicalTitle}\"",
             details);
         await db.SaveChangesAsync(cancellationToken);
+        await MoveMonitoringAsync(sourceWorkId, targetWorkId, cancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""DELETE FROM "WantedItems" WHERE "WorkId" = {sourceWorkId}""", cancellationToken);
 
         db.Set<Work>().Remove(source);
         await db.SaveChangesAsync(cancellationToken);
@@ -337,7 +361,26 @@ public sealed class WorkService(AppDbContext db)
             targetWorkId, sourceWorkId, sourceLinks, identities, titles, relations, structure, provenance);
     }
 
-    private async Task<int> MoveSourceLinksAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
+    /// <summary>
+    /// The monitoring decisions follow the structure that moved: a decision of a node the survivor already had goes with that node, the others now belong to
+    /// the survivor, and the absorbed Work's own decision becomes the survivor's unless the survivor decided for itself.
+    /// </summary>
+    private Task<int> MoveMonitoringAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken) =>
+        db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            DELETE FROM "WorkMonitoring" m WHERE m."WorkId" = {sourceWorkId} AND m."Kind" <> 0
+              AND NOT EXISTS (SELECT 1 FROM "WorkSeasons" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkEpisodes" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkVolumes" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkChapters" x WHERE x."Id" = m."TargetId")
+              AND NOT EXISTS (SELECT 1 FROM "WorkTracks" x WHERE x."Id" = m."TargetId");
+            UPDATE "WorkMonitoring" SET "WorkId" = {targetWorkId} WHERE "WorkId" = {sourceWorkId} AND "Kind" <> 0;
+            DELETE FROM "WorkMonitoring" WHERE "Kind" = 0 AND "WorkId" = {sourceWorkId} AND EXISTS (SELECT 1 FROM "WorkMonitoring" t WHERE t."Kind" = 0 AND t."WorkId" = {targetWorkId});
+            UPDATE "WorkMonitoring" SET "WorkId" = {targetWorkId} WHERE "Kind" = 0 AND "WorkId" = {sourceWorkId}
+            """,
+            cancellationToken);
+
+    private async Task<int> MoveSourceLinksAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken)
     {
         // Each legacy record maps to exactly one work (unique on kind+id), so repointing never collides;
         // moving the bridge is what keeps the absorbed work's progress/notes/wanted/collections intact.
@@ -350,7 +393,7 @@ public sealed class WorkService(AppDbContext db)
         return links.Count;
     }
 
-    private async Task<int> MoveIdentitiesAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
+    private async Task<int> MoveIdentitiesAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken)
     {
         var targetPrimaries = (await db.Set<WorkExternalIdentity>()
             .Where(x => x.WorkId == targetWorkId && x.IsPrimary)
@@ -376,7 +419,7 @@ public sealed class WorkService(AppDbContext db)
         return identities.Count;
     }
 
-    private async Task<int> MoveTitlesAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
+    private async Task<int> MoveTitlesAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken)
     {
         var targetKeys = (await db.Set<WorkTitle>()
             .Where(x => x.WorkId == targetWorkId)
@@ -404,7 +447,7 @@ public sealed class WorkService(AppDbContext db)
         return moved;
     }
 
-    private async Task<int> MoveRelationsAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
+    private async Task<int> MoveRelationsAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken)
     {
         var targetKeys = (await db.Set<WorkRelation>()
             .Where(x => x.FromWorkId == targetWorkId || x.ToWorkId == targetWorkId)
@@ -442,7 +485,7 @@ public sealed class WorkService(AppDbContext db)
         return moved;
     }
 
-    private async Task<int> MoveStructureAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
+    private async Task<int> MoveStructureAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken)
     {
         var moved = 0;
         moved += await RepointOrDropAsync<WorkSeason>(
@@ -465,21 +508,21 @@ public sealed class WorkService(AppDbContext db)
     /// source row whose per-work unique key already exists on the survivor so the unique index holds.
     /// </summary>
     private async Task<int> RepointOrDropAsync<T>(
-        Guid sourceWorkId,
-        Guid targetWorkId,
+        long sourceWorkId,
+        long targetWorkId,
         Func<T, string> uniqueKey,
         CancellationToken cancellationToken)
         where T : class
     {
         var set = db.Set<T>();
         var targetKeys = (await set
-            .Where(x => EF.Property<Guid>(x, "WorkId") == targetWorkId)
+            .Where(x => EF.Property<long>(x, "WorkId") == targetWorkId)
             .ToListAsync(cancellationToken))
             .Select(uniqueKey)
             .ToHashSet(StringComparer.Ordinal);
 
         var sourceRows = await set
-            .Where(x => EF.Property<Guid>(x, "WorkId") == sourceWorkId)
+            .Where(x => EF.Property<long>(x, "WorkId") == sourceWorkId)
             .ToListAsync(cancellationToken);
         var workIdProperty = typeof(T).GetProperty("WorkId")!;
 
@@ -499,7 +542,7 @@ public sealed class WorkService(AppDbContext db)
         return moved;
     }
 
-    private async Task<int> MoveProvenanceAsync(Guid sourceWorkId, Guid targetWorkId, CancellationToken cancellationToken)
+    private async Task<int> MoveProvenanceAsync(long sourceWorkId, long targetWorkId, CancellationToken cancellationToken)
     {
         var targetByField = (await db.Set<WorkFieldProvenance>()
             .Where(x => x.WorkId == targetWorkId)
@@ -538,8 +581,8 @@ public sealed class WorkService(AppDbContext db)
     private void AppendIdentityChange(
         WorkIdentityChangeType changeType,
         WorkMediaType mediaType,
-        Guid targetWorkId,
-        Guid? sourceWorkId,
+        long targetWorkId,
+        long? sourceWorkId,
         string provider,
         string externalId,
         string actor,
@@ -579,7 +622,7 @@ public sealed class WorkService(AppDbContext db)
 
     /// <summary>Adds or refreshes a title, de-duplicated by (work, type, language, normalized value).</summary>
     public async Task<WorkTitle> AddOrUpdateTitleAsync(
-        Guid workId,
+        long workId,
         WorkTitleType titleType,
         string language,
         string value,
@@ -631,8 +674,8 @@ public sealed class WorkService(AppDbContext db)
 
     /// <summary>Upserts a typed relation edge, unique per (from, to, type). Optionally writes the inverse edge too.</summary>
     public async Task AddRelationAsync(
-        Guid fromWorkId,
-        Guid toWorkId,
+        long fromWorkId,
+        long toWorkId,
         WorkRelationType relationType,
         string source,
         bool isManualOverride,
@@ -659,7 +702,7 @@ public sealed class WorkService(AppDbContext db)
     /// the incoming source won (a manual override is never overwritten by a provider refresh).
     /// </summary>
     public async Task<bool> SetFieldProvenanceAsync(
-        Guid workId,
+        long workId,
         string fieldKey,
         string source,
         string? providerExternalId,
@@ -717,7 +760,7 @@ public sealed class WorkService(AppDbContext db)
     /// between works is the explicit owner action <see cref="MergeWorksAsync"/>.
     /// </summary>
     public async Task<WorkSourceLink> LinkSourceAsync(
-        Guid workId,
+        long workId,
         WorkSourceKind sourceKind,
         Guid sourceId,
         CancellationToken cancellationToken)
@@ -737,8 +780,8 @@ public sealed class WorkService(AppDbContext db)
     }
 
     private async Task UpsertRelationAsync(
-        Guid fromWorkId,
-        Guid toWorkId,
+        long fromWorkId,
+        long toWorkId,
         WorkRelationType relationType,
         string source,
         bool isManualOverride,
@@ -772,7 +815,7 @@ public sealed class WorkService(AppDbContext db)
     }
 
     private async Task ClearPrimaryIdentityAsync(
-        Guid workId,
+        long workId,
         WorkMediaType mediaType,
         string provider,
         CancellationToken cancellationToken)
@@ -786,7 +829,7 @@ public sealed class WorkService(AppDbContext db)
         }
     }
 
-    private async Task ClearPrimaryTitleAsync(Guid workId, CancellationToken cancellationToken)
+    private async Task ClearPrimaryTitleAsync(long workId, CancellationToken cancellationToken)
     {
         var current = await db.Set<WorkTitle>()
             .Where(x => x.WorkId == workId && x.IsPrimary)
@@ -797,7 +840,7 @@ public sealed class WorkService(AppDbContext db)
         }
     }
 
-    private async Task PersistPrimaryTitleCacheAsync(Guid workId, WorkTitle title, CancellationToken cancellationToken)
+    private async Task PersistPrimaryTitleCacheAsync(long workId, WorkTitle title, CancellationToken cancellationToken)
     {
         if (!title.IsPrimary)
         {
@@ -813,7 +856,7 @@ public sealed class WorkService(AppDbContext db)
     }
 
     private async Task TryAppendAnimeMappingAuditAsync(
-        Guid workId,
+        long workId,
         string action,
         string summary,
         string details,

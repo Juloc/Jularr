@@ -67,10 +67,10 @@ public static class WorkMetadataPresentation
     /// The address of a cached variant. The version is a prefix of the cache key, which changes whenever the variant's image changes,
     /// so the endpoint can let browsers keep the response for good.
     /// </summary>
-    public static string ArtworkUrl(Guid workId, long artworkId, string cacheKey) => $"/works/{workId:D}/artwork/{artworkId}?v={cacheKey[..12]}";
+    public static string ArtworkUrl(long workId, long artworkId, string cacheKey) => $"/works/{workId:D}/artwork/{artworkId}?v={cacheKey[..12]}";
 
     /// <summary>The view for <paramref name="viewerLocale"/>; null when nothing is persisted for the Work yet.</summary>
-    public static WorkMetadataView? Resolve(Guid workId, WorkMetadataRows rows, string viewerLocale)
+    public static WorkMetadataView? Resolve(long workId, WorkMetadataRows rows, string viewerLocale)
     {
         if (rows.Facts is null && rows.Values.Count == 0 && rows.Credits.Count == 0 && rows.Artwork.Count == 0)
         {
@@ -120,7 +120,7 @@ public static class WorkMetadataPresentation
     /// The card metadata of every Work of a Library page, keyed by Work; Works without persisted metadata are absent. The title follows
     /// the same fallback as <see cref="Resolve"/>, so a card and its detail page always show the same title.
     /// </summary>
-    public static IReadOnlyDictionary<Guid, WorkCardMetadata> ResolveCards(WorkCardMetadataRows rows, string viewerLocale)
+    public static IReadOnlyDictionary<long, WorkCardMetadata> ResolveCards(WorkCardMetadataRows rows, string viewerLocale)
     {
         var artworkLanguages = WorkMetadataLocales.ArtworkLanguages(viewerLocale, configuredFallback: null);
         var artwork = rows.Artwork.ToLookup(x => x.WorkId);

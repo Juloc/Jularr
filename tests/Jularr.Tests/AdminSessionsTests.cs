@@ -63,10 +63,10 @@ public sealed class AdminSessionsTests
 
             var store = new PlaybackStreamSessionStore(TimeProvider.System);
             var sessionA = store.Create(
-                "reader-a", episode.Id, Guid.NewGuid(), "/media/a.mkv", 1200,
+                "reader-a", new PlaybackVideoTarget(1, episode.Id), Guid.NewGuid(), "/media/a.mkv", 1200,
                 SamplePlan(), SampleSelections());
             store.Create(
-                "reader-b", episode.Id, Guid.NewGuid(), "/media/b.mkv", 1200,
+                "reader-b", new PlaybackVideoTarget(1, episode.Id), Guid.NewGuid(), "/media/b.mkv", 1200,
                 SamplePlan(), SampleSelections());
 
             var service = new AdminSessionsService(db, store);
@@ -90,7 +90,7 @@ public sealed class AdminSessionsTests
     {
         var store = new PlaybackStreamSessionStore(TimeProvider.System);
         var session = store.Create(
-            "reader-a", Guid.NewGuid(), Guid.NewGuid(), "/media/a.mkv", 1200,
+            "reader-a", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/a.mkv", 1200,
             SamplePlan(), SampleSelections());
 
         Assert.IsFalse(
@@ -111,7 +111,7 @@ public sealed class AdminSessionsTests
     {
         var store = new PlaybackStreamSessionStore(TimeProvider.System);
         var session = store.Create(
-            "reader-a", Guid.NewGuid(), Guid.NewGuid(), "/media/a.mkv", 1200,
+            "reader-a", new PlaybackVideoTarget(1, Guid.NewGuid()), Guid.NewGuid(), "/media/a.mkv", 1200,
             SamplePlan(), SampleSelections());
 
         Assert.IsTrue(store.RemoveAny(session.Id));

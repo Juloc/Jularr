@@ -8,20 +8,7 @@ public sealed class RoleNavigationTests
 {
     private static readonly string[] MediaManagerAdminIds =
     [
-        "admin-overview",
-        "admin-requests",
-        "admin-wanted",
-        "admin-music",
-        "admin-profiles",
-        "admin-usenet",
-        "admin-anime-acquisition",
-        "admin-import",
-        "admin-mapping",
-        "admin-subtitles",
-        "admin-operations",
-        "admin-scans",
-        "admin-logs",
-        "admin-sessions"
+        "admin-overview", "admin-library", "admin-requests", "admin-wanted", "admin-operations", "admin-usenet", "admin-profiles", "admin-diagnostics"
     ];
 
     /// <summary>The policy check a signed-in account with exactly this role passes.</summary>
@@ -52,7 +39,7 @@ public sealed class RoleNavigationTests
         Assert.AreEqual("admin", nav.Expanded?.Id);
         CollectionAssert.AreEquivalent(
             MediaManagerAdminIds,
-            nav.Expanded!.Groups!.SelectMany(group => group.Items).Concat(nav.Unfinished).Select(item => item.Id).Where(id => id.StartsWith("admin", StringComparison.Ordinal)).ToArray());
+            nav.Expanded!.Groups!.SelectMany(group => group.Items).Select(item => item.Id).Where(id => id.StartsWith("admin", StringComparison.Ordinal)).ToArray());
         Assert.AreEqual(
             "admin-operations",
             nav.Expanded.Groups!.SelectMany(group => group.Items).Single(item => item.IsActive).Id);
@@ -75,7 +62,7 @@ public sealed class RoleNavigationTests
     {
         var can = As(role);
         var section = UiShellNavigation.BuildSection("admin", can);
-        var expected = AdminEntries.Where(entry => can(entry.Policy!)).OrderBy(entry => entry.Unfinished).Select(entry => entry.Id).ToArray();
+        var expected = AdminEntries.Where(entry => can(entry.Policy!)).Select(entry => entry.Id).ToArray();
 
         if (role == AccountRole.User)
         {
@@ -97,7 +84,7 @@ public sealed class RoleNavigationTests
         var section = UiShellNavigation.BuildSection("admin", As(AccountRole.Owner));
 
         CollectionAssert.AreEqual(
-            AdminEntries.OrderBy(entry => entry.Unfinished).Select(entry => entry.Id).ToArray(),
+            AdminEntries.Select(entry => entry.Id).ToArray(),
             section!.Groups!.SelectMany(group => group.Items).Select(item => item.Id).ToArray());
     }
 

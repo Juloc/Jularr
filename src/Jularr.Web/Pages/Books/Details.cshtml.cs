@@ -1,5 +1,7 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Sabnzbd;
+using Jularr.Web.Features.Audiobooks;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Localization;
@@ -13,6 +15,7 @@ public sealed class DetailsModel(
     BookCatalogService books,
     CurrentAccountContext account,
     SabnzbdDownloadService sabnzbd,
+    AcquisitionRequestService requests,
     AppDbContext db,
     ILogger<DetailsModel> logger) : PageModel
 {
@@ -20,6 +23,9 @@ public sealed class DetailsModel(
     public BookCatalogItem? Book { get; private set; }
     public string? Error { get; private set; }
     public bool IsOwner => account.IsOwner;
+
+    /// <summary>Whether the signed-in profile may request an audiobook (the access policy of the Audiobook kind, not the Book's).</summary>
+    public bool CanRequestAudiobook { get; private set; }
 
     /// <summary>
     /// Language availability across this work's known catalog editions (#426). The page already
@@ -44,6 +50,7 @@ public sealed class DetailsModel(
                 return NotFound();
             }
 
+            CanRequestAudiobook = (await requests.GetCapabilitiesAsync(MediaAcquisitionKind.Audiobook, cancellationToken)).CanRequest;
             Facts = MediaFactsStripModel.Create(
                 MediaFactsService.CreateBookCatalogFacts(Book),
                 Ui,
@@ -91,6 +98,35 @@ public sealed class DetailsModel(
             TempData["Status"] = Ui["books.details.acquireFailed"];
             return RedirectToPage(new { id });
         }
+    }
+
+    public async Task<IActionResult> OnPostRequestAudiobookAsync(string id, CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        try
+        {
+            if (await books.GetAsync(id, cancellationToken) is not { } book)
+            {
+                return NotFound();
+            }
+
+            var payload = System.Text.Json.JsonSerializer.Serialize(new AudiobookRequestPayload(book.Title, book.Author), System.Text.Json.JsonSerializerOptions.Web);
+            var submission = await requests.SubmitWithOutcomeAsync(
+                new AcquisitionRequestDraft(MediaAcquisitionKind.Audiobook, BookCatalogService.CatalogRequestProvider, id, book.Title, book.Author, book.CoverImageUrl, payload),
+                cancellationToken);
+            TempData["Status"] = submission.AlreadyRequested ? Ui["admin.books.alreadyRequested"] : submission.Request.StatusMessage ?? Ui["admin.books.requested"];
+        }
+        catch (AcquisitionAccessDeniedException)
+        {
+            return Forbid();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(exception, "Requesting the audiobook of catalog book {BookId} failed", id);
+            TempData["Status"] = Ui["books.details.unavailableError"];
+        }
+
+        return RedirectToPage(new { id });
     }
 
     public async Task<IActionResult> OnPostSabUrlAsync(

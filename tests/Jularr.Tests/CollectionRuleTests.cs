@@ -21,7 +21,7 @@ public sealed class CollectionRuleTests
         (string Code, bool Complete)[]? languages = null,
         Guid[]? franchises = null) =>
         new(
-            Guid.NewGuid(),
+            Random.Shared.NextInt64(1, long.MaxValue),
             mediaType,
             title,
             year,

@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -10,7 +11,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class QualityProfileEditingTests
 {
-    private static ProwlarrReleaseCandidate Release(string title) =>
+    private static AcquisitionCandidate Release(string title) =>
         new(title, "Test indexer", 1, "usenet", 100L * 1024 * 1024, null, null, DateTimeOffset.UtcNow, 0, 1, title, null, AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.invalid/{Uri.EscapeDataString(title)}"), null);
 
     [TestMethod]
@@ -31,7 +32,6 @@ public sealed class QualityProfileEditingTests
             Assert.AreEqual(profile.UpgradeAllowed, parsed.UpgradeAllowed, kind.ToString());
             Assert.AreEqual(profile.UpgradeCutoffQuality, parsed.UpgradeCutoffQuality, kind.ToString());
             Assert.AreEqual(profile.ScoreRules.Length, parsed.ScoreRules.Length, kind.ToString());
-            Assert.AreEqual(profile.FallbackTiers.Length, parsed.FallbackTiers.Length, kind.ToString());
         }
     }
 
@@ -43,11 +43,11 @@ public sealed class QualityProfileEditingTests
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
         foreach (var preferred in new[] { "AAA", "GOOD" })
         {
-            form.Rules = [new ScoreRuleRow { Effect = "Prefer", Field = "ReleaseGroup", Match = "Equals", Value = preferred, Score = "20", Name = "Preferred group" }];
+            form.Rules = [new ScoreRuleRow { Effect = "Prefer", Field = "ReleaseGroup", Match = "Equals", Value = preferred, Name = "Preferred group" }];
             var edited = QualityProfileEditing.Parse(form);
 
             Assert.IsTrue(edited.IsValid);
-            Assert.AreEqual($"Frieren Vol 01 CBZ-{preferred}", ReadingReleaseSelector.Rank(releases, target, edited.Profile)[0].Release.Title, "The rule the owner wrote decides between otherwise equal releases.");
+            Assert.AreEqual($"Frieren Vol 01 CBZ-{preferred}", ReadingRank.Rank(releases, target, edited.Profile)[0].Release.Title, "The rule the owner wrote decides between otherwise equal releases.");
         }
     }
 
@@ -56,11 +56,11 @@ public sealed class QualityProfileEditingTests
     {
         var target = new ReadingAcquisitionTarget(MediaAcquisitionKind.Manga, "Frieren", []);
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
-        form.Rules = [new ScoreRuleRow { Effect = "Reject", Field = "ReleaseGroup", Match = "Equals", Value = "BAD", Score = "0", Name = "Never this group" }];
+        form.Rules = [new ScoreRuleRow { Effect = "Reject", Field = "ReleaseGroup", Match = "Equals", Value = "BAD", Name = "Never this group" }];
         form.MaximumSizeMegabytes = "50";
 
         var profile = QualityProfileEditing.Parse(form).Profile!;
-        var ranked = ReadingReleaseSelector.Rank([Release("Frieren Vol 01 CBZ-BAD"), Release("Frieren Vol 02 CBZ-OK")], target, profile);
+        var ranked = ReadingRank.Rank([Release("Frieren Vol 01 CBZ-BAD"), Release("Frieren Vol 02 CBZ-OK")], target, profile);
 
         Assert.AreEqual(0, ranked.Single(item => item.Release.Title.EndsWith("BAD", StringComparison.Ordinal)).Score, "A rejecting rule is a gate, not a penalty.");
         Assert.AreEqual(0, ranked.Single(item => item.Release.Title.EndsWith("OK", StringComparison.Ordinal)).Score, "The 100 MB release is above the 50 MB limit.");
@@ -73,21 +73,19 @@ public sealed class QualityProfileEditingTests
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
         form.Rules =
         [
-            new ScoreRuleRow { Effect = "Prefer", Field = "ReleaseGroup", Match = "Equals", Value = "GOOD", Score = "20", Name = "fine" },
-            new ScoreRuleRow { Effect = "Prefer", Field = "NoSuchField", Match = "Equals", Value = "x", Score = "1", Name = "broken" },
+            new ScoreRuleRow { Effect = "Prefer", Field = "ReleaseGroup", Match = "Equals", Value = "GOOD", Name = "fine" },
+            new ScoreRuleRow { Effect = "Prefer", Field = "NoSuchField", Match = "Equals", Value = "x", Name = "broken" },
             new ScoreRuleRow()
         ];
-        form.Tiers = [new FallbackTierRow { Minutes = "soon", Qualities = ["ZIP"] }, new FallbackTierRow { Minutes = "30", Qualities = ["PDF"] }];
-        form.UpgradeMinimumScoreDelta = "many";
+        form.UpgradeMinimumQualitySteps = "many";
 
         var result = QualityProfileEditing.Parse(form);
 
         Assert.IsFalse(result.IsValid);
         Assert.IsNull(result.Profile);
         Assert.Contains(error => error is { Field: nameof(QualityProfileForm.Rules), Line: 2, Code: "rule" }, result.Errors);
-        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.Tiers), Line: 1, Code: "tier" }, result.Errors);
         Assert.DoesNotContain(error => error.Field == nameof(QualityProfileForm.Rules) && error.Line == 3, result.Errors, "The blank row the editor offers for adding a rule is not an error.");
-        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.UpgradeMinimumScoreDelta), Code: "number" }, result.Errors);
+        Assert.Contains(error => error is { Field: nameof(QualityProfileForm.UpgradeMinimumQualitySteps), Code: "number" }, result.Errors);
     }
 
     [TestMethod]
@@ -102,17 +100,32 @@ public sealed class QualityProfileEditingTests
     }
 
     [TestMethod]
-    public void AWaitingStepMayOnlyNameQualitiesOfTheOrderAndTheCutoffMustBeInIt()
+    public void TheCutoffMustBeOneOfTheQualitiesOfTheOrder()
     {
         var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultLightNovel());
-        form.Tiers = [new FallbackTierRow { Minutes = "60", Qualities = ["MOBI"] }];
-        Assert.Contains(error => error.Code == "quality" && error.Detail == "MOBI", QualityProfileEditing.Parse(form).Errors);
-
-        form.Tiers = [new FallbackTierRow { Minutes = "60", Qualities = ["ZIP"] }];
         form.UpgradeCutoffQuality = "AZW3";
 
         var result = QualityProfileEditing.Parse(form);
+
         Assert.IsFalse(result.IsValid);
         Assert.Contains(error => error.Code == "profile", result.Errors);
+    }
+
+    [TestMethod]
+    public void TheOrderOfTheRulesIsTheirPriorityAndNoNumberIsAsked()
+    {
+        var target = new ReadingAcquisitionTarget(MediaAcquisitionKind.Manga, "Frieren", []);
+        var releases = new[] { Release("Frieren Vol 01 CBZ-AAA"), Release("Frieren Vol 01 CBZ-GOOD") };
+        var form = QualityProfileEditing.ToForm(ReadingQualityProfiles.CreateDefaultManga());
+        ScoreRuleRow Prefer(string group) => new() { Effect = "Prefer", Field = "ReleaseGroup", Match = "Equals", Value = group, Name = group };
+
+        form.Rules = [Prefer("GOOD"), Prefer("AAA")];
+        var goodFirst = QualityProfileEditing.Parse(form).Profile!;
+        form.Rules = [Prefer("AAA"), Prefer("GOOD")];
+        var aaaFirst = QualityProfileEditing.Parse(form).Profile!;
+
+        Assert.AreEqual("Frieren Vol 01 CBZ-GOOD", ReadingRank.Rank(releases, target, goodFirst)[0].Release.Title);
+        Assert.AreEqual("Frieren Vol 01 CBZ-AAA", ReadingRank.Rank(releases, target, aaaFirst)[0].Release.Title);
+        CollectionAssert.AreEqual(new[] { "GOOD", "AAA" }, QualityProfileEditing.ToForm(goodFirst).Rules.Select(row => row.Value).ToArray(), "The editor shows the rules in the order they rank.");
     }
 }

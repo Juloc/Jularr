@@ -2,16 +2,21 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Localization;
+using Jularr.Web.Pages.Admin;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace Jularr.Web.Pages.Settings.Indexers;
 
-/// <summary>Add or edit one canonical indexer entry.</summary>
+/// <summary>
+/// Add or edit one canonical indexer. A new Newznab indexer needs only its address and API key: <see cref="IndexerSetupService"/> reads the
+/// capabilities, maps the media types and checks that searching works. Everything else is advanced and optional.
+/// </summary>
 [Authorize(Policy = JularrPolicies.AcquisitionSettings)]
-public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditModel> logger) : PageModel
+public sealed class EditModel(AppDbContext db, IndexerStore store, IndexerSetupService setup, ILogger<EditModel> logger, IInstanceModuleService? instanceModules = null) : PageModel
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
@@ -30,15 +35,13 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
     [BindProperty]
     public string? ApiKey { get; set; }
 
-    [BindProperty]
-    public string? Categories { get; set; }
+    /// <summary>The categories the owner typed per media type name; a blank entry uses what the indexer advertises.</summary>
+    [BindProperty(Name = "KindOverrides")]
+    public Dictionary<string, string?> KindOverrides { get; set; } = [];
 
+    /// <summary>The media types this indexer is searched for; none selected means every media type.</summary>
     [BindProperty]
-    public string? BookCategories { get; set; }
-
-    /// <summary>One line per media type, <c>movie: 2000, 2040</c>; a type without a line uses its default categories.</summary>
-    [BindProperty]
-    public string? KindCategories { get; set; }
+    public List<string> SearchedKinds { get; set; } = [];
 
     [BindProperty]
     public string? IndexerIds { get; set; }
@@ -59,16 +62,20 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
     public bool InteractiveSearch { get; set; } = true;
 
     public bool IsNew => Id is null;
+
     public string? Error { get; private set; }
+
+    /// <summary>The media types of the media modules this instance serves, in the order the form lists them.</summary>
+    public IReadOnlyList<MediaAcquisitionKind> Kinds { get; private set; } = [];
+
+    /// <summary>What the indexer's capabilities allow per media type, shown beside the fields that override it; empty for a new or never-read indexer.</summary>
+    public IReadOnlyList<IndexerKindReadiness> Detected { get; private set; } = [];
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        await LoadFormContextAsync(cancellationToken);
         if (Id is not { } id)
         {
-            var defaults = IndexerSettings.CreateDefault(string.Empty, Type);
-            Categories = string.Join(", ", defaults.Categories);
-            BookCategories = string.Join(", ", IndexerSettings.DefaultBookCategories);
             return;
         }
 
@@ -82,37 +89,34 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
         Name = entry.Name;
         Type = entry.Type;
         BaseUrl = entry.Settings.BaseUrl;
-        Categories = string.Join(", ", entry.Settings.Categories);
-        BookCategories = string.Join(", ", entry.Settings.EffectiveBookCategories);
-        KindCategories = string.Join('\n', (entry.Settings.CategoriesByKind ?? []).OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}: {string.Join(", ", pair.Value)}"));
+        KindOverrides = Kinds.ToDictionary(AcquisitionAccessNames.Kind, kind => entry.Settings.CategoriesFor(kind) is { } chosen ? string.Join(", ", chosen) : null);
+        SearchedKinds = [.. (entry.Settings.MediaKinds ?? []).Select(AcquisitionAccessNames.Kind)];
         IndexerIds = string.Join(", ", entry.Settings.IndexerIds);
         SearchLimit = entry.Settings.SearchLimit;
         Priority = entry.Priority;
         Enabled = entry.Enabled;
         AutomaticSearch = entry.Settings.AutomaticSearch;
         InteractiveSearch = entry.Settings.InteractiveSearch;
+        Detected = [.. Kinds.Select(kind => IndexerReadiness.ForKind(entry, kind))];
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        await LoadFormContextAsync(cancellationToken);
         try
         {
-            if (!TryParseIds(Categories, out var categories)
-                || !TryParseIds(IndexerIds, out var indexerIds)
-                || !TryParseIds(BookCategories, out var bookCategories))
+            if (!TryParseIds(IndexerIds, out var indexerIds) || !TryParseKindOverrides(out var overrides))
             {
                 Error = Ui["settings.indexers.invalidIds"];
                 return Page();
             }
 
-            if (!TryParseKindCategories(KindCategories, out var kindCategories))
+            var existing = Id is { } id ? await store.GetAsync(id, cancellationToken) : null;
+            if (existing is null && Type == IndexerType.Newznab)
             {
-                Error = Ui["settings.indexers.invalidKindCategories"];
-                return Page();
+                return await AddNewznabAsync(indexerIds, overrides, cancellationToken);
             }
 
-            var existing = Id is { } id ? await store.GetAsync(id, cancellationToken) : null;
             var apiKey = string.IsNullOrWhiteSpace(ApiKey) ? existing?.ApiKey : ApiKey.Trim();
             if (string.IsNullOrWhiteSpace(apiKey))
             {
@@ -120,28 +124,14 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
                 return Page();
             }
 
-            await store.SaveAsync(
-                new IndexerEntry(
-                    existing?.Id ?? Guid.NewGuid(),
-                    Name,
-                    Type,
-                    Enabled,
-                    Priority,
-                    // What the owner does not edit here (reported capabilities, media scope) stays as stored.
-                    (existing?.Settings ?? new IndexerSettings(BaseUrl, categories, indexerIds, SearchLimit)) with
-                    {
-                        BaseUrl = BaseUrl,
-                        Categories = categories,
-                        IndexerIds = indexerIds,
-                        SearchLimit = SearchLimit,
-                        BookCategories = bookCategories.Length == 0 ? null : bookCategories,
-                        CategoriesByKind = kindCategories,
-                        AutomaticSearch = AutomaticSearch,
-                        InteractiveSearch = InteractiveSearch
-                    },
-                    apiKey),
-                cancellationToken);
+            var baseUrl = BaseUrl;
+            if ((existing?.Type ?? Type) == IndexerType.Newznab && !IndexerSetupService.TryNormalizeBaseUrl(BaseUrl, out baseUrl, out var problem))
+            {
+                Error = problem;
+                return Page();
+            }
 
+            await store.SaveAsync(Apply(existing ?? Create(baseUrl), indexerIds, overrides, apiKey, baseUrl), cancellationToken);
             TempData["IndexerNotice"] = Ui["settings.indexers.saved"];
             return RedirectToPage("/Admin/Usenet");
         }
@@ -154,25 +144,80 @@ public sealed class EditModel(AppDbContext db, IndexerStore store, ILogger<EditM
         }
     }
 
-    /// <summary>Reads one line per media type (<c>movie: 2000, 2040</c>); a name that is not a media type or an id that is not a number refuses the whole text.</summary>
-    private static bool TryParseKindCategories(string? text, out Dictionary<string, int[]>? categories)
+    private async Task<IActionResult> AddNewznabAsync(int[] indexerIds, Dictionary<string, int[]>? overrides, CancellationToken cancellationToken)
     {
-        categories = null;
-        var parsed = new Dictionary<string, int[]>(StringComparer.Ordinal);
-        var kinds = Enum.GetValues<MediaAcquisitionKind>().Select(AcquisitionAccessNames.Kind).ToHashSet(StringComparer.Ordinal);
-        foreach (var line in (text ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        var result = await setup.AddAsync(BaseUrl, ApiKey, Name, cancellationToken);
+        if (result.Outcome != IndexerSetupOutcome.Added || result.Entry is not { } added)
         {
-            var separator = line.IndexOf(':');
-            var name = separator < 0 ? "" : line[..separator].Trim().ToLowerInvariant();
-            if (!kinds.Contains(name) || !TryParseIds(line[(separator + 1)..], out var ids) || ids.Length == 0)
+            Error = IndexerSetupMessages.Describe(Ui, result).Text;
+            return Page();
+        }
+
+        // What the owner set under Advanced applies on top of what setup detected; a search that was not proven keeps the indexer off whatever the checkbox says.
+        await store.SaveAsync(Apply(added, indexerIds, overrides, added.ApiKey, added.Settings.BaseUrl) with { Enabled = Enabled && added.Enabled }, cancellationToken);
+        var (text, isError) = IndexerSetupMessages.Describe(Ui, result);
+        TempData[isError ? "UsenetError" : "UsenetNotice"] = text;
+        return RedirectToPage("/Admin/Usenet");
+    }
+
+    private IndexerEntry Create(string baseUrl) => new(Guid.NewGuid(), Name, Type, Enabled, Priority, IndexerSettings.CreateDefault(baseUrl, Type), ApiKey ?? string.Empty);
+
+    // What the form does not show (reported capabilities and their proof, the legacy anime and book category fields, settings of media types this
+    // instance does not serve) stays exactly as stored. A new address invalidates what was read from the old one.
+    private IndexerEntry Apply(IndexerEntry entry, int[] indexerIds, Dictionary<string, int[]>? overrides, string apiKey, string baseUrl)
+    {
+        var served = Kinds.Select(AcquisitionAccessNames.Kind).ToHashSet(StringComparer.Ordinal);
+        var kept = (entry.Settings.CategoriesByKind ?? []).Where(pair => !served.Contains(pair.Key)).Concat(overrides ?? []).ToDictionary(pair => pair.Key, pair => pair.Value);
+        var keptKinds = (entry.Settings.MediaKinds ?? []).Where(kind => !Kinds.Contains(kind));
+        var searched = Kinds.Where(kind => SearchedKinds.Contains(AcquisitionAccessNames.Kind(kind))).Concat(keptKinds).ToArray();
+        var moved = !string.Equals(entry.Settings.BaseUrl, baseUrl, StringComparison.OrdinalIgnoreCase);
+        return entry with
+        {
+            Name = string.IsNullOrWhiteSpace(Name) ? entry.Name : Name,
+            Enabled = Enabled,
+            Priority = Priority,
+            Settings = entry.Settings with
+            {
+                BaseUrl = baseUrl,
+                IndexerIds = indexerIds,
+                SearchLimit = SearchLimit,
+                CategoriesByKind = kept.Count == 0 ? null : kept,
+                MediaKinds = searched.Length == 0 ? null : searched,
+                AutomaticSearch = AutomaticSearch,
+                InteractiveSearch = InteractiveSearch,
+                Capabilities = moved ? null : entry.Settings.Capabilities,
+                Verification = moved ? null : entry.Settings.Verification
+            },
+            ApiKey = apiKey
+        };
+    }
+
+    private async Task LoadFormContextAsync(CancellationToken cancellationToken)
+    {
+        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        var served = instanceModules is null ? InstanceModuleSettings.Default : await instanceModules.GetAsync(cancellationToken);
+        Kinds = [.. UsenetModel.DownloadKinds.Where(kind => served.IsEnabled(AcquisitionInstanceModules.For(kind)))];
+    }
+
+    /// <summary>Reads the per-media-type fields; a field that is not a list of positive numbers refuses the whole form.</summary>
+    private bool TryParseKindOverrides(out Dictionary<string, int[]>? overrides)
+    {
+        overrides = null;
+        var parsed = new Dictionary<string, int[]>(StringComparer.Ordinal);
+        foreach (var (name, text) in KindOverrides)
+        {
+            if (!TryParseIds(text, out var ids))
             {
                 return false;
             }
 
-            parsed[name] = ids;
+            if (ids.Length > 0)
+            {
+                parsed[name.Trim().ToLowerInvariant()] = ids;
+            }
         }
 
-        categories = parsed.Count == 0 ? null : parsed;
+        overrides = parsed.Count == 0 ? null : parsed;
         return true;
     }
 

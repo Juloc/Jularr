@@ -14,7 +14,7 @@ public sealed class PayloadConflictException() : InvalidOperationException("The 
 public sealed class OpenRequestExistsException(Exception inner) : Exception("The title already has an open request.", inner);
 
 /// <summary>Persistence of the access policies and acquisition requests (tables from migration 20260927120000).</summary>
-public sealed class AcquisitionAccessStore(AppDbContext db)
+public sealed partial class AcquisitionAccessStore(AppDbContext db)
 {
     private const string OpenTitleIndex = "IX_AcquisitionRequests_OpenTitle";
     private const string OpenStatuses = "'pending', 'approved', 'searching', 'downloading', 'importing'";
@@ -105,6 +105,41 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             $"""SELECT {Columns} FROM "AcquisitionRequests" WHERE "Id" = @id LIMIT 1;""",
             command => Add(command, "@id", id.ToString()),
             cancellationToken);
+
+    public async Task<RequestProfileResult> ChangeProfileAsync(Guid id, Func<AcquisitionRequest, Task<RequestProfileResult>> assign, CancellationToken cancellationToken)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var request = await QuerySingleAsync($"SELECT {Columns} FROM \"AcquisitionRequests\" WHERE \"Id\" = @id FOR UPDATE;", command => Add(command, "@id", id.ToString()), cancellationToken);
+        if (request is null || request.OperationId is not null || request.Status is not (AcquisitionRequestStatus.Pending or AcquisitionRequestStatus.Approved or AcquisitionRequestStatus.Failed))
+        {
+            return RequestProfileResult.StateChanged;
+        }
+
+        var result = await assign(request);
+        if (result == RequestProfileResult.Assigned)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return result;
+    }
+
+    public Task<bool> TryDeleteAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
+        WithConnectionAsync(async connection =>
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                DELETE FROM "AcquisitionRequests" r
+                WHERE r."Id" = @id AND r."UpdatedAt" = @updated AND r."Status" = @status
+                    AND r."Status" NOT IN ('searching', 'downloading', 'importing')
+                    AND NOT EXISTS (
+                        SELECT 1 FROM "Operations" o WHERE o."Id" = r."OperationId" AND o."Status" IN (1, 2, 4, 6))
+                """;
+            Add(command, "@id", request.Id.ToString());
+            Add(command, "@updated", request.UpdatedAt);
+            Add(command, "@status", AcquisitionAccessNames.Status(request.Status));
+            return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
+        }, cancellationToken);
 
     /// <summary>The request whose current download is this operation, if any.</summary>
     public Task<AcquisitionRequest?> FindByOperationAsync(Guid operationId, CancellationToken cancellationToken) =>
@@ -218,25 +253,39 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                 Convert.ToInt32(reader.GetValue(1), CultureInfo.InvariantCulture));
         }, cancellationToken);
 
-    /// <summary>How many of a profile's requests one auto-approval rule approved since <paramref name="sinceUtc"/>.</summary>
-    public async Task<int> CountAutoApprovedSinceAsync(
-        string requestedByProfileId,
-        string ruleId,
-        DateTime sinceUtc,
-        CancellationToken cancellationToken) =>
-        await WithConnectionAsync(async connection =>
+    /// <summary>Durable usage of each legacy approval quota in its own rolling window, read in one query.</summary>
+    public async Task<IReadOnlyDictionary<string, int>> CountAutoApprovedAsync(string profileId, IReadOnlyDictionary<string, DateTime> sinceByRule, CancellationToken cancellationToken)
+    {
+        if (sinceByRule.Count == 0)
+        {
+            return new Dictionary<string, int>();
+        }
+
+        return await WithConnectionAsync<IReadOnlyDictionary<string, int>>(async connection =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText =
                 """
-                SELECT COUNT(*) FROM "AcquisitionRequests"
-                WHERE "RequestedByProfileId" = @profile AND "DecidedByProfileId" = @decidedBy AND "CreatedAt" >= @since;
+                SELECT thresholds.id, COUNT(usage."Id")::integer
+                FROM unnest(@ids::text[], @since::timestamptz[]) AS thresholds(id, since)
+                LEFT JOIN "RequestSubmissionUsage" usage ON usage."RequestedByProfileId" = @profile
+                    AND usage."DecidedByProfileId" = @prefix || thresholds.id AND usage."CreatedAt" >= thresholds.since
+                GROUP BY thresholds.id;
                 """;
-            Add(command, "@profile", requestedByProfileId);
-            Add(command, "@decidedBy", AcquisitionAutoApproval.DecidedBy(ruleId));
-            Add(command, "@since", sinceUtc);
-            return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+            Add(command, "@profile", profileId);
+            Add(command, "@prefix", AcquisitionAutoApproval.DecidedBy(string.Empty));
+            Add(command, "@ids", sinceByRule.Keys.ToArray());
+            Add(command, "@since", sinceByRule.Values.ToArray());
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                counts.Add(reader.GetString(0), reader.GetInt32(1));
+            }
+
+            return counts;
         }, cancellationToken);
+    }
 
     /// <summary>
     /// The newest open Movie and TV requests that carry playback markers, at most <paramref name="limit"/>; the caller judges which markers
@@ -280,37 +329,6 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             {
                 Add(command, "@kind", AcquisitionAccessNames.Kind(kind));
                 Add(command, "@status", AcquisitionAccessNames.Status(status));
-            },
-            cancellationToken);
-
-    /// <summary>
-    /// One batch of the requests of a media type that a pass reads back from its monitoring pipeline (see
-    /// <see cref="AcquisitionRequest.IsObservedFromMonitoring"/>), in id order after <paramref name="afterId"/>. Walking the batches by the
-    /// last id reaches every request however many there are, and a request that is not written meanwhile keeps its place.
-    /// </summary>
-    public Task<IReadOnlyList<AcquisitionRequest>> ListObservedFromMonitoringAsync(
-        MediaAcquisitionKind kind,
-        Guid? afterId,
-        int limit,
-        CancellationToken cancellationToken) =>
-        QueryAsync(
-            $"""
-            SELECT {Columns} FROM "AcquisitionRequests"
-            WHERE "Kind" = @kind
-              AND ("Status" = ANY(@underway) OR ("Status" = 'failed' AND "OperationId" IS NOT NULL))
-              AND (@after::text IS NULL OR "Id" > @after)
-            ORDER BY "Id"
-            LIMIT @limit;
-            """,
-            command =>
-            {
-                Add(command, "@kind", AcquisitionAccessNames.Kind(kind));
-                Add(command, "@after", afterId?.ToString());
-                Add(command, "@limit", limit);
-                var underway = command.CreateParameter();
-                underway.ParameterName = "@underway";
-                underway.Value = AcquisitionAccessNames.UnderwayStatuses.Select(AcquisitionAccessNames.Status).ToArray();
-                command.Parameters.Add(underway);
             },
             cancellationToken);
 
@@ -376,7 +394,8 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     : """
                       UPDATE "AcquisitionRequests"
                       SET "PayloadJson" = @next, "Status" = @status, "StatusMessage" = COALESCE(@message, "StatusMessage"),
-                          "ResultUrl" = COALESCE(@resultUrl, "ResultUrl"), "UpdatedAt" = CASE WHEN "Status" = @status THEN "UpdatedAt" ELSE @now END
+                          "ResultUrl" = COALESCE(@resultUrl, "ResultUrl"), "OperationId" = CASE WHEN @clearOperation THEN NULL ELSE "OperationId" END,
+                          "UpdatedAt" = CASE WHEN "Status" = @status THEN "UpdatedAt" ELSE @now END
                       WHERE "Id" = @id AND "PayloadJson" IS NOT DISTINCT FROM @current::text AND "Status" = @expected;
                       """;
                 Add(write, "@id", id.ToString());
@@ -389,6 +408,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     Add(write, "@status", AcquisitionAccessNames.Status(outcome.Status));
                     Add(write, "@message", outcome.Message);
                     Add(write, "@resultUrl", outcome.ResultUrl);
+                    Add(write, "@clearOperation", outcome.ClearOperation);
                     Add(write, "@now", DateTime.UtcNow);
                 }
 
@@ -457,83 +477,102 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
             return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
         }, cancellationToken);
 
-    public async Task<AcquisitionRequest> CreateAsync(
-        AcquisitionRequestDraft draft,
-        string requestedByProfileId,
-        AcquisitionRequestStatus status,
-        string? decidedByProfileId,
-        CancellationToken cancellationToken)
+    public async Task<AcquisitionRequest> CreateAsync(AcquisitionRequestDraft draft, string requestedByProfileId, AcquisitionRequestStatus status, string? decidedByProfileId,
+        CancellationToken cancellationToken, RequestRuleValues? rule = null, Func<Task<(AcquisitionRequestStatus Status, string? DecidedBy)>>? approval = null)
     {
-        var now = DateTime.UtcNow;
-        var request = new AcquisitionRequest(
-            Guid.NewGuid(),
-            draft.Kind,
-            draft.Provider,
-            draft.ExternalId,
-            draft.Title,
-            draft.Subtitle,
-            draft.CoverImageUrl,
-            draft.PayloadJson,
-            requestedByProfileId,
-            status,
-            null,
-            null,
-            null,
-            now,
-            now,
-            decidedByProfileId,
-            decidedByProfileId is null ? null : now,
-            draft.WorkId);
-
-        await WithConnectionAsync(async connection =>
+        AcquisitionRequest? created = null;
+        await db.Database.InTransactionAsync(async () =>
         {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                $"""
+            if (rule is not null)
+            {
+                await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({requestedByProfileId}, 1245187));", cancellationToken);
+                if (await FindOpenAsync(draft.Kind, draft.Provider, draft.ExternalId, cancellationToken) is not null)
+                {
+                    throw new OpenRequestExistsException(new InvalidOperationException("An open request already exists."));
+                }
+
+                if (!rule.Kinds.Contains(draft.Kind))
+                {
+                    throw new AcquisitionAccessDeniedException("Your request rule does not allow this media type.");
+                }
+
+                if (rule.Limit is { } limit)
+                {
+                    var since = DateTime.UtcNow.AddDays(-rule.PeriodDays);
+                    var used = await db.Database.SqlQuery<int>($"""
+                        SELECT COUNT(*)::integer AS "Value" FROM "RequestSubmissionUsage"
+                        WHERE "RequestedByProfileId" = {requestedByProfileId} AND "CreatedAt" >= {since}
+                        """).SingleAsync(cancellationToken);
+                    if (used >= limit)
+                    {
+                        throw new AcquisitionAccessDeniedException("Your rolling request limit has been reached.", "requestRules.quotaReached");
+                    }
+                }
+            }
+
+            if (approval is not null)
+            {
+                (status, decidedByProfileId) = await approval();
+            }
+
+            var now = DateTime.UtcNow;
+            var request = new AcquisitionRequest(Guid.NewGuid(), draft.Kind, draft.Provider, draft.ExternalId, draft.Title, draft.Subtitle, draft.CoverImageUrl, draft.PayloadJson,
+                requestedByProfileId, status, null, null, null, now, now, decidedByProfileId, decidedByProfileId is null ? null : now, draft.WorkId);
+
+            await WithConnectionAsync(async connection =>
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"""
                 INSERT INTO "AcquisitionRequests" ({Columns})
                 VALUES (@id, @kind, @provider, @externalId, @title, @subtitle, @cover, @payload,
                         @requestedBy, @status, NULL, NULL, NULL, @now, @now, @decidedBy, @decidedAt, @workId);
                 """;
-            Add(command, "@id", request.Id.ToString());
-            Add(command, "@kind", AcquisitionAccessNames.Kind(request.Kind));
-            Add(command, "@provider", request.Provider);
-            Add(command, "@externalId", request.ExternalId);
-            Add(command, "@title", request.Title);
-            Add(command, "@subtitle", request.Subtitle);
-            Add(command, "@cover", request.CoverImageUrl);
-            Add(command, "@payload", request.PayloadJson);
-            Add(command, "@requestedBy", request.RequestedByProfileId);
-            Add(command, "@status", AcquisitionAccessNames.Status(request.Status));
-            Add(command, "@now", now);
-            Add(command, "@decidedBy", decidedByProfileId);
-            Add(command, "@decidedAt", request.DecidedAt);
-            Add(command, "@workId", request.WorkId?.ToString());
-            try
-            {
-                await command.ExecuteNonQueryAsync(cancellationToken);
-            }
-            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation && exception.ConstraintName == OpenTitleIndex)
-            {
-                throw new OpenRequestExistsException(exception);
-            }
+                Add(command, "@id", request.Id.ToString());
+                Add(command, "@kind", AcquisitionAccessNames.Kind(request.Kind));
+                Add(command, "@provider", request.Provider);
+                Add(command, "@externalId", request.ExternalId);
+                Add(command, "@title", request.Title);
+                Add(command, "@subtitle", request.Subtitle);
+                Add(command, "@cover", request.CoverImageUrl);
+                Add(command, "@payload", request.PayloadJson);
+                Add(command, "@requestedBy", request.RequestedByProfileId);
+                Add(command, "@status", AcquisitionAccessNames.Status(request.Status));
+                Add(command, "@now", now);
+                Add(command, "@decidedBy", decidedByProfileId);
+                Add(command, "@decidedAt", request.DecidedAt);
+                Add(command, "@workId", request.WorkId);
+                try
+                {
+                    await command.ExecuteNonQueryAsync(cancellationToken);
+                }
+                catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation && exception.ConstraintName == OpenTitleIndex)
+                {
+                    throw new OpenRequestExistsException(exception);
+                }
 
-            return true;
+                return true;
+            }, cancellationToken);
+            await db.Database.ExecuteSqlAsync($"""
+                INSERT INTO "RequestSubmissionUsage" ("RequestId", "RequestedByProfileId", "CreatedAt", "DecidedByProfileId")
+                VALUES ({request.Id}, {requestedByProfileId}, {now}, {decidedByProfileId})
+                """, cancellationToken);
+            created = request;
         }, cancellationToken);
-
-        return request;
+        return created!;
     }
 
     /// <summary>
     /// Binds a request to its canonical Work once. A request that already has a Work keeps it (the condition is in the statement, so two
     /// concurrent passes cannot overwrite each other); returns whether this call set it.
     /// </summary>
-    public async Task<bool> BindWorkAsync(Guid id, Guid workId, CancellationToken cancellationToken) =>
+    public async Task<bool> BindWorkAsync(Guid id, long workId, CancellationToken cancellationToken) =>
         await WithConnectionAsync(async connection =>
         {
             await using var command = connection.CreateCommand();
             command.CommandText = """UPDATE "AcquisitionRequests" SET "WorkId" = @workId WHERE "Id" = @id AND "WorkId" IS NULL;""";
             Add(command, "@id", id.ToString());
-            Add(command, "@workId", workId.ToString());
+            Add(command, "@workId", workId);
             return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
         }, cancellationToken);
 
@@ -687,7 +726,7 @@ public sealed class AcquisitionAccessStore(AppDbContext db)
                     ParseDate(reader.GetString(14)),
                     NullableString(reader, 15),
                     NullableString(reader, 16) is { } decided ? ParseDate(decided) : null,
-                    NullableString(reader, 17) is { } work ? Guid.Parse(work) : null));
+                    reader.IsDBNull(17) ? null : reader.GetInt64(17)));
             }
 
             return rows;

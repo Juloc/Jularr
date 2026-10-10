@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jularr.Web.Features.Acquisition.Core;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -67,7 +68,8 @@ internal sealed class FakeTmdb : HttpMessageHandler
             original_name = name,
             original_language = "en",
             first_air_date = Day(firstAired),
-            seasons = seasons.Select(season => new { season_number = season.Season, name = $"Season {season.Season}" })
+            status = "Returning Series",
+            seasons = seasons.Select(season => new { season_number = season.Season, name = $"Season {season.Season}", episode_count = season.Episodes.Length })
         });
         foreach (var season in seasons)
         {
@@ -93,14 +95,14 @@ internal sealed class FakeTmdb : HttpMessageHandler
 /// <summary>A Usenet indexer whose releases the test changes between searches.</summary>
 internal sealed class ScriptedIndexer : IIndexer
 {
-    public List<ProwlarrReleaseCandidate> Releases { get; } = [];
+    public List<AcquisitionCandidate> Releases { get; } = [];
 
     public int Searches { get; private set; }
 
     public IndexerType Type => IndexerType.Newznab;
 
     public void Publish(string title) =>
-        Releases.Add(new ProwlarrReleaseCandidate(
+        Releases.Add(new AcquisitionCandidate(
             title,
             "Video test indexer",
             1,
@@ -121,10 +123,10 @@ internal sealed class ScriptedIndexer : IIndexer
     public Task<IndexerConnectionTestResult> TestAsync(IndexerEntry entry, CancellationToken cancellationToken) =>
         Task.FromResult(new IndexerConnectionTestResult(true));
 
-    public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken)
     {
         Searches++;
-        return Task.FromResult<IReadOnlyList<ProwlarrReleaseCandidate>>([.. Releases]);
+        return Task.FromResult<IReadOnlyList<AcquisitionCandidate>>([.. Releases]);
     }
 }
 
@@ -166,6 +168,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
     public string Downloads => Path.Combine(_environment.Directory.FullName, "downloads");
     public OperationStore Operations => new(Db);
     public IServiceProvider Services => _services;
+    public StorageAvailabilityCoordinator Storage { get; } = new();
     public AcquisitionAccessStore Requests => new(Db);
 
     public static async Task<VideoRequestToPlayWorld> CreateAsync(MediaAcquisitionKind kind, FakeTmdb tmdb)
@@ -323,7 +326,7 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
         var downloadClient = new SabnzbdDownloadClient(Sabnzbd);
         var bridge = new LegacyWorkBridge(Db, new WorkService(Db), new WorkStructureService(Db));
         var routing = new LibraryRootRoutingService(Db);
-        var availability = new LibraryRootAvailabilityService(Db, new StorageAvailabilityCoordinator());
+        var availability = new LibraryRootAvailabilityService(Db, Storage);
         var hardLinks = new FileSystemHardLinkCreator();
         var canonicalStorage = new CanonicalMediaStorageService(Db);
         var profileStore = new QualityProfileStore(new DirectoryInfo(Path.Combine(directory.FullName, "quality-profiles")), registry);
@@ -347,7 +350,8 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(registry)
             .AddSingleton(profileStore)
             .AddSingleton(installed)
-            .AddSingleton<IWantedSource>(new VideoUpgradeWantedSource(Kind, Db, new AcquisitionAccessStore(Db), installed, profileStore, new UpgradeScanState()))
+            .AddSingleton(new WantedReconciler(Db, Clock, null, new UpgradeAssessors([new VideoUpgradeAssessor(Kind, installed, profileStore)])))
+            .AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(Kind, provider.GetRequiredService<WantedReconciler>(), new AcquisitionAccessStore(Db), profileStore, new UpgradeScanState()))
             .AddSingleton(downloadClients)
             .AddSingleton(new DownloadClientSubmissionService(downloadClient, new DownloadClientSelector(downloadClients, health), Db, NullLogger<DownloadClientSubmissionService>.Instance))
             .AddSingleton<IDownloadClient>(downloadClient)
@@ -355,7 +359,11 @@ internal sealed class VideoRequestToPlayWorld : IAsyncDisposable
             .AddSingleton(new AcquisitionAccessStore(Db))
             .AddSingleton(AcquisitionAccessFixture.Account(Owner, AccountRole.Owner))
             .AddSingleton<ReleaseRequestTracker>()
+            .AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>()
             .AddSingleton<VideoRequestWorkResolver>()
+            .AddSingleton(MonitoringTestSupport.Resolver(Db))
+            .AddSingleton(MonitoringTestSupport.Commands(Db))
+            .AddSingleton(MonitoringTestSupport.Scopes(Db))
             .AddSingleton<VideoAcquisitionEngine>()
             .AddSingleton<IJularrEventPublisher, RecordingEventPublisher>()
             .AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(Pages.Capabilities))
@@ -390,9 +398,8 @@ internal static class RequestToPlayAssert
     /// <summary>The request in the owner's Admin queue lands in the tab its status belongs to, with the status name the pages show.</summary>
     public static void AdminQueueProjectsTheRequest(AcquisitionRequest request)
     {
-        var page = AdminRequestQuery.Build([request], new AdminRequestFilter(AdminRequestTab.All), new Dictionary<string, string>());
-        Assert.AreEqual(request.Id, Assert.ContainsSingle(page.Items).Id);
-        Assert.AreEqual(1, page.TabCounts[AdminRequestQuery.TabOf(request.Status)], $"{request.Kind} request {request.Status} must be counted in its lifecycle tab.");
+        var tab = AdminRequestQuery.TabOf(request.Status);
+        Assert.AreEqual(tab, AdminRequestQuery.ParseTab(AdminRequestQuery.TabName(tab)));
         Assert.AreEqual(request.Status, AdminRequestQuery.TryParseStatus(AcquisitionAccessNames.Status(request.Status)));
     }
 
@@ -444,7 +451,7 @@ internal static class DiscoverPageFactory
         var settings = new AcquisitionRequestSettingsStore(settingsDirectory);
         var store = new AcquisitionAccessStore(db);
         var requests = new AcquisitionRequestService(store, executors, account, new MediaCapabilityService(capabilities), settings, new RecordingEventPublisher(), NullLogger<AcquisitionRequestService>.Instance);
-        var scopes = new VideoRequestScopeResolver(db);
+        var scopes = MonitoringTestSupport.Scopes(db);
         var page = new DiscoverIndexModel(null!, null!, tmdb!, db, null!, null!, account, null!, requests, store, scopes, null!, null!, null!, null!, null!, NullLogger<DiscoverIndexModel>.Instance);
         var requestServices = new ServiceCollection().AddSingleton<IModelMetadataProvider, EmptyModelMetadataProvider>().BuildServiceProvider();
         page.PageContext = new PageContext

@@ -1,4 +1,5 @@
 using System.Net;
+using Jularr.Web.Features.Acquisition.Core;
 using System.IO.Compression;
 using System.Security.Claims;
 using System.Text;
@@ -35,7 +36,7 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class BookPdfAcquisitionTests
 {
-    private const string CatalogId = "ol:OL17930368W";
+    internal const string CatalogId = "ol:OL17930368W";
 
     [TestMethod]
     public void PdfReaderReturnsPagesInOrderWithTheirTextAndTheInfoMetadata()
@@ -138,6 +139,83 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(0, await environment.Db.BookFiles.CountAsync(file => file.Format == BookFileFormats.Pdf));
     }
 
+    // A direct source whose one candidate is the requested catalog edition; importing it records the call or fails like a dead mirror.
+    private sealed class FakeDirectSource(bool fails) : IDirectSource
+    {
+        public int Imports { get; private set; }
+
+        public string Name => "fake";
+
+        public MediaAcquisitionKind Kind => MediaAcquisitionKind.Book;
+
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(Jularr.Web.Features.Acquisition.Search.SearchIntent intent, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AcquisitionCandidate>>(
+            [
+                new AcquisitionCandidate("Atomic Habits [EPUB]", "Free edition", null, "direct", null, null, null, null, null, null, null, null, AnimeReleaseParser.Parse("Atomic Habits [EPUB]"), [], null, null)
+                {
+                    Type = AcquisitionType.DirectImport,
+                    Offer = new DirectOffer("fake", "edition", IdentityIsExact: true)
+                }
+            ]);
+
+        public Task<AcquisitionExecution> ImportAsync(AcquisitionRequest request, DirectOffer offer, CancellationToken cancellationToken)
+        {
+            Imports++;
+            return fails
+                ? throw new InvalidOperationException("The mirror is gone.")
+                : Task.FromResult(new AcquisitionExecution(AcquisitionRequestStatus.Completed, "Imported a direct/free edition."));
+        }
+    }
+
+    [TestMethod]
+    public async Task ADirectEditionAndAUsenetReleaseCompeteInOneSelectionAndTheWinnerIsRoutedByItsType()
+    {
+        var direct = new FakeDirectSource(fails: false);
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync(direct);
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "epub"));
+
+        var request = await environment.AddAsync();
+
+        var stored = await environment.RequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Completed, stored.Status, stored.StatusMessage);
+        Assert.AreEqual(1, direct.Imports, "The free edition won the tie against an equal Usenet EPUB and was imported by its own source.");
+        Assert.IsEmpty(environment.Sabnzbd.Grabs, "Nothing went to the download client.");
+    }
+
+    [TestMethod]
+    public async Task AnAudiobookRequestGrabsTheBestAudioReleaseAndNeverAnEbook()
+    {
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync();
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "ebook"));
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits MP3 Unabridged", "mp3"));
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits M4B Unabridged", "m4b"));
+
+        var request = await environment.AddAudiobookAsync();
+
+        var stored = await environment.RequestAsync(request.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, stored.Status, stored.StatusMessage);
+        StringAssert.Contains(environment.Sabnzbd.Grabs.Single().NzbUrl.ToString(), "m4b", "The audiobook container is the quality; the e-book is no candidate.");
+    }
+
+    [TestMethod]
+    public async Task ADirectEditionThatFailsIsTriedOnceAndTheNextCandidateIsTaken()
+    {
+        var direct = new FakeDirectSource(fails: true);
+        await using var environment = await BookAcquisitionEnvironment.CreateAsync(direct);
+        environment.Prowlarr.Releases.Add(Release("James Clear - Atomic Habits EPUB", "epub"));
+
+        var first = await environment.AddAsync();
+        Assert.AreEqual(1, direct.Imports);
+        var waiting = await environment.RequestAsync(first.Id);
+        Assert.AreEqual(AcquisitionRequestStatus.Approved, waiting.Status, waiting.StatusMessage);
+        StringAssert.Contains(waiting.StatusMessage, "The mirror is gone.");
+
+        await environment.Services.GetRequiredService<AcquisitionRequestService>().ContinueAsync(first.Id, CancellationToken.None);
+
+        Assert.AreEqual(1, direct.Imports, "The failed edition is never tried again.");
+        Assert.AreEqual(1, environment.Sabnzbd.Grabs.Count, "The Usenet release is the next candidate.");
+    }
+
     [TestMethod]
     public async Task UnsupportedDownloadContinuesWithTheNextReleaseAndNeverResendsABadOne()
     {
@@ -158,9 +236,7 @@ public sealed class BookPdfAcquisitionTests
         StringAssert.Contains(next.StatusMessage, BookCompletedDownloadImportAdapter.NoBookFileReason);
         Assert.AreEqual(2, environment.Sabnzbd.Grabs.Count);
         StringAssert.Contains(environment.Sabnzbd.Grabs[1].NzbUrl.ToString(), "pdf");
-        CollectionAssert.AreEquivalent(
-            new[] { "James Clear - Atomic Habits EPUB", "James Clear - Atomic Habits PDF" },
-            BookAcquisitionExecutor.ReadPayload(next).TriedReleases!.ToArray());
+        Assert.HasCount(2, BookAcquisitionExecutor.ReadPayload(next).TriedReleases!, "Both releases are remembered as tried.");
 
         // The PDF release is unusable too: nothing is left to try, the request waits for new releases.
         Directory.Delete(folder, recursive: true);
@@ -464,11 +540,11 @@ public sealed class BookPdfAcquisitionTests
         Assert.AreEqual(0, await environment.Db.NovelWorks.CountAsync());
     }
 
-    private static ProwlarrReleaseCandidate Release(string title, string key) =>
+    internal static AcquisitionCandidate Release(string title, string key) =>
         new(title, "Test indexer", 1, "usenet", 4_000_000, null, null, DateTimeOffset.UtcNow, 1, 1, key, null,
             AnimeReleaseParser.Parse(title), [], new Uri($"https://indexer.example/{key}.nzb"), null);
 
-    private static SabnzbdHistorySnapshot History(string nzoId, string storagePath) =>
+    internal static SabnzbdHistorySnapshot History(string nzoId, string storagePath) =>
         new([new SabnzbdHistoryJob(nzoId, Path.GetFileName(storagePath), "Completed", "books", storagePath, null, SabnzbdFailureKind.None, DateTimeOffset.UtcNow)]);
 
     // Not a decodable picture; the reader only checks the JPEG start marker.
@@ -480,7 +556,7 @@ public sealed class BookPdfAcquisitionTests
     /// streams are Flate-compressed, the last page uses a two-byte font with a ToUnicode CMap,
     /// and page 1 draws a full-page JPEG.
     /// </summary>
-    private static byte[] TestPdf(
+    internal static byte[] TestPdf(
         int pages,
         string? title = null,
         string? author = null,
@@ -624,7 +700,7 @@ public sealed class BookPdfAcquisitionTests
     /// Prowlarr indexer and SABnzbd client, the real executor, request service and import.
     /// The free catalogs are unreachable, so every add goes to Usenet.
     /// </summary>
-    private sealed class BookAcquisitionEnvironment : IAsyncDisposable
+    internal sealed class BookAcquisitionEnvironment : IAsyncDisposable
     {
         private readonly ServiceProvider services;
 
@@ -643,8 +719,11 @@ public sealed class BookPdfAcquisitionTests
         public OperationStore Operations => new(Db);
         public string FilesPath => Books.FilesPath;
 
-        public static async Task<BookAcquisitionEnvironment> CreateAsync()
+        public static async Task<BookAcquisitionEnvironment> CreateAsync(IDirectSource? direct = null, HttpMessageHandler? newznab = null, bool canonicalWorks = false, HttpMessageHandler? aniList = null, HttpMessageHandler? novelAniList = null, IEnumerable<Jularr.Web.Features.Novels.INovelSourceProvider>? novelSources = null)
         {
+            // The Reading pipeline serves Manga and Light Novels together; a host that asks for one gets the shared part of both.
+            aniList ??= novelAniList is null ? null : new UnreachableHandler();
+            canonicalWorks |= aniList is not null;
             var root = Path.Combine(Path.GetTempPath(), $"jularr-books-{Guid.NewGuid():N}");
             var data = Directory.CreateDirectory(Path.Combine(root, "data"));
             Directory.CreateDirectory(Path.Combine(root, "mnt", "complete", "books"));
@@ -685,6 +764,18 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
             collection.AddSingleton<IHardLinkCreator, FileSystemHardLinkCreator>();
             collection.AddSingleton(new AcquisitionAccessStore(db));
+            if (canonicalWorks)
+            {
+                // The canonical Work every Book request binds to, as in Program.cs.
+                collection.AddSingleton<Jularr.Web.Features.MediaCore.WorkService>();
+                collection.AddSingleton<Jularr.Web.Features.MediaCore.WorkStructureService>();
+                collection.AddSingleton<Jularr.Web.Features.MediaCore.LegacyWorkBridge>();
+                collection.AddSingleton<RequestWorkBinder>();
+                collection.AddSingleton<RequestIntent>();
+                collection.AddSingleton<Jularr.Web.Features.Monitoring.MonitoringResolver>();
+                collection.AddSingleton<Jularr.Web.Features.Monitoring.MonitoringCommands>();
+            }
+
             collection.AddSingleton<FakeProwlarrClient>();
             collection.AddSingleton<IProwlarrClient>(provider => provider.GetRequiredService<FakeProwlarrClient>());
             collection.AddSingleton<FakeSabnzbdClient>();
@@ -692,15 +783,18 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton(new IndexerStore(protection, data));
             collection.AddSingleton(new DownloadClientStore(protection, data));
             collection.AddSingleton(new AcquisitionHealthStore(data));
-            collection.AddSingleton(new SabnzbdAcquisitionStore(protection, data));
+            collection.AddSingleton(new SabnzbdAcquisitionStore(data));
             collection.AddSingleton<IReadOnlyDictionary<IndexerType, IIndexer>>(provider =>
                 new Dictionary<IndexerType, IIndexer>
                 {
-                    [IndexerType.Prowlarr] = new ProwlarrIndexer(provider.GetRequiredService<IProwlarrClient>())
+                    [IndexerType.Prowlarr] = new ProwlarrIndexer(provider.GetRequiredService<IProwlarrClient>()),
+                    [IndexerType.Newznab] = new NewznabIndexer(new HttpClient(newznab ?? new UnreachableHandler()), ProviderTestFactory.NewExecutor())
                 });
+            collection.AddSingleton<IndexerSetupService>();
             collection.AddSingleton<IDownloadClient>(provider => new SabnzbdDownloadClient(provider.GetRequiredService<ISabnzbdClient>()));
             collection.AddSingleton<IndexerSearchCoordinator>();
             collection.AddSingleton<IMediaAcquisitionRegistration, BookAcquisitionRegistration>();
+            collection.AddSingleton<IMediaAcquisitionRegistration, AudiobookAcquisitionRegistration>();
             collection.AddSingleton<MediaAcquisitionRegistry>();
             collection.AddSingleton(provider => new QualityProfileStore(
                 new DirectoryInfo(Path.Combine(data.FullName, "quality-profiles")),
@@ -712,7 +806,36 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton(owner);
             collection.AddSingleton(TimeProvider.System);
             collection.AddSingleton<ReleaseRequestTracker>();
+            collection.AddSingleton<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
+            if (direct is not null)
+            {
+                collection.AddSingleton(direct);
+            }
+
+            if (canonicalWorks)
+            {
+                collection.AddSingleton<BookManualSearchService>();
+                // The upgrade part of the Wanted pass for Books, as Program.cs registers it.
+                collection.AddSingleton(provider => new WantedReconciler(db, TimeProvider.System, null, new UpgradeAssessors(
+                    [new BookUpgradeAssessor(db, provider.GetRequiredService<QualityProfileStore>()), .. ReadingAssessors(provider, MediaAcquisitionKind.Manga, aniList is not null), .. ReadingAssessors(provider, MediaAcquisitionKind.LightNovel, novelAniList is not null)])));
+                collection.AddSingleton<UpgradeScanState>();
+                collection.AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(MediaAcquisitionKind.Book, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<QualityProfileStore>(), provider.GetRequiredService<UpgradeScanState>()));
+            }
+
+            if (aniList is not null)
+            {
+                AddManga(collection, db, root, aniList);
+            }
+
+            if (novelAniList is not null)
+            {
+                AddLightNovel(collection, db, root, novelSources ?? []);
+                collection.AddSingleton(new Jularr.Web.Features.Novels.NovelAniListProvider(new HttpClient(novelAniList, disposeHandler: false) { BaseAddress = new Uri("https://graphql.anilist.co/") }, Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.Novels.NovelAniListProvider>.Instance));
+                collection.AddSingleton<Jularr.Web.Features.Novels.INovelMetadataProvider>(provider => provider.GetRequiredService<Jularr.Web.Features.Novels.NovelAniListProvider>());
+            }
+
             collection.AddSingleton<IAcquisitionRequestExecutor, BookAcquisitionExecutor>();
+            collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.Audiobooks.AudiobookAcquisitionRequestExecutor>();
             collection.AddSingleton<Jularr.Web.Features.Events.IJularrEventPublisher, RecordingEventPublisher>();
             collection.AddSingleton<IMediaCapabilityService>(new MediaCapabilityService(new MediaCapabilityStore(data.FullName)));
             collection.AddSingleton(new AcquisitionRequestSettingsStore(data.FullName));
@@ -725,29 +848,140 @@ public sealed class BookPdfAcquisitionTests
             collection.AddSingleton<CompletedDownloadImportService>();
             var services = collection.BuildServiceProvider();
 
-            await services.GetRequiredService<IndexerStore>().SaveAsync(new IndexerEntry(
-                Guid.NewGuid(),
-                "Prowlarr",
-                IndexerType.Prowlarr,
-                Enabled: true,
-                Priority: 1,
-                IndexerSettings.CreateDefault("http://prowlarr:9696", IndexerType.Prowlarr),
-                "prowlarr-key"));
+            if (newznab is null)
+            {
+                await services.GetRequiredService<IndexerStore>().SaveAsync(new IndexerEntry(
+                    Guid.NewGuid(),
+                    "Prowlarr",
+                    IndexerType.Prowlarr,
+                    Enabled: true,
+                    Priority: 1,
+                    IndexerSettings.CreateDefault("http://prowlarr:9696", IndexerType.Prowlarr),
+                    "prowlarr-key"));
+            }
             await services.GetRequiredService<DownloadClientStore>().SaveAsync(new DownloadClientEntry(
                 Guid.NewGuid(),
                 "SABnzbd",
                 DownloadClientType.Sabnzbd,
                 Enabled: true,
                 Priority: 1,
-                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Anime] = "anime" }),
+                new DownloadClientSettings("http://sabnzbd:8080", new Dictionary<MediaAcquisitionKind, string?> { [MediaAcquisitionKind.Book] = "books", [MediaAcquisitionKind.Audiobook] = "audiobooks", [MediaAcquisitionKind.Manga] = "manga", [MediaAcquisitionKind.LightNovel] = "lightnovel", [MediaAcquisitionKind.Anime] = "anime" }),
                 "secret-key"));
             await services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(
                 state => state.WithRemotePathMappings(MediaAcquisitionKind.Book, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
                 CancellationToken.None);
 
             await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Book, Path.Combine(root, "library-books"), ImportMode.Copy);
+            if (aniList is not null)
+            {
+                Directory.CreateDirectory(Path.Combine(root, "mnt", "complete", "manga"));
+                await services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(
+                    state => state.WithRemotePathMappings(MediaAcquisitionKind.Manga, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
+                    CancellationToken.None);
+                await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.Manga, Path.Combine(root, "library-manga"), ImportMode.Copy);
+            }
+
+            if (novelAniList is not null)
+            {
+                Directory.CreateDirectory(Path.Combine(root, "mnt", "complete", "lightnovel"));
+                await services.GetRequiredService<AnimeImportSettingsStore>().UpdateAsync(
+                    state => state.WithRemotePathMappings(MediaAcquisitionKind.LightNovel, [new RemotePathMapping("/data/downloads/complete", Path.Combine(root, "mnt", "complete"))]),
+                    CancellationToken.None);
+                await ReadingTestRoots.AssignAsync(db, MediaAcquisitionKind.LightNovel, Path.Combine(root, "library-novels"), ImportMode.Copy);
+            }
+
             return new BookAcquisitionEnvironment(root, services, db);
         }
+
+        private static IEnumerable<IUpgradeAssessor> ReadingAssessors(IServiceProvider provider, MediaAcquisitionKind kind, bool enabled) =>
+            !enabled
+                ? []
+                : new[] { WantedTargetKind.Work, WantedTargetKind.Volume, WantedTargetKind.Chapter }.Select(target => (IUpgradeAssessor)new Jularr.Web.Features.ReadingAcquisition.ReadingUpgradeAssessor(
+                    kind,
+                    target,
+                    provider.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>(),
+                    provider.GetRequiredService<QualityProfileStore>()));
+
+        // The Light Novel half: EPUB import, the executor, Wanted, upgrades and edition selection, wired as Program.cs does it.
+        private static void AddLightNovel(ServiceCollection collection, AppDbContext db, string root, IEnumerable<Jularr.Web.Features.Novels.INovelSourceProvider> novelSources)
+        {
+            var mapping = new DirectoryInfo(Path.Combine(root, "mapping"));
+            collection.AddSingleton(new Jularr.Web.Features.Novels.NovelVolumeAssetStore(new DirectoryInfo(Path.Combine(root, "volumes"))));
+            collection.AddSingleton(provider => new Jularr.Web.Features.Novels.NovelEpubImportService(
+                db,
+                provider.GetRequiredService<Jularr.Web.Features.Novels.NovelVolumeAssetStore>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.Novels.NovelEpubImportService>.Instance));
+            collection.AddSingleton(new Jularr.Web.Features.MediaMapping.MediaMappingReviewStore(Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.MediaMapping.MediaMappingReviewStore>.Instance, mapping));
+            collection.AddSingleton(new Jularr.Web.Features.MediaMapping.ReadingSegmentMappingStore(Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.MediaMapping.ReadingSegmentMappingStore>.Instance, mapping));
+            collection.AddSingleton<Jularr.Web.Features.Novels.NovelMetadataService>();
+            collection.AddSingleton(novelSources);
+            collection.AddSingleton<Jularr.Web.Features.Novels.NovelImportService>();
+            collection.AddSingleton<IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRegistration>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.NovelImportTies>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.LightNovelVersionSelector>();
+            collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.LightNovelAcquisitionRequestExecutor>();
+            collection.AddSingleton<IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.LightNovelWantedRequestHandler>();
+            collection.AddSingleton<IWantedSource>(provider => new WantedRequestSource(
+                MediaAcquisitionKind.LightNovel,
+                provider.GetRequiredService<WantedReconciler>(),
+                provider.GetRequiredService<AcquisitionAccessStore>(),
+                new IdentityRequestDrafter(MediaAcquisitionKind.LightNovel, db)));
+            collection.AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(MediaAcquisitionKind.LightNovel, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<QualityProfileStore>(), provider.GetRequiredService<UpgradeScanState>()));
+            collection.AddSingleton<ICompletedDownloadImportAdapter>(provider => new Jularr.Web.Features.ReadingAcquisition.LightNovelCompletedDownloadImportAdapter(
+                provider.GetRequiredService<Jularr.Web.Features.Novels.NovelEpubImportService>(),
+                provider.GetRequiredService<Jularr.Web.Features.Novels.NovelMetadataService>(),
+                provider.GetRequiredService<AnimeImportSettingsStore>(),
+                provider.GetRequiredService<IHardLinkCreator>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.ReadingAcquisition.LightNovelCompletedDownloadImportAdapter>.Instance,
+                routing: provider.GetRequiredService<Jularr.Web.Features.Storage.LibraryRootRoutingService>(),
+                binder: provider.GetRequiredService<RequestWorkBinder>(),
+                profiles: provider.GetRequiredService<QualityProfileStore>(),
+                ties: provider.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.NovelImportTies>(),
+                versions: provider.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.LightNovelVersionSelector>(),
+                wanted: provider.GetRequiredService<WantedReconciler>()));
+        }
+
+        // The Manga half of the shared Reading pipeline, wired as Program.cs does it.
+        private static void AddManga(ServiceCollection collection, AppDbContext db, string root, HttpMessageHandler aniList)
+        {
+            collection.AddSingleton<IHttpClientFactory>(new FixedHttpClientFactory(aniList));
+            collection.AddSingleton<Jularr.Web.Features.MediaCore.ReadingUnits>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingCoverageService>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.MangaVersionSelector>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingStructureService>();
+            collection.AddSingleton<IWantedSource>(provider => new UpgradeWantedSource(MediaAcquisitionKind.Manga, provider.GetRequiredService<WantedReconciler>(), provider.GetRequiredService<AcquisitionAccessStore>(), provider.GetRequiredService<QualityProfileStore>(), provider.GetRequiredService<UpgradeScanState>()));
+            collection.AddSingleton<IMediaAcquisitionRegistration, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRegistration>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingAcquisitionEngine>();
+            collection.AddSingleton<Jularr.Web.Features.Acquisition.ManualSearch.ManualGrabCoordinator>();
+            collection.AddSingleton<Jularr.Web.Features.ReadingAcquisition.ReadingManualSearchService>();
+            collection.AddSingleton<IAcquisitionRequestExecutor, Jularr.Web.Features.ReadingAcquisition.MangaAcquisitionRequestExecutor>();
+            collection.AddSingleton<IWantedRequestHandler, Jularr.Web.Features.ReadingAcquisition.MangaWantedRequestHandler>();
+            collection.AddSingleton<IWantedSource>(provider => new WantedRequestSource(
+                MediaAcquisitionKind.Manga,
+                provider.GetRequiredService<WantedReconciler>(),
+                provider.GetRequiredService<AcquisitionAccessStore>(),
+                new IdentityRequestDrafter(MediaAcquisitionKind.Manga, db)));
+            collection.AddSingleton<ICompletedDownloadImportAdapter>(provider => new Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter(
+                db,
+                provider.GetRequiredService<IHttpClientFactory>(),
+                null!,
+                null!,
+                provider.GetRequiredService<AnimeImportSettingsStore>(),
+                provider.GetRequiredService<IHardLinkCreator>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Jularr.Web.Features.ReadingAcquisition.MangaCompletedDownloadImportAdapter>.Instance,
+                Path.Combine(root, "manga-cache"),
+                routing: provider.GetRequiredService<Jularr.Web.Features.Storage.LibraryRootRoutingService>(),
+                binder: provider.GetRequiredService<RequestWorkBinder>(),
+                wanted: provider.GetRequiredService<WantedReconciler>(),
+                versions: provider.GetRequiredService<Jularr.Web.Features.ReadingAcquisition.MangaVersionSelector>()));
+        }
+
+        private sealed class FixedHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+        {
+            public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+        }
+
+        public IServiceProvider Services => services;
 
         public Task<AcquisitionRequest> AddAsync() =>
             services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
@@ -763,6 +997,27 @@ public sealed class BookPdfAcquisitionTests
                         System.Text.Json.JsonSerializerOptions.Web)),
                 CancellationToken.None);
 
+        public Task<AcquisitionRequest> AddAsync(string catalogId, string title, string author) =>
+            services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
+                new AcquisitionRequestDraft(
+                    MediaAcquisitionKind.Book,
+                    BookCatalogService.CatalogRequestProvider,
+                    catalogId,
+                    title,
+                    author,
+                    null,
+                    System.Text.Json.JsonSerializer.Serialize(new BookRequestPayload(catalogId, title, author), System.Text.Json.JsonSerializerOptions.Web)),
+                CancellationToken.None);
+
+        /// <summary>Adds the Newznab indexer the way the owner does: by address and API key, so caps and categories are detected.</summary>
+        public async Task<IndexerEntry> AddNewznabIndexerAsync(string key = "book-key") =>
+            (await services.GetRequiredService<IndexerSetupService>().AddAsync("https://indexer.example", key, null, CancellationToken.None)).Entry!;
+
+        public Task<AcquisitionRequest> AddAudiobookAsync() =>
+            services.GetRequiredService<AcquisitionRequestService>().SubmitAsync(
+                new AcquisitionRequestDraft(MediaAcquisitionKind.Audiobook, BookCatalogService.CatalogRequestProvider, CatalogId, "Atomic Habits", "James Clear", null),
+                CancellationToken.None);
+
         public async Task<AcquisitionRequest> RequestAsync(Guid id) =>
             (await services.GetRequiredService<AcquisitionAccessStore>().GetAsync(id, CancellationToken.None))!;
 
@@ -773,6 +1028,12 @@ public sealed class BookPdfAcquisitionTests
         /// <summary>The job folder as Jularr sees it (under the mapped mount).</summary>
         public string CompletedFolder(string job) =>
             Directory.CreateDirectory(Path.Combine(Root, "mnt", "complete", "books", job)).FullName;
+
+        public string LightNovelFolder(string job) =>
+            Directory.CreateDirectory(Path.Combine(Root, "mnt", "complete", "lightnovel", job)).FullName;
+
+        public string MangaFolder(string job) =>
+            Directory.CreateDirectory(Path.Combine(Root, "mnt", "complete", "manga", job)).FullName;
 
         /// <summary>
         /// SABnzbd finishes the request's job at <paramref name="reportedPath"/> (the monitor

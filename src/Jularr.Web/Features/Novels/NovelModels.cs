@@ -59,6 +59,23 @@ public sealed class NovelVolume
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>
+/// One EPUB file that holds the content of a volume. A volume keeps every file it was imported from; the one whose hash is
+/// <see cref="NovelVolume.SourceContentHash"/> is the version the reader shows.
+/// </summary>
+public sealed class NovelVolumeEdition
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid VolumeId { get; set; }
+    public string ContentHash { get; set; } = "";
+    public string FileName { get; set; } = "";
+    /// <summary>Where the file lives in the library, so a better edition can be shown again later; null for an upload that was not kept.</summary>
+    public string? StoragePath { get; set; }
+    /// <summary>The quality key of the profile's quality order this edition counts as.</summary>
+    public string Quality { get; set; } = "EPUB";
+    public DateTime ImportedAt { get; set; } = DateTime.UtcNow;
+}
+
 public static class NovelVolumeKinds
 {
     /// <summary>Chapter index of a web novel source (Narou/Ncode).</summary>

@@ -384,7 +384,7 @@ public sealed partial class AniListAccountService
         var workId = await db.WorkSourceLinks
             .AsNoTracking()
             .Where(x => x.SourceKind == WorkSourceKind.Anime && x.SourceId == animeId)
-            .Select(x => (Guid?)x.WorkId)
+            .Select(x => (long?)x.WorkId)
             .SingleOrDefaultAsync(cancellationToken);
         if (workId is null)
         {

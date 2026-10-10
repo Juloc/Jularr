@@ -177,7 +177,7 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
         code switch
         {
             ManualSearchReasonCode.MatchesTarget or ManualSearchReasonCode.ContainsTarget => "eligible",
-            ManualSearchReasonCode.LowerQuality or ManualSearchReasonCode.AlreadyTried or ManualSearchReasonCode.FallbackTier or ManualSearchReasonCode.AmbiguousIdentity => "warning",
+            ManualSearchReasonCode.LowerQuality or ManualSearchReasonCode.AlreadyTried or ManualSearchReasonCode.AmbiguousIdentity => "warning",
             _ => "rejected"
         };
 
@@ -189,7 +189,7 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
     public static ManualSearchReason Headline(ManualSearchCandidate candidate)
     {
         var neutral = new[] { ManualSearchReasonCode.MatchesTarget, ManualSearchReasonCode.ContainsTarget, ManualSearchReasonCode.AlreadyTried };
-        var warnings = new[] { ManualSearchReasonCode.LowerQuality, ManualSearchReasonCode.FallbackTier, ManualSearchReasonCode.AmbiguousIdentity };
+        var warnings = new[] { ManualSearchReasonCode.LowerQuality, ManualSearchReasonCode.AmbiguousIdentity };
         var leading = candidate.Verdict == ManualSearchVerdict.Rejected
             ? candidate.Reasons.FirstOrDefault(reason => !neutral.Contains(reason.Code))
             : candidate.Reasons.FirstOrDefault(reason => warnings.Contains(reason.Code));
@@ -243,7 +243,7 @@ public sealed class ManualSearchModel(AppDbContext db, VideoManualSearchService 
             "age" => filtered.OrderBy(candidate => candidate.AgeDays ?? int.MaxValue),
             "size" => filtered.OrderBy(candidate => candidate.SizeBytes ?? long.MaxValue),
             "title" => filtered.OrderBy(candidate => candidate.Title, StringComparer.OrdinalIgnoreCase),
-            _ => filtered.OrderBy(candidate => candidate.Verdict == ManualSearchVerdict.Rejected).ThenByDescending(candidate => candidate.Score ?? int.MinValue)
+            _ => filtered.OrderBy(candidate => candidate.Rank ?? int.MaxValue)
         }).ToArray();
     }
 

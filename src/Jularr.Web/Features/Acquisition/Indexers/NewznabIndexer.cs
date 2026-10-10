@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jularr.Web.Features.Acquisition.Core;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Xml.Linq;
@@ -10,7 +11,7 @@ namespace Jularr.Web.Features.Acquisition.Indexers;
 /// <summary>
 /// Direct Newznab (usenet) indexer client using the caps/search XML API.
 /// Every result carries the usenet protocol per
-/// <see cref="ProwlarrReleaseCandidate.Protocol"/>. Its HTTP calls run through the
+/// <see cref="AcquisitionCandidate.Protocol"/>. Its HTTP calls run through the
 /// shared <see cref="ProviderExecutor"/> (#438) for timeouts and bounded retries;
 /// per-entry health stays in <c>AcquisitionHealthStore</c>, so framework health
 /// tracking is left off here (see <see cref="ExecutionPolicy"/>).
@@ -53,14 +54,31 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
 
             if (!response.IsSuccessStatusCode)
             {
-                return new IndexerConnectionTestResult(false, Error: DescribeStatus(response.StatusCode));
+                return Failure(DescribeStatus(response.StatusCode), response.StatusCode switch
+                {
+                    HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => IndexerCheckState.AuthenticationFailed,
+                    HttpStatusCode.TooManyRequests => IndexerCheckState.RateLimited,
+                    _ => IndexerCheckState.Unavailable
+                });
             }
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             var document = XDocument.Parse(body);
+            if (string.Equals(document.Root?.Name.LocalName, "error", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = int.TryParse(document.Root!.Attribute("code")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code);
+                var description = document.Root.Attribute("description")?.Value ?? document.Root.Value.Trim();
+                return code switch
+                {
+                    >= 100 and < 200 => Failure(description, IndexerCheckState.AuthenticationFailed),
+                    429 or 500 => Failure("The indexer reported a reached request limit.", IndexerCheckState.RateLimited),
+                    _ => Failure(description, IndexerCheckState.InvalidResponse)
+                };
+            }
+
             if (!string.Equals(document.Root?.Name.LocalName, "caps", StringComparison.OrdinalIgnoreCase))
             {
-                return new IndexerConnectionTestResult(false, Error: "Indexer did not return a caps document.");
+                return Failure("It answered with something other than a caps document. Check that the address is the indexer's API address.", IndexerCheckState.InvalidResponse);
             }
 
             var version = document.Root!
@@ -74,18 +92,19 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         {
             throw;
         }
-        catch (Exception exception) when (
-            exception is HttpRequestException or
-            System.Xml.XmlException or
-            UriFormatException)
+        catch (System.Xml.XmlException)
         {
-            return new IndexerConnectionTestResult(
-                false,
-                Error: "The indexer could not be reached or returned an invalid response.");
+            return Failure("It answered with data that is not Newznab XML, for example a web page. Check that the address is the indexer's API address.", IndexerCheckState.InvalidResponse);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or UriFormatException or OperationCanceledException)
+        {
+            return Failure("No connection, or no answer in time.", IndexerCheckState.Unavailable);
         }
     }
 
-    public async Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    private static IndexerConnectionTestResult Failure(string error, IndexerCheckState state) => new(false, Error: error, State: state);
+
+    public async Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         IndexerEntry entry,
         IndexerSearchQuery query,
         CancellationToken cancellationToken)
@@ -99,26 +118,29 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
             parameters.Add(new("q", query.Query));
         }
 
-        parameters.AddRange(query.Parameters ?? []);
-        if (parameters.Count == 0)
+        parameters.AddRange((query.Parameters ?? []).Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value)));
+        if (parameters.Count == 0 && !query.Latest)
         {
             return [];
         }
 
         var label = string.IsNullOrWhiteSpace(query.Query) ? string.Join(' ', parameters.Select(pair => $"{pair.Key}={pair.Value}")) : query.Query;
-        parameters.AddRange(
-            entry.Settings.Categories.Select(
-                category => new KeyValuePair<string, string>("cat", category.ToString(CultureInfo.InvariantCulture))));
+        if (entry.Settings.Categories.Length > 0)
+        {
+            parameters.Add(new("cat", string.Join(',', entry.Settings.Categories.Distinct().Select(category => category.ToString(CultureInfo.InvariantCulture)))));
+        }
+
         parameters.Add(new("limit", (query.Limit ?? entry.Settings.SearchLimit).ToString(CultureInfo.InvariantCulture)));
         if (query.Offset > 0)
         {
             parameters.Add(new("offset", query.Offset.ToString(CultureInfo.InvariantCulture)));
         }
 
+        var function = Function(query.Mode);
         using var response = await executor.SendAsync(
             ProviderKeys.Newznab,
             httpClient,
-            () => CreateRequest(entry, Function(query.Mode), parameters),
+            () => CreateRequest(entry, function, parameters),
             ExecutionPolicy,
             cancellationToken);
 
@@ -133,30 +155,42 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
             throw new IndexerRateLimitedException($"'{entry.Name}' is rate limited.", RetryAfter(response));
         }
 
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new IndexerException($"'{entry.Name}' search failed with HTTP {(int)response.StatusCode}.");
-        }
-
         try
         {
-            return ParseSearchResponse(entry, label, body);
+            // An error document counts whatever the HTTP status: indexers answer 200, 400 or 500 with the same <error> body.
+            if (!response.IsSuccessStatusCode && !body.TrimStart().StartsWith('<'))
+            {
+                throw new IndexerException($"'{entry.Name}' search failed with HTTP {(int)response.StatusCode}.");
+            }
+
+            return ParseSearchResponse(entry, label, body, query.Mode, RequestShape(function, parameters));
         }
         catch (System.Xml.XmlException exception)
         {
-            throw new IndexerException($"'{entry.Name}' returned invalid search XML.", exception);
+            throw new IndexerException($"'{entry.Name}' returned a response that is not Newznab XML (the Base URL may point at a web page instead of the API).", exception);
         }
     }
 
-    public static IReadOnlyList<ProwlarrReleaseCandidate> ParseSearchResponse(
+    /// <summary>The request in words that are safe to show: the function and the parameters sent, never the API key.</summary>
+    public static string RequestShape(string function, IEnumerable<KeyValuePair<string, string>> parameters) =>
+        $"t={function} " + string.Join(' ', parameters.Select(pair => $"{pair.Key}={pair.Value}"));
+
+    public static IReadOnlyList<AcquisitionCandidate> ParseSearchResponse(
         IndexerEntry entry,
         string query,
-        string xml)
+        string xml,
+        IndexerSearchMode mode = IndexerSearchMode.Search,
+        string requestShape = "")
     {
         var document = XDocument.Parse(xml);
-        ThrowWhenError(entry, document);
+        ThrowWhenError(entry, document, mode, requestShape);
+        if (!string.Equals(document.Root?.Name.LocalName, "rss", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IndexerException($"'{entry.Name}' returned a response that is not Newznab XML (the Base URL may point at a web page instead of the API).");
+        }
+
         var items = document.Descendants().Where(element => element.Name.LocalName == "item");
-        var releases = new List<ProwlarrReleaseCandidate>();
+        var releases = new List<AcquisitionCandidate>();
         const string protocol = "usenet";
         var now = DateTimeOffset.UtcNow;
 
@@ -199,7 +233,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
             }
 
             releases.Add(
-                new ProwlarrReleaseCandidate(
+                new AcquisitionCandidate(
                     title,
                     entry.Name,
                     null,
@@ -243,9 +277,10 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         return header?.Date is { } date && date > DateTimeOffset.UtcNow ? date - DateTimeOffset.UtcNow : null;
     }
 
-    // Newznab reports many failures as an HTTP 200 <error code="..."/> document: 1xx is a credential or account problem, 429/500 a
-    // reached request limit. Anything else is an ordinary failure of this indexer.
-    private static void ThrowWhenError(IndexerEntry entry, XDocument document)
+    // Newznab reports many failures as an HTTP 200 <error code="..."/> document: 1xx is a credential or account problem, 200-203 a request the
+    // indexer refuses by shape (missing or wrong parameter, a function it does not have), 429/500 a reached request limit. Anything else is an
+    // ordinary failure of this indexer.
+    private static void ThrowWhenError(IndexerEntry entry, XDocument document, IndexerSearchMode mode, string requestShape)
     {
         if (!string.Equals(document.Root?.Name.LocalName, "error", StringComparison.OrdinalIgnoreCase))
         {
@@ -253,14 +288,20 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         }
 
         _ = int.TryParse(document.Root!.Attribute("code")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code);
-        var description = document.Root.Attribute("description")?.Value;
+        var description = document.Root.Attribute("description")?.Value ?? (string.IsNullOrWhiteSpace(document.Root.Value) ? null : document.Root.Value.Trim());
         throw code switch
         {
             >= 100 and < 200 => new IndexerAuthenticationException($"'{entry.Name}' rejected the account: {description ?? "invalid credentials"}."),
+            200 => Rejected(entry, IndexerRejection.MissingParameter, mode, requestShape, description, "needs a parameter that was not sent"),
+            201 => Rejected(entry, IndexerRejection.IncorrectParameter, mode, requestShape, description, "refused a parameter value"),
+            202 or 203 => Rejected(entry, IndexerRejection.UnsupportedFunction, mode, requestShape, description, "does not offer this search function"),
             429 or 500 => new IndexerRateLimitedException($"'{entry.Name}' reached its request limit.", null),
             _ => new IndexerException($"'{entry.Name}' reported an error: {description ?? code.ToString(CultureInfo.InvariantCulture)}.")
         };
     }
+
+    private static IndexerRequestRejectedException Rejected(IndexerEntry entry, IndexerRejection reason, IndexerSearchMode mode, string shape, string? description, string meaning) =>
+        new($"'{entry.Name}' {meaning} ({description ?? reason.ToString()}). Request: {shape.Trim()}.", reason, mode, shape, description);
 
     private static HttpRequestMessage CreateRequest(
         IndexerEntry entry,
@@ -276,7 +317,7 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         query.AddRange(parameters);
 
         var uri = new Uri(
-            $"{entry.Settings.BaseUrl}/api?" +
+            $"{ApiEndpoint(entry.Settings.BaseUrl)}?" +
             string.Join(
                 "&",
                 query.Select(pair => $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value)}")),
@@ -285,6 +326,13 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
         var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
         return request;
+    }
+
+    /// <summary>The API address of a Base URL: a custom path is kept, and a Base URL that already ends in <c>/api</c> is not given a second one.</summary>
+    public static string ApiEndpoint(string baseUrl)
+    {
+        var trimmed = baseUrl.Trim().TrimEnd('/');
+        return trimmed.EndsWith("/api", StringComparison.OrdinalIgnoreCase) ? trimmed : $"{trimmed}/api";
     }
 
     private static string? Text(XElement item, string localName) =>
@@ -335,8 +383,8 @@ public sealed class NewznabIndexer(HttpClient httpClient, ProviderExecutor execu
     private static string DescribeStatus(HttpStatusCode statusCode) =>
         statusCode switch
         {
-            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "The indexer rejected the API key.",
-            HttpStatusCode.NotFound => "The indexer API endpoint was not found. Check the Base URL.",
-            _ => $"The indexer returned HTTP {(int)statusCode}."
+            HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => $"HTTP {(int)statusCode}.",
+            HttpStatusCode.NotFound => "HTTP 404: the API endpoint was not found. Check the address.",
+            _ => $"HTTP {(int)statusCode}."
         };
 }

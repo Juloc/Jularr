@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Manga;
 using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Novels;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,14 +16,14 @@ namespace Jularr.Web.Features.Acquisition.Access;
 /// not guessed at, the request stays unbound and keeps working on its payload. Nothing is created by showing a search result: a Work is only
 /// materialized for a request, which is a durable decision.
 /// </summary>
-public sealed class RequestWorkBinder(AppDbContext db, WorkService works, LegacyWorkBridge bridge, AcquisitionAccessStore store, ILogger<RequestWorkBinder> logger)
+public sealed class RequestWorkBinder(AppDbContext db, WorkService works, LegacyWorkBridge bridge, AcquisitionAccessStore store, ILogger<RequestWorkBinder> logger, MonitoringResolver? monitoringState = null, MonitoringCommands? monitoring = null)
 {
     /// <summary>The media types whose requests carry a canonical Work (Movie and TV keep theirs in the video payload, Anime in its own monitoring).</summary>
-    public static bool Applies(MediaAcquisitionKind kind) => kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Manga;
+    public static bool Applies(MediaAcquisitionKind kind) => kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook or MediaAcquisitionKind.LightNovel or MediaAcquisitionKind.Manga;
 
     public static WorkMediaType MediaTypeOf(MediaAcquisitionKind kind) => kind switch
     {
-        MediaAcquisitionKind.Book => WorkMediaType.Book,
+        MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook => WorkMediaType.Book,
         MediaAcquisitionKind.LightNovel => WorkMediaType.LightNovel,
         MediaAcquisitionKind.Manga => WorkMediaType.Manga,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "This media type has no request Work binding.")
@@ -41,7 +42,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
 
         return kind switch
         {
-            MediaAcquisitionKind.Book => provider.Equals(BookCatalogService.CatalogRequestProvider, StringComparison.OrdinalIgnoreCase),
+            MediaAcquisitionKind.Book or MediaAcquisitionKind.Audiobook => provider.Equals(BookCatalogService.CatalogRequestProvider, StringComparison.OrdinalIgnoreCase),
             MediaAcquisitionKind.Manga => provider.Equals(NovelAniListProvider.ProviderKey, StringComparison.OrdinalIgnoreCase) && long.TryParse(externalId, out var id) && id > 0,
             MediaAcquisitionKind.LightNovel => (provider.Equals(NovelAniListProvider.ProviderKey, StringComparison.OrdinalIgnoreCase) && long.TryParse(externalId, out var anilist) && anilist > 0)
                 || provider.Equals(NcodeNovelSourceProvider.ProviderKey, StringComparison.OrdinalIgnoreCase),
@@ -53,7 +54,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
     /// The canonical Work of the evidence, or null when the evidence is not trustworthy or points at two different Works. The Work is created only when
     /// nothing identifies one yet.
     /// </summary>
-    public async Task<Guid?> ResolveAsync(MediaAcquisitionKind kind, string provider, string externalId, string title, CancellationToken cancellationToken)
+    public async Task<long?> ResolveAsync(MediaAcquisitionKind kind, string provider, string externalId, string title, CancellationToken cancellationToken, IReadOnlyList<(string Provider, string ExternalId)>? alsoKnownAs = null)
     {
         if (!Applies(kind) || !IsTrustworthy(kind, provider, externalId))
         {
@@ -69,14 +70,79 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
             return null;
         }
 
-        if ((byIdentity ?? byLegacy) is { } existing)
+        // Another provider's record of the same book (or its ISBN) may already have its Work: exactly one such Work is this book's; none leaves the book new,
+        // and more than one is an existing split that is not decided here.
+        long? resolved = byIdentity ?? byLegacy;
+        if (resolved is null && alsoKnownAs is { Count: > 0 })
+        {
+            var holders = new HashSet<long>();
+            foreach (var (otherProvider, otherId) in alsoKnownAs)
+            {
+                if (await WorkOfIdentityAsync(mediaType, otherProvider, otherId, cancellationToken) is { } holder)
+                {
+                    holders.Add(holder);
+                }
+            }
+
+            resolved = holders.Count == 1 ? holders.Single() : null;
+        }
+
+        if (resolved is { } existing)
         {
             // The identity may still be unlinked when the Work was found through its legacy record; linking is a no-op when it is already there.
             await works.LinkExternalIdentityAsync(existing, mediaType, provider, externalId, 1.0, "request provider id", false, false, MappingReviewState.Confirmed, cancellationToken);
+            await LinkAlsoKnownAsAsync(mediaType, existing, alsoKnownAs, cancellationToken);
+            await MonitorRequestedWorkAsync(kind, existing, cancellationToken);
             return existing;
         }
 
-        return (await works.EnsureWorkByExternalIdentityAsync(mediaType, provider, externalId, title, null, cancellationToken)).Id;
+        var created = (await works.EnsureWorkByExternalIdentityAsync(mediaType, provider, externalId, title, null, cancellationToken)).Id;
+        await LinkAlsoKnownAsAsync(mediaType, created, alsoKnownAs, cancellationToken);
+        await MonitorRequestedWorkAsync(kind, created, cancellationToken);
+        return created;
+    }
+
+    /// <summary>The other identities a request names for its title: the provider records of the same book and its ISBN, as the Books add dialog sends them.</summary>
+    public static IReadOnlyList<(string Provider, string ExternalId)> AlsoKnownAs(MediaAcquisitionKind kind, string? payloadJson)
+    {
+        if (kind != MediaAcquisitionKind.Book || string.IsNullOrWhiteSpace(payloadJson))
+        {
+            return [];
+        }
+
+        try
+        {
+            if (System.Text.Json.JsonSerializer.Deserialize<BookRequestPayload>(payloadJson, System.Text.Json.JsonSerializerOptions.Web) is not { } payload)
+            {
+                return [];
+            }
+
+            var identities = (payload.Identities ?? []).Where(id => !string.IsNullOrWhiteSpace(id) && id != payload.CatalogId).Select(id => (BookCatalogService.CatalogRequestProvider, id.Trim()));
+            return [.. identities.Concat(BookReleaseSelector.NormalizeIsbn(payload.Isbn) is { } isbn ? [("isbn", isbn)] : [])];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
+    }
+
+    // An identity another Work holds stays there; the link only adds what nothing claimed yet.
+    private async Task LinkAlsoKnownAsAsync(WorkMediaType mediaType, long workId, IReadOnlyList<(string Provider, string ExternalId)>? alsoKnownAs, CancellationToken cancellationToken)
+    {
+        foreach (var (otherProvider, otherId) in alsoKnownAs ?? [])
+        {
+            await works.LinkExternalIdentityAsync(workId, mediaType, otherProvider, otherId, 1.0, "same book, another provider record", false, false, MappingReviewState.Confirmed, cancellationToken);
+        }
+    }
+
+    // Requesting a Book, Manga or Light Novel monitors it unless somebody already decided: that is what keeps a better format of a Book and the volumes still missing of a
+    // Manga or Light Novel wanted after the first import. An audiobook request says nothing about the Book, and a decision the owner made (also "off") is never overwritten.
+    private async Task MonitorRequestedWorkAsync(MediaAcquisitionKind kind, long workId, CancellationToken cancellationToken)
+    {
+        if (kind is MediaAcquisitionKind.Book or MediaAcquisitionKind.Manga or MediaAcquisitionKind.LightNovel && monitoring is not null && monitoringState is not null && (await monitoringState.LoadAsync(workId, cancellationToken)).WorkDecision is null)
+        {
+            await monitoring.SetWorkAsync(workId, true, cancellationToken, replaceChildren: false);
+        }
     }
 
     /// <summary>Binds a request that has no Work yet; a request that has one, or whose evidence cannot be resolved safely, is returned as it is.</summary>
@@ -87,17 +153,18 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
             return request;
         }
 
-        if (await ResolveAsync(request.Kind, request.Provider, request.ExternalId, request.Title, cancellationToken) is not { } workId)
+        if (await ResolveAsync(request.Kind, request.Provider, request.ExternalId, request.Title, cancellationToken, AlsoKnownAs(request.Kind, request.PayloadJson)) is not { } workId)
         {
             return request;
         }
 
         await store.BindWorkAsync(request.Id, workId, cancellationToken);
+
         return (await store.GetAsync(request.Id, cancellationToken)) ?? request with { WorkId = workId };
     }
 
     /// <summary>The record of a legacy library (Manga series, Novel work) already linked to the Work, so an import goes into it instead of creating a second one.</summary>
-    public async Task<Guid?> LinkedLegacyIdAsync(Guid workId, WorkSourceKind sourceKind, CancellationToken cancellationToken) =>
+    public async Task<Guid?> LinkedLegacyIdAsync(long workId, WorkSourceKind sourceKind, CancellationToken cancellationToken) =>
         await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(link => link.WorkId == workId && link.SourceKind == sourceKind)
             .OrderBy(link => link.SourceId)
@@ -134,7 +201,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
             return null;
         }
 
-        var owner = await db.Set<WorkSourceLink>().AsNoTracking().Where(link => link.SourceKind == sourceKind && link.SourceId == id).Select(link => (Guid?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
+        var owner = await db.Set<WorkSourceLink>().AsNoTracking().Where(link => link.SourceKind == sourceKind && link.SourceId == id).Select(link => (long?)link.WorkId).FirstOrDefaultAsync(cancellationToken);
         return owner is null || owner == workId ? id : null;
     }
 
@@ -189,19 +256,19 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
         }
     }
 
-    private async Task<Guid?> WorkOfIdentityAsync(WorkMediaType mediaType, string provider, string externalId, CancellationToken cancellationToken)
+    private async Task<long?> WorkOfIdentityAsync(WorkMediaType mediaType, string provider, string externalId, CancellationToken cancellationToken)
     {
         var normalizedProvider = provider.Trim().ToLowerInvariant();
         var normalizedId = externalId.Trim();
         var found = await db.Set<WorkExternalIdentity>().AsNoTracking()
             .Where(identity => identity.MediaType == mediaType && identity.Provider == normalizedProvider && identity.ExternalId == normalizedId)
-            .Select(identity => (Guid?)identity.WorkId)
+            .Select(identity => (long?)identity.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
         return found;
     }
 
     /// <summary>The Work of the legacy record that already holds the provider id (an AniList-matched series, a catalog-linked book), when that record is linked to one.</summary>
-    private async Task<Guid?> WorkOfLegacyRecordAsync(MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken)
+    private async Task<long?> WorkOfLegacyRecordAsync(MediaAcquisitionKind kind, string provider, string externalId, CancellationToken cancellationToken)
     {
         Guid? legacyId;
         WorkSourceKind sourceKind;
@@ -214,7 +281,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
         {
             sourceKind = WorkSourceKind.NovelWork;
             legacyId = await db.NovelWorks.AsNoTracking()
-                .Where(novel => novel.MetadataProvider == provider && novel.MetadataExternalId == externalId && (novel.SourceProvider == BookCatalogService.ImportedBookProvider) == (kind == MediaAcquisitionKind.Book))
+                .Where(novel => novel.MetadataProvider == provider && novel.MetadataExternalId == externalId && (novel.SourceProvider == BookCatalogService.ImportedBookProvider) == (kind == MediaAcquisitionKind.Book || kind == MediaAcquisitionKind.Audiobook))
                 .Select(novel => (Guid?)novel.Id)
                 .FirstOrDefaultAsync(cancellationToken);
         }
@@ -226,7 +293,7 @@ public sealed class RequestWorkBinder(AppDbContext db, WorkService works, Legacy
 
         return await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(link => link.SourceKind == sourceKind && link.SourceId == id)
-            .Select(link => (Guid?)link.WorkId)
+            .Select(link => (long?)link.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
     }
 

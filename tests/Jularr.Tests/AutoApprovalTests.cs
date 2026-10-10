@@ -191,9 +191,11 @@ public sealed class AutoApprovalTests
         await store.CreateAsync(Draft("other"), "bob", AcquisitionRequestStatus.Completed, marker, CancellationToken.None);
         await store.CreateAsync(Draft("manual"), "alice", AcquisitionRequestStatus.Completed, "owner", CancellationToken.None);
 
-        Assert.AreEqual(1, await store.CountAutoApprovedSinceAsync("alice", rule.Id, DateTime.UtcNow.AddDays(-1), CancellationToken.None));
-        Assert.AreEqual(0, await store.CountAutoApprovedSinceAsync("alice", rule.Id, DateTime.UtcNow.AddMinutes(1), CancellationToken.None), "Requests before the start of the period do not count.");
-        Assert.AreEqual(0, await store.CountAutoApprovedSinceAsync("alice", "other-rule", DateTime.UtcNow.AddDays(-1), CancellationToken.None));
+        var current = await store.CountAutoApprovedAsync("alice", new Dictionary<string, DateTime> { [rule.Id] = DateTime.UtcNow.AddDays(-1), ["other-rule"] = DateTime.UtcNow.AddDays(-1) }, CancellationToken.None);
+        Assert.AreEqual(1, current[rule.Id]);
+        Assert.AreEqual(0, current["other-rule"]);
+        var future = await store.CountAutoApprovedAsync("alice", new Dictionary<string, DateTime> { [rule.Id] = DateTime.UtcNow.AddMinutes(1) }, CancellationToken.None);
+        Assert.AreEqual(0, future[rule.Id], "Requests before the start of the period do not count.");
     }
 
     private static AutoApprovalRule Rule(

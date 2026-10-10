@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Health;
 using Jularr.Web.Features.Acquisition.Indexers;
@@ -99,7 +100,7 @@ public sealed class IndexerCategoryTests
 
             CollectionAssert.AreEqual(new[] { "Both" }, asked.Select(call => call.Name).Distinct().ToArray(), "The TV-only indexer is not asked about movies.");
             CollectionAssert.AreEqual(new[] { 2040 }, asked[0].Categories, "Only the chosen categories the indexer offers are sent.");
-            Assert.IsTrue(result.Outcomes.Any(outcome => outcome.IndexerName == "TV only" && outcome.State == IndexerSearchState.Skipped && outcome.Message!.Contains("offers none", StringComparison.Ordinal)));
+            Assert.IsTrue(result.Outcomes.Any(outcome => outcome.IndexerName == "TV only" && outcome.State == IndexerSearchState.Skipped && outcome.Message!.Contains("no category that belongs", StringComparison.Ordinal)));
         }
         finally
         {
@@ -107,12 +108,12 @@ public sealed class IndexerCategoryTests
         }
     }
 
-    private sealed class FakeIndexer(Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<ProwlarrReleaseCandidate>> search) : IIndexer
+    private sealed class FakeIndexer(Func<IndexerEntry, IndexerSearchQuery, IReadOnlyList<AcquisitionCandidate>> search) : IIndexer
     {
         public IndexerType Type => IndexerType.Newznab;
 
         public Task<IndexerConnectionTestResult> TestAsync(IndexerEntry entry, CancellationToken cancellationToken) => Task.FromResult(new IndexerConnectionTestResult(true));
 
-        public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken) => Task.FromResult(search(entry, query));
+        public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(IndexerEntry entry, IndexerSearchQuery query, CancellationToken cancellationToken) => Task.FromResult(search(entry, query));
     }
 }

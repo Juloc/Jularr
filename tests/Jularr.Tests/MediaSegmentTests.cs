@@ -224,6 +224,50 @@ public sealed class MediaSegmentTests
     }
 
     [TestMethod]
+    public async Task EpisodeSnapshot_LearningOff_PreservesMediaWithoutLoadingLearningCues()
+    {
+        await using var fixture = await MediaInventoryFixture.CreateAsync();
+        var media = await fixture.AddMediaAsync("learning-cold.mkv", [1, 2, 3]);
+
+        var track = new SubtitleTrack
+        {
+            EpisodeId = media.EpisodeId!.Value,
+            Path = "learning-cold.ja.srt",
+            Language = "ja",
+            Format = "srt"
+        };
+        fixture.Db.SubtitleTracks.Add(track);
+        fixture.Db.SubtitleCues.Add(new SubtitleCue
+        {
+            SubtitleTrackId = track.Id,
+            StartMs = 1_000,
+            EndMs = 3_000,
+            Text = "字幕"
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var playback = new PlaybackService(
+            fixture.Db,
+            new PlaybackCueProjector(new EmptyMorphology()),
+            fixture.Inventory);
+
+        var disabled = await playback.GetSnapshotAsync(
+            media.EpisodeId.Value,
+            CancellationToken.None,
+            includeLearningCues: false);
+        var enabled = await playback.GetSnapshotAsync(
+            media.EpisodeId.Value,
+            CancellationToken.None,
+            includeLearningCues: true);
+
+        Assert.IsNotNull(disabled.Media);
+        Assert.IsNotNull(enabled.Media);
+        Assert.AreEqual(disabled.Media.MediaFileId, enabled.Media.MediaFileId);
+        Assert.AreEqual(0, disabled.Cues.Count);
+        Assert.AreEqual(1, enabled.Cues.Count);
+    }
+
+    [TestMethod]
     public async Task TrickplayCacheIsKeyedByInventoryIdentityAndGeneratorVersion()
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();

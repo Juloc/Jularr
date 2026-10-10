@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Tests.Infrastructure;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
@@ -252,7 +253,7 @@ public sealed class MusicImportTests
 
     private sealed class World : IDisposable
     {
-        private World(AppDbContext db, string root, string libraryPath, Guid workId, Guid rootId, MusicCompletedDownloadImportAdapter adapter, LibraryRootRoutingService routing, string requestExternalId, AcquisitionRequest request)
+        private World(AppDbContext db, string root, string libraryPath, long workId, Guid rootId, MusicCompletedDownloadImportAdapter adapter, LibraryRootRoutingService routing, string requestExternalId, AcquisitionRequest request)
         {
             Db = db;
             Root = root;
@@ -270,7 +271,7 @@ public sealed class MusicImportTests
 
         public string LibraryPath { get; }
 
-        public Guid WorkId { get; }
+        public long WorkId { get; }
 
         public Guid RootId { get; }
 
@@ -295,14 +296,16 @@ public sealed class MusicImportTests
             var work = new Work { MediaType = WorkMediaType.Music, CanonicalTitle = "Random Access Memories", Year = 2013 };
             db.MusicArtists.Add(artist);
             db.Works.Add(work);
-            db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, MusicBrainzReleaseGroupId = Group, Monitored = true, ReleaseDate = new DateTime(2013, 5, 17, 0, 0, 0, DateTimeKind.Utc) });
+            await db.SaveChangesAsync();
+            db.MusicAlbums.Add(new MusicAlbum { WorkId = work.Id, ArtistId = artist.Id, MusicBrainzReleaseGroupId = Group, ReleaseDate = new DateTime(2013, 5, 17, 0, 0, 0, DateTimeKind.Utc) });
             db.WorkExternalIdentities.Add(new WorkExternalIdentity { WorkId = work.Id, MediaType = WorkMediaType.Music, Provider = "musicbrainz", ExternalId = Group, IsPrimary = true, Evidence = "test" });
             await db.SaveChangesAsync();
+            await MonitoringTestSupport.Commands(db).SetWorkAsync(work.Id, true, CancellationToken.None);
 
             var provider = new TrackProvider(tracks ?? [Track(1, 1, "Give Life Back to Music"), Track(1, 2, "The Game of Love"), Track(1, 3, "Giorgio by Moroder")]);
             var routing = new LibraryRootRoutingService(db);
             await routing.AssignDefaultAsync(LibraryContentType.Music, libraryRoot.Id, policy);
-            var library = new MusicLibraryService(db, provider, new WorkService(db), TimeProvider.System);
+            var library = new MusicLibraryService(db, provider, new WorkService(db), MonitoringTestSupport.Commands(db), TimeProvider.System);
             var adapter = new MusicCompletedDownloadImportAdapter(
                 db,
                 library,

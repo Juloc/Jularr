@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Prowlarr;
+using Jularr.Web.Features.Acquisition.Core;
 
 namespace Jularr.Web.Features.Acquisition.Indexers;
 
@@ -20,7 +21,7 @@ public sealed class ProwlarrIndexer(IProwlarrClient client) : IIndexer
         return new IndexerConnectionTestResult(result.Success, result.Version, result.Error);
     }
 
-    public Task<IReadOnlyList<ProwlarrReleaseCandidate>> SearchAsync(
+    public Task<IReadOnlyList<AcquisitionCandidate>> SearchAsync(
         IndexerEntry entry,
         IndexerSearchQuery query,
         CancellationToken cancellationToken) =>

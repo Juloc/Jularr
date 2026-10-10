@@ -3,8 +3,11 @@ using Jularr.Web.Features.Library;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Data;
+using Microsoft.EntityFrameworkCore;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Import;
+using Jularr.Web.Features.Acquisition.Quality;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Manga;
@@ -33,7 +36,9 @@ public sealed class MangaCompletedDownloadImportAdapter(
     ReadingNamingProfileStore? namingStore = null,
     ReadingCoverArtwork? coverArtwork = null,
     LibraryRootRoutingService? routing = null,
-    RequestWorkBinder? binder = null)
+    RequestWorkBinder? binder = null,
+    WantedReconciler? wanted = null,
+    MangaVersionSelector? versions = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     public MediaAcquisitionKind Kind =>
@@ -44,6 +49,7 @@ public sealed class MangaCompletedDownloadImportAdapter(
         CancellationToken cancellationToken)
     {
         CompletedDownloadPlacement? placement = null;
+        string? placedCopy = null;
         try
         {
             var repository = new MangaRepository(db);
@@ -120,6 +126,11 @@ public sealed class MangaCompletedDownloadImportAdapter(
             var mode = settings.ModeFor(MediaAcquisitionKind.Manga);
             placement = new CompletedDownloadPlacement(releaseTarget, mode);
 
+            if (sourceExists && !File.Exists(releaseTarget) && !Directory.Exists(releaseTarget))
+            {
+                placedCopy = releaseTarget;
+            }
+
             if (sourceExists)
             {
                 new MangaLibraryPlacement(new ImportFileTransfer(hardLinks)).Place(
@@ -147,6 +158,13 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 importSource,
                 cancellationToken,
                 existing?.Id);
+
+            // A release without a single readable page (a damaged archive) is rejected, so it can neither replace nor hide the version the library already reads.
+            if (!(await repository.GetChapterSourcesAsync(imported.SeriesId, cancellationToken)).Any(chapter => StoragePaths.AreSame(chapter.SourcePath, releaseTarget) || StoragePaths.IsBelow(chapter.SourcePath, releaseTarget)))
+            {
+                await RemoveUnreadableCopyAsync(placedCopy, cancellationToken);
+                return CompletedDownloadImportResult.RejectRelease("The downloaded release holds no readable manga pages.", placement);
+            }
 
             string? metadataWarning = null;
             if (existing is null && aniListId is not null)
@@ -193,6 +211,21 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 return CompletedDownloadImportResult.NeedsReview(conflict, placement);
             }
 
+            // What the release brought is tied to the volumes and chapters it holds, and Wanted drops what is now in the library.
+            if (acquisition?.WorkId is { } workId)
+            {
+                await new ReadingImportTies(db, new ReadingUnits(db)).TieAsync(workId, imported.SeriesId, releaseTarget, cancellationToken);
+                if (versions is not null)
+                {
+                    await versions.ReselectAsync(workId, cancellationToken);
+                }
+
+                if (wanted is not null)
+                {
+                    await wanted.ReconcileAsync(workId, cancellationToken);
+                }
+            }
+
             return CompletedDownloadImportResult.Completed(
                 $"Imported {imported.ChapterCount} Manga chapter(s).{metadataWarning}",
                 $"/Manga/Series/{imported.SeriesId}",
@@ -232,9 +265,40 @@ public sealed class MangaCompletedDownloadImportAdapter(
                 exception,
                 "Downloaded Manga release '{SourcePath}' was unsuitable.",
                 request.SourcePath);
+            await RemoveUnreadableCopyAsync(placedCopy, cancellationToken);
             return CompletedDownloadImportResult.RejectRelease(
                 "Downloaded release could not be imported as Manga.",
                 placement);
+        }
+    }
+
+    // The copy this import placed in the library is removed only while no library entry reads anything of it, so a damaged release never leaves junk beside a
+    // working version and a partly readable one is never cut off from its entries.
+    private async Task RemoveUnreadableCopyAsync(string? placedCopy, CancellationToken cancellationToken)
+    {
+        if (placedCopy is null || await db.Database.SqlQuery<int>(
+                $"""
+                SELECT COUNT(*)::int AS "Value" FROM "MangaChapters"
+                WHERE "SourcePath" = {placedCopy} OR left("SourcePath", {placedCopy.Length + 1}) IN ({placedCopy + "/"}, {placedCopy + "\\"})
+                """).SingleAsync(cancellationToken) > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(placedCopy))
+            {
+                Directory.Delete(placedCopy, recursive: true);
+            }
+            else if (File.Exists(placedCopy))
+            {
+                File.Delete(placedCopy);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "The unreadable Manga copy '{Path}' could not be removed.", placedCopy);
         }
     }
 
@@ -300,7 +364,11 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
     ILogger<LightNovelCompletedDownloadImportAdapter> logger,
     ReadingNamingProfileStore? namingStore = null,
     LibraryRootRoutingService? routing = null,
-    RequestWorkBinder? binder = null)
+    RequestWorkBinder? binder = null,
+    QualityProfileStore? profiles = null,
+    NovelImportTies? ties = null,
+    LightNovelVersionSelector? versions = null,
+    WantedReconciler? wanted = null)
     : ICompletedDownloadImportAdapter, IMediaInboxImportAdapter
 {
     private static readonly CompletedDownloadPlacement Placement =
@@ -314,6 +382,7 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
         CancellationToken cancellationToken)
     {
         CompletedDownloadPlacement? placement = null;
+        IReadOnlyList<PlacedFile> placed = [];
         if (!File.Exists(request.SourcePath) &&
             !Directory.Exists(request.SourcePath))
         {
@@ -345,13 +414,12 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
                 namingProfile);
             var mode = settings.ModeFor(MediaAcquisitionKind.LightNovel);
             placement = new CompletedDownloadPlacement(destination, mode);
-            new ReadingLibraryPlacement(new ImportFileTransfer(hardLinks)).PlaceEpubs(
+            placed = new ReadingLibraryPlacement(new ImportFileTransfer(hardLinks)).PlaceEpubs(
                 request.SourcePath,
                 destination,
                 mode,
                 namingProfile,
                 releaseTitle);
-            var importSource = destination;
 
             // The request's Work decides the series: volumes of a request are added to the series of the title it asked for.
             var acquisition = request.Request is { } asked && binder is not null ? await binder.EnsureBoundAsync(asked, cancellationToken) : request.Request;
@@ -360,13 +428,16 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
                 : null;
 
             // Recursive, no folder hints, validated before anything is stored (#485 item 8).
-            var import = await importer.ImportDownloadAsync(
-                importSource,
-                cancellationToken,
+            // Only the files this release brought are imported, so an older edition in the same folder is never read again as if it were new.
+            var import = await importer.ImportFilesAsync(
+                [.. placed.Select(file => file.Path)],
                 recordSourceStoragePath: true,
-                targetWorkId: targetSeries);
+                targetSeries,
+                await EditionAsync(acquisition, cancellationToken),
+                cancellationToken);
             if (import.RejectedBecause is { } rejected)
             {
+                await RemoveUnreadableCopiesAsync(placed, cancellationToken);
                 return CompletedDownloadImportResult.RejectRelease(
                     $"Downloaded Light Novel release was refused: {rejected}");
             }
@@ -377,6 +448,7 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
                     outcome.Succeeded &&
                     outcome.WorkId is not null)
                 .ToArray();
+            await RemoveUnreadableCopiesAsync(placed, cancellationToken);
             if (successes.Length == 0)
             {
                 return CompletedDownloadImportResult.RejectRelease(
@@ -439,6 +511,25 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
                 return CompletedDownloadImportResult.NeedsReview(conflict, placement ?? Placement);
             }
 
+            // The imported EPUB volumes are the published volumes of their numbers, the best edition of each is shown, and Wanted drops what the library now holds.
+            if (acquisition?.WorkId is { } canonicalWorkId)
+            {
+                if (ties is not null)
+                {
+                    await ties.TieAsync(canonicalWorkId, workIds[0], [.. successes.Where(outcome => outcome.VolumeNumber is not null).Select(outcome => outcome.VolumeNumber!.Value)], cancellationToken);
+                }
+
+                if (versions is not null)
+                {
+                    await versions.ReselectAsync(canonicalWorkId, cancellationToken);
+                }
+
+                if (wanted is not null)
+                {
+                    await wanted.ReconcileAsync(canonicalWorkId, cancellationToken);
+                }
+            }
+
             return CompletedDownloadImportResult.Completed(
                 $"{NovelEpubImportOutcome.Summarize(outcomes)}{metadataWarning}",
                 $"/Novels/Work/{workIds[0]}",
@@ -468,9 +559,42 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
                 exception,
                 "Downloaded Light Novel release '{SourcePath}' was unsuitable.",
                 request.SourcePath);
+            await RemoveUnreadableCopiesAsync(placed, cancellationToken);
             return CompletedDownloadImportResult.RejectRelease(
                 "Downloaded release could not be imported as a Light Novel.",
                 placement);
+        }
+    }
+
+    // What the release says it is decides the edition's quality; an EPUB that nothing labels is only as good as the profile's last tier until a labelled one arrives.
+    private async Task<NovelEditionHint?> EditionAsync(AcquisitionRequest? request, CancellationToken cancellationToken)
+    {
+        if (request is not { WorkId: { } workId } || profiles is null)
+        {
+            return null;
+        }
+
+        var release = ReadingAcquisitionEngine.ReadPayload(request, ReadingAcquisitionEngine.FallbackTarget(request)).GrabbedRelease;
+        var quality = string.IsNullOrWhiteSpace(release) ? "EPUB" : ReadingReleaseEvidenceParser.QualityOf(ReadingReleaseParser.Parse(release).Format);
+        return new NovelEditionHint(quality, await profiles.ResolveAsync(MediaAcquisitionKind.LightNovel, workId, cancellationToken));
+    }
+
+    // A file this release placed that no volume stores is a damaged or refused copy: it is removed, so it never sits beside the edition the library already reads.
+    private async Task RemoveUnreadableCopiesAsync(IReadOnlyList<PlacedFile> placed, CancellationToken cancellationToken)
+    {
+        foreach (var file in placed.Where(file => file.Created))
+        {
+            if (File.Exists(file.Path) && !await importer.IsStoredAsync(file.Path, cancellationToken))
+            {
+                try
+                {
+                    File.Delete(file.Path);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogWarning(exception, "The unreadable Light Novel copy '{Path}' could not be removed.", file.Path);
+                }
+            }
         }
     }
 
@@ -504,6 +628,9 @@ public sealed class LightNovelCompletedDownloadImportAdapter(
 /// chapter and asset state. The same transfer policy as Manga is used, but only EPUB files are
 /// accepted here; unrelated download artifacts never become library files.
 /// </summary>
+/// <summary>One file a placement put in the library; <paramref name="Created"/> is false when an identical file was already there.</summary>
+public sealed record PlacedFile(string Path, bool Created);
+
 public sealed class ReadingLibraryPlacement(ImportFileTransfer transfer)
 {
     /// <summary>
@@ -522,7 +649,7 @@ public sealed class ReadingLibraryPlacement(ImportFileTransfer transfer)
         return Path.Combine(Path.GetFullPath(libraryRoot), folderName);
     }
 
-    public void PlaceEpubs(
+    public IReadOnlyList<PlacedFile> PlaceEpubs(
         string source,
         string destination,
         ImportMode mode,
@@ -537,7 +664,7 @@ public sealed class ReadingLibraryPlacement(ImportFileTransfer transfer)
             profile,
             seriesTitle);
 
-    public void PlaceBookFiles(
+    public IReadOnlyList<PlacedFile> PlaceBookFiles(
         string source,
         string destination,
         ImportMode mode,
@@ -545,7 +672,7 @@ public sealed class ReadingLibraryPlacement(ImportFileTransfer transfer)
         string? seriesTitle = null)
         => PlaceFiles(source, destination, mode, BookFileFormats.IsSupported, "Book", profile, seriesTitle);
 
-    private void PlaceFiles(
+    private IReadOnlyList<PlacedFile> PlaceFiles(
         string source,
         string destination,
         ImportMode mode,
@@ -568,6 +695,7 @@ public sealed class ReadingLibraryPlacement(ImportFileTransfer transfer)
             throw new InvalidDataException($"The download contains no supported {mediaName} files.");
         }
 
+        var placed = new List<PlacedFile>(files.Length);
         foreach (var file in files)
         {
             var relative = File.Exists(root) ? Path.GetFileName(file) : Path.GetRelativePath(root, file);
@@ -592,6 +720,7 @@ public sealed class ReadingLibraryPlacement(ImportFileTransfer transfer)
                         File.Delete(file);
                     }
 
+                    placed.Add(new PlacedFile(target, Created: false));
                     continue;
                 }
 
@@ -599,7 +728,10 @@ public sealed class ReadingLibraryPlacement(ImportFileTransfer transfer)
             }
 
             transfer.Transfer(file, target, mode);
+            placed.Add(new PlacedFile(target, Created: true));
         }
+
+        return placed;
     }
 
     private static string UniqueName(string path)

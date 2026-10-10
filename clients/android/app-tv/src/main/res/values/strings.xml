@@ -71,6 +71,9 @@
     <string name="tv_watchlist_media_light_novel">Light Novel</string>
     <string name="tv_watchlist_media_book">Book</string>
     <string name="tv_watchlist_in_library">In library</string>
+    <string name="tv_watchlist_previous_page">Previous</string>
+    <string name="tv_watchlist_next_page">Next</string>
+    <string name="tv_watchlist_page">Page %1$d</string>
 
     <!-- Activity -->
     <string name="tv_activity_title">Activity</string>

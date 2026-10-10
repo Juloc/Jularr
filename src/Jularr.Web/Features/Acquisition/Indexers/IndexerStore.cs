@@ -88,6 +88,29 @@ public sealed class IndexerStore
         }
     }
 
+    /// <summary>
+    /// Stores what setup or a refresh found: the proof of what works and, when the caps were read, the new capabilities. A failed refresh passes no
+    /// capabilities, so the earlier ones and the owner's settings stay; only the one entry's discovery fields change.
+    /// </summary>
+    public async Task UpdateDiscoveryAsync(Guid id, IndexerCapabilities? capabilities, IndexerVerification verification, CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var all = (await LoadUnlockedAsync(cancellationToken)).ToList();
+            var index = all.FindIndex(item => item.Id == id);
+            if (index >= 0)
+            {
+                all[index] = all[index] with { Settings = all[index].Settings with { Capabilities = capabilities ?? all[index].Settings.Capabilities, Verification = verification } };
+                await WriteUnlockedAsync(all, cancellationToken);
+            }
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     /// <summary>Adds or replaces the entry with the same Id.</summary>
     public async Task SaveAsync(
         IndexerEntry entry,
@@ -263,7 +286,8 @@ public sealed class IndexerStore
                         AutomaticSearch = item.AutomaticSearch ?? true,
                         InteractiveSearch = item.InteractiveSearch ?? true,
                         MediaKinds = item.MediaKinds,
-                        CategoriesByKind = item.CategoriesByKind
+                        CategoriesByKind = item.CategoriesByKind,
+                        Verification = item.Verification
                     },
                     apiKey));
         }
@@ -298,7 +322,8 @@ public sealed class IndexerStore
                 entry.Settings.AutomaticSearch,
                 entry.Settings.InteractiveSearch,
                 entry.Settings.MediaKinds,
-                entry.Settings.CategoriesByKind))
+                entry.Settings.CategoriesByKind,
+                entry.Settings.Verification))
             .ToArray();
 
         var temporaryPath = $"{storePath}.tmp-{Guid.NewGuid():N}";
@@ -358,5 +383,6 @@ public sealed class IndexerStore
         bool? AutomaticSearch = null,
         bool? InteractiveSearch = null,
         MediaAcquisitionKind[]? MediaKinds = null,
-        Dictionary<string, int[]>? CategoriesByKind = null);
+        Dictionary<string, int[]>? CategoriesByKind = null,
+        IndexerVerification? Verification = null);
 }

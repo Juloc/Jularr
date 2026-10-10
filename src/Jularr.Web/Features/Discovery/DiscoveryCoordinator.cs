@@ -386,7 +386,7 @@ public sealed class DiscoveryCoordinator(
 
         // A TMDB title is a durable Work as soon as one exists (for example after a Request); it is in the library only once it has a video file.
         var tmdbWorks = tmdbIds.Length == 0
-            ? new Dictionary<(WorkMediaType MediaType, string ExternalId), Guid>()
+            ? new Dictionary<(WorkMediaType MediaType, string ExternalId), long>()
             : (await db.WorkExternalIdentities
                 .AsNoTracking()
                 .Where(identity => identity.Provider == TmdbDiscoveryProvider.ProviderKey
@@ -399,7 +399,7 @@ public sealed class DiscoveryCoordinator(
 
         var tmdbWorkIds = tmdbWorks.Values.Distinct().ToArray();
         var tmdbWorksInLibrary = tmdbWorkIds.Length == 0
-            ? new HashSet<Guid>()
+            ? new HashSet<long>()
             : (await (
                     from asset in db.MediaAssets.AsNoTracking()
                     join file in db.StoredFiles.AsNoTracking()
@@ -410,7 +410,7 @@ public sealed class DiscoveryCoordinator(
                 .ToListAsync(cancellationToken))
                 .ToHashSet();
 
-        IReadOnlyDictionary<Guid, WorkCardMetadata> persisted = new Dictionary<Guid, WorkCardMetadata>();
+        IReadOnlyDictionary<long, WorkCardMetadata> persisted = new Dictionary<long, WorkCardMetadata>();
         if (tmdbWorkIds.Length > 0)
         {
             var rows = await new WorkMetadataStore(db).LoadCardMetadataAsync(tmdbWorkIds, cancellationToken);
@@ -520,7 +520,7 @@ public sealed class DiscoveryCoordinator(
                     {
                         IsLocal = inLibrary,
                         LocalUrl = inLibrary ? detailUrl : null,
-                        LocalMediaId = inLibrary ? canonicalWorkId : null,
+                        LocalWorkId = inLibrary ? canonicalWorkId : null,
                         WorkUrl = detailUrl,
                         Title = metadata?.Title ?? item.Title,
                         CoverImageUrl = metadata?.PosterUrl ?? item.CoverImageUrl,

@@ -48,7 +48,7 @@ public sealed class ArtistModel(AppDbContext db, MusicQuery query, MusicLibraryS
         return RedirectToPage(new { id });
     }
 
-    public async Task<IActionResult> OnPostAlbumAsync(Guid id, Guid workId, bool monitored, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostAlbumAsync(Guid id, long workId, bool monitored, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         try

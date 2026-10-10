@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Release;
 
@@ -58,13 +59,6 @@ public sealed record ReleaseScoreRule(
 }
 
 /// <summary>
-/// One explicit step of the fallback ladder: once a target has been wanted for <see cref="AfterMinutes"/>, the qualities in
-/// <see cref="AddedQualities"/> become allowed as well. Identity, safety and the permanent Require/Reject rules never relax; a
-/// candidate taken from a later tier is only temporary and the target stays wanted for an upgrade.
-/// </summary>
-public sealed record FallbackTier(int AfterMinutes, string[] AddedQualities);
-
-/// <summary>
 /// Which indexers an Acquisition Profile may search and which it prefers, by the canonical entry id of the Indexer settings (the profile never copies
 /// an indexer's configuration). An empty allow list is "every indexer that takes part in this kind of search". A restricted profile is never silently
 /// widened: when none of its indexers can be searched the search says so and asks nobody else. Preferred entries only win ties between candidates that are
@@ -90,7 +84,6 @@ public sealed record QualityProfile(
     string[] QualityOrder,
     bool UpgradeAllowed,
     string? UpgradeCutoffQuality,
-    int MinimumScore,
     long? MinimumSizeBytes,
     long? MaximumSizeBytes,
     string[] MustContain,
@@ -99,26 +92,14 @@ public sealed record QualityProfile(
     string[] RejectedRegex,
     ReleaseScoreRule[] ScoreRules)
 {
-    /// <summary>The fallback ladder after tier 0 (the allowed qualities above); tiers are ordered by their wait.</summary>
-    public FallbackTier[] FallbackTiers { get; init; } = [];
-
-    /// <summary>The least preference-score gain that makes a candidate of the same quality an upgrade, so tiny differences never churn files.</summary>
-    public int UpgradeMinimumScoreDelta { get; init; } = 1;
-
     /// <summary>The least number of quality steps a candidate must be better by to be an upgrade; 1 means any better quality.</summary>
     public int UpgradeMinimumQualitySteps { get; init; } = 1;
 
-    /// <summary>
-    /// A release of a fallback tier that is not yet reached is taken at once when its preference score is at least this; null always waits for the ladder.
-    /// Identity, safety and every gate still apply, and the release is temporary: the target stays wanted for an upgrade.
-    /// </summary>
-    public int? GrabImmediatelyScore { get; init; }
-
-    /// <summary>Upgrades stop once the current file reaches this preference score; null keeps upgrading until the quality cutoff.</summary>
-    public int? UpgradeUntilScore { get; init; }
-
     /// <summary>Whether a candidate whose identity is only ambiguous may be taken automatically; by default it waits for manual review.</summary>
     public bool AllowAmbiguousIdentity { get; init; }
+
+    /// <summary>The languages the profile wants, best first; among releases of the same quality one in an earlier language wins. Empty means language never decides.</summary>
+    public string[] LanguageOrder { get; init; } = [];
 
     /// <summary>The indexers this profile may search and prefers; the same policy applies to Automatic and Manual Search of every media type the profile serves.</summary>
     public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
@@ -134,15 +115,17 @@ public sealed record QualityProfileState(
     Dictionary<string, string> KindDefaults,
     Dictionary<string, string> WorkAssignments)
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     public string? DefaultProfileIdFor(MediaAcquisitionKind kind) =>
         KindDefaults.TryGetValue(AcquisitionAccessNames.Kind(kind), out var id) ? id : null;
 
-    public string? ResolveProfileId(MediaAcquisitionKind kind, Guid? workId) =>
-        workId is Guid id && WorkAssignments.TryGetValue(id.ToString("D"), out var assigned)
-            ? assigned
-            : DefaultProfileIdFor(kind);
+    public string? ResolveProfileId(MediaAcquisitionKind kind, long? workId) => ResolveProfileId(kind, workId?.ToString(CultureInfo.InvariantCulture));
+
+    public string? ResolveProfileId(MediaAcquisitionKind kind, Guid? animeId) => ResolveProfileId(kind, animeId?.ToString("D"));
+
+    private string? ResolveProfileId(MediaAcquisitionKind kind, string? key) =>
+        key is not null && WorkAssignments.TryGetValue(key, out var assigned) ? assigned : DefaultProfileIdFor(kind);
 }
 
 public sealed record ReleaseCandidate(
@@ -217,7 +200,6 @@ public static class AnimeQualityProfiles
             ],
             UpgradeAllowed: true,
             UpgradeCutoffQuality: "BLURAY-1080p",
-            MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],

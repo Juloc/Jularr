@@ -10,6 +10,7 @@ Status: planning baseline. This document defines information architecture, navig
 - When an Original Jularr screen intentionally uses the Jularr mascot/anime character, it uses the canonical reference at `docs/assets/original-j/jularr-mascot-reference.png`. The mascot is optional; screens do not invent replacement characters. Pose/expression/props may vary while identity stays canonical.
 - Clean does not use the Original J mascot by default. Mascot presence never changes information architecture, feature availability or behavior.
 - No unnecessary explanatory text, duplicated headings or nested pages when a direct interaction works.
+- Page identity belongs in the shared header breadcrumbs, not a repeated page heading. Related views use section tabs instead of top-right switching buttons; useful headings within content sections remain.
 - Media is the visual focus; administration is information-dense but structured.
 - User UI and Admin UI are distinct modes.
 - Responsive behavior is intentional for Desktop, Tablet, Mobile and TV.
@@ -898,6 +899,20 @@ Binding screen specifications:
 - `docs/mockups/admin-history/SPEC.md`
 
 Requests moderates user requests and hands approved acquisition needs into Wanted.
+
+The Requests / Rules / Users section tabs precede the lifecycle tabs in the first desktop row. The second row contains visible request-local search, centered type/language/requester filters and right-aligned sorting. Filters support multiple choices (OR within a dimension, AND across dimensions); sorting is single-choice. Single choices apply immediately; multiple choices apply through the combobox's Apply action or when leaving its popup, while Cancel restores the applied selection. No extra page-level or sheet-level Apply is needed. Lifecycle tabs replace a redundant status dropdown. There is no season filter; season coverage remains in each request. Rich filter options reuse table tags and requester avatars, with language flags and direction-specific sort icons. Narrow layouts place filters in the existing modal sheet.
+
+Within Admin, the shared header search searches permission/module-scoped canonical Admin destinations, account names and request titles. Only nonempty Users / Pages / Settings / Requests groups are rendered. Configuration destinations are searchable by their translated labels, not by secret setting values. Consumer header search remains Discover; request-local search remains independent.
+
+Rules uses compact profile rows beside one permanent desktop editor, with a list-to-editor flow on narrow screens. Fresh installations persist one Standard default (10 submissions / 30 rolling days, manual approval). Profiles have stable numeric IDs; the current default cannot be deleted. Confirmed deletion of an assigned nondefault profile reassigns its users to the current default while preserving individual overrides. Revision checks prevent stale forms from overwriting concurrent changes.
+
+Requests → Users lists and searches real accounts with effective restrictions. Desktop uses a compact table with account, profile, quota and configured approval columns; phones reflow the same data into compact rows without horizontal scrolling. Whole rows open the shared editor without separate Edit buttons; the first search result is selected on entry. Save and Cancel belong in that editor. The same editor and save workflow is available at `/Admin/Users/{id}/Settings/Requests`, linked from the canonical `/Admin/User/{id}` page. An inherited default is distinct from an explicit assignment. Override OFF displays read-only profile values; ON persists only differing fields. Non-overridden fields follow later profile edits, and switching the default does not overwrite explicit assignments.
+
+Request Rule Profiles are not Acquisition Quality Profiles. Their effective media types remain intersected with instance modules and Media Capabilities; Instant still bypasses manual approval. Submission quotas are admitted atomically in the canonical request path and count durable creation usage across media types, not watchlist entries or reuse of open requests. Deleting a request never refunds its quota. Monitoring and Wanted retain their independent lifecycle.
+
+Existing auto-approval configuration upgrades into an explicit transition, because approval quotas cannot become submission limits without changing behavior. Upgraded installations retain unlimited submission by default and evaluate the preserved approval rules for users inheriting the default without overrides. Explicit profile assignments use the new rule values. The Rules page exposes the legacy configuration and requires confirmation to end this transition; ending it archives rather than deletes the old configuration.
+
+Requester-selectable acquisition quality profiles are part of each Request Rule and the shared editor, including sparse user inheritance. They reference the existing Acquisition Profiles definitions without duplicating them. Existing global quality choices are carried into profiles that predate this field; thereafter request option authorization reads only the resolved rule. An empty choice list keeps acquisition defaults and does not grant requesters arbitrary quality choices; media-manager capabilities remain unchanged.
 
 Activity / To-Do is the live/pending operational work queue for imports, remux, repack/replace, subtitles, translations, metadata, AI and maintenance.
 

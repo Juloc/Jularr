@@ -1,0 +1,64 @@
+@model Jularr.Web.Pages.Admin.Requests.UsersModel
+@using Jularr.Web.Features.Acquisition.Access
+@using Jularr.Web.Features.Auth
+@{
+    var ui = Model.Ui;
+    var rules = Model.RequestSettings.Rules;
+}
+<div asp-validation-summary="All" class="validation"></div>
+@if (Model.IsUserSettings && Model.SelectedUser is { } selected)
+{
+    <nav class="rre-user-context" aria-label="@ui["requestRules.userSettings"]"><a class="button button-secondary" href="/Admin/User/@Uri.EscapeDataString(selected.Id)">@selected.UserName</a><span>@ui["requestRules.userSettings"] / @ui["admin.nav.requests"]</span></nav>
+}
+<div class="admreq rre-users-workspace @(Model.SelectedUser is not null ? "rre-has-user rre-mobile-editor" : "")" data-rre-workspace>
+    @if (!Model.IsUserSettings)
+    {
+        <section class="panel rre-list rre-users-list" aria-label="@ui["admin.users.accounts"]">
+            <form method="get" class="rre-user-search" data-rre-navigation><input type="search" name="q" maxlength="80" value="@Model.Query" aria-label="@ui["requestRules.searchUsers"]" placeholder="@ui["requestRules.searchUsers"]" /><button class="button button-secondary" type="submit"><partial name="_AppIcon" model="@("search")" /><span class="sr-only">@ui["common.search"]</span></button></form>
+            <p class="muted rre-user-count">@ui["admin.users.accounts"] · @Model.Directory.TotalCount</p>
+            @if (Model.Directory.Items.Count == 0) { <div class="empty-state"><strong>@ui[Model.Query.Length > 0 ? "requestRules.noMatchingUsers" : "admin.users.noAccounts"]</strong></div> }
+            @if (Model.Directory.Items.Count > 0)
+            {
+                <div class="rre-user-table-wrap" tabindex="0" role="region" aria-label="@ui["admin.users.accounts"]">
+                    <table class="rre-user-table">
+                        <colgroup><col class="rre-user-column" /><col class="rre-rule-column" /><col class="rre-limit-column" /><col class="rre-approval-column" /></colgroup>
+                        <thead><tr><th scope="col">@ui["admin.users.accounts"]</th><th scope="col">@ui["requestRules.profile"]</th><th scope="col">@ui["requestRules.limit"]</th><th scope="col">@ui["requestRules.configuredApproval"]</th></tr></thead>
+                        <tbody>
+                            @foreach (var account in Model.Directory.Items)
+                            {
+                                var resolved = rules.Resolve(account.Id, Model.RequestSettings.AutoApprovalRules);
+                                var quota = resolved.Values.Limit is { } limit ? ui.Format("requestRules.limitSummary", ("count", limit), ("days", resolved.Values.PeriodDays)) : ui["requestRules.unlimited"];
+                                var assignment = ui[resolved.Overrides.HasChanges ? "requestRules.custom" : resolved.InheritsDefault ? "requestRules.inherited" : "requestRules.assigned"];
+                                var approval = ui[resolved.TransitionRules.Count > 0 ? "requestRules.transition" : resolved.Values.Approval == RequestApprovalMode.Automatic ? "requestRules.automatic" : "requestRules.manual"];
+                                var roleLabel = ui[AccountRoles.LabelKey(account.Role)] + (account.IsEnabled ? "" : " · " + ui["admin.user.disabledPendingLabel"]);
+                                <tr class="rre-user-row @(account.Id == Model.SelectedUser?.Id ? "is-selected" : "")">
+                                    <td>
+                                        <a class="rre-user-link" href="/Admin/Requests/Users?userId=@Uri.EscapeDataString(account.Id)&amp;q=@Uri.EscapeDataString(Model.Query)&amp;p=@Model.Directory.Page" data-rre-navigation aria-current="@(account.Id == Model.SelectedUser?.Id ? "true" : null)" title="@account.UserName · @roleLabel · @resolved.Profile.Name · @assignment · @quota · @approval">
+                                            <span class="rre-user-identity"><partial name="/Pages/Admin/_RequestRequester.cshtml" model="account.UserName" /></span>
+                                            <span class="rre-user-role">@roleLabel</span>
+                                        </a>
+                                    </td>
+                                    <td><span class="rre-user-profile" title="@resolved.Profile.Name">@resolved.Profile.Name</span><span class="rre-user-assignment">@assignment</span></td>
+                                    <td><span class="rre-user-value" title="@quota">@quota</span></td>
+                                    <td><span class="rre-user-value" title="@approval · @ui["requestRules.effectiveApprovalHelp"]">@approval</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            @if (Model.Directory.TotalCount > Model.Directory.PageSize)
+            {
+                <nav class="rre-pagination" aria-label="@ui["admin.users.accounts"]">
+                    @if (Model.Directory.Page > 1) { <a class="button button-secondary" href="?q=@Uri.EscapeDataString(Model.Query)&amp;p=@(Model.Directory.Page - 1)" data-rre-navigation><partial name="_AppIcon" model="@("chevronLeft")" /></a> }
+                    <span>@Model.Directory.Page / @((Model.Directory.TotalCount + Model.Directory.PageSize - 1) / Model.Directory.PageSize)</span>
+                    @if (Model.Directory.HasMore == true) { <a class="button button-secondary" href="?q=@Uri.EscapeDataString(Model.Query)&amp;p=@(Model.Directory.Page + 1)" data-rre-navigation><partial name="_AppIcon" model="@("chevronRight")" /></a> }
+                </nav>
+            }
+        </section>
+    }
+    @if (Model.SelectedUser is { } user)
+    {
+        <partial name="/Pages/Admin/Requests/_RequestRuleEditor.cshtml" model="new RequestRuleEditorView(ui, Model.Editor, Model.RequestSettings, Model.EnabledKinds, Model.EditableKinds, Model.QualityProfiles, user.UserName, user.Id)" />
+    }
+</div>

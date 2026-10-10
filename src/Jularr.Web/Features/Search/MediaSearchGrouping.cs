@@ -6,7 +6,7 @@ namespace Jularr.Web.Features.Search;
 /// One canonical work among the candidates: every source record that bridges to the same media-core
 /// <c>Work</c> (or a single unbridged record), best variant first.
 /// </summary>
-public sealed record MediaSearchGroup(Guid? WorkId, IReadOnlyList<MediaSearchVariant> Variants)
+public sealed record MediaSearchGroup(long? WorkId, IReadOnlyList<MediaSearchVariant> Variants)
 {
     public MediaSearchVariant Best => Variants[0];
 }
@@ -24,10 +24,10 @@ public static class MediaSearchGrouping
     /// </summary>
     public static IReadOnlyList<MediaSearchGroup> Group(
         IEnumerable<MediaSearchVariant> variants,
-        IReadOnlyDictionary<(MediaSearchType Type, Guid Id), Guid> workOf)
+        IReadOnlyDictionary<(MediaSearchType Type, Guid Id), long> workOf)
     {
         var groups = new List<MediaSearchGroup>();
-        var byWork = new Dictionary<Guid, List<MediaSearchVariant>>();
+        var byWork = new Dictionary<long, List<MediaSearchVariant>>();
 
         foreach (var variant in variants)
         {

@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
@@ -78,7 +79,9 @@ public sealed class VideoAdminPagesRenderTests
 
         StringAssert.Contains(html, $"href=\"/Library/Movie/{movie.Work.Id:D}\"");
         StringAssert.Contains(html, $"href=\"/Admin/Media/movie/{movie.Work.Id:D}\"");
-        Assert.AreEqual(1, Regex.Matches(html, @"admin-icon-label"">Search now</span>").Count);
+        Assert.AreEqual(1, Regex.Matches(html, "<button[^>]*title=\"Search now\"[^>]*>").Count);
+        var searchAction = Regex.Match(html, "<form[^>]*action=\"(?<action>/Admin/Requests[^\"]*handler=Approve[^\"]*)\"").Groups["action"].Value;
+        StringAssert.Contains(WebUtility.HtmlDecode(searchAction), $"id={request.Id:D}");
         StringAssert.Contains(html, $"href=\"/Admin/ManualSearch?id={request.Id:D}\"");
         Assert.IsFalse(html.Contains("/Search?q=", StringComparison.Ordinal), "View media never goes to a search.");
         StringAssert.Contains(html, "href=\"/Admin/Wanted\"");
@@ -140,7 +143,7 @@ public sealed class VideoAdminPagesRenderTests
     }
 
     [TestMethod]
-    public async Task AMovieInTheLibraryListsItsFilesAndMonitoringItHasNothingToAcquire()
+    public async Task AMovieInTheLibraryListsItsFilesAndMonitoringItHasNothingToAcquireButIsKeptForUpgrades()
     {
         await using var movie = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Movie, "Dune", 2021, "438631", DuneRelease);
         await movie.AttachFileAsync(null, "Dune.2021.1080p.mkv", 2048);
@@ -151,7 +154,44 @@ public sealed class VideoAdminPagesRenderTests
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=MovieMonitor", [new("monitored", "true")]));
 
         Assert.AreEqual(0, (await movie.Requests.ListAllAsync(10, CancellationToken.None)).Count, "Nothing is requested for a movie that is there.");
-        StringAssert.Contains(await host.GetHtmlAsync(page), "aria-checked=\"false\"");
+        StringAssert.Contains(await host.GetHtmlAsync(page), "aria-checked=\"true\"");
+    }
+
+    [TestMethod]
+    public async Task TheSeriesMediaPageNamesItsProviderIdentityAndMarksAnInstalledEpisodeThatStillWantsAnUpgrade()
+    {
+        await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", SeveranceFirst, SeveranceSecond, addEpisode: true);
+        await series.AttachFileAsync(series.EpisodeId);
+        await series.CreateApprovedAsync();
+        await using var host = await VideoAdminPageHost.CreateAsync(series);
+        var page = $"/Admin/Media/series/{series.Work.Id:D}";
+
+        var plain = await host.GetHtmlAsync(page);
+        StringAssert.Contains(plain, "href=\"https://www.themoviedb.org/tv/95396\"");
+        StringAssert.Contains(plain, "TMDB 95396");
+        Assert.IsFalse(plain.Contains("Upgrade wanted", StringComparison.Ordinal), "An installed episode that satisfies its profile is not an upgrade candidate.");
+
+        series.Get<Jularr.Web.Data.AppDbContext>().WantedItems.Add(new Jularr.Web.Features.Acquisition.Wanted.WantedItem { WorkId = series.Work.Id, TargetKind = Jularr.Web.Features.Acquisition.Wanted.WantedTargetKind.Episode, TargetId = series.EpisodeId });
+        await series.Get<Jularr.Web.Data.AppDbContext>().SaveChangesAsync();
+        StringAssert.Contains(await host.GetHtmlAsync(page), "Upgrade wanted");
+    }
+
+    [TestMethod]
+    public async Task AFailedSeriesRequestIsExplainedOnTheMediaPageWithItsReason()
+    {
+        await using var series = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Tv, "Severance", 2022, "95396", SeveranceFirst, SeveranceSecond, addEpisode: true);
+        var request = await series.CreateApprovedAsync();
+        await series.Requests.UpdateStatusAsync(request.Id, AcquisitionRequestStatus.Failed, "Every release was rejected.", null, null, null, CancellationToken.None);
+        await using var host = await VideoAdminPageHost.CreateAsync(series);
+
+        var html = await host.GetHtmlAsync($"/Admin/Media/series/{series.Work.Id:D}");
+
+        StringAssert.Contains(html, "The last request failed: Every release was rejected.");
+        StringAssert.Contains(html, $"/Admin/ManualSearch?id={request.Id:D}&tab=history");
+
+        var page = $"/Admin/Media/series/{series.Work.Id:D}";
+        Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=Retry", []));
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, (await series.Requests.GetAsync(request.Id, CancellationToken.None))!.Status, "Retry runs the request again through the shared path.");
     }
 
     [TestMethod]
@@ -171,7 +211,7 @@ public sealed class VideoAdminPagesRenderTests
         StringAssert.Contains(html, "Season 2");
         StringAssert.Contains(html, "Upcoming");
         StringAssert.Contains(html, $"/Admin/ManualSearch?id={request.Id:D}&unit={series.SecondEpisodeId:D}");
-        Assert.AreEqual(4, Regex.Matches(html, "/Admin/ManualSearch").Count, "The header and the phone action bar, the season and the one missing aired episode; the episode with a file and the upcoming one have none.");
+        Assert.AreEqual(5, Regex.Matches(html, "/Admin/ManualSearch").Count, "The header and the phone action bar, the request history, the season and the one missing aired episode; the episode with a file and the upcoming one have none.");
         StringAssert.Contains(html, "Monitor all episodes");
         StringAssert.Contains(html, "Monitor future episodes only");
         Assert.AreEqual(3, Regex.Matches(html, @"name=""episodeId""").Count);
@@ -180,9 +220,9 @@ public sealed class VideoAdminPagesRenderTests
 
         var second = series.SecondEpisodeId!.Value.ToString();
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=EpisodeMonitor", [new("episodeId", second), new("monitored", "false")]));
-        var payload = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
-        Assert.AreEqual(VideoRequestScope.AllCurrentAndFuture, payload.Scope);
-        CollectionAssert.Contains(payload.ExcludedEpisodeIds!, series.SecondEpisodeId!.Value);
+        var view = await series.Get<MonitoringResolver>().LoadAsync(series.Work.Id, CancellationToken.None);
+        Assert.IsTrue(view.IsWorkMonitored);
+        Assert.IsFalse(view.IsMonitored(series.SecondEpisodeId!.Value));
         var partial = await host.GetHtmlAsync(page);
         StringAssert.Contains(partial, "Partial");
         StringAssert.Contains(partial, "aria-checked=\"mixed\"");
@@ -190,8 +230,8 @@ public sealed class VideoAdminPagesRenderTests
 
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "2"), new("monitored", "false")]));
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("season", "1"), new("monitored", "true")]));
-        var restored = VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!;
-        CollectionAssert.DoesNotContain(restored.ExcludedEpisodeIds!, series.SecondEpisodeId!.Value, "Switching a season on monitors all of its episodes again.");
+        var restored = await series.Get<MonitoringResolver>().LoadAsync(series.Work.Id, CancellationToken.None);
+        Assert.IsTrue(restored.IsMonitored(series.SecondEpisodeId!.Value), "Switching a season on monitors all of its episodes again.");
         Assert.AreEqual(HttpStatusCode.BadRequest, await host.PostAsync(page, $"{page}?handler=SeasonMonitor", [new("monitored", "false")]), "A missing season never means the specials.");
 
         var before = (await series.GetAsync(request.Id)).PayloadJson;
@@ -200,7 +240,9 @@ public sealed class VideoAdminPagesRenderTests
         Assert.AreEqual(before, (await series.GetAsync(request.Id)).PayloadJson, "An episode or season that is not part of the Series changes nothing.");
 
         Assert.AreEqual(HttpStatusCode.Found, await host.PostAsync(page, $"{page}?handler=SeriesScope", [new("scope", "future")]));
-        Assert.AreEqual(VideoRequestScope.FutureOnly, VideoRequestPayload.Parse((await series.GetAsync(request.Id)).PayloadJson)!.Scope);
+        var future = await series.Get<MonitoringResolver>().LoadAsync(series.Work.Id, CancellationToken.None);
+        Assert.IsTrue(future.IsWorkMonitored);
+        Assert.IsFalse(future.IsMonitored(series.EpisodeId!.Value), "Future only switches the episodes that are already out off.");
         Assert.AreEqual(HttpStatusCode.NotFound, await host.PostAsync(page, $"/Admin/Media/series/{Guid.NewGuid():D}?handler=SeriesScope", [new("scope", "all")]));
     }
 

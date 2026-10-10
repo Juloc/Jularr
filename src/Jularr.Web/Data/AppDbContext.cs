@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Acquisition.Api;
 using Jularr.Web.Features.Acquisition.History;
 using Jularr.Web.Features.Ai;
@@ -55,6 +56,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
     public DbSet<StoredFile> MediaFiles => StoredFiles;
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
+
+    public DbSet<WantedItem> WantedItems => Set<WantedItem>();
     public DbSet<LibraryReconciliationPlan> LibraryReconciliationPlans => Set<LibraryReconciliationPlan>();
     public DbSet<LibraryReconciliationPlanItem> LibraryReconciliationPlanItems => Set<LibraryReconciliationPlanItem>();
     public DbSet<LibraryReconciliationLogicalGroup> LibraryReconciliationLogicalGroups => Set<LibraryReconciliationLogicalGroup>();
@@ -95,6 +98,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<LearnerCourseProgress> LearnerCourseProgress => Set<LearnerCourseProgress>();
     public DbSet<AiSentenceExplanationCache> AiSentenceExplanationCache => Set<AiSentenceExplanationCache>();
     public DbSet<OwnerAccount> OwnerAccounts => Set<OwnerAccount>();
+    public DbSet<AccountLoginIdentity> AccountLoginIdentities => Set<AccountLoginIdentity>();
+    public DbSet<PlexLoginAttempt> PlexLoginAttempts => Set<PlexLoginAttempt>();
     public DbSet<EpisodeProgress> EpisodeProgress => Set<EpisodeProgress>();
     public DbSet<EpisodePlaybackHistoryEntry> EpisodePlaybackHistory => Set<EpisodePlaybackHistoryEntry>();
     public DbSet<ProfilePlaybackPreferences> ProfilePlaybackPreferences => Set<ProfilePlaybackPreferences>();
@@ -102,6 +107,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<BookEdition> BookEditions => Set<BookEdition>();
     public DbSet<BookFile> BookFiles => Set<BookFile>();
     public DbSet<NovelVolume> NovelVolumes => Set<NovelVolume>();
+    public DbSet<NovelVolumeEdition> NovelVolumeEditions => Set<NovelVolumeEdition>();
     public DbSet<NovelChapter> NovelChapters => Set<NovelChapter>();
     public DbSet<NovelTranslation> NovelTranslations => Set<NovelTranslation>();
     public DbSet<NovelProgress> NovelProgress => Set<NovelProgress>();
@@ -125,6 +131,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     // WorkSourceKind.Audiobook, plus canonical per-profile listening progress.
     public DbSet<Audiobook> Audiobooks => Set<Audiobook>();
     public DbSet<AudiobookFile> AudiobookFiles => Set<AudiobookFile>();
+    public DbSet<AudiobookEditionMetadata> AudiobookEditionMetadata => Set<AudiobookEditionMetadata>();
     public DbSet<AudiobookProgress> AudiobookProgress => Set<AudiobookProgress>();
 
     // Universal media core (#592): provider-independent works, external identities, titles, structure
@@ -137,12 +144,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<WorkSeason> WorkSeasons => Set<WorkSeason>();
     public DbSet<WorkEpisode> WorkEpisodes => Set<WorkEpisode>();
     public DbSet<WorkTrack> WorkTracks => Set<WorkTrack>();
+    public DbSet<MusicRecording> MusicRecordings => Set<MusicRecording>();
 
     // Music (manager MVP): artists own album Works; albums add their provider identity and monitoring to the Work row.
     public DbSet<MusicArtist> MusicArtists => Set<MusicArtist>();
     public DbSet<MusicAlbum> MusicAlbums => Set<MusicAlbum>();
     public DbSet<WorkVolume> WorkVolumes => Set<WorkVolume>();
     public DbSet<WorkChapter> WorkChapters => Set<WorkChapter>();
+    public DbSet<WorkUnitBinding> WorkUnitBindings => Set<WorkUnitBinding>();
     public DbSet<WorkEdition> WorkEditions => Set<WorkEdition>();
     public DbSet<WorkVersion> WorkVersions => Set<WorkVersion>();
     public DbSet<WorkFieldProvenance> WorkFieldProvenance => Set<WorkFieldProvenance>();
@@ -167,6 +176,34 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.PasswordHash).HasMaxLength(1024);
             entity.Property(x => x.Role).HasConversion<int>();
             entity.HasIndex(x => x.NormalizedUserName).IsUnique();
+        });
+
+        modelBuilder.Entity<AccountLoginIdentity>(entity =>
+        {
+            entity.HasKey(x => new { x.Provider, x.ExternalAccountId });
+            entity.Property(x => x.AccountId).HasMaxLength(32);
+            entity.Property(x => x.Provider).HasMaxLength(40);
+            entity.Property(x => x.ExternalAccountId).HasMaxLength(160);
+            entity.HasOne<OwnerAccount>()
+                .WithMany()
+                .HasForeignKey(x => x.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.AccountId, x.Provider }).IsUnique();
+        });
+
+        modelBuilder.Entity<PlexLoginAttempt>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ClientIdentifier).HasMaxLength(120);
+            entity.Property(x => x.BrowserNonceHash).HasMaxLength(64);
+            entity.Property(x => x.StartedAccountId).HasMaxLength(32);
+            entity.Property(x => x.VerifiedPlexAccountId).HasMaxLength(160);
+            entity.Property(x => x.ReturnPath).HasMaxLength(512);
+            entity.HasOne<OwnerAccount>()
+                .WithMany()
+                .HasForeignKey(x => x.StartedAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => x.ExpiresAtUtc);
         });
 
         modelBuilder.Entity<LibraryRoot>(entity =>
@@ -317,6 +354,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasIndex(x => new { x.WorkId, x.WorkEpisodeId, x.Kind });
         });
 
+        modelBuilder.Entity<WantedItem>(entity =>
+        {
+            entity.ToTable("WantedItems", table =>
+            {
+                table.HasCheckConstraint("CK_WantedItems_TargetKind", "\"TargetKind\" >= 0 AND \"TargetKind\" <= 6");
+                table.HasCheckConstraint("CK_WantedItems_WorkTargetHasNoNode", "(\"TargetKind\" = 0) = (\"TargetId\" IS NULL)");
+            });
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.TargetKind).HasConversion<short>();
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(x => new { x.WorkId, x.TargetKind, x.TargetId }).IsUnique().AreNullsDistinct(false);
+            entity.HasIndex(x => new { x.TargetKind, x.TargetId });
+        });
+
         modelBuilder.Entity<StoredFile>(entity =>
         {
             entity.ToTable("StoredFiles", table =>
@@ -443,11 +494,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
         modelBuilder.Entity<ProfilePlaybackPreferences>(entity =>
         {
+            entity.ToTable("ProfilePlaybackPreferences", table =>
+            {
+                table.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleSizePercent", "\"SubtitleSizePercent\" BETWEEN 75 AND 200");
+                table.HasCheckConstraint("CK_ProfilePlaybackPreferences_SubtitleOffsetMs", "\"SubtitleOffsetMs\" BETWEEN -10000 AND 10000");
+            });
             entity.HasKey(x => x.ProfileId);
             entity.Property(x => x.ProfileId).HasMaxLength(80);
             entity.Property(x => x.PreferredAudioLanguage).HasMaxLength(16);
             entity.Property(x => x.PreferredSubtitleLanguage).HasMaxLength(16);
+            entity.Property(x => x.PreferredSecondarySubtitleLanguage).HasMaxLength(16);
             entity.Property(x => x.DefaultPlaybackSpeed).HasDefaultValue(PlaybackPreferenceRules.DefaultSpeed);
+            entity.Property(x => x.SubtitleSizePercent).HasDefaultValue(100);
+            entity.Property(x => x.SubtitleOffsetMs).HasDefaultValue(0);
         });
 
         LearningCourseModelConfiguration.Configure(modelBuilder);
@@ -543,6 +602,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasOne<NovelWork>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.WorkId, x.Number }).IsUnique();
             entity.HasIndex(x => new { x.WorkId, x.SourceKey }).IsUnique();
+        });
+
+        modelBuilder.Entity<NovelVolumeEdition>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ContentHash).HasMaxLength(64);
+            entity.Property(x => x.FileName).HasMaxLength(500);
+            entity.Property(x => x.StoragePath).HasMaxLength(2048);
+            entity.Property(x => x.Quality).HasMaxLength(40);
+            entity.HasOne<NovelVolume>().WithMany().HasForeignKey(x => x.VolumeId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.VolumeId, x.ContentHash }).IsUnique();
         });
 
         modelBuilder.Entity<NovelChapter>(entity =>
@@ -715,6 +785,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.MediaType).HasConversion<int>();
             entity.Property(x => x.CanonicalTitle).HasMaxLength(1000);
             entity.HasIndex(x => x.MediaType);
+            entity.HasIndex(x => x.IsAnime).HasFilter("\"IsAnime\"");
         });
 
         modelBuilder.Entity<WorkTitle>(entity =>
@@ -777,9 +848,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Title).HasMaxLength(500);
-            entity.Property(x => x.MusicBrainzRecordingId).HasMaxLength(64);
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<MusicRecording>().WithMany().HasForeignKey(x => x.MusicRecordingId).OnDelete(DeleteBehavior.NoAction);
             entity.HasIndex(x => new { x.WorkId, x.Disc, x.Number }).IsUnique();
+            entity.HasIndex(x => x.MusicRecordingId);
+        });
+
+        modelBuilder.Entity<AudiobookEditionMetadata>(entity =>
+        {
+            entity.HasKey(x => x.EditionId);
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.ExternalId).HasMaxLength(200);
+            entity.Property(x => x.Title).HasMaxLength(500);
+            entity.Property(x => x.Asin).HasMaxLength(16);
+            entity.Property(x => x.CoverUrl).HasMaxLength(2048);
+            entity.Property(x => x.SourceUrl).HasMaxLength(2048);
+            entity.HasOne<WorkEdition>().WithOne().HasForeignKey<AudiobookEditionMetadata>(x => x.EditionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MusicRecording>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.MusicBrainzId).HasMaxLength(64);
+            entity.Property(x => x.Title).HasMaxLength(500);
+            entity.HasIndex(x => x.MusicBrainzId).IsUnique();
         });
 
         modelBuilder.Entity<MusicArtist>(entity =>
@@ -789,7 +881,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.SortName).HasMaxLength(300);
             entity.Property(x => x.MusicBrainzId).HasMaxLength(64);
             entity.Property(x => x.AddedByProfileId).HasMaxLength(64);
-            entity.Property(x => x.Monitor).HasConversion<int>();
             entity.HasIndex(x => x.MusicBrainzId).IsUnique().HasFilter("\"MusicBrainzId\" IS NOT NULL");
             entity.HasIndex(x => x.SortName);
         });
@@ -799,27 +890,53 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(x => x.WorkId);
             entity.Property(x => x.Type).HasConversion<int>();
             entity.Property(x => x.MusicBrainzReleaseGroupId).HasMaxLength(64);
+            entity.Property(x => x.MusicBrainzReleaseId).HasMaxLength(64);
             entity.HasOne<Work>().WithOne().HasForeignKey<MusicAlbum>(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<MusicArtist>().WithMany().HasForeignKey(x => x.ArtistId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => x.MusicBrainzReleaseGroupId).IsUnique().HasFilter("\"MusicBrainzReleaseGroupId\" IS NOT NULL");
-            entity.HasIndex(x => new { x.ArtistId, x.Monitored });
         });
 
         modelBuilder.Entity<WorkVolume>(entity =>
         {
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Title).HasMaxLength(500);
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.ExternalId).HasMaxLength(200);
+            entity.ToTable("WorkVolumes", table => table.HasCheckConstraint("CK_WorkVolumes_Identity", "(\"Provider\" IS NULL) = (\"ExternalId\" IS NULL)"));
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.WorkId, x.Number }).IsUnique();
+            entity.HasIndex(x => new { x.WorkId, x.Provider, x.ExternalId }).IsUnique().HasFilter("\"ExternalId\" IS NOT NULL");
         });
 
         modelBuilder.Entity<WorkChapter>(entity =>
         {
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Title).HasMaxLength(500);
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.ExternalId).HasMaxLength(200);
+            entity.ToTable("WorkChapters", table => table.HasCheckConstraint("CK_WorkChapters_Identity", "(\"Provider\" IS NULL) = (\"ExternalId\" IS NULL)"));
             entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<WorkVolume>().WithMany().HasForeignKey(x => x.VolumeId).OnDelete(DeleteBehavior.SetNull);
             entity.HasIndex(x => new { x.WorkId, x.Number }).IsUnique();
+            entity.HasIndex(x => new { x.WorkId, x.Provider, x.ExternalId }).IsUnique().HasFilter("\"ExternalId\" IS NOT NULL");
+        });
+
+        modelBuilder.Entity<WorkUnitBinding>(entity =>
+        {
+            entity.ToTable("WorkUnitBindings", table => table.HasCheckConstraint("CK_WorkUnitBindings_OneUnit", "(\"WorkVolumeId\" IS NULL) <> (\"WorkChapterId\" IS NULL)"));
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.LocalKind).HasConversion<short>();
+            entity.Property(x => x.LocalId).HasMaxLength(64);
+            entity.HasOne<Work>().WithMany().HasForeignKey(x => x.WorkId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<WorkVolume>().WithMany().HasForeignKey(x => x.WorkVolumeId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<WorkChapter>().WithMany().HasForeignKey(x => x.WorkChapterId).OnDelete(DeleteBehavior.Cascade);
+            // One local unit can cover several canonical ones (a package of chapters 17-24), but covers each only once.
+            entity.HasIndex(x => new { x.LocalKind, x.LocalId, x.WorkChapterId }).IsUnique().HasFilter("\"WorkChapterId\" IS NOT NULL");
+            entity.HasIndex(x => new { x.LocalKind, x.LocalId, x.WorkVolumeId }).IsUnique().HasFilter("\"WorkVolumeId\" IS NOT NULL");
+            entity.HasIndex(x => new { x.LocalKind, x.LocalId });
+            entity.HasIndex(x => x.WorkVolumeId);
+            entity.HasIndex(x => x.WorkChapterId);
+            entity.HasIndex(x => x.WorkId);
         });
 
         modelBuilder.Entity<WorkEdition>(entity =>

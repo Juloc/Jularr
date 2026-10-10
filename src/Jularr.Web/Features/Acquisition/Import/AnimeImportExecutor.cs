@@ -33,10 +33,17 @@ public sealed record AnimeImportActionResult(
 /// then reconciles that anime folder through the library scanner. Uncertain or failed files become
 /// manual-intervention records the owner resolves on the acquisition overview.
 /// </summary>
+/// <summary>
+/// What a completed anime download was grabbed for: the anime and its episodes, and the job id that ownership and the import record know it by. It comes from the
+/// acquisition relation of a download the old pipeline started, or from the request whose payload names the episodes of a shared download.
+/// </summary>
+public sealed record AnimeDownloadTarget(Guid JobId, string AnimeKey, string AnimeTitle, IReadOnlyList<AnimeEpisodeKey> Episodes, string? ProfileId);
+
 public sealed class AnimeImportExecutor(
     AppDbContext db,
+    AcquisitionAccessStore requests,
+    AnimeQualityProfileStore profiles,
     AnimeImportStore imports,
-    SabnzbdAcquisitionStore acquisitions,
     AcquisitionOwnershipStore ownershipStore,
     SonarrObservationService observation,
     AnimeAcquisitionInventory inventory,
@@ -70,7 +77,19 @@ public sealed class AnimeImportExecutor(
         ExecutionGate.Wait(0) ? new ExecutionLease() : null;
 
     public static bool IsAnimeDownload(OperationSnapshot operation) =>
-        string.Equals(operation.Kind, SabnzbdAcquisitionService.OperationKind, StringComparison.Ordinal);
+        operation.Kind is AnimeAcquisitionEngine.LegacyOperationKind or AnimeAcquisitionEngine.OperationKind;
+
+    // The request that owns the download's operation names its episodes.
+    private async Task<AnimeDownloadTarget?> ResolveTargetAsync(OperationSnapshot download, CancellationToken cancellationToken)
+    {
+        if (await requests.FindByOperationAsync(download.Id, cancellationToken) is not { } request || AnimeRequestPayload.Of(request) is not { AnimeKey: { Length: > 0 } key, Episodes: { Count: > 0 } episodes })
+        {
+            return null;
+        }
+
+        var anime = await db.Anime.AsNoTracking().FirstOrDefaultAsync(item => item.Key == key, cancellationToken);
+        return anime is null ? null : new AnimeDownloadTarget(download.Id, key, anime.Title, episodes, (await profiles.ResolveAsync(anime.Id, cancellationToken)).Id);
+    }
 
     public MediaAcquisitionKind Kind =>
         MediaAcquisitionKind.Anime;
@@ -176,12 +195,12 @@ public sealed class AnimeImportExecutor(
         }
 
         var now = DateTimeOffset.UtcNow;
-        var acquisition = (await acquisitions.FindByOperationAsync(download.Id, cancellationToken))?.Acquisition;
+        var acquisition = await ResolveTargetAsync(download, cancellationToken);
         var record = existing ?? new AnimeImportRecord(
             Guid.NewGuid(),
             download.Id,
             null,
-            acquisition?.Id,
+            acquisition?.JobId,
             acquisition?.AnimeKey ?? "",
             acquisition?.AnimeTitle ?? download.Subject ?? "Anime",
             storagePath ?? existing?.DownloadPath,
@@ -207,7 +226,7 @@ public sealed class AnimeImportExecutor(
                 OperationKind,
                 OperationCategory,
                 "Anime import",
-                $"{acquisition.AnimeTitle} · {SabnzbdAcquisitionService.FormatEpisodes(acquisition.Episodes)}",
+                $"{acquisition.AnimeTitle} · {AnimeAcquisitionPipeline.FormatEpisodes(acquisition.Episodes)}",
                 acquisition.ProfileId,
                 OperationLane.Normal,
                 Retryable: false),
@@ -389,6 +408,12 @@ public sealed class AnimeImportExecutor(
             cancellationToken);
         await RecordOnDownloadAsync(finished, cancellationToken);
 
+        // The request that waited for this decision goes on: the next Wanted pass reads the imported record and completes or continues it.
+        if (finished.Status == AnimeImportStatus.Imported && await requests.FindByOperationAsync(record.DownloadOperationId, cancellationToken) is { Status: AcquisitionRequestStatus.Failed } blocked)
+        {
+            await requests.TryTransitionStatusAsync(blocked.Id, [AcquisitionRequestStatus.Failed], AcquisitionRequestStatus.Importing, "The owner imported the download.", record.DownloadOperationId, cancellationToken);
+        }
+
         return executed.Status == AnimeImportFileStatus.Imported
             ? new(true, $"Imported as S{seasonNumber:00}E{episodeNumber:00}.")
             : new(false, executed.Error ?? "Manual import did not complete.");
@@ -429,7 +454,7 @@ public sealed class AnimeImportExecutor(
 
     private async Task<AnimeImportRecord> PlanAndExecuteAsync(
         AnimeImportRecord record,
-        SabnzbdAcquisition acquisition,
+        AnimeDownloadTarget acquisition,
         OperationSnapshot download,
         Guid operationId,
         CompletedDownloadImportRequest? request,
@@ -490,7 +515,7 @@ public sealed class AnimeImportExecutor(
             .ToArray();
 
         var snapshot = await observation.GetSnapshotAsync(forceRefresh: true, cancellationToken);
-        var jobId = acquisition.Id.ToString();
+        var jobId = acquisition.JobId.ToString();
         var monitoringState = await monitoring.LoadAsync(cancellationToken);
         var preferredRootId = monitoringState.Anime.TryGetValue(acquisition.AnimeKey, out var monitorSettings)
             ? monitorSettings.TargetRootId

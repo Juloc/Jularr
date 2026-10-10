@@ -1,4 +1,4 @@
-@page "{workId:guid}"
+@page "{workId:long}"
 @model Jularr.Web.Pages.Admin.Music.AlbumModel
 @using Jularr.Web.Features.Music
 @using Jularr.Web.Features.Watchlist
@@ -26,7 +26,7 @@
     </div>
 </header>
 
-<partial name="_AdminNavigation" model="Model.Ui" />
+<partial name="_AdminSectionLinks" />
 
 @if (Model.Notice is not null)
 {

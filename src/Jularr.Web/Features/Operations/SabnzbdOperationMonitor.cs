@@ -166,7 +166,6 @@ public sealed class SabnzbdOperationMonitorService(
         CancellationToken stoppingToken)
     {
         await Task.Yield();
-        await RecoverAcquisitionsAsync(stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -263,7 +262,7 @@ public sealed class SabnzbdOperationMonitorService(
             {
                 if (!configured.TryGetValue(selectedClientId, out entry!))
                 {
-                    await FailRemovedClientDownloadsAsync(services, store, group.ToArray(), cancellationToken);
+                    await FailRemovedClientDownloadsAsync(store, group.ToArray(), cancellationToken);
                     continue;
                 }
 
@@ -346,28 +345,22 @@ public sealed class SabnzbdOperationMonitorService(
             nowUtc,
             cancellationToken);
 
-        await ImportCompletedAnimeDownloadsAsync(services, result.Completed, cancellationToken);
-        await ContinueFailedAnimeAcquisitionsAsync(services, result.Failed, cancellationToken);
     }
 
     private async Task FailRemovedClientDownloadsAsync(
-        IServiceProvider services,
         OperationStore store,
         IReadOnlyList<OperationSnapshot> groupOperations,
         CancellationToken cancellationToken)
     {
-        var failed = new List<SabnzbdProjectedFailure>();
         foreach (var operation in groupOperations)
         {
             await store.MarkFailedAsync(operation.Id, RemovedClientMessage, cancellationToken);
             await SabnzbdOperationProjector.RecordFailureKindAsync(store, operation, SabnzbdFailureKind.Lost, cancellationToken);
-            failed.Add(new SabnzbdProjectedFailure(operation, SabnzbdFailureKind.Lost, RemovedClientMessage));
         }
 
         logger.LogWarning(
             "Failed {Count} SABnzbd downloads because their download client was removed.",
-            failed.Count);
-        await ContinueFailedAnimeAcquisitionsAsync(services, failed, cancellationToken);
+            groupOperations.Count);
     }
 
     private bool ShouldWarn(string key, DateTime nowUtc)
@@ -386,130 +379,5 @@ public sealed class SabnzbdOperationMonitorService(
             ? details!.ClientEntryId
             : null;
 
-    private async Task ImportCompletedAnimeDownloadsAsync(
-        IServiceProvider services,
-        IReadOnlyList<OperationSnapshot> completed,
-        CancellationToken cancellationToken)
-    {
-        var modules = services.GetService<IInstanceModuleService>();
-        if (modules is not null
-            && !await modules.IsEnabledAsync(
-                InstanceModule.Anime,
-                cancellationToken))
-        {
-            return;
-        }
 
-        foreach (var operation in completed.Where(AnimeImportExecutor.IsAnimeDownload))
-        {
-            try
-            {
-                // The shared import step: the exact download client's completed path, the Anime
-                // remote path mapping, then the Anime importer behind the dispatcher.
-                await services.GetRequiredService<CompletedDownloadImportService>()
-                    .ImportAsync(
-                        operation,
-                        MediaAcquisitionKind.Anime,
-                        request: null,
-                        DateTime.UtcNow,
-                        cancellationToken);
-            }
-            catch (Exception exception) when (
-                exception is InvalidOperationException
-                    or InvalidDataException
-                    or IOException
-                    or UnauthorizedAccessException)
-            {
-                // The import executor recovers unfinished imports on the next start.
-                logger.LogWarning(
-                    exception,
-                    "Could not import the completed anime download of operation {OperationId}.",
-                    operation.Id);
-            }
-        }
-    }
-
-    private async Task RecoverAcquisitionsAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var modules = scope.ServiceProvider.GetService<IInstanceModuleService>();
-            if (modules is not null)
-            {
-                var instance = await modules.GetAsync(cancellationToken);
-                if (!instance.IsEnabled(InstanceModule.Acquisition)
-                    || !instance.IsEnabled(InstanceModule.Anime))
-                {
-                    return;
-                }
-            }
-
-            var advanced = await scope.ServiceProvider
-                .GetRequiredService<SabnzbdAcquisitionService>()
-                .RecoverAsync(cancellationToken);
-            if (advanced > 0)
-            {
-                logger.LogInformation(
-                    "Resumed {Count} anime acquisitions whose SABnzbd download failed before the restart.",
-                    advanced);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(
-                exception,
-                "Could not recover SABnzbd anime acquisitions after startup.");
-        }
-    }
-
-    private async Task ContinueFailedAnimeAcquisitionsAsync(
-        IServiceProvider services,
-        IReadOnlyList<SabnzbdProjectedFailure> failures,
-        CancellationToken cancellationToken)
-    {
-        var modules = services.GetService<IInstanceModuleService>();
-        if (modules is not null
-            && !await modules.IsEnabledAsync(
-                InstanceModule.Anime,
-                cancellationToken))
-        {
-            return;
-        }
-
-        var animeFailures = failures
-            .Where(failure => failure.Operation.Kind == SabnzbdAcquisitionService.OperationKind)
-            .ToArray();
-        if (animeFailures.Length == 0)
-        {
-            return;
-        }
-
-        var acquisitions = services.GetRequiredService<SabnzbdAcquisitionService>();
-        foreach (var failure in animeFailures)
-        {
-            try
-            {
-                await acquisitions.HandleFailedAsync(
-                    failure.Operation.Id,
-                    failure.FailureKind,
-                    failure.Reason,
-                    cancellationToken);
-            }
-            catch (Exception exception) when (
-                exception is InvalidOperationException
-                    or InvalidDataException
-                    or IOException)
-            {
-                // RecoverAsync retries this acquisition on the next start.
-                logger.LogWarning(
-                    exception,
-                    "Could not continue the anime acquisition after SABnzbd operation {OperationId} failed.",
-                    failure.Operation.Id);
-            }
-        }
-    }
 }

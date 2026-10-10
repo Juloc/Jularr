@@ -28,14 +28,14 @@ public sealed class CollectionFactsProvider(
 
     /// <summary>Fact snapshots for a specific set of works, used to render a collection's stored membership.</summary>
     public Task<IReadOnlyList<WorkFactSnapshot>> BuildForWorksAsync(
-        IReadOnlyCollection<Guid> workIds,
+        IReadOnlyCollection<long> workIds,
         CancellationToken cancellationToken) =>
         workIds.Count == 0
             ? Task.FromResult<IReadOnlyList<WorkFactSnapshot>>([])
             : BuildAsync(workIds, cancellationToken);
 
     private async Task<IReadOnlyList<WorkFactSnapshot>> BuildAsync(
-        IReadOnlyCollection<Guid>? workIds,
+        IReadOnlyCollection<long>? workIds,
         CancellationToken cancellationToken)
     {
         var query = db.Works.AsNoTracking().AsQueryable();

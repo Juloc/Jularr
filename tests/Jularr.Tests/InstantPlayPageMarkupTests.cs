@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -52,8 +53,8 @@ public sealed partial class InstantPlayPageMarkupTests
         return Whitespace().Replace(Tags().Replace(withoutCode, " "), " ");
     }
 
-    private static string MoviePayload(Guid workId, string extra = "") =>
-        $$"""{"workId":"{{workId}}","title":"Film","year":2024,"scope":0,"selectedEpisodeIds":[],"monitorFuture":false{{extra}} }""";
+    private static string MoviePayload(long workId, string extra = "") =>
+        $$"""{"workId":"{{workId}}","title":"Film","year":2024{{extra}} }""";
 
     private static Task<AcquisitionRequest> OpenRequestAsync(VideoDetailPageTestHost host, MediaAcquisitionKind kind, string tmdbId, AcquisitionRequestStatus status, string? payload = null) =>
         new AcquisitionAccessStore(host.Db).CreateAsync(new AcquisitionRequestDraft(kind, "tmdb", tmdbId, "Title", null, null, payload), "someone-else", status, "owner", CancellationToken.None);
@@ -326,13 +327,16 @@ public sealed partial class InstantPlayPageMarkupTests
     public async Task AnAvailableManagerOnlyTitleWithMonitoringShowsBothStatesWithoutAPlayer()
     {
         await using var host = await ReadyHostAsync();
-        var movie = await AddTitleAsync(host, WorkMediaType.Movie, "Moon Empire", "603");
-        await new LibraryCanonicalSeed(host.Db).AddVideoAsync(movie, null);
-        var payload = MoviePayload(movie.Id, ",\"nextSearchUtc\":\"2099-01-01T00:00:00Z\"").Replace("\"monitorFuture\":false", "\"monitorFuture\":true", StringComparison.Ordinal);
-        await OpenRequestAsync(host, MediaAcquisitionKind.Movie, "603", AcquisitionRequestStatus.Approved, payload);
+        var series = await AddTitleAsync(host, WorkMediaType.Series, "Moon Empire", "603");
+        var seed = new LibraryCanonicalSeed(host.Db);
+        var episode = await seed.AddEpisodeAsync(series, 1, 1);
+        await seed.AddVideoAsync(series, episode);
+        var payload = MoviePayload(series.Id, ",\"nextSearchUtc\":\"2099-01-01T00:00:00Z\"");
+        await OpenRequestAsync(host, MediaAcquisitionKind.Tv, "603", AcquisitionRequestStatus.Approved, payload);
+        await MonitoringTestSupport.Commands(host.Db).SetWorkAsync(series.Id, true, CancellationToken.None);
         await host.Modules.SetAsync(InstanceModule.Playback, false);
 
-        var hero = VisibleText(Hero(await host.GetOkAsync($"/Library/Movie/{movie.Id}", asOwner: true)));
+        var hero = VisibleText(Hero(await host.GetOkAsync($"/Library/Series/{series.Id}", asOwner: true)));
 
         StringAssert.Contains(hero, "Available");
         StringAssert.Contains(hero, "Monitoring future releases");
@@ -371,9 +375,9 @@ public sealed partial class InstantPlayPageMarkupTests
         var source = File.ReadAllText(Path.Combine(PlayerControlsTests.RepositoryRoot(), "src", "Jularr.Web", "wwwroot", "js", "instant-play.js"));
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var view = new ConsumerAcquisitionView(ConsumerAcquisitionState.GettingMedia, ConsumerMediaUnit.Episode, 42, true);
-        var target = new ClientVideoTarget(Guid.NewGuid(), Guid.NewGuid());
+        var target = new ClientVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), Guid.NewGuid());
         var intent = JsonDocument.Parse(JsonSerializer.Serialize(new ClientPlaybackIntentResponse(PlaybackIntentOutcome.Acquiring, target, Guid.NewGuid(), view), options)).RootElement;
-        var status = JsonDocument.Parse(JsonSerializer.Serialize(new ClientRequestStatusResponse(Guid.NewGuid(), new ClientVideoTarget(Guid.NewGuid(), null), view), options)).RootElement;
+        var status = JsonDocument.Parse(JsonSerializer.Serialize(new ClientRequestStatusResponse(Guid.NewGuid(), new ClientVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), null), view), options)).RootElement;
 
         CollectionAssert.AreEquivalent(new[] { "outcome", "target", "requestId", "acquisition" }, intent.EnumerateObject().Select(x => x.Name).ToArray());
         CollectionAssert.AreEquivalent(new[] { "requestId", "target", "acquisition" }, status.EnumerateObject().Select(x => x.Name).ToArray());

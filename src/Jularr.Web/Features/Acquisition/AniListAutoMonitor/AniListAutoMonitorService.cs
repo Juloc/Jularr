@@ -20,6 +20,7 @@ public sealed class AniListAutoMonitorService(
     AniListAutoMonitorSettingsStore settingsStore,
     AcquisitionOwnershipStore ownershipStore,
     AnimeMonitoringStore monitoringStore,
+    AnimeMonitoring animeMonitoring,
     AnimeAcquisitionPipeline pipeline,
     IServiceProvider services,
     IHttpClientFactory httpClientFactory,
@@ -87,6 +88,7 @@ public sealed class AniListAutoMonitorService(
 
         var ownership = await ownershipStore.LoadAsync(cancellationToken);
         var monitoring = await monitoringStore.LoadAsync(cancellationToken);
+        var views = await animeMonitoring.LoadAsync([.. anime.Values.Select(entry => entry.Key)], cancellationToken);
         var notes = new List<string>();
         var newlyMonitored = 0;
 
@@ -104,7 +106,7 @@ public sealed class AniListAutoMonitorService(
             }
 
             var existing = monitoring.Anime.TryGetValue(entry.Key, out var settings) ? settings : null;
-            if (existing?.Monitored == true)
+            if (views[entry.Key].IsWorkMonitored)
             {
                 continue;
             }

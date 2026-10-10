@@ -15,7 +15,10 @@ namespace Jularr.Web.Pages.Account;
 
 [AllowAnonymous]
 [EnableRateLimiting("login")]
-public sealed class LoginModel(OwnerAuthService ownerAuth, SecurityEventLog securityEvents) : PageModel
+public sealed class LoginModel(
+    OwnerAuthService ownerAuth,
+    SecurityEventLog securityEvents,
+    Jularr.Web.Features.Plex.PlexIdentitySettingsStore plexSettings) : PageModel
 {
     [BindProperty]
     [Required]
@@ -35,6 +38,8 @@ public sealed class LoginModel(OwnerAuthService ownerAuth, SecurityEventLog secu
 
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
 
+    public bool PlexLoginEnabled { get; private set; }
+
     public async Task<IActionResult> OnGetAsync(
         [FromServices] AppDbContext db,
         CancellationToken cancellationToken)
@@ -52,6 +57,7 @@ public sealed class LoginModel(OwnerAuthService ownerAuth, SecurityEventLog secu
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        PlexLoginEnabled = (await plexSettings.GetAsync(cancellationToken)).CanLogin;
         return Page();
     }
 
@@ -67,6 +73,7 @@ public sealed class LoginModel(OwnerAuthService ownerAuth, SecurityEventLog secu
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
+        PlexLoginEnabled = (await plexSettings.GetAsync(cancellationToken)).CanLogin;
         if (!ModelState.IsValid)
         {
             AccountForm.LocalizeFieldErrors(ModelState, new Dictionary<string, string>

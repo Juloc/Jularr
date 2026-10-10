@@ -133,9 +133,9 @@ public sealed class PlaybackStreamSession(
     public Guid Id { get; } = id;
     public string ProfileId { get; } = profileId;
     public PlaybackVideoTarget Target { get; } = target;
-    public Guid WorkId => Target.WorkId;
+    public long WorkId => Target.WorkId;
     public Guid? WorkEpisodeId => Target.WorkEpisodeId;
-    public Guid TargetId => Target.IdentityId;
+    public Guid TargetId => Target.WorkEpisodeId ?? mediaFileId;
     public Guid? LegacyEpisodeId { get; } = legacyEpisodeId;
 
     /// <summary>
@@ -317,27 +317,6 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time)
     public event Action<PlaybackStreamSession>? Removed;
 
     public int Count => sessions.Count;
-
-    /// <summary>Legacy Anime/test compatibility overload. New playback orchestration supplies a canonical target.</summary>
-    public PlaybackStreamSession Create(
-        string profileId,
-        Guid episodeId,
-        Guid mediaFileId,
-        string sourcePath,
-        double? durationSeconds,
-        PlaybackPlan plan,
-        PlaybackStreamSelections selections,
-        Guid? replaces = null) =>
-        Create(
-            profileId,
-            new PlaybackVideoTarget(episodeId, episodeId),
-            mediaFileId,
-            sourcePath,
-            durationSeconds,
-            plan,
-            selections,
-            replaces,
-            episodeId);
 
     public PlaybackStreamSession Create(
         string profileId,

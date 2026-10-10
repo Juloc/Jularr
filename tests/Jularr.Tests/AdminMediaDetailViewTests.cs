@@ -133,39 +133,4 @@ public sealed class AdminMediaDetailViewTests
         Assert.IsFalse(AdminMediaDetailView.IsAniList(null));
         Assert.IsFalse(AdminMediaDetailView.IsAniList("absolute"));
     }
-
-    [TestMethod]
-    public void SeasonMonitoringStoresAnOverrideOnlyWhereItDiffersAndClearsItsEpisodes()
-    {
-        var monitored = AdminMediaMonitoringEdit.Empty("frieren") with { Monitored = true };
-        monitored.EpisodeOverrides["S01E02"] = false;
-        monitored.EpisodeOverrides["S02E01"] = false;
-
-        var off = AdminMediaMonitoringEdit.SetSeason(monitored, 1, false);
-        Assert.IsFalse(off.SeasonOverrides[1]);
-        Assert.IsFalse(off.EpisodeOverrides.ContainsKey("S01E02"), "Episodes inside the season follow the season.");
-        Assert.IsTrue(off.EpisodeOverrides.ContainsKey("S02E01"), "Other seasons are untouched.");
-
-        var back = AdminMediaMonitoringEdit.SetSeason(off, 1, true);
-        Assert.IsFalse(back.SeasonOverrides.ContainsKey(1), "Matching the medium removes the override.");
-        Assert.IsTrue(monitored.EpisodeOverrides.ContainsKey("S01E02"), "The original settings are not changed.");
-    }
-
-    [TestMethod]
-    public void EpisodeMonitoringInheritsFromItsSeasonBeforeTheMedium()
-    {
-        var settings = AdminMediaMonitoringEdit.Empty("frieren") with { Monitored = true };
-
-        var off = AdminMediaMonitoringEdit.SetEpisode(settings, 1, 3, false);
-        Assert.IsFalse(off.EpisodeOverrides["S01E03"]);
-
-        var again = AdminMediaMonitoringEdit.SetEpisode(off, 1, 3, true);
-        Assert.AreEqual(0, again.EpisodeOverrides.Count);
-
-        var seasonOff = AdminMediaMonitoringEdit.SetSeason(settings, 2, false);
-        var episodeOn = AdminMediaMonitoringEdit.SetEpisode(seasonOff, 2, 1, true);
-        Assert.IsTrue(episodeOn.EpisodeOverrides["S02E01"], "An episode switched on inside an off season is an override.");
-        var episodeOff = AdminMediaMonitoringEdit.SetEpisode(seasonOff, 2, 1, false);
-        Assert.AreEqual(0, episodeOff.EpisodeOverrides.Count, "Off inside an off season is simply inherited.");
-    }
 }

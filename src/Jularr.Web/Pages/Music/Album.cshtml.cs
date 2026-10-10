@@ -29,7 +29,7 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, AcquisitionReq
 
     public string? Error => TempData["MusicError"] as string;
 
-    public async Task<IActionResult> OnGetAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(long workId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         View = await query.GetAlbumAsync(workId, cancellationToken);
@@ -46,7 +46,7 @@ public sealed class AlbumModel(AppDbContext db, MusicQuery query, AcquisitionReq
         return Page();
     }
 
-    public async Task<IActionResult> OnPostRequestAsync(Guid workId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostRequestAsync(long workId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var view = await query.GetAlbumAsync(workId, cancellationToken);

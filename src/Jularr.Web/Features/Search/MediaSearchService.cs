@@ -36,7 +36,7 @@ namespace Jularr.Web.Features.Search;
 /// </summary>
 public sealed class MediaSearchService(
     AppDbContext db,
-    MonitoringStore monitoring,
+    AnimeMonitoring animeMonitoring,
     AcquisitionAccessStore requests,
     IInstanceModuleService? instanceModules = null)
 {
@@ -97,7 +97,7 @@ public sealed class MediaSearchService(
 
         var (workOf, workYear) = await ResolveWorksAsync(variants, cancellationToken);
         var groups = MediaSearchGrouping.Group(variants, workOf);
-        var variantFacts = await new MediaSearchFactsLoader(db, monitoring, requests)
+        var variantFacts = await new MediaSearchFactsLoader(db, animeMonitoring, requests)
             .LoadAsync(variants, cancellationToken);
 
         var works = groups
@@ -154,11 +154,11 @@ public sealed class MediaSearchService(
 
     // The canonical work each variant is bridged to (media core WorkSourceLink) and the year the work
     // itself carries, in one query for every candidate.
-    private async Task<(Dictionary<(MediaSearchType Type, Guid Id), Guid> WorkOf, Dictionary<Guid, int?> Years)>
+    private async Task<(Dictionary<(MediaSearchType Type, Guid Id), long> WorkOf, Dictionary<long, int?> Years)>
         ResolveWorksAsync(IReadOnlyCollection<MediaSearchVariant> variants, CancellationToken cancellationToken)
     {
-        var workOf = new Dictionary<(MediaSearchType, Guid), Guid>();
-        var years = new Dictionary<Guid, int?>();
+        var workOf = new Dictionary<(MediaSearchType, Guid), long>();
+        var years = new Dictionary<long, int?>();
         if (variants.Count == 0)
         {
             return (workOf, years);

@@ -34,7 +34,7 @@ public sealed class InstantPlayPlaybackGateTests
         "/stream-sessions/{sessionId:guid}", "/stream-sessions/{sessionId:guid}/stream", "/stream-sessions/{sessionId:guid}/hls",
         "/stream-sessions/{sessionId:guid}/hls/{hlsSessionId:guid}/{fileName}", "/stream-sessions/{sessionId:guid}/telemetry",
         "/offline/media/{mediaFileId:guid}/content",
-        "/Library/Watch/{workId:guid}/{episodeId:guid?}", "/Library/Episode/{id:guid}", "/Library/Episode/{id:guid}/segments"
+        "/Library/Watch/{workId:long}/{episodeId:guid?}", "/Library/Episode/{id:guid}", "/Library/Episode/{id:guid}/segments"
     ];
 
     /// <summary>
@@ -62,7 +62,7 @@ public sealed class InstantPlayPlaybackGateTests
         "/offline-library/works/{workId:guid}/manifest", "/offline-library/chapters/{chapterId:guid}", "/offline-library/assets/{volumeId:guid}/{asset}", "/offline-library/sync",
         "/offline/packages/options", "/offline/packages/preview",
         "/offline-media/{kind}/{id:guid}/manifest", "/offline-media/{kind}/{id:guid}/resources/{resourceId}",
-        "/Library", "/Library/Anime/{id:guid}", "/Library/AnimeRepair/{id:guid}", "/Library/Movie/{workId:guid}", "/Library/Series/{workId:guid}",
+        "/Library", "/Library/Anime/{id:guid}", "/Library/AnimeRepair/{id:guid}", "/Library/Movie/{workId:long}", "/Library/Series/{workId:long}",
         "/Library/Index", "/Library/PresentationGroups/{id:guid}", "/Library/Rename/{id:guid}",
         "/pairing/start", "/pairing/poll", "/pairing/approve",
         "/playback-sessions/", "/playback-sessions/pair", "/playback-sessions/{sessionId:guid}", "/playback-sessions/{sessionId:guid}/commands", "/playback-sessions/{sessionId:guid}/pairing",

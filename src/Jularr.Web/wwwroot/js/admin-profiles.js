@@ -1,4 +1,4 @@
-// Admin Acquisition Profiles: reorders and adds the ranked qualities and adds or removes rules and waiting steps. Every control posts through the
+// Admin Acquisition Profiles: reorders and adds the ranked qualities and adds, reorders or removes rules. Every control posts through the
 // ordinary form fields, so what the server saves is exactly what is on the page; without this script the stored rows stay editable in place.
 (() => {
     const form = document.querySelector(".admprofiles-form");
@@ -29,22 +29,6 @@
         }
     };
 
-    const syncScore = (select) => {
-        const row = select.closest("[data-rule-row]");
-        const score = row?.querySelector("[data-rule-score]");
-        if (score) {
-            score.disabled = !["Prefer", "Avoid"].includes(select.value);
-        }
-    };
-
-    form.querySelectorAll("[data-rule-effect]").forEach(syncScore);
-
-    form.addEventListener("change", (event) => {
-        if (event.target instanceof HTMLSelectElement && event.target.matches("[data-rule-effect]")) {
-            syncScore(event.target);
-        }
-    });
-
     form.addEventListener("click", (event) => {
         const target = event.target instanceof Element ? event.target.closest("button") : null;
         if (!target) {
@@ -52,7 +36,7 @@
         }
 
         if (target.dataset.move) {
-            const row = target.closest("li");
+            const row = target.closest("li, [data-rule-row]");
             const neighbour = target.dataset.move === "up" ? row.previousElementSibling : row.nextElementSibling;
             if (neighbour) {
                 target.dataset.move === "up" ? neighbour.before(row) : neighbour.after(row);
@@ -85,19 +69,14 @@
             syncUnranked();
             row.querySelector("[data-move]").focus();
         } else if ("removeRow" in target.dataset) {
-            target.closest("[data-rule-row], [data-tier-row]")?.remove();
+            target.closest("[data-rule-row]")?.remove();
         } else if ("repeatAdd" in target.dataset) {
             const wrapper = target.closest("[data-repeat]");
             const index = Number(wrapper.dataset.next);
-            const row = wrapper.querySelector("template[data-repeat-template]").content.querySelector("[data-rule-row], [data-tier-row]").cloneNode(true);
+            const row = wrapper.querySelector("template[data-repeat-template]").content.querySelector("[data-rule-row]").cloneNode(true);
             replaceToken(row, "__index__", String(index));
             wrapper.dataset.next = String(index + 1);
             wrapper.querySelector("[data-repeat-list]").append(row);
-            const select = row.querySelector("[data-rule-effect]");
-            if (select) {
-                syncScore(select);
-            }
-
             row.querySelector("input:not([type=hidden]), select")?.focus();
         }
     });

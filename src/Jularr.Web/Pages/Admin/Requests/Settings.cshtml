@@ -1,0 +1,75 @@
+@page
+@model Jularr.Web.Pages.Admin.Requests.SettingsModel
+@using Jularr.Web.Features.Acquisition.Access
+@{
+    var ui = Model.Ui;
+    var settings = Model.RequestSettings;
+    ViewData["Title"] = ui["admin.requests.section.rules"];
+    ViewData["AdminSectionRoot"] = "/Admin/Requests";
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/request-rule-editor.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-requests.js" asp-append-version="true" defer></script>
+    <script src="~/js/request-rule-editor.js" asp-append-version="true" defer></script>
+}
+<partial name="_AdminSectionLinks" />
+<div asp-validation-summary="All" class="validation"></div>
+<div class="admreq rre-workspace @(Model.Request.Query.ContainsKey("id") ? "rre-mobile-editor" : "")" data-rre-workspace>
+    <section class="panel rre-list" aria-label="@ui["requestRules.profiles"]">
+        <div class="rre-list-head"><strong>@ui["requestRules.profiles"]</strong><button type="button" class="button button-primary" data-rre-new>@ui["requestRules.add"]</button></div>
+        @foreach (var rule in settings.Rules.Profiles)
+        {
+            <article class="rre-profile @(rule.Id == Model.Editor.Id ? "is-selected" : "")" data-rre-profile="@rule.Id">
+                <button class="rre-profile-select" type="button" data-rre-select="@rule.Id" aria-pressed="@(rule.Id == Model.Editor.Id ? "true" : "false")">
+                    <span class="rre-profile-name">@rule.Name @if (rule.Id == settings.Rules.DefaultId) { <span class="status-pill">@ui["requestRules.default"]</span> }</span>
+                    <span class="rre-profile-summary"><span>@(rule.Values.Limit is { } limit ? ui.Format("requestRules.limitSummary", ("count", limit), ("days", rule.Values.PeriodDays)) : ui["requestRules.unlimited"])</span><span>@ui[rule.Values.Approval == RequestApprovalMode.Manual ? "requestRules.manual" : "requestRules.automatic"]</span></span>
+                    @{ var mediaSummary = string.Join(" · ", rule.Values.Kinds.Where(Model.EnabledKinds.Contains).Select(kind => ui["admin.requests.kind." + AcquisitionAccessNames.Kind(kind)])); }
+                    <span class="muted rre-profile-media" title="@mediaSummary">@mediaSummary</span>
+                </button>
+                <div class="rre-profile-actions">
+                    <form method="post" asp-page-handler="Duplicate" data-rre-mutation>
+                        <input type="hidden" name="id" value="@rule.Id" /><input type="hidden" name="revision" value="@settings.Revision" />
+                        <button class="button button-secondary" type="submit" aria-label="@ui["requestRules.duplicate"]" title="@ui["requestRules.duplicate"]"><partial name="_AppIcon" model="@("copy")" /></button>
+                    </form>
+                    @if (rule.Id != settings.Rules.DefaultId)
+                    {
+                        <form method="post" asp-page-handler="Default" data-rre-mutation>
+                            <input type="hidden" name="id" value="@rule.Id" /><input type="hidden" name="revision" value="@settings.Revision" />
+                            <button class="button button-secondary" type="submit" aria-label="@ui["requestRules.makeDefault"]" title="@ui["requestRules.makeDefault"]"><partial name="_AppIcon" model="@("default")" /></button>
+                        </form>
+                        <form method="post" asp-page-handler="Delete" data-rre-delete data-confirm="@ui["requestRules.deleteConfirm"]">
+                            <input type="hidden" name="id" value="@rule.Id" /><input type="hidden" name="revision" value="@settings.Revision" />
+                            <input type="hidden" name="confirmReassignment" value="true" />
+                            <button class="button button-secondary" type="submit" aria-label="@ui["requestRules.delete"]" title="@ui["requestRules.delete"]"><partial name="_AppIcon" model="@("delete")" /></button>
+                        </form>
+                    }
+                </div>
+            </article>
+        }
+    </section>
+    <partial name="_RequestRuleEditor" model="new RequestRuleEditorView(ui, Model.Editor, settings, Model.EnabledKinds, Model.EnabledKinds, Model.QualityProfiles)" />
+</div>
+@if (settings.Rules.HasApprovalTransition)
+{
+    <section class="panel rre-transition" aria-label="@ui["requestRules.transition"]">
+        <strong>@ui["requestRules.transition"]</strong>
+        <p class="muted">@ui["requestRules.transitionHelp"]</p>
+        <ul>
+            @foreach (var rule in settings.AutoApprovalRules)
+            {
+                <li><strong>@rule.Name</strong> · @(rule.Enabled ? ui["common.yes"] : ui["common.no"]) · @(rule.Quota is { } quota ? ui.Format("admin.requests.autoQuotaText", ("count", quota.MaxRequests), ("days", quota.PeriodDays)) : ui["admin.requests.autoNoLimit"])
+                    <span class="muted">@(rule.Kinds.Count == 0 ? ui["admin.requests.autoAllMedia"] : string.Join(", ", rule.Kinds.Select(kind => ui["admin.requests.kind." + AcquisitionAccessNames.Kind(kind)]))) · @(rule.ProfileIds.Count == 0 ? ui["admin.requests.autoEveryone"] : string.Join(", ", rule.ProfileIds))</span>
+                </li>
+            }
+        </ul>
+        <form method="post" asp-page-handler="FinishTransition" data-rre-mutation>
+            <input type="hidden" name="revision" value="@settings.Revision" />
+            <label class="rre-check"><input type="checkbox" name="confirmed" value="true" required /> @ui["requestRules.transitionConfirm"]</label>
+            <button class="button button-secondary" type="submit">@ui["requestRules.finishTransition"]</button>
+        </form>
+    </section>
+}
+<p class="muted rre-capabilities-link"><a href="/Admin/Capabilities/Manual">@ui["admin.requests.policiesHeading"]</a></p>

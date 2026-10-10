@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Monitoring;
@@ -61,17 +62,6 @@ public sealed class VideoUpgradeTests
         Assert.AreEqual(UpgradeState.Final, UpgradePolicy.Assess(s_profile with { UpgradeAllowed = false }, "WEB-720p").State);
         Assert.IsTrue(UpgradePolicy.Assess(s_profile with { UpgradeCutoffQuality = "BLURAY-1080p" }, "WEB-1080p").IsUpgradable, "Raising the cutoff makes the installed quality upgradable again.");
         Assert.AreEqual(UpgradeState.Final, UpgradePolicy.Assess(s_profile with { UpgradeCutoffQuality = null }, "BLURAY-1080p").State, "Without a cutoff the best quality of the profile is final.");
-    }
-
-    [TestMethod]
-    public void AQualityOnlyAFallbackTierAllowedIsTemporaryEvenWhenTheProfileDoesNotUpgrade()
-    {
-        var strict = s_profile with { AllowedQualities = ["WEB-1080p", "BLURAY-1080p"], UpgradeAllowed = false, FallbackTiers = [new FallbackTier(60, ["WEB-720p"])] };
-
-        Assert.IsTrue(UpgradePolicy.Assess(strict, "WEB-720p").IsUpgradable, "A temporary acceptance stays wanted for the profile's own qualities.");
-        Assert.IsTrue(UpgradePolicy.IsUpgrade(strict, "WEB-720p", "WEB-1080p"));
-        Assert.AreEqual(UpgradeState.Final, UpgradePolicy.Assess(strict, "WEB-1080p").State);
-        Assert.IsFalse(UpgradePolicy.IsUpgrade(strict, "WEB-1080p", "BLURAY-1080p"), "A profile that does not upgrade keeps what it accepted.");
     }
 
     [TestMethod]
@@ -152,12 +142,57 @@ public sealed class VideoUpgradeTests
         world.Indexer.Publish(DuneLow);
         var request = await world.RequestAsync(DuneTmdb, "Dune");
         await ImportAsync(world, request, DuneLow, size: 4);
-        var wanted = new WantedListService(world.Requests, new AnimeMonitoringStore(Path.Combine(Path.GetTempPath(), "jularr-wanted-" + Guid.NewGuid().ToString("N"))), world.Services.GetRequiredService<QualityProfileStore>(), world.Db, new VideoRequestWorkResolver(world.Db), [], world.Clock);
+        var wanted = new WantedListService(world.Requests, world.Services.GetRequiredService<QualityProfileStore>(), world.Db, new VideoRequestWorkResolver(world.Db), new MonitoringResolver(world.Db), [], world.Clock);
 
         var row = Assert.ContainsSingle(await wanted.LoadAsync(CancellationToken.None));
 
         Assert.IsTrue(row.IsUpgrade, "The movie is installed, so the row is an upgrade, not a missing title.");
         Assert.AreEqual(MediaAcquisitionKind.Movie, row.Kind);
+    }
+
+    [TestMethod]
+    public async Task AnInstalledMovieIsQueuedWhileItsProfileWantsMoreAndLeavesTheQueueWhenTheProfileIsSatisfied()
+    {
+        await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());
+        world.Indexer.Publish(DuneLow);
+        var request = await world.RequestAsync(DuneTmdb, "Dune");
+        await ImportAsync(world, request, DuneLow, size: 4);
+        var workId = await world.Db.Works.AsNoTracking().Select(work => work.Id).SingleAsync();
+        var reconciler = world.Services.GetRequiredService<WantedReconciler>();
+
+        await reconciler.ReconcileAsync(workId, CancellationToken.None);
+        var queued = Assert.ContainsSingle(await world.Db.WantedItems.AsNoTracking().ToListAsync());
+        Assert.AreEqual((workId, (Guid?)null), (queued.WorkId, queued.TargetId), "720p is below the cutoff, so the installed movie is queued as an upgrade.");
+        Assert.IsEmpty(await reconciler.WorksWithoutOpenRequestAsync(MediaAcquisitionKind.Movie, 0, 10, CancellationToken.None), "Nothing is missing, so no new request is opened for it.");
+
+        var store = world.Services.GetRequiredService<QualityProfileStore>();
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Movie, null)) with { UpgradeCutoffQuality = "WEB-720p" });
+        await reconciler.ReconcileAsync(workId, CancellationToken.None);
+        Assert.IsEmpty(await world.Db.WantedItems.AsNoTracking().ToListAsync(), "A profile the installed quality satisfies leaves the queue.");
+
+        await store.UpsertAsync((await store.ResolveAsync(MediaAcquisitionKind.Movie, null)) with { UpgradeCutoffQuality = "BLURAY-1080p" });
+        var page = await reconciler.ReconcileUpgradesAsync(MediaAcquisitionKind.Movie, 0, 10, CancellationToken.None);
+        Assert.AreEqual(workId, Assert.ContainsSingle(page.Works));
+        Assert.IsTrue(page.ReachedEnd);
+        Assert.AreEqual(workId, Assert.ContainsSingle(await world.Db.WantedItems.AsNoTracking().ToListAsync()).WorkId, "The upgrade scan queues what a raised cutoff makes upgradable.");
+    }
+
+    [TestMethod]
+    public async Task AnInstalledMovieThatWasNeverRequestedIsRequestedOnceWhenItsProfileWantsBetter()
+    {
+        await using var world = await VideoRequestToPlayWorld.CreateAsync(MediaAcquisitionKind.Movie, Tmdb());
+        world.Indexer.Publish(DuneLow);
+        var request = await world.RequestAsync(DuneTmdb, "Dune");
+        await ImportAsync(world, request, DuneLow, size: 4);
+        await world.Db.Database.ExecuteSqlRawAsync("""DELETE FROM "RequestTargets"; DELETE FROM "AcquisitionRequests";""");
+        var reconciler = world.Services.GetRequiredService<WantedReconciler>();
+        var source = new VideoWantedSource(MediaAcquisitionKind.Movie, reconciler, ActivatorUtilities.CreateInstance<VideoMonitoringService>(world.Services));
+        var workId = await world.Db.Works.AsNoTracking().Select(work => work.Id).SingleAsync();
+        await reconciler.ReconcileAsync(workId, CancellationToken.None);
+
+        Assert.AreEqual(1, await source.PrepareAsync(world.Clock.UtcNow, CancellationToken.None), "The library movie is upgradable and has no request, so the canonical lifecycle gets one.");
+        Assert.AreEqual(0, await source.PrepareAsync(world.Clock.UtcNow, CancellationToken.None), "The open request carries it.");
+        Assert.AreEqual(1, (await world.Requests.ListAllAsync(10, CancellationToken.None)).Count(open => open.IsOpen));
     }
 
     [TestMethod]
@@ -204,7 +239,7 @@ public sealed class VideoUpgradeTests
         Assert.AreEqual(IncomingVideoVerdict.Upgrade, (await installed.JudgeIncomingAsync(MediaAcquisitionKind.Movie, workId, null, "WEB-1080p", CancellationToken.None)).Verdict);
         Assert.AreEqual(IncomingVideoVerdict.ExistingPreferred, (await installed.JudgeIncomingAsync(MediaAcquisitionKind.Movie, workId, null, "HDTV-720p", CancellationToken.None)).Verdict);
         Assert.AreEqual(IncomingVideoVerdict.Undecidable, (await installed.JudgeIncomingAsync(MediaAcquisitionKind.Movie, workId, null, null, CancellationToken.None)).Verdict);
-        Assert.AreEqual(IncomingVideoVerdict.NothingInstalled, (await installed.JudgeIncomingAsync(MediaAcquisitionKind.Movie, Guid.NewGuid(), null, "WEB-1080p", CancellationToken.None)).Verdict);
+        Assert.AreEqual(IncomingVideoVerdict.NothingInstalled, (await installed.JudgeIncomingAsync(MediaAcquisitionKind.Movie, Random.Shared.NextInt64(1, long.MaxValue), null, "WEB-1080p", CancellationToken.None)).Verdict);
     }
 
     [TestMethod]
@@ -240,16 +275,33 @@ public sealed class VideoUpgradeTests
     }
 
     [TestMethod]
+    public void AnUpgradeScanIsDueAtOnceWhileTheLibraryIsNotFinishedAndWhenTheProfilesChanged()
+    {
+        var scans = new UpgradeScanState();
+        var now = DateTime.UtcNow;
+        var written = now.AddDays(-1);
+
+        Assert.IsTrue(scans.TryStart(MediaAcquisitionKind.Movie, now, UpgradeScanState.Interval, written));
+        Assert.IsFalse(scans.TryStart(MediaAcquisitionKind.Movie, now.AddMinutes(2), UpgradeScanState.Interval, written), "A finished scan waits for the interval.");
+        scans.Continue(MediaAcquisitionKind.Movie, Random.Shared.NextInt64(1, long.MaxValue), reachedEnd: false);
+        Assert.IsTrue(scans.TryStart(MediaAcquisitionKind.Movie, now.AddMinutes(2), UpgradeScanState.Interval, written), "An unfinished library continues at the next pass.");
+
+        scans.Continue(MediaAcquisitionKind.Movie, Random.Shared.NextInt64(1, long.MaxValue), reachedEnd: true);
+        Assert.IsTrue(scans.TryStart(MediaAcquisitionKind.Movie, now.AddMinutes(4), UpgradeScanState.Interval, now), "Changed profiles start the scan over without waiting.");
+        Assert.AreEqual(0L, scans.CursorOf(MediaAcquisitionKind.Movie));
+    }
+
+    [TestMethod]
     public void AnUpgradeScanContinuesAfterTheTitlesItLookedAtAndStartsOverAtTheEndOfTheLibrary()
     {
         var scans = new UpgradeScanState();
-        var last = Guid.NewGuid();
+        var last = Random.Shared.NextInt64(1, long.MaxValue);
 
-        Assert.AreEqual(Guid.Empty, scans.CursorOf(MediaAcquisitionKind.Movie), "The first scan starts at the beginning.");
+        Assert.AreEqual(0L, scans.CursorOf(MediaAcquisitionKind.Movie), "The first scan starts at the beginning.");
         scans.Continue(MediaAcquisitionKind.Movie, last, reachedEnd: false);
         Assert.AreEqual(last, scans.CursorOf(MediaAcquisitionKind.Movie), "A full scan leaves the next one to continue after its last title.");
-        Assert.AreEqual(Guid.Empty, scans.CursorOf(MediaAcquisitionKind.Tv), "Every media type walks its own library.");
+        Assert.AreEqual(0L, scans.CursorOf(MediaAcquisitionKind.Tv), "Every media type walks its own library.");
         scans.Continue(MediaAcquisitionKind.Movie, last, reachedEnd: true);
-        Assert.AreEqual(Guid.Empty, scans.CursorOf(MediaAcquisitionKind.Movie), "Reaching the end starts the library over, so a title is never skipped for good.");
+        Assert.AreEqual(0L, scans.CursorOf(MediaAcquisitionKind.Movie), "Reaching the end starts the library over, so a title is never skipped for good.");
     }
 }

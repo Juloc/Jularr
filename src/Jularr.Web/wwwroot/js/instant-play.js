@@ -723,7 +723,7 @@
         };
 
         wait = createWait({
-            target: { workId: root.dataset.ipWorkId, workEpisodeId: root.dataset.ipEpisodeId || null },
+            target: { workId: Number(root.dataset.ipWorkId), workEpisodeId: root.dataset.ipEpisodeId || null },
             api: createApi({ intentUrl: root.dataset.ipIntentUrl, statusUrl: root.dataset.ipStatusUrl, fetchImpl: (...args) => window.fetch(...args), timers }),
             timers,
             isVisible: () => document.visibilityState !== "hidden",
@@ -769,7 +769,7 @@
 
         const mediaUnit = root.dataset.ipUnit || "media";
         const wait = createWait({
-            target: { workId: root.dataset.ipWorkId, workEpisodeId: root.dataset.ipEpisodeId || null },
+            target: { workId: Number(root.dataset.ipWorkId), workEpisodeId: root.dataset.ipEpisodeId || null },
             requestId: root.dataset.ipRequestId,
             observeOnly: true,
             api: createApi({ intentUrl: "", statusUrl: root.dataset.ipStatusUrl, fetchImpl: (...args) => window.fetch(...args), timers }),

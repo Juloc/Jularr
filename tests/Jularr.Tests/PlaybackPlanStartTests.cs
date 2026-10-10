@@ -33,6 +33,7 @@ public sealed partial class PlaybackPlanStartTests
     {
         await using var fixture = await MediaInventoryFixture.CreateAsync();
         var media = await fixture.AddMediaAsync("episode.mkv", new byte[4096]);
+        await fixture.BridgeEpisodeAsync(media);
         fixture.Root.WakeOnLanEnabled = true;
         fixture.Root.WakeMacAddress = "AA:BB:CC:DD:EE:FF";
         await fixture.Db.SaveChangesAsync();
@@ -217,7 +218,7 @@ public sealed partial class PlaybackPlanStartTests
         Assert.AreEqual(PlaybackTransport.Hls, plan.Transport);
         return new PlaybackStreamSessionStore(TimeProvider.System).Create(
             "reader",
-            Guid.NewGuid(),
+            new PlaybackVideoTarget(1, Guid.NewGuid()),
             Guid.NewGuid(),
             "/media/episode.mkv",
             1420,

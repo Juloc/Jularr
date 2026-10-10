@@ -23,6 +23,14 @@ import de.juloc.jularr.core.model.TtsPreferences
 import de.juloc.jularr.core.model.TtsPreferencesUpdate
 import de.juloc.jularr.core.model.WatchlistItem
 
+data class WatchlistPage(
+    val items: List<WatchlistItem>,
+    val page: Int,
+    val pageSize: Int,
+    val totalCount: Long,
+    val hasMore: Boolean,
+)
+
 interface JularrClientApi {
     suspend fun getCapabilities(): ClientCapabilities
     suspend fun login(credentials: ClientLogin): ClientAccount
@@ -36,8 +44,7 @@ interface JularrClientApi {
     /** `GET /me/playback-history`: past playback entries, most recent first. */
     suspend fun getPlaybackHistory(): List<PlaybackHistoryItem>
 
-    /** `GET /watchlist`: the signed-in profile's followed works. */
-    suspend fun getWatchlist(): List<WatchlistItem>
+    suspend fun getWatchlistPage(page: Int = 1, pageSize: Int = 25): WatchlistPage
 
     suspend fun getAnime(animeId: String): AnimeDetail
     suspend fun getEpisode(episodeId: String): EpisodeDetail

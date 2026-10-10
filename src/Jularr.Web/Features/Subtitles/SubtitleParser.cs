@@ -68,60 +68,207 @@ public static partial class SubtitleParser
     {
         var normalized = content.Replace("\r\n", "\n").Replace('\r', '\n');
         var result = new List<SubtitleCueData>();
-        string[]? format = null;
-        var inEvents = false;
+        var styles = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        string[]? styleFormat = null;
+        string[]? eventFormat = null;
+        var section = "";
+        var playResX = 0;
+        var playResY = 0;
 
         foreach (var rawLine in normalized.Split('\n'))
         {
             var line = rawLine.Trim();
             if (line.StartsWith("[", StringComparison.Ordinal))
             {
-                inEvents = line.Equals("[Events]", StringComparison.OrdinalIgnoreCase);
+                section = line;
                 continue;
             }
 
-            if (!inEvents)
+            if (section.Equals("[Script Info]", StringComparison.OrdinalIgnoreCase))
+            {
+                if (line.StartsWith("PlayResX:", StringComparison.OrdinalIgnoreCase))
+                {
+                    int.TryParse(line["PlayResX:".Length..].Trim(), CultureInfo.InvariantCulture, out playResX);
+                }
+                else if (line.StartsWith("PlayResY:", StringComparison.OrdinalIgnoreCase))
+                {
+                    int.TryParse(line["PlayResY:".Length..].Trim(), CultureInfo.InvariantCulture, out playResY);
+                }
+                continue;
+            }
+
+            if (section.Equals("[V4+ Styles]", StringComparison.OrdinalIgnoreCase) ||
+                section.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase))
+            {
+                if (line.StartsWith("Format:", StringComparison.OrdinalIgnoreCase))
+                {
+                    styleFormat = line["Format:".Length..].Split(',', StringSplitOptions.TrimEntries);
+                }
+                else if (styleFormat is not null && line.StartsWith("Style:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fields = line["Style:".Length..].Split(',', styleFormat.Length, StringSplitOptions.TrimEntries);
+                    var style = ReadFields(styleFormat, fields);
+                    if (section.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase) &&
+                        style.TryGetValue("Alignment", out var legacyValue) &&
+                        int.TryParse(legacyValue, CultureInfo.InvariantCulture, out var legacyAlignment))
+                    {
+                        style["Alignment"] = MapLegacyAlignment(legacyAlignment)?.ToString(CultureInfo.InvariantCulture) ?? "";
+                    }
+                    if (style.TryGetValue("Name", out var name) && !string.IsNullOrWhiteSpace(name))
+                    {
+                        styles[name] = style;
+                    }
+                }
+                continue;
+            }
+
+            if (!section.Equals("[Events]", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
             if (line.StartsWith("Format:", StringComparison.OrdinalIgnoreCase))
             {
-                format = line["Format:".Length..]
-                    .Split(',', StringSplitOptions.TrimEntries);
+                eventFormat = line["Format:".Length..].Split(',', StringSplitOptions.TrimEntries);
                 continue;
             }
 
-            if (format is null || !line.StartsWith("Dialogue:", StringComparison.OrdinalIgnoreCase))
+            if (eventFormat is null || !line.StartsWith("Dialogue:", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            var values = line["Dialogue:".Length..].Split(',', format.Length, StringSplitOptions.None);
-            if (values.Length != format.Length)
+            var values = line["Dialogue:".Length..].Split(',', eventFormat.Length, StringSplitOptions.None);
+            var fieldsByName = ReadFields(eventFormat, values);
+            if (!fieldsByName.TryGetValue("Start", out var from) ||
+                !fieldsByName.TryGetValue("End", out var to) ||
+                !fieldsByName.TryGetValue("Text", out var rawText) ||
+                !TryParseTimestamp(from, out var start) ||
+                !TryParseTimestamp(to, out var end))
             {
                 continue;
             }
 
-            var startIndex = Array.FindIndex(format, x => x.Equals("Start", StringComparison.OrdinalIgnoreCase));
-            var endIndex = Array.FindIndex(format, x => x.Equals("End", StringComparison.OrdinalIgnoreCase));
-            var textIndex = Array.FindIndex(format, x => x.Equals("Text", StringComparison.OrdinalIgnoreCase));
-            if (startIndex < 0 || endIndex < 0 || textIndex < 0 ||
-                !TryParseTimestamp(values[startIndex], out var start) ||
-                !TryParseTimestamp(values[endIndex], out var end))
+            var text = CleanText(rawText.Replace("\\N", " ", StringComparison.OrdinalIgnoreCase))
+                .Replace("\\h", "\u00A0", StringComparison.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(text))
             {
                 continue;
             }
 
-            var text = CleanText(values[textIndex].Replace("\\N", " ", StringComparison.OrdinalIgnoreCase));
-            if (text.Length > 0)
+            fieldsByName.TryGetValue("Style", out var styleName);
+            styles.TryGetValue(styleName ?? "", out var styleFields);
+            var alignment = ReadInt(styleFields, "Alignment");
+            var alignmentTags = Regex.Matches(rawText, @"\\an([1-9])|\\a(1[01]|[1-9])(?!\d)", RegexOptions.CultureInvariant);
+            if (alignmentTags.Count > 0)
             {
-                result.Add(new SubtitleCueData(start, end, text));
+                var lastTag = alignmentTags[^1];
+                alignment = lastTag.Groups[1].Success
+                    ? int.Parse(lastTag.Groups[1].Value, CultureInfo.InvariantCulture)
+                    : MapLegacyAlignment(int.Parse(lastTag.Groups[2].Value, CultureInfo.InvariantCulture));
             }
+            if (alignment is < 1 or > 9)
+            {
+                alignment = null;
+            }
+
+            double? xPercent = null;
+            double? yPercent = null;
+            var position = Regex.Match(
+                rawText,
+                @"\\pos\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)",
+                RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+            if (position.Success && playResX > 0 && playResY > 0 &&
+                double.TryParse(position.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var x) &&
+                double.TryParse(position.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
+            {
+                var px = x * 100d / playResX;
+                var py = y * 100d / playResY;
+                if (double.IsFinite(px) && double.IsFinite(py) &&
+                    px is >= 0 and <= 100 && py is >= 0 and <= 100)
+                {
+                    xPercent = px;
+                    yPercent = py;
+                }
+            }
+
+            var layer = ReadInt(fieldsByName, "Layer");
+            var bold = ReadAssFlag(styleFields, "Bold");
+            var italic = ReadAssFlag(styleFields, "Italic");
+            var boldOverride = Regex.Match(rawText, @"\\b([01])", RegexOptions.CultureInvariant);
+            var italicOverride = Regex.Match(rawText, @"\\i([01])", RegexOptions.CultureInvariant);
+            if (boldOverride.Success) bold = boldOverride.Groups[1].Value == "1";
+            if (italicOverride.Success) italic = italicOverride.Groups[1].Value == "1";
+
+            string? fontFamily = null;
+            double? fontSize = null;
+            string? color = null;
+            if (styleFields is not null)
+            {
+                if (styleFields.TryGetValue("Fontname", out var font) && font.Length <= 100)
+                {
+                    fontFamily = font;
+                }
+                if (styleFields.TryGetValue("Fontsize", out var size) &&
+                    double.TryParse(size, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedSize) &&
+                    double.IsFinite(parsedSize) && parsedSize is >= 6 and <= 150)
+                {
+                    fontSize = parsedSize;
+                }
+                if (styleFields.TryGetValue("PrimaryColour", out var assColor))
+                {
+                    var hex = assColor.Trim().TrimStart('&').TrimEnd('&').TrimStart('H', 'h');
+                    if ((hex.Length == 6 || hex.Length == 8) && hex.All(Uri.IsHexDigit))
+                    {
+                        hex = hex[^6..];
+                        color = $"#{hex[4..6]}{hex[2..4]}{hex[..2]}";
+                    }
+                }
+            }
+
+            var presentation = alignment is not null || xPercent is not null || layer is not null ||
+                bold is not null || italic is not null || fontFamily is not null || fontSize is not null || color is not null
+                ? new SubtitleCuePresentation(alignment, xPercent, yPercent, layer,
+                    fontFamily, fontSize, bold, italic, color)
+                : null;
+            result.Add(new SubtitleCueData(start, end, text, presentation));
         }
 
         return result;
     }
+
+    private static int? MapLegacyAlignment(int value) =>
+        value switch
+        {
+            1 or 2 or 3 => value,
+            5 or 6 or 7 => value + 2,
+            9 or 10 or 11 => value - 5,
+            _ => null
+        };
+
+    private static Dictionary<string, string> ReadFields(string[] format, string[] values)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (values.Length != format.Length)
+        {
+            return result;
+        }
+
+        for (var index = 0; index < format.Length; index++)
+        {
+            result[format[index]] = values[index].Trim();
+        }
+        return result;
+    }
+
+    private static int? ReadInt(IReadOnlyDictionary<string, string>? fields, string key) =>
+        fields is not null && fields.TryGetValue(key, out var value) &&
+        int.TryParse(value, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private static bool? ReadAssFlag(IReadOnlyDictionary<string, string>? fields, string key) =>
+        ReadInt(fields, key) is { } value ? value != 0 : null;
 
     public static IReadOnlyList<SubtitleCueData> ParseVtt(string content)
     {

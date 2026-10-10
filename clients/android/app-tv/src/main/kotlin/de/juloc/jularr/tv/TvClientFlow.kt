@@ -4,6 +4,7 @@ import de.juloc.jularr.core.api.JularrClientApi
 import de.juloc.jularr.core.api.ApiCompatibility
 import de.juloc.jularr.core.api.ClientApiCompatibility
 import de.juloc.jularr.core.api.ClientApiRoutes
+import de.juloc.jularr.core.api.WatchlistPage
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientCapabilities
@@ -21,7 +22,6 @@ import de.juloc.jularr.core.model.PlaybackHistoryItem
 import de.juloc.jularr.core.model.PlayerBootstrap
 import de.juloc.jularr.core.model.RootAvailability
 import de.juloc.jularr.core.model.TermStateResult
-import de.juloc.jularr.core.model.WatchlistItem
 
 class TvClientFlow(
     private val apiFactory: (String) -> JularrClientApi,
@@ -127,8 +127,8 @@ class TvClientFlow(
     suspend fun loadPlaybackHistory(): List<PlaybackHistoryItem> =
         requireApi().getPlaybackHistory()
 
-    suspend fun loadWatchlist(): List<WatchlistItem> =
-        requireApi().getWatchlist()
+    suspend fun loadWatchlistPage(page: Int): WatchlistPage =
+        requireApi().getWatchlistPage(page, 25)
 
     suspend fun loadAnime(animeId: String): AnimeDetail =
         requireApi().getAnime(animeId)

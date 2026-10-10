@@ -41,7 +41,7 @@ public sealed record DiscoverRequestSettingsView(
     IReadOnlyList<VideoRequestSeason> Seasons,
     string? DefaultAudio,
     string? DefaultSubtitles,
-    VideoRequestPayload? SavedScope = null,
+    VideoRequestScopeChoice? SavedScope = null,
     string? ProfileId = null)
 {
     public bool OffersScope => Existing is null && Kind == MediaAcquisitionKind.Tv;
@@ -52,25 +52,25 @@ public sealed record DiscoverRequestSettingsView(
 public static class DiscoverRequestSummary
 {
     /// <summary>The exact series scope that was requested, in the words of the dialog's Scope control.</summary>
-    public static string Scope(VideoRequestPayload payload, UiTextBundle ui)
+    public static string Scope(VideoRequestScopeChoice choice, UiTextBundle ui)
     {
-        if (payload.Scope != VideoRequestScope.Custom)
+        if (choice.Scope != VideoRequestScope.Custom)
         {
-            return ui[payload.Scope == VideoRequestScope.FutureOnly ? "discover.request.scope.future" : "discover.request.scope.all"];
+            return ui[choice.Scope == VideoRequestScope.FutureOnly ? "discover.request.scope.future" : "discover.request.scope.all"];
         }
 
         List<string> parts = [ui["discover.request.scope.custom"]];
-        if (payload.SelectedSeasonIds is { Length: > 0 } seasons)
+        if (choice.SeasonIds.Count > 0)
         {
-            parts.Add(ui.Format("discover.request.summary.seasons", ("count", seasons.Length)));
+            parts.Add(ui.Format("discover.request.summary.seasons", ("count", choice.SeasonIds.Count)));
         }
 
-        if (payload.SelectedEpisodeIds.Length > 0)
+        if (choice.EpisodeIds.Count > 0)
         {
-            parts.Add(ui.Format("discover.request.summary.episodes", ("count", payload.SelectedEpisodeIds.Length)));
+            parts.Add(ui.Format("discover.request.summary.episodes", ("count", choice.EpisodeIds.Count)));
         }
 
-        if (payload.MonitorFuture)
+        if (choice.MonitorFuture)
         {
             parts.Add(ui["discover.request.summary.future"]);
         }

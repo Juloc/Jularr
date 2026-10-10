@@ -1,0 +1,16 @@
+@page "{workId:long}"
+@model Jularr.Web.Pages.Admin.Novels.WorkModel
+@{
+    ViewData["Title"] = Model.View.Title;
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-controls.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-media-detail.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-manga.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-settings.css" asp-append-version="true" />
+}
+@section Scripts {
+    <script src="~/js/admin-menu.js" asp-append-version="true" defer></script>
+}
+
+<partial name="_ReadingWork" model="Model" />

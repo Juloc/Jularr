@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Progress;
@@ -49,7 +50,6 @@ public enum PrimaryActionReason
     NoProviderIdentity,
     NotReleased,
     MonitoringStopped,
-    ExcludedFromRequest,
     NothingToWatch,
     UnknownTarget
 }
@@ -60,7 +60,7 @@ public enum PrimaryActionReason
 /// playback intent. <see cref="RequestIsAlternative"/> is set while a playback intent is the primary action of a missing target and the
 /// profile may still ask for it through the explicit Request action instead, which stays the one consumer acquisition action (section 12).
 /// </summary>
-public sealed record PrimaryAction(PrimaryActionKind Kind, PrimaryActionReason Reason, Guid WorkId, Guid? WorkEpisodeId, bool TargetIsLocal = false, bool IsRewatch = false, bool RequestIsAlternative = false);
+public sealed record PrimaryAction(PrimaryActionKind Kind, PrimaryActionReason Reason, long WorkId, Guid? WorkEpisodeId, bool TargetIsLocal = false, bool IsRewatch = false, bool RequestIsAlternative = false);
 
 /// <summary>
 /// What the instance, the profile and the policy allow for one media type: the capability chain of the Instant Play contract
@@ -76,15 +76,14 @@ public sealed record InstantPlayPolicy(bool MediaTypeEnabled, bool AcquisitionEn
 }
 
 /// <summary>
-/// The open request of a title (a title has at most one) as far as a playback intent depends on it: which episodes its scope covers, which
-/// an Admin excluded, whether monitoring is on and which units a profile already asked to watch. An Admin exclusion beats a playback intent.
+/// The open request of a title (a title has at most one) as far as a playback intent depends on it: which episodes are monitored, whether anything of
+/// the Work is monitored and which units a profile already asked to watch.
 /// </summary>
 public sealed record OpenRequestFacts(
     AcquisitionRequestStatus Status,
     bool Monitored,
     bool CoversWork,
     IReadOnlySet<Guid> CoveredEpisodeIds,
-    IReadOnlySet<Guid> ExcludedEpisodeIds,
     bool WorkPrioritized,
     IReadOnlySet<Guid> PrioritizedEpisodeIds)
 {
@@ -92,48 +91,37 @@ public sealed record OpenRequestFacts(
 
     public bool Covers(Guid? workEpisodeId) => workEpisodeId is { } id ? CoveredEpisodeIds.Contains(id) : CoversWork;
 
-    public bool IsExcluded(Guid? workEpisodeId) => workEpisodeId is { } id && ExcludedEpisodeIds.Contains(id);
-
     /// <summary>Whether a profile already asked to watch the unit, so it is searched and downloaded ahead of the rest.</summary>
     public bool IsPrioritized(Guid? workEpisodeId) => workEpisodeId is { } id ? PrioritizedEpisodeIds.Contains(id) : WorkPrioritized;
 
-    public static OpenRequestFacts ForMovie(AcquisitionRequest request, DateTime nowUtc)
-    {
-        var payload = VideoRequestPayload.Parse(request.PayloadJson);
-        return new OpenRequestFacts(request.Status, payload?.Monitored ?? true, true, new HashSet<Guid>(), new HashSet<Guid>(), payload?.IsPlaybackUnit(null, nowUtc) == true, new HashSet<Guid>());
-    }
+    /// <summary>A request that waits for approval, or that still carries the choice its first run applies, has applied no monitoring yet, so it is not "switched off".</summary>
+    private static bool IsMonitored(AcquisitionRequest request, WorkMonitoringView view) =>
+        request.Status == AcquisitionRequestStatus.Pending || VideoRequestPayload.Parse(request.PayloadJson)?.Requested is not null || view.IsAnyMonitored;
 
-    /// <summary>The episodes the request's scope includes, by the same <see cref="VideoRequestSelection"/> the executor uses.</summary>
-    public static OpenRequestFacts ForSeries(AcquisitionRequest request, VideoRequestSelection selection, IEnumerable<(Guid Id, Guid? SeasonId, DateTime? AiredAt)> episodes, DateTime nowUtc)
-    {
-        var payload = selection.Payload;
-        var all = episodes.ToArray();
-        var excludedSeasons = (payload.ExcludedSeasonIds ?? []).ToHashSet();
-        var selected = payload.SelectedEpisodeIds.ToHashSet();
-        var excluded = (payload.ExcludedEpisodeIds ?? [])
-            .Concat(all.Where(x => x.SeasonId is { } season && excludedSeasons.Contains(season) && !selected.Contains(x.Id)).Select(x => x.Id))
-            .ToHashSet();
-        return new OpenRequestFacts(
+    public static OpenRequestFacts ForMovie(AcquisitionRequest request, WorkMonitoringView view, DateTime nowUtc) =>
+        new(request.Status, IsMonitored(request, view), true, new HashSet<Guid>(), VideoRequestPayload.Parse(request.PayloadJson)?.IsPlaybackUnit(null, nowUtc) == true, new HashSet<Guid>());
+
+    /// <summary>The episodes the Work's monitoring covers, by the same decisions the executor reads.</summary>
+    public static OpenRequestFacts ForSeries(AcquisitionRequest request, WorkMonitoringView view, IEnumerable<(Guid Id, Guid? SeasonId, DateTime? AiredAt)> episodes, DateTime nowUtc) =>
+        new(
             request.Status,
-            payload.Monitored,
+            IsMonitored(request, view),
             false,
-            all.Where(x => selection.Includes(x.Id, x.SeasonId, x.AiredAt)).Select(x => x.Id).ToHashSet(),
-            excluded,
+            episodes.Where(x => view.IsMonitored(x.Id, x.SeasonId)).Select(x => x.Id).ToHashSet(),
             false,
-            payload.ActivePlaybackMarkers(nowUtc).Select(marker => marker.WorkEpisodeId).OfType<Guid>().ToHashSet());
-    }
+            (VideoRequestPayload.Parse(request.PayloadJson)?.ActivePlaybackMarkers(nowUtc) ?? []).Select(marker => marker.WorkEpisodeId).OfType<Guid>().ToHashSet());
 }
 
 /// <summary>The canonical facts about one Movie or Series Work and one profile that the primary action depends on.</summary>
 /// <param name="HasRequestIdentity">The provider identifies the title, so it can be requested.</param>
-public abstract record PlaybackFacts(Guid WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest);
+public abstract record PlaybackFacts(long WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest);
 
 /// <param name="IsReleased">Not announced for a later year: the only release knowledge a Work has is its year, so a movie of the current year counts as released.</param>
-public sealed record MoviePlaybackFacts(Guid WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest, bool HasMedia, MediaProgressSnapshot? Progress, bool IsReleased = true)
+public sealed record MoviePlaybackFacts(long WorkId, bool HasRequestIdentity, OpenRequestFacts? OpenRequest, bool HasMedia, MediaProgressSnapshot? Progress, bool IsReleased = true)
     : PlaybackFacts(WorkId, HasRequestIdentity, OpenRequest);
 
 public sealed record SeriesPlaybackFacts(
-    Guid WorkId,
+    long WorkId,
     bool HasRequestIdentity,
     OpenRequestFacts? OpenRequest,
     IReadOnlyList<SeriesUnit> Units,
@@ -231,21 +219,16 @@ public static class PrimaryActionResolver
 
     /// <summary>
     /// The target has no local media (<paramref name="hasTarget"/> is false when no episode needs playing now). An open request is
-    /// never duplicated and never bypassed; a playback intent may only add the target to one that is already approved, is monitored and has not excluded it.
+    /// never duplicated and never bypassed; a playback intent may only add the target to one that is already approved and monitored.
     /// </summary>
     private static PrimaryAction Missing(PlaybackFacts facts, Guid? episodeId, bool hasTarget, PrimaryActionKind instantKind, bool released, InstantPlayPolicy policy)
     {
         if (facts.OpenRequest is { } open)
         {
-            // Admin curation beats a playback intent: monitoring that was turned off or an episode that was unchecked is not searched.
+            // Monitoring that was turned off beats a playback intent: nothing of the title is searched.
             if (hasTarget && !open.Monitored)
             {
                 return None(facts, PrimaryActionReason.MonitoringStopped, episodeId);
-            }
-
-            if (hasTarget && open.IsExcluded(episodeId))
-            {
-                return None(facts, PrimaryActionReason.ExcludedFromRequest, episodeId);
             }
 
             // A unit the request does not cover yet, or covers without a profile waiting for it, takes the playback intent; it is never

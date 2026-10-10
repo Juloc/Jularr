@@ -20,6 +20,9 @@ public abstract record ReleaseRequestPayload
 
     public string? LastProblem { get; init; }
 
+    /// <summary>The title of the release most recently sent to the download client, so a page can say what a running download holds.</summary>
+    public string? GrabbedRelease { get; init; }
+
     /// <summary>
     /// Merges this payload (what a search computed from the request it read) into the payload stored now, so a field that another
     /// owner changed while the search ran is not written back stale. The default has no such fields and keeps this payload.
@@ -37,7 +40,7 @@ public abstract record ReleaseRequestPayload
 public sealed record ReleaseRequestCandidate(
     string Identity,
     string Title,
-    Uri DownloadUri,
+    Uri? DownloadUri,
     string? Source = null,
     string? ReleaseGroup = null);
 
@@ -45,7 +48,11 @@ public sealed record ReleaseRequestCandidate(
 public sealed record ReleaseRequestSubmission(
     bool Accepted,
     Guid? OperationId,
-    string Message);
+    string Message)
+{
+    /// <summary>Set when a direct source imported the candidate on the spot: the request ends there instead of waiting for a download.</summary>
+    public AcquisitionExecution? Completed { get; init; }
+}
 
 /// <summary>
 /// The one release-request lifecycle shared by every media type that searches Usenet for a
@@ -176,11 +183,17 @@ public sealed class ReleaseRequestTracker(
                 TriedReleases = triedReleases,
                 Searches = searches,
                 NextSearchUtc = null,
-                LastProblem = null
+                LastProblem = null,
+                GrabbedRelease = next.Title
             },
             cancellationToken);
 
         var outcome = await submit(next);
+        if (outcome.Accepted && outcome.Completed is not null)
+        {
+            return outcome.Completed;
+        }
+
         if (outcome.Accepted)
         {
             return new AcquisitionExecution(

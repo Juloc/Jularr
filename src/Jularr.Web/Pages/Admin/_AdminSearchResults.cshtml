@@ -1,0 +1,25 @@
+@model Jularr.Web.Pages.Admin.SearchModel
+@if (Model.Groups.Count == 0)
+{
+    <p class="admin-search-message">@Model.Ui[Model.Query.Length == 0 ? "admin.search.hint" : "admin.search.empty"]</p>
+}
+@foreach (var group in Model.Groups)
+{
+    <section class="admin-search-group" data-admin-search-group="@group.LabelKey">
+        <h2>@Model.Ui[group.LabelKey]</h2>
+        @foreach (var item in group.Items)
+        {
+            <a class="admin-search-result" href="@item.Href">
+                @if (item.IsUser)
+                {
+                    <span class="admin-search-avatar" aria-hidden="true">@System.Globalization.StringInfo.GetNextTextElement(item.Label).ToUpperInvariant()</span>
+                }
+                else
+                {
+                    <partial name="_AppIcon" model="item.Icon" />
+                }
+                <span>@item.Label</span>
+            </a>
+        }
+    </section>
+}

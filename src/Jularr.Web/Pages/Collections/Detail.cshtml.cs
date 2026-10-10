@@ -70,14 +70,14 @@ public sealed class DetailModel(
         }));
     }
 
-    public async Task<IActionResult> OnPostAddAsync(Guid id, Guid workId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostAddAsync(Guid id, long workId, CancellationToken cancellationToken)
     {
         var added = await collections.AddManualItemAsync(account.ProfileId, id, workId, cancellationToken);
         TempData["Status"] = added ? "Work added." : "Work is already in this collection.";
         return RedirectToPage(new { id });
     }
 
-    public async Task<IActionResult> OnPostRemoveAsync(Guid id, Guid workId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostRemoveAsync(Guid id, long workId, CancellationToken cancellationToken)
     {
         await collections.RemoveItemAsync(account.ProfileId, id, workId, cancellationToken);
         TempData["Status"] = "Work removed.";

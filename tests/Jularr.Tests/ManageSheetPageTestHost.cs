@@ -191,9 +191,7 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                             new DirectoryInfo(Path.Combine(dataDirectory.FullName, "quality-profiles"))));
                         services.AddSingleton(new AnimeImportStore(
                             new DirectoryInfo(Path.Combine(dataDirectory.FullName, "anime-imports"))));
-                        services.AddSingleton(new SabnzbdAcquisitionStore(
-                            protectionProvider,
-                            new DirectoryInfo(Path.Combine(dataDirectory.FullName, "sabnzbd-acquisitions"))));
+                        services.AddSingleton(new SabnzbdAcquisitionStore(new DirectoryInfo(Path.Combine(dataDirectory.FullName, "sabnzbd-acquisitions"))));
                         services.AddScoped<ISonarrObserverClient, SonarrObserverClient>();
                         services.AddScoped<ISabnzbdClient>(_ => new SabnzbdClient(
                             new HttpClient(new NeverCallHandler())));
@@ -201,13 +199,15 @@ internal sealed class ManageSheetPageTestHost : IAsyncDisposable
                         services.AddScoped<DownloadClientSelector>();
                         services.AddScoped<DownloadClientSubmissionService>();
                         services.AddScoped<SabnzbdDownloadService>();
-                        services.AddScoped<SabnzbdAcquisitionService>();
                         services.AddScoped<SonarrObservationService>();
                         services.AddScoped<IndexerSearchCoordinator>();
                         services.AddScoped<AnimeAcquisitionInventory>();
                         services.AddScoped<Jularr.Web.Features.Storage.LibraryRootRoutingService>();
                         services.AddScoped<AcquisitionHistoryService>();
+                        services.AddMonitoringForTests();
                         services.AddScoped<AnimeAcquisitionPipeline>();
+                        services.AddScoped<Jularr.Web.Features.Acquisition.Wanted.ReleaseRequestTracker>();
+                        services.AddScoped<Jularr.Web.Features.Acquisition.Core.AcquisitionCore>();
                         // The Settings → Acquisition page (#389) lists the per-media-type remote
                         // path mappings; its other panels read the same empty stores.
                         services.AddSingleton(new AniListAutoMonitorSettingsStore(

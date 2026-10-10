@@ -32,9 +32,7 @@ public sealed class LightNovelAcquisitionExecutorTests
                 var executor = new LightNovelAcquisitionRequestExecutor(
                     null!,
                     null!,
-                    new NovelImportService(db, [source]),
-                    null!,
-                    null!);
+                    new NovelImportService(db, [source]));
 
                 var result = await executor.ExecuteAsync(
                     Request(NcodeNovelSourceProvider.ProviderKey, "n9669bk", payloadJson: null),
@@ -53,7 +51,7 @@ public sealed class LightNovelAcquisitionExecutorTests
     }
 
     [TestMethod]
-    public async Task AniListRequestImportsExactPublicCopyBeforeUsenet()
+    public async Task AnExactPublicCopyIsFoundAndImportedByTheWebDirectSource()
     {
         var directory = Path.Combine(
             Path.GetTempPath(),
@@ -88,27 +86,19 @@ public sealed class LightNovelAcquisitionExecutorTests
                 NullLogger<ReadingCatalogSearchService>.Instance);
             var settings = new ReadingSourceSettingsStore(directory);
 
-            // Null engine proves a matching public source short-circuits Usenet.
-            var executor = new LightNovelAcquisitionRequestExecutor(
-                null!,
-                null!,
-                new NovelImportService(db, [source]),
-                catalogSearch,
-                settings);
-            var payload = new ReadingRequestPayload(
-                "Mushoku Tensei",
-                ["無職転生"],
-                "Rifujin na Magonote")
+            var directSource = new LightNovelWebDirectSource(new NovelImportService(db, [source]), catalogSearch, settings);
+            var intent = new Jularr.Web.Features.Acquisition.Search.SearchIntent(MediaAcquisitionKind.LightNovel, "Mushoku Tensei")
             {
-                Searches = 1
+                Aliases = ["無職転生"],
+                Creator = "理不尽な孫の手"
             };
 
-            var result = await executor.ExecuteAsync(
-                Request(
-                    NovelAniListProvider.ProviderKey,
-                    "85470",
-                    JsonSerializer.Serialize(payload, JsonSerializerOptions.Web),
-                    subtitle: "Rifujin na Magonote"),
+            var candidate = Assert.ContainsSingle(await directSource.SearchAsync(intent, CancellationToken.None));
+            Assert.AreEqual(Jularr.Web.Features.Acquisition.Core.AcquisitionType.DirectImport, candidate.Type);
+            Assert.IsTrue(candidate.Offer!.IdentityIsExact);
+            var result = await directSource.ImportAsync(
+                Request(NovelAniListProvider.ProviderKey, "85470", payloadJson: null, subtitle: "Rifujin na Magonote"),
+                candidate.Offer,
                 CancellationToken.None);
 
             Assert.AreEqual(
@@ -118,7 +108,7 @@ public sealed class LightNovelAcquisitionExecutorTests
             Assert.AreEqual(
                 "https://ncode.syosetu.com/n9669bk/",
                 source.LastUrl);
-            Assert.AreEqual(1, catalog.Calls);
+            Assert.AreEqual(2, catalog.Calls, "The title and its alias are searched; the candidate both return is one.");
             var work = await db.NovelWorks.SingleAsync();
             Assert.AreEqual(
                 $"/Novels/Work/{work.Id}",
@@ -137,10 +127,10 @@ public sealed class LightNovelAcquisitionExecutorTests
         var payload = new ReadingRequestPayload(
             "Mushoku Tensei",
             ["無職転生"],
-            "Rifujin na Magonote");
+            "理不尽な孫の手");
 
         Assert.IsTrue(
-            LightNovelAcquisitionRequestExecutor.CanAutoImport(
+            LightNovelWebDirectSource.CanAutoImport(
                 payload,
                 new ReadingCatalogCandidate(
                     NcodeNovelSourceProvider.ProviderKey,
@@ -157,8 +147,12 @@ public sealed class LightNovelAcquisitionExecutorTests
                     IsPublicWebSource: true),
                 settings));
 
+        var sameTitle = new ReadingCatalogCandidate(NcodeNovelSourceProvider.ProviderKey, "n9669bk", "無職転生", null, "理不尽な孫の手", null, null, null, null, null, "https://ncode.syosetu.com/n9669bk/", IsPublicWebSource: true);
+        Assert.IsFalse(LightNovelWebDirectSource.CanAutoImport(payload with { Author = null }, sameTitle, settings), "A title alone never makes a hosted copy the published edition that was asked for.");
+        Assert.IsFalse(LightNovelWebDirectSource.CanAutoImport(payload with { Author = "Rifujin na Magonote" }, sameTitle, settings), "An author that cannot be compared is no evidence either.");
+
         Assert.IsFalse(
-            LightNovelAcquisitionRequestExecutor.CanAutoImport(
+            LightNovelWebDirectSource.CanAutoImport(
                 payload,
                 new ReadingCatalogCandidate(
                     NcodeNovelSourceProvider.ProviderKey,
@@ -177,7 +171,7 @@ public sealed class LightNovelAcquisitionExecutorTests
             "A loose search result may not be imported automatically.");
 
         Assert.IsFalse(
-            LightNovelAcquisitionRequestExecutor.CanAutoImport(
+            LightNovelWebDirectSource.CanAutoImport(
                 payload,
                 new ReadingCatalogCandidate(
                     BookWalkerCatalogProvider.ProviderKey,
@@ -212,9 +206,7 @@ public sealed class LightNovelAcquisitionExecutorTests
                 var executor = new LightNovelAcquisitionRequestExecutor(
                     null!,
                     null!,
-                    new NovelImportService(db, [new FakeSyosetu(fail: true)]),
-                    null!,
-                    null!);
+                    new NovelImportService(db, [new FakeSyosetu(fail: true)]));
 
                 var result = await executor.ExecuteAsync(
                     Request(NcodeNovelSourceProvider.ProviderKey, "n9669bk", payloadJson: null),

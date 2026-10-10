@@ -54,7 +54,7 @@ public sealed class LibraryWorkBackfillTests
         return entry;
     }
 
-    private static Task<Guid?> WorkOfAsync(AppDbContext db, NovelWork entry) => RequestWorkTestSupport.WorkOfLegacyAsync(db, WorkSourceKind.NovelWork, entry.Id);
+    private static Task<long?> WorkOfAsync(AppDbContext db, NovelWork entry) => RequestWorkTestSupport.WorkOfLegacyAsync(db, WorkSourceKind.NovelWork, entry.Id);
 
     private static Task<int> WorkCountAsync(AppDbContext db, MediaAcquisitionKind kind) => db.Set<Work>().CountAsync(work => work.MediaType == RequestWorkBinder.MediaTypeOf(kind));
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
@@ -39,7 +40,7 @@ public sealed class IndexModel(
     public IReadOnlyList<WorkFieldProvenance> Provenance { get; private set; } = [];
 
     [BindProperty(SupportsGet = true)]
-    public Guid? WorkId { get; set; }
+    public long? WorkId { get; set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -53,7 +54,7 @@ public sealed class IndexModel(
         return Page();
     }
 
-    public async Task<IActionResult> OnPostMergeAsync(Guid keepWorkId, Guid mergeWorkId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostMergeAsync(long keepWorkId, long mergeWorkId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (!account.Can(JularrPolicies.MappingEdit))
@@ -61,7 +62,7 @@ public sealed class IndexModel(
             return Forbid();
         }
 
-        if (keepWorkId == Guid.Empty || mergeWorkId == Guid.Empty || keepWorkId == mergeWorkId)
+        if (keepWorkId <= 0 || mergeWorkId <= 0 || keepWorkId == mergeWorkId)
         {
             TempData["Status"] = Ui["admin.mergeReview.status.notFound"];
             return RedirectToPage();
@@ -80,7 +81,7 @@ public sealed class IndexModel(
             return Forbid();
         }
 
-        if (!Guid.TryParse(targetWorkId?.Trim(), out var target) || target == Guid.Empty)
+        if (!TryParseWorkId(targetWorkId, out var target))
         {
             TempData["Status"] = Ui["admin.mergeReview.status.invalidTarget"];
             return RedirectToPage();
@@ -115,7 +116,7 @@ public sealed class IndexModel(
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostConfirmIdentityAsync(Guid identityId, Guid? workId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostConfirmIdentityAsync(Guid identityId, long? workId, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (!account.Can(JularrPolicies.MappingEdit))
@@ -136,7 +137,7 @@ public sealed class IndexModel(
         string provider,
         string externalId,
         string? targetWorkId,
-        Guid? workId,
+        long? workId,
         CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -151,7 +152,7 @@ public sealed class IndexModel(
             return RedirectToPage(new { workId });
         }
 
-        if (!Guid.TryParse(targetWorkId, out var target) || target == Guid.Empty)
+        if (!TryParseWorkId(targetWorkId, out var target))
         {
             TempData["Status"] = Ui["admin.mergeReview.status.invalidTarget"];
             return RedirectToPage(new { workId });
@@ -171,7 +172,7 @@ public sealed class IndexModel(
         string provider,
         string externalId,
         string? newTitle,
-        Guid? workId,
+        long? workId,
         CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
@@ -195,7 +196,7 @@ public sealed class IndexModel(
         return RedirectToPage(new { workId = work?.Id ?? workId });
     }
 
-    public async Task<IActionResult> OnPostPinFieldAsync(Guid workId, string fieldKey, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostPinFieldAsync(long workId, string fieldKey, CancellationToken cancellationToken)
     {
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         if (!account.Can(JularrPolicies.MappingEdit))
@@ -203,7 +204,7 @@ public sealed class IndexModel(
             return Forbid();
         }
 
-        if (workId != Guid.Empty && !string.IsNullOrWhiteSpace(fieldKey))
+        if (workId > 0 && !string.IsNullOrWhiteSpace(fieldKey))
         {
             await works.SetManualFieldOverrideAsync(workId, fieldKey, cancellationToken);
             TempData["Status"] = Ui["admin.mergeReview.status.pinned"];
@@ -211,6 +212,8 @@ public sealed class IndexModel(
 
         return RedirectToPage(new { workId });
     }
+
+    private static bool TryParseWorkId(string? value, out long workId) => long.TryParse(value?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out workId) && workId > 0;
 
     private static string StatusKey(LibraryWorkResolution resolution) => resolution switch
     {

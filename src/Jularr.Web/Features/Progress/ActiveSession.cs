@@ -6,7 +6,7 @@ namespace Jularr.Web.Features.Progress;
 public sealed record ActiveSessionSnapshot(
     Guid Id,
     string ProfileId,
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId,
     Guid MediaAssetId,
     Guid StoredFileId,
@@ -208,7 +208,7 @@ public sealed class ActiveSessionService(
     private sealed record ActiveSessionDbRow(
         Guid Id,
         string ProfileId,
-        Guid WorkId,
+        long WorkId,
         Guid? WorkEpisodeId,
         Guid MediaAssetId,
         Guid StoredFileId,
@@ -219,7 +219,7 @@ public sealed class ActiveSessionService(
         DateTime? EndedAt);
 
     private sealed record ActiveTargetRow(
-        Guid WorkId,
+        long WorkId,
         Guid? WorkEpisodeId,
         Guid MediaAssetId,
         Guid StoredFileId);

@@ -1,6 +1,7 @@
 using System.Data;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Tracking;
 using Microsoft.EntityFrameworkCore;
@@ -21,19 +22,29 @@ public static class ReleaseLibraryLinks
     /// <summary>Manga series and light novels of the library that are matched to AniList.</summary>
     public static async Task<IReadOnlyList<ReadingReleaseLink>> LoadReadingLinksAsync(
         AppDbContext db,
+        bool includeManga,
+        bool includeLightNovels,
         CancellationToken cancellationToken)
     {
         var links = new List<ReadingReleaseLink>();
-        var novels = await db.NovelWorks
-            .AsNoTracking()
-            .Where(work =>
-                work.MetadataProvider == AniListReleaseNormalizer.Provider &&
-                work.MetadataExternalId != null &&
-                work.SourceProvider != BookCatalogService.ImportedBookProvider)
-            .Select(work => new { work.Id, Title = work.MetadataTitle ?? work.Title, work.CoverImageUrl, work.MetadataExternalId, work.MetadataStatus })
-            .ToListAsync(cancellationToken);
-        links.AddRange(novels.Select(work => new ReadingReleaseLink(
-            ReleaseMediaType.LightNovel, work.Id, work.Title, work.CoverImageUrl, work.MetadataExternalId!, work.MetadataStatus)));
+        if (includeLightNovels)
+        {
+            var novels = await db.NovelWorks
+                .AsNoTracking()
+                .Where(work =>
+                    work.MetadataProvider == AniListReleaseNormalizer.Provider &&
+                    work.MetadataExternalId != null &&
+                    work.SourceProvider != BookCatalogService.ImportedBookProvider)
+                .Select(work => new { work.Id, Title = work.MetadataTitle ?? work.Title, work.CoverImageUrl, work.MetadataExternalId, work.MetadataStatus })
+                .ToListAsync(cancellationToken);
+            links.AddRange(novels.Select(work => new ReadingReleaseLink(
+                ReleaseMediaType.LightNovel, work.Id, work.Title, work.CoverImageUrl, work.MetadataExternalId!, work.MetadataStatus)));
+        }
+
+        if (!includeManga)
+        {
+            return links;
+        }
 
         var connection = db.Database.GetDbConnection();
         var openedHere = connection.State != ConnectionState.Open;
@@ -87,7 +98,8 @@ public sealed class AniListReleaseEventSource(
     AppDbContext db,
     ReleaseCalendarCacheStore cache,
     AniListAccountStore mappingStore,
-    AnimeMonitoringStore monitoringStore) : IReleaseEventSource
+    AnimeEpisodeStates episodeStates,
+    AnimeMonitoring animeMonitoring) : IReleaseEventSource
 {
     public string Name => "anilist";
 
@@ -121,7 +133,11 @@ public sealed class AniListReleaseEventSource(
             var starts = releases.Where(release => release.Kind == ReleaseKind.SeriesStart).ToLookup(release => release.ExternalId);
             if (starts.Count > 0)
             {
-                foreach (var link in await ReleaseLibraryLinks.LoadReadingLinksAsync(db, cancellationToken))
+                foreach (var link in await ReleaseLibraryLinks.LoadReadingLinksAsync(
+                    db,
+                    query.Wants(ReleaseMediaType.Manga),
+                    query.Wants(ReleaseMediaType.LightNovel),
+                    cancellationToken))
                 {
                     if (!query.Wants(link.MediaType, link.MediaId))
                     {
@@ -223,7 +239,8 @@ public sealed class AniListReleaseEventSource(
                         group => new AnimeReleaseLocalEpisode(group.First().Id, group.Any(episode => episode.HasFile))));
         }).ToArray();
 
-        var monitoring = await monitoringStore.LoadAsync(cancellationToken);
-        return AnimeReleaseStateResolver.ToEvents(releases, library, monitoring, query.Now, query.Zone);
+        var states = await episodeStates.LoadAsync(null, cancellationToken);
+        var views = await animeMonitoring.LoadAsync([.. library.Select(entry => entry.AnimeKey)], cancellationToken);
+        return AnimeReleaseStateResolver.ToEvents(releases, library, states, views, query.Now, query.Zone);
     }
 }

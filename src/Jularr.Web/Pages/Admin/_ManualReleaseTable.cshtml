@@ -3,12 +3,13 @@
 @using Jularr.Web.Pages.Admin
 @{
     var ui = Model.Ui;
+    var ranked = Model.Rows.Any(row => row.Rank is not null);
 }
 <div class="bms-results">
     <table class="bms-table">
         <thead>
             <tr>
-                <th scope="col">@ui["admin.manualSearch.col.score"]</th>
+                <th scope="col">@ui[ranked ? "admin.manualSearch.col.rank" : "admin.manualSearch.col.score"]</th>
                 <th scope="col">@ui["admin.manualSearch.col.release"]</th>
                 <th scope="col">@ui["admin.manualSearch.col.details"]</th>
                 <th scope="col">@ui["admin.manualSearch.col.match"]</th>
@@ -20,7 +21,7 @@
             {
                 var verdict = ManualReleaseRows.VerdictName(row.Verdict);
                 <tr data-verdict="@verdict">
-                    <td class="bms-score bms-score-@verdict">@(row.Score?.ToString() ?? "–")</td>
+                    <td class="bms-score bms-score-@verdict">@(ranked ? (row.Rank is { } place ? $"#{place}" : "–") : row.Score?.ToString() ?? "–")</td>
                     <td class="bms-release">
                         <span class="bms-release-title">@row.Title</span>
                         <small><span>@row.Meta</span></small>
@@ -61,7 +62,7 @@
             <article class="bms-card" data-verdict="@verdict">
                 <div class="bms-card-head">
                     <strong>@row.Title</strong>
-                    <span class="bms-score bms-score-@verdict">@(row.Score?.ToString() ?? "–")</span>
+                    <span class="bms-score bms-score-@verdict">@(ranked ? (row.Rank is { } place ? $"#{place}" : "–") : row.Score?.ToString() ?? "–")</span>
                 </div>
                 <small>@row.Meta</small>
                 <div class="bms-card-tags">

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Access;
@@ -8,6 +9,7 @@ using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Data;
 
 namespace Jularr.Web.Features.Books;
 
@@ -19,21 +21,24 @@ namespace Jularr.Web.Features.Books;
 public sealed record BookRequestPayload(
     string CatalogId,
     string Title,
-    string? Author) : ReleaseRequestPayload;
+    string? Author,
+    string? Language = null,
+    string? Isbn = null,
+    int? Year = null,
+    IReadOnlyList<string>? Identities = null) : ReleaseRequestPayload;
 
 /// <summary>
-/// Automatic Books acquisition on the shared acquisition path: a direct/free catalog edition is
-/// preferred, then an enabled OPDS EPUB, then every enabled Usenet indexer. The best accepted
-/// Usenet release goes through the generic download-client abstraction, and the shared
-/// completed-download dispatcher imports it (see
-/// <see cref="BookCompletedDownloadImportAdapter"/>).
+/// Automatic Books acquisition on the shared core: the free catalog edition, enabled OPDS catalogs and every enabled Usenet indexer are searched
+/// together, the one selection ranks what they returned, and the winner goes where its acquisition type says (an import by its direct source, or the
+/// download client and the shared completed-download dispatcher, see <see cref="BookCompletedDownloadImportAdapter"/>).
 /// </summary>
 public sealed class BookAcquisitionExecutor(
-    BookCatalogService books,
-    BookSearchCoordinator search,
+    IndexerSearchCoordinator indexers,
     DownloadClientStore downloadClients,
-    DownloadClientSubmissionService downloads,
+    AcquisitionCore core,
+    QualityProfileStore profiles,
     ReleaseRequestTracker tracker,
+    AppDbContext db,
     RequestWorkBinder? binder = null) : IAcquisitionRequestExecutor
 {
     /// <summary>Operation kind of a request-backed Books download.</summary>
@@ -45,117 +50,74 @@ public sealed class BookAcquisitionExecutor(
     {
         request = binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken);
         var payload = ReadPayload(request);
+        var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Book, request.WorkId, cancellationToken);
+        var search = await core.SearchAsync(BookReleaseSelector.Plan(payload.Title, payload.Author, payload.CatalogId, payload.Language, payload.Isbn), profile, new SearchOptions(), cancellationToken);
 
-        string? directNote = null;
-        // Default source priority is local/direct before network download. This is a policy choice,
-        // not a second Books acquisition engine: every Usenet download still uses the shared path.
-        try
+        // A Usenet release needs an indexer and a download client; without them only a direct edition can serve the request.
+        var usenetConfigured = await indexers.HasEnabledIndexerAsync(cancellationToken) && (await downloadClients.LoadAllAsync(cancellationToken)).Any(entry => entry.Enabled);
+        var grabbable = search.Grabbable.Where(release => usenetConfigured || release.Candidate.Type == AcquisitionType.DirectImport).ToArray();
+        if (grabbable.Length == 0 && !usenetConfigured)
         {
-            var workId = await books.AcquireCatalogBookAsync(payload.CatalogId, cancellationToken);
+            var problems = string.Join("; ", search.Search.Warnings.Select(warning => warning.Message));
             return new AcquisitionExecution(
-                AcquisitionRequestStatus.Completed,
-                "Imported a direct/free edition.",
-                ResultUrl: $"/Books/Library/{workId}");
-        }
-        catch (Exception exception) when (
-            !cancellationToken.IsCancellationRequested
-            && exception is InvalidOperationException or HttpRequestException or TaskCanceledException)
-        {
-            directNote = exception.Message;
+                AcquisitionRequestStatus.Failed,
+                $"No direct/free or OPDS edition is available{(problems.Length == 0 ? string.Empty : $" ({problems})")} and no indexer or download client is configured.");
         }
 
-        string? opdsNote = null;
-        try
+        // A Book that is in the library is only searched again while its profile wants a better format, and then only a better one is taken.
+        if (request.WorkId is { } workId && await BookInstalledQuality.BestAsync(db, profile, workId, cancellationToken) is { } installed)
         {
-            var opdsQuery = BookWorkSearch.MainTitle(payload.Title);
-            var offer = await search.FindOpdsOfferAsync(
-                payload.Title,
-                payload.Author,
-                cancellationToken);
-
-            if (offer is not null)
+            if (!UpgradePolicy.Assess(profile, installed).IsUpgradable)
             {
-                var workId = await books.ImportOpdsBookAsync(
-                    offer.SourceId,
-                    opdsQuery,
-                    offer.Key,
-                    cancellationToken);
-                return new AcquisitionExecution(
-                    AcquisitionRequestStatus.Completed,
-                    $"Imported an EPUB from {offer.SourceName}.",
-                    ResultUrl: $"/Books/Library/{workId}");
+                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"The book is in the library as {installed}.", ResultUrl: $"/Books/Library/{workId}");
             }
 
-            opdsNote = "No matching enabled OPDS edition was found.";
-        }
-        catch (Exception exception) when (
-            !cancellationToken.IsCancellationRequested
-            && exception is InvalidOperationException or HttpRequestException or TaskCanceledException)
-        {
-            opdsNote = exception.Message;
-        }
-
-        if (!await search.HasEnabledIndexerAsync(cancellationToken))
-        {
-            return new AcquisitionExecution(
-                AcquisitionRequestStatus.Failed,
-                $"No direct/free or OPDS edition is available ({directNote}; {opdsNote}) and no indexer is configured.");
-        }
-
-        var downloadClientConfigured = (await downloadClients.LoadAllAsync(cancellationToken))
-            .Any(entry => entry.Enabled);
-        if (!downloadClientConfigured)
-        {
-            return new AcquisitionExecution(
-                AcquisitionRequestStatus.Failed,
-                $"No direct/free or OPDS edition is available ({directNote}; {opdsNote}) and no download client is configured.");
-        }
-
-        var usenetSearch = await search.SearchUsenetAsync(
-            payload.Title,
-            payload.Author,
-            cancellationToken,
-            SelectionContext.SinceCreated(request.CreatedAt),
-            request.WorkId);
-        return await tracker.ContinueAsync(
-            request,
-            payload,
-            Candidates(usenetSearch),
-            usenetSearch.FailureMessage,
-            async release =>
+            var better = grabbable.Where(release => release.Score is { } score && UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey)).ToArray();
+            var waiting = await tracker.WaitForUpgradeAsync(
+                request,
+                payload,
+                [.. better.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
+                $"The book is in the library as {installed} and no better release is known yet.",
+                cancellationToken);
+            if (waiting is not null)
             {
-                var outcome = await downloads.SubmitAsync(
-                    new DownloadSubmissionSpec(
-                        OperationKind,
-                        "Download Book",
-                        payload.Title,
-                        request.RequestedByProfileId,
-                        release.DownloadUri,
-                        payload.Title,
-                        MediaAcquisitionKind.Book,
-                        ReleaseSource: release.Source,
-                        ReleaseGroup: release.ReleaseGroup),
-                    cancellationToken);
-                return new ReleaseRequestSubmission(outcome.Accepted, outcome.OperationId, outcome.Message);
-            },
-            cancellationToken,
-            searchUnavailable: usenetSearch.EveryIndexerFailed);
+                return waiting;
+            }
+
+            grabbable = better;
+        }
+
+        return await BindDirectImportAsync(
+            binder,
+            request,
+            await core.GrabAsync(
+                request,
+                payload,
+                grabbable,
+                BookReleaseSelector.ToResult(search).FailureMessage,
+                new GrabTarget(OperationKind, "Download Book", payload.Title, MediaAcquisitionKind.Book, string.Empty),
+                cancellationToken,
+                searchUnavailable: search.Search.EveryIndexerFailed),
+            cancellationToken);
     }
 
     /// <summary>
-    /// The releases the book selector accepted, best first. A Books release is remembered by its
-    /// title, as it always was, so requests created before the shared state keep their history.
+    /// A direct or free edition is imported by its own source, not by the completed-download importer, so nothing has tied the new library entry to the
+    /// request's Work yet. This does it, with the same conflict rule as a download import: an entry that belongs to another title is reported, never switched.
     /// </summary>
-    public static IReadOnlyList<ReleaseRequestCandidate> Candidates(BookUsenetSearchResult search) =>
-        search.Ranked
-            .Where(candidate => candidate.Score > 0 && candidate.Release.InternalDownloadUri is not null)
-            .Select(candidate => new ReleaseRequestCandidate(
-                candidate.Release.Title,
-                candidate.Release.Title,
-                candidate.Release.InternalDownloadUri!,
-                candidate.Release.Indexer,
-                candidate.Release.ParsedRelease.ReleaseGroup))
-            .ToArray();
+    public static async Task<AcquisitionExecution> BindDirectImportAsync(RequestWorkBinder? binder, AcquisitionRequest request, AcquisitionExecution execution, CancellationToken cancellationToken)
+    {
+        const string LibraryPrefix = "/Books/Library/";
+        if (binder is null || execution.Status != AcquisitionRequestStatus.Completed || execution.ResultUrl is not { } url || !url.StartsWith(LibraryPrefix, StringComparison.Ordinal)
+            || !Guid.TryParse(url[LibraryPrefix.Length..], out var novelId))
+        {
+            return execution;
+        }
+
+        return await binder.BindImportedAsync(request, Jularr.Web.Features.MediaCore.WorkSourceKind.NovelWork, novelId, cancellationToken) is { } conflict
+            ? new AcquisitionExecution(AcquisitionRequestStatus.Failed, conflict)
+            : execution;
+    }
 
     public static BookRequestPayload ReadPayload(AcquisitionRequest request)
     {
@@ -190,8 +152,14 @@ public sealed class BookWantedRequestHandler(
 }
 
 /// <summary>One indexer result as the book selector judged it; <see cref="Score"/> 0 means rejected.</summary>
-public sealed record RankedBookRelease(ProwlarrReleaseCandidate Release, int Score, string? RejectedBecause)
+public sealed record RankedBookRelease(AcquisitionCandidate Release, int Score, string? RejectedBecause)
 {
+    /// <summary>The position among the releases that can be taken, in the order automatic acquisition grabs by; null for a rejected one.</summary>
+    public int? Rank { get; init; }
+
+    /// <summary>The selection's evaluation this row shows, which a grab hands to the core; null for rows built without a search.</summary>
+    public ReleaseEvaluation<BookMatch>? Evaluation { get; init; }
+
     public string? QualityKey { get; init; }
 
     public int QualityRank { get; init; } = int.MaxValue;
@@ -199,7 +167,7 @@ public sealed record RankedBookRelease(ProwlarrReleaseCandidate Release, int Sco
     public IReadOnlyList<string> ScoreReasons { get; init; } = [];
 }
 
-/// <summary>The outcome of one book search on the indexers, shared by automatic adding and the admin test tool.</summary>
+/// <summary>The outcome of one book search over every source, as Manual Search and the admin test tool list it.</summary>
 public sealed record BookUsenetSearchResult(
     IReadOnlyList<string> Queries,
     IReadOnlyList<RankedBookRelease> Ranked,
@@ -209,7 +177,7 @@ public sealed record BookUsenetSearchResult(
     /// <summary>True when no indexer could answer at all, so an empty result says nothing about the book.</summary>
     public bool EveryIndexerFailed { get; init; }
 
-    public ProwlarrReleaseCandidate? Picked => Ranked.FirstOrDefault(release => release.Score > 0)?.Release;
+    public AcquisitionCandidate? Picked => Ranked.FirstOrDefault(release => release.Score > 0)?.Release;
 
     public string FailureMessage =>
         Ranked.Count == 0
@@ -233,17 +201,16 @@ public static class BookUsenetSearch
         QualityProfile profile,
         CancellationToken cancellationToken,
         SearchOptions? options = null,
-        ReleaseReliabilityLookup? reliability = null,
-        DateTimeOffset? wantedSince = null)
+        ReleaseReliabilityLookup? reliability = null)
     {
         var intent = new SearchIntent(MediaAcquisitionKind.Book, title.Trim()) { Creator = string.IsNullOrWhiteSpace(author) ? null : author.Trim() };
         var result = await indexers.SearchAsync(
             intent,
-            (options ?? new SearchOptions()).WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile, reliability, wantedSince).Count(ranked => ranked.Score > 0) },
+            (options ?? new SearchOptions()).WithSourcePolicy(profile.SourcePolicy) with { UsableCount = releases => BookReleaseSelector.Rank(releases, title, author, profile, reliability).Count(ranked => ranked.Score > 0) },
             cancellationToken);
         return new BookUsenetSearchResult(
             [.. result.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
-            BookReleaseSelector.Rank(result.Releases, title, author, profile, reliability, wantedSince),
+            BookReleaseSelector.Rank(result.Releases, title, author, profile, reliability),
             result.Warnings,
             result.Trace.Any(line => line.Stage == "any-category" && line.Results > 0))
         {
@@ -252,132 +219,3 @@ public static class BookUsenetSearch
     }
 }
 
-/// <summary>Ranks indexer results for one book: Usenet only, EPUB first, then PDF, title words must match.</summary>
-public static class BookReleaseSelector
-{
-    private static readonly string[] UnsupportedFormats = ["mobi", "azw3", "azw", "djvu", "cbr", "cbz", "mp3", "m4b", "audiobook", "hörbuch"];
-
-    public static ProwlarrReleaseCandidate? Pick(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
-        string title,
-        string? author,
-        QualityProfile? profile = null) =>
-        Rank(releases, title, author, profile).FirstOrDefault(release => release.Score > 0)?.Release;
-
-    /// <summary>Every release, best first; rejected releases (score 0) last, each with its reason.</summary>
-    public static IReadOnlyList<RankedBookRelease> Rank(
-        IReadOnlyList<ProwlarrReleaseCandidate> releases,
-        string title,
-        string? author,
-        QualityProfile? profile = null,
-        ReleaseReliabilityLookup? reliability = null,
-        DateTimeOffset? wantedSince = null)
-    {
-        // Identity is decided first and the shared selection engine orders what is left, so a custom profile can reject or prefer a
-        // format, regex or scored term but can never make a release for another book eligible.
-        var effectiveProfile = profile ?? BookQualityProfiles.CreateDefaultBook();
-        var titleWords = Words(SearchPlanner.MainTitle(title));
-        var authorWords = Words(author);
-        var judged = releases.GroupBy(release => release.Identity, StringComparer.Ordinal).ToDictionary(group => group.Key, group => Judge(group.First(), titleWords, authorWords), StringComparer.Ordinal);
-        var now = DateTimeOffset.UtcNow;
-        var selection = ReleaseSelectionEngine.Select(effectiveProfile, new SelectionContext(now, wantedSince ?? now), [.. judged.Values.Select(item => item.Candidate)], reliability);
-        return [.. selection.Ranked.Select(evaluation => ToRanked(evaluation, judged[evaluation.Candidate.Id]))];
-    }
-
-    private sealed record BookJudgement(ProwlarrReleaseCandidate Release, SelectionCandidate Candidate, int MatchedTitleWords, int AuthorHits);
-
-    private static BookJudgement Judge(ProwlarrReleaseCandidate release, IReadOnlyCollection<string> titleWords, IReadOnlyCollection<string> authorWords)
-    {
-        var words = Words(release.Title);
-        var matchedTitle = titleWords.Count(words.Contains);
-        var authorHits = authorWords.Count(words.Contains);
-        var formatWords = words.Where(word => UnsupportedFormats.Contains(word)).ToArray();
-        var safety = release.InternalDownloadUri is null
-            ? "no download link"
-            : release.Protocol is not null && !release.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase)
-                ? "not a Usenet release"
-                : !words.Contains("epub") && !words.Contains("pdf") && formatWords.Length > 0 ? $"{formatWords[0].ToUpperInvariant()}, not EPUB or PDF" : null;
-        var identity = titleWords.Count == 0
-            ? ReleaseIdentityEvidence.Conflict("EmptyTitle", "empty title")
-            : matchedTitle < titleWords.Count
-                ? ReleaseIdentityEvidence.Conflict("TitleDoesNotMatch", "title does not match")
-                : authorHits > 0
-                    ? ReleaseIdentityEvidence.Exact("TitleAndAuthor", "Title and author match.")
-                    : ReleaseIdentityEvidence.Strong("Title", "The title matches.");
-
-        // An oversized release for one book costs storage: it only loses against an otherwise equal one.
-        var coverage = SelectionCoverage.Single with { Cost = release.SizeBytes is > 200L * 1024 * 1024 ? 6 : 0 };
-        var candidate = new SelectionCandidate(release.Identity, BookReleaseParser.Instance.Parse(release.Title), release.SizeBytes, release.Indexer, release.Sources.FirstOrDefault()?.Priority ?? 0, release.PublishedAt, identity, coverage)
-        {
-            SafetyRejection = safety
-        };
-        return new BookJudgement(release, candidate, matchedTitle, authorHits);
-    }
-
-    private static RankedBookRelease ToRanked(CandidateEvaluation evaluation, BookJudgement judged)
-    {
-        var score = evaluation.Score;
-        if (!evaluation.IsSelectable)
-        {
-            var waiting = evaluation.Reasons.FirstOrDefault(reason => reason.Code == "WaitingForFallbackTier")?.Detail;
-            var because = evaluation.Reasons.FirstOrDefault(reason => reason.Kind is SelectionReasonKind.Safety)?.Detail
-                          ?? (evaluation.Candidate.Identity.Confidence == IdentityConfidence.Conflict ? evaluation.Candidate.Identity.Detail : waiting ?? string.Join("; ", score?.RejectionReasons ?? []));
-            return new RankedBookRelease(judged.Release, 0, because)
-            {
-                QualityKey = score?.QualityKey,
-                QualityRank = score?.QualityRank ?? int.MaxValue,
-                ScoreReasons = score?.ScoreReasons ?? []
-            };
-        }
-
-        // The displayed score keeps its meaning: identity points plus the profile preference, minus the cost of a large release.
-        var reasons = new List<string> { $"Title match +{10 + judged.MatchedTitleWords}" };
-        var total = 10 + judged.MatchedTitleWords + score!.Score;
-        if (judged.AuthorHits > 0)
-        {
-            total += judged.AuthorHits * 2;
-            reasons.Add($"Author match +{judged.AuthorHits * 2}");
-        }
-
-        reasons.Add($"Quality {score.QualityKey}");
-        reasons.AddRange(score.ScoreReasons);
-        if (evaluation.Candidate.Coverage.Cost > 0)
-        {
-            total -= evaluation.Candidate.Coverage.Cost;
-            reasons.Add($"Large release -{evaluation.Candidate.Coverage.Cost}");
-        }
-
-        return new RankedBookRelease(judged.Release, Math.Max(total, 1), null)
-        {
-            QualityKey = score.QualityKey,
-            QualityRank = score.QualityRank,
-            ScoreReasons = reasons
-        };
-    }
-
-    private static HashSet<string> Words(string? value)
-    {
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return result;
-        }
-
-        foreach (var word in value.Split(
-                     [' ', '.', '_', '-', ':', ',', '(', ')', '[', ']', '\'', '"', '!', '?', '&', '/'],
-                     StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (word.Length > 1 && !StopWords.Contains(word))
-            {
-                result.Add(word.ToLowerInvariant());
-            }
-        }
-
-        return result;
-    }
-
-    private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "the", "a", "an", "of", "and", "der", "die", "das", "und", "des", "le", "la", "les"
-    };
-}

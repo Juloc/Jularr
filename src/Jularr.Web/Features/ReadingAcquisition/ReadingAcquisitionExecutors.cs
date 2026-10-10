@@ -1,11 +1,14 @@
+using Jularr.Web.Features.Acquisition.Search;
 using System.Text.Json;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.DownloadClients;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Selection;
 using Jularr.Web.Features.Acquisition.Wanted;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Novels;
 using Jularr.Web.Features.ReadingDiscovery;
 using Jularr.Web.Features.ReadingSources;
@@ -28,11 +31,12 @@ public sealed record ReadingRequestPayload(
 public sealed class ReadingAcquisitionEngine(
     IndexerSearchCoordinator indexers,
     DownloadClientStore downloadClients,
-    DownloadClientSubmissionService downloads,
-    ReleaseRequestTracker tracker,
+    AcquisitionCore core,
     QualityProfileStore? profiles = null,
-    ReleaseReliabilityService? reliability = null,
-    RequestWorkBinder? binder = null)
+    RequestWorkBinder? binder = null,
+    ReadingCoverageService? coverage = null,
+    ReadingStructureService? structure = null,
+    ReleaseRequestTracker? tracker = null)
 {
     public const string OperationKind = "reading-usenet-download";
 
@@ -51,96 +55,101 @@ public sealed class ReadingAcquisitionEngine(
         // A request made before the Work binding, or one whose identity could not be resolved then, is bound now; the profile below is the Work's.
         request = binder is null ? request : await binder.EnsureBoundAsync(request, cancellationToken);
         var payload = ReadPayload(request, initialTarget);
-        var target = ToTarget(request.Kind, payload);
-
-        if (!await indexers.HasEnabledIndexerAsync(cancellationToken))
+        var target = await TargetAsync(request, payload, refreshStructure: payload.Searches == 0, cancellationToken);
+        if (target.Want is { IsEmpty: true })
         {
-            return new AcquisitionExecution(
-                AcquisitionRequestStatus.Failed,
-                "No Usenet indexer is configured.");
+            return new AcquisitionExecution(AcquisitionRequestStatus.Completed, "Nothing is missing: every wanted volume and chapter is in the library.");
         }
 
-        if (!(await downloadClients.LoadAllAsync(cancellationToken))
-            .Any(entry => entry.Enabled && entry.Type == DownloadClientType.Sabnzbd))
+        // Without Usenet configured only a direct source (a public web copy) can serve the request.
+        var usenetProblem = !await indexers.HasEnabledIndexerAsync(cancellationToken)
+            ? "No Usenet indexer is configured."
+            : !(await downloadClients.LoadAllAsync(cancellationToken)).Any(entry => entry.Enabled && entry.Type == DownloadClientType.Sabnzbd)
+                ? "SABnzbd is not configured."
+                : null;
+        var profile = profiles is null ? ReadingQualityProfiles.For(request.Kind) : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
+        var search = await core.SearchAsync(ReadingReleaseJudge.Plan(target), profile, new SearchOptions(), cancellationToken);
+        var grabbable = search.Grabbable.Where(release => usenetProblem is null || release.Candidate.Type == AcquisitionType.DirectImport).ToArray();
+
+        // A Manga that is in the library is searched again only for a better version of what it holds, and only a better one is taken. With a structure the judge
+        // already limits the releases to the missing units and genuine upgrades; without one the installed quality decides.
+        var installed = target.Want is null && coverage is not null && request.WorkId is { } workId
+            ? await coverage.InstalledQualityAsync(workId, cancellationToken)
+            : null;
+        if (installed is not null)
         {
-            return new AcquisitionExecution(
-                AcquisitionRequestStatus.Failed,
-                "SABnzbd is not configured.");
+            if (!UpgradePolicy.Assess(profile, installed).IsUpgradable)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Completed, $"The {(request.Kind == MediaAcquisitionKind.Manga ? "Manga" : "Light Novel")} is in the library as {installed}.");
+            }
+
+            grabbable = [.. grabbable.Where(release => release.Candidate.Type != AcquisitionType.DirectImport && release.Score is { } score && UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey))];
         }
 
-        var profile = profiles is null ? null : await profiles.ResolveAsync(request.Kind, request.WorkId, cancellationToken);
-        var lookup = reliability is null ? null : await reliability.LoadAsync(cancellationToken);
-        var search = await ReadingUsenetSearch.SearchAsync(indexers, target, cancellationToken, profile: profile, reliability: lookup, wantedSince: SelectionContext.SinceCreated(request.CreatedAt));
+        if ((installed is not null || target.Want is { HasMissing: false }) && tracker is not null
+            && await tracker.WaitForUpgradeAsync(
+                request,
+                payload,
+                [.. grabbable.Select(release => new ReleaseRequestCandidate(release.Candidate.Identity, release.Candidate.Title, release.Candidate.InternalDownloadUri, release.Candidate.Indexer, release.Candidate.ParsedRelease.ReleaseGroup))],
+                $"The {(request.Kind == MediaAcquisitionKind.Manga ? "Manga" : "Light Novel")} is in the library and no better version is known yet.",
+                cancellationToken) is { } waiting)
+        {
+            return waiting;
+        }
 
-        return await GrabAsync(request, payload, Candidates(search), search.FailureMessage, cancellationToken, searchUnavailable: search.Search?.EveryIndexerFailed == true);
+        return grabbable.Length == 0 && usenetProblem is not null
+            ? new AcquisitionExecution(AcquisitionRequestStatus.Failed, usenetProblem)
+            : await GrabAsync(request, payload, grabbable, FailureMessage(search), cancellationToken, searchUnavailable: search.Search.EveryIndexerFailed);
     }
 
-    /// <summary>
-    /// Runs the tracker lifecycle over the given releases (best first) and submits the first untried one through the shared download-client path.
-    /// Automatic acquisition passes every accepted release; Manual Search passes the one the owner selected.
-    /// </summary>
+    // Manual Search builds its target here too, so it ranks releases exactly as the automatic search does.
+    public async Task<ReadingAcquisitionTarget> TargetAsync(AcquisitionRequest request, ReadingRequestPayload payload, bool refreshStructure, CancellationToken cancellationToken)
+    {
+        var target = ToTarget(request.Kind, payload);
+        if (coverage is null || request.WorkId is not { } workId)
+        {
+            return target;
+        }
+
+        if (refreshStructure && structure is not null)
+        {
+            await structure.RefreshAsync(workId, cancellationToken);
+        }
+
+        var aliases = structure is null ? [] : await structure.AliasesAsync(workId, cancellationToken);
+        var wholeTitleAsked = await coverage.WholeTitleAskedAsync(request.Id, cancellationToken);
+        return target with
+        {
+            Aliases = [.. (target.Aliases ?? []).Concat(aliases).Where(alias => !string.IsNullOrWhiteSpace(alias) && !alias.Equals(target.Title, StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase)],
+            Want = await coverage.WantAsync(workId, wholeTitleAsked, payload.RequestedVolume, payload.RequestedChapterStart, payload.RequestedChapterEnd, cancellationToken)
+        };
+    }
+
+    // Runs the shared grab over the releases (best first); Manual Search passes the one the owner selected.
     public async Task<AcquisitionExecution> GrabAsync(
         AcquisitionRequest request,
         ReadingRequestPayload payload,
-        IReadOnlyList<ReleaseRequestCandidate> candidates,
+        IReadOnlyList<ReleaseEvaluation<ReadingReleaseInfo>> releases,
         string noReleaseReason,
         CancellationToken cancellationToken,
         ManualGrabProgress? progress = null,
         bool searchUnavailable = false) =>
-        await tracker.ContinueAsync(
+        await core.GrabAsync(
             request,
             payload,
-            candidates,
+            releases,
             noReleaseReason,
-            async release =>
-            {
-                progress?.SubmitStarted = true;
-                var outcome = await downloads.SubmitAsync(
-                    new DownloadSubmissionSpec(
-                        OperationKind,
-                        request.Kind == MediaAcquisitionKind.Manga
-                            ? "Download Manga"
-                            : "Download Light Novel",
-                        payload.Title,
-                        request.RequestedByProfileId,
-                        release.DownloadUri,
-                        release.Title,
-                        request.Kind,
-                        ReleaseSource: release.Source,
-                        ReleaseGroup: release.ReleaseGroup),
-                    cancellationToken);
-                if (outcome.Accepted && progress is not null)
-                {
-                    progress.Accepted = true;
-                    progress.OperationId = outcome.OperationId;
-                }
-
-                return new ReleaseRequestSubmission(
-                    outcome.Accepted,
-                    outcome.OperationId,
-                    outcome.Message);
-            },
+            new GrabTarget(OperationKind, request.Kind == MediaAcquisitionKind.Manga ? "Download Manga" : "Download Light Novel", payload.Title, request.Kind, string.Empty),
             cancellationToken,
+            progress,
             searchUnavailable);
 
-    /// <summary>The releases the reading matcher accepted, best first; each is tried once by its identity.</summary>
-    public static IReadOnlyList<ReleaseRequestCandidate> Candidates(
-        ReadingUsenetSearchResult search)
-    {
-        ArgumentNullException.ThrowIfNull(search);
-
-        return search.Ranked
-            .Where(candidate =>
-                candidate.Score > 0 &&
-                candidate.Release.InternalDownloadUri is not null)
-            .Select(candidate => new ReleaseRequestCandidate(
-                candidate.Release.Identity,
-                candidate.Release.Title,
-                candidate.Release.InternalDownloadUri!,
-                candidate.Release.Indexer,
-                candidate.Release.ParsedRelease.ReleaseGroup))
-            .ToArray();
-    }
+    public static string FailureMessage(SearchEvaluation<ReadingReleaseInfo> search) =>
+        search.Releases.Count == 0
+            ? search.Search.Warnings.Count > 0
+                ? $"No release found on the indexers ({search.Search.Warnings[0].IndexerName}: {search.Search.Warnings[0].Message})."
+                : "No release found on the indexers."
+            : "No suitable release matched the requested title, format, volume, chapter or language.";
 
     public static ReadingRequestPayload ReadPayload(
         AcquisitionRequest request,
@@ -229,8 +238,7 @@ public sealed class LightNovelAcquisitionRequestExecutor(
     ReadingAcquisitionEngine engine,
     NovelAniListProvider aniList,
     NovelImportService webNovels,
-    ReadingCatalogSearchService catalogSearch,
-    ReadingSourceSettingsStore sourceSettings) : IAcquisitionRequestExecutor
+    RequestWorkBinder? binder = null) : IAcquisitionRequestExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.LightNovel;
 
@@ -258,123 +266,10 @@ public sealed class LightNovelAcquisitionRequestExecutor(
             };
         }
 
-        // Search every enabled Reading source before Usenet. Only a source explicitly marked as
-        // PublicFullText may be imported automatically; previews, shops and reference-only results
-        // remain discovery evidence and can never bypass the normal acquisition path.
-        var publicCopy = await TryImportPublicCopyAsync(
-            payload,
-            cancellationToken);
-        if (publicCopy is not null)
-        {
-            return publicCopy;
-        }
-
         return await engine.ExecuteAsync(
             request,
             ReadingAcquisitionEngine.ToTarget(MediaAcquisitionKind.LightNovel, payload),
             cancellationToken);
-    }
-
-    private async Task<AcquisitionExecution?> TryImportPublicCopyAsync(
-        ReadingRequestPayload payload,
-        CancellationToken cancellationToken)
-    {
-        ReadingSourceSettingsState settings;
-        try
-        {
-            settings = await sourceSettings.LoadAsync(cancellationToken);
-        }
-        catch (Exception exception) when (
-            exception is IOException or
-            InvalidDataException or
-            UnauthorizedAccessException)
-        {
-            // Source configuration is optional enrichment for this acquisition attempt. Usenet
-            // remains available even when reading-source settings cannot be loaded.
-            return null;
-        }
-
-        var queries = new[] { payload.Title }
-            .Concat(payload.Aliases ?? [])
-            .Where(query => !string.IsNullOrWhiteSpace(query))
-            .Select(query => query.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(3)
-            .ToArray();
-
-        foreach (var query in queries)
-        {
-            var outcome = await catalogSearch.SearchLightNovelsAsync(
-                settings,
-                query,
-                limit: 12,
-                cancellationToken);
-
-            foreach (var candidate in outcome.Candidates)
-            {
-                if (!CanAutoImport(payload, candidate, settings))
-                {
-                    continue;
-                }
-
-                var definition = ReadingSourceCatalog.GetRequired(candidate.Provider);
-                var sourceUrl = definition.DirectImportUrl!(candidate.ExternalId);
-                try
-                {
-                    var workId = await webNovels.ImportWorkAsync(
-                        sourceUrl,
-                        cancellationToken);
-                    return new AcquisitionExecution(
-                        AcquisitionRequestStatus.Completed,
-                        $"Imported a public copy from {definition.Name}.",
-                        ResultUrl: $"/Novels/Work/{workId}");
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception exception) when (
-                    exception is InvalidOperationException or
-                    HttpRequestException or
-                    TaskCanceledException)
-                {
-                    // A catalog result is evidence, not a guarantee that the full text is still
-                    // reachable. Try the remaining candidates and ultimately the normal Usenet path.
-                }
-            }
-        }
-
-        return null;
-    }
-
-    public static bool CanAutoImport(
-        ReadingRequestPayload payload,
-        ReadingCatalogCandidate candidate,
-        ReadingSourceSettingsState settings)
-    {
-        ArgumentNullException.ThrowIfNull(payload);
-        ArgumentNullException.ThrowIfNull(candidate);
-        ArgumentNullException.ThrowIfNull(settings);
-
-        if (!candidate.IsPublicWebSource
-            || !settings.IsEnabled(candidate.Provider)
-            || !ReadingSourceCatalog.TryGet(candidate.Provider, out var definition)
-            || !definition.SupportsDirectImport
-            || definition.DirectImportUrl is null
-            || !definition.IsValidExternalId(candidate.ExternalId))
-        {
-            return false;
-        }
-
-        // Never infer identity from a loose contains/prefix search result. At least one canonical
-        // title or alias from the request must exactly match the result's title/native title after
-        // the same normalization the Reading catalog uses for ranking.
-        var names = new[] { payload.Title }
-            .Concat(payload.Aliases ?? [])
-            .Where(name => !string.IsNullOrWhiteSpace(name));
-
-        return names.Any(name =>
-            ReadingCatalogSearch.MatchScore(name, candidate) >= 1000);
     }
 
     /// <summary>
@@ -459,6 +354,11 @@ public sealed class LightNovelAcquisitionRequestExecutor(
         try
         {
             var workId = await webNovels.ImportWorkAsync(sourceUrl, cancellationToken);
+            if (binder is not null && await binder.BindImportedAsync(request, WorkSourceKind.NovelWork, workId, cancellationToken) is { } conflict)
+            {
+                return new AcquisitionExecution(AcquisitionRequestStatus.Failed, conflict);
+            }
+
             return new AcquisitionExecution(
                 AcquisitionRequestStatus.Completed,
                 "Imported from Syosetu.",

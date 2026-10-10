@@ -22,6 +22,7 @@ namespace Jularr.Web.Pages.Acquisition;
 [Authorize(Policy = JularrPolicies.AdminMedia)]
 public sealed class IndexModel(
     AnimeAcquisitionPipeline pipeline,
+    AnimeManualGrabService manualGrab,
     AnimeAcquisitionScheduler scheduler,
     AnimeImportExecutor importExecutor,
     DownloadClientStore downloadClients,
@@ -85,29 +86,6 @@ public sealed class IndexModel(
                 ConfigurationError = Ui["acquisition.error.animeNoLongerExists"];
             }
         }
-    }
-
-    public async Task<IActionResult> OnPostScheduleAsync(
-        bool enabled,
-        int intervalMinutes,
-        CancellationToken cancellationToken)
-    {
-        Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-
-        if (intervalMinutes is < AnimeMonitoringSchedule.MinimumIntervalMinutes or > AnimeMonitoringSchedule.MaximumIntervalMinutes)
-        {
-            TempData["AcquisitionError"] = Ui.Format(
-                "acquisition.error.intervalRange",
-                ("min", AnimeMonitoringSchedule.MinimumIntervalMinutes),
-                ("max", AnimeMonitoringSchedule.MaximumIntervalMinutes));
-            return RedirectToPage();
-        }
-
-        await pipeline.UpdateScheduleAsync(enabled, intervalMinutes, cancellationToken);
-        TempData["AcquisitionNotice"] = enabled
-            ? Ui.Format("acquisition.status.scheduleOn", ("minutes", intervalMinutes))
-            : Ui["acquisition.status.scheduleOff"];
-        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostRunNowAsync(CancellationToken cancellationToken)
@@ -179,7 +157,7 @@ public sealed class IndexModel(
             }
 
             var queued = update.StartedMonitoring && searchOnAdd &&
-                         scheduler.RequestRun(update.AnimeKey, AnimeSearchTrigger.SearchOnAdd);
+                         scheduler.RequestRun(update.AnimeKey);
             TempData["AcquisitionNotice"] = queued
                 ? Ui["acquisition.status.settingsSavedSearching"]
                 : Ui["acquisition.status.settingsSaved"];
@@ -207,9 +185,7 @@ public sealed class IndexModel(
             return BadRequest();
         }
 
-        var result = await scheduler.RunExclusiveAsync(
-            (runner, token) => runner.GrabAsync(animeKey, season, episode, mode, releaseIdentity, token),
-            cancellationToken);
+        var result = await manualGrab.GrabAsync(animeKey, season, episode, mode, releaseIdentity, cancellationToken);
         TempData[result.Success ? "AcquisitionNotice" : "AcquisitionError"] = result.Message;
         return result.Success
             ? RedirectToPage()
@@ -224,17 +200,6 @@ public sealed class IndexModel(
         CancellationToken cancellationToken)
     {
         var result = await importExecutor.ImportManuallyAsync(recordId, sourcePath, season, episode, cancellationToken);
-        if (result.Success)
-        {
-            await scheduler.RunExclusiveAsync(
-                async (runner, token) =>
-                {
-                    await runner.ReconcileAttemptsAsync(token);
-                    return true;
-                },
-                cancellationToken);
-        }
-
         TempData[result.Success ? "AcquisitionNotice" : "AcquisitionError"] = result.Message;
         return RedirectToPage();
     }

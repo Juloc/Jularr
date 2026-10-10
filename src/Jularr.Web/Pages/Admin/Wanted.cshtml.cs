@@ -46,10 +46,10 @@ public sealed class WantedModel(
     public bool AnyWanted { get; private set; }
 
     /// <summary>The cached poster of each Movie or Series Work on the page, by Work id.</summary>
-    public IReadOnlyDictionary<Guid, string> WorkPosters { get; private set; } = new Dictionary<Guid, string>();
+    public IReadOnlyDictionary<long, string> WorkPosters { get; private set; } = new Dictionary<long, string>();
 
     /// <summary>The cover of a row: the canonical Work poster of a Movie or Series, the cover the source carries for everything else.</summary>
-    public string? CoverOf(WantedItem item) => item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
+    public string? CoverOf(WantedRow item) => item.Kind is MediaAcquisitionKind.Movie or MediaAcquisitionKind.Tv
         ? item.WorkId is { } workId ? WorkPosters.GetValueOrDefault(workId) : null
         : item.CoverUrl;
 
@@ -79,7 +79,7 @@ public sealed class WantedModel(
     }
 
     /// <summary>The unit a row is about: "Season 2, episode 13", "Volume 42", the requested seasons, or nothing for a whole title.</summary>
-    public string? UnitLabel(WantedItem item)
+    public string? UnitLabel(WantedRow item)
     {
         if (item.Scope == RequestScope.Seasons && item.Selection is { } seasons)
         {
@@ -129,30 +129,6 @@ public sealed class WantedModel(
             WantedAgeUnit.Hours => Ui.Format("admin.wanted.age.hours", ("count", number)),
             WantedAgeUnit.Days => Ui.Format("admin.wanted.age.days", ("count", number)),
             _ => Ui["admin.wanted.age.now"]
-        };
-    }
-
-    /// <summary>What the last search of a row came to, in a few words; the acquisition's own message wins.</summary>
-    public string? ResultLabel(WantedItem item)
-    {
-        if (item.Note is { } note)
-        {
-            return note;
-        }
-
-        if (item.Source != WantedSource.Monitored)
-        {
-            return null;
-        }
-
-        return item.Attempt switch
-        {
-            AcquisitionAttemptStatus.Pending => Ui["admin.wanted.attempt.queued"],
-            AcquisitionAttemptStatus.Grabbed => Ui["admin.wanted.attempt.grabbed"],
-            AcquisitionAttemptStatus.Failed => Ui.Format(
-                "admin.wanted.attempt.failed",
-                ("count", item.Failures.ToString(CultureInfo.InvariantCulture))),
-            _ => null
         };
     }
 
@@ -239,7 +215,7 @@ public sealed class WantedModel(
         }
 
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
-        TempData["Status"] = scheduler.RequestRun(animeKey.Trim(), AnimeSearchTrigger.Manual)
+        TempData["Status"] = scheduler.RequestRun(animeKey.Trim())
             ? Ui["admin.wanted.searchQueued"]
             : Ui["acquisition.error.tooManyQueued"];
         return Back(returnUrl);

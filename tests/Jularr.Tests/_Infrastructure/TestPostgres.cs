@@ -32,6 +32,7 @@ public static class TestPostgres
     private static bool _initialized;
     private static string _baseConnectionString = string.Empty;
     private static string[] _dataTables = [];
+    private static string[] _templateTriggerObjects = [];
     private static int _counter;
 
     // Per-run prefix "jt_<unix seconds>_<random>_": unique per test process, so concurrent runs against
@@ -44,7 +45,7 @@ public static class TestPostgres
 
     private static string BaseConnectionString =>
         Environment.GetEnvironmentVariable("JULARR_TEST_DB")
-        ?? "Host=localhost;Port=5433;Username=jularr;Password=devtest;Include Error Detail=true";
+        ?? "Host=127.0.0.1;Port=5433;Username=jularr;Password=devtest;Include Error Detail=true";
 
     /// <summary>
     /// Called by the <c>UseSqlite</c> test shim. Returns a PostgreSQL connection string for a database
@@ -117,8 +118,9 @@ public static class TestPostgres
         }
     }
 
-    private static string ConnectionFor(string database) =>
-        new NpgsqlConnectionStringBuilder(BaseConnectionString) { Database = database }.ConnectionString;
+    // Every isolated database otherwise retains its own idle connection pool across the three CI shards.
+    // Release fixture connections on disposal; concurrent tests still open independent real connections.
+    private static string ConnectionFor(string database) => new NpgsqlConnectionStringBuilder(BaseConnectionString) { Database = database, Pooling = false }.ConnectionString;
 
     private static void EnsureInitialized()
     {
@@ -154,6 +156,7 @@ public static class TestPostgres
         }
 
         _dataTables = LoadDataTables(templateConnection);
+        _templateTriggerObjects = LoadTriggerObjects(templateConnection);
         NpgsqlConnection.ClearAllPools();
         _initialized = true;
     }
@@ -171,8 +174,56 @@ public static class TestPostgres
     {
         using var connection = new NpgsqlConnection(ConnectionFor(database));
         connection.Open();
+        DropLeakedTriggers(connection);
         var list = string.Join(", ", _dataTables.Select(t => $"\"{t}\""));
         Execute(connection, $"TRUNCATE TABLE {list} RESTART IDENTITY CASCADE;");
+    }
+
+    // TRUNCATE neither fires nor removes triggers: a test that installed one (to make a write fail) must not poison the next test that gets this database.
+    // Only what the migrated template does not have is dropped, so the schema's own triggers stay.
+    private static void DropLeakedTriggers(NpgsqlConnection connection)
+    {
+        var leaked = LoadTriggerObjects(connection).Where(item => !_templateTriggerObjects.Contains(item, StringComparer.Ordinal)).ToArray();
+        foreach (var item in leaked.Where(item => item.StartsWith("trigger|", StringComparison.Ordinal)))
+        {
+            var parts = item.Split('|');
+            Execute(connection, $"DROP TRIGGER IF EXISTS \"{parts[2]}\" ON \"{parts[1]}\";");
+        }
+
+        foreach (var item in leaked.Where(item => item.StartsWith("function|", StringComparison.Ordinal)))
+        {
+            Execute(connection, $"DROP FUNCTION IF EXISTS \"{item.Split('|')[1]}\"() CASCADE;");
+        }
+    }
+
+    private static string[] LoadTriggerObjects(string connectionString)
+    {
+        using var connection = new NpgsqlConnection(connectionString);
+        connection.Open();
+        return LoadTriggerObjects(connection);
+    }
+
+    private static string[] LoadTriggerObjects(NpgsqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT 'trigger|' || c.relname || '|' || t.tgname
+            FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE NOT t.tgisinternal AND n.nspname = 'public'
+            UNION ALL
+            SELECT 'function|' || p.proname
+            FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.prorettype = 'trigger'::regtype;
+            """;
+        var items = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            items.Add(reader.GetString(0));
+        }
+
+        return [.. items];
     }
 
     private static string[] LoadDataTables(string connectionString)

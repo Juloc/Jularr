@@ -52,14 +52,14 @@ public sealed class RequestToPlayMovieTests
         return (completed, await world.Db.Works.AsNoTracking().SingleAsync());
     }
 
-    private static async Task<JsonElement> PostPlanAsync(VideoRequestToPlayWorld world, Guid workId, string? profile = null)
+    private static async Task<JsonElement> PostPlanAsync(VideoRequestToPlayWorld world, long workId, string? profile = null)
     {
         var response = await world.Pages.SendAsync(HttpMethod.Post, $"{Api}/video/playback-plan", new { target = new { workId } }, profile: profile);
         Assert.AreEqual(HttpStatusCode.OK, response.Status, response.Body);
         return JsonDocument.Parse(response.Body).RootElement.Clone();
     }
 
-    private static async Task<JsonElement> PutProgressAsync(VideoRequestToPlayWorld world, Guid workId, long positionMs, bool completed, string? profile = null)
+    private static async Task<JsonElement> PutProgressAsync(VideoRequestToPlayWorld world, long workId, long positionMs, bool completed, string? profile = null)
     {
         var response = await world.Pages.SendAsync(HttpMethod.Put, $"{Api}/video/progress", new { target = new { workId }, positionMs, durationMs = 1_440_000, completed }, profile: profile);
         Assert.AreEqual(HttpStatusCode.OK, response.Status, response.Body);
@@ -164,7 +164,7 @@ public sealed class RequestToPlayMovieTests
         RequestToPlayAssert.Contains(watch, "data-storage-state=\"available\"");
         RequestToPlayAssert.NoHostPathIn(watch, world.LibraryRoot, world.Downloads);
         var plan = await PostPlanAsync(world, work.Id);
-        Assert.AreEqual(work.Id, plan.GetProperty("target").GetProperty("workId").GetGuid());
+        Assert.AreEqual(work.Id, plan.GetProperty("target").GetProperty("workId").GetInt64());
         Assert.AreNotEqual(JsonValueKind.Null, plan.GetProperty("delivery").ValueKind, "A reachable file has a delivery route.");
         Assert.AreEqual(0, plan.GetProperty("resumePositionMs").GetInt64());
         var bootstrap = await world.Pages.SendAsync(HttpMethod.Post, $"{Api}/video/player", new { target = new { workId = work.Id } });

@@ -160,7 +160,7 @@ public sealed class ContinueReadingQuery(AppDbContext db)
                     COALESCE(s."MetadataTitle", s."Title") AS "Title",
                     s."CoverImageUrl" AS "CoverImageUrl",
                     (SELECT c0."Id" FROM "MangaChapters" c0
-                        WHERE c0."SeriesId" = s."Id"
+                        WHERE c0."SeriesId" = s."Id" AND c0."SupersededById" IS NULL
                         ORDER BY c0."Number" LIMIT 1) AS "PreviewChapterId",
                     p."ChapterId" AS "ChapterId",
                     c."Number" AS "Number",
@@ -175,7 +175,7 @@ public sealed class ContinueReadingQuery(AppDbContext db)
                       p."PageIndex" >= c."PageCount" - 1
                       AND NOT EXISTS (
                           SELECT 1 FROM "MangaChapters" later
-                          WHERE later."SeriesId" = p."SeriesId"
+                          WHERE later."SeriesId" = p."SeriesId" AND later."SupersededById" IS NULL
                             AND later."Number" > c."Number"))
                 ORDER BY p."UpdatedAt" DESC, lower(p."SeriesId")
                 LIMIT {limit}

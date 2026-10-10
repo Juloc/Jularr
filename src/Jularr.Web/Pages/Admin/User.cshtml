@@ -24,7 +24,8 @@
     <a class="button" asp-page="/Admin/Users">@ui["admin.user.backToUsers"]</a>
 </header>
 
-<partial name="_AdminNavigation" model="Model.Ui" />
+<partial name="_AdminSectionLinks" />
+<p><a class="button button-secondary" href="/Admin/Users/@Uri.EscapeDataString(account.Id)/Settings/Requests">@ui["admin.nav.requests"]</a></p>
 
 <div asp-validation-summary="ModelOnly" class="validation"></div>
 

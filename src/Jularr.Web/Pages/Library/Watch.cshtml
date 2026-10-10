@@ -1,4 +1,4 @@
-@page "/Library/Watch/{workId:guid}/{episodeId:guid?}"
+@page "/Library/Watch/{workId:long}/{episodeId:guid?}"
 @using Jularr.Web.Features.Playback
 @model Jularr.Web.Pages.Library.WatchModel
 @* The web player of a Movie or one episode of a Series. It renders the same player stage and scripts as every other
@@ -21,7 +21,7 @@
     @if (Model.Stage is { } stage)
     {
         <partial name="_VideoPlayerStage" model="stage" />
-        <partial name="_VideoPlayerScripts" />
+        <partial name="_VideoPlayerScripts" model="@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)" />
     }
     else if (Model.Unavailable is { } unavailable)
     {

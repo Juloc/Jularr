@@ -17,6 +17,7 @@
         .Where(pair => pair.Value)
         .Select(pair => pair.Key)
         .ToHashSet();
+    var mediaManagerMode = InstanceModulePresets.Detect(instanceSettings) == InstancePreset.MediaManager;
     var learningVisible = false;
     if (instanceSettings.IsEnabled(InstanceModule.Learning)
         && !string.IsNullOrWhiteSpace(profileId))
@@ -32,7 +33,8 @@
         learningVisible,
         policy => Jularr.Web.Features.Auth.JularrPolicies.Allows(User, policy),
         media.VisibleMediaTypes,
-        enabledModules);
+        enabledModules,
+        mediaManagerMode);
 
     // The sidebar shows Admin as a permanent shortcut unless the profile turned it off; it always stays in the account menu, and the
     // section opens in the sidebar whenever an Admin page is open. Settings only opens as the section of the current page.
@@ -54,6 +56,7 @@
         current = recent.FirstOrDefault(item => item.ChapterId == chapterId || (workId is { } id && item.WorkId == id));
     }
 }
+@{ ViewData["AdminSearch"] = nav.Expanded?.Id == "admin"; }
 <partial name="_AppHeader" model="(nav.Breadcrumb, true)" />
 
 <aside class="sidebar">
@@ -75,23 +78,6 @@
         }
 
         <div class="nav-bottom">
-            @* The one Unfinished section (#870): above the Admin shortcut, collapsed unless the current page is inside it. *@
-            @if (nav.Unfinished.Count > 0)
-            {
-                <details class="nav-unfinished" open="@nav.Unfinished.Any(item => item.IsActive)">
-                    <summary class="nav-unfinished-summary">
-                        <span class="nav-label">@ui["nav.unfinished"]</span>
-                        <partial name="_AppIcon" model="@("chevronDown")" />
-                    </summary>
-                    <nav class="nav-list nav-list-secondary" aria-label="@ui["nav.unfinished"]">
-                        @foreach (var item in nav.Unfinished)
-                        {
-                            <partial name="_AppNavLink" model="item" />
-                        }
-                    </nav>
-                </details>
-            }
-
             @if (sidebarSecondary.Length > 0)
             {
                 <nav class="nav-list nav-list-secondary @(nav.Expanded is not null ? "nav-list-expanded" : "")" aria-label="@ui["nav.secondaryAria"]">
@@ -123,7 +109,10 @@
         </div>
     </div>
 
-    <partial name="_AppUserMenu" />
+    @if (Jularr.Web.Features.Auth.JularrPolicies.Allows(User, Jularr.Web.Features.Auth.JularrPolicies.AdminMedia))
+    {
+        <div class="sidebar-version">Jularr <span>@ViewData["AppBuildVersion"]</span></div>
+    }
 </aside>
 
 <nav class="mobile-nav" aria-label="@ui["nav.primaryAria"]">

@@ -21,7 +21,7 @@
     <span class="admin-tag admin-tag-@ManualSearchModel.VerdictTone(chosen.Verdict)"><partial name="_ManualSearchIcon" model="chosenVerdict" />@ui["admin.manualSearch.state." + chosenVerdict]</span>
 </div>
 <dl class="bms-facts">
-    <div><dt>@ui["admin.manualSearch.col.score"]</dt><dd>@(chosen.Score?.ToString() ?? "–")</dd></div>
+    <div><dt>@ui["admin.manualSearch.col.rank"]</dt><dd>@(chosen.Rank?.ToString() ?? "–")</dd></div>
     <div><dt>@ui["admin.manualSearch.col.size"]</dt><dd>@ManualSearchModel.Size(chosen.SizeBytes)</dd></div>
     <div><dt>@ui["admin.manualSearch.col.age"]</dt><dd>@ManualSearchModel.AgeText(ui, chosen.AgeDays)</dd></div>
     <div><dt>@ui["admin.manualSearch.filter.quality"]</dt><dd>@(chosen.Quality ?? "—")</dd></div>
@@ -52,7 +52,7 @@
 @if (chosen.ScoreBreakdown.Count > 0)
 {
     <div class="bms-breakdown">
-        <strong>@ui["admin.manualSearch.scoreBreakdown"]</strong>
+        <strong>@ui["admin.manualSearch.rankDetails"]</strong>
         <ul>
             @foreach (var line in chosen.ScoreBreakdown)
             {

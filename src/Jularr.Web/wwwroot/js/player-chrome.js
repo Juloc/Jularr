@@ -1,8 +1,4 @@
-// The player's own controls. episode-player.js owns sources, the (absolute) timeline, subtitles
-// and progress; this file only drives what the native <video controls> used to: play/pause,
-// volume, full screen, picture-in-picture, the settings menu, auto-hiding the chrome and taps on
-// the video (show/hide, double-tap seek). Every control exists once; there is deliberately no
-// second timeline and no native control bar.
+// The shared player chrome owns mouse, touch, keyboard and presentation controls; episode-player.js owns media and progress.
 (() => {
     const root = document.querySelector("[data-episode-player]");
     const stage = root?.querySelector("[data-player-chrome]");
@@ -50,6 +46,12 @@
     // Controls stay up while paused and hide a few seconds into playback without interaction.
     const settingsOpen = () => settings && !settings.hidden;
     const chromeHidden = () => stage.dataset.chromeState === "hidden";
+    const focusedOnControls = () =>
+        stage.contains(document.activeElement) &&
+        document.activeElement?.matches?.(":focus-visible") === true &&
+        Boolean(document.activeElement?.closest?.(".player-top, .player-center, .player-bottom, .player-settings"));
+    const hoveredControls = () =>
+        Boolean(stage.querySelector(".player-top:hover, .player-center:hover, .player-bottom:hover, .player-settings:hover"));
     const hide = () => {
         window.clearTimeout(hideTimer);
         if (!settingsOpen()) stage.dataset.chromeState = "hidden";
@@ -59,7 +61,7 @@
         window.clearTimeout(hideTimer);
         if (!video.paused && !settingsOpen()) {
             hideTimer = window.setTimeout(() => {
-                if (!video.paused && !settingsOpen() && !stage.contains(document.activeElement?.closest?.(".player-settings"))) {
+                if (!video.paused && !settingsOpen() && !focusedOnControls() && !hoveredControls()) {
                     hide();
                 }
             }, hideDelayMs);
@@ -70,7 +72,7 @@
         if (event.pointerType === "mouse") show();
     });
     stage.addEventListener("pointerleave", event => {
-        if (event.pointerType === "mouse" && !video.paused && !settingsOpen()) hide();
+        if (event.pointerType === "mouse" && !video.paused && !settingsOpen() && !focusedOnControls()) hide();
     });
     // Keyboard focus shows the controls; the focus a click gives the stage does not.
     stage.addEventListener("focusin", event => {
@@ -103,12 +105,11 @@
     });
     for (const name of ["play", "pause", "ended", "emptied"]) video.addEventListener(name, renderPlayState);
 
-    // --- taps on the video (touch and mouse alike) --------------------------------------------
-    // A tap shows or hides the controls and never pauses. Double tap left/right seeks, repeated
-    // taps add up; double tap in the middle toggles full screen (player-gestures.js decides).
+    // Mouse clicks toggle playback; double-click opens fullscreen. Touch retains its separate tap/seek gestures.
     const seekSeconds = design.seekSeconds(root);
     const taps = window.JularrPlayerGestures?.createTapDecider({ backSeconds: seekSeconds.back, forwardSeconds: seekSeconds.forward });
-    const interactive = ".player-center button, .player-bottom, .player-settings, .player-learning-sheet, .post-play, " +
+    const mouseClicks = window.JularrPlayerGestures?.createMouseClickDecider();
+    const interactive = ".player-top, .player-center, .player-bottom, .player-settings, .player-learning-sheet, .post-play, " +
         ".player-error, .player-subtitle-bubble, .playback-preparation-actions, button, a, input, select, textarea, label, summary";
     const isSurface = target => target instanceof Element && !target.closest(interactive);
 
@@ -153,10 +154,27 @@
         }
     };
 
+    const handleMouseClick = (x, y) => {
+        if (!mouseClicks) {
+            togglePlay();
+            return;
+        }
+
+        const decision = mouseClicks.click(x, y, performance.now());
+        if (decision.action === "fullscreen") {
+            void presentation.toggleFullscreen();
+        } else {
+            if (decision.action === "playPauseAndWait") togglePlay();
+            window.setTimeout(() => {
+                if (mouseClicks.settle(performance.now()).action === "playPause") togglePlay();
+            }, mouseClicks.delayMs + 20);
+        }
+    };
+
     let press = null;
     stage.addEventListener("pointerdown", event => {
         press = null;
-        if (!event.isPrimary || event.button > 0) return;
+        if (!event.isPrimary || event.button !== 0) return;
         if (!isSurface(event.target)) {
             // Using a control keeps the controls up.
             show();
@@ -169,19 +187,23 @@
             return;
         }
 
-        press = { x: event.clientX, y: event.clientY, at: performance.now() };
+        press = { x: event.clientX, y: event.clientY, at: performance.now(), pointerId: event.pointerId, pointerType: event.pointerType };
     });
     stage.addEventListener("pointercancel", () => { press = null; });
     stage.addEventListener("pointerup", event => {
         const start = press;
         press = null;
-        if (!start || !event.isPrimary || video.hidden || !isSurface(event.target)) return;
-        // Drags, swipes and long presses are not taps.
+        if (!start || !event.isPrimary || start.pointerId !== event.pointerId ||
+            start.pointerType !== event.pointerType || video.hidden || !isSurface(event.target)) return;
         if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 16 || performance.now() - start.at > 600) return;
-        const rect = stage.getBoundingClientRect();
-        handleTap(rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0.5);
+
+        if (event.pointerType === "mouse") {
+            handleMouseClick(event.clientX, event.clientY);
+        } else {
+            const rect = stage.getBoundingClientRect();
+            handleTap(rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0.5);
+        }
     });
-    // Double-click on the video would select text or zoom; the tap logic above owns it.
     stage.addEventListener("dblclick", event => {
         if (isSurface(event.target)) event.preventDefault();
     });
@@ -193,6 +215,7 @@
         timeline?.style.setProperty("--progress", max > 0 ? `${(value / max) * 100}%` : "0%");
     };
     timeline?.addEventListener("input", renderTimelineFill);
+    timeline?.addEventListener("change", renderTimelineFill);
     video.addEventListener("timeupdate", renderTimelineFill);
     video.addEventListener("seeked", renderTimelineFill);
     video.addEventListener("loadedmetadata", renderTimelineFill);
@@ -296,6 +319,7 @@
     const settingRows = settings ? [...settings.querySelectorAll("[data-setting-row]")] : [];
     const settingSelects = {
         subtitles: subtitleSelect,
+        secondarySubtitles: stage.querySelector("[data-secondary-subtitle-track]"),
         audio: stage.querySelector("[data-audio-track]"),
         quality: stage.querySelector("[data-quality-cap]"),
         speed: stage.querySelector("[data-playback-speed]")
@@ -307,8 +331,14 @@
     const renderSettingValues = () => {
         for (const control of stage.querySelectorAll("[data-chrome-open-setting]")) {
             const value = control.querySelector("[data-chrome-setting-value]");
-            const option = settingSelects[control.dataset.chromeOpenSetting]?.selectedOptions[0];
-            if (value && option) value.textContent = optionLabel(option);
+            const selected = settingSelects[control.dataset.chromeOpenSetting]?.selectedOptions[0];
+            if (!value || !selected) continue;
+            const secondary = control.dataset.chromeOpenSetting === "subtitles"
+                ? settingSelects.secondarySubtitles?.selectedOptions[0]
+                : null;
+            value.textContent = secondary?.value && secondary.value !== "off"
+                ? `${optionLabel(selected)} + ${optionLabel(secondary)}`
+                : optionLabel(selected);
         }
     };
 
@@ -317,20 +347,40 @@
         optionList = null;
         const select = settingSelects[mode];
         if (!select) return;
+
         optionList = document.createElement("div");
-        optionList.className = "player-options";
-        optionList.setAttribute("role", "radiogroup");
-        optionList.setAttribute("aria-label", title);
-        for (const option of select.options) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "player-option";
-            button.setAttribute("role", "radio");
-            button.setAttribute("aria-checked", String(option.value === select.value));
-            if (option.disabled) button.setAttribute("aria-disabled", "true");
-            button.dataset.value = option.value;
-            button.textContent = optionLabel(option);
-            optionList.append(button);
+        optionList.className = "player-options-group";
+        const choices = mode === "subtitles"
+            ? ["subtitles", "secondarySubtitles"]
+            : [mode];
+        for (const choice of choices) {
+            const source = settingSelects[choice];
+            if (!source) continue;
+            const heading = settings.querySelector(`[data-setting-row="${choice}"] > span`)?.textContent?.trim()
+                || title;
+            const list = document.createElement("div");
+            list.className = "player-options";
+            list.setAttribute("role", "radiogroup");
+            list.setAttribute("aria-label", heading);
+            if (choices.length > 1) {
+                const label = document.createElement("strong");
+                label.className = "player-options-heading";
+                label.textContent = heading;
+                optionList.append(label);
+            }
+            for (const option of source.options) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "player-option";
+                button.setAttribute("role", "radio");
+                button.setAttribute("aria-checked", String(option.value === source.value));
+                if (option.disabled) button.setAttribute("aria-disabled", "true");
+                button.dataset.value = option.value;
+                button.dataset.settingMode = choice;
+                button.textContent = optionLabel(option);
+                list.append(button);
+            }
+            optionList.append(list);
         }
         settings.querySelector(".player-settings-header").after(optionList);
     };
@@ -358,16 +408,26 @@
             : settingsTitle?.dataset.titleAll || "";
         settings.dataset.settingsMode = mode;
         if (settingsTitle) settingsTitle.textContent = title;
-        // In the single-choice view the select row is replaced by the option list; its hint (burn-in, quality limit) stays.
+        const directSettings = new Set([...stage.querySelectorAll("[data-chrome-open-setting]")]
+            .filter(control => !control.hidden && control.getClientRects().length > 0)
+            .map(control => control.dataset.chromeOpenSetting));
+        const parentSetting = name => name === "secondarySubtitles" || name === "subtitleAppearance"
+            ? "subtitles" : name;
         for (const row of settingRows) {
-            row.toggleAttribute("data-filtered", single && (row.dataset.settingRow !== mode || row.classList.contains("player-setting")));
+            const parent = parentSetting(row.dataset.settingRow);
+            const appearance = mode === "subtitles" && row.dataset.settingRow === "subtitleAppearance";
+            const filtered = single
+                ? (parent !== mode || (row.classList.contains("player-setting") && !appearance))
+                : directSettings.has(parent);
+            row.toggleAttribute("data-filtered", filtered);
         }
         renderOptions(single ? mode : "", title);
         stage.dataset.chromeState = "visible";
         window.clearTimeout(hideTimer);
         const first = optionList
             ? optionList.querySelector('[aria-checked="true"]') || optionList.querySelector(".player-option")
-            : settings.querySelector("select, input, button:not([data-chrome-settings-close])");
+            : [...settings.querySelectorAll("select, input, button:not([data-chrome-settings-close])")]
+                .find(control => control.getClientRects().length > 0);
         first?.focus({ preventScroll: true });
     };
 
@@ -386,11 +446,17 @@
     stage.querySelector("[data-chrome-settings-close]")?.addEventListener("click", () => setSettings(false));
     settings?.addEventListener("click", event => {
         const button = event.target.closest(".player-option");
-        const select = settingSelects[settings.dataset.settingsMode];
+        const select = settingSelects[button?.dataset.settingMode];
         if (!button || !select || button.getAttribute("aria-disabled") === "true") return;
         select.value = button.dataset.value;
         select.dispatchEvent(new Event("change", { bubbles: true }));
-        setSettings(false);
+        if (settings.dataset.settingsMode === "subtitles") {
+            renderOptions("subtitles", settingsTitle?.textContent || "");
+            optionList?.querySelector(`[data-setting-mode="${button.dataset.settingMode}"][aria-checked="true"]`)
+                ?.focus({ preventScroll: true });
+        } else {
+            setSettings(false);
+        }
     });
     settings?.addEventListener("keydown", event => {
         if (!optionList || (event.key !== "ArrowDown" && event.key !== "ArrowUp")) return;
@@ -433,7 +499,7 @@
 
     // --- keyboard (when focus is in the player and not in a form control) -------------------
     stage.addEventListener("keydown", event => {
-        if (event.target.closest("select, input:not([type=range]), textarea, .player-settings")) {
+        if (event.target.closest("select, input, textarea, [contenteditable], [role=textbox], .player-settings")) {
             if (event.key === "Escape" && settingsOpen()) {
                 event.preventDefault();
                 setSettings(false);

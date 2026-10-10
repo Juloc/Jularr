@@ -405,6 +405,26 @@ public sealed class PlayerPresentationTests
     }
 
     [TestMethod]
+    public void DesktopTransportStaysAboveBottomChromeAndSeekingHasAUsableHitArea()
+    {
+        var css = Read("src", "Jularr.Web", "wwwroot", "css", "player.css");
+        var chrome = Read("src", "Jularr.Web", "wwwroot", "js", "player-chrome.js");
+        var stage = Read("src", "Jularr.Web", "Pages", "Library", "_VideoPlayerStage.cshtml");
+
+        StringAssert.Contains(css, ".player-center { top: auto; bottom: 8px; z-index: 1;");
+        StringAssert.Contains(css, ".player-timeline-row { grid-area: line; position: relative; display: flex; align-items: center; height: 26px;");
+        StringAssert.Contains(css, "background-size: 100% 5px;");
+        StringAssert.Contains(css, ".player-timeline:hover, .player-timeline:focus-visible { background-size: 100% 7px; }");
+        StringAssert.Contains(chrome, "!focusedOnControls() && !hoveredControls()");
+        StringAssert.Contains(chrome, "document.activeElement?.matches?.(\":focus-visible\") === true");
+        StringAssert.Contains(chrome, "timeline?.addEventListener(\"change\", renderTimelineFill);");
+        StringAssert.Contains(stage, "data-playback-timeline");
+        StringAssert.Contains(stage, "data-chrome-play");
+        StringAssert.Contains(stage, "data-player-action=\"seekBack10\"");
+        StringAssert.Contains(stage, "data-player-action=\"seekForward10\"");
+    }
+
+    [TestMethod]
     public void TheaterStylesFillTheDynamicViewportWithSafeAreasAndRespectReducedMotion()
     {
         var css = Read("src", "Jularr.Web", "wwwroot", "css", "player.css");

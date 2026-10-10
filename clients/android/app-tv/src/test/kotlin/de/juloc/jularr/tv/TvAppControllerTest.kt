@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.api.JularrClientApi
+import de.juloc.jularr.core.api.WatchlistPage
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientCapabilities
@@ -297,16 +298,22 @@ class TvAppControllerTest {
             ),
         )
 
-        override suspend fun getWatchlist() = listOf(
-            WatchlistItem(
-                id = "anime",
-                mediaType = "anime",
-                title = "Anime",
-                artworkUrl = null,
-                availability = "in_library",
-                detailsUrl = "/Library/Anime/anime",
-                addedAtUtc = "2026-09-20T00:00:00Z",
-            ),
+        override suspend fun getWatchlistPage(page: Int, pageSize: Int) = WatchlistPage(
+            items = if (page == 1) listOf(
+                WatchlistItem(
+                    id = "anime",
+                    mediaType = "anime",
+                    title = "Anime",
+                    artworkUrl = null,
+                    availability = "in_library",
+                    detailsUrl = "/Library/Anime/anime",
+                    addedAtUtc = "2026-09-20T00:00:00Z",
+                ),
+            ) else emptyList(),
+            page = page,
+            pageSize = pageSize,
+            totalCount = 1L,
+            hasMore = false,
         )
 
         override suspend fun getAnime(animeId: String): AnimeDetail = error("unused")

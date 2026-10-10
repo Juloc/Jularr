@@ -5,16 +5,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Features.Progress;
 
-public sealed record MediaProgressTarget(Guid WorkId, Guid? WorkEpisodeId)
+public sealed record MediaProgressTarget(long WorkId, Guid? WorkEpisodeId)
 {
-    public static MediaProgressTarget Movie(Guid workId) => new(workId, null);
+    public static MediaProgressTarget Movie(long workId) => new(workId, null);
 
-    public static MediaProgressTarget Episode(Guid workId, Guid workEpisodeId) =>
+    public static MediaProgressTarget Episode(long workId, Guid workEpisodeId) =>
         new(workId, workEpisodeId);
 }
 
 public sealed record MediaProgressSnapshot(
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId,
     long PositionMs,
     long? DurationMs,
@@ -53,7 +53,7 @@ public sealed record CompletedEpisodeRef(Guid WorkEpisodeId, int SeasonNumber, i
 /// episode (specials excluded) in season/episode order whose predecessors are all completed; a single uncompleted
 /// episode stops it. <see cref="UpdatedAt"/> is the newest regular-episode progress write, completed or not.
 /// </summary>
-public sealed record VideoWorkCompletion(Guid WorkId, DateTime UpdatedAt, CompletedEpisodeRef? CompletedThrough);
+public sealed record VideoWorkCompletion(long WorkId, DateTime UpdatedAt, CompletedEpisodeRef? CompletedThrough);
 
 /// <summary>
 /// Canonical progress of one Anime episode addressed through its legacy library identity, for pages and clients that
@@ -84,7 +84,7 @@ public enum VideoContinueWatchingKind
 public sealed record VideoContinueWatchingItem(
     VideoContinueWatchingKind Kind,
     WorkMediaType MediaType,
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId,
     string WorkTitle,
     int? SeasonNumber,
@@ -95,7 +95,7 @@ public sealed record VideoContinueWatchingItem(
     DateTime UpdatedAt);
 
 public sealed record VideoEpisodeFlowSnapshot(
-    Guid WorkId,
+    long WorkId,
     Guid CurrentWorkEpisodeId,
     Guid? PreviousWorkEpisodeId,
     Guid? NextWorkEpisodeId);
@@ -103,7 +103,7 @@ public sealed record VideoEpisodeFlowSnapshot(
 public sealed record MediaPlaybackHistoryItem(
     Guid Id,
     WorkMediaType MediaType,
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId,
     string WorkTitle,
     int? SeasonNumber,
@@ -147,7 +147,7 @@ public sealed class VideoProgressService(AppDbContext db)
     /// The canonical progress rows of one profile for the given Works in a single read, for browse surfaces that
     /// show continue state for many Works at once instead of loading each target through <see cref="GetAsync"/>.
     /// </summary>
-    public async Task<IReadOnlyList<MediaProgressSnapshot>> ListAsync(string profileId, IReadOnlyCollection<Guid> workIds, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MediaProgressSnapshot>> ListAsync(string profileId, IReadOnlyCollection<long> workIds, CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
         var rows = await db.Database.SqlQueryRaw<MediaProgressDbRow>(
@@ -314,6 +314,7 @@ public sealed class VideoProgressService(AppDbContext db)
         }
 
         var mediaTypeFilter = mediaTypes?.Select(type => (int)type).ToArray();
+        var animeVisible = mediaTypes is null || mediaTypes.Contains(WorkMediaType.Anime);
 
         var rows = await db.Database.SqlQueryRaw<ContinueWatchingDbRow>(
                 """
@@ -323,7 +324,7 @@ public sealed class VideoProgressService(AppDbContext db)
                        p."DurationMs",
                        p."IsCompleted",
                        p."UpdatedAt",
-                       w."MediaType",
+                       CASE WHEN w."IsAnime" AND w."MediaType" IN (0, 1) AND {3} THEN 2 ELSE w."MediaType" END AS "MediaType",
                        w."CanonicalTitle" AS "WorkTitle",
                        e."SeasonNumber",
                        e."EpisodeNumber",
@@ -333,7 +334,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 LEFT JOIN "WorkEpisodes" e ON e."Id" = p."WorkEpisodeId"
                 WHERE p."ProfileId" = {0}
                   AND (p."IsCompleted" = TRUE OR p."PositionMs" >= {1})
-                  AND ({2}::int[] IS NULL OR w."MediaType" = ANY({2}))
+                  AND ({2}::int[] IS NULL OR (CASE WHEN w."IsAnime" AND w."MediaType" IN (0, 1) AND {3} THEN 2 ELSE w."MediaType" END) = ANY({2}))
                   AND EXISTS (
                       SELECT 1
                       FROM "MediaAssets" a
@@ -350,7 +351,8 @@ public sealed class VideoProgressService(AppDbContext db)
                 """,
                 profileId,
                 MinimumResumeMs,
-                (object?)mediaTypeFilter ?? DBNull.Value)
+                (object?)mediaTypeFilter ?? DBNull.Value,
+                animeVisible)
             .ToListAsync(cancellationToken);
 
         if (rows.Count == 0)
@@ -454,9 +456,11 @@ public sealed class VideoProgressService(AppDbContext db)
 
     public async Task<IReadOnlyList<MediaPlaybackHistoryItem>> GetHistoryAsync(
         string profileId,
+        IReadOnlyCollection<WorkMediaType>? mediaTypes = null,
         CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
+        var animeVisible = mediaTypes is null || mediaTypes.Contains(WorkMediaType.Anime);
         var rows = await db.Database.SqlQueryRaw<HistoryDbRow>(
                 """
                 SELECT h."Id",
@@ -467,7 +471,7 @@ public sealed class VideoProgressService(AppDbContext db)
                        h."PositionMs",
                        h."DurationMs",
                        h."ReachedEnd",
-                       w."MediaType",
+                       CASE WHEN w."IsAnime" AND w."MediaType" IN (0, 1) AND {1} THEN 2 ELSE w."MediaType" END AS "MediaType",
                        w."CanonicalTitle" AS "WorkTitle",
                        e."SeasonNumber",
                        e."EpisodeNumber",
@@ -479,7 +483,8 @@ public sealed class VideoProgressService(AppDbContext db)
                 ORDER BY h."LastPlayedAt" DESC, h."StartedAt" DESC, h."Id"
                 LIMIT 50
                 """,
-                profileId)
+                profileId,
+                animeVisible)
             .ToListAsync(cancellationToken);
 
         return rows.Select(row => new MediaPlaybackHistoryItem(
@@ -535,7 +540,7 @@ public sealed class VideoProgressService(AppDbContext db)
     /// </summary>
     public async Task<IReadOnlyList<VideoWorkCompletion>> GetCompletedThroughAsync(
         string profileId,
-        Guid? workId = null,
+        long? workId = null,
         CancellationToken cancellationToken = default)
     {
         ValidateProfile(profileId);
@@ -551,7 +556,7 @@ public sealed class VideoProgressService(AppDbContext db)
                 LEFT JOIN "MediaProgress" p ON p."WorkEpisodeId" = we."Id" AND p."ProfileId" = {0}
                 WHERE we."SeasonNumber" > 0
                   AND we."EpisodeNumber" > 0
-                  AND ({1}::uuid IS NULL OR we."WorkId" = {1})
+                  AND ({1}::bigint IS NULL OR we."WorkId" = {1})
                   AND EXISTS (
                       SELECT 1
                       FROM "MediaProgress" started
@@ -1140,7 +1145,7 @@ public sealed class VideoProgressService(AppDbContext db)
     private sealed record MediaProgressDbRow(
         Guid Id,
         string ProfileId,
-        Guid WorkId,
+        long WorkId,
         Guid? WorkEpisodeId,
         long PositionMs,
         long? DurationMs,
@@ -1148,7 +1153,7 @@ public sealed class VideoProgressService(AppDbContext db)
         DateTime UpdatedAt);
 
     private sealed record CompletionDbRow(
-        Guid WorkId,
+        long WorkId,
         Guid WorkEpisodeId,
         int SeasonNumber,
         int EpisodeNumber,
@@ -1157,14 +1162,14 @@ public sealed class VideoProgressService(AppDbContext db)
 
     private sealed record HistoryIdentityDbRow(
         Guid Id,
-        Guid WorkId,
+        long WorkId,
         Guid? WorkEpisodeId,
         DateTime LastPlayedAt,
         long? DurationMs,
         bool ReachedEnd);
 
     private sealed record ContinueWatchingDbRow(
-        Guid WorkId,
+        long WorkId,
         Guid? WorkEpisodeId,
         long PositionMs,
         long? DurationMs,
@@ -1178,7 +1183,7 @@ public sealed class VideoProgressService(AppDbContext db)
 
     private sealed record HistoryDbRow(
         Guid Id,
-        Guid WorkId,
+        long WorkId,
         Guid? WorkEpisodeId,
         DateTime StartedAt,
         DateTime LastPlayedAt,
@@ -1193,7 +1198,7 @@ public sealed class VideoProgressService(AppDbContext db)
 
     private sealed record EpisodeCandidate(
         Guid Id,
-        Guid WorkId,
+        long WorkId,
         int SeasonNumber,
         int EpisodeNumber,
         string? Title);
@@ -1221,13 +1226,13 @@ public sealed class CanonicalVideoTargetResolver(
         var episodeWorkId = await db.WorkSourceLinks
             .AsNoTracking()
             .Where(x => x.SourceKind == WorkSourceKind.Episode && x.SourceId == episodeId)
-            .Select(x => (Guid?)x.WorkId)
+            .Select(x => (long?)x.WorkId)
             .SingleOrDefaultAsync(cancellationToken);
 
         var workId = episodeWorkId ?? await db.WorkSourceLinks
             .AsNoTracking()
             .Where(x => x.SourceKind == WorkSourceKind.Anime && x.SourceId == legacy.Anime.Id)
-            .Select(x => (Guid?)x.WorkId)
+            .Select(x => (long?)x.WorkId)
             .SingleOrDefaultAsync(cancellationToken);
 
         workId ??= await bridge.EnsureWorkForAnimeAsync(legacy.Anime, cancellationToken);

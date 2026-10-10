@@ -23,6 +23,9 @@ public sealed class RoleAuthorizationTests
     {
         ["Jularr.Web.Pages.Acquisition.IndexModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.BookManualSearchModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.Books.WorkModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.Manga.WorkModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.Novels.WorkModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.HistoryModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.IndexModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Admin.ManualSearchModel"] = JularrPolicies.AdminMedia,
@@ -48,6 +51,8 @@ public sealed class RoleAuthorizationTests
         ["Jularr.Web.Pages.Library.AnimeRepairModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Settings.SubtitlesModel"] = JularrPolicies.AdminMedia,
 
+        ["Jularr.Web.Pages.Admin.Capabilities.ManualModel"] = JularrPolicies.AcquisitionSettings,
+        ["Jularr.Web.Pages.Admin.Requests.SettingsModel"] = JularrPolicies.AcquisitionSettings,
         ["Jularr.Web.Pages.Admin.ReadingSourcesModel"] = JularrPolicies.AcquisitionSettings,
         ["Jularr.Web.Pages.Admin.UsenetModel"] = JularrPolicies.AcquisitionSettings,
         ["Jularr.Web.Pages.Settings.AcquisitionModel"] = JularrPolicies.AcquisitionSettings,
@@ -64,6 +69,9 @@ public sealed class RoleAuthorizationTests
 
         ["Jularr.Web.Pages.Library.RenameModel"] = JularrPolicies.MediaRename,
 
+        ["Jularr.Web.Pages.Admin.LibraryModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.SearchModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.Requests.UsersModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.AiModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.AppearanceModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.Capabilities.IndexModel"] = JularrPolicies.AdminSystem,
@@ -120,10 +128,19 @@ public sealed class RoleAuthorizationTests
             }
         }
 
+        var foundPageNames = restricted.Select(page => page.type.FullName!).ToArray();
+        var unexpectedPages = foundPageNames
+            .Except(PagePolicies.Keys, StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        var missingPages = PagePolicies.Keys
+            .Except(foundPageNames, StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
         CollectionAssert.AreEquivalent(
             PagePolicies.Keys.ToArray(),
-            restricted.Select(page => page.type.FullName!).ToArray(),
-            "A restricted page was added or removed; update the permissions matrix.");
+            foundPageNames,
+            $"Restricted page policy matrix mismatch. Unexpected: [{string.Join(", ", unexpectedPages)}]; Missing: [{string.Join(", ", missingPages)}].");
         foreach (var (type, attributes) in restricted)
         {
             Assert.AreEqual(PagePolicies[type.FullName!], attributes.Single().Policy, type.FullName);

@@ -14,6 +14,15 @@ namespace Jularr.Tests;
 public sealed class MangaReaderFrameTests
 {
     [TestMethod]
+    public void AHiddenVersionOfAChapterLeadsToTheShownOneAndKeepsThePage()
+    {
+        var shown = Guid.NewGuid();
+
+        Assert.AreEqual($"/Manga/Read/{shown}?page=2", ReadModel.ShownVersionUrl(shown, 2));
+        Assert.AreEqual($"/Manga/Read/{shown}", ReadModel.ShownVersionUrl(shown, null));
+    }
+
+    [TestMethod]
     public void MangaReaderRendersTheSharedFrameWithWorkingControls()
     {
         var page = Read("src", "Jularr.Web", "Pages", "Manga", "Read.cshtml");

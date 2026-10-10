@@ -25,7 +25,7 @@ public sealed class PlaybackTelemetryEndpointTests
     private static PlaybackStreamSession NewSession(VideoDetailPageTestHost host) =>
         host.Services.GetRequiredService<PlaybackStreamSessionStore>().Create(
             Owner,
-            Guid.NewGuid(),
+            new PlaybackVideoTarget(1, Guid.NewGuid()),
             Guid.NewGuid(),
             "/media/episode.mkv",
             1400,

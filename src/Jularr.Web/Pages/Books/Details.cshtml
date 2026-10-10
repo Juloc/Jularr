@@ -69,6 +69,13 @@
                    target="_blank"
                    rel="noopener noreferrer">@Model.Book.SourceName</a>
 
+                @if (Model.CanRequestAudiobook)
+                {
+                    <form method="post" asp-page-handler="RequestAudiobook" asp-route-id="@Model.Book.Id">
+                        <button class="button" type="submit">@ui["admin.books.requestAudiobook"]</button>
+                    </form>
+                }
+
                 @if (Model.IsOwner)
                 {
                     Func<dynamic?, IHtmlContent> acquisitionGroup = @<div>

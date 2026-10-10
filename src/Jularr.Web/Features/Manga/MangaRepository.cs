@@ -18,8 +18,8 @@ public sealed class MangaRepository(AppDbContext db)
                 COALESCE(s."MetadataTitle", s."Title") AS "Title",
                 s."MetadataNativeTitle",
                 s."CoverImageUrl",
-                (SELECT COUNT(*) FROM "MangaChapters" c WHERE c."SeriesId" = s."Id") AS "ChapterCount",
-                (SELECT c0."Id" FROM "MangaChapters" c0 WHERE c0."SeriesId" = s."Id" ORDER BY c0."Number" LIMIT 1) AS "PreviewChapterId",
+                (SELECT COUNT(*) FROM "MangaChapters" c WHERE c."SeriesId" = s."Id" AND c."SupersededById" IS NULL) AS "ChapterCount",
+                (SELECT c0."Id" FROM "MangaChapters" c0 WHERE c0."SeriesId" = s."Id" AND c0."SupersededById" IS NULL ORDER BY c0."Number" LIMIT 1) AS "PreviewChapterId",
                 p."ChapterId",
                 c."Number",
                 COALESCE(p."PageIndex", 0),
@@ -266,7 +266,7 @@ public sealed class MangaRepository(AppDbContext db)
                 "SourceKind",
                 "SourceUpdatedAt"
             FROM "MangaChapters"
-            WHERE "SeriesId" = @seriesId
+            WHERE "SeriesId" = @seriesId AND "SupersededById" IS NULL
             ORDER BY "Number", lower("Title");
             """,
             command => AddParameter(command, "@seriesId", seriesId.ToString()),
@@ -315,6 +315,15 @@ public sealed class MangaRepository(AppDbContext db)
             cancellationToken)).SingleOrDefault();
     }
 
+    // The version of the same chapter or volume the reader shows instead of this one, or null when this one is the shown version.
+    public Task<Guid?> GetSupersedingChapterIdAsync(
+        Guid chapterId,
+        CancellationToken cancellationToken) =>
+        QueryScalarGuidAsync(
+            """SELECT "SupersededById" FROM "MangaChapters" WHERE "Id" = @id AND "SupersededById" IS NOT NULL;""",
+            command => AddParameter(command, "@id", chapterId.ToString()),
+            cancellationToken);
+
     public async Task<(Guid? Previous, Guid? Next)> GetAdjacentChapterIdsAsync(
         Guid seriesId,
         double chapterNumber,
@@ -323,7 +332,7 @@ public sealed class MangaRepository(AppDbContext db)
         var previous = await QueryScalarGuidAsync(
             """
             SELECT "Id" FROM "MangaChapters"
-            WHERE "SeriesId" = @seriesId AND "Number" < @number
+            WHERE "SeriesId" = @seriesId AND "SupersededById" IS NULL AND "Number" < @number
             ORDER BY "Number" DESC LIMIT 1;
             """,
             command =>
@@ -336,7 +345,7 @@ public sealed class MangaRepository(AppDbContext db)
         var next = await QueryScalarGuidAsync(
             """
             SELECT "Id" FROM "MangaChapters"
-            WHERE "SeriesId" = @seriesId AND "Number" > @number
+            WHERE "SeriesId" = @seriesId AND "SupersededById" IS NULL AND "Number" > @number
             ORDER BY "Number" LIMIT 1;
             """,
             command =>

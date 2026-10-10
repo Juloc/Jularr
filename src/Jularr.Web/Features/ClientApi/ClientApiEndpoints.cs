@@ -1,4 +1,7 @@
+using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.MediaCore;
+using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Instance;
 using Jularr.Web.Features.Learning;
 using Jularr.Web.Features.MediaSegments;
@@ -15,6 +18,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Web.Features.ClientApi;
 
@@ -228,17 +232,46 @@ public static class ClientApiEndpoints
         });
 
         group.MapGet("/watchlist", async (
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize,
             WatchlistStore watchlist,
             WatchlistLibraryResolver library,
             CurrentAccountContext currentAccount,
+            IAppShellService shell,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            var items = await library.ApplyAsync(
-                await watchlist.GetEffectiveAsync(currentAccount.ProfileId, cancellationToken),
+            PageRequest paging;
+            try
+            {
+                paging = new PageRequest(
+                    page ?? 1,
+                    pageSize ?? PageRequest.DefaultPageSize);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return BadRequest("invalid_pagination", "The requested watchlist page is invalid.");
+            }
+
+            var visible = (await shell.GetMediaAccessAsync(httpContext.User, cancellationToken))
+                .VisibleMediaTypes
+                .ToHashSet();
+            var selected = Enum.GetValues<WatchlistMediaType>()
+                .Where(type => visible.Contains(WorkMediaTypes.FromWatchlist(type)))
+                .ToArray();
+            var result = await watchlist.GetEffectivePageAsync(
+                currentAccount,
+                paging,
+                selected,
                 cancellationToken);
+            var items = await library.ApplyAsync(result.Items, cancellationToken);
 
             return Results.Ok(new ClientWatchlistResponse(
-                items.Select(ClientApiMappings.ToClientWatchlistItem).ToArray()));
+                items.Select(ClientApiMappings.ToClientWatchlistItem).ToArray(),
+                result.Page,
+                result.PageSize,
+                result.TotalCount ?? 0,
+                result.HasMore == true));
         });
 
         group.MapGet("/me/playback-preferences", async (
@@ -262,7 +295,10 @@ public static class ClientApiEndpoints
                         update.AutoplayNext,
                         update.PreferredAudioLanguage,
                         update.PreferredSubtitleLanguage,
-                        update.DefaultPlaybackSpeed),
+                        update.DefaultPlaybackSpeed,
+                        update.PreferredSecondarySubtitleLanguage,
+                        update.SubtitleSizePercent,
+                        update.SubtitleOffsetMs),
                     cancellationToken);
                 return Results.Ok(ClientApiMappings.ToClientPreferences(preferences));
             }
@@ -276,6 +312,12 @@ public static class ClientApiEndpoints
                     "audioLanguage" => BadRequest(
                         "invalid_audio_language",
                         "preferredAudioLanguage must be an ISO 639 language tag or empty."),
+                    "subtitleSizePercent" => BadRequest(
+                        "invalid_subtitle_size",
+                        "subtitleSizePercent must be between 75 and 200."),
+                    "subtitleOffsetMs" => BadRequest(
+                        "invalid_subtitle_offset",
+                        "subtitleOffsetMs must be between -10000 and 10000."),
                     _ => BadRequest(
                         "invalid_subtitle_language",
                         "preferredSubtitleLanguage must be an ISO 639 language tag, off, or empty.")

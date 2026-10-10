@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Prowlarr;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Release;
@@ -32,35 +33,30 @@ public sealed class AcquisitionProfilePolicyTests
         [MediaAcquisitionKind.Tv, "Show.S01E01.720p.WEB-DL.H264-GRP"],
         [MediaAcquisitionKind.Anime, "Show.S01E01.720p.WEB-DL.H264-GRP"],
         [MediaAcquisitionKind.Book, "Frank Herbert - Dune (1965) PDF"],
-        [MediaAcquisitionKind.LightNovel, "Frieren Vol 01 ZIP"],
+        [MediaAcquisitionKind.LightNovel, "Frieren Vol 01 EPUB"],
         [MediaAcquisitionKind.Manga, "Frieren Vol 01 ZIP"],
         [MediaAcquisitionKind.Music, "Artist - Album (2020) MP3-256"]
     ];
 
     [TestMethod]
     [DynamicData(nameof(KindsWithAReleaseName))]
-    public void OneWaitPolicyAppliesToEveryMediaKindFromTheStoredStartOfTheWait(MediaAcquisitionKind kind, string releaseName)
+    public void AnAllowedQualityIsTakenAtOnceAndAnotherOneIsNotForEveryMediaKind(MediaAcquisitionKind kind, string releaseName)
     {
         var registry = Registry();
         var parser = registry.ParserFor(kind);
         var quality = ReleaseQuality.GetKey(parser.Parse(releaseName));
         var basic = registry.DefaultProfileFor(kind);
         Assert.IsTrue(basic.QualityOrder.Contains(quality, StringComparer.OrdinalIgnoreCase), $"{kind} ranks {quality}.");
-        var profile = basic with { AllowedQualities = [.. basic.QualityOrder.Where(item => !item.Equals(quality, StringComparison.OrdinalIgnoreCase))], FallbackTiers = [new FallbackTier(90, [quality])], MinimumScore = 0 };
-        var stored = Now.AddMinutes(-30);
+        var allowed = basic with { AllowedQualities = [quality] };
+        var other = basic with { AllowedQualities = [.. basic.QualityOrder.Where(item => !item.Equals(quality, StringComparison.OrdinalIgnoreCase))] };
 
-        var waiting = ProfileTest.Run(profile, parser, releaseName, null, null, Now - stored, Now);
-        var restartedNearTheEnd = ProfileTest.Run(profile, parser, releaseName, null, null, TimeSpan.FromMinutes(89), Now);
-        var afterTheWait = ProfileTest.Run(profile, parser, releaseName, null, null, TimeSpan.FromMinutes(90), Now);
+        var taken = ProfileTest.Run(allowed, parser, releaseName, null, null);
+        var refused = ProfileTest.Run(other, parser, releaseName, null, null);
 
-        Assert.AreEqual(SelectionDecision.Rejected, waiting.Decision);
-        Assert.AreEqual(stored.AddMinutes(90), waiting.EligibleAt, "The wait ends a fixed time after the stored start, whenever the engine is asked.");
-        Assert.IsFalse(waiting.WouldGrab);
-        Assert.IsTrue(waiting.Reasons.Any(reason => reason.Contains("fallback tier 1") && reason.Contains($"{Now.AddMinutes(60):u}")), "Manual Search can say when and why.");
-        Assert.IsNotNull(restartedNearTheEnd.EligibleAt);
-        Assert.AreEqual(SelectionDecision.Temporary, afterTheWait.Decision, "After the wait the fallback quality is taken, and the title stays wanted for the better one.");
-        Assert.IsNull(afterTheWait.EligibleAt);
-        Assert.IsTrue(afterTheWait.WouldGrab);
+        Assert.AreEqual(SelectionDecision.Eligible, taken.Decision, "An allowed quality is taken now; a better one upgrades it later.");
+        Assert.IsTrue(taken.WouldGrab);
+        Assert.AreEqual(SelectionDecision.Rejected, refused.Decision);
+        Assert.IsFalse(refused.WouldGrab);
     }
 
     [TestMethod]
@@ -70,8 +66,8 @@ public sealed class AcquisitionProfilePolicyTests
         var allowed = Guid.NewGuid();
         var profile = registry.DefaultProfileFor(MediaAcquisitionKind.Movie) with { SourcePolicy = new AcquisitionSourcePolicy([allowed], []) };
 
-        var fromAllowed = ProfileTest.Run(profile, registry.ParserFor(MediaAcquisitionKind.Movie), "Dune.2021.1080p.WEB-DL.H264-GRP", null, allowed, TimeSpan.Zero, Now);
-        var fromOther = ProfileTest.Run(profile, registry.ParserFor(MediaAcquisitionKind.Movie), "Dune.2021.1080p.WEB-DL.H264-GRP", null, Guid.NewGuid(), TimeSpan.Zero, Now);
+        var fromAllowed = ProfileTest.Run(profile, registry.ParserFor(MediaAcquisitionKind.Movie), "Dune.2021.1080p.WEB-DL.H264-GRP", null, allowed);
+        var fromOther = ProfileTest.Run(profile, registry.ParserFor(MediaAcquisitionKind.Movie), "Dune.2021.1080p.WEB-DL.H264-GRP", null, Guid.NewGuid());
 
         Assert.IsTrue(fromAllowed.WouldGrab);
         Assert.IsNull(fromAllowed.SourceProblem);
@@ -112,48 +108,14 @@ public sealed class AcquisitionProfilePolicyTests
     }
 
     [TestMethod]
-    public void TheBookAndReadingSelectorsHonourTheWaitFromTheRequestsStoredStart()
-    {
-        var book = BookQualityProfiles.CreateDefaultBook();
-        var bookQuality = ReleaseQuality.GetKey(BookReleaseParser.Instance.Parse("Frank Herbert - Dune (1965) PDF"));
-        var bookProfile = book with { AllowedQualities = [.. book.QualityOrder.Where(item => !item.Equals(bookQuality, StringComparison.OrdinalIgnoreCase))], FallbackTiers = [new FallbackTier(90, [bookQuality])] };
-        var pdf = Release("Frank Herbert - Dune (1965) PDF");
-
-        var bookWaiting = BookReleaseSelector.Rank([pdf], "Dune", "Frank Herbert", bookProfile, null, DateTimeOffset.UtcNow.AddMinutes(-30));
-        var bookDue = BookReleaseSelector.Rank([pdf], "Dune", "Frank Herbert", bookProfile, null, DateTimeOffset.UtcNow.AddMinutes(-100));
-
-        Assert.AreEqual(0, bookWaiting[0].Score);
-        StringAssert.Contains(bookWaiting[0].RejectedBecause, "fallback tier 1", "Manual Search says what it waits for and until when.");
-        Assert.IsTrue(bookDue[0].Score > 0);
-
-        var target = new ReadingAcquisitionTarget(MediaAcquisitionKind.LightNovel, "Frieren", [], null, 1);
-        var reading = ReadingQualityProfiles.For(MediaAcquisitionKind.LightNovel);
-        var readingQuality = reading.QualityOrder[0];
-        var readingProfile = reading with { AllowedQualities = [.. reading.QualityOrder.Skip(1)], FallbackTiers = [new FallbackTier(90, [readingQuality])] };
-        var volume = Release($"Frieren Vol 01 {readingQuality}");
-
-        var readingWaiting = ReadingReleaseSelector.Rank([volume], target, readingProfile, null, DateTimeOffset.UtcNow.AddMinutes(-30));
-        var readingDue = ReadingReleaseSelector.Rank([volume], target, readingProfile, null, DateTimeOffset.UtcNow.AddMinutes(-100));
-
-        Assert.AreEqual(0, readingWaiting[0].Score);
-        Assert.IsTrue(readingDue[0].Score > 0);
-    }
-
-    [TestMethod]
-    public void NoPipelineStartsTheWaitOverAtEverySearchAndEveryProfileSearchAppliesItsSourcePolicy()
+    public void EveryProfileSearchAppliesItsSourcePolicy()
     {
         var web = Path.Combine(RepositoryRoot(), "src", "Jularr.Web", "Features");
-        var offenders = Directory.EnumerateFiles(web, "*.cs", SearchOption.AllDirectories)
-            .Where(file => File.ReadAllText(file).Contains("new SelectionContext(now, now)", StringComparison.Ordinal))
-            .Select(Path.GetFileName)
-            .ToArray();
         var searches = new (string File, int Minimum)[]
         {
-            ("Acquisition/Access/VideoAcquisitionRequestExecutor.cs", 1), ("Acquisition/Pipeline/AnimeAcquisitionPipeline.cs", 2), ("Books/BookAcquisitionExecutor.cs", 1),
-            ("ReadingAcquisition/ReadingReleaseMatching.cs", 1), ("Music/MusicAcquisition.cs", 1)
+            ("Acquisition/Core/AcquisitionCore.cs", 1), ("Books/BookAcquisitionExecutor.cs", 1)
         };
 
-        Assert.AreEqual(0, offenders.Length, "A selection that is asked with 'wanted since now' can never reach a fallback tier: " + string.Join(", ", offenders));
         foreach (var (file, minimum) in searches)
         {
             var text = File.ReadAllText(Path.Combine(web, file));
@@ -177,11 +139,11 @@ public sealed class AcquisitionProfilePolicyTests
             var registry = Registry();
             var store = new QualityProfileStore(directory, registry);
             var baseline = registry.DefaultProfileFor(kind);
-            var waiting = baseline with { Id = "waits", Name = "Waits", FallbackTiers = [new FallbackTier(60, [baseline.QualityOrder[^1]])] };
+            var waiting = baseline with { Id = "waits", Name = "Waits", UpgradeAllowed = !baseline.UpgradeAllowed };
             var restricted = baseline with { Id = "restricted", Name = "Restricted", SourcePolicy = new AcquisitionSourcePolicy([Guid.NewGuid()], []) };
             await store.UpsertAsync(waiting);
             await store.UpsertAsync(restricted);
-            var work = Guid.NewGuid();
+            var work = Random.Shared.NextInt64(1, long.MaxValue);
 
             var before = await store.ResolveAsync(kind, work);
             await store.SetKindDefaultAsync(kind, "waits");
@@ -202,7 +164,35 @@ public sealed class AcquisitionProfilePolicyTests
         }
     }
 
-    private static ProwlarrReleaseCandidate Release(string title) =>
+    [TestMethod]
+    public async Task AStoredProfileThatWaitedBeforeTakingLowerQualitiesAllowsThemAtOnce()
+    {
+        var directory = Directory.CreateTempSubdirectory("jularr-profile-fold-");
+        try
+        {
+            var registry = Registry();
+            var profile = registry.DefaultProfileFor(MediaAcquisitionKind.Movie);
+            var lower = profile.QualityOrder[^1];
+            var strict = profile with { AllowedQualities = [.. profile.QualityOrder.Take(2)] };
+            var legacy = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(new QualityProfileState(2, [strict], new Dictionary<string, string> { ["movie"] = strict.Id }, new Dictionary<string, string>()), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)))!;
+            legacy["profiles"]![0]!["fallbackTiers"] = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject { ["afterMinutes"] = 90, ["addedQualities"] = new System.Text.Json.Nodes.JsonArray(lower) });
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "quality-profiles.json"), legacy.ToJsonString());
+
+            var store = new QualityProfileStore(directory, registry);
+            var loaded = await store.LoadAsync();
+            var again = await new QualityProfileStore(directory, registry).LoadAsync();
+
+            Assert.AreEqual(QualityProfileState.CurrentVersion, loaded.Version);
+            CollectionAssert.Contains(loaded.Profiles.Single().AllowedQualities, lower, "A quality that was allowed after a wait is allowed now.");
+            Assert.AreEqual(QualityProfileState.CurrentVersion, again.Version, "The file was rewritten in the current shape.");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    private static AcquisitionCandidate Release(string title) =>
         new(title, "Indexer", null, "usenet", 100_000_000, null, null, Now, 1, 24, title, null, AnimeReleaseParser.Parse(title), [], new Uri("http://indexer.example/nzb/" + Uri.EscapeDataString(title)), null);
 
     private static string RepositoryRoot()

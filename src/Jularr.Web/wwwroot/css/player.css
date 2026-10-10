@@ -59,12 +59,69 @@
     border-radius: 10px;
     background: var(--player-subtitle-bg);
     color: var(--player-subtitle-text);
-    font-size: clamp(15px, 2.2vw, var(--player-playback-subtitle-size));
+    font-size: clamp(15px, var(--player-playback-subtitle-size), 44px);
     font-weight: 650;
     line-height: 1.45;
     text-align: center;
     white-space: pre-line;
     text-shadow: 0 2px 4px #000;
+}
+
+.playback-subtitle-overlay[data-subtitle-layer="secondary"] {
+    font-size: var(--player-secondary-subtitle-size, 20px);
+    font-weight: 600;
+}
+
+.playback-subtitle-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    padding: 0;
+}
+
+.playback-subtitle-cue,
+.player-subtitle-positioned-cue {
+    max-width: 100%;
+    padding: 5px 10px;
+    border-radius: 10px;
+    background: var(--player-subtitle-bg);
+    color: var(--player-subtitle-text);
+    text-align: center;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+    text-shadow: 0 2px 4px #000;
+}
+
+.player-subtitle-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.player-subtitle-positioned-layer {
+    position: absolute;
+    inset: 0;
+}
+
+.player-subtitle-positioned-layer[hidden] {
+    display: none;
+}
+
+.player-subtitle-positioned-cue {
+    position: absolute;
+    max-width: min(85%, 800px);
+    width: max-content;
+    font-size: clamp(15px, var(--player-playback-subtitle-size), 44px);
+    font-weight: 650;
+    line-height: 1.45;
+}
+
+.player-subtitle-positioned-layer[data-subtitle-layer="secondary"] .player-subtitle-positioned-cue {
+    font-size: var(--player-secondary-subtitle-size, 20px);
+    font-weight: 600;
 }
 
 .playback-subtitle-overlay[hidden] {
@@ -550,10 +607,11 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 }
 .player-round-button:hover { background: rgba(0,0,0,.5); transform: scale(1.05); }
 .player-round-button .player-icon { width: 30px; height: 30px; }
-/* The seek step sits inside the arrow of the seek icon (its circle is centred slightly below the middle of the viewBox). */
-.player-round-button > span {
-    position: absolute; inset: 0; display: grid; place-items: center; padding-top: 3px;
-    font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; pointer-events: none;
+.player-round-button.player-round-seek .player-icon { width: 34px; height: 34px; }
+.player-round-seek .player-seek-count {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, calc(-50% + 3px));
+    font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums; pointer-events: none;
 }
 /* Previous and Next episode: secondary to the seek and play buttons in the transport group. */
 .player-round-step { width: 44px; height: 44px; text-decoration: none; }
@@ -571,7 +629,7 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "line" "time" "controls";
 }
-.player-timeline-row { grid-area: line; position: relative; display: flex; align-items: center; height: 18px; }
+.player-timeline-row { grid-area: line; position: relative; display: flex; align-items: center; height: 26px; }
 .player-time {
     grid-area: time; display: flex; justify-content: space-between; gap: 4px;
     color: rgba(255,255,255,.9); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -623,12 +681,16 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
    and the unbuffered rest. The buffered layer is lighter than the rest, so it reads without relying on the accent colour. */
 .player-timeline {
     width: 100%;
+    height: 26px;
     background:
         linear-gradient(to right, var(--accent) 0 var(--progress, 0%), transparent var(--progress, 0%) 100%),
         var(--buffered-ranges, linear-gradient(transparent, transparent)),
         var(--player-timeline-rest);
+    background-size: 100% 5px;
+    background-position: center;
+    background-repeat: no-repeat;
 }
-.player-timeline:hover, .player-timeline:focus-visible { height: 6px; }
+.player-timeline:hover, .player-timeline:focus-visible { background-size: 100% 7px; }
 .player-volume-slider { width: 84px; margin-inline-end: 4px; }
 .player-timeline::-webkit-slider-thumb, .player-volume-slider::-webkit-slider-thumb {
     -webkit-appearance: none; width: 14px; height: 14px; border: 2px solid #fff; border-radius: 50%;
@@ -638,6 +700,13 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
     width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: var(--accent);
 }
 .player-timeline:disabled { cursor: default; opacity: .6; }
+.player-panel .player-volume-slider:focus-visible { outline: none; }
+.player-volume-slider:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 2px var(--player-popup-bg), 0 0 0 4px var(--player-focus);
+}
+.player-volume-slider:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 2px var(--player-popup-bg), 0 0 0 4px var(--player-focus);
+}
 
 /* Settings panel inside the player: a bottom sheet on a phone, an anchored panel above the bar on larger stages. It never
    takes the theme's field colours: the stage is a dark surface in both themes, so its controls read from the player tokens. */
@@ -662,6 +731,10 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 }
 .player-setting select option { background: var(--player-popup-bg); color: var(--player-field-text); }
 .player-setting select:focus-visible { outline: 2px solid var(--player-focus); outline-offset: 1px; }
+.player-setting > .player-setting-slider { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 62px; gap: 8px; }
+.player-setting-slider input { min-width: 0; width: 100%; accent-color: var(--accent); cursor: pointer; }
+.player-setting-slider output { font-variant-numeric: tabular-nums; text-align: end; font-weight: 600; }
+.player-setting-slider input:focus-visible { outline: 2px solid var(--player-focus); outline-offset: 2px; }
 .player-setting-toggle { grid-template-columns: 1fr auto; }
 .player-setting-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
 .player-setting-hint, .player-setting-status small { color: rgba(255,255,255,.72); font-size: 11px; line-height: 1.4; }
@@ -689,6 +762,8 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
 
 /* A choice opened from the bar (Subtitles, Audio, Quality, Speed) lists its options instead of the whole panel; the rows that
    are not that choice are hidden by player-chrome.js and the options are built from the same select, so nothing is stored twice. */
+.player-options-group { display: grid; gap: 10px; min-width: 0; }
+.player-options-heading { font-size: 12px; font-weight: 700; color: var(--player-muted); }
 .player-options { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .player-option {
     min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px;
@@ -785,7 +860,7 @@ html[data-player-theater], html[data-player-theater] body { overflow: hidden; ov
         .player-control { min-width: 56px; }
         .player-control-pip { display: grid; }
         .player-window-actions { display: none; }
-        .player-center { top: auto; bottom: 8px; transform: translateX(-50%); gap: 8px; }
+        .player-center { top: auto; bottom: 8px; z-index: 1; transform: translateX(-50%); gap: 8px; }
         .player-round-button { width: 40px; height: 40px; background: transparent; backdrop-filter: none; }
         .player-round-button:hover { background: rgba(255,255,255,.14); transform: none; }
         .player-round-button .player-icon { width: 30px; height: 30px; }

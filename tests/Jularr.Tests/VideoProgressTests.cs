@@ -115,7 +115,11 @@ public sealed class VideoProgressTests
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var root = new LibraryRoot { Name = "Video", Path = $"/tmp/jularr-progress-{Guid.NewGuid():N}" };
         var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Movie" };
+        db.Works.Add(movie);
+        await db.SaveChangesAsync();
         var series = new Work { MediaType = WorkMediaType.Series, CanonicalTitle = "Series" };
+        db.Works.Add(series);
+        await db.SaveChangesAsync();
         var episode1 = new WorkEpisode
         {
             WorkId = series.Id,
@@ -130,7 +134,7 @@ public sealed class VideoProgressTests
             EpisodeNumber = 2,
             Title = "Episode 2"
         };
-        db.AddRange(root, movie, series, episode1, episode2);
+        db.AddRange(root, episode1, episode2);
         await db.SaveChangesAsync();
 
         await AddPlayableAsync(db, root, movie, null, "movie.mkv");
@@ -175,7 +179,9 @@ public sealed class VideoProgressTests
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var root = new LibraryRoot { Name = "Video", Path = $"/tmp/jularr-session-{Guid.NewGuid():N}" };
         var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Movie" };
-        db.AddRange(root, movie);
+        db.Works.Add(movie);
+        await db.SaveChangesAsync();
+        db.AddRange(root);
         await db.SaveChangesAsync();
         var file = await AddPlayableAsync(db, root, movie, null, "movie.mkv");
 
@@ -217,6 +223,8 @@ public sealed class VideoProgressTests
             Title = "Episode 3"
         };
         var work = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = anime.Title };
+        db.Works.Add(work);
+        await db.SaveChangesAsync();
         var workEpisode = new WorkEpisode
         {
             WorkId = work.Id,
@@ -227,7 +235,6 @@ public sealed class VideoProgressTests
         db.AddRange(
             anime,
             episode,
-            work,
             workEpisode,
             new WorkSourceLink
             {
@@ -294,11 +301,13 @@ public sealed class VideoProgressTests
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var series = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Gap Anime" };
+        db.Works.Add(series);
+        await db.SaveChangesAsync();
         var special = new WorkEpisode { WorkId = series.Id, SeasonNumber = 0, EpisodeNumber = 1 };
         var episodes = Enumerable.Range(1, 4)
             .Select(number => new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = number })
             .ToArray();
-        db.AddRange(series, special);
+        db.AddRange(special);
         db.AddRange(episodes);
         await db.SaveChangesAsync();
 
@@ -332,10 +341,11 @@ public sealed class VideoProgressTests
     {
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var series = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Open Episode Anime" };
+        db.Works.Add(series);
+        await db.SaveChangesAsync();
         var episodes = Enumerable.Range(1, 3)
             .Select(number => new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = number })
             .ToArray();
-        db.Add(series);
         db.AddRange(episodes);
         await db.SaveChangesAsync();
 
@@ -353,9 +363,11 @@ public sealed class VideoProgressTests
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var root = new LibraryRoot { Name = "Video", Path = $"/tmp/jularr-rewatch-{Guid.NewGuid():N}" };
         var series = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Rewatch Anime" };
+        db.Works.Add(series);
+        await db.SaveChangesAsync();
         var first = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 1 };
         var second = new WorkEpisode { WorkId = series.Id, SeasonNumber = 1, EpisodeNumber = 2 };
-        db.AddRange(root, series, first, second);
+        db.AddRange(root, first, second);
         await db.SaveChangesAsync();
         await AddPlayableAsync(db, root, series, first, "s01e01.mkv");
         await AddPlayableAsync(db, root, series, second, "s01e02.mkv");
@@ -390,9 +402,13 @@ public sealed class VideoProgressTests
         await using var db = await MediaCoreTestSupport.CreateDbAsync();
         var root = new LibraryRoot { Name = "Video", Path = $"/tmp/jularr-types-{Guid.NewGuid():N}" };
         var movie = new Work { MediaType = WorkMediaType.Movie, CanonicalTitle = "Movie" };
+        db.Works.Add(movie);
+        await db.SaveChangesAsync();
         var anime = new Work { MediaType = WorkMediaType.Anime, CanonicalTitle = "Anime" };
+        db.Works.Add(anime);
+        await db.SaveChangesAsync();
         var animeEpisode = new WorkEpisode { WorkId = anime.Id, SeasonNumber = 1, EpisodeNumber = 1 };
-        db.AddRange(root, movie, anime, animeEpisode);
+        db.AddRange(root, animeEpisode);
         await db.SaveChangesAsync();
         await AddPlayableAsync(db, root, movie, null, "movie.mkv");
         await AddPlayableAsync(db, root, anime, animeEpisode, "anime.mkv");

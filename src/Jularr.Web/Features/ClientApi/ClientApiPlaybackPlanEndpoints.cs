@@ -15,11 +15,11 @@ using Jularr.Web.Features.Subtitles;
 namespace Jularr.Web.Features.ClientApi;
 
 public sealed record ClientVideoTarget(
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId)
 {
     [JsonIgnore]
-    public bool IsValid => WorkId != Guid.Empty && (WorkEpisodeId is null || WorkEpisodeId != Guid.Empty);
+    public bool IsValid => WorkId > 0 && (WorkEpisodeId is null || WorkEpisodeId != Guid.Empty);
 }
 
 /// <summary>
@@ -280,7 +280,7 @@ public static class ClientApiPlaybackPlanEndpoints
 
         group.MapGet("/video/subtitle-tracks/{trackId}/cues", async (
             string trackId,
-            Guid workId,
+            long workId,
             Guid? workEpisodeId,
             CanonicalMediaStorageService storage,
             PlaybackService playback,

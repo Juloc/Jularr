@@ -1,4 +1,5 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Search;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.DownloadClients;
@@ -30,12 +31,12 @@ public enum UsenetCheckState
 /// <summary>One step of the Usenet setup checklist.</summary>
 public sealed record UsenetCheck(string Key, UsenetCheckState State, string Detail, string? LinkPage);
 
-public sealed record UsenetIndexerCard(IndexerEntry Entry, AcquisitionHealthStatus? Health);
+public sealed record UsenetIndexerCard(IndexerEntry Entry, AcquisitionHealthStatus? Health, IndexerReadinessLevel Readiness, IReadOnlyList<IndexerKindReadiness> Kinds);
 
 public sealed record UsenetClientCard(DownloadClientEntry Entry, AcquisitionHealthStatus? Health);
 
 /// <summary>One release as the media type's own selector judged it; <see cref="Score"/> 0 means rejected.</summary>
-public sealed record UsenetTestRelease(ProwlarrReleaseCandidate Release, int Score, string? RejectedBecause);
+public sealed record UsenetTestRelease(AcquisitionCandidate Release, int Score, string? RejectedBecause);
 
 /// <summary>The search test result, from the same search and ranking automatic adding uses.</summary>
 public sealed record UsenetSearchTest(
@@ -43,7 +44,7 @@ public sealed record UsenetSearchTest(
     IReadOnlyList<UsenetTestRelease> Ranked,
     IReadOnlyList<IndexerSearchWarning> Warnings,
     bool UsedCategoryFallback,
-    ProwlarrReleaseCandidate? Picked,
+    AcquisitionCandidate? Picked,
     string FailureMessage);
 
 /// <summary>One SABnzbd job for the recent downloads list; <see cref="LocalPathReadable"/> is null when unknown.</summary>
@@ -72,6 +73,8 @@ public sealed class UsenetModel(
     IndexerStore indexerStore,
     IReadOnlyDictionary<IndexerType, IIndexer> indexers,
     IndexerSearchCoordinator searchCoordinator,
+    IndexerSetupService indexerSetup,
+    Jularr.Web.Features.Acquisition.Core.AcquisitionCore core,
     QualityProfileStore qualityProfiles,
     DownloadClientStore clientStore,
     IDownloadClient downloadClient,
@@ -136,7 +139,7 @@ public sealed class UsenetModel(
         var indexerCards = new List<UsenetIndexerCard>();
         foreach (var entry in indexerEntries)
         {
-            indexerCards.Add(new UsenetIndexerCard(entry, await health.GetAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken)));
+            indexerCards.Add(new UsenetIndexerCard(entry, await health.GetAsync(AcquisitionHealthKind.Indexer, entry.Id, cancellationToken), IndexerReadiness.Level(entry), [.. ActiveKinds.Select(kind => IndexerReadiness.ForKind(entry, kind))]));
         }
 
         Indexers = indexerCards;
@@ -208,22 +211,18 @@ public sealed class UsenetModel(
                 book.FailureMessage);
         }
 
-        var reading = await ReadingUsenetSearch.SearchAsync(
-            searchCoordinator,
-            new ReadingAcquisitionTarget(
-                kind,
-                title.Trim(),
-                [],
-                string.IsNullOrWhiteSpace(author) ? null : author.Trim()),
-            cancellationToken,
-            new SearchOptions { Purpose = SearchPurpose.Interactive });
+        var reading = await core.SearchAsync(
+            ReadingReleaseJudge.Plan(new ReadingAcquisitionTarget(kind, title.Trim(), [], string.IsNullOrWhiteSpace(author) ? null : author.Trim())),
+            ReadingQualityProfiles.For(kind),
+            new SearchOptions { Purpose = SearchPurpose.Interactive },
+            cancellationToken);
         return new UsenetSearchTest(
-            reading.Queries,
-            reading.Ranked.Select(ranked => new UsenetTestRelease(ranked.Release, ranked.Score, ranked.RejectedBecause)).ToArray(),
-            reading.Warnings,
-            reading.UsedCategoryFallback,
-            reading.Picked,
-            reading.FailureMessage);
+            [.. reading.Search.Trace.Select(line => line.QueryText).Distinct(StringComparer.OrdinalIgnoreCase)],
+            reading.Releases.Select(evaluation => new UsenetTestRelease(evaluation.Candidate, ReadingReleaseJudge.DisplayScore(evaluation), ReadingReleaseJudge.RejectedBecause(evaluation))).ToArray(),
+            reading.Search.Warnings,
+            reading.Search.Trace.Any(line => line.Stage == "any-category" && line.Results > 0),
+            reading.Grabbable.FirstOrDefault()?.Candidate,
+            ReadingAcquisitionEngine.FailureMessage(reading));
     }
 
     public async Task<IActionResult> OnPostTestIndexerAsync(Guid id, CancellationToken cancellationToken)
@@ -242,6 +241,21 @@ public sealed class UsenetModel(
                 ? ui.Format("settings.indexers.connected", ("name", entry.Name))
                 : ui.Format("settings.indexers.connectedWithVersion", ("name", entry.Name), ("version", result.Version)))
             : result.Error ?? ui["settings.indexers.connectionFailed"];
+        return RedirectToPage();
+    }
+
+    /// <summary>Reads the indexer's capabilities again and checks its searches; its settings and a working configuration stay when it cannot be reached now.</summary>
+    public async Task<IActionResult> OnPostRefreshIndexerAsync(Guid id, CancellationToken cancellationToken) =>
+        await ReportAsync(await indexerSetup.RefreshAsync(id, cancellationToken));
+
+    /// <summary>Runs the bounded validation searches again, also once per distinct category set the media types use.</summary>
+    public async Task<IActionResult> OnPostTestIndexerSearchAsync(Guid id, CancellationToken cancellationToken) =>
+        await ReportAsync(await indexerSetup.TestSearchAsync(id, cancellationToken));
+
+    private async Task<IActionResult> ReportAsync(IndexerSetupResult result)
+    {
+        var (text, isError) = IndexerSetupMessages.Describe(await UiRequestLocalization.GetBundleAsync(HttpContext, db), result);
+        TempData[isError ? "UsenetError" : "UsenetNotice"] = text;
         return RedirectToPage();
     }
 
@@ -469,12 +483,12 @@ public sealed class UsenetModel(
                     "/Settings/Acquisition"));
 
         checks.Add(BookPolicy is null
-            ? new UsenetCheck("access", UsenetCheckState.Unknown, string.Empty, "/Admin/Requests")
+            ? new UsenetCheck("access", UsenetCheckState.Unknown, string.Empty, "/Admin/Capabilities/Manual")
             : new UsenetCheck(
                 "access",
                 UsenetCheckState.Ok,
                 Ui[$"admin.requests.manual.{AcquisitionAccessNames.Manual(BookPolicy.Manual)}"],
-                "/Admin/Requests"));
+                "/Admin/Capabilities/Manual"));
 
         return checks;
     }

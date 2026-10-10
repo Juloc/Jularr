@@ -3,6 +3,7 @@ using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Naming;
 using Jularr.Web.Features.Acquisition.Ownership;
 using Jularr.Web.Features.Acquisition.Pipeline;
+using Jularr.Web.Features.Acquisition.Wanted;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -15,14 +16,13 @@ namespace Jularr.Web.Features.Acquisition.Access;
 /// Automatic anime acquisition for a request identified by its AniList id, like adding a series
 /// in Sonarr: a series that is not in the library yet is created (AniList match, Jularr-managed,
 /// first library root, default quality profile), then monitoring and search-on-add are switched
-/// on through the acquisition pipeline and the Usenet search is queued. The importer later puts
+/// on through the acquisition pipeline and the Usenet search starts. The importer later puts
 /// the files into the series folder the naming profile builds, and the scan finds this entry by
 /// the key of that folder.
 /// <para>
-/// The request follows the shared lifecycle (Approved, Downloading, Importing, Completed, Failed) but owns none of it:
-/// the monitoring pipeline searches, grabs and imports, and <see cref="AnimeRequestObservation"/> reads the requested episodes,
-/// the open acquisitions and the library back. A request is Completed only when every monitored episode it asks for
-/// that has aired has a file; the shared Wanted pass keeps asking until then.
+/// The request runs the shared lifecycle (Approved, Downloading, Importing, Completed, Failed): <see cref="AnimeRequestScopeReader"/> reads the requested episodes
+/// and the library, <see cref="AnimeAcquisitionEngine"/> searches and grabs, and the Wanted pass follows the download and imports it. A request is Completed
+/// only when every monitored episode it asks for that has aired has a file; the shared Wanted pass keeps asking until then.
 /// </para>
 /// <para>
 /// The requester's <see cref="AcquisitionRequestOptions"/> are applied when monitoring starts: the
@@ -40,10 +40,12 @@ public sealed class AnimeAcquisitionRequestExecutor(
     AnimeMonitoringStore monitoringStore,
     AnimeAcquisitionPipeline pipeline,
     AnimeAcquisitionInventory inventory,
-    AnimeAcquisitionScheduler scheduler,
+    AnimeMonitoring animeMonitoring,
+    AnimeAcquisitionEngine engine,
+    WantedReconciler wanted,
     LegacyWorkBridge workBridge,
     ReleaseCalendarCacheStore calendar,
-    TimeProvider clock) : IMonitoredAcquisitionExecutor
+    TimeProvider clock) : IAcquisitionRequestExecutor
 {
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Anime;
 
@@ -123,26 +125,24 @@ public sealed class AnimeAcquisitionRequestExecutor(
         return await MonitorAsync(request, created.Id, created.Key, root.Id, cancellationToken);
     }
 
-    /// <summary>
-    /// Loads the monitoring state, ownership, acquisition relations and release calendar once, so one pass can read where the monitoring
-    /// pipeline stands for every open request without loading them again for each (<see cref="AnimeRequestObservation"/>).
-    /// </summary>
-    public async Task<IRequestObservation> BeginObservationAsync(DateTime nowUtc, CancellationToken cancellationToken) =>
-        new AnimeRequestObservation(
+    // What the request still needs: complete, held back by ownership, or the search for its next episode.
+    private async Task<AcquisitionExecution> ContinueAsync(AcquisitionRequest request, CancellationToken cancellationToken)
+    {
+        var reader = new AnimeRequestScopeReader(
             db,
             inventory,
-            pipeline,
             calendar,
-            await monitoringStore.LoadAsync(cancellationToken),
+            animeMonitoring,
             await ownershipStore.LoadAsync(cancellationToken),
-            await pipeline.LoadAcquisitionSnapshotAsync(cancellationToken),
+            wanted,
             await calendar.GetSourcesAsync(AniListReleaseNormalizer.Provider, cancellationToken),
-            await pipeline.IsProwlarrConfiguredAsync(cancellationToken),
-            nowUtc);
-
-    private async Task<AcquisitionExecution> ObserveNowAsync(AcquisitionRequest request, CancellationToken cancellationToken) =>
-        await (await BeginObservationAsync(clock.GetUtcNow().UtcDateTime, cancellationToken)).ObserveAsync(request, cancellationToken)
-        ?? throw new InvalidOperationException("The series of the request does not exist after it was added.");
+            clock.GetUtcNow().UtcDateTime);
+        var scope = await reader.ReadScopeAsync(request, cancellationToken) ?? throw new InvalidOperationException("The series of the request does not exist after it was added.");
+        var decided = reader.Decide(scope);
+        return decided.Status == AcquisitionRequestStatus.Approved && decided.Message != AnimeRequestScopeReader.ReadOnlyMessage
+            ? await engine.SearchAndGrabAsync(request, scope, decided.Message ?? string.Empty, cancellationToken)
+            : decided;
+    }
 
     private async Task<SeriesIdentity?> FindSeriesAsync(string aniListId, CancellationToken cancellationToken) =>
         await (
@@ -180,15 +180,13 @@ public sealed class AnimeAcquisitionRequestExecutor(
     private async Task<AcquisitionExecution> MonitorAsync(AcquisitionRequest request, Guid animeId, string animeKey, Guid? targetRootId, CancellationToken cancellationToken)
     {
         var options = request.Options;
-        var ownership = await ownershipStore.LoadAsync(cancellationToken);
-        if (SonarrParallelSafety.GetMode(ownership, animeKey) == AnimeManagementMode.ReadOnlyCoexistence)
+        if (SonarrParallelSafety.GetMode(await ownershipStore.LoadAsync(cancellationToken), animeKey) == AnimeManagementMode.ReadOnlyCoexistence)
         {
-            return await ObserveNowAsync(request, cancellationToken);
+            return await ContinueAsync(request, cancellationToken);
         }
 
-        var monitoring = await monitoringStore.LoadAsync(cancellationToken);
-        var existing = monitoring.Anime.TryGetValue(animeKey, out var settings) ? settings : null;
-        var startsMonitoring = existing?.Monitored != true;
+        var existing = (await monitoringStore.LoadAsync(cancellationToken)).Anime.GetValueOrDefault(animeKey);
+        var startsMonitoring = !(await animeMonitoring.LoadAsync(animeKey, cancellationToken)).IsWorkMonitored;
         if (startsMonitoring)
         {
             await pipeline.UpdateAnimeSettingsAsync(
@@ -202,14 +200,8 @@ public sealed class AnimeAcquisitionRequestExecutor(
         }
 
         // The scope is in place before any search runs, so a search only looks for what was requested.
-        await ApplyScopeAsync(animeKey, options, startsMonitoring, cancellationToken);
-        var observed = await ObserveNowAsync(request, cancellationToken);
-        if (observed.Status != AcquisitionRequestStatus.Completed)
-        {
-            scheduler.RequestRun(animeKey, startsMonitoring ? AnimeSearchTrigger.SearchOnAdd : AnimeSearchTrigger.Manual);
-        }
-
-        return observed;
+        await ApplyScopeAsync(animeId, animeKey, options, startsMonitoring, cancellationToken);
+        return await ContinueAsync(request, cancellationToken);
     }
 
     /// <summary>
@@ -219,6 +211,7 @@ public sealed class AnimeAcquisitionRequestExecutor(
     /// the requested ones are only switched on.
     /// </summary>
     private async Task ApplyScopeAsync(
+        Guid animeId,
         string animeKey,
         AcquisitionRequestOptions options,
         bool startsMonitoring,
@@ -233,43 +226,14 @@ public sealed class AnimeAcquisitionRequestExecutor(
             ? (await inventory.LoadAsync(animeKey, cancellationToken))?.Episodes.Select(episode => episode.Key).ToArray() ?? []
             : [];
 
-        await monitoringStore.UpdateAsync(
-            state =>
-            {
-                if (!state.Anime.TryGetValue(animeKey, out var settings))
-                {
-                    return state;
-                }
+        if (startsMonitoring)
+        {
+            // Nothing is requested yet: start from "nothing is monitored" for every season the title has.
+            var seasons = known.Select(episode => episode.SeasonNumber).Concat(options.Episodes.Select(episode => episode.Season)).Distinct().ToArray();
+            await animeMonitoring.SetUnitsAsync(animeId, seasons, [], false, cancellationToken);
+        }
 
-                var seasonOverrides = new Dictionary<int, bool>(settings.SeasonOverrides);
-                var episodeOverrides = new Dictionary<string, bool>(settings.EpisodeOverrides, StringComparer.OrdinalIgnoreCase);
-                if (startsMonitoring)
-                {
-                    // Nothing is requested yet: start from "nothing is monitored" for every season the title has.
-                    foreach (var season in known.Select(episode => episode.SeasonNumber)
-                                 .Concat(options.Episodes.Select(episode => episode.Season))
-                                 .Distinct())
-                    {
-                        seasonOverrides[season] = false;
-                    }
-                }
-
-                foreach (var season in options.Seasons)
-                {
-                    seasonOverrides[season] = true;
-                }
-
-                foreach (var episode in options.Episodes)
-                {
-                    episodeOverrides[AnimeMonitoringEngine.EpisodeOverrideKey(episode.Season, episode.Number)] = true;
-                }
-
-                var anime = new Dictionary<string, AnimeMonitorSettings>(state.Anime, StringComparer.OrdinalIgnoreCase)
-                {
-                    [animeKey] = settings with { SeasonOverrides = seasonOverrides, EpisodeOverrides = episodeOverrides }
-                };
-                return state with { Anime = anime };
-            },
-            cancellationToken);
+        await animeMonitoring.SetUnitsAsync(animeId, [.. options.Seasons], [], true, cancellationToken);
+        await animeMonitoring.SetUnitsAsync(animeId, [], [.. options.Episodes.Select(episode => (episode.Season, episode.Number))], true, cancellationToken);
     }
 }

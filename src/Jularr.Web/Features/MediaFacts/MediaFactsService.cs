@@ -133,7 +133,7 @@ public sealed class MediaFactsService(AppDbContext db)
                 """
                 SELECT "VolumeNumber", "PageCount"
                 FROM "MangaChapters"
-                WHERE "SeriesId" = {0}
+                WHERE "SeriesId" = {0} AND "SupersededById" IS NULL
                 """,
                 seriesId.ToString())
             .ToListAsync(cancellationToken);

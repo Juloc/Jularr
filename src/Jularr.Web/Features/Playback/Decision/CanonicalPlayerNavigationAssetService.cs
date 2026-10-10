@@ -74,7 +74,7 @@ public sealed class CanonicalPlayerNavigationAssetService(
         {
             await trickplay.EnsureQueuedAsync(
                 new TrickplayRequest(
-                    target.IdentityId,
+                    target.WorkEpisodeId ?? file.StoredFileId,
                     file.StoredFileId,
                     source.Identity,
                     file.Path,

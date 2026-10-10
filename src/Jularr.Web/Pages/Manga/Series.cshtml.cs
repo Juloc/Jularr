@@ -5,6 +5,7 @@ using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Franchises;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.Manga;
+using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.MediaFacts;
 using Jularr.Web.Features.MediaMapping;
 using Jularr.Web.Features.Operations;
@@ -13,6 +14,7 @@ using Jularr.Web.Features.Tracking;
 using Jularr.Web.Features.Watchlist;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace Jularr.Web.Pages.Manga;
 
@@ -35,6 +37,8 @@ public sealed class SeriesModel(
     public string Query { get; private set; } = "";
     public string? SearchError { get; private set; }
     public bool IsOwner => account.IsOwner;
+
+    public long? ManageWorkId { get; private set; }
     public IReadOnlyList<FranchiseSummary> Franchises { get; private set; } = [];
     public IReadOnlyList<FranchiseRelationGroup> FranchiseGroups { get; private set; } = [];
     public IReadOnlyList<PresentationSection<MangaChapterItem>> PresentationSections { get; private set; } = [];
@@ -61,6 +65,14 @@ public sealed class SeriesModel(
         }
 
         Series = series;
+        if (account.IsOwner)
+        {
+            ManageWorkId = await db.WorkSourceLinks.AsNoTracking()
+                .Where(link => link.SourceKind == WorkSourceKind.MangaSeries && link.SourceId == id)
+                .Select(link => (long?)link.WorkId)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
         Facts = MediaFactsStripModel.Create(
             await new MediaFactsService(db).GetMangaFactsAsync(id, cancellationToken),
             Ui,

@@ -28,9 +28,9 @@ public sealed class MediaTypeRouteGateTests
     [DataRow("/Library")]
     [DataRow("/Library/Anime/7a4c0000-0000-0000-0000-000000000001")]
     [DataRow("/Library/Episode/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("/Library/Movie/1")]
+    [DataRow("/Library/Series/1")]
+    [DataRow("/Library/Watch/1")]
     [DataRow("/Reading")]
     [DataRow("/Novels")]
     [DataRow("/Novels/Work/7a4c0000-0000-0000-0000-000000000001")]
@@ -79,11 +79,11 @@ public sealed class MediaTypeRouteGateTests
     }
 
     [TestMethod]
-    [DataRow("movie", "/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("series", "/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("anime", "/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("anime", "/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("anime", "/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("movie", "/Library/Series/1")]
+    [DataRow("series", "/Library/Movie/1")]
+    [DataRow("anime", "/Library/Movie/1")]
+    [DataRow("anime", "/Library/Series/1")]
+    [DataRow("anime", "/Library/Watch/1")]
     public async Task AProfileDoesNotReachTheDetailOrPlayerPagesOfAVideoTypeItCannotBrowse(string visible, string path)
     {
         await using var host = await GateHost.CreateAsync();
@@ -93,10 +93,10 @@ public sealed class MediaTypeRouteGateTests
     }
 
     [TestMethod]
-    [DataRow("movie", "/Library/Movie/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("series", "/Library/Series/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("movie", "/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
-    [DataRow("series", "/Library/Watch/7a4c0000-0000-0000-0000-000000000001")]
+    [DataRow("movie", "/Library/Movie/1")]
+    [DataRow("series", "/Library/Series/1")]
+    [DataRow("movie", "/Library/Watch/1")]
+    [DataRow("series", "/Library/Watch/1")]
     public async Task AProfileReachesTheDetailAndPlayerPagesOfItsOwnVideoType(string visible, string path)
     {
         await using var host = await GateHost.CreateAsync();

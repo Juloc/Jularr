@@ -23,11 +23,16 @@ namespace Jularr.Web.Features.MediaCore;
 /// </summary>
 public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStructureService structure)
 {
+    /// <summary>The evidence of a library anime: its owner put it in the Anime library.</summary>
+    public const string AnimeLibrarySource = "anime-library";
+
     /// <summary>Ensures the work for an anime record (bridges by <c>Anime.Id</c>).</summary>
-    public async Task<Guid> EnsureWorkForAnimeAsync(Anime anime, CancellationToken cancellationToken)
+    public async Task<long> EnsureWorkForAnimeAsync(Anime anime, CancellationToken cancellationToken)
     {
+        // A library anime is an episodic Series classified as Anime; its AniList match is mirrored as an identity by the metadata match, not here.
         var workId = await EnsureWorkAsync(
-            WorkSourceKind.Anime, anime.Id, WorkMediaType.Anime, anime.Title, year: null, cancellationToken);
+            WorkSourceKind.Anime, anime.Id, WorkMediaType.Series, anime.Title, year: null, cancellationToken);
+        await works.SetAnimeClassificationAsync(workId, true, AnimeLibrarySource, null, isManualOverride: false, cancellationToken);
 
         await works.AddOrUpdateTitleAsync(
             workId, WorkTitleType.Primary, "und", anime.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
@@ -44,7 +49,7 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// TMDB/IMDb identities into the core. A movie is a single unit, so no season/episode structure is
     /// created (#593).
     /// </summary>
-    public async Task<Guid> EnsureWorkForMovieAsync(Movie movie, CancellationToken cancellationToken)
+    public async Task<long> EnsureWorkForMovieAsync(Movie movie, CancellationToken cancellationToken)
     {
         var workId = await EnsureWorkAsync(
             WorkSourceKind.Movie, movie.Id, WorkMediaType.Movie, movie.Title, movie.Year, cancellationToken,
@@ -81,7 +86,7 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// (<see cref="WorkSeason"/>/<see cref="WorkEpisode"/>), so the caller adds those through
     /// <see cref="WorkStructureService"/> rather than a per-type episode table (#594).
     /// </summary>
-    public async Task<Guid> EnsureWorkForSeriesAsync(TvSeries series, CancellationToken cancellationToken)
+    public async Task<long> EnsureWorkForSeriesAsync(TvSeries series, CancellationToken cancellationToken)
     {
         var workId = await EnsureWorkAsync(
             WorkSourceKind.Series, series.Id, WorkMediaType.Series, series.Title, series.Year, cancellationToken,
@@ -124,16 +129,25 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// <see cref="WorkVersion"/> — editions and versions are modelled separately (#592). The Audible ASIN,
     /// when known, is mirrored as a correctable external identity (#440).
     /// </summary>
-    public async Task<Guid> EnsureWorkForAudiobookAsync(Audiobook audiobook, CancellationToken cancellationToken)
+    public async Task<long> EnsureWorkForAudiobookAsync(Audiobook audiobook, CancellationToken cancellationToken, long? requestedWorkId = null)
     {
+        // An audiobook requested for a Book Work is that Work's audio edition; it does not get a Work of its own or rewrite the Work's titles.
+        if (requestedWorkId is { } requested && !await db.Set<WorkSourceLink>().AnyAsync(x => x.SourceKind == WorkSourceKind.Audiobook && x.SourceId == audiobook.Id, cancellationToken))
+        {
+            await works.LinkSourceAsync(requested, WorkSourceKind.Audiobook, audiobook.Id, cancellationToken);
+        }
+
         var workId = await EnsureWorkAsync(
             WorkSourceKind.Audiobook, audiobook.Id, WorkMediaType.Book, audiobook.Title, audiobook.Year, cancellationToken);
 
-        await works.AddOrUpdateTitleAsync(
-            workId, WorkTitleType.Primary, "und", audiobook.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
-        await works.SetFieldProvenanceAsync(
-            workId, "title", MetadataFieldSources.Local, null, null,
-            isManualOverride: false, preferredProvider: null, cancellationToken);
+        if (requestedWorkId is null)
+        {
+            await works.AddOrUpdateTitleAsync(
+                workId, WorkTitleType.Primary, "und", audiobook.Title, MetadataFieldSources.Local, isPrimary: true, cancellationToken);
+            await works.SetFieldProvenanceAsync(
+                workId, "title", MetadataFieldSources.Local, null, null,
+                isManualOverride: false, preferredProvider: null, cancellationToken);
+        }
 
         var edition = await structure.AddOrUpdateEditionAsync(
             workId,
@@ -173,7 +187,7 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// identities plus its titles into the core. The caller decides whether the work is a
     /// <see cref="WorkMediaType.LightNovel"/> or a plain <see cref="WorkMediaType.Book"/>.
     /// </summary>
-    public async Task<Guid> EnsureWorkForNovelAsync(
+    public async Task<long> EnsureWorkForNovelAsync(
         NovelWork novel,
         WorkMediaType mediaType,
         CancellationToken cancellationToken)
@@ -213,6 +227,15 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
                 isManualOverride: false, MappingReviewState.Confirmed, cancellationToken);
         }
 
+        // A Book's editions (and through them its files) belong to the same Work, so installed and upgrade state read from the Work see them.
+        if (mediaType == WorkMediaType.Book)
+        {
+            foreach (var edition in await db.Set<BookEdition>().AsNoTracking().Where(item => item.WorkId == novel.Id).OrderBy(item => item.CreatedAt).ToListAsync(cancellationToken))
+            {
+                await MirrorBookEditionAsync(workId, edition, cancellationToken);
+            }
+        }
+
         return workId;
     }
 
@@ -220,14 +243,18 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// Ensures the work for a book by bridging its parent novel work, and mirrors the book edition into
     /// a <see cref="WorkEdition"/> (editions are modelled separately from versions, #592).
     /// </summary>
-    public async Task<Guid> EnsureWorkForBookEditionAsync(BookEdition edition, CancellationToken cancellationToken)
+    public async Task<long> EnsureWorkForBookEditionAsync(BookEdition edition, CancellationToken cancellationToken)
     {
         var novel = await db.Set<NovelWork>().AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == edition.WorkId, cancellationToken)
             ?? throw new InvalidOperationException($"Book edition {edition.Id:D} has no parent novel work.");
 
-        var workId = await EnsureWorkForNovelAsync(novel, WorkMediaType.Book, cancellationToken);
+        // Bridging the novel mirrors every edition of the book, this one included.
+        return await EnsureWorkForNovelAsync(novel, WorkMediaType.Book, cancellationToken);
+    }
 
+    private async Task MirrorBookEditionAsync(long workId, BookEdition edition, CancellationToken cancellationToken)
+    {
         await structure.AddOrUpdateEditionAsync(
             workId,
             editionKey: edition.EditionKey,
@@ -249,15 +276,13 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
                 confidence: 1.0, evidence: "book ISBN-13", isPrimary: false,
                 isManualOverride: false, MappingReviewState.Confirmed, cancellationToken);
         }
-
-        return workId;
     }
 
     /// <summary>
     /// Ensures the work for a manga series. MangaSeries is a raw-SQL table (not an EF entity), so the
     /// caller passes the fields; the bridge is keyed by the series id.
     /// </summary>
-    public async Task<Guid> EnsureWorkForMangaSeriesAsync(
+    public async Task<long> EnsureWorkForMangaSeriesAsync(
         Guid seriesId,
         string title,
         string? nativeTitle,
@@ -298,7 +323,7 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     /// id, the work that id already identifies is the record's work: Discover and Request materialize the canonical Work from the
     /// provider id before the importer creates the legacy record, and a second Work would split request, files and progress.
     /// </summary>
-    private async Task<Guid> EnsureWorkAsync(
+    private async Task<long> EnsureWorkAsync(
         WorkSourceKind sourceKind,
         Guid sourceId,
         WorkMediaType mediaType,
@@ -310,7 +335,7 @@ public sealed class LegacyWorkBridge(AppDbContext db, WorkService works, WorkStr
     {
         var existing = await db.Set<WorkSourceLink>().AsNoTracking()
             .Where(x => x.SourceKind == sourceKind && x.SourceId == sourceId)
-            .Select(x => (Guid?)x.WorkId)
+            .Select(x => (long?)x.WorkId)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (existing is { } workId)

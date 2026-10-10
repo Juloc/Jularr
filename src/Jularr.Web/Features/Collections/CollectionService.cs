@@ -28,7 +28,7 @@ public sealed record CollectionTileView(
     IReadOnlyList<string> PosterUrls);
 
 /// <summary>One card of a collection shelf plus, for a smart collection, the reasons the work matched.</summary>
-public sealed record CollectionCardView(Guid WorkId, MediaBannerCardModel Card, IReadOnlyList<string> Reasons);
+public sealed record CollectionCardView(long WorkId, MediaBannerCardModel Card, IReadOnlyList<string> Reasons);
 
 /// <summary>The full detail of one collection: its metadata, the rendered shelf and per-item explainability.</summary>
 public sealed record CollectionDetailView(
@@ -145,13 +145,13 @@ public sealed class CollectionService(
         ];
     }
 
-    private async Task<IReadOnlyDictionary<Guid, string?>> ResolvePostersAsync(
-        IReadOnlyCollection<Guid> workIds,
+    private async Task<IReadOnlyDictionary<long, string?>> ResolvePostersAsync(
+        IReadOnlyCollection<long> workIds,
         CancellationToken cancellationToken)
     {
         if (workIds.Count == 0)
         {
-            return new Dictionary<Guid, string?>();
+            return new Dictionary<long, string?>();
         }
 
         var covers = await (
@@ -215,7 +215,7 @@ public sealed class CollectionService(
         return deleted;
     }
 
-    public async Task<bool> AddManualItemAsync(string profileId, Guid id, Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> AddManualItemAsync(string profileId, Guid id, long workId, CancellationToken cancellationToken)
     {
         var collection = await store.GetAsync(profileId, id, cancellationToken);
         if (collection is null || collection.Kind != CollectionKind.Manual)
@@ -228,7 +228,7 @@ public sealed class CollectionService(
         return added;
     }
 
-    public async Task<bool> RemoveItemAsync(string profileId, Guid id, Guid workId, CancellationToken cancellationToken)
+    public async Task<bool> RemoveItemAsync(string profileId, Guid id, long workId, CancellationToken cancellationToken)
     {
         var collection = await store.GetAsync(profileId, id, cancellationToken);
         if (collection is null)
@@ -343,13 +343,13 @@ public sealed class CollectionService(
         return view;
     }
 
-    private async Task<IReadOnlyDictionary<Guid, string>> ResolveHrefsAsync(
-        IReadOnlyList<Guid> workIds,
+    private async Task<IReadOnlyDictionary<long, string>> ResolveHrefsAsync(
+        IReadOnlyList<long> workIds,
         CancellationToken cancellationToken)
     {
         if (workIds.Count == 0)
         {
-            return new Dictionary<Guid, string>();
+            return new Dictionary<long, string>();
         }
 
         var links = await db.WorkSourceLinks.AsNoTracking()
@@ -357,7 +357,7 @@ public sealed class CollectionService(
             .Select(x => new { x.WorkId, x.SourceKind, x.SourceId })
             .ToListAsync(cancellationToken);
 
-        var map = new Dictionary<Guid, string>();
+        var map = new Dictionary<long, string>();
         foreach (var link in links)
         {
             if (!map.ContainsKey(link.WorkId) &&
@@ -370,7 +370,7 @@ public sealed class CollectionService(
         return map;
     }
 
-    private static MediaBannerCardData ToCardData(WorkFactSnapshot snapshot, IReadOnlyDictionary<Guid, string> hrefs) =>
+    private static MediaBannerCardData ToCardData(WorkFactSnapshot snapshot, IReadOnlyDictionary<long, string> hrefs) =>
         new(
             snapshot.BannerKind ?? MediaBannerKind.Book,
             snapshot.Title,

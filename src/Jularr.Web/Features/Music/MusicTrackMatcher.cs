@@ -57,7 +57,7 @@ public static partial class MusicTrackMatcher
     /// The tracks of an album the provider knows no track list for: one per audio file, numbered by its file name (or by its position), so the
     /// files can still be recorded. They are real structure from then on and never replaced by a later provider list.
     /// </summary>
-    public static IReadOnlyList<WorkTrack> Synthesize(Guid workId, IReadOnlyList<CompletedDownloadFile> files)
+    public static IReadOnlyList<WorkTrack> Synthesize(long workId, IReadOnlyList<CompletedDownloadFile> files)
     {
         var used = new HashSet<(int Disc, int Number)>();
         var tracks = new List<WorkTrack>();

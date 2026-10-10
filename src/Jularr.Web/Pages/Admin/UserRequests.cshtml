@@ -1,0 +1,12 @@
+@page "/Admin/Users/{userId}/Settings/Requests"
+@model Jularr.Web.Pages.Admin.Requests.UsersModel
+@{
+    ViewData["Title"] = Model.Ui["admin.nav.requests"];
+    ViewData["AdminSectionRoot"] = "/Admin/Users";
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/admin-requests.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/request-rule-editor.css" asp-append-version="true" />
+}
+@section Scripts { <script src="~/js/admin-requests.js" asp-append-version="true" defer></script><script src="~/js/request-rule-editor.js" asp-append-version="true" defer></script> }
+<partial name="/Pages/Admin/Requests/_RequestUsersPage.cshtml" />

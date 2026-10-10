@@ -22,7 +22,6 @@ public sealed class MediaAcquisitionEngineTests
             ["WEB-1080p", "BLURAY-1080p", "WEB-720p"],
             UpgradeAllowed: true,
             UpgradeCutoffQuality: "WEB-1080p",
-            MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],
@@ -90,7 +89,7 @@ public sealed class MediaAcquisitionEngineTests
         try
         {
             var store = new QualityProfileStore(directory, TwoKindRegistry());
-            var workId = Guid.NewGuid();
+            var workId = Random.Shared.NextInt64(1, long.MaxValue);
 
             await store.AssignWorkAsync(workId, MoviesProfileId);
 
@@ -129,7 +128,7 @@ public sealed class MediaAcquisitionEngineTests
         try
         {
             var anime = AnimeQualityProfiles.CreateDefaultAnime1080p();
-            var workId = Guid.NewGuid();
+            var workId = Random.Shared.NextInt64(1, long.MaxValue);
             var webOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
             var legacy = new
             {

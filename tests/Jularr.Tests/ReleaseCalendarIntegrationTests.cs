@@ -1,5 +1,7 @@
 using Jularr.Web.Data;
+using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Monitoring;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Books;
 using Jularr.Web.Features.Calendar;
 using Jularr.Web.Features.Library;
@@ -31,11 +33,7 @@ public sealed class ReleaseCalendarIntegrationTests
         var novel = await fixture.AddNovelAsync();
         var book = await fixture.AddBookAsync("2026-10-05");
         await fixture.AddBookAsync("an unknown year");
-        await fixture.Monitoring.UpdateAsync(state =>
-        {
-            state.Anime["frieren"] = new AnimeMonitorSettings("frieren", true, false, new(), new());
-            return state;
-        });
+        await MonitoringTestSupport.Anime(fixture.Db).SetMonitoredAsync(anime.Id, true, CancellationToken.None);
 
         fixture.Client.Responses.Enqueue(new AniListReleaseSchedule(
             [
@@ -105,6 +103,58 @@ public sealed class ReleaseCalendarIntegrationTests
             includeUndated: false,
             CancellationToken.None);
         Assert.AreEqual(2, missing.Days.Single(day => day.Events.Count > 0).Events.Single().Unit?.Number);
+    }
+
+    [TestMethod]
+    public async Task ReadingLinks_OnlyLoadRequestedMediaTypes()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var novelId = await fixture.AddNovelAsync();
+
+        var novelOnly = await ReleaseLibraryLinks.LoadReadingLinksAsync(
+            fixture.Db, includeManga: false, includeLightNovels: true, cancellationToken: CancellationToken.None);
+        var link = Assert.ContainsSingle(novelOnly);
+        Assert.AreEqual(ReleaseMediaType.LightNovel, link.MediaType);
+        Assert.AreEqual(novelId, link.MediaId);
+
+        Assert.IsEmpty(await ReleaseLibraryLinks.LoadReadingLinksAsync(
+            fixture.Db, includeManga: false, includeLightNovels: false, cancellationToken: CancellationToken.None));
+        Assert.IsEmpty(await ReleaseLibraryLinks.LoadReadingLinksAsync(
+            fixture.Db, includeManga: true, includeLightNovels: false, cancellationToken: CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task RefreshDue_UsesUniqueFollowedTargetsFromMultipleProfiles()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var watchlist = new WatchlistStore(fixture.Db);
+        var shared = new WatchlistIdentity(WatchlistMediaType.Anime, "anilist", "76001");
+        var ignored = new WatchlistIdentity(WatchlistMediaType.Anime, "anilist", "76002");
+
+        await watchlist.FollowAsync(
+            "profile-a",
+            new WatchlistDraft(shared, "Shared", Status: "RELEASING"),
+            CancellationToken.None);
+        await watchlist.FollowAsync(
+            "profile-b",
+            new WatchlistDraft(shared, "Shared", Status: null),
+            CancellationToken.None);
+        await watchlist.FollowAsync(
+            "profile-a",
+            new WatchlistDraft(ignored, "Ignored"),
+            CancellationToken.None);
+        await watchlist.UnfollowAsync("profile-a", ignored, CancellationToken.None);
+
+        fixture.Client.Responses.Enqueue(new AniListReleaseSchedule(
+            [new AniListReleaseMedia(76001, "ANIME", "RELEASING", 2026, 10, 1, null)],
+            [],
+            HasMoreAirings: false));
+
+        var result = await fixture.Refresher().RefreshDueAsync(CancellationToken.None);
+
+        Assert.AreEqual(1, result.Refreshed);
+        Assert.AreEqual(1, result.Requests);
+        CollectionAssert.AreEqual(new[] { 76001 }, fixture.Client.RequestedIds.Single().ToArray());
     }
 
     [TestMethod]
@@ -364,7 +414,7 @@ public sealed class ReleaseCalendarIntegrationTests
         public ReleaseCalendarService Service() =>
             new(
                 [
-                    new AniListReleaseEventSource(Db, new ReleaseCalendarCacheStore(Db), Mappings, Monitoring),
+                    new AniListReleaseEventSource(Db, new ReleaseCalendarCacheStore(Db), Mappings, new AnimeEpisodeStates(Db, new AcquisitionAccessStore(Db)), MonitoringTestSupport.Anime(Db)),
                     new NovelChapterReleaseEventSource(Db),
                     new BookReleaseEventSource(Db),
                     new WatchlistReleaseEventSource(

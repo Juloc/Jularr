@@ -77,7 +77,6 @@ public static class BookQualityProfiles
             ],
             UpgradeAllowed: true,
             UpgradeCutoffQuality: "EPUB",
-            MinimumScore: 0,
             MinimumSizeBytes: null,
             MaximumSizeBytes: null,
             MustContain: [],

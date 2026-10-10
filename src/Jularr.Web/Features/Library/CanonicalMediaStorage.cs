@@ -19,7 +19,7 @@ public enum MediaAssetKind
 public sealed class MediaAsset
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
     public Guid? WorkEpisodeId { get; set; }
 
     /// <summary>The track of an album Work an Audio asset belongs to; null for every other asset.</summary>
@@ -48,13 +48,13 @@ public sealed class StoredFile
 
 /// <param name="Quality">The quality key of the release the file came from (see <c>ReleaseQuality</c>); it is what the upgrade policy compares later. Null keeps what the Version already says.</param>
 public sealed record CanonicalVideoAttachment(
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId,
     string Path,
     string? StorageRootPath = null,
     string? Quality = null);
 
-public sealed record CanonicalAudioAttachment(Guid WorkId, Guid WorkTrackId, string Path, string? Quality = null);
+public sealed record CanonicalAudioAttachment(long WorkId, Guid WorkTrackId, string Path, string? Quality = null);
 
 /// <summary>One video file of a Work as the canonical Version/Asset/File chain holds it; <see cref="Quality"/> is the Version's recorded quality, null when none was recorded.</summary>
 public sealed record InstalledVideoFile(Guid StoredFileId, Guid? WorkEpisodeId, string Path, string? Quality);
@@ -67,7 +67,7 @@ public sealed record CanonicalAudioFile(Guid MediaAssetId, Guid StoredFileId, Gu
 public sealed record CanonicalPlayableFile(
     Guid MediaAssetId,
     Guid StoredFileId,
-    Guid WorkId,
+    long WorkId,
     Guid? WorkEpisodeId,
     Guid WorkVersionId,
     string Path,
@@ -84,7 +84,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
     private const string LocalAudioVersionPrefix = "audio-file:";
 
     public async Task<CanonicalPlayableFile> AttachVideoAsync(
-        Guid workId,
+        long workId,
         Guid? workEpisodeId,
         string path,
         string? storageRootPath,
@@ -388,7 +388,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
     }
 
     /// <summary>Every video file of the Work with the quality its Version recorded; episodes are told apart by <see cref="InstalledVideoFile.WorkEpisodeId"/>, a Movie has none.</summary>
-    public async Task<IReadOnlyList<InstalledVideoFile>> ListVideoFilesAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<InstalledVideoFile>> ListVideoFilesAsync(long workId, CancellationToken cancellationToken) =>
         await (
             from asset in db.MediaAssets.AsNoTracking()
             join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
@@ -399,7 +399,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         .ToListAsync(cancellationToken);
 
     /// <summary>Every audio file of the album Work with the quality its Version recorded.</summary>
-    public async Task<IReadOnlyList<InstalledAudioFile>> ListAudioFilesAsync(Guid workId, CancellationToken cancellationToken) =>
+    public async Task<IReadOnlyList<InstalledAudioFile>> ListAudioFilesAsync(long workId, CancellationToken cancellationToken) =>
         await (
             from asset in db.MediaAssets.AsNoTracking()
             join file in db.StoredFiles.AsNoTracking() on (Guid?)asset.Id equals file.MediaAssetId
@@ -441,7 +441,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
     }
 
     public async Task<CanonicalPlayableFile?> ResolveVideoAsync(
-        Guid workId,
+        long workId,
         Guid? workEpisodeId,
         CancellationToken cancellationToken) =>
         await (
@@ -524,7 +524,7 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         return root;
     }
 
-    private sealed record VideoEpisodeRow(Guid Id, Guid WorkId, int SeasonNumber, int EpisodeNumber);
+    private sealed record VideoEpisodeRow(Guid Id, long WorkId, int SeasonNumber, int EpisodeNumber);
 }
 
 

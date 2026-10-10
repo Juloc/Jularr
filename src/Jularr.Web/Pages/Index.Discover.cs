@@ -345,8 +345,17 @@ public sealed partial class IndexModel
         IReadOnlyDictionary<string, Guid?> followed = new Dictionary<string, Guid?>();
         try
         {
-            followed = (await watchlist.GetEffectiveAsync(account.ProfileId, cancellationToken))
-                .ToDictionary(item => item.Identity.Key, item => item.FranchiseId, StringComparer.Ordinal);
+            var visibleIdentities = list
+                .Select(item => WatchlistDraftInput.TryIdentity(
+                    item.Category, item.Provider, item.ExternalId, out var identity)
+                    ? identity
+                    : null)
+                .OfType<WatchlistIdentity>()
+                .ToArray();
+            followed = await watchlist.GetFollowedFranchiseIdsForKeysAsync(
+                account,
+                visibleIdentities,
+                cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -370,7 +379,7 @@ public sealed partial class IndexModel
     {
         // Only the titles on the page are read: a few anime by their legacy record, a few movies and series by their Work.
         Guid[] animeIds = [.. LocalIds(items, "anime")];
-        Guid[] videoIds = [.. LocalIds(items, "movie").Concat(LocalIds(items, "tv"))];
+        long[] videoIds = [.. items.Where(item => item.IsLocal && item.Category is "movie" or "tv" && item.LocalWorkId is not null).Select(item => item.LocalWorkId!.Value).Distinct()];
         if (animeIds.Length == 0 && videoIds.Length == 0)
         {
             return new Dictionary<string, DiscoverLocalFacts>();
@@ -558,10 +567,10 @@ public sealed partial class IndexModel
                     return BadRequest();
                 }
 
-                var payload = await scopes.BuildTvPayloadAsync(work, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
+                var choice = await scopes.ValidateTvAsync(work.Id, new VideoRequestScopeChoice(scope, form.SeasonIds, form.EpisodeIds, form.MonitorFuture), cancellationToken);
                 var languages = new AcquisitionRequestOptions { AudioLanguage = form.Audio, SubtitleLanguage = form.Subtitles }.Validate();
-                draft = draft with { PayloadJson = (payload with { AudioLanguage = languages.AudioLanguage, SubtitleLanguage = languages.SubtitleLanguage }).Serialize() };
-                summary.Add(DiscoverRequestSummary.Scope(payload, Ui));
+                draft = draft with { PayloadJson = (new VideoRequestPayload(work.Id, work.CanonicalTitle, work.Year) { Requested = choice, AudioLanguage = languages.AudioLanguage, SubtitleLanguage = languages.SubtitleLanguage }).Serialize() };
+                summary.Add(DiscoverRequestSummary.Scope(choice, Ui));
                 summary.AddRange(RequestOptionsSummary.Describe(languages, Ui));
             }
             else if (target.Kind == MediaAcquisitionKind.Anime)

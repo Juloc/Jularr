@@ -108,6 +108,9 @@ public sealed class ReadModel(
     // "page" is also the Razor Pages route value (the page path) and model
     // binding reads route values before the query string; the page index is
     // therefore bound from the query explicitly (?page= resume, page images).
+    // A literal route: "page" is a reserved route value of Razor Pages, so it cannot be passed to RedirectToPage.
+    public static string ShownVersionUrl(Guid shown, int? page) => page is { } pageIndex ? $"/Manga/Read/{shown}?page={pageIndex}" : $"/Manga/Read/{shown}";
+
     public async Task<IActionResult> OnGetAsync(
         Guid id,
         [FromQuery(Name = "page")] int? page,
@@ -116,6 +119,11 @@ public sealed class ReadModel(
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
 
         var repository = new MangaRepository(db);
+        if (await repository.GetSupersedingChapterIdAsync(id, cancellationToken) is { } shown)
+        {
+            return LocalRedirect(ShownVersionUrl(shown, page));
+        }
+
         var chapter = await repository.GetChapterAsync(id, cancellationToken);
         if (chapter is null)
         {
@@ -187,7 +195,7 @@ public sealed class ReadModel(
             scope,
             "media",
             StringComparison.OrdinalIgnoreCase);
-        Guid? workId = await workQueries.ResolveWorkForSourceAsync(
+        long? workId = await workQueries.ResolveWorkForSourceAsync(
             WorkSourceKind.MangaSeries,
             chapter.SeriesId,
             cancellationToken);
@@ -233,7 +241,7 @@ public sealed class ReadModel(
             WorkSourceKind.MangaSeries,
             chapter.SeriesId,
             cancellationToken);
-        if (workId is Guid resolvedWorkId)
+        if (workId is { } resolvedWorkId)
         {
             await MangaReaderPreferences.ResetWorkAsync(
                 db,

@@ -1,6 +1,7 @@
 package de.juloc.jularr.tv
 
 import de.juloc.jularr.core.api.JularrClientApi
+import de.juloc.jularr.core.api.WatchlistPage
 import de.juloc.jularr.core.model.AnimeDetail
 import de.juloc.jularr.core.model.ClientAccount
 import de.juloc.jularr.core.model.ClientCapabilities
@@ -58,6 +59,21 @@ class TvClientFlowTest {
         assertEquals(102_000, api.lastCueToMs)
     }
 
+    @Test
+    fun watchlistPageUsesRequestedPageWithoutTruncation() {
+        val api = FakeApi(capabilities = capabilities())
+        val flow = TvClientFlow { api }
+        runSuspend { flow.connect("https://jularr.example") }
+
+        val page = runSuspend { flow.loadWatchlistPage(2) }
+
+        assertEquals(2, api.lastWatchlistPage)
+        assertEquals(2, page.page)
+        assertEquals(25, page.pageSize)
+        assertEquals(26L, page.totalCount)
+        assertEquals(false, page.hasMore)
+    }
+
     private fun capabilities(
         nativeSessionAuth: Boolean = true,
     ) = ClientCapabilities(
@@ -87,6 +103,7 @@ class TvClientFlowTest {
     private class FakeApi(
         private val capabilities: ClientCapabilities,
     ) : JularrClientApi {
+        var lastWatchlistPage: Int? = null
         var lastCueFromMs: Int? = null
         var lastCueToMs: Int? = null
 
@@ -98,7 +115,10 @@ class TvClientFlowTest {
         override suspend fun getLibrary() = ClientLibrary(emptyList())
         override suspend fun getContinueWatching() = emptyList<de.juloc.jularr.core.model.ContinueWatchingItem>()
         override suspend fun getPlaybackHistory() = emptyList<de.juloc.jularr.core.model.PlaybackHistoryItem>()
-        override suspend fun getWatchlist() = emptyList<de.juloc.jularr.core.model.WatchlistItem>()
+        override suspend fun getWatchlistPage(page: Int, pageSize: Int): WatchlistPage {
+            lastWatchlistPage = page
+            return WatchlistPage(emptyList(), page, pageSize, 26L, page == 1)
+        }
         override suspend fun getAnime(animeId: String): AnimeDetail =
             error("unused")
         override suspend fun getEpisode(episodeId: String): EpisodeDetail =

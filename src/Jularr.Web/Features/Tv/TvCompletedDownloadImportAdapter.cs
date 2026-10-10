@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Acquisition.Core;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Web.Features.Acquisition.Access;
@@ -31,6 +32,9 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 {
     /// <summary>Why a finished download did not become an episode; the next release is tried.</summary>
     public const string NoVideoFileReason = "The download contained no video file.";
+
+    // A parsed span wider than this is a mislabelled pack, not one file of several episodes.
+    private const int MaxEpisodesPerFile = 6;
 
     public MediaAcquisitionKind Kind => MediaAcquisitionKind.Tv;
 
@@ -71,10 +75,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             {
                 foreach (var video in videos)
                 {
-                    if (await PlaceAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken) is { } episode)
-                    {
-                        placed.Add(episode);
-                    }
+                    placed.AddRange(await PlaceFileAsync(route, files, video.Path, ResolveMetadata(request, video.Path), cancellationToken));
                 }
 
                 failed = false;
@@ -136,10 +137,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
                 try
                 {
-                    if (await PlaceAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken) is { } episode)
-                    {
-                        placed.Add(episode);
-                    }
+                    placed.AddRange(await PlaceFileAsync(route, files, file.Path, ResolveMetadata(request: null, file.Path), cancellationToken));
                 }
                 catch (DestinationMismatchException exception)
                 {
@@ -159,14 +157,40 @@ public sealed partial class TvCompletedDownloadImportAdapter(
     }
 
     /// <summary>
+    /// Places the episodes one video file holds: one for an ordinary file, each of them for a multi-episode file (<c>S01E01-E02</c>). Every
+    /// episode owns its file, so coverage, playback and upgrades stay per episode: the extra episodes are hardlinked (copied where the
+    /// filesystem cannot link) from the first placed file, or from the download when that is still there.
+    /// </summary>
+    private async Task<IReadOnlyList<PlacedEpisode>> PlaceFileAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, EpisodeMetadata meta, CancellationToken cancellationToken)
+    {
+        var incomingQuality = upgrades?.QualityOfDownload(MediaAcquisitionKind.Tv, videoPath);
+        var result = new List<PlacedEpisode>();
+        var firstDestination = (string?)null;
+        for (var episode = meta.Episode; episode <= Math.Max(meta.Episode, meta.EpisodeEnd); episode++)
+        {
+            var current = meta with { Episode = episode };
+            var linkFromLibrary = firstDestination is not null && !File.Exists(videoPath);
+            var source = linkFromLibrary ? firstDestination! : videoPath;
+            var forced = linkFromLibrary ? (ImportFileAction.Hardlink, true) : ((ImportFileAction, bool)?)null;
+            if (await PlaceAsync(route, files, source, current, incomingQuality, forced, cancellationToken) is { } placed)
+            {
+                result.Add(placed);
+                firstDestination ??= placed.Attachment.Path;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Places one episode into the TV root with the root's placement policy and records the series and episode. Idempotent: an episode
     /// already placed at the destination is left as is and only its records are refreshed. An episode that is a meaningful upgrade of the
     /// installed one replaces it once the new file is recorded; an episode the library already has in at least this quality is skipped
     /// (null), so a season pack never replaces a good file with a worse one.
     /// </summary>
-    private async Task<PlacedEpisode?> PlaceAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, EpisodeMetadata meta, CancellationToken cancellationToken)
+    private async Task<PlacedEpisode?> PlaceAsync(LibraryRootRoute route, IReadOnlyList<CompletedDownloadFile> files, string videoPath, EpisodeMetadata meta, string? incomingQuality, (ImportFileAction Action, bool AllowFallback)? forcedAction, CancellationToken cancellationToken)
     {
-        var (action, allowFallback) = ImportFileTransfer.Resolve(ImportFileTransfer.ModeFor(route.PlacementPolicy));
+        var (action, allowFallback) = forcedAction ?? ImportFileTransfer.Resolve(ImportFileTransfer.ModeFor(route.PlacementPolicy));
         var seriesFolder = Path.Combine(route.Path, TvNaming.SeriesFolderName(meta.Series, meta.Year));
         var destination = Path.Combine(seriesFolder, TvNaming.SeasonFolderName(meta.Season), TvNaming.EpisodeFileName(meta.Series, meta.Season, meta.Episode, meta.EpisodeTitle, Path.GetExtension(videoPath)));
         if (!StoragePaths.IsBelow(destination, route.Path))
@@ -175,7 +199,6 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         }
 
         var alreadyPlaced = LibraryFilePlacer.FindDestinationConflict(destination, []) is not null;
-        var incomingQuality = upgrades?.QualityOfDownload(MediaAcquisitionKind.Tv, videoPath);
 
         // A different file at the destination is only ever replaced as an upgrade of a series the library already has, so for an unknown series
         // it is refused before any record exists.
@@ -281,6 +304,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
 
         var season = release?.SeasonNumber ?? 1;
         var episode = release?.EpisodeStart ?? 1;
+        var episodeEnd = release?.EpisodeEnd is { } end && end > episode && end - episode < MaxEpisodesPerFile ? end : episode;
         var canonicalRequest = request?.Request is { } storedRequest
             ? VideoRequestPayload.Parse(storedRequest.PayloadJson)
             : null;
@@ -302,7 +326,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
             }
         }
 
-        return new EpisodeMetadata(seriesTitle!, year, season, episode, EpisodeTitle: null, tmdb, tvdb);
+        return new EpisodeMetadata(seriesTitle!, year, season, episode, episodeEnd, EpisodeTitle: null, tmdb, tvdb);
     }
 
     private static int? TryParseYear(string? text)
@@ -359,6 +383,7 @@ public sealed partial class TvCompletedDownloadImportAdapter(
         int? Year,
         int Season,
         int Episode,
+        int EpisodeEnd,
         string? EpisodeTitle,
         string? TmdbId,
         string? TvdbId);

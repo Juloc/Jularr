@@ -28,8 +28,7 @@ public sealed class AniListAutoMonitorTests
         var result = await environment.RunAniListAutoMonitorAsync(ProfileId);
 
         Assert.AreEqual(1, result.NewlyMonitored, string.Join(" ", result.Notes));
-        var monitoring = await environment.MonitoringStateAsync();
-        Assert.IsTrue(monitoring.Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
+        Assert.IsTrue((await environment.AnimeMonitoringAsync()).IsWorkMonitored);
     }
 
     [TestMethod]
@@ -44,8 +43,7 @@ public sealed class AniListAutoMonitorTests
         var result = await environment.RunAniListAutoMonitorAsync(ProfileId);
 
         Assert.AreEqual(0, result.NewlyMonitored);
-        var monitoring = await environment.MonitoringStateAsync();
-        Assert.IsFalse(monitoring.Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
+        Assert.IsFalse((await environment.AnimeMonitoringAsync()).IsWorkMonitored);
     }
 
     [TestMethod]
@@ -77,8 +75,7 @@ public sealed class AniListAutoMonitorTests
         var result = await environment.RunAniListAutoMonitorAsync(ProfileId);
 
         Assert.AreEqual(0, result.NewlyMonitored, "Read-only Sonarr coexistence is never touched, even when opted in.");
-        var monitoring = await environment.MonitoringStateAsync();
-        Assert.IsFalse(monitoring.Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
+        Assert.IsFalse((await environment.AnimeMonitoringAsync()).IsWorkMonitored);
     }
 
     [TestMethod]

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.ManualSearch;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Acquisition.Search;
@@ -44,7 +45,7 @@ public sealed class MusicManualSearchService(
     QualityProfileStore profiles,
     TimeProvider clock)
 {
-    public async Task<MusicManualSearchResult?> SearchAsync(Guid workId, bool refresh, SearchDepth depth, CancellationToken cancellationToken)
+    public async Task<MusicManualSearchResult?> SearchAsync(long workId, bool refresh, SearchDepth depth, CancellationToken cancellationToken)
     {
         if (await LoadAsync(workId, cancellationToken) is not { } album)
         {
@@ -54,8 +55,7 @@ public sealed class MusicManualSearchService(
         var open = await requests.FindOpenAsync(MediaAcquisitionKind.Music, ProviderKeys.MusicBrainz, album.GroupId, cancellationToken);
         var payload = open is null ? album.Payload : MusicRequestPayload.Of(open) with { WorkId = workId };
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId, cancellationToken);
-        var wantedSince = open?.CreatedAt ?? clock.GetUtcNow().UtcDateTime;
-        var evaluation = await engine.SearchAsync(wantedSince, payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, cancellationToken);
+        var evaluation = await engine.SearchAsync(payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Depth = depth, Refresh = refresh }, cancellationToken);
         var tried = new HashSet<string>(payload.TriedReleases ?? [], StringComparer.OrdinalIgnoreCase);
         var candidates = evaluation.Releases.Select(release => ToCandidate(release, tried)).ToArray();
         return new MusicManualSearchResult(
@@ -68,7 +68,7 @@ public sealed class MusicManualSearchService(
     /// "Search now": makes sure the album has a request that waits for a release and runs it through the shared executor right away. An album that
     /// gave up is searched again from the start; one that is downloading or imported is left as it is. Returns the message of the request.
     /// </summary>
-    public async Task<string?> SearchNowAsync(Guid workId, string requestedByProfileId, CancellationToken cancellationToken)
+    public async Task<string?> SearchNowAsync(long workId, string requestedByProfileId, CancellationToken cancellationToken)
     {
         if (await LoadAsync(workId, cancellationToken) is not { } album)
         {
@@ -93,7 +93,7 @@ public sealed class MusicManualSearchService(
             : open.StatusMessage;
     }
 
-    public async Task<ManualGrabOutcome> GrabAsync(Guid workId, string requestedByProfileId, string releaseIdentity, CancellationToken cancellationToken)
+    public async Task<ManualGrabOutcome> GrabAsync(long workId, string requestedByProfileId, string releaseIdentity, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseIdentity);
         if (await LoadAsync(workId, cancellationToken) is not { } album)
@@ -110,7 +110,7 @@ public sealed class MusicManualSearchService(
         }
 
         var profile = await profiles.ResolveAsync(MediaAcquisitionKind.Music, workId, cancellationToken);
-        var evaluation = await engine.SearchAsync(request.CreatedAt, payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, cancellationToken);
+        var evaluation = await engine.SearchAsync(payload, profile, new SearchOptions { Purpose = SearchPurpose.Interactive, Refresh = true }, cancellationToken);
         var selected = evaluation.Releases.FirstOrDefault(release => release.Candidate.Identity.Equals(releaseIdentity, StringComparison.Ordinal));
         if (selected is null || !selected.IsManuallyGrabbable)
         {
@@ -130,7 +130,7 @@ public sealed class MusicManualSearchService(
             cancellationToken);
     }
 
-    private async Task<AlbumRef?> LoadAsync(Guid workId, CancellationToken cancellationToken)
+    private async Task<AlbumRef?> LoadAsync(long workId, CancellationToken cancellationToken)
     {
         var row = await (
                 from album in db.MusicAlbums.AsNoTracking()
@@ -149,15 +149,14 @@ public sealed class MusicManualSearchService(
         return new AlbumRef(row.GroupId, payload, draft);
     }
 
-    private static MusicManualCandidate ToCandidate(MusicReleaseEvaluation evaluation, HashSet<string> tried)
+    private static MusicManualCandidate ToCandidate(ReleaseEvaluation<MusicJudgement> evaluation, HashSet<string> tried)
     {
         var candidate = evaluation.Candidate;
         var selection = evaluation.Selection;
         var isTried = tried.Contains(candidate.Identity);
-        var lower = evaluation.IsGrabbable && selection.Decision == SelectionDecision.Temporary;
         var verdict = !evaluation.IsManuallyGrabbable
             ? ManualSearchVerdict.Rejected
-            : lower || selection.Decision == SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
+            : selection.Decision == SelectionDecision.ManualReview ? ManualSearchVerdict.Warning : ManualSearchVerdict.Eligible;
         return new MusicManualCandidate(
             candidate.Identity,
             candidate.Title,

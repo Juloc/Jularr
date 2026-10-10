@@ -91,7 +91,7 @@ public sealed class WorkMetadataFacts
 {
     public long Id { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public string? OriginalTitle { get; set; }
 
@@ -129,7 +129,7 @@ public sealed class WorkLocalizedValue
 {
     public long Id { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     /// <summary>Culture name of the locale the value is for (<c>en</c>, <c>de-DE</c>).</summary>
     public string Locale { get; set; } = "";
@@ -167,7 +167,7 @@ public sealed class WorkCredit
 {
     public long Id { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public WorkCreditKind Kind { get; set; }
 
@@ -193,7 +193,7 @@ public sealed class WorkArtwork
 {
     public long Id { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public WorkArtworkSlot Slot { get; set; }
 
@@ -233,7 +233,7 @@ public sealed class WorkMetadataRefresh
 {
     public long Id { get; set; }
 
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     public string Locale { get; set; } = "";
 

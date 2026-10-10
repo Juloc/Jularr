@@ -1,3 +1,4 @@
+using Jularr.Web.Features.Monitoring;
 using System.Data.Common;
 using System.Text.Json;
 using Jularr.Web.Data;
@@ -6,6 +7,7 @@ using Jularr.Web.Features.Acquisition.History;
 using Jularr.Web.Features.Acquisition.Import;
 using Jularr.Web.Features.Acquisition.Monitoring;
 using Jularr.Web.Features.Acquisition.Ownership;
+using Jularr.Web.Features.Acquisition.Pipeline;
 using Jularr.Web.Features.Acquisition.Quality;
 using Jularr.Web.Features.Artwork;
 using Jularr.Web.Features.Metadata;
@@ -26,11 +28,13 @@ namespace Jularr.Web.Features.Library;
 public sealed class AdminMediaDetailService(
     AppDbContext db,
     AnimeMonitoringStore monitoring,
+    AnimeMonitoring animeMonitoring,
     AnimeQualityProfileStore profiles,
     AcquisitionOwnershipStore ownership,
     AnimeImportStore imports,
     AniListAccountStore aniList,
-    AcquisitionHistoryService history)
+    AcquisitionHistoryService history,
+    AnimeEpisodeStates episodeStates)
 {
     public const int HistoryLimit = 12;
     public const int OperationLimit = 6;
@@ -49,7 +53,9 @@ public sealed class AdminMediaDetailService(
         var metadata = await db.AnimeMetadata.AsNoTracking().SingleOrDefaultAsync(item => item.AnimeId == id, cancellationToken);
         var state = await monitoring.LoadAsync(cancellationToken);
         var settings = state.Anime.GetValueOrDefault(anime.Key);
-        var episodes = await LoadEpisodesAsync(anime, state, settings, cancellationToken);
+        var view = await animeMonitoring.LoadAsync(anime.Key, cancellationToken);
+        var states = await episodeStates.LoadAsync(anime.Key, cancellationToken);
+        var episodes = await LoadEpisodesAsync(anime, states, view, cancellationToken);
 
         var profileState = await profiles.LoadAsync(cancellationToken);
         var profileId = profileState.ResolveProfileId(MediaAcquisitionKind.Anime, id)
@@ -57,14 +63,14 @@ public sealed class AdminMediaDetailService(
         var ownershipState = await ownership.LoadAsync(cancellationToken);
         var acquisition = new AdminMediaAcquisition(
             SonarrParallelSafety.GetMode(ownershipState, anime.Key),
-            settings?.Monitored == true,
+            view.IsWorkMonitored,
             settings?.SearchOnAdd ?? true,
             profileId,
             profileState.Profiles.FirstOrDefault(profile => profile.Id.Equals(profileId, StringComparison.OrdinalIgnoreCase))?.Name ?? profileId,
             [.. profileState.Profiles.Select(profile => (profile.Id, profile.Name))],
             settings?.IndexerIds ?? [],
             settings?.TargetRootId,
-            state.Wanted.Values.Count(item => item.Key.AnimeKey.Equals(anime.Key, StringComparison.OrdinalIgnoreCase)));
+            states.Wanted.Count);
 
         var (ranges, rangesFailed) = await LoadRangesAsync(id, cancellationToken);
         var mapping = new AdminMediaMapping(
@@ -111,8 +117,8 @@ public sealed class AdminMediaDetailService(
 
     private async Task<IReadOnlyList<AdminMediaEpisode>> LoadEpisodesAsync(
         Anime anime,
-        MonitoringState state,
-        MonitorSettings? settings,
+        AnimeEpisodeStateMap states,
+        WorkMonitoringView view,
         CancellationToken cancellationToken)
     {
         var id = anime.Id;
@@ -170,7 +176,6 @@ public sealed class AdminMediaDetailService(
         var sidecarsByEpisode = sidecarRows.ToLookup(row => row.EpisodeId);
 
         var filesByEpisode = fileRows.ToLookup(row => row.EpisodeId);
-        var monitored = settings?.Monitored == true;
 
         AdminMediaEpisode Build(int season, int number, Guid? episodeId, string title)
         {
@@ -198,8 +203,6 @@ public sealed class AdminMediaDetailService(
                 : [];
 
             var unit = MonitoredUnitKey.ForEpisode(anime.Key, season, number);
-            state.Wanted.TryGetValue(unit.ToString(), out var wanted);
-            state.Attempts.TryGetValue(unit.ToString(), out var attempt);
 
             string? quality = null;
             foreach (var file in files)
@@ -212,10 +215,10 @@ public sealed class AdminMediaDetailService(
                 number,
                 episodeId,
                 title,
-                monitored && MonitoringEngine.IsMonitored(state, unit),
-                AdminMediaDetailView.StateOf(files.Length > 0, attempt?.Status),
-                wanted?.Reason == WantedReason.CutoffUnmet,
-                attempt?.FailureCount ?? 0,
+                AnimeMonitoring.IsUnitMonitored(view, unit),
+                AdminMediaDetailView.StateOf(files.Length > 0, states.AttemptOf(unit)),
+                states.WantedOf(unit)?.Reason == WantedReason.CutoffUnmet,
+                states.FailuresOf(unit),
                 quality,
                 LanguageSet(files.SelectMany(file => file.Audio).Select(track => track.Language)),
                 LanguageSet(
@@ -231,13 +234,11 @@ public sealed class AdminMediaDetailService(
 
         // Episodes acquisition wants but the library has no row for yet still belong on the page.
         var known = rows.Select(row => (row.Season, row.Number)).ToHashSet();
-        foreach (var wanted in state.Wanted.Values)
+        foreach (var episode in states.Wanted)
         {
-            if (wanted.Key.AnimeKey.Equals(anime.Key, StringComparison.OrdinalIgnoreCase)
-                && wanted.Key.Granularity == MonitoringGranularity.Episode
-                && known.Add((wanted.Key.SeasonNumber, wanted.Key.EpisodeNumber)))
+            if (known.Add((episode.Key.SeasonNumber, episode.Key.EpisodeNumber)))
             {
-                rows.Add(Build(wanted.Key.SeasonNumber, wanted.Key.EpisodeNumber, null, ""));
+                rows.Add(Build(episode.Key.SeasonNumber, episode.Key.EpisodeNumber, null, ""));
             }
         }
 

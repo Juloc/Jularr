@@ -1,4 +1,5 @@
 using Jularr.Web.Features.Acquisition.Search;
+using Jularr.Web.Features.Acquisition.Core;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Acquisition.Indexers;
 using Jularr.Web.Features.Acquisition.Prowlarr;
@@ -190,46 +191,6 @@ public sealed class BookSearchCoordinator(
             .ToArray();
     }
 
-    /// <summary>
-    /// Finds a directly-acquirable OPDS copy for a requested canonical work. Automatic
-    /// acquisition uses the same title/author identity rule as consumer search.
-    /// </summary>
-    public async Task<BookOpdsCatalogItem?> FindOpdsOfferAsync(
-        string title,
-        string? author,
-        CancellationToken cancellationToken)
-    {
-        var offers = await books.SearchOpdsAsync(
-            null,
-            BookWorkSearch.MainTitle(title),
-            cancellationToken);
-
-        return offers.FirstOrDefault(offer =>
-            BookWorkSearch.SameWork(
-                title,
-                author,
-                offer.Title,
-                offer.Author));
-    }
-
-    public Task<bool> HasEnabledIndexerAsync(CancellationToken cancellationToken) =>
-        indexers.HasEnabledIndexerAsync(cancellationToken);
-
-    /// <summary>Shared automatic/manual Books Usenet search path.</summary>
-    public async Task<BookUsenetSearchResult> SearchUsenetAsync(
-        string title,
-        string? author,
-        CancellationToken cancellationToken,
-        DateTimeOffset? wantedSince = null,
-        Guid? workId = null)
-    {
-        var profile = await qualityProfiles.ResolveAsync(
-            MediaAcquisitionKind.Book,
-            workId,
-            cancellationToken);
-        return await BookUsenetSearch.SearchAsync(indexers, title, author, profile, cancellationToken, reliability: reliability is null ? null : await reliability.LoadAsync(cancellationToken), wantedSince: wantedSince);
-    }
-
     private async Task<SourceResult<UsenetPool>> CaptureUsenetPoolAsync(
         IReadOnlyList<string> queries,
         CancellationToken cancellationToken)
@@ -352,7 +313,7 @@ public sealed class BookSearchCoordinator(
         BookSearchWarning? Warning);
 
     private sealed record UsenetPool(
-        IReadOnlyList<ProwlarrReleaseCandidate> Releases,
+        IReadOnlyList<AcquisitionCandidate> Releases,
         IReadOnlyList<IndexerSearchWarning> Warnings,
         bool UsedCategoryFallback);
 }

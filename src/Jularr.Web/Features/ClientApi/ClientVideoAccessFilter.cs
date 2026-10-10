@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Web.Data;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Shell;
@@ -18,8 +19,8 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
     {
         var http = context.HttpContext;
         var cancellationToken = http.RequestAborted;
-        var (named, mediaType) = await ResolveAsync(context, cancellationToken);
-        if (named && (mediaType is not { } type || !(await appShell.GetMediaAccessAsync(http.User, cancellationToken)).IsVisible(type)))
+        var (named, technical, isAnime) = await ResolveAsync(context, cancellationToken);
+        if (named && (technical is not { } type || !(await appShell.GetMediaAccessAsync(http.User, cancellationToken)).IsWorkVisible(type, isAnime)))
         {
             return Results.NotFound(new ClientErrorResponse("video_target_not_found", "The requested video does not exist."));
         }
@@ -27,7 +28,7 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
         return await next(context);
     }
 
-    private async Task<(bool Named, WorkMediaType? MediaType)> ResolveAsync(EndpointFilterInvocationContext context, CancellationToken cancellationToken)
+    private async Task<(bool Named, WorkMediaType? MediaType, bool IsAnime)> ResolveAsync(EndpointFilterInvocationContext context, CancellationToken cancellationToken)
     {
         var http = context.HttpContext;
         var bodyTarget = context.Arguments
@@ -40,26 +41,27 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
             })
             .FirstOrDefault(target => target is not null)
             ?? (http.Items[ClientPlaybackIntentBodyFilter.ItemKey] as ClientPlaybackIntentRequest)?.Target;
-        var queryWorkId = Guid.TryParse(http.Request.Query["workId"], out var parsed) ? parsed : (Guid?)null;
+        var queryWorkId = long.TryParse(http.Request.Query["workId"], NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : (long?)null;
         if (bodyTarget is not null || queryWorkId is not null)
         {
-            if (bodyTarget is { IsValid: false } || queryWorkId == Guid.Empty)
+            if (bodyTarget is { IsValid: false } || queryWorkId == 0)
             {
-                return (false, null);
+                return (false, null, false);
             }
 
             var workId = bodyTarget?.WorkId ?? queryWorkId!.Value;
-            return (true, await db.Works.AsNoTracking().Where(x => x.Id == workId).Select(x => (WorkMediaType?)x.MediaType).SingleOrDefaultAsync(cancellationToken));
+            var target = await db.Works.AsNoTracking().Where(x => x.Id == workId).Select(x => new { x.MediaType, x.IsAnime }).SingleOrDefaultAsync(cancellationToken);
+            return (true, target?.MediaType, target?.IsAnime ?? false);
         }
 
         if (http.GetRouteValue("episodeId") is not null || http.GetRouteValue("animeId") is not null)
         {
-            return (true, WorkMediaType.Anime);
+            return (true, WorkMediaType.Anime, false);
         }
 
         if (!Guid.TryParse(http.GetRouteValue("mediaFileId")?.ToString(), out var mediaFileId))
         {
-            return (false, null);
+            return (false, null, false);
         }
 
         var file = await (
@@ -67,10 +69,10 @@ public sealed class ClientVideoAccessFilter(IAppShellService appShell, AppDbCont
             where stored.Id == mediaFileId
             join asset in db.MediaAssets.AsNoTracking() on stored.MediaAssetId equals (Guid?)asset.Id into assets
             from asset in assets.DefaultIfEmpty()
-            join work in db.Works.AsNoTracking() on (Guid?)asset.WorkId equals (Guid?)work.Id into works
+            join work in db.Works.AsNoTracking() on (long?)asset.WorkId equals (long?)work.Id into works
             from work in works.DefaultIfEmpty()
-            select new { MediaType = (WorkMediaType?)work.MediaType, IsLegacy = stored.EpisodeId != null })
+            select new { MediaType = (WorkMediaType?)work.MediaType, IsAnime = work.IsAnime, IsLegacy = stored.EpisodeId != null })
             .SingleOrDefaultAsync(cancellationToken);
-        return (true, file is null ? null : file.MediaType ?? (file.IsLegacy ? WorkMediaType.Anime : null));
+        return (true, file is null ? null : file.MediaType ?? (file.IsLegacy ? WorkMediaType.Anime : null), file?.IsAnime ?? false);
     }
 }

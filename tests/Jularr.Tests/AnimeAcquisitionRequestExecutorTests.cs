@@ -23,9 +23,9 @@ public sealed class AnimeAcquisitionRequestExecutorTests
         environment.AniListMetadata.Add(FrierenId, "Frieren", episodeCount: 2);
         environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Episode1, "e1"));
 
-        var execution = await environment.ExecuteAnimeRequestAsync(FrierenId);
+        var execution = await environment.SubmitRequestAsync(FrierenId);
 
-        Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "Adding the series is not having its media: the request is only completed by the import.");
+        Assert.AreEqual(AcquisitionRequestStatus.Downloading, execution.Status, "Adding the series searches at once; the request is only completed by the import.");
         var anime = await environment.Db.Anime.AsNoTracking().SingleAsync();
         Assert.AreEqual(AnimeAcquisitionEnvironment.AnimeKey, anime.Key, "The key matches the series folder the importer creates.");
         Assert.AreEqual($"/Library/Anime/{anime.Id}", execution.ResultUrl);
@@ -36,14 +36,10 @@ public sealed class AnimeAcquisitionRequestExecutorTests
         Assert.AreEqual($"/Library/Anime/{anime.Id}", Assert.ContainsSingle(library.Entries).Card.Href, "A requested anime is in the Library before any scan or file.");
 
         var settings = (await environment.MonitoringStateAsync()).Anime[anime.Key];
-        Assert.IsTrue(settings.Monitored);
+        Assert.IsTrue((await environment.AnimeMonitoringAsync()).IsWorkMonitored);
         Assert.IsTrue(settings.SearchOnAdd);
         Assert.AreEqual(environment.Root.Id, settings.TargetRootId);
         Assert.AreEqual(AnimeManagementMode.JularrManaged, SonarrParallelSafety.GetMode(await environment.Ownership.LoadAsync(), anime.Key));
-        Assert.AreEqual(1, environment.Scheduler.QueuedRequests, "The search-on-add run is queued.");
-
-        var run = await environment.Scheduler.RunNowAsync(anime.Key, AnimeSearchTrigger.SearchOnAdd, CancellationToken.None);
-        Assert.AreEqual(1, run.Grabs, run.ToString());
         Assert.AreEqual(Episode1, environment.Sabnzbd.Grabs.Single().NzbName);
 
         var download = environment.AddCompletedDownload(Episode1, $"{Episode1}.mkv");
@@ -94,8 +90,8 @@ public sealed class AnimeAcquisitionRequestExecutorTests
 
         Assert.AreEqual(AcquisitionRequestStatus.Approved, execution.Status, "S01E02 has aired (the series is finished) and is missing, so the request is not completed.");
         Assert.AreEqual(1, await environment.Db.Anime.CountAsync());
-        Assert.IsTrue((await environment.MonitoringStateAsync()).Anime[AnimeAcquisitionEnvironment.AnimeKey].Monitored);
-        Assert.AreEqual(1, environment.Scheduler.QueuedRequests);
+        Assert.IsTrue((await environment.AnimeMonitoringAsync()).IsWorkMonitored);
+        Assert.IsTrue(environment.Prowlarr.Queries.Count > 0, "The missing episode is searched at once.");
     }
 
     [TestMethod]

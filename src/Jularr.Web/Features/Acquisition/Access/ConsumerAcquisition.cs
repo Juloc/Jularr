@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Jularr.Web.Data;
+using Jularr.Web.Features.Monitoring;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Operations;
@@ -65,11 +66,12 @@ public static class ConsumerAcquisitionProjector
 {
     /// <param name="targetIsLocal">The unit the consumer waits for can be played (or, on a manager-only instance, is imported) now.</param>
     /// <param name="download">The operation of the request's current download, or null when there is none.</param>
+    /// <param name="futureMonitored">The Work's monitoring also reaches what appears later, so the request keeps watching.</param>
     /// <param name="targetEpisodeId">The episode of a Series the consumer waits for; null for a Movie or the request as a whole.</param>
-    public static ConsumerAcquisitionView Project(AcquisitionRequest request, VideoRequestPayload? payload, OperationSnapshot? download, bool targetIsLocal, Guid? targetEpisodeId, bool playbackEnabled, DateTime nowUtc)
+    public static ConsumerAcquisitionView Project(AcquisitionRequest request, VideoRequestPayload? payload, bool futureMonitored, OperationSnapshot? download, bool targetIsLocal, Guid? targetEpisodeId, bool playbackEnabled, DateTime nowUtc)
     {
         var unit = request.Kind == MediaAcquisitionKind.Movie ? ConsumerMediaUnit.Movie : targetEpisodeId is not null ? ConsumerMediaUnit.Episode : ConsumerMediaUnit.Media;
-        var monitoring = request.IsOpen && payload is { Monitored: true, MonitorFuture: true };
+        var monitoring = request.IsOpen && futureMonitored;
         if (targetIsLocal)
         {
             return new ConsumerAcquisitionView(playbackEnabled ? ConsumerAcquisitionState.ReadyToWatch : ConsumerAcquisitionState.Available, unit, null, monitoring);
@@ -130,13 +132,13 @@ public static class ConsumerAcquisitionProjector
 }
 
 /// <summary>A request of a Movie or Series and the Work it names, for a consumer read.</summary>
-public sealed record ConsumerRequestRead(AcquisitionRequest Request, Guid WorkId);
+public sealed record ConsumerRequestRead(AcquisitionRequest Request, long WorkId);
 
 /// <summary>
 /// Reads the consumer projection of a request. A pure read: it never advances a request, and a failing operation lookup is not hidden
 /// as a made-up state. Who may read a request is decided by the caller (the authorization boundary).
 /// </summary>
-public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessStore requests, VideoRequestWorkResolver works, TimeProvider clock)
+public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessStore requests, VideoRequestWorkResolver works, MonitoringResolver monitoring, TimeProvider clock)
 {
     /// <summary>
     /// The one rule of who may read the consumer state of a request (docs/mockups/instant-play, section 13): its requester, whoever manages
@@ -178,7 +180,8 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessS
         var operation = request.OperationId is { } operationId ? await new OperationStore(db).GetAsync(operationId, cancellationToken) : null;
         var work = (await works.ResolveAsync([request], cancellationToken)).GetValueOrDefault(request.Id);
         var local = work is not null && await HasFileAsync(work.WorkId, episodeId, cancellationToken);
-        return ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), operation, local, workEpisodeId, playbackEnabled, clock.GetUtcNow().UtcDateTime);
+        var futureMonitored = work is not null && (await monitoring.LoadAsync(work.WorkId, cancellationToken)).ReachesFutureNodes;
+        return ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), futureMonitored, operation, local, workEpisodeId, playbackEnabled, clock.GetUtcNow().UtcDateTime);
     }
 
     /// <summary>
@@ -196,7 +199,7 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessS
         var workByRequest = await works.ResolveAsync(requests, cancellationToken);
         var downloadIds = requests.Where(request => request.Status == AcquisitionRequestStatus.Downloading && request.OperationId is not null).Select(request => request.OperationId!.Value).ToArray();
         var downloads = await new OperationStore(db).GetManyAsync(downloadIds, cancellationToken);
-        Guid[] WorkIdsOf(MediaAcquisitionKind kind) => [.. requests.Where(request => request.Kind == kind && workByRequest.ContainsKey(request.Id)).Select(request => workByRequest[request.Id].WorkId).Distinct()];
+        long[] WorkIdsOf(MediaAcquisitionKind kind) => [.. requests.Where(request => request.Kind == kind && workByRequest.ContainsKey(request.Id)).Select(request => workByRequest[request.Id].WorkId).Distinct()];
         var movieWorkIds = WorkIdsOf(MediaAcquisitionKind.Movie);
         var seriesWorkIds = WorkIdsOf(MediaAcquisitionKind.Tv);
         var moviesWithFile = movieWorkIds.Length == 0
@@ -215,6 +218,7 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessS
                 .ToListAsync(cancellationToken)).ToHashSet();
 
         var now = clock.GetUtcNow().UtcDateTime;
+        var monitored = await monitoring.LoadManyAsync(seriesWorkIds, cancellationToken);
         var views = new Dictionary<Guid, ConsumerAcquisitionView>(requests.Count);
         foreach (var request in requests)
         {
@@ -227,13 +231,14 @@ public sealed class ConsumerAcquisitionQuery(AppDbContext db, AcquisitionAccessS
                 _ => false
             };
             var download = request.OperationId is { } operationId ? downloads.GetValueOrDefault(operationId) : null;
-            views[request.Id] = ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), download, local, null, playbackEnabled, now);
+            var futureMonitored = work is not null && request.Kind == MediaAcquisitionKind.Tv && monitored[work.WorkId].ReachesFutureNodes;
+            views[request.Id] = ConsumerAcquisitionProjector.Project(request, VideoRequestPayload.Parse(request.PayloadJson), futureMonitored, download, local, null, playbackEnabled, now);
         }
 
         return views;
     }
 
-    private Task<bool> HasFileAsync(Guid workId, Guid? workEpisodeId, CancellationToken cancellationToken) =>
+    private Task<bool> HasFileAsync(long workId, Guid? workEpisodeId, CancellationToken cancellationToken) =>
         db.MediaAssets.AsNoTracking().AnyAsync(
             asset => asset.WorkId == workId && asset.WorkEpisodeId == workEpisodeId && asset.Kind == MediaAssetKind.Video && db.StoredFiles.Any(file => file.MediaAssetId == asset.Id),
             cancellationToken);

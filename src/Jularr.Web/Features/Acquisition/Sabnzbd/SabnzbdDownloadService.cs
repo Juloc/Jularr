@@ -177,23 +177,15 @@ public sealed class SabnzbdDownloadService(
             return new SabnzbdActionOutcome(false, "Only failed SABnzbd downloads can be retried.");
         }
 
-        var relation = await acquisitions.FindByOperationAsync(operation.Id, cancellationToken);
-        if (relation is { } related
-            && related.Acquisition.LatestAttempt?.OperationId != operation.Id)
-        {
-            return new SabnzbdActionOutcome(
-                false,
-                "A newer release already replaced this download for the same episodes.");
-        }
-
-        // Request-backed Books, Manga, Light Novel, Movie and TV downloads: once Wanted moved the request on to
+        // Request-backed Anime, Books, Manga, Light Novel, Movie and TV downloads: once Wanted moved the request on to
         // a newer release, retrying this one would start a download nobody imports.
         var requests = new AcquisitionAccessStore(db);
         var request = await requests.FindByOperationAsync(operation.Id, cancellationToken);
         var requestDownload = operation.Kind is
             ReadingAcquisitionEngine.OperationKind or
             Books.BookAcquisitionExecutor.OperationKind or
-            VideoAcquisitionEngine.OperationKind;
+            VideoAcquisitionEngine.OperationKind or
+            Pipeline.AnimeAcquisitionEngine.OperationKind;
         if (requestDownload && request is null)
         {
             return new SabnzbdActionOutcome(
@@ -253,10 +245,10 @@ public sealed class SabnzbdDownloadService(
                 cancellationToken);
         }
 
-        if (relation is { } retried)
+        if ((await acquisitions.LoadAsync(cancellationToken)).Blocklist.FirstOrDefault(entry => entry.OperationId == operation.Id) is { } blocked)
         {
             // The owner explicitly asked for this release again.
-            await acquisitions.UnblockAsync(retried.Attempt.ReleaseIdentity, cancellationToken);
+            await acquisitions.UnblockAsync(blocked.ReleaseIdentity, cancellationToken);
         }
 
         return new SabnzbdActionOutcome(true, "Retry queued in SABnzbd.");

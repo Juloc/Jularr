@@ -22,7 +22,7 @@ public sealed record LibraryCardEntry(
     int MissingUnits,
     DateTime AddedAt,
     DateTime? LastWatchedAt,
-    Guid WorkId,
+    long WorkId,
     WorkMediaType MediaType,
     int? RuntimeMinutes,
     int? RemainingMinutes);
@@ -332,13 +332,14 @@ public static class LibraryBrowse
     /// The detail address of a title. Movies and Series are keyed by their Work; an Anime is still keyed by its legacy
     /// record id until its detail page moves to the Work.
     /// </summary>
-    public static string DetailHref(WorkMediaType mediaType, Guid id) => mediaType switch
+    public static string DetailHref(WorkMediaType mediaType, long workId) => mediaType switch
     {
-        WorkMediaType.Anime => $"/Library/Anime/{id}",
-        WorkMediaType.Series => $"/Library/Series/{id}",
-        WorkMediaType.Movie => $"/Library/Movie/{id}",
+        WorkMediaType.Series => $"/Library/Series/{workId}",
+        WorkMediaType.Movie => $"/Library/Movie/{workId}",
         _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
     };
+
+    public static string AnimeDetailHref(Guid animeId) => $"/Library/Anime/{animeId}";
 
     private static readonly LibraryProgressState[] ProgressOrder =
         [LibraryProgressState.NotStarted, LibraryProgressState.InProgress, LibraryProgressState.Completed];

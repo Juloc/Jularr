@@ -96,7 +96,7 @@ internal sealed class WorkMetadataFixture : IAsyncDisposable
 
     public Task<WorkMetadataPass> RunSpoolAsync() => WorkMetadataRefreshService.ProcessDueAsync(services, 50, CancellationToken.None);
 
-    public async Task<WorkMetadataRefresh> RefreshEntryAsync(Guid workId) =>
+    public async Task<WorkMetadataRefresh> RefreshEntryAsync(long workId) =>
         await Db.Set<WorkMetadataRefresh>().AsNoTracking().SingleAsync(x => x.WorkId == workId);
 
     /// <summary>Makes every spool entry due, as if its time had come.</summary>

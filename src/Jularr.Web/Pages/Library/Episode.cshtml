@@ -55,8 +55,12 @@ else if (Model.Playback.Media is { } media)
         DurationSeconds: media.DurationSeconds,
         ResumeSeconds: Model.ResumePositionSeconds,
         NextUrl: Model.NextEpisodeUrl,
+        PreviousUrl: Model.PreviousEpisodeUrl,
+        PreviousLabel: Model.Flow?.Previous is { } previous
+            ? ui.Format("library.episode.previousEpisodeAria", ("season", previous.SeasonNumber.ToString("00")), ("episode", previous.Number.ToString("00")))
+            : null,
         AutoplayNext: Model.Flow?.AutoplayNext == true,
-        OffersAutoplay: true,
+        OffersAutoplay: Model.NextEpisodeUrl is not null,
         FinishedKey: "library.episode.episodeFinished",
         Title: Model.AnimeTitle,
         EpisodeLine: $"{episodeCode} – {Model.EpisodeTitle}",
@@ -68,8 +72,11 @@ else if (Model.Playback.Media is { } media)
         Cues: Model.Playback.Cues,
         ShowPlayerTools: Model.ShowPlayerTools);
     <partial name="_VideoPlayerStage" model="stage" />
-    <partial name="_LanguageInspector" model='LanguageInspectorHost.ForAnimeEpisode(Model.AnimeId, Model.EpisodeId, "ja")' />
-    <partial name="_VideoPlayerScripts" />
+    @if (stage.ShowPlayerTools)
+    {
+        <partial name="_LanguageInspector" model='LanguageInspectorHost.ForAnimeEpisode(Model.AnimeId, Model.EpisodeId, "ja")' />
+    }
+    <partial name="_VideoPlayerScripts" model="@(stage.ShowPlayerTools || stage.Controls?.HasLearningCues == true)" />
     <partial name="_EpisodeMediaNavigation" model="new Jularr.Web.Features.MediaSegments.EpisodeMediaNavigationView(Model.EpisodeId, Model.Playback.Navigation, CanEdit: false, ui)" />
 }
 else

@@ -358,25 +358,26 @@ Only one secondary panel should be open at a time.
 
 Pointer + keyboard first.
 
-### Layout
-- media fills viewport;
-- top title row is compact;
-- timeline spans most of the bottom width;
-- the lower controls are divided into **three independent zones**:
-  1. **left:** volume/mute;
-  2. **center:** Previous, -10 seconds, Play/Pause, +30 seconds, Next;
-  3. **right:** subtitles, audio, quality, speed, chapters, PiP/fullscreen/overflow as supported;
-- the center transport group is geometrically centered in the viewport and does not shift when right-side settings appear/disappear;
-- Play/Pause may be slightly larger than adjacent transport controls, but must not become a giant permanent toolbar centerpiece;
-- volume never moves into the centered transport group;
-- audio/subtitle/quality/speed use compact anchored menus;
-- diagnostics opens as an on-demand side panel or modal, not permanent text.
+### Layout (owner-approved desktop, 2026-10-09)
 
-Preferred Desktop control grammar:
+The existing compact **centered over-video transport** and bottom timeline/action row are the approved baseline. Earlier three-zone transport descriptions and mockups are superseded for Desktop; do not reorganize the player merely to match them.
 
-`Volume | Previous · -10 · Play/Pause · +30 · Next | Subtitles · Audio · Quality · Speed · Chapters · PiP · Fullscreen · More`
+- media fills the available video stage, with a compact title row;
+- one interactive timeline spans most of the bottom width and keeps time/buffer information accessible;
+- the centered over-video transport group is **Previous · -10 · Play/Pause · +30 · Next**, symmetrically arranged; Previous/Next appear only when their actual canonical episode neighbors exist, never as false links on movies;
+- retain the established bottom volume/mute control and direct action group **Subtitles · Audio · Quality · Speed · PiP · Fullscreen · More** where available, rather than a second transport row;
+- use the shared icon paths; position the **10/30 numerals inside their circular seek arrows**, not overlapping the path;
+- when keyboard Tab focuses the volume slider, the visible focus ring surrounds **the round thumb only**, not the full slider track; keyboard arrows, pointer dragging and accessibility remain intact;
+- preserve the current muted/translucent overlays and the user's approved proportions; fix hit targets/functionality without a global redesign.
 
-Timeline sits directly above this control row. Chapter names/thumbnails are not permanently expanded above the timeline; Desktop hover/focus may show the current/hovered chapter preview on demand.
+### Desktop More menu and direct actions
+
+- Subtitles, Audio, Quality and Speed are operated using their **direct controls below the player** when those controls are visible. Choosing one opens its own portion of the **same shared player settings component**; Subtitles also exposes the second subtitle language, font size and delay where supported.
+- The Desktop **More** menu shows only **read-only playback information** (Direct Play/Direct Stream/Transcode and optional expandable diagnostics), **Autoplay next episode** when a playable next episode exists, and **Save as my defaults** for the canonical profile-level preferences.
+- No duplicate Speed/Subtitles/Audio/Quality controls in More on wide Desktop.
+- No user-facing forced "Playback mode" dropdown. Delivery is automatically decided by the canonical `PlaybackPlan`, client capabilities, Quality selection and server policy. Stale saved forced mode overrides must not silently affect planning.
+- On narrow/mobile/touch layouts, any selection without a visible dedicated action remains accessible in the consolidated Settings sheet using the **same control and persistence paths**. Do not create a second settings store.
+- Chapter navigation may be added later; do not block the current Desktop completion on a new chapter UI.
 
 ### Pointer behavior
 - single click on unobstructed video = Play/Pause;

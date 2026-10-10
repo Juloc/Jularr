@@ -334,7 +334,7 @@ public sealed class DiscoveryCoordinatorTests
 
         var local = overlay["tmdb:movie:101"];
         Assert.IsTrue(local.IsLocal);
-        Assert.AreEqual(work.Id, local.LocalMediaId);
+        Assert.AreEqual(work.Id, local.LocalWorkId);
         Assert.AreEqual("Persisted Title", local.Title);
         StringAssert.StartsWith(local.CoverImageUrl, $"/works/{work.Id:D}/artwork/", "The poster comes from the local artwork endpoint, not the provider's CDN.");
         var transient = overlay["tmdb:movie:102"];

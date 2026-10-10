@@ -61,8 +61,14 @@ public sealed class DetailsModel(
             .ToArray();
         var graph = await relations.GetForFranchiseAsync(id, cancellationToken);
         var matches = await library.ResolveAsync(members.Select(member => member.Media.Identity), cancellationToken);
-        var followed = await watchlist.GetEffectiveKeysAsync(account.ProfileId, cancellationToken);
-        var hidden = await watchlist.GetHiddenKeysAsync(account.ProfileId, cancellationToken);
+        var followed = await watchlist.GetFollowedFranchiseIdsForKeysAsync(
+            account,
+            members.Select(member => member.Media.Identity).ToArray(),
+            cancellationToken);
+        var hidden = await watchlist.GetHiddenKeysForIdentitiesAsync(
+            account,
+            members.Select(member => member.Media.Identity).ToArray(),
+            cancellationToken);
         var titles = members.ToDictionary(member => member.Media.Identity.Key, member => member.Media.Title, StringComparer.Ordinal);
 
         Members = members
@@ -73,7 +79,7 @@ public sealed class DetailsModel(
                     member,
                     matches.GetValueOrDefault(key),
                     RelationLabel(member, franchise.Seed, graph, titles),
-                    followed.Contains(key),
+                    followed.ContainsKey(key),
                     hidden.Contains(key));
             })
             .ToArray();

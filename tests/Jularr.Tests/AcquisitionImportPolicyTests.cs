@@ -156,7 +156,7 @@ public sealed class AcquisitionImportPolicyTests
         await using var environment = await AnimeAcquisitionEnvironment.CreateAsync();
         await environment.SeedFrierenAsync();
         environment.Prowlarr.Releases.Add(AnimeAcquisitionEnvironment.Release(Best, "g1080"));
-        await environment.Scheduler.RunNowAsync(null, AnimeSearchTrigger.PeriodicMissing, CancellationToken.None);
+        await environment.SearchNowAsync();
         var download = environment.AddCompletedDownload(Best, $"{Best}.mkv");
         await environment.ImportCompletedAsync(await environment.CompleteLatestDownloadAsync(download), download);
 

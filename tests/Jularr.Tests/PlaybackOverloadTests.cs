@@ -21,7 +21,7 @@ public sealed class PlaybackOverloadTests
     private static PlaybackStreamSession StartTranscode(PlaybackServerTestKit kit, PlaybackPlan? plan = null) =>
         kit.Sessions.Create(
             "viewer",
-            Guid.NewGuid(),
+            new PlaybackVideoTarget(1, Guid.NewGuid()),
             Guid.NewGuid(),
             "/media/episode.mkv",
             1400,
@@ -172,7 +172,7 @@ public sealed class PlaybackOverloadTests
     private static PlaybackStreamSession Start(PlaybackServerTestKit kit, string profile, PlaybackPlan plan, Guid? replaces = null) =>
         kit.Sessions.Create(
             profile,
-            Guid.NewGuid(),
+            new PlaybackVideoTarget(1, Guid.NewGuid()),
             Guid.NewGuid(),
             "/media/b.mkv",
             1400,
@@ -298,7 +298,7 @@ public sealed class PlaybackOverloadTests
         using var otherLease = kit.Admission.Admit(Transcode(Video()), "other").Lease;
         Assert.AreEqual(0, kit.Slots.Available(PlaybackCostClass.SoftwareVideo), "Both software slots are in use.");
 
-        var target = new PlaybackVideoTarget(Guid.NewGuid(), Guid.NewGuid());
+        var target = new PlaybackVideoTarget(Random.Shared.NextInt64(1, long.MaxValue), Guid.NewGuid());
         var replacement = kit.Sessions.Create("viewer", target, Guid.NewGuid(), "/media/b.mkv", 1400, Delivering(4_000), oldSession.Selections, oldSession.Id, deferRetirement: true);
         Assert.AreSame(oldSession, replacement.Replacing, "The playing session stays until the new one delivered.");
         Assert.IsNull(kit.Admission.Preflight(replacement.Plan, "viewer", replacement), "The advised swap is possible although the class is full.");
