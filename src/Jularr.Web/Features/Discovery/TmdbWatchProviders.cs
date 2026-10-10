@@ -117,6 +117,7 @@ public sealed partial class TmdbDiscoveryProvider
             {
                 if (provider.ValueKind != JsonValueKind.Object ||
                     !provider.TryGetProperty("provider_id", out var id) ||
+                    id.ValueKind != JsonValueKind.Number ||
                     !id.TryGetInt32(out var numericId) || numericId <= 0 ||
                     !provider.TryGetProperty("provider_name", out var name) ||
                     name.ValueKind != JsonValueKind.String ||
