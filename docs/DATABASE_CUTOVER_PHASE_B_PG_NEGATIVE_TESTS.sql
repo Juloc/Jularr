@@ -22,6 +22,10 @@ DECLARE
     enrollment_one uuid;
     progress_id bigint;
     work_id bigint;
+    other_account_id bigint;
+    other_profile_id bigint;
+    image_id bigint;
+    chapter_id bigint;
 BEGIN
     INSERT INTO "UiLocales" ("Locale","Name") VALUES ('en','English')
     RETURNING "Id" INTO locale_id;
@@ -158,6 +162,55 @@ BEGIN
         EXECUTE 'SET CONSTRAINTS "FK_MediaProgress_TimeProgressPositions" IMMEDIATE';
         RAISE EXCEPTION 'Time progress without subtype was accepted';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    -- Negative #6: Account A cannot select another Account B's Profile in its session.
+    INSERT INTO "Accounts" ("Email","DisplayName","AccountRoleTypeId")
+    VALUES ('phase-b-other@example.invalid','Other Account',2)
+    RETURNING "Id" INTO other_account_id;
+    INSERT INTO "Profiles" ("OwnerAccountId","DisplayName","UiLocaleId")
+    VALUES (other_account_id,'Other Profile',locale_id)
+    RETURNING "Id" INTO other_profile_id;
+    INSERT INTO "AccountProfiles" ("AccountId","ProfileId")
+    VALUES (other_account_id,other_profile_id);
+
+    BEGIN
+        INSERT INTO "AccountSessions"
+            ("AccountId","ActiveProfileId","TokenHash","ExpiresAt")
+        VALUES (account_id,other_profile_id,decode('deadbeef','hex'),now()+interval '1 day');
+        RAISE EXCEPTION 'Cross-account Profile was accepted as active session';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    -- Positive cover assignment, then reject one image assigned to two targets
+    -- in a single row. A second invalid case proves Type/Target-kind pairing.
+    INSERT INTO "ImageTypes" ("Id","Key") VALUES (1,'ci-cover');
+    INSERT INTO "ImageTypeTargets" ("ImageTypeId","ImageTargetKindTypeId")
+    VALUES (1,1);
+    INSERT INTO "Images" ("StorageKey","MimeType")
+    VALUES ('phase-b-ci-image','image/png') RETURNING "Id" INTO image_id;
+    INSERT INTO "ImageAssignments"
+        ("ImageId","ImageTypeId","ImageTargetKindTypeId","WorkId")
+    VALUES (image_id,1,1,work_id);
+    INSERT INTO "WorkChapters" ("WorkId","OrderIndex","DisplayName")
+    VALUES (work_id,1,'CI chapter') RETURNING "Id" INTO chapter_id;
+
+    -- Negative #7: exactly one image target, even if both targets exist.
+    BEGIN
+        INSERT INTO "ImageAssignments"
+            ("ImageId","ImageTypeId","ImageTargetKindTypeId","WorkId","WorkChapterId")
+        VALUES (image_id,1,1,work_id,chapter_id);
+        RAISE EXCEPTION 'ImageAssignment with two targets was accepted';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+
+    -- Negative #8: Work-kind image type may not be used on a Chapter target.
+    BEGIN
+        INSERT INTO "ImageAssignments"
+            ("ImageId","ImageTypeId","ImageTargetKindTypeId","WorkChapterId")
+        VALUES (image_id,1,1,chapter_id);
+        RAISE EXCEPTION 'ImageAssignment with incorrect target kind was accepted';
+    EXCEPTION WHEN check_violation THEN NULL;
     END;
 
     RAISE NOTICE 'Phase B positive and negative relational scope tests passed';
