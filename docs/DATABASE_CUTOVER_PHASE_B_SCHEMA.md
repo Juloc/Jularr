@@ -7,19 +7,19 @@
 - Fachlich maßgeblich: [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md) §2, §3 und §8.
 - Ergebnis aus Phase A: 19 Fachverantwortungen in [PR #945](https://github.com/Juloc/Jularr/pull/945), alter Live-Katalog nur zur Funktionskontrolle (152 Anwendungstabellen/56 Migrationen), nicht als DDL-Schablone.
 - Backend-Grenzen: [SERVICE_DATA_LOGIC_ARCHITECTURE.md](https://github.com/Juloc/Jularr/blob/docs/service-data-logic-contract-20261010/docs/SERVICE_DATA_LOGIC_ARCHITECTURE.md), #852/#942. Auth-/Profilrechte bleiben im Service-Gate; **nur Logic schreibt**. Service-Read hat echte PostgreSQL-READ-ONLY-Transaktion.
-- Konkreter Entwurf: [01_CORE_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql) und [02_PROGRESS_MEDIA_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql), in dieser Reihenfolge. **Beides sind DDL-DRAFTS, KEINE freigegebene ausführbare EF-Baseline.** Die Dateien enthalten bewusst vorläufige Felder und Semantik und dürfen nicht auf `dev` ausgeführt werden.
+- Konkreter Entwurf: [01_CORE_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql), [02_PROGRESS_MEDIA_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql) und [03_MEDIA_DETAILS_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_03_MEDIA_DETAILS_DRAFT.sql), in dieser Reihenfolge. **Beides sind DDL-DRAFTS, KEINE freigegebene ausführbare EF-Baseline.** Die Dateien enthalten bewusst vorläufige Felder und Semantik und dürfen nicht auf `dev` ausgeführt werden.
 - Offene B-Entscheidungen und tatsächliche Abdeckungslücken: [DATABASE_CUTOVER_PHASE_B_DECISIONS.md](DATABASE_CUTOVER_PHASE_B_DECISIONS.md).
 
 ## Was jetzt physisch entworfen ist
 
-**81 Tabellen als konkret benannte PostgreSQL-`CREATE TABLE`-Statements (45 Kern + 36 Fortschritt/Artwork/Jobs).** Zusammen bilden sie einen weitreichenden Target-Entwurf, nicht die gesamte bereits reviewte Zielstruktur.
+**91 Tabellen als konkret benannte PostgreSQL-`CREATE TABLE`-Statements (45 Kern + 36 Fortschritt/Artwork/Jobs + 10 Spezialidentitäten).** Zusammen bilden sie einen weitreichenden Target-Entwurf, nicht die gesamte bereits reviewte Zielstruktur.
 
 | Fachbereich | Tatsächlich in Draft-SQL modelliert | Fehlende/noch zu bestätigende Fachanteile |
 | --- | --- | --- |
 | Accounts / Profile / Auth | Accounts, AccountRoleTypes, Profiles, AccountProfiles, AccountPasswords, AccountPasskeys, AccountTotpFactors, AccountRecoveryCodes, AccountExternalLogins, AccountSessions, AccountAuthChallenges, Providers, UiLocales | Auth-Challenge-Typen, WebAuthn-Details, externe Plex-PIN-Nonce-/Link-Vorgänge, optionale AccountPermissions/Groups, effektive Profileinschränkungen |
-| Works / Titles / Metadata / Relations | Works, MediaTypes, WorkTitles, WorkExternalIdentities, WorkMetadataFacts, WorkLocalizedValues, WorkFieldProvenance, WorkFactTypes, WorkRelations/Types, Franchises/FranchiseWorks, WorkMediaClassifications/Types | EditionExternalIdentities, WorkCredits/Narrators, weitere tatsächlich nötige getypte Metadatenfelder, Provider-Namespace-Normalisierung/Transaktionen |
-| Film / TV / Anime / Reader-Units / Music | WorkSeasons, WorkEpisodes, WorkVolumes, WorkChapters, WorkTracks, WorkEditions, WorkVersions | Musik-Artist/Recording-Spezialidentitäten, Cross-Media-Units und eindeutige externe Chapter-/Season-Fakten verifizieren |
-| Media / Files / Games | MediaAssets/Types, LibraryRoots, StoredFiles, MediaTracks/Types, GamePlatforms, GameReleases, GameReleaseStoredFiles, GameReleaseFileRoleTypes, StoredFileHashes | MediaTechnicalAnalyses/Stream-Details, tatsächliche File-Attachments/Launcher-/Release-Hashes; Game-only FK-Absicherung |
+| Works / Titles / Metadata / Relations | Works, MediaTypes, WorkTitles, WorkExternalIdentities, WorkMetadataFacts, WorkLocalizedValues, WorkFieldProvenance, WorkFactTypes, WorkRelations/Types, Franchises/FranchiseWorks, WorkMediaClassifications/Types | Weitere tatsächlich nötige getypte Metadatenfelder und Credit-/EditionExternalIdentity-Feldfreigabe, Provider-Namespace-Normalisierung/Transaktionen |
+| Film / TV / Anime / Reader-Units / Music | WorkSeasons, WorkEpisodes, WorkVolumes, WorkChapters, WorkTracks, WorkEditions, WorkVersions | MusicArtists, MusicRecordings und deren Zuordnung sind im Spezialentwurf ergänzt; echte Artist-/Recording-Credits und Cross-Media-Units und eindeutige externe Chapter-/Season-Fakten verifizieren |
+| Media / Files / Games | MediaAssets/Types, LibraryRoots, StoredFiles, MediaTracks/Types, GamePlatforms, GameReleases, GameReleaseStoredFiles, GameReleaseFileRoleTypes, StoredFileHashes | MediaTechnicalAnalyses ist als Entwurf ergänzt; zusätzliche Stream-Details und tatsächliche File-Attachments/Launcher-/Release-Hashes; Game-only FK-Absicherung |
 | Personal State | MediaProgress, ProgressPositionTypes, Time/Reading/GameProgressPositions, WatchlistEntries, Collections, CollectionWorks, ProfileRatings, MediaPlaybackHistory | Offline-Event-Idempotency/Revision, Ratings-Skala und Progress-Client-Semantik |
 | Player / Images / Reader | PlaybackSessions, Images, ImageTypes, ImageTargetKindTypes, ImageTypeTargets, ImageAssignments, MediaChapters, MediaSegments/Types/SourceTypes, MediaDetectionRuns/Types/StatusTypes, ReaderContent/Pages/Bookmarks/Highlights | Companion-/Pairing-Session-Lebensdauer, Image-Generation-Presets (bedingt), Reader-Translations, effektive MediaAsset-Version-Sicherheit |
 | Background / Acquisition / Locale | Operations, OperationLogs, OperationStatusTypes, AcquisitionRequests/StatusTypes, Notifications, UiTranslationMessages, UiTranslations, ImageGenerationRequests | Wanted/Rules/Downloads/Import/Arr, Notification-Channels/Preferences/Delivery, AI/Learning/Curriculum und Provider-Grants/Sync |
@@ -37,7 +37,7 @@
 
 ## Noch KEIN Gate B
 
-Die 81 Tabellen sind ein **prüfbarer erster physischer Entwurf**, keine Abnahme aller 19 Fachbereiche. Insbesondere fehlen abschließende Tabellen/Felder für Music-Artist/Recording, AI/Learning/Curriculum, Wanted/Rules/Arr, Notifications-Channels, externe Provider-Grants und Event-Idempotenz; `CLEAN_CUT_DATABASE.md` entscheidet diese Funktionsanforderungen, aber nicht sämtliche Spalten.
+Die 91 Tabellen sind ein **prüfbarer erster physischer Entwurf**, keine Abnahme aller 19 Fachbereiche. Insbesondere fehlen abschließende Tabellen/Felder für AI/Learning/Curriculum, Wanted/Rules/Arr, Notifications-Channels, externe Provider-Grants und Event-Idempotenz; `CLEAN_CUT_DATABASE.md` entscheidet diese Funktionsanforderungen, aber nicht sämtliche Spalten.
 
 Zudem sind Seeds für die echten `enum : byte`-Kontrakte nicht bestätigt. Im SQL sind einige Zahlen ausdrücklich nur **PROPOSED**, mehrere Typ-FKs absichtlich **ohne Seed**. Für ein Release sind genau definierte, stabile numerische Seed-IDs mit entsprechenden .NET-Enums erforderlich.
 
