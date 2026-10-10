@@ -91,3 +91,12 @@ Die tatsächlichen alten C#-Werte und der korrigierte AccountRole-Entwurf stehen
 Die Client-/API- und echte Service-Berechtigungsnachweise werden in D/E getestet. Public UUIDs bieten keine Zugriffsberechtigung. **Keine** künstliche Permission-Proxy-Tabelle und **kein** SQL-Join über PublicId.
 
 **Noch offen:** die restlichen Typ-/Seed-Verträge (B01), finale Profile-/Auth-/AI-/Arr-/Provider-/Import-Verträge und integrale Query-/Permission-Lasttests. Die Anzahl 173 ist kein festgeschriebener Sollwert und kein Gate-B-Abnahmebeweis. EF-Baseline gehört nach Gate B in Phase C.
+
+
+## AI-Zielpersistenz — Draft 15 / Teilprüfung B04 und B11
+
+**Aktueller Entwurfsstand:** **15 DDL-Abschnitte, 180 Target-Tabellen, 47 Typ-Kataloge**; ausdrücklich noch keine finale Baseline und keine Gate-B-Abnahme. Teil 15 stellt die bestehenden und verbindlich geplanten Admin-/Profil-AI-Funktionen unter die eine neue SQL-Fachverantwortung: Server-AI-Provider, deren lokales Model-Catalog, Task-Routing, Profileinstellungen, explizite Overrides, gemessene/tagesweise Nutzung und der source-verifizierte `AiTranslationMode : byte`-Katalog. Einzelheiten [AI Review](DATABASE_CUTOVER_PHASE_B_15_AI_REVIEW.md) und [PostgreSQL-Tests](DATABASE_CUTOVER_PHASE_B_PG_AI_TESTS.sql).
+
+**Keine doppelte Queue, kein doppelter Ergebnis-Owner:** AI-Jobs laufen über `Operations`; generierte Bilder/Reader-/Work-/Translationsinhalte bleiben beim jeweiligen Fachowner. API-Schlüssel sind nicht SQL-Strings und keine `bigint`-IDs, sondern referenzieren getrennt geschützte Secrets. Tages-Tokenmengen sind nichtnegative **Mengenzähler**, keine Token/Session-Kennungen. Profileinstellungen bleiben vom serverweiten Admin-AI getrennt.
+
+**Noch nicht bewiesen:** die endgültige Rechte-/Consent-Policy, sichere Provider-Endpunktvalidierung, D/E-Grenzen und persistenter Budget-/Retry-Race-Test sowie weiterhin alle offenen B01-Enum-Seeds und die verbliebenen nicht-AI-Fachfragen. Entwurfszielzahl nicht künstlich festschreiben.
