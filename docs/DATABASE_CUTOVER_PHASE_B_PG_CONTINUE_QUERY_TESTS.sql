@@ -1,6 +1,7 @@
 -- Phase B B15 scratch-only: execute canonical bounded Continue SELECT for two profiles.
 -- Intentionally committed only inside disposable CI PostgreSQL.
 \set ON_ERROR_STOP on
+BEGIN;
 INSERT INTO "UiLocales" ("Locale","Name") VALUES ('phase-b-continue','Phase B Continue');
 INSERT INTO "Accounts" ("Email","DisplayName","AccountRoleTypeId")
 VALUES ('phase-b-continue-a@example.invalid','Continue A',1),
@@ -11,6 +12,7 @@ FROM "Accounts" WHERE "Email" LIKE 'phase-b-continue-%@example.invalid';
 INSERT INTO "AccountProfiles" ("AccountId","ProfileId")
 SELECT p."OwnerAccountId",p."Id" FROM "Profiles" p
 WHERE p."DisplayName" IN ('Continue A','Continue B');
+COMMIT;
 
 -- Every seeded Progress has exactly one matching Time position, satisfying
 -- DEFERRABLE 1:1 child/parent guarantees at COMMIT.
