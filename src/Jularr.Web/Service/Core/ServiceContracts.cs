@@ -71,11 +71,14 @@ public sealed record ServiceResultType
     public static ServiceResultType Additional<T>() where T : IServiceOutput => new(typeof(T), false);
 }
 
-public sealed record ServicePermission(string Key)
+public sealed record ServicePermission
 {
-    public ServicePermission : this(Key)
+    public string Key { get; }
+
+    public ServicePermission(string key)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(Key);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        Key = key;
     }
 }
 
