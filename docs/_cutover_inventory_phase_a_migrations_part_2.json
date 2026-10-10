@@ -1,0 +1,406 @@
+[
+  {
+    "file": "20261002112130_AddReconciliationFileLinks.cs",
+    "creates": [
+      "LibraryReconciliationFileLinks"
+    ],
+    "drops": [
+      "LibraryReconciliationFileLinks"
+    ],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "DropTable"
+    ],
+    "sql": [],
+    "size": 5518
+  },
+  {
+    "file": "20261002113129_AddReconciliationLogicalGroups.cs",
+    "creates": [
+      "LibraryReconciliationLogicalGroups"
+    ],
+    "drops": [
+      "LibraryReconciliationLogicalGroups"
+    ],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "AddForeignKey",
+      "DropForeignKey",
+      "DropTable",
+      "DropIndex",
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 3123
+  },
+  {
+    "file": "20261002113620_AddReconciliationReleaseMetadata.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey",
+      "DropForeignKey",
+      "DropForeignKey",
+      "DropForeignKey",
+      "DropForeignKey",
+      "DropIndex",
+      "DropIndex",
+      "DropIndex",
+      "DropIndex",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 8684
+  },
+  {
+    "file": "20261002114518_AddReconciliationObservedFileState.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropColumn",
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 1176
+  },
+  {
+    "file": "20261002153437_AddReconciliationExecutionOperation.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 818
+  },
+  {
+    "file": "20261002153945_AddReconciliationFilenameEvidenceOption.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 854
+  },
+  {
+    "file": "20261003041810_AddReconciliationSourceFolderCleanup.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 854
+  },
+  {
+    "file": "20261003175500_GamesFoundation.cs",
+    "creates": [
+      "GamePlatforms",
+      "Games",
+      "GameArtworks",
+      "GameExternalIdentities",
+      "GameTitles",
+      "GameReleases",
+      "GameReleaseFiles",
+      "GameReleaseHashes"
+    ],
+    "drops": [
+      "GameArtworks",
+      "GameExternalIdentities",
+      "GameReleaseFiles",
+      "GameReleaseHashes",
+      "GameTitles",
+      "GameReleases",
+      "GamePlatforms",
+      "Games"
+    ],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "DropTable",
+      "DropTable",
+      "DropTable",
+      "DropTable",
+      "DropTable",
+      "DropTable",
+      "DropTable",
+      "DropTable"
+    ],
+    "sql": [],
+    "size": 13618
+  },
+  {
+    "file": "20261003190000_CanonicalVideoStorage.cs",
+    "creates": [
+      "MediaAssets"
+    ],
+    "drops": [
+      "MediaAssets"
+    ],
+    "renames": [
+      "MediaFiles->StoredFiles",
+      "MediaAnalyses->MediaTechnicalAnalyses",
+      "MediaAnalysisStreams->MediaTracks",
+      "StoredFiles->MediaFiles",
+      "MediaTechnicalAnalyses->MediaAnalyses",
+      "MediaTracks->MediaAnalysisStreams"
+    ],
+    "ops": [
+      "RenameTable",
+      "RenameTable",
+      "RenameTable",
+      "RenameColumn",
+      "RenameColumn",
+      "RenameIndex",
+      "RenameIndex",
+      "RenameIndex",
+      "DropForeignKey",
+      "DropForeignKey",
+      "DropForeignKey",
+      "CreateTable",
+      "AddCheckConstraint",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey",
+      "DropForeignKey",
+      "DropTable",
+      "DropCheckConstraint",
+      "DropForeignKey",
+      "DropForeignKey",
+      "DropForeignKey",
+      "DropIndex",
+      "DropColumn",
+      "RenameColumn",
+      "RenameColumn",
+      "RenameIndex",
+      "RenameIndex",
+      "RenameIndex",
+      "RenameTable",
+      "RenameTable",
+      "RenameTable",
+      "AddForeignKey",
+      "AddForeignKey",
+      "AddForeignKey"
+    ],
+    "sql": [],
+    "size": 9326
+  },
+  {
+    "file": "20261004060000_CanonicalVideoProgress.cs",
+    "creates": [
+      "MediaProgress",
+      "MediaPlaybackHistory",
+      "ActiveSessions"
+    ],
+    "drops": [
+      "ActiveSessions",
+      "MediaPlaybackHistory",
+      "MediaProgress"
+    ],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "DropTable",
+      "DropTable",
+      "DropTable"
+    ],
+    "sql": [],
+    "size": 9517
+  },
+  {
+    "file": "20261004152000_ReaderImagePreferences.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn",
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 3063
+  },
+  {
+    "file": "20261004153500_ReaderPreferenceScopeIdentity.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "DropForeignKey",
+      "DropIndex",
+      "DropColumn",
+      "Sql",
+      "CreateIndex",
+      "AddForeignKey"
+    ],
+    "sql": [
+      " UPDATE \"ReaderPreferences\" AS Preference SET \"WorkId\" = subs"
+    ],
+    "size": 2259
+  },
+  {
+    "file": "20261004154500_CanonicalMangaReaderPreferenceScopes.cs",
+    "creates": [],
+    "drops": [],
+    "renames": [],
+    "ops": [
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql",
+      "Sql"
+    ],
+    "sql": [
+      " INSERT INTO \"Works\" ( \"Id\", \"MediaType\", \"CanonicalTitle",
+      " INSERT INTO \"WorkSourceLinks\" ( \"Id\", \"WorkId\", \"SourceK",
+      " UPDATE \"ReaderPreferences\" AS Target SET \"Re",
+      " UPDATE \"ReaderPreferences\" AS Target SET \"Re",
+      " UPDATE \"ReaderPreferences\" AS Preference SET \"ScopeKey\" = 'w",
+      " UPDATE \"ReaderPreferences\" AS Preference SET \"ScopeKey\" = "
+    ],
+    "size": 8733
+  },
+  {
+    "file": "20261004202500_LibraryRootContentRouting.cs",
+    "creates": [
+      "LibraryRootContentAssignments"
+    ],
+    "drops": [
+      "LibraryRootContentAssignments"
+    ],
+    "renames": [],
+    "ops": [
+      "AddCheckConstraint",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "DropTable",
+      "DropCheckConstraint",
+      "DropColumn"
+    ],
+    "sql": [],
+    "size": 2710
+  },
+  {
+    "file": "20261006002056_AddWorkMetadataAndArtwork.cs",
+    "creates": [
+      "WorkArtwork",
+      "WorkCredits",
+      "WorkLocalizedValues",
+      "WorkMetadataFacts",
+      "WorkMetadataRefreshes"
+    ],
+    "drops": [
+      "WorkArtwork",
+      "WorkCredits",
+      "WorkLocalizedValues",
+      "WorkMetadataFacts",
+      "WorkMetadataRefreshes"
+    ],
+    "renames": [],
+    "ops": [
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateTable",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "CreateIndex",
+      "DropTable",
+      "DropTable",
+      "DropTable",
+      "DropTable",
+      "DropTable"
+    ],
+    "sql": [],
+    "size": 14171
+  }
+]
