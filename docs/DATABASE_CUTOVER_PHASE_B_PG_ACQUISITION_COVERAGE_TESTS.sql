@@ -9,8 +9,10 @@ DECLARE
   wanted_edition bigint;
   wanted_b bigint;
   op bigint;
+  op_b bigint;
   client uuid;
   binding bigint;
+  binding_b bigint;
 BEGIN
   INSERT INTO "Works" ("MediaTypeId","CanonicalTitle")
   VALUES (1,'Phase B Coverage A') RETURNING "Id" INTO work_a;
@@ -52,11 +54,18 @@ BEGIN
     RAISE EXCEPTION 'Foreign Work Wanted accepted by acquisition binding';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
+  -- Different valid Work-B binding prevents the duplicate PK from masking
+  -- the intended mismatched WantedItem/work FK rejection.
+  INSERT INTO "Operations" ("OperationKindKey","OperationStatusTypeId")
+  VALUES ('ci-second-download',1) RETURNING "Id" INTO op_b;
+  INSERT INTO "AcquisitionDownloadBindings"
+    ("OperationId","AcquisitionDownloadClientId","AcquisitionKindTypeId","WorkId")
+  VALUES (op_b,client,1,work_b) RETURNING "Id" INTO binding_b;
   BEGIN
     INSERT INTO "AcquisitionDownloadWantedItems"
       ("AcquisitionDownloadBindingId","WantedItemId","WorkId")
-    VALUES (binding,wanted_a,work_b);
-    RAISE EXCEPTION 'Acquisition binding accepted a fabricated WorkId';
+    VALUES (binding_b,wanted_a,work_b);
+    RAISE EXCEPTION 'Foreign Work-A Wanted accepted by Work-B binding';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
   RAISE NOTICE 'Phase B Wanted uniqueness and same-Work pack coverage passed';
