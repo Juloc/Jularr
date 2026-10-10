@@ -1,0 +1,178 @@
+{
+  "capturedFrom": "GitHub code search default branch dev (2026-10-10)",
+  "note": "File-level matches only; not a Roslyn callgraph or proof every execution path was found",
+  "rows": [
+    {
+      "term": "SaveChangesAsync",
+      "total": 58,
+      "paths": [
+        "src/Jularr.Web/Features/Collections/CollectionStore.cs",
+        "src/Jularr.Web/Features/MediaCore/AudiobookEditions.cs",
+        "src/Jularr.Web/Features/MediaCore/ReadingUnits.cs",
+        "src/Jularr.Web/Features/MediaCore/WorkStructureService.cs",
+        "src/Jularr.Web/Features/Novels/NovelProgressService.cs",
+        "src/Jularr.Web/Features/Auth/OwnerAuthService.cs",
+        "src/Jularr.Web/Features/Learning/Curriculum/SharedCourseService.cs",
+        "src/Jularr.Web/Pages/Admin/System.cshtml.cs",
+        "src/Jularr.Web/Features/Music/MusicLibraryService.cs",
+        "src/Jularr.Web/Features/Acquisition/Api/AcquisitionApiKeyService.cs",
+        "src/Jularr.Web/Features/Novels/NovelImportService.cs",
+        "src/Jularr.Web/Features/MediaCore/WorkService.cs",
+        "src/Jularr.Web/Features/Acquisition/History/AcquisitionHistoryService.cs",
+        "src/Jularr.Web/Features/Audiobooks/AudiobookLibraryService.cs",
+        "src/Jularr.Web/Features/Vocabulary/VocabularyService.cs",
+        "src/Jularr.Web/Features/Audiobooks/AudiobookProgress.cs",
+        "src/Jularr.Web/Features/Novels/NovelAnnotationService.cs",
+        "src/Jularr.Web/Program.cs",
+        "src/Jularr.Web/Features/Learning/LearningService.cs",
+        "src/Jularr.Web/Features/Learning/Courses/LearningCourseStore.cs",
+        "src/Jularr.Web/Features/Movies/MovieLibraryService.cs",
+        "src/Jularr.Web/Features/Tv/TvLibraryService.cs",
+        "src/Jularr.Web/Pages/Account/Plex.cshtml.cs",
+        "src/Jularr.Web/Features/Kana/KanaLearningService.cs",
+        "src/Jularr.Web/Features/Speech/TtsPreferencesService.cs",
+        "src/Jularr.Web/Features/Novels/NovelAiServices.cs",
+        "src/Jularr.Web/Features/Subtitles/SubtitleLanguageProfileService.cs",
+        "src/Jularr.Web/Features/Books/BookCatalogPdfAnalysis.cs",
+        "src/Jularr.Web/Features/Ai/AiSentenceExplanationService.cs",
+        "src/Jularr.Web/Features/Storage/LibraryRootRoutingService.cs",
+        "src/Jularr.Web/Features/Novels/NovelMetadataService.cs",
+        "src/Jularr.Web/Features/Library/CanonicalMediaStorage.cs",
+        "src/Jularr.Web/Features/Books/BookCatalogPdf.cs",
+        "src/Jularr.Web/Features/Novels/NovelVolumeContent.cs",
+        "src/Jularr.Web/Features/Books/BookReaderAnnotations.cs",
+        "src/Jularr.Web/Features/OfflineLibrary/OfflineLibrarySync.cs",
+        "src/Jularr.Web/Features/Library/MediaInventoryService.cs",
+        "src/Jularr.Web/Features/Library/LibraryScanner.cs",
+        "src/Jularr.Web/Features/Monitoring/MonitoringCommands.cs",
+        "src/Jularr.Web/Features/Audiobooks/AudiobookMetadata.cs",
+        "src/Jularr.Web/Features/Library/AnimeRepairService.cs",
+        "src/Jularr.Web/Features/Books/BookCatalogService.cs",
+        "src/Jularr.Web/Features/MediaSegments/MediaSegmentService.cs",
+        "src/Jularr.Web/Features/Novels/NovelEpubImportService.cs",
+        "src/Jularr.Web/Features/Progress/EpisodeProgress.cs",
+        "src/Jularr.Web/Features/Progress/VideoProgress.cs",
+        "src/Jularr.Web/Features/Metadata/AnimeMetadataService.cs",
+        "src/Jularr.Web/Features/ReaderPreferences/ReaderPreferences.cs",
+        "src/Jularr.Web/Features/MediaSegments/MediaSegmentSidecar.cs",
+        "src/Jularr.Web/Features/Learning/Curriculum/CurriculumBlueprintService.cs",
+        "src/Jularr.Web/Features/Subtitles/SubtitleImportService.cs",
+        "src/Jularr.Web/Features/Acquisition/Pipeline/AnimeCanonicalEpisodes.cs",
+        "src/Jularr.Web/Features/Music/MusicCompletedDownloadImportAdapter.cs",
+        "src/Jularr.Web/Features/Acquisition/Naming/AnimeRenameService.cs",
+        "src/Jularr.Web/Features/Media/Optimization/MediaContainerOptimizer.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AnimeAcquisitionRequestExecutor.cs",
+        "src/Jularr.Web/Features/Learning/LanguageAssistance/LanguageInspectorService.cs",
+        "src/Jularr.Web/Features/Storage/Reconciliation/LibraryReconciliationPlanService.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "ExecuteUpdateAsync",
+      "total": 5,
+      "paths": [
+        "src/Jularr.Web/Features/Novels/NovelVolumeContent.cs",
+        "src/Jularr.Web/Features/Storage/LibraryRootRoutingService.cs",
+        "src/Jularr.Web/Features/Books/BookCatalogService.cs",
+        "src/Jularr.Web/Features/Library/MediaInventoryService.cs",
+        "src/Jularr.Web/Features/Subtitles/SubtitleImportService.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "ExecuteDeleteAsync",
+      "total": 13,
+      "paths": [
+        "src/Jularr.Web/Pages/Account/Plex.cshtml.cs",
+        "src/Jularr.Web/Features/Books/BookReaderAnnotations.cs",
+        "src/Jularr.Web/Features/Vocabulary/VocabularyService.cs",
+        "src/Jularr.Web/Features/MediaCore/ReadingUnits.cs",
+        "src/Jularr.Web/Features/Novels/NovelAiServices.cs",
+        "src/Jularr.Web/Features/Subtitles/SubtitleLanguageProfileService.cs",
+        "src/Jularr.Web/Features/Progress/VideoProgress.cs",
+        "src/Jularr.Web/Features/Novels/NovelAnnotationService.cs",
+        "src/Jularr.Web/Features/Books/BookCatalogService.cs",
+        "src/Jularr.Web/Features/Metadata/AnimeMetadataService.cs",
+        "src/Jularr.Web/Features/Subtitles/SubtitleImportService.cs",
+        "src/Jularr.Web/Features/Library/MediaInventoryService.cs",
+        "src/Jularr.Web/Features/MediaSegments/MediaSegmentService.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "ExecuteSqlRaw",
+      "total": 8,
+      "paths": [
+        "src/Jularr.Web/Data/WorkIdMigrationFollowUp.cs",
+        "src/Jularr.Web/Features/Progress/ActiveSession.cs",
+        "src/Jularr.Web/Features/Acquisition/Wanted/RequestIntent.cs",
+        "src/Jularr.Web/Features/Devices/KnownDeviceRegistry.cs",
+        "src/Jularr.Web/Features/Progress/VideoProgress.cs",
+        "src/Jularr.Web/Features/Monitoring/MonitoringCommands.cs",
+        "src/Jularr.Web/Features/Auth/OwnerAuthService.cs",
+        "src/Jularr.Web/Features/Acquisition/Wanted/WantedReconciler.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "ExecuteSqlInterpolated",
+      "error": "UNKNOWN: Error code: UNKNOWN; Error: RemoteProtocolError: Server disconnected without sending a response."
+    },
+    {
+      "term": "SqlQuery",
+      "total": 33,
+      "paths": [
+        "src/Jularr.Web/Features/Manga/MangaArtworkFolders.cs",
+        "src/Jularr.Web/Features/Monitoring/MonitoringResolver.cs",
+        "src/Jularr.Web/Features/Music/MusicWantedSource.cs",
+        "src/Jularr.Web/Features/Library/HomeVideoQuery.cs",
+        "src/Jularr.Web/Features/MediaCore/WorkMetadataStore.cs",
+        "src/Jularr.Web/Features/ReadingAcquisition/ReadingCoverage.cs",
+        "src/Jularr.Web/Features/Discovery/DiscoverySnapshotStore.cs",
+        "src/Jularr.Web/Features/Music/MusicQuery.cs",
+        "src/Jularr.Web/Features/Storage/Insights/StorageUsageService.cs",
+        "src/Jularr.Web/Features/Auth/OwnerAuthService.cs",
+        "src/Jularr.Web/Features/MediaCore/ReadingUnits.cs",
+        "src/Jularr.Web/Features/Health/SystemHealthService.cs",
+        "src/Jularr.Web/Features/Reading/ContinueReadingQuery.cs",
+        "src/Jularr.Web/Features/Admin/AdminDashboardService.cs",
+        "src/Jularr.Web/Features/Tracking/AniListSyncCheckpoints.cs",
+        "src/Jularr.Web/Features/ReadingAcquisition/MangaVersions.cs",
+        "src/Jularr.Web/Features/Admin/StackResourceTelemetry.cs",
+        "src/Jularr.Web/Features/ReadingAcquisition/ReadingWorkAdmin.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/RequestWorkBinder.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.Queue.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/AcquisitionAccessStore.cs",
+        "src/Jularr.Web/Features/Learning/LanguageAssistance/LanguageInspectorService.cs",
+        "src/Jularr.Web/Features/ReadingAcquisition/ReadingCompletedDownloadAdapters.cs",
+        "src/Jularr.Web/Data/WorkIdMigrationFollowUp.cs",
+        "src/Jularr.Web/Features/Acquisition/Wanted/WantedReconciler.cs",
+        "src/Jularr.Web/Features/Devices/KnownDeviceRegistry.cs",
+        "src/Jularr.Web/Features/Acquisition/Wanted/RequestIntent.cs",
+        "src/Jularr.Web/Features/Progress/VideoProgress.cs",
+        "src/Jularr.Web/Features/Progress/ActiveSession.cs",
+        "src/Jularr.Web/Features/MediaFacts/MediaFactsService.cs",
+        "src/Jularr.Web/Features/Search/MediaSearchFactsLoader.cs",
+        "src/Jularr.Web/Features/Monitoring/MonitoringCommands.cs",
+        "src/Jularr.Web/Features/Acquisition/Access/VideoWorkLinks.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "FromSql",
+      "total": 1,
+      "paths": [
+        "src/Jularr.Web/Features/MediaCore/WorkMetadataStore.cs"
+      ],
+      "truncated": false
+    },
+    {
+      "term": "NpgsqlCommand",
+      "total": 1,
+      "paths": [
+        "src/Jularr.Web/Features/Auth/AdminAccountService.cs"
+      ],
+      "truncated": false
+    }
+  ]
+}
