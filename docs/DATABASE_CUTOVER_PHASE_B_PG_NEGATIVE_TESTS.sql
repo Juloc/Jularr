@@ -288,8 +288,23 @@ BEGIN
     -- T06: game release files must come from precisely the release's WorkVersion.
     INSERT INTO "GamePlatforms" ("Key","Name") VALUES ('ci-platform','Test Platform')
         RETURNING "Id" INTO game_platform_id;
-    INSERT INTO "GameReleases" ("WorkVersionId","GamePlatformId")
-    VALUES (version_two,game_platform_id);
+    INSERT INTO "GameReleases" ("WorkVersionId","WorkId","GamePlatformId")
+    VALUES (version_two,other_work,game_platform_id);
+    -- T07 negative control 1: a Movie WorkVersion is never a GameRelease,
+    -- even when the WorkVersion/WorkId pair itself is consistent.
+    BEGIN
+        INSERT INTO "GameReleases" ("WorkVersionId","WorkId","GamePlatformId")
+        VALUES (version_one,work_for_image,game_platform_id);
+        RAISE EXCEPTION 'Non-game WorkVersion was accepted as GameRelease';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+    -- T07 negative control 2: a Game-typed Work cannot borrow a Movie version.
+    BEGIN
+        INSERT INTO "GameReleases" ("WorkVersionId","WorkId","GamePlatformId")
+        VALUES (version_one,other_work,game_platform_id);
+        RAISE EXCEPTION 'GameRelease with a foreign WorkVersion was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
     INSERT INTO "GameReleaseFileRoleTypes" ("Id","Key") VALUES (1,'ci-disc');
     INSERT INTO "GameReleaseStoredFiles"
         ("WorkVersionId","StoredFileId","DiscNumber","GameReleaseFileRoleTypeId")
@@ -301,7 +316,8 @@ BEGIN
         RAISE EXCEPTION 'Foreign WorkVersion file was accepted for game release';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
-    -- T07 remains explicitly OPEN: GameRelease itself must additionally be game-only.
+    -- T07 draft relational guarantee holds with PROPOSED MediaType(game)=7;
+    -- B01 byte-enum/seed signoff remains mandatory.
 
     -- T08: neither the Work nor the selected File may point to a different asset.
     BEGIN
