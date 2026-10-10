@@ -44,14 +44,7 @@ interface JularrClientApi {
     /** `GET /me/playback-history`: past playback entries, most recent first. */
     suspend fun getPlaybackHistory(): List<PlaybackHistoryItem>
 
-    /** `GET /watchlist`: the signed-in profile's followed works. */
-    suspend fun getWatchlist(): List<WatchlistItem>
-
-    suspend fun getWatchlistPage(page: Int = 1, pageSize: Int = 25): WatchlistPage {
-        require(page == 1 && pageSize == 25)
-        val entries = getWatchlist()
-        return WatchlistPage(entries, page, pageSize, entries.size.toLong(), false)
-    }
+    suspend fun getWatchlistPage(page: Int = 1, pageSize: Int = 25): WatchlistPage
 
     suspend fun getAnime(animeId: String): AnimeDetail
     suspend fun getEpisode(episodeId: String): EpisodeDetail
