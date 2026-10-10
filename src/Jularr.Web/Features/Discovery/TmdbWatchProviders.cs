@@ -71,7 +71,7 @@ public sealed partial class TmdbDiscoveryProvider
             key,
             TimeSpan.FromHours(3),
             ct => GetJsonAsync<JsonElement>(
-                `${type}/${normalizedId}/watch/providers`, [], ct),
+                $"{type}/{normalizedId}/watch/providers", [], ct),
             cancellationToken);
         return ReadWatchAvailability(response, type, normalizedId, region);
     }
