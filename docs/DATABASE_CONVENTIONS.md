@@ -25,14 +25,14 @@ Jularr-specific non-negotiable defaults:
 
 ## Mandatory SQL statement style (owner decision)
 
-**This applies to every new or intentionally modified hand-authored SQL statement, including reads and writes, EF Core `SqlQueryRaw`/`FromSqlRaw`, `ExecuteSqlRaw`, ADO.NET/Npgsql and SQL inside feature stores.**
+**This applies to every new or intentionally modified hand-authored SQL statement, including reads and writes, EF Core `SqlQueryRaw`/`FromSqlRaw`, `ExecuteSqlRaw`, ADO.NET/Npgsql and SQL in Service or Logic.**
 
 1. **Never interpolate values into SQL.** No C# `$"..."`, `$"""..."""`, `string.Format`, concatenation or computed fragments for SQL text. Do not substitute EF Core interpolated-string query APIs for this rule. Define **static, inspectable SQL text** (`const string` / non-interpolated `"""..."""`) and supply values using **explicit named, typed parameters** (`@AccountId`, `@ProfileId`, etc.).
 2. Format SQL as multiline statements, with uppercase SQL keywords. **One selected column per line**; use clear newlines for `SELECT`, `FROM`, `JOIN`, `WHERE`, `GROUP BY`, `ORDER BY`, `UPDATE`, `SET`, `INSERT INTO`, `VALUES`, etc. Align indentation and keep each predicate/update assignment readable. Avoid `SELECT *`; select only needed columns.
 3. With **more than one table** in the query, **qualify every column** with its real table name (or a clear explicitly declared alias if unavoidable): in `SELECT`, `ON`, `WHERE`, `SET` expressions, `GROUP BY`, `ORDER BY` and `RETURNING`. Prefer the actual table name for unambiguous review; a multi-table query must never have naked `Id`, `Status` or `WorkId` columns.
 4. PostgreSQL owns the dialect: use `"Accounts"`, `"Id"`, not SQL Server three-part names such as `Main.dbo.Accounts`. PascalCase identifiers require PostgreSQL double-quoting. Parameters use `@Name`, **never** quoted SQL literals derived from input.
 5. Static SQL query variants may be separate named constants for genuinely different shapes. Do not build table names, column names, schema names, `ORDER BY` fragments, joins, or `WHERE` clauses by arbitrary string concatenation/interpolation; choose a reviewed static variant instead. Pagination sizes/filters/sort values are bound parameters; choosing from a fixed set of static SQL variants is acceptable.
-6. SQL may live **directly in its owning feature service** when that service owns the data access; do not add a Store/Repository merely to pass calls through. The Razor Page calls the same backend method as HTTP endpoints through DI, without an HTTP round trip. Public user/admin operations own different READ projections and authorizations; shared internal mutation code handles common invariants and SQL UPDATE. A generic unrestricted `UpdateUser(Data)` exposed to API callers is forbidden.
+6. Authorized static **SELECTs live in the owning Service**; **all SQL mutations live in Logic**, using one shared SqlContext/transaction when coordinated. Do not introduce a Store/Repository. Razor Pages call the same Service as HTTP endpoints through DI, without an HTTP round trip. User/Admin/System Services have distinct READ projections and authorization; internal Logic actions enforce invariants and perform DML. A generic unrestricted `UpdateUser(Data)` exposed to API callers is forbidden.
 7. Include focused tests for parameter values containing quotes/metacharacters, SQL correctness, authorization, query cardinality and all affected write invariants. The real database constraint remains the last line of defense against concurrent writes.
 
 **Example: one-table READ** (`UserAccountService.ReadUserV1`):
@@ -82,7 +82,7 @@ ORDER BY
     "Profiles"."Id"
 ```
 
-**Example: shared internal UPDATE** (validated/authorized callers only):
+**Example: Logic-owned internal UPDATE** (invoked only after Service authorization, in the shared transaction):
 
 ```csharp
 private const string UpdateDisplayNameSql = """
