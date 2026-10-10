@@ -10,14 +10,18 @@ CREATE TABLE "LearningActivityKindTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_LearningActivityKindTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_LearningActivityKindTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_LearningActivityKindTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_LearningActivityKindTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_LearningActivityKindTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- Lesson, Review, VocabularyPractice, SentencePractice, ScriptPractice, MediaPractice.
 CREATE TABLE "LearningSessionEndReasonTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_LearningSessionEndReasonTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_LearningSessionEndReasonTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_LearningSessionEndReasonTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_LearningSessionEndReasonTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_LearningSessionEndReasonTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- Completed, Exited, Abandoned. Session existence does NOT mean course completion.
 
@@ -76,7 +80,9 @@ CREATE TABLE "LearningActivityEventKindTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_LearningActivityEventKindTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_LearningActivityEventKindTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_LearningActivityEventKindTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_LearningActivityEventKindTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_LearningActivityEventKindTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- ExerciseCompleted / ReviewCompleted / LessonCompleted /
 -- PracticeItemCompleted / SessionCompleted. NOT JularrEvent notifications.

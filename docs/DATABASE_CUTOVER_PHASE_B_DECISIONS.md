@@ -134,3 +134,20 @@ bestanden. Die neue Suite prüft vier spezifische Cross-Work-FK-Ablehnungen,
 zulässigen Contentwechsel innerhalb desselben Works sowie je sechs ungültige
 Dimensionspaare gegen beide Tabellen. Constraint-Namen werden geprüft.
 Gate B bleibt offen für die übrigen Fach-/Seed- und vollständigen Query-Verträge.
+
+## B01 – physische Byte-Grenzen der Type-Kataloge
+
+Alle 46 bestehenden Type-Kataloge besitzen einen validierten ID-CHECK im
+C#-`byte`-Wertebereich und einen CHECK gegen leere oder nur aus Leerzeichen
+bestehende Keys. Der strengere bestehende Bereich 1–255 für
+`LearningMediaScopeTypes` bleibt erhalten. Es entstehen weder neue Kataloge noch
+zusätzliche Seeds; interne Ressourcen-PKs/FKs bleiben `bigint`.
+
+**Lokaler Nachweis:** DDL 01–14 auf einer weiteren frischen isolierten
+PostgreSQL-18.6-DB aufgebaut. Katalog-, Type-Grenz-, allgemeine Negativ-, Event-,
+Acquisition- und Learning-Scope-Suites bestanden. Die neue Suite prüft alle
+46 Kataloge strukturell, gültige Byte-Grenzen sowie spezifische Ablehnungen für
+negative/zu große IDs und leere Keys in zwei Domänen. Die bestehende Ablehnung
+von Learning-Media-Scope 0 wird ebenfalls geprüft. B01 bleibt für die fachliche
+Festlegung der tatsächlichen Keys und Seed-Werte offen; diese physische
+Absicherung ist keine Seed-Freigabe und schließt Gate B nicht.

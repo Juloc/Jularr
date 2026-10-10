@@ -91,19 +91,25 @@ CREATE TABLE "NotificationEventCategoryTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_NotificationEventCategoryTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_NotificationEventCategoryTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_NotificationEventCategoryTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_NotificationEventCategoryTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_NotificationEventCategoryTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 CREATE TABLE "NotificationChannelTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_NotificationChannelTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_NotificationChannelTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_NotificationChannelTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_NotificationChannelTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_NotificationChannelTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 CREATE TABLE "NotificationTimingTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_NotificationTimingTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_NotificationTimingTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_NotificationTimingTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_NotificationTimingTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_NotificationTimingTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 CREATE TABLE "NotificationSubscriptions" (
     "ProfileId" bigint NOT NULL,

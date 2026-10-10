@@ -23,7 +23,8 @@ CREATE TABLE "AccountRoleTypes" (
     "Key" text NOT NULL,
     CONSTRAINT "PK_AccountRoleTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_AccountRoleTypes_Key" UNIQUE ("Key"),
-    CONSTRAINT "CK_AccountRoleTypes_Id" CHECK ("Id" BETWEEN 0 AND 255)
+    CONSTRAINT "CK_AccountRoleTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_AccountRoleTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- PROPOSED seed IDs; binding enum values require owner/implementation confirmation.
 -- Current Jularr C# AccountRole values are Owner=1, User=2, MediaManager=3.
@@ -186,7 +187,8 @@ CREATE TABLE "MediaTypes" (
     "Key" text NOT NULL,
     CONSTRAINT "PK_MediaTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_MediaTypes_Key" UNIQUE ("Key"),
-    CONSTRAINT "CK_MediaTypes_Id" CHECK ("Id" BETWEEN 0 AND 255)
+    CONSTRAINT "CK_MediaTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_MediaTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- PROPOSED seeds; exact enum bytes must be frozen before the final baseline.
 INSERT INTO "MediaTypes" ("Id","Key") VALUES
@@ -280,7 +282,9 @@ CREATE TABLE "WorkFactTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_WorkFactTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_WorkFactTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_WorkFactTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_WorkFactTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_WorkFactTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 CREATE TABLE "WorkFieldProvenance" (
     "WorkId" bigint NOT NULL,
@@ -300,7 +304,8 @@ CREATE TABLE "WorkRelationTypes" (
     "Key" text NOT NULL,
     CONSTRAINT "PK_WorkRelationTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_WorkRelationTypes_Key" UNIQUE ("Key"),
-    CONSTRAINT "CK_WorkRelationTypes_Id" CHECK ("Id" BETWEEN 0 AND 255)
+    CONSTRAINT "CK_WorkRelationTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_WorkRelationTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- Seed keys/byte IDs are pending owner approval.
 CREATE TABLE "WorkRelations" (
@@ -333,7 +338,9 @@ CREATE TABLE "WorkMediaClassificationTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_WorkMediaClassificationTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_WorkMediaClassificationTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_WorkMediaClassificationTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_WorkMediaClassificationTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_WorkMediaClassificationTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 CREATE TABLE "WorkMediaClassifications" (
     "WorkId" bigint NOT NULL,
@@ -437,7 +444,9 @@ CREATE TABLE "MediaAssetTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_MediaAssetTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_MediaAssetTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_MediaAssetTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_MediaAssetTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_MediaAssetTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- Type seed set awaits MediaAsset kind inventory sign-off.
 
@@ -494,7 +503,9 @@ CREATE TABLE "MediaTrackTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_MediaTrackTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_MediaTrackTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_MediaTrackTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_MediaTrackTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_MediaTrackTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- Seed set awaits player/subtitle owner sign-off.
 CREATE TABLE "MediaTracks" (
@@ -542,7 +553,9 @@ CREATE TABLE "GameReleaseFileRoleTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_GameReleaseFileRoleTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_GameReleaseFileRoleTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_GameReleaseFileRoleTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_GameReleaseFileRoleTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_GameReleaseFileRoleTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- Exact file roles and enum seeds are not yet owner-approved.
 -- Every GameReleaseStoredFiles row is constrained to a StoredFile whose

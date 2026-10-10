@@ -11,7 +11,8 @@ CREATE TABLE "LearningModeTypes" (
     "Key" text NOT NULL,
     CONSTRAINT "PK_LearningModeTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_LearningModeTypes_Key" UNIQUE ("Key"),
-    CONSTRAINT "CK_LearningModeTypes_Id" CHECK ("Id" BETWEEN 0 AND 255)
+    CONSTRAINT "CK_LearningModeTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_LearningModeTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 INSERT INTO "LearningModeTypes" ("Id","Key") VALUES
     (0,'off'),(1,'language_tools'),(2,'study'),(3,'custom');
@@ -21,7 +22,8 @@ CREATE TABLE "LearningCapabilityTypes" (
     "Key" text NOT NULL,
     CONSTRAINT "PK_LearningCapabilityTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_LearningCapabilityTypes_Key" UNIQUE ("Key"),
-    CONSTRAINT "CK_LearningCapabilityTypes_Id" CHECK ("Id" BETWEEN 0 AND 255)
+    CONSTRAINT "CK_LearningCapabilityTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_LearningCapabilityTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 INSERT INTO "LearningCapabilityTypes" ("Id","Key") VALUES
     (1,'language_lookup'),
@@ -46,7 +48,8 @@ CREATE TABLE "LearningMediaScopeTypes" (
     "Key" text NOT NULL,
     CONSTRAINT "PK_LearningMediaScopeTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_LearningMediaScopeTypes_Key" UNIQUE ("Key"),
-    CONSTRAINT "CK_LearningMediaScopeTypes_Id" CHECK ("Id" BETWEEN 1 AND 255)
+    CONSTRAINT "CK_LearningMediaScopeTypes_Id" CHECK ("Id" BETWEEN 1 AND 255),
+    CONSTRAINT "CK_LearningMediaScopeTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 INSERT INTO "LearningMediaScopeTypes" ("Id","Key") VALUES
     (1,'anime'),(2,'novel'),(3,'book'),(4,'manga');

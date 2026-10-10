@@ -11,14 +11,18 @@ CREATE TABLE "EventAudienceTypes" (
     "RequiresProfile" boolean NOT NULL,
     CONSTRAINT "PK_EventAudienceTypes" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_EventAudienceTypes_Key" UNIQUE ("Key"),
-    CONSTRAINT "UX_EventAudienceTypes_Id_RequiresProfile" UNIQUE ("Id","RequiresProfile")
+    CONSTRAINT "UX_EventAudienceTypes_Id_RequiresProfile" UNIQUE ("Id","RequiresProfile"),
+    CONSTRAINT "CK_EventAudienceTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_EventAudienceTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 
 CREATE TABLE "EventSeverityTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_EventSeverityTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_EventSeverityTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_EventSeverityTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_EventSeverityTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_EventSeverityTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 
 -- Event Id is public/distributed for replay protection; UUID is a documented

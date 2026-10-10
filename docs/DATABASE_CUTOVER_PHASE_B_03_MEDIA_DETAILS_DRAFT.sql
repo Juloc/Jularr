@@ -27,7 +27,9 @@ CREATE TABLE "WorkCreditRoleTypes" (
     "Id" smallint NOT NULL,
     "Key" text NOT NULL,
     CONSTRAINT "PK_WorkCreditRoleTypes" PRIMARY KEY ("Id"),
-    CONSTRAINT "UX_WorkCreditRoleTypes_Key" UNIQUE ("Key")
+    CONSTRAINT "UX_WorkCreditRoleTypes_Key" UNIQUE ("Key"),
+    CONSTRAINT "CK_WorkCreditRoleTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
+    CONSTRAINT "CK_WorkCreditRoleTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
 -- Required: author, narrator, illustrator etc.; exact byte enum seed IDs pending.
 CREATE TABLE "WorkCredits" (
