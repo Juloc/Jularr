@@ -73,18 +73,34 @@ for (const [index, query] of queries.entries())
     writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`), query.declaration + sql + ';\n');
 }
 
-let groupsSql = readFileSync(fileURLToPath(new URL('../docs/DATABASE_CUTOVER_PHASE_B_ADMIN_QUERIES_DRAFT.sql', import.meta.url)), 'utf8').replaceAll('\r\n', '\n').trim();
-for (const [index, parameter] of ['ActorAccountId', 'PageSize', 'Offset'].entries())
-{
-    const placeholder = `@${parameter}`;
-    if (!groupsSql.includes(placeholder))
+for (const query of [
     {
-        throw new Error(`Canonical Groups query is missing ${placeholder}.`);
+        name: 'groups',
+        file: 'DATABASE_CUTOVER_PHASE_B_ADMIN_QUERIES_DRAFT.sql',
+        declaration: 'PREPARE phase_b_groups(bigint,integer,bigint) AS\n',
+        parameters: ['ActorAccountId', 'PageSize', 'Offset']
+    },
+    {
+        name: 'contexts',
+        file: 'DATABASE_CUTOVER_PHASE_B_LEARNING_QUERIES_DRAFT.sql',
+        declaration: 'PREPARE phase_b_contexts(bigint,bigint,uuid,integer,bigint) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'LearningUnitPublicId', 'PageSize', 'Offset']
     }
-    groupsSql = groupsSql.replaceAll(placeholder, `$${index + 1}`);
-}
-if (groupsSql.includes('@'))
+])
 {
-    throw new Error('Unbound SQL placeholder in canonical Groups query.');
+    let sql = readFileSync(fileURLToPath(new URL(`../docs/${query.file}`, import.meta.url)), 'utf8').replaceAll('\r\n', '\n').trim();
+    for (const [index, parameter] of query.parameters.entries())
+    {
+        const placeholder = `@${parameter}`;
+        if (!sql.includes(placeholder))
+        {
+            throw new Error(`Canonical ${query.name} query is missing ${placeholder}.`);
+        }
+        sql = sql.replaceAll(placeholder, `$${index + 1}`);
+    }
+    if (sql.includes('@'))
+    {
+        throw new Error(`Unbound SQL placeholder in canonical ${query.name} query.`);
+    }
+    writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`), query.declaration + sql + '\n');
 }
-writeFileSync(resolve(outputDirectory, 'phase_b_groups_prepared.sql'), 'PREPARE phase_b_groups(bigint,integer,bigint) AS\n' + groupsSql + '\n');

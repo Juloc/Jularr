@@ -26,6 +26,8 @@ BEGIN
             ('ReaderBookmarks'),
             ('ReaderHighlights'),
             ('LearningCourses'),
+            ('LearningUnits'),
+            ('LearningContexts'),
             ('LearningCards'),
             ('Notifications'),
             ('LibraryRoots')

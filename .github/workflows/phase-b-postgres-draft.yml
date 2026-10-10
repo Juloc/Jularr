@@ -121,6 +121,10 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_LEARNING_SCOPE_TESTS.sql
 
+      - name: Verify personal Learning Context integrity and paginated authorization
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_LEARNING_CONTEXT_TESTS.sql
+
       - name: Verify distinct public resource identity and internal FKs
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_PUBLIC_IDS_TESTS.sql

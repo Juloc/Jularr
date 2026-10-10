@@ -211,3 +211,39 @@ bestanden. Der unabhängige Zwei-Verbindungs-SKIP-LOCKED-Test besteht mit den
 echten OperationStatus-Seeds. Alle 18 Ziel-Enums separat mit .NET 10 kompiliert.
 Kein vollständiger Web-Build, keine EF-Baseline und kein aktiver DB-Reset.
 28 Kataloge bleiben fachlich offen; B01 und Gate B sind deshalb nicht geschlossen.
+
+## B05 – persönliche Learning-Kontexte und bestehende Kursoptionen
+
+`LearningContexts` waren im Entwurf fälschlich ohne Profile-Owner. Sie besitzen
+jetzt einen erforderlichen Profile-FK und genau einen typisierten Inhalts-FK
+auf WorkEpisode oder WorkChapter, jeweils mit derselben WorkId. Die generischen
+`SourceTypeKey`/`SourceKey`-IDs entfallen. Cue-/Paragraph-/Page-/Region-Positionen
+bleiben begrenzte Positionsdaten, keine relationalen Identitäten. Ein
+`UNIQUE NULLS NOT DISTINCT` über Profil, Unit, Inhalt und Position verhindert
+auch für NULL-Positionen doppelte persönliche Fundstellen. Zwei Profile dürfen
+dieselbe Fundstelle unabhängig speichern. CreatedAt bleibt erhalten.
+
+LearningUnits und LearningContexts besitzen separate öffentliche UUIDs;
+sämtliche internen Joins/FKs bleiben bigint. Der neue statische Read prüft den
+aktivierten Actor und die aktuelle Profilmitgliedschaft vor der Root-Seite.
+Alle ausgegebenen Ressourcenreferenzen sind UUIDs. ActorAccountId und die aktive
+interne ProfileId kommen aus dem Service, nicht aus einem ungeprüften DTO.
+PublicId grantet keine Rechte. Work-/Learning-Hard-Gates bleiben zusätzliche
+Service-Gates in D/E; dieser Profilnachweis ersetzt sie nicht.
+
+Die bestehenden unabhängigen Kursoptionen Recognition, Production, Listening,
+Writing und SentencePractice sowie UpdatedAt fehlen nicht länger im Ziel.
+Karten behalten CreatedAt/UpdatedAt. Prompt-/Answer-Sprache wird aus der
+kanonischen Kurs-Sprachpaarung und dem Modus projiziert: Recognition/Listening
+Source → Target, Production/Writing Target → Source. Kein zweiter Sprachfakt
+oder FSRS-Schatten. Recognition als benötigte Unit-Ankerkarte ist unabhängig
+von der persönlichen Practice-Option, wie im aktuellen Owner.
+
+**Lokaler Nachweis:** Frischer PostgreSQL-18.6-Bootstrap 01–14; Learning-Kontext-,
+Public-ID-, allgemeine Negativ- und Struktur-Suites bestanden. Geprüft werden
+persönliche NULL-Idempotenz, falsche Work-/Profile-FKs, fehlender/doppelter
+Inhalt, Kursoptionen und Karten-Profilzugehörigkeit sowie erste/zweite/letzte/
+leere Seite, fremdes Profil, Sharing, Widerruf, deaktivierter/unbekannter Actor
+und unbekannte Unit. EXPLAIN mit 1.003 Kontexten nutzt den Profil/Unit/CreatedAt/
+Id-Index und liest für die erste Seite nur 25 Root-Zeilen; Details folgen danach.
+Gate B bleibt für die übrigen fachlichen und vollständigen Query-Verträge offen.
