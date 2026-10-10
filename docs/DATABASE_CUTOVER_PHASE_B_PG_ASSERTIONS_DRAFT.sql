@@ -38,7 +38,9 @@ BEGIN
         ('FK_AcquisitionDownloadWantedItems_BindingWork','f'),
         ('FK_AcquisitionDownloadWantedItems_TargetWork','f'),
         ('FK_WorkTitles_Providers','f'),
-        ('CK_AccountPasskeys_BackupState','c')
+        ('CK_AccountPasskeys_BackupState','c'),
+        ('CK_WorkMetadataFacts_CommunityRating','c'),
+        ('FK_MusicArtists_People','f')
     )
     SELECT string_agg(r.name,', ' ORDER BY r.name)
     INTO missing
