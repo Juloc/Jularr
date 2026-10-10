@@ -626,16 +626,24 @@ public sealed class PlaybackPreparationService(
             }
 
             File.Move(temporaryPath, path, overwrite: false);
+            var registered = false;
             try
             {
                 var published = await canonicalStorage.PublishVerifiedPreparedVideoAsync(
                     source, entry, path, VerifiedRoot, VerifiedRecipe, probeRunner, cancellationToken);
+                registered = true;
+                // Once a canonical row is committed, keep its output even when the subsequent
+                // inventory scan is interrupted. Playback eligibility stays false until analysis succeeds.
                 await mediaInventory.EnsureAnalyzedAsync(published.StoredFileId, cancellationToken);
                 await operation.ReportAsync(100, "Verified video version available", cancellationToken: cancellationToken);
             }
             catch
             {
-                TryDelete(path);
+                if (!registered)
+                {
+                    TryDelete(path);
+                }
+
                 throw;
             }
         }

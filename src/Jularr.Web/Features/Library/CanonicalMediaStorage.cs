@@ -445,12 +445,12 @@ public sealed class CanonicalMediaStorageService(AppDbContext db)
         if (sourceVersion is null || sourceFile is null ||
             sourceVersion.Source == PreparedVideoVersionSource ||
             sourceFile.SizeBytes != source.SizeBytes ||
-            sourceFile.LastWriteTimeUtc != source.LastWriteTimeUtc ||
+            Math.Abs((sourceFile.LastWriteTimeUtc - source.LastWriteTimeUtc).Ticks) >= 10 ||
             sourceAnalysis.MediaFileId != source.StoredFileId ||
             sourceAnalysis.Status != MediaAnalysisStatus.Succeeded ||
             sourceAnalysis.ProbeVersion != MediaInventoryService.CurrentProbeVersion ||
             sourceAnalysis.SourceSizeBytes != source.SizeBytes ||
-            sourceAnalysis.SourceLastWriteTimeUtc != source.LastWriteTimeUtc ||
+            Math.Abs((sourceAnalysis.SourceLastWriteTimeUtc - source.LastWriteTimeUtc).Ticks) >= 10 ||
             sourceAnalysis.SourceFingerprint is not { Length: 64 } sourceFingerprint ||
             sourceAnalysis.Technical is not { } sourceTechnical)
         {

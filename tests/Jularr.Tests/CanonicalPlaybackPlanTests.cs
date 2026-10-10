@@ -401,6 +401,22 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.AreEqual(1, installed.Count);
         Assert.AreEqual(source.StoredFileId, installed[0].StoredFileId);
 
+        await fixture.Inventory.EnsureAnalyzedAsync(prepared.StoredFileId, CancellationToken.None);
+        var planner = new PlaybackPlanService(
+            fixture.Db, fixture.Inventory,
+            new PlaybackStreamSessionStore(TimeProvider.System),
+            PlaybackServerTestKit.Create().Capabilities,
+            canonicalStorage: storage);
+        var playback = await planner.PlanAsync(
+            PlaybackVideoTarget.Movie(movie.Id), "reader",
+            new PlaybackPlanInput(
+                null, ClientKinds.Web, ChromeAgent, IPAddress.Parse("203.0.113.9"),
+                Network: new PlaybackNetworkReport(ThroughputKbps: 24_000)),
+            CancellationToken.None);
+        Assert.IsNotNull(playback);
+        Assert.AreEqual(prepared.StoredFileId, playback.MediaFileId,
+            "A published and analyzed prepared version should be reused instead of starting a live HEVC conversion.");
+
         var same = await storage.PublishVerifiedPreparedVideoAsync(
             source, sourceAnalysis, output, cacheRoot, "mobile1080",
             fixture.Runner, CancellationToken.None);
