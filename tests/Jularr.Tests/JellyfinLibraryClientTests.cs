@@ -106,7 +106,7 @@ public sealed class JellyfinLibraryClientTests
         await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
             client.GetViewerAsync(new Uri("https://jellyfin.example/"),
                 "bad\r\nInjected: header", CancellationToken.None));
-        await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
+        await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(() =>
             client.GetItemsAsync(new Uri("https://jellyfin.example/"),
                 "token", ViewerId, MoviesId, 0, 101, CancellationToken.None));
         await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
