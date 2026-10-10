@@ -6,6 +6,8 @@ Jularr uses the canonical Juloc database and persistence conventions defined in 
 
 **Binding Service/Data/Logic target:** [SERVICE_DATA_LOGIC_ARCHITECTURE.md](SERVICE_DATA_LOGIC_ARCHITECTURE.md) is the canonical specification for new `Data.<Area>.<Entity>.V1` contracts, SELECT-only `Service.<Area>.<Entity>.V1`, role/version-neutral `Logic.<Entity>` write/side-effect ownership, `GetOperationKind()`, shared SQL context and database-enforced READ ONLY. Current `SqlParams` and EF snippets below describe existing or former implementation practices, not the new automatic whole-DTO SqlExecutor. Neither the new runtime nor the clean database baseline is implemented.
 
+**Step-by-step database cutover:** [DATABASE_CUTOVER_EXECUTION_PLAN.md](DATABASE_CUTOVER_EXECUTION_PLAN.md), tracked by #880. No historical migration rewrite on active dev; generate and test the clean baseline first in an isolated throwaway PostgreSQL instance, switch the existing test installation only after all clients and security/performance gates and explicit user authorization.
+
 These rules are mandatory for all new SQL/persistence code and whenever existing persistence code is intentionally changed. Existing untouched persistence code does not require a bulk rewrite.
 
 Jularr-specific non-negotiable defaults:
