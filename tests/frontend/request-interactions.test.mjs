@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const source = readFileSync(new URL('../../src/Jularr.Web/wwwroot/js/admin-requests.js', import.meta.url), 'utf8');
+const controls = ['ui-popover', 'ui-table', 'ui-select'].map(name => readFileSync(new URL(`../../src/Jularr.Web/wwwroot/js/${name}.js`, import.meta.url), 'utf8')).join('\n');
+const source = controls + readFileSync(new URL('../../src/Jularr.Web/wwwroot/js/admin-requests.js', import.meta.url), 'utf8');
 
 class Target {
     listeners = new Map();
@@ -11,8 +12,9 @@ class Target {
     indeterminate = false;
     classList = { toggle() {} };
     dataset = {};
-    addEventListener(name, callback) {
+    addEventListener(name, callback, options) {
         this.listeners.set(name, [...(this.listeners.get(name) || []), callback]);
+        options?.signal?.addEventListener('abort', () => this.listeners.set(name, this.listeners.get(name).filter(listener => listener !== callback)), { once: true });
     }
     dispatchEvent(event) {
         event.target ||= this;
@@ -36,7 +38,7 @@ function harness() {
         return input;
     });
     table.querySelectorAll = () => inputs;
-    table.querySelector = selector => selector === '[data-admreq-select-all]' ? all : null;
+    table.querySelector = selector => selector === '[data-ui-select-all]' ? all : null;
     const pageSize = new Target();
     pageSize.value = '50';
     pageSize.checkValidity = () => Number(pageSize.value) >= 1 && Number(pageSize.value) <= 500;
@@ -47,7 +49,7 @@ function harness() {
     document.querySelector = selector => selector === '[data-admin-requests]' ? table : selector === '[data-admreq-page-size]' ? pageForm : null;
     document.body = new Target();
     const window = new Target();
-    vm.runInNewContext(source, { document, window, Event: class { constructor(type) { this.type = type; } } });
+    vm.runInNewContext(source, { document, window, AbortController, MutationObserver: class { observe() {} disconnect() {} }, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } }, Event: class { constructor(type) { this.type = type; } } });
     return { table, all, inputs, pageSize, pageForm };
 }
 
@@ -56,7 +58,7 @@ test('Shift row selection spans a range and keeps select-all tri-state consisten
     inputs[0].checked = true;
     inputs[0].dispatchEvent({ type: 'change' });
     assert.equal(all.indeterminate, true);
-    const target = { closest: selector => selector === '[data-admreq-row]' ? inputs[3].row : null };
+    const target = { closest: selector => selector === '[data-ui-row]' ? inputs[3].row : null };
     table.dispatchEvent({ type: 'click', target, shiftKey: true });
     assert.deepEqual(inputs.map(input => input.checked), [true, true, true, true, false]);
     assert.equal(all.checked, false);
@@ -92,6 +94,8 @@ function filterHarness(initialValues = []) {
         classList = { add() {}, toggle() {} };
         append(...children) { this.children.push(...children); }
         replaceChildren(...children) { this.children = children; }
+        remove() {}
+        removeAttribute(name) { this.attributes.delete(name); }
         setAttribute(name, value) { this.attributes.set(name, value); }
         getAttribute(name) { return this.attributes.get(name); }
         hasAttribute(name) { return this.attributes.has(name); }
@@ -114,21 +118,46 @@ function filterHarness(initialValues = []) {
     select.multiple = true;
     select.name = 'type';
     select.form = form;
+    select.required = true;
+    select.setAttribute('aria-describedby', 'filter-help');
+    select.setAttribute('aria-invalid', 'true');
     select.options = ['', 'movie', 'tv'].map(value => ({ value, textContent: value || 'Media type', selected: initialValues.includes(value) }));
     Object.defineProperty(select, 'selectedOptions', { get: () => select.options.filter(option => option.selected) });
     select.closest = () => control;
+    const dispatch = select.dispatchEvent.bind(select);
+    select.dispatchEvent = event => { dispatch(event); if (event.type === 'ui:select-commit') form.dispatchEvent({ ...event, target: select }); };
+    select.matches = () => false;
     form.querySelectorAll = selector => selector === 'select[multiple]' || selector === 'select' ? [select] : [];
     document.querySelector = selector => selector === '[data-admreq-filters]' ? form : null;
-    document.querySelectorAll = selector => selector === 'select[data-admreq-custom-select]' ? [select] : [];
+    document.querySelectorAll = selector => selector === 'select[data-ui-select]' ? [select] : [];
     document.createElement = () => new Element();
     document.documentElement = { clientWidth: 1440, clientHeight: 900 };
     const window = new Element();
-    vm.runInNewContext(source, { document, window, Event: class { constructor(type) { this.type = type; } } });
+    vm.runInNewContext(source, { document, window, AbortController, MutationObserver: class { observe() {} disconnect() {} }, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } }, Event: class { constructor(type) { this.type = type; } } });
     const panel = control.children[1];
     const options = panel.children[0].children;
     const [cancel, apply] = panel.children[1].children;
-    return { form, select, panel, options, cancel, apply, trigger: control.children[0] };
+    return { document, window, control, form, select, panel, options, cancel, apply, trigger: control.children[0] };
 }
+
+test('Select initialization is idempotent and disposal removes document listeners', () => {
+    const { document, window, control, select } = filterHarness();
+    const listenerCount = document.listeners.get('click').length;
+    window.JularrSelect.init();
+    assert.equal(control.children.length, 2);
+    assert.equal(document.listeners.get('click').length, listenerCount);
+    window.JularrSelect.dispose(document);
+    assert.equal(document.listeners.get('click').length, listenerCount - 1);
+    assert.equal(select.getAttribute('aria-hidden'), undefined);
+    assert.equal(control.dataset.uiSelectEnhanced, undefined);
+});
+
+test('Enhanced selects preserve validation and help semantics on the visible trigger', () => {
+    const { trigger } = filterHarness();
+    assert.equal(trigger.getAttribute('aria-describedby'), 'filter-help');
+    assert.equal(trigger.getAttribute('aria-invalid'), 'true');
+    assert.equal(trigger.getAttribute('aria-required'), 'true');
+});
 
 test('Multiple filters keep the popup open until Apply and submit all selected values', () => {
     const { form, select, panel, options, apply, trigger } = filterHarness();
@@ -138,7 +167,7 @@ test('Multiple filters keep the popup open until Apply and submit all selected v
     assert.equal(panel.open, true);
     assert.equal(form.submissions, 0);
     assert.deepEqual(select.selectedOptions.map(option => option.value), ['movie', 'tv']);
-    assert.equal(options[1].children[0].className, 'admreq-dropdown-checkbox');
+    assert.equal(options[1].children[0].className, 'ui-select-checkbox');
     assert.equal(options[1].getAttribute('aria-selected'), 'true');
     apply.dispatchEvent({ type: 'click' });
     assert.equal(form.submissions, 1);

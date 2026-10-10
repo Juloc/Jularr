@@ -61,8 +61,8 @@
     };
     const allowDiscard = () => !dirty || window.confirm(editor.dataset.unsaved);
     const showEditor = () => {
-        workspace.classList.add('rre-mobile-editor');
-        (form.querySelector('[data-rre-name]') || editor.querySelector('[data-admreq-select-trigger]') || assignment)?.focus();
+        workspace.classList.add('ui-split-editing');
+        (form.querySelector('[data-rre-name]') || editor.querySelector('[data-ui-select-trigger]') || assignment)?.focus();
     };
     const selectProfile = profile => {
         base = profile;
@@ -145,7 +145,7 @@
         if (!allowDiscard()) return;
         reset();
         if (workspace.querySelector('.rre-list')) {
-            workspace.classList.remove('rre-mobile-editor');
+            workspace.classList.remove('ui-split-editing');
             (workspace.querySelector('[data-rre-new]') || workspace.querySelector('[data-rre-navigation]'))?.focus();
         }
         else {

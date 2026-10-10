@@ -15,4 +15,4 @@
         _ => "stack"
     };
 }
-<span class="admreq-badge admreq-type admreq-type-@name" title="@ui["admin.requests.kind." + name]"><partial name="_AdminIcon" model="icon" />@ui["admin.requests.kind." + name]</span>
+<partial name="_UiStatusTag" model='new UiStatusTagModel(ui["admin.requests.kind." + name], Icon: icon, CssClass: "admreq-type admreq-type-" + name)' />

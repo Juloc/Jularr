@@ -34,6 +34,31 @@ namespace Jularr.Tests;
 public sealed class RequestPagesRenderTests
 {
     [TestMethod]
+    public async Task SharedControls_PlaygroundIsDevelopmentOnlyAndExistingPagesReuseAssets()
+    {
+        await using var production = await RequestPagesHost.CreateAsync("Production");
+        Assert.AreEqual(HttpStatusCode.NotFound, await production.GetStatusAsync("/Admin/UiPlayground", true));
+        await using var development = await RequestPagesHost.CreateAsync("Development");
+        Assert.AreEqual(HttpStatusCode.Forbidden, await development.GetStatusAsync("/Admin/UiPlayground", false));
+        var playground = await development.GetHtmlAsync("/Admin/UiPlayground", true);
+        StringAssert.Contains(playground, "data-ui-playground-table");
+        StringAssert.Contains(playground, "class=\"ui-text-cell\"");
+        StringAssert.Contains(playground, "class=\"admin-tag admin-tag-soft admin-tag-success");
+        StringAssert.Contains(playground, "ui-table.js");
+        foreach (var path in new[] { "/Admin/Requests", "/Admin/Requests/Settings", "/Admin/Requests/Users" })
+        {
+            var html = await development.GetHtmlAsync(path, true);
+            StringAssert.Contains(html, "ui-select.js");
+            StringAssert.Contains(html, "ui-popover.js");
+            StringAssert.Contains(html, "class=\"ui-tabs");
+            if (path != "/Admin/Requests")
+            {
+                Assert.IsFalse(html.Contains("/js/admin-requests.js", StringComparison.Ordinal), "Rule and user editors must not load queue interactions.");
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task RuleEditor_BothUserRoutesShareRenderingValidationAndSparsePersistence()
     {
         await using var host = await RequestPagesHost.CreateAsync();
@@ -49,14 +74,14 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(directory, "data-rre-editor");
         StringAssert.Contains(user, "data-rre-editor");
         StringAssert.Contains(user, "name=\"Editor.QualityProfileIds\"");
-        StringAssert.Contains(user, "rre-tags rre-quality-options");
-        StringAssert.Contains(user, "admreq-badge admreq-type rre-quality-chip");
+        StringAssert.Contains(user, "ui-chip-group rre-tags rre-quality-options");
+        StringAssert.Contains(user, "admin-tag admin-tag-soft admreq-type rre-quality-chip");
         StringAssert.Contains(user, "Configured approval rule");
         StringAssert.Contains(user, "Owner requests and media with Instant capability skip manual approval");
         StringAssert.Contains(user, "aria-describedby=\"rre-approval-help\"");
         StringAssert.Contains(user, "href=\"/Admin/User/rule-user\"");
         Assert.IsFalse(user.Contains("admin.requests.section.requests", StringComparison.Ordinal), "Deep-link labels and breadcrumbs must use existing localized navigation keys.");
-        var sharedFields = "<fieldset class=\"rre-fields\"[\\s\\S]*?</fieldset>\\s*</fieldset>";
+        var sharedFields = "<fieldset class=\"ui-fields rre-fields\"[\\s\\S]*?</fieldset>\\s*</fieldset>";
         Assert.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(directory, sharedFields), "The shared field comparison must contain the actual editor fields.");
         Assert.AreEqual(System.Text.RegularExpressions.Regex.Match(directory, sharedFields).Value, System.Text.RegularExpressions.Regex.Match(user, sharedFields).Value);
         Assert.AreEqual(HttpStatusCode.NotFound, await host.GetStatusAsync("/Admin/Users/missing/Settings/Requests", true));
@@ -165,7 +190,7 @@ public sealed class RequestPagesRenderTests
         foreach (var path in new[] { "/Admin/Requests", "/Admin/Requests/Settings", "/Admin/Requests/Users" })
         {
             var html = await host.GetHtmlAsync(path, asOwner: true);
-            var sectionTabs = System.Text.RegularExpressions.Regex.Match(html, "<nav class=\"admin-section-links library-type-tabs admreq-section-tabs\"[^>]*>(.*?)</nav>", System.Text.RegularExpressions.RegexOptions.Singleline).Value;
+            var sectionTabs = System.Text.RegularExpressions.Regex.Match(html, "<nav class=\"ui-tabs admin-section-links admreq-section-tabs\"[^>]*>(.*?)</nav>", System.Text.RegularExpressions.RegexOptions.Singleline).Value;
             Assert.IsTrue(sectionTabs.Length > 0, path);
             StringAssert.Contains(sectionTabs, "href=\"/Admin/Requests\"");
             StringAssert.Contains(sectionTabs, "href=\"/Admin/Requests/Settings\"");
@@ -382,20 +407,20 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(all, "data-media-status=\"failed\"");
         StringAssert.Contains(all, "data-admreq-action=\"retry\"");
         StringAssert.Contains(all, "data-media-status=\"downloading\"");
-        StringAssert.Contains(all, "data-admreq-select-all");
-        StringAssert.Contains(all, "data-admreq-select");
+        StringAssert.Contains(all, "data-ui-select-all");
+        StringAssert.Contains(all, "data-ui-select-row");
         StringAssert.Contains(all, "data-admreq-bulk");
         StringAssert.Contains(all, "class=\"admreq-control-surface\"");
-        StringAssert.Contains(all, "class=\"library-type-tabs admreq-tabs\"");
+        StringAssert.Contains(all, "class=\"ui-tabs admreq-tabs\"");
         Assert.IsTrue(all.IndexOf("admreq-navigation-row", StringComparison.Ordinal) < all.IndexOf("admreq-control-surface", StringComparison.Ordinal));
         Assert.IsFalse(all.Contains("name=\"season\"", StringComparison.Ordinal));
         Assert.IsFalse(all.Contains("admreq-search-menu", StringComparison.Ordinal));
-        StringAssert.Contains(all, "data-admreq-option-select=\"type\"");
-        StringAssert.Contains(all, "data-admreq-option-select=\"lang\"");
-        Assert.IsFalse(all.Contains("data-admreq-option-select=\"status\"", StringComparison.Ordinal));
+        StringAssert.Contains(all, "data-ui-select-option=\"type\"");
+        StringAssert.Contains(all, "data-ui-select-option=\"lang\"");
+        Assert.IsFalse(all.Contains("data-ui-select-option=\"status\"", StringComparison.Ordinal));
         Assert.IsFalse(all.Contains("<select name=\"status\"", StringComparison.Ordinal));
-        StringAssert.Contains(all, "data-admreq-option-select=\"by\"");
-        StringAssert.Contains(all, "data-admreq-option-select=\"sort\"");
+        StringAssert.Contains(all, "data-ui-select-option=\"by\"");
+        StringAssert.Contains(all, "data-ui-select-option=\"sort\"");
         StringAssert.Contains(all, "admreq-language-flag");
         Assert.AreEqual(3, System.Text.RegularExpressions.Regex.Matches(all, "<select name=\"(?:type|lang|by)\" multiple").Count);
         StringAssert.Contains(all, "admreq-cell-modified");
@@ -405,15 +430,15 @@ public sealed class RequestPagesRenderTests
         StringAssert.Contains(all, "data-local-clock");
         StringAssert.Contains(all, "local-time.js");
         Assert.IsFalse(System.Text.RegularExpressions.Regex.IsMatch(all, @"\d{2}:\d{2} UTC"), "Request times are localized in the browser and never labeled as UTC.");
-        StringAssert.Contains(all, "data-admreq-custom-select");
+        StringAssert.Contains(all, "data-ui-select");
         StringAssert.Contains(all, "data-admreq-dialog");
         StringAssert.Contains(all, "admin-requests.js");
         Assert.AreEqual(
             1,
-            System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button button-primary admreq-action\" type=\"submit\"[^>]*>[\\s\\S]*?<span>Approve</span></button>").Count,
+            System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button button-primary ui-pill-button ui-action-button admreq-action\" type=\"submit\"[^>]*>[\\s\\S]*?<span>Approve</span></button>").Count,
             "Only the pending request can be approved.");
         StringAssert.Contains(all, "<button class=\"admin-menu-item\" type=\"submit\" data-admreq-command=\"Reject\">Reject</button>", "Reject remains available through the row's More actions menu.");
-        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button admreq-action\" type=\"submit\">[\\s\\S]*?<span>Reopen</span></button>").Count);
+        Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(all, "<button class=\"button ui-pill-button ui-action-button admreq-action\" type=\"submit\">[\\s\\S]*?<span>Reopen</span></button>").Count);
         StringAssert.Contains(all, "class=\"admin-menu-item\" href=\"/Admin/Wanted\"");
         Assert.IsFalse(all.Contains("/Acquisition#wanted", StringComparison.Ordinal));
 
@@ -569,7 +594,7 @@ public sealed class RequestPagesRenderTests
         public AppDbContext Db { get; }
         public AcquisitionRequestSettingsStore Settings { get; }
 
-        public static async Task<RequestPagesHost> CreateAsync()
+        public static async Task<RequestPagesHost> CreateAsync(string environment = "Testing")
         {
             var root = Path.Combine(Path.GetTempPath(), $"jularr-request-pages-{Guid.NewGuid():N}");
             var data = Directory.CreateDirectory(Path.Combine(root, "data"));
@@ -580,6 +605,7 @@ public sealed class RequestPagesRenderTests
             var host = await new HostBuilder()
                 .ConfigureWebHost(webBuilder => webBuilder
                     .UseTestServer()
+                    .UseEnvironment(environment)
                     .UseContentRoot(FindWebProjectRoot())
                     .ConfigureServices(services =>
                     {
