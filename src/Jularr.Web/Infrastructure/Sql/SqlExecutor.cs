@@ -35,8 +35,9 @@ internal static class SqlExecutor
             }
             else if (binding.Source == BindingSource.Page)
             {
-                var number = binding.Name == "PageSize" ? pageRequest!.PageSize : pageRequest!.Offset;
-                values[index] = binding.Name == "PageSize"
+                var isPageSize = string.Equals(binding.Name, "PageSize", StringComparison.OrdinalIgnoreCase);
+                var number = isPageSize ? pageRequest!.PageSize : pageRequest!.Offset;
+                values[index] = isPageSize
                     ? SqlParams.Create().Add(binding.Name, (int)number).ToArray()[0]
                     : SqlParams.Create().Add(binding.Name, number).ToArray()[0];
             }
