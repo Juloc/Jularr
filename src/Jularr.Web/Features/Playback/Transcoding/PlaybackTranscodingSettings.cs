@@ -39,12 +39,18 @@ public sealed record PlaybackTranscodingSettings(
     long FreeSpaceFloorBytes,
     PlaybackBufferPreset BufferPreset = PlaybackBufferPreset.Normal,
     int WanUploadBudgetKbps = 0,
-    PlaybackWanUploadMode WanUploadMode = PlaybackWanUploadMode.Off)
+    PlaybackWanUploadMode WanUploadMode = PlaybackWanUploadMode.Off,
+    bool PreparedRenditionsEnabled = false,
+    long PreparedCacheBudgetBytes = 10L << 30,
+    int PreparationStartHourUtc = 1,
+    int PreparationEndHourUtc = 5)
 {
     public const string DefaultHlsCachePath = "/data/playback-cache/hls";
     public const int MaxSessionsPerClass = 64;
     public const int MaxWanUploadBudgetKbps = 1_000_000;
     public const int AutomaticFallbackBudgetKbps = 8_000;
+    public const long MinPreparedCacheBudgetBytes = 1L << 20;
+    public const long MaxPreparedCacheBudgetBytes = 1024L << 30;
     public const long BytesPerGiB = 1L << 30;
     // The Admin form offers whole GiB (so at least 1); the stored rule only refuses a budget too small to hold a single segment.
     public const long MinCacheBudgetGiB = 1;
@@ -62,6 +68,11 @@ public sealed record PlaybackTranscodingSettings(
         CacheBudgetBytes: 10 * BytesPerGiB,
         FreeSpaceFloorBytes: 5 * BytesPerGiB,
         BufferPreset: PlaybackBufferPreset.Normal);
+
+    public bool InPreparationWindow(DateTimeOffset now) =>
+        PreparationStartHourUtc < PreparationEndHourUtc
+            ? now.Hour >= PreparationStartHourUtc && now.Hour < PreparationEndHourUtc
+            : now.Hour >= PreparationStartHourUtc || now.Hour < PreparationEndHourUtc;
 
     public int EffectiveWanUploadBudgetKbps => WanUploadMode switch
     {
@@ -95,7 +106,9 @@ public enum PlaybackSettingsIssueCode
     FloorRange,
     BufferPresetInvalid,
     WanUploadBudgetInvalid,
-    WanUploadModeInvalid
+    WanUploadModeInvalid,
+    PreparedCacheBudgetInvalid,
+    PreparationWindowInvalid
 }
 
 /// <summary>One rejected setting: the field name and why.</summary>
@@ -136,6 +149,19 @@ public static class PlaybackTranscodingSettingsRules
         if (settings.WanUploadBudgetKbps < 0 || settings.WanUploadBudgetKbps > PlaybackTranscodingSettings.MaxWanUploadBudgetKbps)
         {
             issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps), PlaybackSettingsIssueCode.WanUploadBudgetInvalid));
+        }
+
+        if (settings.PreparedCacheBudgetBytes < MinPreparedCacheBudgetBytes ||
+            settings.PreparedCacheBudgetBytes > MaxPreparedCacheBudgetBytes)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.PreparedCacheBudgetBytes), PlaybackSettingsIssueCode.PreparedCacheBudgetInvalid));
+        }
+
+        if (settings.PreparationStartHourUtc is < 0 or > 23 ||
+            settings.PreparationEndHourUtc is < 0 or > 23 ||
+            settings.PreparationStartHourUtc == settings.PreparationEndHourUtc)
+        {
+            issues.Add(new PlaybackSettingsIssue(nameof(PlaybackTranscodingSettings.PreparationStartHourUtc), PlaybackSettingsIssueCode.PreparationWindowInvalid));
         }
 
         if (!Enum.IsDefined(settings.WanUploadMode))
@@ -428,7 +454,11 @@ public sealed class PlaybackTranscodingSettingsStore
         string[]? RetiredCachePaths,
         PlaybackBufferPreset? BufferPreset = null,
         int? WanUploadBudgetKbps = null,
-        PlaybackWanUploadMode? WanUploadMode = null)
+        PlaybackWanUploadMode? WanUploadMode = null,
+        bool? PreparedRenditionsEnabled = null,
+        long? PreparedCacheBudgetBytes = null,
+        int? PreparationStartHourUtc = null,
+        int? PreparationEndHourUtc = null)
     {
         public static Persisted From(Stored stored) =>
             new(
@@ -443,7 +473,11 @@ public sealed class PlaybackTranscodingSettingsStore
                 stored.RetiredRoots,
                 stored.Settings.BufferPreset,
                 stored.Settings.WanUploadBudgetKbps,
-                stored.Settings.WanUploadMode);
+                stored.Settings.WanUploadMode,
+                stored.Settings.PreparedRenditionsEnabled,
+                stored.Settings.PreparedCacheBudgetBytes,
+                stored.Settings.PreparationStartHourUtc,
+                stored.Settings.PreparationEndHourUtc);
 
         public PlaybackTranscodingSettings ToSettings()
         {
@@ -459,7 +493,11 @@ public sealed class PlaybackTranscodingSettingsStore
                 FreeSpaceFloorBytes ?? defaults.FreeSpaceFloorBytes,
                 BufferPreset ?? defaults.BufferPreset,
                 WanUploadBudgetKbps ?? defaults.WanUploadBudgetKbps,
-                WanUploadMode ?? (WanUploadBudgetKbps is > 0 ? PlaybackWanUploadMode.Manual : PlaybackWanUploadMode.Off));
+                WanUploadMode ?? (WanUploadBudgetKbps is > 0 ? PlaybackWanUploadMode.Manual : PlaybackWanUploadMode.Off),
+                PreparedRenditionsEnabled ?? defaults.PreparedRenditionsEnabled,
+                PreparedCacheBudgetBytes ?? defaults.PreparedCacheBudgetBytes,
+                PreparationStartHourUtc ?? defaults.PreparationStartHourUtc,
+                PreparationEndHourUtc ?? defaults.PreparationEndHourUtc);
         }
     }
 }

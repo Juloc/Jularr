@@ -134,6 +134,33 @@ public sealed class TranscodingPageTests
     }
 
     [TestMethod]
+    public async Task OwnerCanEnableAndDisablePreparedRenditionsWithinBoundedQuietHours()
+    {
+        await using var host = await TranscodingPageHost.CreateAsync();
+        var status = await host.PostAsync(host.ValidForm(
+            ("PreparedRenditionsEnabled", "true"),
+            ("PreparedCacheBudgetGiB", "20"),
+            ("PreparationStartHourUtc", "22"),
+            ("PreparationEndHourUtc", "5")));
+        Assert.AreEqual(HttpStatusCode.Redirect, status);
+        var saved = host.Kit.Settings.Current;
+        Assert.IsTrue(saved.PreparedRenditionsEnabled);
+        Assert.AreEqual(20L * PlaybackTranscodingSettings.BytesPerGiB, saved.PreparedCacheBudgetBytes);
+        Assert.IsTrue(saved.InPreparationWindow(DateTimeOffset.Parse("2026-10-10T23:00:00Z")));
+        Assert.IsFalse(saved.InPreparationWindow(DateTimeOffset.Parse("2026-10-10T12:00:00Z")));
+
+        var refused = await host.PostForHtmlAsync(host.ValidForm(
+            ("PreparedCacheBudgetGiB", "2048")));
+        Assert.AreEqual(HttpStatusCode.OK, refused.Status);
+        Assert.IsTrue(host.Kit.Settings.Current.PreparedRenditionsEnabled);
+        StringAssert.Contains(refused.Html, "between 1 and 1024 GiB");
+
+        Assert.AreEqual(HttpStatusCode.Redirect, await host.PostAsync(host.ValidForm()));
+        Assert.IsFalse(host.Kit.Settings.Current.PreparedRenditionsEnabled,
+            "An absent checkbox turns speculative preparation off.");
+    }
+
+    [TestMethod]
     public async Task TheBufferPresetIsSavedShownAndOnlyOneOfTheOfferedPresetsIsAccepted()
     {
         await using var host = await TranscodingPageHost.CreateAsync();
@@ -294,7 +321,10 @@ public sealed class TranscodingPageTests
                 ["FreeSpaceFloorGiB"] = "5",
                 ["BufferPreset"] = "Normal",
                 ["WanUploadBudgetMbps"] = "0",
-                ["WanUploadMode"] = "Off"
+                ["WanUploadMode"] = "Off",
+                ["PreparedCacheBudgetGiB"] = "10",
+                ["PreparationStartHourUtc"] = "1",
+                ["PreparationEndHourUtc"] = "5"
             };
             foreach (var (name, value) in overrides)
             {

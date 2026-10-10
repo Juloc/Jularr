@@ -156,4 +156,36 @@
             </div>
         </div>
     </section>
+    <section class="admset-section" aria-labelledby="transcoding-preparation-title">
+        <div class="admset-head">
+            <span class="admset-tile"><partial name="_AdminIcon" model='"storage"' /></span>
+            <div>
+                <h2 id="transcoding-preparation-title">@ui["admin.transcoding.preparationTitle"]</h2>
+                <p>@ui["admin.transcoding.preparationHint"]</p>
+            </div>
+        </div>
+        <div class="admset-fields">
+            <div class="admset-field">
+                <label asp-for="PreparedRenditionsEnabled">
+                    <input asp-for="PreparedRenditionsEnabled" type="checkbox" />
+                    @ui["admin.transcoding.preparationEnabled"]
+                </label>
+            </div>
+            <div class="admset-field">
+                <label asp-for="PreparedCacheBudgetGiB">@ui["admin.transcoding.preparationBudget"]</label>
+                <input asp-for="PreparedCacheBudgetGiB" type="number" min="1" max="1024" inputmode="numeric" />
+                <span asp-validation-for="PreparedCacheBudgetGiB" class="admset-error"></span>
+            </div>
+            <div class="admset-field">
+                <label asp-for="PreparationStartHourUtc">@ui["admin.transcoding.preparationStart"]</label>
+                <input asp-for="PreparationStartHourUtc" type="number" min="0" max="23" inputmode="numeric" />
+                <span asp-validation-for="PreparationStartHourUtc" class="admset-error"></span>
+            </div>
+            <div class="admset-field">
+                <label asp-for="PreparationEndHourUtc">@ui["admin.transcoding.preparationEnd"]</label>
+                <input asp-for="PreparationEndHourUtc" type="number" min="0" max="23" inputmode="numeric" />
+                <span asp-validation-for="PreparationEndHourUtc" class="admset-error"></span>
+            </div>
+        </div>
+    </section>
 </form>

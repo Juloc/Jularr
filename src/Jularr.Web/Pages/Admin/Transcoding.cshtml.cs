@@ -59,6 +59,18 @@ public sealed class TranscodingModel(
     [BindProperty]
     public int WanUploadBudgetMbps { get; set; }
 
+    [BindProperty]
+    public bool PreparedRenditionsEnabled { get; set; }
+
+    [BindProperty]
+    public long PreparedCacheBudgetGiB { get; set; }
+
+    [BindProperty]
+    public int PreparationStartHourUtc { get; set; }
+
+    [BindProperty]
+    public int PreparationEndHourUtc { get; set; }
+
     /// <summary>Recent Jularr-container TX rate only; not ISP uplink capacity or video-only traffic.</summary>
     public double? ContainerOutboundMbps { get; private set; }
 
@@ -123,7 +135,11 @@ public sealed class TranscodingModel(
                 ToBytes(FreeSpaceFloorGiB),
                 BufferPreset,
                 uploadKbps,
-                WanUploadMode),
+                WanUploadMode,
+                PreparedRenditionsEnabled,
+                ToBytes(PreparedCacheBudgetGiB),
+                PreparationStartHourUtc,
+                PreparationEndHourUtc),
             cancellationToken);
         if (!result.Succeeded)
         {
@@ -168,6 +184,10 @@ public sealed class TranscodingModel(
         BufferPreset = settings.BufferPreset;
         WanUploadMode = settings.WanUploadMode;
         WanUploadBudgetMbps = settings.WanUploadBudgetKbps / 1000;
+        PreparedRenditionsEnabled = settings.PreparedRenditionsEnabled;
+        PreparedCacheBudgetGiB = settings.PreparedCacheBudgetBytes / PlaybackTranscodingSettings.BytesPerGiB;
+        PreparationStartHourUtc = settings.PreparationStartHourUtc;
+        PreparationEndHourUtc = settings.PreparationEndHourUtc;
     }
 
     private static string FormField(string settingsField) =>
@@ -182,6 +202,8 @@ public sealed class TranscodingModel(
             nameof(PlaybackTranscodingSettings.BufferPreset) => nameof(BufferPreset),
             nameof(PlaybackTranscodingSettings.WanUploadBudgetKbps) => nameof(WanUploadBudgetMbps),
             nameof(PlaybackTranscodingSettings.WanUploadMode) => nameof(WanUploadMode),
+            nameof(PlaybackTranscodingSettings.PreparedCacheBudgetBytes) => nameof(PreparedCacheBudgetGiB),
+            nameof(PlaybackTranscodingSettings.PreparationStartHourUtc) => nameof(PreparationStartHourUtc),
             _ => nameof(HlsCachePath)
         };
 
