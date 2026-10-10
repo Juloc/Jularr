@@ -70,10 +70,23 @@ public sealed class PlexItemAccessService(
             return false;
         }
 
+        // The user may have disconnected or an administrator may have revoked
+        // the library while the remote item request was in flight.
+        var latestGrant = await servers.GetGrantAsync(
+            machineIdentifier, cancellationToken);
+        var latestUserToken = await connections.GetBackendTokenAsync(
+            profileId, cancellationToken);
+        if (latestGrant is null ||
+            latestGrant.Server.UpdatedAtUtc != grant.Server.UpdatedAtUtc ||
+            !string.Equals(latestUserToken, userToken, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         // Plex must explicitly name the library the item currently belongs to.
         // Missing/unknown section or a conflicting identity is not sufficient.
         if (item?.LibrarySectionId is not { } sectionId ||
-            !grant.Server.LibrarySectionIds.Contains(sectionId, StringComparer.Ordinal) ||
+            !latestGrant.Server.LibrarySectionIds.Contains(sectionId, StringComparer.Ordinal) ||
             !visible.Any(section => section.Id == sectionId))
         {
             return false;
