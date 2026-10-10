@@ -98,6 +98,42 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_WORKCARD_QUERY_TESTS.sql
 
+      - name: Prepare exact canonical Continue and Operations claim SQL
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('docs/DATABASE_CUTOVER_PHASE_B_READ_QUERIES_DRAFT.sql', 'utf8');
+          const section2 = source.indexOf('-- 2. Bounded Continue list');
+          const section3 = source.indexOf('-- 3. Logic-only short transaction');
+          if (section2 < 0 || section3 <= section2) throw Error('Missing canonical queries');
+          function compile(sql, bindings) {
+            let result = sql.trim().replace(/;$/, '');
+            for (const [key,value] of Object.entries(bindings)) result = result.replaceAll(key,value);
+            if (result.includes('@')) throw Error('Unbound SQL placeholder in service/logic SQL');
+            return result;
+          }
+          const continueSql = compile(
+            source.slice(source.indexOf('SELECT',section2),section3),
+            { '@ActiveProfileId':'$1', '@PageSize':'$2', '@Offset':'$3' });
+          const claimSql = compile(
+            source.slice(source.indexOf('WITH claimed AS',section3)),
+            { '@PendingStatusTypeId':'$1', '@RunningStatusTypeId':'$2',
+              '@BatchSize':'$3', '@TrustedWorkerKey':'$4' });
+          fs.writeFileSync('/tmp/phase_b_continue_prepared.sql',
+            'PREPARE phase_b_continue(bigint,integer,integer) AS\n' + continueSql + ';\n');
+          fs.writeFileSync('/tmp/phase_b_claim_prepared.sql',
+            'PREPARE phase_b_claim(smallint,smallint,integer,text) AS\n' + claimSql + ';\n');
+          NODE
+
+      - name: Execute profile-scoped Continue and verify pagination on scratch database
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_CONTINUE_QUERY_TESTS.sql
+
+      - name: Verify independent workers SKIP LOCKED and retry eligibility
+        run: |
+          bash docs/DATABASE_CUTOVER_PHASE_B_PG_CLAIM_CONCURRENCY_TEST.sh
+
       - name: Verify multi-target Wanted acquisition integrity
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_ACQUISITION_COVERAGE_TESTS.sql
