@@ -109,7 +109,7 @@ BEGIN
     BEGIN
         INSERT INTO "LearningScopeOverrides"
           ("ProfileId","LearningMediaScopeTypeId","LearningModeTypeId")
-        VALUES (profile_id,3,255);
+        VALUES (profile_id,2,255);
         RAISE EXCEPTION 'Unknown Learning mode byte allowed';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
