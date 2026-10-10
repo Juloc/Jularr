@@ -73,6 +73,36 @@ public sealed class PlexProfileConnectionTests
     }
 
     [TestMethod]
+    public async Task StaleCallbackCannotDisconnectNewerPersonalGrant()
+    {
+        var root = NewDirectory();
+        try
+        {
+            var store = new PlexProfileConnectionStore(
+                new EphemeralDataProtectionProvider(), root);
+            await store.SaveVerifiedAsync(
+                "viewer", "100", null, "original-token");
+            await store.SaveVerifiedAsync(
+                "viewer", "200", null, "replacement-token");
+
+            Assert.IsFalse(await store.DisconnectMatchingAsync(
+                "viewer", "100", "original-token"));
+            Assert.IsFalse(await store.DisconnectMatchingAsync(
+                "viewer", "200", "incorrect-token"));
+            Assert.AreEqual("200",
+                (await store.GetStatusAsync("viewer"))?.PlexUserId);
+
+            Assert.IsTrue(await store.DisconnectMatchingAsync(
+                "viewer", "200", "replacement-token"));
+            Assert.IsNull(await store.GetStatusAsync("viewer"));
+        }
+        finally
+        {
+            Remove(root);
+        }
+    }
+
+    [TestMethod]
     public async Task LostEncryptionKeysRequireMediaReconnection()
     {
         var root = NewDirectory();
