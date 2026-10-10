@@ -194,8 +194,15 @@ public sealed class PlaybackStreamSession(
     public bool HasStartedDelivery => Volatile.Read(ref _deliveryStarted) != 0;
 
     /// <summary>Only actual stream output or authenticated progress counts toward live WAN demand.</summary>
-    public bool HasRecentDelivery(DateTimeOffset since) =>
-        HasStartedDelivery && Interlocked.Read(ref _lastDeliveryActivityTicks) >= since.UtcTicks;
+    public bool HasRecentDelivery(DateTimeOffset since)
+    {
+        var lastDeliveryTicks = Interlocked.Read(ref _lastDeliveryActivityTicks);
+        var latest = Telemetry.Latest;
+        return HasStartedDelivery &&
+               lastDeliveryTicks >= since.UtcTicks &&
+               (latest is not { State: PlaybackClientState.Paused } ||
+                lastDeliveryTicks > latest.ReportedAtUtc.UtcTicks);
+    }
 
     public void MarkDeliveryStarted()
     {
@@ -339,8 +346,7 @@ public sealed class PlaybackStreamSessionStore(TimeProvider time, PlaybackTransc
             session.Id != replacingSessionId &&
             session.Replacing is null &&
             session.HasRecentDelivery(since) &&
-            session.Plan.Quality.Network is PlaybackNetworkClass.Remote or PlaybackNetworkClass.Metered or PlaybackNetworkClass.Unknown &&
-            session.Telemetry.Latest?.State != PlaybackClientState.Paused);
+            session.Plan.Quality.Network is PlaybackNetworkClass.Remote or PlaybackNetworkClass.Metered or PlaybackNetworkClass.Unknown);
     }
 
     public PlaybackStreamSession Create(

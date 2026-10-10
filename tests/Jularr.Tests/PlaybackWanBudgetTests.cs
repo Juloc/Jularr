@@ -143,5 +143,9 @@ public sealed class PlaybackWanBudgetTests
         Assert.IsTrue(sessions.ReportTelemetry(session.Id, "viewer", new PlaybackTelemetry(
             2, clock.GetUtcNow(), PlaybackClientState.Paused, 5, null, 0, 0, 1)));
         Assert.AreEqual(0, sessions.ActiveExternalDeliveries());
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        session.MarkDeliveryStarted(); // resumed segment is stronger evidence than stale pause telemetry
+        Assert.AreEqual(1, sessions.ActiveExternalDeliveries());
     }
 }
