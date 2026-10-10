@@ -44,14 +44,57 @@ internal static class SqlExecutor
             else
             {
                 var source = binding.Source == BindingSource.Parameters ? parameters : data!;
-                var builder = SqlParams.From(source);
-                values[index] = binding.DatabaseType.HasValue
-                    ? builder.Add(binding.Name, binding.DatabaseType.Value).ToArray()[0]
-                    : builder.Add(binding.Name).ToArray()[0];
+                var property = source.GetType().GetProperty(binding.Name, BindingFlags.Public | BindingFlags.Instance);
+                if (property is null)
+                {
+                    throw new InvalidOperationException($"SQL parameter '{binding.Name}' is no longer a readable DTO property.");
+                }
+
+                // The existing SqlParams implementation supports primitive values and bytea,
+                // but not PostgreSQL arrays. Bind only the known typed, one-dimensional arrays.
+                // All other values reuse the central SqlParams type validation.
+                if (property.PropertyType.IsArray && property.PropertyType != typeof(byte[]))
+                {
+                    var arrayType = GetArrayDatabaseType(property.PropertyType);
+                    if (binding.DatabaseType is { } castType && castType != arrayType)
+                    {
+                        throw new ArgumentException($"The SQL array cast for '{binding.Name}' does not match its CLR element type.");
+                    }
+
+                    values[index] = new NpgsqlParameter(binding.Name, arrayType)
+                    {
+                        Value = property.GetValue(source) ?? DBNull.Value
+                    };
+                }
+                else
+                {
+                    var builder = SqlParams.From(source);
+                    values[index] = binding.DatabaseType.HasValue
+                        ? builder.Add(binding.Name, binding.DatabaseType.Value).ToArray()[0]
+                        : builder.Add(binding.Name).ToArray()[0];
+                }
             }
         }
 
         return values;
+    }
+
+    private static NpgsqlDbType GetArrayDatabaseType(Type type)
+    {
+        if (type.GetArrayRank() != 1)
+        {
+            throw new NotSupportedException("Only one-dimensional PostgreSQL arrays are supported.");
+        }
+
+        var element = type.GetElementType();
+        var dbElement = element == typeof(long) ? NpgsqlDbType.Bigint
+            : element == typeof(int) ? NpgsqlDbType.Integer
+            : element == typeof(string) ? NpgsqlDbType.Text
+            : element == typeof(bool) ? NpgsqlDbType.Boolean
+            : element == typeof(Guid) ? NpgsqlDbType.Uuid
+            : throw new NotSupportedException($"No PostgreSQL array mapping exists for {element?.Name}.");
+
+        return NpgsqlDbType.Array | dbElement;
     }
 
     private static Binding[] CompileBindings(string sql, Type parametersType, Type? dataType)
