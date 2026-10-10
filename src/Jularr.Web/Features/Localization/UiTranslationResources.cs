@@ -4,6 +4,10 @@ public static class UiTranslationResources
 {
     public static IReadOnlyList<UiMessageDefinition> All { get; } =
     [
+        M("uiPlayground.reset", "Reset", "UI playground", "Button", "Reset local developer-only form fixtures; no saved data changes.", "short action", 20),
+        M("uiPlayground.busy", "Busy", "UI playground", "Button", "Disabled developer-only button demonstrating a busy state.", "short status", 20),
+        M("uiPlayground.unavailableAction", "Unavailable action", "UI playground", "Button", "Disabled developer-only menu action fixture.", "short action", 30),
+        M("uiPlayground.previewEditor", "Preview editor", "UI playground", "Button", "Open the local developer-only renderer preview on narrow layouts.", "short action", 30),
         M("nav.home", "Home", "Shell", "Navigation", "Primary navigation entry that opens the Jularr home dashboard.", "short navigation label", 18),
         M("nav.discover", "Discover", "Shell", "Navigation", "Primary navigation entry for the media-manager landing page.", "short navigation label", 18),
         M("nav.library", "Library", "Shell", "Navigation", "Primary navigation entry for the library: anime, manga, light novels and books.", "short navigation label", 18),
