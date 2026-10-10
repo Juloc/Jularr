@@ -23,8 +23,11 @@ Modulpräferenzen, detaillierte WebAuthn-/Session-Policies, getypte Medienfacts,
 AI-/Learning-Scopes, Acquisition-/Provider-Policies. Eine identische Person und
 ein Musik-Act dürfen nicht versehentlich doppelt als dieselbe Identität behandelt
 werden: `People` sind persönliche Credits, `MusicArtists` sind musikalische
-Acts einschließlich Gruppen. Ob ein expliziter Cross-Reference-Link benötigt wird,
-entscheidet die tatsächlich verwendete Credits-/Metadata-Funktion.
+Acts einschließlich Gruppen. Ein optionaler `MusicArtists.PersonId`-FK verknüpft
+Solo-Acts mit der bestehenden Person, ohne Bands als Personen zu erzwingen.
+Aus den aktuell vorhandenen `WorkMetadataFacts` wurden zusätzlich
+CommunityRating, RatingCount, Certification, Studios und ProductionCountries
+als getypte Fakten übernommen; weitere Felder bleiben fachlich zu validieren.
 
 Ältere Zählstände der Abschnitte 01–10 in diesem laufenden Dokument sind
 historische Zwischenstände; der aktuelle Tabellenstand wird aus dem
