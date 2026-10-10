@@ -6,6 +6,13 @@
 -- NO database reset or production execution.
 BEGIN;
 
+ALTER TABLE "Providers"
+    ADD COLUMN "IsAccountLoginEnabled" boolean NOT NULL DEFAULT false,
+    ADD COLUMN "IsAccountLinkEnabled" boolean NOT NULL DEFAULT false,
+    ADD COLUMN "IsMediaConnectionEnabled" boolean NOT NULL DEFAULT false,
+    ADD COLUMN "IsAccountAutoProvisionEnabled" boolean NOT NULL DEFAULT false;
+
+
 -- (Id, ProfileId) is a candidate key for a durable, profile-scoped FK.
 ALTER TABLE "MediaProgress" ADD CONSTRAINT "UX_MediaProgress_Id_ProfileId" UNIQUE ("Id","ProfileId");
 CREATE TABLE "MediaProgressCheckpointEvents" (
