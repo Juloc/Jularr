@@ -91,7 +91,7 @@ public sealed class ServiceFoundationTests
 
         protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.read");
 
-        protected override ResourceTarget GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
+        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
 
         protected override async Task<IServiceOutput> ExecuteCoreAsync(AccountParameters parameters, NoData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
         {
@@ -110,7 +110,7 @@ public sealed class ServiceFoundationTests
 
         protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.update");
 
-        protected override ResourceTarget GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
+        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
 
         protected override async Task<IServiceOutput> ExecuteCoreAsync(AccountParameters parameters, AccountData data, Type resultType, ServiceContext context, CancellationToken cancellationToken)
         {
