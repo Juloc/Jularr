@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for id in $(seq -w 1 14); do
+          for id in $(seq -w 1 15); do
             files=(docs/DATABASE_CUTOVER_PHASE_B_${id}_*_DRAFT.sql)
             if [ "${#files[@]}" -ne 1 ]; then
               printf 'Expected one DDL draft for phase %s; found %s\n' "$id" "${#files[@]}" >&2
@@ -157,6 +157,10 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_PUBLIC_IDS_TESTS.sql
 
+      - name: Verify one AI provider and profile-owned settings/usage lifecycle
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_AI_TESTS.sql
+
       - name: Check the target table count and schema isolation
         shell: bash
         run: |
@@ -164,7 +168,7 @@ jobs:
           count="$(psql -X -A -t -v ON_ERROR_STOP=1 -c \
             "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public' AND c.relname NOT LIKE 'pg_%'")"
           echo "Target draft tables: $count"
-          if [ "$count" -ne 173 ]; then
-            echo "Expected 173 proposed Phase B tables; unexpected DDL drift" >&2
+          if [ "$count" -ne 179 ]; then
+            echo "Expected 179 proposed Phase B tables; unexpected DDL drift" >&2
             exit 1
           fi
