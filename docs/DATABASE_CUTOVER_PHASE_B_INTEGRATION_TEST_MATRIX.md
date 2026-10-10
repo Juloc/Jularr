@@ -1,42 +1,34 @@
-# Phase B/C/D – PostgreSQL-Invarianten und Funktionsabnahmetests
+# Phase B — PostgreSQL-Abnahme ohne Learning
 
-**Status: Teilweise mit isoliertem PostgreSQL 18 ausgeführt.** Die zehn DDL-Dateien aus [PR #946](https://github.com/Juloc/Jularr/pull/946) sind nicht die produktive Baseline. Diese Tests dürfen **nur auf einer eigens isolierten, wegwerfbaren PostgreSQL-Datenbank** mit festgehaltenem Schema-/C#-Stand laufen. Kein Eingriff in `dev` oder lokale User-/NAS-Daten. Die strukturellen [pg_catalog-Assertions](DATABASE_CUTOVER_PHASE_B_PG_ASSERTIONS_DRAFT.sql) prüfen die Anwesenheit einiger Constraints; sie sind **nicht** gleichbedeutend mit diesen Laufzeit-/Negativtests.
+Nur isolierte, frische PostgreSQL-18-Testdatenbanken. Keine dev-/Produktiv-/NAS-
+Daten, keine stille Bootstrap-Reparatur durch IF NOT EXISTS oder Fallback-DDL.
+Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
+[Entscheidungen](DATABASE_CUTOVER_PHASE_B_DECISIONS.md).
 
-| Nr. | Gezielter Test | Erwartete Garantie / Besitzer |
-| --- | --- | --- |
-| T01 | Frisch DB, DDL 01→10 in Reihenfolge, zweite frische DB identisch; PostgreSQL `pg_catalog`, Id/PK/UK/FK/Seed überprüfen | Alle B-DDL-Dateien und Enum Seeds reproduzierbar; Phase B/C |
-| T02 | Ein `Profile` ohne `AccountProfiles`-Owner-Membership committen; anschließend Profile+Membership zusammen in EINER Tx | Ohne Owner-Link Commit-Fehler; zusammen erfolgreich (deferrable FK); B + Logic |
-| T03 | `AccountSessions(AccountId,ActiveProfileId)` auf Profil einer fremden AccountMembership setzen; Profil-Transfer unter konkurrierender Session-Aktivität | Composite FK/Service-Recheck verhindert unzulässige Profilnutzung; B + D |
-| T04 | `MediaAssets(WorkVersionId,WorkId)` mit fremder WorkId schreiben | Composite FK verhindert Cross-Work-Asset; B |
-| T05 | `StoredFiles(MediaAssetId,WorkVersionId)` mit fremder WorkVersionId schreiben | Composite FK verhindert fremdes File↔Version; B |
-| T06 | `GameReleaseStoredFiles` auf ein File einer anderen WorkVersion setzen; gültige Multi-Disc-Files eintragen | Fremdes File abgelehnt, gültige Reihenfolge erhalten; B |
-| T07 | Ein GameRelease auf WorkVersion eines `movie` Work setzen; Game-WorkId mit falscher Version kombinieren | **Auf provisorischem Typwert 7 in isoliertem PG18-CI bestätigt**; B01-Enum-Seed-Entscheidung vor finaler DDL weiterhin OFFEN |
-| T08 | PlaybackSession mit `StoredFileId` einer anderen MediaAssetId, oder MediaAssetId eines anderen WorkId; PlaybackHistory Asset/Work mismatched | Fremdfile/-asset abgelehnt, richtige Workzuordnung; B |
-| T09 | `MediaProgress` Time-Typ ohne `TimeProgressPositions` committen; mit ReadingPosition statt TimePosition; mehrere Positiontypen | Commit fehlgeschlagen; genau passender Detailtyp pro Progress, keine versteckte Trigger-Businesslogik; B |
-| T10 | Progress mit Episode/Chapter/Edition eines anderen WorkId, konkurrierende Revision, doppeltes Offline-`ClientEventId` | Cross-Work FK, UNIQUE+Revision-Logik, idempotente Replay-Ablehnung; FK B, Logic D/E |
-| T11 | Zwei `MediaProgress` für denselben Profile/Work/NULL-exact Target | `UNIQUE NULLS NOT DISTINCT` verhindert Duplikate; B |
-| T12 | Ungültige ImageAssignments: kein Ziel, mehrere Ziele, falscher ImageType/TargetKind; manuelles Override mit Fallback | CHECK/FK verhindern ungültige Targets, Sort-/Locale-Regeln in Read-Service D/E |
-| T13 | `MediaSegments` ungültige End/Start, wiederholte/überlappende Intro/Recap/Credits; Detection-Run `MatchCount=0` | Zeit-Checks greifen, legitime Überlappung und NoMatch bleiben möglich; B und D/E |
-| T14 | `LearnerCourse` für Profil A, LearningActivitySession mit Profil B; LearningCardReview für fremdes Profil | Composite FKs verhindern fremde Lernzustände; B |
-| T15 | Curriculum Exercise auf Objective einer **anderen** Lesson; LearnerCourse Attempts/Progress zu fremdem Blueprint | Cross-Lesson-FK verhindert ersteres; Part 10 fügt Composite-FKs für gepinnten Blueprint hinzu; echte Negativ-/Race-/Publish-Tests bleiben **B05 Pflicht** |
-| T16 | Doppelte LearningActivitySession(`ProfileId,ClientSessionId`), gleiches LearningActivityEvent(`ProfileId,SourceEventId,Kind`) | Eindeutigkeitsverletzung, keine doppelte XP-Vergabe; B |
-| T17 | Client-Monotonic-ActiveMilliseconds gleich oder niedriger; idle/background; excessive elapsed; Learning-Gamification Off | Kein doppelt gezählter Sekundenwert, kein XP Off, echte Lern-Interaktionszeit; **Logic D/E** |
-| T18 | DailyGoal einmal pro Profil+LocalDate erzeugen, danach Präferenzen ändern, Tag wechseln, deaktivieren/re-aktivieren | Snapshot bleibt stabil, Streak ist abgeleitet, keine retroaktive XP-Vergabe; **Logic D/E** |
-| T19 | Achievement zweimal unlocken, Kurszustand bei Achievement-Auswertung-Fehler fortsetzen | UNIQUE unlock; Fehler isoliert, keine doppelte Achievement-Progress-Wahrheit; B und D/E |
-| T20 | `AcquisitionRequestTargets`, `WantedItems`, MonitoringDecision mit fremder WorkEpisodeId/WorkId, Duplicate/Inherit | FK/UNIQUE korrekt; Wanted schreibt nur Reconciler, keine zweite Queue; B/D |
-| T21 | Operation Queue Claim `SKIP LOCKED` mit zwei Workern, abgestürzter Lease, Force vs Direct, Provider/NAS-Timeout | Keine Doppelvergabe, Lease-/Retry-Verhalten und kurze gemeinsame DB-Transaktion; B/D/E |
-| T22 | Plex/Jellyfin LibraryGrant/ProfileConsent, falscher AccountOwner, externe Credentials/Provider offline | Kein fremder Providerzugriff oder Secret im DB-Log, keine ungewollte Watchlist/Progress-Importmutation; B/D/E |
-| T23 | User/Admin WorkCard mit >10 Episoden/Tracks, Locale-Image-Fallback, 100 PageSize, mehrere Profile | Ein paginierter Root-SELECT, bounded LATERAL-Kinder, korrektes Profilfilter und sortierte Page, kein N+1; SQL/EXPLAIN B+D |
-| T24 | Notification Events an Profile/Admin, Preferences für nicht vorhandenen Sink, Zustellungsfehler, Retry | Sink-Verfügbarkeit an Runtime gebunden; kein fiktiver Push/Email-Erfolg, gebrochener Sink stoppt nicht Medienmutation; B/D/E |
+| Prüfung | Garantie / Abgrenzung |
+| --- | --- |
+| Frischer Bootstrap aller neun DDL-Dateien | Vollständiger aktueller Target-Satz, nicht alte Migrationen |
+| Katalogassertions | FKs/CHECKs/DEFERRABLE/NULLS NOT DISTINCT; ausdrücklich keine Learning-Tabellen oder Profil-Learning-Spalte |
+| Defined Seeds / Type Catalogs | 28 Byte-/smallint-Kataloge, 145 exakt definierte Codes, unbekannte FK-Werte und Bereichs-/Blank-Key-Ablehnung |
+| Account/Profile/Groups | Owner-Membership, fremde AccountSession-Profile, neutrale Gruppen, eindeutige Namen, RESTRICT und Owner-Paging |
+| Assets/Files/Game/Playback | Identische Work-/Version-/Asset-/File-Zuordnung; Game-only und Multidisc-FKs |
+| Progress/Reader | Genau ein Positionstyp, Reader-/Edition-/Work-Zuordnung, nullable Dimensionspaare, Revision/CAS und Offline-Replay |
+| Images/Segments/Detection | Genau ein typisiertes Bildziel, valide Zeitspannen, legitime Überlappung, No-Match und wiederholte Detection-Runs |
+| Wanted/Acquisition | Exact-Target-Unique, Cross-Work-Ablehnung, Pack-Coverage und Download-Bindings |
+| Events/Notifications | Aktuelle Profile-/Admin-Audience, feste Category-Policy, Scope-Isolation und Delivery-Versuche |
+| Watchlist/Continue/Groups Reads | Statische typisierte PREPAREs aus kanonischen Queries, Autorisierung vor Root-Paging, deterministische Seiten |
+| Worker Claims | Zwei reale PostgreSQL-Sessions, SKIP LOCKED, Retry-Fälligkeit und keine Doppelvergabe |
+| Öffentliche IDs | Separate UUID-Adresse, interne bigint-FKs; PublicId gewährt keine Berechtigung |
 
-**Sicherheitsregel:** Bei negativer PostgreSQL-Ausführung die erwartete Fehlermeldung nach Klasse `23503` (FK), `23505` (UNIQUE) oder `23514` (CHECK) gezielt prüfen. `ROLLBACK TO SAVEPOINT` innerhalb einer temporären Testtransaktion benutzen. **Nie** eine fehlgeschlagene Datenbankschema-Bootstrap-Runde durch `CREATE TABLE IF NOT EXISTS` oder andere stille DDL-Fallbacks „reparieren“.
+Negative Fälle prüfen erwartete SQLSTATE-/Constraint-Bedeutung; Fixtures rollen
+zurück. Strukturelle Assertions allein beweisen keine Service-Autorisierung oder
+Produktregeln. Aktuelle CI muss den geänderten PR-Head ausführen.
 
-**Noch offen:** B01 vollständiges `enum : byte`-Seed-Manifest; T07 finale Game-MediaType-Byte-Seed-Abnahme (provisorische FK-Garantie bereits getestet); T15 Pinned-Blueprint-Negativtests/Source-Konsistenz; Learning-ActiveTime/Session-/Locale-/TimeZone-Contract; NotificationDelivery-/Outbox-Schema vs sink runtime; Provider Auth- und Acquisition-Rules. Diese bleiben [explizite Phase-B-Entscheidungen](DATABASE_CUTOVER_PHASE_B_DECISIONS.md), nicht als bestanden markieren. Erst die B/C/D-Evidence mit echtem PG-/EF-/Consumer-Code erlaubt eine spätere Gate-Freigabe.
+Learning-/Curriculum-/FSRS-/Gamification-Tests sind aus diesem Gate entfernt.
+Wiedereinführung gehört zum [späteren Plan](DATABASE_CUTOVER_DEFERRED_LEARNING.md),
+nicht zu reservierten Testfixtures der Baseline.
 
-**Automatisierte Teilprüfung:** [DDL-/Katalog-CI](https://github.com/Juloc/Jularr/actions/runs/38073509274) hat die isolierte PostgreSQL-18-Neuinstallation bestanden. [Gezielte Negativtest-SQL](DATABASE_CUTOVER_PHASE_B_PG_NEGATIVE_TESTS.sql) wird in derselben Scratch-DB-CI geprüft; die übrigen End-to-End-/Service-/Race-Tests sind ausdrücklich noch nicht abgeschlossen.
-
-**Verifiziert (CI, nicht alle 24 Tests):** [Erfolgreicher isolierter PostgreSQL-18-Run](https://github.com/Juloc/Jularr/actions/runs/38073814369) beinhaltet acht fokussierte SQL-Szenarien zu **T03** (AccountSession fremdes Profil), **T09** (Progress-Subtype, teilweise), **T12** (Images, teilweise) und **T15** (Cross-Blueprint Attempts, CourseProgress, SharedCourseContent, ActivitySessions). Die übrigen Aspekte derselben Tests und alle nicht genannten T-Nummern stehen weiterhin aus.
-
-**Weitere real ausgeführte Integritätsfälle (10.10.2026):** [GitHub-Actions-Run #38074610636](https://github.com/Juloc/Jularr/actions/runs/38074610636) erfolgreich. Die temporäre PostgreSQL-18-Datenbank durchlief DDL 01–10, Katalogprüfungen und elf zusätzliche gezielte Ablehnungsszenarien: **T02** Profile-Owner-Membership (DEFERRABLE), **T04** MediaAsset-/WorkVersion-Cross-Work, **T05** StoredFile-/WorkVersion-Mismatch, **T06** GameRelease fremdes StoredFile, **T08** PlaybackSessions fremde Work-/Asset- und File-/Asset-Kombinationen, **T10** Progress-Episode anderer Work, **T11** doppelter Root-Progress mit NULLS NOT DISTINCT, **T13** umgekehrte Segment-Zeitspanne, **T20** Wanted fremde Episode und doppelter Root. Positivkontrollen: korrekt zugewiesene WorkVersions, Game-Datei, überlappende Segmente und erfolgreicher Detection-NoMatch mit `MatchCount=0`. Alle Fixtures wurden zurückgerollt. **T07** GameRelease nur für MediaType=game ist ausdrücklich NICHT erzwungen/geprüft; nicht stillschweigend abhaken. Mit diesem Run sind die anderen Teilszenarien aus T02/T04/T05/T06/T08/T10/T11/T13/T20 **teilweise PostgreSQL-seitig bestätigt**, aber nicht ihre späteren Service-/Logic-/Client-Aspekte.
-
-**T07-PostgreSQL-Prüfung:** [Run #38074769345](https://github.com/Juloc/Jularr/actions/runs/38074769345) testet zusätzlich zu den vorigen Fällen eine gültige GameRelease-Einfügung und zwei erwartete FK-Ablehnungen (Film als GameRelease, falsches WorkVersion/WorkId-Paar). **GameMediaTypeId=7 bleibt provisorisch**, B01 nicht als freigegeben markieren. Ein späterer Seed-Wechsel muss DDL, C#-Enum und Testfixture atomar aktualisieren.
+Noch offen sind die vollständigen in-scope Fachverträge, weiteren statischen
+Auth-/Search-/Reader-/Playable-/Arr-/Jobs-/Admin-Queries und repräsentativen
+Leistungs-/Isolationstests. EF gehört in C, Runtime/Consumer in D/E und
+vollständige Release-/E2E-Abnahme in F. Kein vorzeitiges Gate-B-GO.

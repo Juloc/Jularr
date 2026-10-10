@@ -54,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for id in $(seq -w 1 14); do
+          for id in 01 02 03 04 06 07 11 12 14; do
             files=(docs/DATABASE_CUTOVER_PHASE_B_${id}_*_DRAFT.sql)
             if [ "${#files[@]}" -ne 1 ]; then
               printf 'Expected one DDL draft for phase %s; found %s\n' "$id" "${#files[@]}" >&2
@@ -117,14 +117,6 @@ jobs:
         run: |
           bash docs/DATABASE_CUTOVER_PHASE_B_PG_CLAIM_CONCURRENCY_TEST.sh
 
-      - name: Verify Learning profile/media/work/content scope invariants
-        run: |
-          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_LEARNING_SCOPE_TESTS.sql
-
-      - name: Verify personal Learning Context integrity and paginated authorization
-        run: |
-          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_LEARNING_CONTEXT_TESTS.sql
-
       - name: Verify distinct public resource identity and internal FKs
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_PUBLIC_IDS_TESTS.sql
@@ -136,7 +128,7 @@ jobs:
           count="$(psql -X -A -t -v ON_ERROR_STOP=1 -c \
             "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public' AND c.relname NOT LIKE 'pg_%'")"
           echo "Target draft tables: $count"
-          if [ "$count" -ne 175 ]; then
-            echo "Expected 175 proposed Phase B tables; unexpected DDL drift" >&2
+          if [ "$count" -ne 130 ]; then
+            echo "Expected 130 proposed Phase B tables; unexpected DDL drift" >&2
             exit 1
           fi

@@ -67,22 +67,6 @@ ALTER TABLE "ReaderHighlights"
     ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
     ADD CONSTRAINT "UX_ReaderHighlights_PublicId" UNIQUE ("PublicId");
 
-ALTER TABLE "LearningCourses"
-    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
-    ADD CONSTRAINT "UX_LearningCourses_PublicId" UNIQUE ("PublicId");
-
-ALTER TABLE "LearningUnits"
-    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
-    ADD CONSTRAINT "UX_LearningUnits_PublicId" UNIQUE ("PublicId");
-
-ALTER TABLE "LearningContexts"
-    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
-    ADD CONSTRAINT "UX_LearningContexts_PublicId" UNIQUE ("PublicId");
-
-ALTER TABLE "LearningCards"
-    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
-    ADD CONSTRAINT "UX_LearningCards_PublicId" UNIQUE ("PublicId");
-
 ALTER TABLE "Notifications"
     ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
     ADD CONSTRAINT "UX_Notifications_PublicId" UNIQUE ("PublicId");

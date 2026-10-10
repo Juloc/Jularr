@@ -1,4 +1,10 @@
-# Phase B – geprüfte bestehende Enumwerte (kein finales Target-Seed-GO)
+# Historischer Source-Enum-Abgleich vor der Scope-Änderung
+
+Dieser alte Quellenstand ist keine aktuelle Gate-B- oder Seed-Entscheidung.
+Der Cutover ist jetzt ausdrücklich ohne Learning; dessen Einträge unten sind
+nur historische Belege. Maßgeblich sind die aktuellen 28 Byte-Verträge,
+145 Seeds und das bereinigte ENUM_SEED_MANIFEST. Frühere offene Target-Status
+in diesem historischen Abgleich werden nicht als aktuelle Blocker fortgeführt.
 
 **Ziel:** B01 konkret abarbeiten statt erfundene numerische Seedwerte als produktionsfertig auszugeben. Nachweis aus `dev`-Quelldateien vom 10.10.2026. Die meisten alten C#-Enums sind standardmäßig `int`; die neue SQL-Baseline verlangt für persistierte Ziel-Enums die später explizit vereinbarte `enum : byte` ↔ PostgreSQL-`smallint`-Bindung. **Nicht 1:1-Altwelt konservieren.**
 

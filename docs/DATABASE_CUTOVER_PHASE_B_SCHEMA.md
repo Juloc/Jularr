@@ -1,156 +1,72 @@
-# Phase B — neue PostgreSQL-Zielstruktur (erster konkreter DDL-Entwurf)
+# Phase B — Cutover-Zielschema ohne Learning
 
-**Stand: IN ARBEIT / NICHT FREIGEGEBEN (10.10.2026).** Keine produktive Datenbank, Migration oder laufende `dev`-Installation wurde verändert. Dieser Entwurf verwendet ausschließlich eine **neue, leere** PostgreSQL-Datenbank als spätere Testbasis. Weder alte IDs noch alte Spalten oder die 56 historischen Migrationen werden übernommen.
+Status: IN ARBEIT, nicht als Gate B freigegeben. Aktueller Owner-Auftrag vom
+10.10.2026: Learning entfällt aus diesem Cutover. Frühere Einschlussentscheidungen
+und Prüfstände sind durch diesen Umfang ersetzt, nicht unverändert weiterzuführen.
 
-## Aktueller Prüfstand
+Keine laufende dev-/Produktivdatenbank, EF-Migration oder Runtime-Portierung wird
+durch diesen Entwurf verändert. Der frische Greenfield-Cutover übernimmt weder
+alte IDs noch die historische Migrationskette; ein tatsächlicher Reset benötigt
+später eine eigene Freigabe.
 
-14 DDL-Abschnitte, 175 Target-Tabellen, 46 Type-Kataloge und 22 separate öffentliche
-Ressourcen-UUIDs. Interne Ressourcen-PKs/FKs und Joins bleiben bigint; Secrets
-bleiben unabhängig davon kryptografisch zufällig und gehasht/geschützt.
-Alle 46 bestehenden Type-Kataloge mit 235 Codes besitzen explizite C#-byte-
-Verträge und identische Seeds. Der Verifier lehnt nicht definierte Kataloge ab.
-Der vollständige DDL-Bootstrap sowie fünf betroffene SQL-Suites sind lokal auf
-PostgreSQL 18.6 geprüft. Diese Zahlen sind kein Gate-B-Abschluss.
+## Aktueller Umfang
 
-Account Groups ist durch aktuellen Owner-Auftrag eingeschlossen; seine neutrale
-Foundation und der paginierte Owner-Read sind geprüft. Persönliche Learning-
-Kontexte besitzen Profilzuordnung, typisierte Inhaltsreferenzen und einen
-berechtigungsgeprüften paginierten Read. Bestehende Kursoptionen sind erhalten.
-Geplante Notifications-Verträge wurden direkt mit PR #842 abgeglichen;
-Category/Audience/Severity sind jetzt durch einen Composite-FK gekoppelt.
+Neun DDL-Dateien, in dieser Reihenfolge:
 
-Learning-SkipReason ist nur bei Status Skipped erlaubt; abgeschlossene
-Learning-Sessions benötigen eine passende EndReason. Detection-Runs erzwingen
-konsistente Running-/Succeeded-/Failed-/Cancelled-Ergebnisse. Erfolgreiche
-No-Match-Runs und erneute Runs mit gleichem Fingerprint bleiben zulässig.
+1. [01 Core](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql)
+2. [02 Progress/Media](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql)
+3. [03 Media Details](DATABASE_CUTOVER_PHASE_B_03_MEDIA_DETAILS_DRAFT.sql)
+4. [04 Monitoring/Notifications](DATABASE_CUTOVER_PHASE_B_04_MONITORING_NOTIFICATIONS_DRAFT.sql)
+5. [06 Offline/Provider](DATABASE_CUTOVER_PHASE_B_06_OFFLINE_PROVIDER_DRAFT.sql)
+6. [07 Acquisition](DATABASE_CUTOVER_PHASE_B_07_ACQUISITION_DRAFT.sql)
+7. [11 Events/Delivery](DATABASE_CUTOVER_PHASE_B_11_EVENTS_DELIVERY_DRAFT.sql)
+8. [12 Acquisition Coverage](DATABASE_CUTOVER_PHASE_B_12_ACQUISITION_COVERAGE_DRAFT.sql)
+9. [14 Public IDs](DATABASE_CUTOVER_PHASE_B_14_PUBLIC_RESOURCE_IDS_DRAFT.sql)
 
-Die verbleibenden Fach- und vollständigen Query-Nachweise stehen in
-[DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md). Insbesondere Quiet-Hours-/
-Digest-/Endpoint-Persistenz, Inbox-Recurrence und weitere Auth-/Provider-/
-Work-Facts bleiben offen. Keine Runtime-Portierung, EF-Baseline oder aktive
-DB-Neuanlage wird dadurch als abgeschlossen bezeichnet. Die folgenden
-Zwischenstände dokumentieren die Entwicklung, nicht den aktuellen Gesamtumfang.
+Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
+nicht als leere oder optionale Baseline-Dateien behalten.
 
-## Früherer Korrekturabgleich zum Zielmodell (10.10.2026)
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 130
+Target-Tabellen. Die 28 bestehenden Type-Kataloge haben 145 feste Codes in
+[C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
+[Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
+Der Verifier lehnt undefinierte Kataloge ab. Keine Übernahme alter int-Enumcodes.
 
-Die 12 Entwurfsabschnitte enthalten weiterhin **168 Zieltabellen** (kein neuer kanonischer Root).
-Im korrigierten Schema sind interne Acquisition-Indexer/-Downloadclient- und
-Curriculum-/SharedCourse-/LearnerCourse-IDs **bigint** und nicht mehr UUID;
-UUID bleibt für echte Ereignis-/Client-Idempotenz- und technische Identifier.
-`Profiles.IsLearningEnabled` ist gemäß `LEARNING_V2.md` ein eigenständiges,
-standardmäßig ausgeschaltetes persönliches Modul-Gate, unabhängig vom Instanz-Gate.
-`WorkTitles` erfasst ProviderId/SourceReference/manuellen Override direkt bei der
-maßgeblichen Titelfassung. `AccountPasskeys` enthält AAGUID, Transport- und
-Credential-Backup-/User-Verification-Metadaten. Das Manifest und die isolierten
-SQL-Tests wurden entsprechend erweitert; **die neuen Änderungen gelten erst
-nach einem erfolgreichen CI-Lauf als validiert**.
+18 adressierbare Ressourcen besitzen separate öffentliche UUIDs. Interne
+Ressourcen-PKs, FKs und Joins bleiben bigint/C# long. Öffentliche Identität ist
+keine Berechtigung; Session-/Reset-/Refresh-/Capability-Secrets bleiben unabhängig
+davon kryptografisch zufällig und gehasht bzw. geschützt.
 
-Nicht stillschweigend hinzugefügt wurden die ursprünglich **optionalen**
-`AccountPermissions` und `ImageGenerationPresets`. Weiterhin offene
-Produkt-/Feldabdeckung: allgemeine Profil-/Contentrestriktionen und weitere
-Modulpräferenzen, detaillierte WebAuthn-/Session-Policies, getypte Medienfacts,
-AI-/Learning-Scopes, Acquisition-/Provider-Policies. Eine identische Person und
-ein Musik-Act dürfen nicht versehentlich doppelt als dieselbe Identität behandelt
-werden: `People` sind persönliche Credits, `MusicArtists` sind musikalische
-Acts einschließlich Gruppen. Ein optionaler `MusicArtists.PersonId`-FK verknüpft
-Solo-Acts mit der bestehenden Person, ohne Bands als Personen zu erzwingen.
-Aus den aktuell vorhandenen `WorkMetadataFacts` wurden zusätzlich
-CommunityRating, RatingCount, Certification, Studios und ProductionCountries
-als getypte Fakten übernommen; weitere Felder bleiben fachlich zu validieren.
+## Learning ist ausdrücklich zurückgestellt
 
-Ältere Zählstände der Abschnitte 01–10 in diesem laufenden Dokument sind
-historische Zwischenstände; der aktuelle Tabellenstand wird aus dem
-[Target-Manifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) bestimmt.
+Keine Learning-DDL, Learning-Seeds, Learning-Reads, Profil-Learning-Optionen oder
+Learning-Testgates. Der [grobe spätere Plan](DATABASE_CUTOVER_DEFERRED_LEARNING.md)
+ist kein aktueller Implementierungsauftrag. Bestehende Laufzeitverbindungen
+werden in D/E kohärent entfernt; keine versteckte Legacy-/Fallback-Abhängigkeit
+darf die neue Baseline voraussetzen.
 
-## Quellen und Umsetzung
+Reader/Player, Untertitel, Übersetzung, AI, Medienfortschritt und gewöhnliche
+UI-Lokalisierung bleiben eigenständige Anforderungen des aktuellen Cutovers.
+Account Groups bleibt aufgrund des ausdrücklichen Owner-Auftrags eingeschlossen.
 
-- Fachlich maßgeblich: [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md) §2, §3 und §8.
-- Ergebnis aus Phase A: 19 Fachverantwortungen in [PR #945](https://github.com/Juloc/Jularr/pull/945), alter Live-Katalog nur zur Funktionskontrolle (152 Anwendungstabellen/56 Migrationen), nicht als DDL-Schablone.
-- Backend-Grenzen: [SERVICE_DATA_LOGIC_ARCHITECTURE.md](https://github.com/Juloc/Jularr/blob/docs/service-data-logic-contract-20261010/docs/SERVICE_DATA_LOGIC_ARCHITECTURE.md), #852/#942. Auth-/Profilrechte bleiben im Service-Gate; **nur Logic schreibt**. Service-Read hat echte PostgreSQL-READ-ONLY-Transaktion.
-- Konkreter Entwurf: [01_CORE_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql), [02_PROGRESS_MEDIA_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql), [03_MEDIA_DETAILS_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_03_MEDIA_DETAILS_DRAFT.sql), [04_MONITORING_NOTIFICATIONS_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_04_MONITORING_NOTIFICATIONS_DRAFT.sql), [05_LEARNING_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_05_LEARNING_DRAFT.sql), [06_OFFLINE_PROVIDER_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_06_OFFLINE_PROVIDER_DRAFT.sql), [07_ACQUISITION_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_07_ACQUISITION_DRAFT.sql), [08_LEARNING_CARDS_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_08_LEARNING_CARDS_DRAFT.sql), [09_LEARNING_ACTIVITY_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_09_LEARNING_ACTIVITY_DRAFT.sql), [10_CURRICULUM_SCOPE_DRAFT.sql](DATABASE_CUTOVER_PHASE_B_10_CURRICULUM_SCOPE_DRAFT.sql) in dieser Reihenfolge. **Alle zehn sind DDL-ENTWÜRFE, keine freigegebene EF-Baseline.** Sie dürfen nicht auf einer bestehenden dev-Datenbank ausgeführt werden.
-- Erste **statische SQL-Queryformen** (noch kein PostgreSQL-EXPLAIN): [Watchlist WorkCard mit paginiertem Root + unabhängigen begrenzten LATERAL-Kindern; Continue; atomarer Operations-Claim](DATABASE_CUTOVER_PHASE_B_READ_QUERIES_DRAFT.sql). Read-SQL gehört in autorisierte Services, Claim-DML nur in Logic.
-- [Gezielte Testmatrix für 24 FK-/UNIQUE-/Auth-/Offline-/Learning-/Acquisition-Prüffälle](DATABASE_CUTOVER_PHASE_B_INTEGRATION_TEST_MATRIX.md) für die spätere isolierte PostgreSQL- und Service-/Logic-Abnahme; bisher nicht ausgeführt.
-- Offene B-Entscheidungen und tatsächliche Abdeckungslücken: [DATABASE_CUTOVER_PHASE_B_DECISIONS.md](DATABASE_CUTOVER_PHASE_B_DECISIONS.md).
+## Nachweise und verbleibende Gates
 
-## Was jetzt physisch entworfen ist
+Der frühere Commit 6926d0b6 hat alle damals vorhandenen Seeds, Typgrenzen und
+Detection-/Learning-Zustandsregeln lokal und in CI geprüft. Dieser Nachweis ist
+historisch und kein Nachweis für den geänderten Umfang ohne Learning.
 
-**162 neue Zieltabellen und 782 erkannte Spaltendeklarationen (einschließlich nachträglicher Discriminator-Spalten) in zehn PostgreSQL-DDL-Drafts (45 Kern + 36 Fortschritt/Artwork/Jobs + 10 Spezialidentitäten + 9 Monitoring/Notifications + 18 Curriculum + 5 Offline/Provider + 17 Acquisition + 13 Language/LearningCards + 9 Learning Activity/Gamification).** Zusammen bilden sie einen weitreichenden Target-Entwurf, nicht die gesamte bereits reviewte Zielstruktur.
+Die aktuelle Fassung ist auf einer zweiten frischen PostgreSQL-18.6-Datenbank
+ohne Learning aufgebaut: alle neun DDL-Dateien, Katalog-, Seed-, Type-Grenz-,
+Negativ- und Public-ID-Suites bestanden. Tatsächlich 130 Tabellen; die
+Katalogassertions prüfen ausdrücklich die Abwesenheit von Learning. Die
+28 C#-Byte-Verträge kompilieren ohne Warnungen/Fehler. CI am neuen PR-Head
+bleibt der zusätzliche Nachweis; keine vollständige Anwendungssuite ausgeführt.
 
-| Fachbereich | Tatsächlich in Draft-SQL modelliert | Fehlende/noch zu bestätigende Fachanteile |
-| --- | --- | --- |
-| Accounts / Profile / Auth | Accounts, AccountRoleTypes, Profiles, AccountProfiles, AccountPasswords, AccountPasskeys, AccountTotpFactors, AccountRecoveryCodes, AccountExternalLogins, AccountSessions, AccountAuthChallenges, Providers, UiLocales | Auth-Challenge-Typen, WebAuthn-Details, externe Plex-PIN-Nonce-/Link-Vorgänge, optionale AccountPermissions/Groups, effektive Profileinschränkungen |
-| Works / Titles / Metadata / Relations | Works, MediaTypes, WorkTitles, WorkExternalIdentities, WorkMetadataFacts, WorkLocalizedValues, WorkFieldProvenance, WorkFactTypes, WorkRelations/Types, Franchises/FranchiseWorks, WorkMediaClassifications/Types | Weitere tatsächlich nötige getypte Metadatenfelder und Credit-/EditionExternalIdentity-Feldfreigabe, Provider-Namespace-Normalisierung/Transaktionen |
-| Film / TV / Anime / Reader-Units / Music | WorkSeasons, WorkEpisodes, WorkVolumes, WorkChapters, WorkTracks, WorkEditions, WorkVersions | MusicArtists, MusicRecordings und deren Zuordnung sind im Spezialentwurf ergänzt; echte Artist-/Recording-Credits und Cross-Media-Units und eindeutige externe Chapter-/Season-Fakten verifizieren |
-| Media / Files / Games | MediaAssets/Types, LibraryRoots, StoredFiles, MediaTracks/Types, GamePlatforms, GameReleases, GameReleaseStoredFiles, GameReleaseFileRoleTypes, StoredFileHashes | MediaTechnicalAnalyses ist ergänzt; die File-/Version-/Work-Zugehörigkeit wird nun per zusammengesetzten FK erzwungen; Game-only per zwei Composite-FKs im DRAFT erzwungen, aber numerische MediaType(game)=7 noch nicht als neuer Byte-Seed freigegeben; Stream-Details, Launcher-/Release-Hashes bleiben zu bestätigen |
-| Personal State | MediaProgress, ProgressPositionTypes, Time/Reading/GameProgressPositions, WatchlistEntries, Collections, CollectionWorks, ProfileRatings, MediaPlaybackHistory | Offline-Event-Idempotency/Revision, Ratings-Skala und Progress-Client-Semantik |
-| Player / Images / Reader | PlaybackSessions, Images, ImageTypes, ImageTargetKindTypes, ImageTypeTargets, ImageAssignments, MediaChapters, MediaSegments/Types/SourceTypes, MediaDetectionRuns/Types/StatusTypes, ReaderContent/Pages/Bookmarks/Highlights | Companion-/Pairing-Session-Lebensdauer, Image-Generation-Presets (bedingt), Reader-Translations, effektive MediaAsset-Version-Sicherheit |
-| Background / Acquisition / Locale | Operations/Logs, WantedItems, MonitoringDecisions, AcquisitionRequests/Targets, QualityProfiles/Rules/Languages, Indexer/DownloadClient-Konfiguration, Notifications/SubscriptionChannels, UiTranslationMessages/UiTranslations | ReleaseAttempt/Import/Reliability, Zustellversuche/Outbox und noch fehlende technische Berechtigungen |
-| Language Learning / Curriculum | CurriculumBlueprints/Levels/Chapters/Lessons/Exercises/Objectives, SharedCourseInstances/ExerciseContent, LearnerCourses/Progress/Attempts sowie LearningUnits/Variants/Courses/Cards/Reviews/Contexts | FSRS-Byte-Enums, Curriculum-Unit-Join, Learning-Scope/Capability-Overrides; Blueprint-Membership wird nun mittels Composite-FKs (Part 10) abgesichert, negative Tests folgen |
-| Monitoring / Wanted / Notification Preferences | WorkMonitoringDecisions, AcquisitionRequestTargets, WantedItems, NotificationEventCategoryTypes/ChannelTypes/TimingTypes, NotificationSubscriptions, NotificationSubscriptionChannels, NotificationProfileChannels | Monitoring-Vererbung und fachliche Quelle, tatsächliche Notification-Sink-Verfügbarkeit, Event/Channel/Timing-Enum-IDs; keine Doppel-Queue |
-| Learning Activity / Gamification | LearningActivitySessions/TimeSlices/Events, LearningGamificationPreferences, LearningDailyGoals und LearningAchievementUnlocks; keine zweite XP-/Streak-/Notification-Wahrheit | Lernzeit-Clock-/Idempotenz-/Session-Profile-Tests, Snapshot des lokalen Tages, Gamification-Off, Seed-IDs, Curriculum-Blueprint-Membership |
-| Offline / Provider Grants | MediaProgressCheckpointEvents, ProviderMediaConnections, ProviderServerGrants, ProviderGrantLibrarySections, ProviderCatalogCheckpoints | Conflict-/Replay-Regeln, Version/Revision, nicht-geheime Checkpoint-Quelle vs /data-Quelle, Plex/Jellyfin-Consent/Grants und Credential-Lebenszyklus |
+[DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md) nennt verbleibende Fach- und
+Query-Anforderungen. Nicht alle übrigen Funktionsverträge sind abgeschlossen.
+Tabellenzahlen und grüne Teilprüfungen ersetzen kein Gate B.
 
-**Ergänzende relationale Fachentscheidungen aus dem Entwurf (noch mit PostgreSQL-Betrieb zu testen):**
-
-1. **Accounts vs Profiles:** `Accounts.Email` ist `citext UNIQUE NOT NULL`, `Profiles.OwnerAccountId` ist echte Login-Account-FK; `AccountProfiles(AccountId,ProfileId)` gibt Auswahlrecht, **nicht** Manage-Rechte. Ein zusätzlicher **DEFERRABLE zyklischer FK** verhindert nach COMMIT einen Profile-Owner ohne AccountProfile-Link. `AccountSessions( AccountId, ActiveProfileId)` hat zusammengesetzte FK auf AccountProfiles; widerrufene/übertragene Profile werden transaktional gehandhabt.
-2. **One Work:** Ein `Works.Id bigint` ist Root für Movie/Series/Book/Manga/LightNovel/Music/Game; Anime ist Klassifikation, GameRelease verweist ausschließlich auf `WorkVersions.Id` ohne eigene GameId. `WorkEpisode/Chapter/Track/Edition` besitzen je eine `UNIQUE(Id,WorkId)` für echte Cross-Work-Membership-FKs. Franchises sind keine WorkRelations.
-3. **Keine offene EAV-Datenhalde:** `WorkMetadataFacts` und `WorkLocalizedValues` haben explizit **getypte, benannte** Felder, keine `FactKey/Value JSONB`-Tabelle. `WorkFieldProvenance` nutzt eine code-geprüfte Typ-FK, nicht beliebige vom Client stammende Feldnamen. Verbleibende echte Facts in B typisiert ergänzen.
-4. **Progress und echte Total-Subtype-Invariante:** `MediaProgress(ProfileId, WorkId, optional genau ein Unit-Target)` nutzt `UNIQUE NULLS NOT DISTINCT`; jede Unit-FK referenziert auch `WorkId`. Für `ProgressPositionTypeId=1/2/3` erzeugen generierte Spalten den passenden Detail-FK. **Zweiseitig DEFERRABLE FKs** erzwingen, dass beim Commit genau die entsprechende Time-/Reading-/Game-Position existiert und eine falsche Positionstabelle nicht referenziert werden darf. Konkrete Insert-/Update-/Delete- und Concurrency-Tests sind Pflicht; kein Trigger-basierter Geschäftsablauf.
-5. **Image-Ziele:** `ImageAssignments` hat `num_nonnulls(WorkId, WorkChapterId, MediaChapterId)=1` plus FK-geprüfte Target-Art und erlaubte ImageType/TargetKind-Kombinationen über `ImageTypeTargets`. Exakte Kombinationen/Seedwerte vor finaler DDL entscheiden. Spiele bebildern `Works.Id`, nicht `Games.Id`.
-6. **Zeitleisten:** Kapitel/Segments sind immer auf genauem `MediaAssetId`; `StartMs >=0 AND EndMs>StartMs`; wiederholte/überlappende Intro/Recap/Outro/Credits-Marker erlaubt. Detection-Run mit `MatchCount=0` bleibt erfolgreicher NoMatch und darf den Scanner vor unnötigen Reruns schützen.
-7. **Operationen:** Ein gemeinsames Operations/Logs-Modell. `Execute`-Service/Direct/Queue/Force sind **separat autorisierte Abläufe**; kein langes SQL-Transaction-Window über NAS/Provider. Durables Claim/Retry/Outbox und Partner-Mutationen brauchen die endgültigen Anforderungen aus B.
-8. **Indizes:** Nur belegbar nützliche Startindizes: Account-Mail, ProviderIdentity, Work/Title-Search, Work->Children, Root/RelativePath, Progress-Continue, Watchlist-Neu, Image/Locale, Timeline, Operations-Claim. PostgreSQL `pg_trgm` ist im Entwurf **tatsächlich verwendet**; `citext` für die Case-insensitive Email. Finaler Satz erst nach den statischen Service-SELECTs und `EXPLAIN (ANALYZE, BUFFERS)`.
-
-## Noch KEIN Gate B
-
-Die 162 neuen Zieltabellen sind ein **prüfbarer physischer Entwurf, keine 1:1-Ableitung der 152 Legacy-Anwendungstabellen und nicht die finale Zielanzahl**. Acquisition QualityProfiles, Regeln, Indexer, DownloadClients und die Beziehung zu **einer** Operations-Queue sind nun konkret skizziert. Ebenso sind BCP-47-LearningCourses, LearningUnits/Variants, LearningCards und FSRS-Review-Events als **ein** Scheduler/Review-State-Owner erfasst.
-
-Noch nicht vollständig modelliert oder validiert sind Learning-Scopes, Gamification/XP, AI-/Übersetzungsfunktionen, Release-Versuchs-/Import- und Backoff-Details, Notification-Delivery/Outbox, alternative Provider-Authentifizierung, Profil-/Account-Permissions sowie fachliche Grenzfälle von Reader, Music und Games. Vorhandene Fachfunktionen bleiben damit als offene Phase-B-Lücken explizit dokumentiert. Kein stillschweigendes Entfernen alter Funktionen.
-
-Die bisherige [Enum-Quellprüfung](DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md) hat unter anderem die realen AccountRole-Werte **Owner=1, User=2, MediaManager=3** bestätigt und den vertauschten Seed-Entwurf korrigiert. **Das ist noch keine Freigabe sämtlicher neuer enum : byte-Verträge.** Zudem sind Seeds für die weiteren `enum : byte`-Kontrakte nicht bestätigt. Im SQL sind einige Zahlen ausdrücklich nur **PROPOSED**, mehrere Typ-FKs absichtlich **ohne Seed**. Für ein Release sind genau definierte, stabile numerische Seed-IDs mit entsprechenden .NET-Enums erforderlich.
-
-**Phasenfolge:** fehlende Fachanteile + Entscheidungen schließen → SQL syntax/constraint checks in einer **isolierten wegwerfbaren PostgreSQL-Test-DB** und EF-Core-Design/ModelSnapshot → erst nach Gate B die **einzige** echte Baseline in Phase C erstellen. Das bestehende `dev` und die aktuell getestete Demo-DB werden nicht angefasst; echter Reset nur Phase G nach separater Freigabe.
-
-**Zusätzlicher Abnahmecheck:** [Read-only PostgreSQL-Katalog-Assertions](DATABASE_CUTOVER_PHASE_B_PG_ASSERTIONS_DRAFT.sql) können nach einem isolierten Aufbau genutzt werden (noch nicht ausgeführt).  Die zehn SQL-Drafts und das Tabellenmanifest wurden textuell auf Zieltabellen/FK-Referenzen und doppelte Namen geprüft (siehe [statischer Prüfbericht](DATABASE_CUTOVER_PHASE_B_STATIC_CHECK.md)). Das ist ausdrücklich kein erfolgreicher PostgreSQL-Build oder bestandenes Gate B.
-
-## Erwartete B-Abnahme (noch offen)
-
-- [x] Aktuelles Domänen-/Fachziel ist vom Legacy-Inventar getrennt und in eigenem Branch dokumentiert.
-- [x] Ausgewählte kritische Tabellen bekommen konkrete Spalten, FK, CHECK/UNIQUE und Index-Entwürfe.
-- [ ] **Alle** 19 Funktionsbereiche mit tatsächlich benötigten eigenen Tabellen/Feldern/Units berücksichtigt, ohne doppeltes EAV/DB-State-Root.
-- [ ] Alle Type-Enum-Ids (C# byte ↔ PostgreSQL smallint), Defaults, nullable- und Delete-Regeln vom Besitzer bestätigt.
-- [ ] Progress-Subtype-Zyklus, Owner-Profil-Link, GameRelease-WorkType, Media-Asset-Link, Image-Target-Typ, Offline-Revision/Sessions und Provider-Mutationen real auf PostgreSQL verifiziert.
-- [ ] Auth/WebAuthn/TOTP/Plex/Jellyfin/Notification/Learning/Arr fachliche und Sicherheitslücken geschlossen.
-- [ ] Neue wichtige statische Read-Queries mit realistischen Seeds ausgeführt, korrekte Pagination/WorkCards/N+1-Vermeidung, `EXPLAIN` für geplante Indizes geprüft.
-- [ ] Keine offene produktentscheidende Frage, vollständiges referenzierbares Zieltable-/EF-/raw SQL-Inventar, und Freeze-/PR-Integrationsplan für Phase C.
-
-**PostgreSQL-18 CI-Scratch-Validierung:** [Workflow](../.github/workflows/phase-b-postgres-draft.yml) installiert 01–10 auf einer ausschließlich temporären Datenbank und prüft die Katalog-Invarianten. [Erster erfolgreicher Workflow-Lauf](https://github.com/Juloc/Jularr/actions/runs/38073509274) bestätigt DDL-Bootstrap und Struktur; dies ist **kein** Gate-B-Pass und kein EF- oder Permission-Test. Erweiterte [positive/negative PostgreSQL-Tests](DATABASE_CUTOVER_PHASE_B_PG_NEGATIVE_TESTS.sql) prüfen gezielt Curriculum-Cross-Blueprint und Progress-Total-Subtype auf demselben isolierten DB-Service.
-
-**Letzter konkret geprüfter Teststand:** [PostgreSQL-18-GitHub-Workflow #38073814369](https://github.com/Juloc/Jularr/actions/runs/38073814369) erfolgreich: 01–10 ausgeführt, 162 Tabellen, zentraler Katalog-Check und acht gezielte Negativ-/Positivfälle (Curriculum, AccountSession, MediaProgress, ImageAssignments). Die **EF-Baseline aus Phase C wird dadurch noch nicht erstellt oder freigegeben**; B ist weiterhin offen.
-
-**Typ-/Seed-Übersicht:** [ENUM_SEED_MANIFEST.csv](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) zeigt alle **41** persistierten Type-Kataloge aus den Entwürfen, darunter fünf mit bisher nur vorgeschlagenen Seeds. B01 bleibt offen, bis die tatsächlichen `enum : byte`-Verträge und Seeds fachlich vereinbart sind.
-
-**Game-only-Zusatztest:** [PG18-CI #38074769345](https://github.com/Juloc/Jularr/actions/runs/38074769345) bestätigt, dass `GameReleases` nur eine `WorkVersion` einer `Works(MediaTypeId=7)` akzeptiert und eine falsche WorkId/WorkVersion-Kombination abweist. Der Wert **7 ist weiterhin ein vorgeschlagener Seed**, keine finale Enum-Zusage. B01 bleibt vor einer echten Baseline verbindlich. Kein neues Game-Root eingeführt; `WorkId` ist durch Composite-FK mit `WorkVersions.WorkId` verbunden.
-
-
-## Ergänzung Draft 11–12 (PR #947)
-
-**Zusatzstand auf eigenem Branch, NICHT Gate-B-Abnahme:** Die neu dokumentierten PostgreSQL-Drafts 11 und 12 erweitern den aus Phase A abgeleiteten Entwurf auf **168 CREATE-TABLE-Ziele**. Sie ergänzen den kanonischen Domänen-Event-Log, Event-Audience/Severity-Kataloge, profile/account-scope-verifizierte In-App-Empfänger, technische Zustellversuche und die identitätsgesicherte Mehrziel-Bindung eines Acquisition-Downloads. Die bestehende `Operations`-Queue bleibt der einzige ausführende Job-Owner. `WantedItems` verwendet weiterhin **den** vorhandenen `UX_WantedItems_ExactTarget`-Index; keine doppelte Unique-Struktur.
-
-- [Draft 11](DATABASE_CUTOVER_PHASE_B_11_EVENTS_DELIVERY_DRAFT.sql): 5 weitere Tabellen, Anpassung des bestehenden `Notifications`-Inboxes statt zweiter Benachrichtigungsquelle.
-- [Draft 12](DATABASE_CUTOVER_PHASE_B_12_ACQUISITION_COVERAGE_DRAFT.sql): 1 weitere Tabelle, zwei zusammengesetzte Work-FKs und Wiederverwendung der vorhandenen exakt-ein-Wanted-Ziel-Unique.
-- [PG Event Tests](DATABASE_CUTOVER_PHASE_B_PG_EVENTS_TESTS.sql), [PG Acquisition Coverage Tests](DATABASE_CUTOVER_PHASE_B_PG_ACQUISITION_COVERAGE_TESTS.sql), [1000-WorkCard Query Smoke/EXPLAIN](DATABASE_CUTOVER_PHASE_B_PG_WORKCARD_QUERY_TESTS.sql) sind dem isolierten CI-Scratch-Workflow hinzugefügt.
-- Das tabellenweise [Target-Manifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) berücksichtigt alle 168 Zieltabellen und die neue Shape des bestehenden `Notifications`-Inboxes; das [Enum-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) erfasst nun 43 Persistenzkataloge. **Aus vorhandenen Quell-Enums verifizierte Werte sind weiterhin keine automatische Freigabe der neuen `enum : byte`-Verträge.**
-
-**Weiterhin offen:** die 16 B01–B16-Gates im [Entscheidungsregister](DATABASE_CUTOVER_PHASE_B_DECISIONS.md), insb. alle Enum-Seed-Verträge, noch unmodellierte Fachanteile für Auth/AI/Learning/Direct Sources/Arr und externe Transport-Policies, realistische Zugriffs-/Laufzeittests sowie die nötigen Produktentscheidungen. Ein synthetischer WorkCard-`EXPLAIN` allein schließt B15 nicht. Die neue EF-Baseline bleibt Phase C und wurde nicht angelegt.
-
-
-## Stand nach Learning-Scopes (13) und öffentlichen IDs (14)
-
-**Korrigierter DDL-Zwischenstand:** 14 SQL-Abschnitte, **173 Target-Tabellen** und **46 Type-Kataloge**, noch keine finale Baseline. Die fünf Learning-Zieltabelle und drei Type-Kataloge sind in TABLE_MANIFEST/ENUM_SEED_MANIFEST ergänzt. Neu hinzugekommene `PublicId uuid`-Spalten auf 16 tatsächlich nach außen adressierbaren Entitäten werden im selben Tabellenmanifest geführt; **alle** internen `Id`-/FK-/Composite-Key-`bigint` bleiben erhalten. PostgreSQL wird mit einem isolierten positiven/negativen Public-ID-Test validiert.
-
-**Normativer Owner-Vorrang:** öffentliche Ressourcenidentität ist nicht die SQL-`Id` und nicht das Sicherheitstoken. Die Regel `Works.Id bigint` bleibt intern; `Works.PublicId uuid` ist die öffentliche Adresse. Login-/Recovery-/Refresh-/Invite-/Pairing-/Capability-Secrets sind kryptografisch zufällige Tokens mit Hash/Secret-Store, Scope, Expiry, Rotation und Revocation. Provider-IDs bleiben externe Namespaces. Alte numerische Client-Routen werden erst koordiniert in **Phase E** ersetzt; kein ungetestetes Breaking-Change in der alten laufenden dev-Version.
-
-Die Client-/API- und echte Service-Berechtigungsnachweise werden in D/E getestet. Public UUIDs bieten keine Zugriffsberechtigung. **Keine** künstliche Permission-Proxy-Tabelle und **kein** SQL-Join über PublicId.
-
-**Noch offen:** die restlichen Typ-/Seed-Verträge (B01), finale Profile-/Auth-/AI-/Arr-/Provider-/Import-Verträge und integrale Query-/Permission-Lasttests. Die Anzahl 173 ist kein festgeschriebener Sollwert und kein Gate-B-Abnahmebeweis. EF-Baseline gehört nach Gate B in Phase C.
+Nach Gate B folgt die einzelne EF-Baseline in C, die Service/Data/Logic-Portierung
+in D und die vollständige Consumer-Bereinigung in E. F prüft das Gesamtergebnis;
+G bleibt die separat freizugebende tatsächliche DB-Neuanlage. Kein dev-/main-Merge,
+Release oder aktiver Reset ist Teil dieser Schemaänderung.

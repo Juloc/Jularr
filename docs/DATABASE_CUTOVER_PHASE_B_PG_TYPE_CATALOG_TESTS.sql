@@ -20,8 +20,8 @@ BEGIN
         AND key.atttypid = 'text'::regtype
         AND key.attnotnull;
 
-    IF catalog_count <> 46 THEN
-        RAISE EXCEPTION 'Expected 46 current draft type catalogs, found %', catalog_count;
+    IF catalog_count <> 28 THEN
+        RAISE EXCEPTION 'Expected 28 current draft type catalogs, found %', catalog_count;
     END IF;
 
     IF EXISTS (
@@ -102,15 +102,5 @@ BEGIN
         END;
     END LOOP;
 
-    BEGIN
-        INSERT INTO "LearningMediaScopeTypes" ("Id", "Key")
-        VALUES (0, 'phase-b-invalid-zero');
-        RAISE EXCEPTION 'LearningMediaScopeTypes lost its nonzero scope boundary';
-    EXCEPTION WHEN check_violation THEN
-        GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
-        IF rejected_constraint <> 'CK_LearningMediaScopeTypes_Id' THEN
-            RAISE;
-        END IF;
-    END;
 END $type_catalog$;
 ROLLBACK;

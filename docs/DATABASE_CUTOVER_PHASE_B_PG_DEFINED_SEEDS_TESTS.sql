@@ -55,50 +55,6 @@ BEGIN
             ('AcquisitionRuleEffectTypes', 2, 'require'),
             ('AcquisitionRuleEffectTypes', 3, 'reject'),
             ('AcquisitionRuleEffectTypes', 4, 'info'),
-            ('LearningUnitKindTypes', 1, 'word'),
-            ('LearningUnitKindTypes', 2, 'sentence'),
-            ('LearningUnitKindTypes', 3, 'script'),
-            ('LearningVariantRoleTypes', 1, 'primary'),
-            ('LearningVariantRoleTypes', 2, 'meaning'),
-            ('LearningVariantSourceTypes', 1, 'manual'),
-            ('LearningVariantSourceTypes', 2, 'term'),
-            ('LearningVariantSourceTypes', 3, 'dictionary'),
-            ('LearningVariantSourceTypes', 4, 'script_catalog'),
-            ('LearningCardModeTypes', 1, 'recognition'),
-            ('LearningCardModeTypes', 2, 'production'),
-            ('LearningCardModeTypes', 3, 'listening'),
-            ('LearningCardModeTypes', 4, 'writing'),
-            ('LearningCardStateTypes', 1, 'known'),
-            ('LearningCardStateTypes', 2, 'learning'),
-            ('LearningCardStateTypes', 3, 'saved'),
-            ('LearningCardStateTypes', 4, 'ignored'),
-            ('LearningCardStateTypes', 5, 'suspended'),
-            ('LearningCardReviewRatingTypes', 1, 'again'),
-            ('LearningCardReviewRatingTypes', 2, 'hard'),
-            ('LearningCardReviewRatingTypes', 3, 'good'),
-            ('LearningCardReviewRatingTypes', 4, 'easy'),
-            ('LearningModeTypes', 0, 'off'),
-            ('LearningModeTypes', 1, 'language_tools'),
-            ('LearningModeTypes', 2, 'study'),
-            ('LearningModeTypes', 3, 'custom'),
-            ('LearningCapabilityTypes', 1, 'language_lookup'),
-            ('LearningCapabilityTypes', 2, 'reading_aids'),
-            ('LearningCapabilityTypes', 3, 'translation'),
-            ('LearningCapabilityTypes', 4, 'ai_explanations'),
-            ('LearningCapabilityTypes', 5, 'vocabulary'),
-            ('LearningCapabilityTypes', 6, 'reviews'),
-            ('LearningCapabilityTypes', 7, 'sentence_practice'),
-            ('LearningCapabilityTypes', 8, 'script_trainer'),
-            ('LearningCapabilityTypes', 9, 'progress'),
-            ('LearningCapabilityTypes', 10, 'home_widget'),
-            ('LearningCapabilityTypes', 11, 'content_metrics'),
-            ('LearningCapabilityTypes', 12, 'preparation_suggestions'),
-            ('LearningCapabilityTypes', 13, 'player_tools'),
-            ('LearningCapabilityTypes', 14, 'reader_tools'),
-            ('LearningMediaScopeTypes', 1, 'anime'),
-            ('LearningMediaScopeTypes', 2, 'novel'),
-            ('LearningMediaScopeTypes', 3, 'book'),
-            ('LearningMediaScopeTypes', 4, 'manga'),
             ('NotificationEventCategoryTypes', 1, 'download_grabbed'),
             ('NotificationEventCategoryTypes', 2, 'download_failed'),
             ('NotificationEventCategoryTypes', 3, 'import_completed'),
@@ -135,52 +91,6 @@ BEGIN
             ('AcquisitionRequestStatusTypes', 6, 'completed'),
             ('AcquisitionRequestStatusTypes', 7, 'rejected'),
             ('AcquisitionRequestStatusTypes', 8, 'failed'),
-            ('CurriculumExerciseKindTypes', 1, 'presentation'),
-            ('CurriculumExerciseKindTypes', 2, 'multiple_choice'),
-            ('CurriculumExerciseKindTypes', 3, 'matching'),
-            ('CurriculumExerciseKindTypes', 4, 'cloze'),
-            ('CurriculumExerciseKindTypes', 5, 'ordering'),
-            ('CurriculumExerciseKindTypes', 6, 'short_answer'),
-            ('CurriculumExercisePhaseTypes', 1, 'orient'),
-            ('CurriculumExercisePhaseTypes', 2, 'introduce'),
-            ('CurriculumExercisePhaseTypes', 3, 'example'),
-            ('CurriculumExercisePhaseTypes', 4, 'guided_practice'),
-            ('CurriculumExercisePhaseTypes', 5, 'independent_retrieval'),
-            ('CurriculumExercisePhaseTypes', 6, 'apply'),
-            ('CurriculumExercisePhaseTypes', 7, 'checkpoint'),
-            ('CurriculumExercisePhaseTypes', 8, 'summary'),
-            ('CurriculumObjectiveSkillTypes', 1, 'vocabulary'),
-            ('CurriculumObjectiveSkillTypes', 2, 'grammar'),
-            ('CurriculumObjectiveSkillTypes', 3, 'reading'),
-            ('CurriculumObjectiveSkillTypes', 4, 'listening'),
-            ('CurriculumObjectiveSkillTypes', 5, 'script'),
-            ('CurriculumObjectiveSkillTypes', 6, 'production'),
-            ('CurriculumObjectiveSkillTypes', 7, 'writing'),
-            ('CurriculumObjectiveSkillTypes', 8, 'speaking'),
-            ('LearnerProgressStatusTypes', 1, 'not_started'),
-            ('LearnerProgressStatusTypes', 2, 'in_progress'),
-            ('LearnerProgressStatusTypes', 3, 'completed'),
-            ('LearnerProgressStatusTypes', 4, 'skipped'),
-            ('LearnerProgressSkipReasonTypes', 1, 'optional'),
-            ('LearnerProgressSkipReasonTypes', 2, 'capability_unavailable'),
-            ('LearnerExerciseOutcomeTypes', 1, 'completed'),
-            ('LearnerExerciseOutcomeTypes', 2, 'correct'),
-            ('LearnerExerciseOutcomeTypes', 3, 'incorrect'),
-            ('LearnerExerciseOutcomeTypes', 4, 'partial'),
-            ('LearningActivityKindTypes', 1, 'lesson'),
-            ('LearningActivityKindTypes', 2, 'review'),
-            ('LearningActivityKindTypes', 3, 'vocabulary_practice'),
-            ('LearningActivityKindTypes', 4, 'sentence_practice'),
-            ('LearningActivityKindTypes', 5, 'script_practice'),
-            ('LearningActivityKindTypes', 6, 'media_practice'),
-            ('LearningSessionEndReasonTypes', 1, 'completed'),
-            ('LearningSessionEndReasonTypes', 2, 'exited'),
-            ('LearningSessionEndReasonTypes', 3, 'abandoned'),
-            ('LearningActivityEventKindTypes', 1, 'exercise_completed'),
-            ('LearningActivityEventKindTypes', 2, 'review_completed'),
-            ('LearningActivityEventKindTypes', 3, 'lesson_completed'),
-            ('LearningActivityEventKindTypes', 4, 'practice_item_completed'),
-            ('LearningActivityEventKindTypes', 5, 'session_completed'),
             ('GameReleaseFileRoleTypes', 1, 'primary'),
             ('GameReleaseFileRoleTypes', 2, 'disc'),
             ('GameReleaseFileRoleTypes', 3, 'track'),
@@ -297,60 +207,6 @@ BEGIN
         FROM "AcquisitionRuleEffectTypes" AS catalog
         UNION ALL
         SELECT
-            'LearningUnitKindTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningUnitKindTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningVariantRoleTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningVariantRoleTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningVariantSourceTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningVariantSourceTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningCardModeTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningCardModeTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningCardStateTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningCardStateTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningCardReviewRatingTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningCardReviewRatingTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningModeTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningModeTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningCapabilityTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningCapabilityTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningMediaScopeTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningMediaScopeTypes" AS catalog
-        UNION ALL
-        SELECT
             'NotificationEventCategoryTypes',
             catalog."Id",
             catalog."Key"
@@ -397,60 +253,6 @@ BEGIN
             catalog."Id",
             catalog."Key"
         FROM "AcquisitionRequestStatusTypes" AS catalog
-        UNION ALL
-        SELECT
-            'CurriculumExerciseKindTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "CurriculumExerciseKindTypes" AS catalog
-        UNION ALL
-        SELECT
-            'CurriculumExercisePhaseTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "CurriculumExercisePhaseTypes" AS catalog
-        UNION ALL
-        SELECT
-            'CurriculumObjectiveSkillTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "CurriculumObjectiveSkillTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearnerProgressStatusTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearnerProgressStatusTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearnerProgressSkipReasonTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearnerProgressSkipReasonTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearnerExerciseOutcomeTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearnerExerciseOutcomeTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningActivityKindTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningActivityKindTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningSessionEndReasonTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningSessionEndReasonTypes" AS catalog
-        UNION ALL
-        SELECT
-            'LearningActivityEventKindTypes',
-            catalog."Id",
-            catalog."Key"
-        FROM "LearningActivityEventKindTypes" AS catalog
         UNION ALL
         SELECT
             'GameReleaseFileRoleTypes',

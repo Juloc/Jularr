@@ -1,5 +1,5 @@
 -- READ-ONLY STRUCTURAL ASSERTIONS FOR FRESH, ISOLATED PHASE-B TARGET DATABASE ONLY.
--- Execute after DRAFTS 01..12, NEVER on the current dev or production DB.
+-- Execute after the current cutover DDL set, NEVER on the current dev or production DB.
 -- This checks actual PostgreSQL catalog constraints, NOT merely SQL text.
 -- It does NOT substitute insertion rejection tests or an EXPLAIN/EF baseline.
 BEGIN TRANSACTION READ ONLY;
@@ -7,6 +7,22 @@ DO $phase_b$
 DECLARE
     missing text;
 BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM pg_class AS relation
+        JOIN pg_namespace AS schema ON schema.oid = relation.relnamespace
+        WHERE schema.nspname = current_schema()
+          AND relation.relkind IN ('r','p')
+          AND (relation.relname LIKE ANY (ARRAY['Learning%', 'Learner%', 'Curriculum%', 'SharedCourse%'])
+               OR relation.relname = 'Terms')
+    ) OR EXISTS (
+        SELECT 1 FROM pg_attribute AS attribute
+        WHERE attribute.attrelid = '"Profiles"'::regclass
+          AND attribute.attname = 'IsLearningEnabled' AND NOT attribute.attisdropped
+    ) THEN
+        RAISE EXCEPTION 'Deferred Learning must not be part of the cutover schema';
+    END IF;
+
     WITH required_constraint(name, kind) AS (
         VALUES
         ('FK_Profiles_OwnerAccountProfiles','f'),
@@ -16,10 +32,6 @@ BEGIN
         ('FK_PlaybackSessions_MediaAssets','f'),
         ('FK_PlaybackSessions_StoredFiles','f'),
         ('FK_MediaPlaybackHistory_MediaAssets','f'),
-        ('FK_LearningActivitySessions_LearnerCourses','f'),
-        ('FK_LearningActivityEvents_LearningActivitySessions','f'),
-        ('FK_LearningCardReviews_LearningCards','f'),
-        ('FK_LearnerExerciseAttempts_CurriculumExercises','f'),
         ('FK_MediaProgress_TimeProgressPositions','f'),
         ('FK_MediaProgress_ReadingProgressPositions','f'),
         ('FK_MediaProgress_GameProgressPositions','f'),
@@ -29,7 +41,6 @@ BEGIN
         ('CK_ImageAssignments_OneTarget','c'),
         ('CK_ImageAssignments_ValidKind','c'),
         ('CK_MediaProgress_TargetCount','c'),
-        ('UX_LearningActivityEvents_Profile_Event_Kind','u'),
         ('FK_Events_EventAudienceTypes','f'),
         ('FK_Notifications_EventsAudience','f'),
         ('FK_NotificationDeliveries_EventsAudience','f'),
@@ -115,50 +126,17 @@ BEGIN
         SELECT count(*) FROM pg_class AS t JOIN pg_namespace AS n ON n.oid=t.relnamespace
         WHERE t.relkind IN ('r','p') AND n.nspname=current_schema()
           AND t.relname IN ('Works','GameReleases','MediaAssets','StoredFiles',
-              'Profiles','AccountProfiles','MediaProgress','LearningActivityEvents')
-    ) <> 8 THEN
+              'Profiles','AccountProfiles','MediaProgress')
+    ) <> 7 THEN
         RAISE EXCEPTION 'Core target tables missing from current_schema()';
-    END IF;
-
-    -- Blueprint membership cannot be satisfied by a Lesson/Exercise from a
-    -- different published Course. These composite constraints are mandatory.
-    IF (
-        SELECT count(*) FROM pg_constraint
-        WHERE contype='f' AND conname IN (
-            'FK_CurriculumChapters_LevelBlueprint',
-            'FK_CurriculumLessons_ChapterBlueprint',
-            'FK_CurriculumExercises_LessonBlueprint',
-            'FK_SharedCourseExerciseContent_InstanceBlueprint',
-            'FK_SharedCourseExerciseContent_ExerciseBlueprint',
-            'FK_LearnerCourses_InstanceBlueprint',
-            'FK_LearnerCourseProgress_CourseBlueprint',
-            'FK_LearnerCourseProgress_LevelBlueprint',
-            'FK_LearnerCourseProgress_ChapterBlueprint',
-            'FK_LearnerCourseProgress_LessonBlueprint',
-            'FK_LearnerCourseProgress_ExerciseBlueprint',
-            'FK_LearnerExerciseAttempts_CourseBlueprint',
-            'FK_LearnerExerciseAttempts_ExerciseBlueprint',
-            'FK_LearningActivitySessions_LearnerCourseBlueprint',
-            'FK_LearningActivitySessions_LessonBlueprint'
-        )
-    ) <> 15 THEN
-        RAISE EXCEPTION 'Curriculum/Learner cross-blueprint FKs are missing';
     END IF;
 
     IF EXISTS (
         SELECT 1
         FROM (VALUES
-            ('CurriculumBlueprints','Id'),
-            ('CurriculumLevels','Id'),
-            ('CurriculumChapters','Id'),
-            ('CurriculumLessons','Id'),
-            ('CurriculumExercises','Id'),
-            ('SharedCourseInstances','Id'),
-            ('LearnerCourses','Id'),
             ('AcquisitionIndexers','Id'),
             ('AcquisitionDownloadClients','Id'),
-            ('AcquisitionDownloadBindings','AcquisitionDownloadClientId'),
-            ('LearningActivitySessions','LearnerCourseId')
+            ('AcquisitionDownloadBindings','AcquisitionDownloadClientId')
         ) AS expected(table_name,column_name)
         WHERE NOT EXISTS (
             SELECT 1
@@ -170,15 +148,7 @@ BEGIN
               AND NOT a.attisdropped
         )
     ) THEN
-        RAISE EXCEPTION 'Canonical internal curriculum/acquisition IDs must be bigint';
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_attribute AS a
-        WHERE a.attrelid = '"Profiles"'::regclass AND a.attname = 'IsLearningEnabled'
-          AND a.atttypid = 'boolean'::regtype AND a.attnotnull
-    ) THEN
-        RAISE EXCEPTION 'Profiles must store explicit Learning module opt-in';
+        RAISE EXCEPTION 'Canonical internal acquisition IDs must be bigint';
     END IF;
 
     IF NOT EXISTS (

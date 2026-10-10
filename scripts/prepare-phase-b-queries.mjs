@@ -79,12 +79,6 @@ for (const query of [
         file: 'DATABASE_CUTOVER_PHASE_B_ADMIN_QUERIES_DRAFT.sql',
         declaration: 'PREPARE phase_b_groups(bigint,integer,bigint) AS\n',
         parameters: ['ActorAccountId', 'PageSize', 'Offset']
-    },
-    {
-        name: 'contexts',
-        file: 'DATABASE_CUTOVER_PHASE_B_LEARNING_QUERIES_DRAFT.sql',
-        declaration: 'PREPARE phase_b_contexts(bigint,bigint,uuid,integer,bigint) AS\n',
-        parameters: ['ActorAccountId', 'ActiveProfileId', 'LearningUnitPublicId', 'PageSize', 'Offset']
     }
 ])
 {

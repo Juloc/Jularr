@@ -1,6 +1,6 @@
 -- DESTRUCTIVE TEST FIXTURES: ONLY run on fresh, disposable Phase-B scratch PostgreSQL.
 -- DO NOT execute against dev/production. All inserts roll back after test.
--- The DDL 01..10 and seed proposals must be installed first.
+-- The cutover DDL and exact type seeds must be installed first.
 -- These are real negative FK/permission-scope rejection tests, not just catalog checks.
 BEGIN;
 DO $test$
@@ -8,18 +8,6 @@ DECLARE
     account_id bigint;
     locale_id bigint;
     profile_id bigint;
-    blueprint_one bigint;
-    blueprint_two bigint;
-    level_one bigint;
-    level_two bigint;
-    chapter_one bigint;
-    chapter_two bigint;
-    lesson_one bigint;
-    lesson_two bigint;
-    exercise_one bigint;
-    exercise_two bigint;
-    shared_one bigint;
-    enrollment_one bigint;
     progress_id bigint;
     work_id bigint;
     work_for_image bigint;
@@ -42,7 +30,6 @@ DECLARE
     person_id bigint;
     season_one bigint;
     episode_one bigint;
-    target_status smallint;
     rejected_constraint text;
     result_case record;
 BEGIN
@@ -57,9 +44,6 @@ BEGIN
     INSERT INTO "AccountProfiles" ("AccountId","ProfileId")
     VALUES (account_id,profile_id);
 
-    IF (SELECT "IsLearningEnabled" FROM "Profiles" WHERE "Id" = profile_id) THEN
-        RAISE EXCEPTION 'Learning must be off for new Profiles by default';
-    END IF;
     INSERT INTO "AccountPasskeys"
         ("AccountId","CredentialId","PublicKey","Aaguid","Transports",
          "BackupEligible","BackedUp","UserVerificationRequired")
@@ -72,139 +56,6 @@ BEGIN
         RAISE EXCEPTION 'Backed-up ineligible credential was accepted';
     EXCEPTION WHEN check_violation THEN NULL;
     END;
-
-    INSERT INTO "CurriculumBlueprints" ("Key","Version")
-    VALUES ('ci-blueprint-one',1) RETURNING "Id" INTO blueprint_one;
-    INSERT INTO "CurriculumBlueprints" ("Key","Version")
-    VALUES ('ci-blueprint-two',1) RETURNING "Id" INTO blueprint_two;
-    INSERT INTO "CurriculumLevels" ("CurriculumBlueprintId","Ordinal")
-    VALUES (blueprint_one,1) RETURNING "Id" INTO level_one;
-    INSERT INTO "CurriculumLevels" ("CurriculumBlueprintId","Ordinal")
-    VALUES (blueprint_two,1) RETURNING "Id" INTO level_two;
-    INSERT INTO "CurriculumChapters" ("CurriculumLevelId","CurriculumBlueprintId","Ordinal")
-    VALUES (level_one,blueprint_one,1) RETURNING "Id" INTO chapter_one;
-    INSERT INTO "CurriculumChapters" ("CurriculumLevelId","CurriculumBlueprintId","Ordinal")
-    VALUES (level_two,blueprint_two,1) RETURNING "Id" INTO chapter_two;
-    INSERT INTO "CurriculumLessons" ("CurriculumChapterId","CurriculumBlueprintId","Ordinal")
-    VALUES (chapter_one,blueprint_one,1) RETURNING "Id" INTO lesson_one;
-    INSERT INTO "CurriculumLessons" ("CurriculumChapterId","CurriculumBlueprintId","Ordinal")
-    VALUES (chapter_two,blueprint_two,1) RETURNING "Id" INTO lesson_two;
-
-    INSERT INTO "CurriculumExercises"
-        ("CurriculumLessonId","CurriculumBlueprintId","Key","Ordinal",
-         "CurriculumExerciseKindTypeId","CurriculumExercisePhaseTypeId")
-    VALUES (lesson_one,blueprint_one,'one',1,1,1)
-    RETURNING "Id" INTO exercise_one;
-    INSERT INTO "CurriculumExercises"
-        ("CurriculumLessonId","CurriculumBlueprintId","Key","Ordinal",
-         "CurriculumExerciseKindTypeId","CurriculumExercisePhaseTypeId")
-    VALUES (lesson_two,blueprint_two,'two',1,1,1)
-    RETURNING "Id" INTO exercise_two;
-
-    INSERT INTO "SharedCourseInstances"
-        ("CurriculumBlueprintId","SourceLanguage","TargetLanguage","Title",
-         "ContentVersion","ContentFingerprint")
-    VALUES (blueprint_one,'en','de','CI Course',1,repeat('a',64))
-    RETURNING "Id" INTO shared_one;
-    INSERT INTO "LearnerCourses"
-        ("ProfileId","SharedCourseInstanceId","CurriculumBlueprintId")
-    VALUES (profile_id,shared_one,blueprint_one)
-    RETURNING "Id" INTO enrollment_one;
-
-    -- Positive control: an item inside the same pinned blueprint must succeed.
-    INSERT INTO "LearnerCourseProgress"
-        ("LearnerCourseId","CurriculumBlueprintId","CurriculumLevelId",
-         "LearnerProgressStatusTypeId")
-    VALUES (enrollment_one,blueprint_one,level_one,1);
-    FOR target_status IN 1..3 LOOP
-        BEGIN
-            UPDATE "LearnerCourseProgress"
-            SET "LearnerProgressStatusTypeId" = target_status,
-                "LearnerProgressSkipReasonTypeId" = 1
-            WHERE "LearnerCourseId" = enrollment_one AND "CurriculumLevelId" = level_one;
-            RAISE EXCEPTION 'Non-skipped status % accepted a skip reason', target_status;
-        EXCEPTION WHEN check_violation THEN
-            GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
-            IF rejected_constraint <> 'CK_LearnerCourseProgress_SkipReason' THEN
-                RAISE;
-            END IF;
-        END;
-    END LOOP;
-    UPDATE "LearnerCourseProgress"
-    SET "LearnerProgressStatusTypeId" = 4, "LearnerProgressSkipReasonTypeId" = 2
-    WHERE "LearnerCourseId" = enrollment_one AND "CurriculumLevelId" = level_one;
-    UPDATE "LearnerCourseProgress"
-    SET "LearnerProgressStatusTypeId" = 1, "LearnerProgressSkipReasonTypeId" = NULL
-    WHERE "LearnerCourseId" = enrollment_one AND "CurriculumLevelId" = level_one;
-    INSERT INTO "LearnerExerciseAttempts"
-        ("LearnerCourseId","CurriculumBlueprintId","CurriculumExerciseId",
-         "ClientEventId","LearnerExerciseOutcomeTypeId")
-    VALUES (enrollment_one,blueprint_one,exercise_one,gen_random_uuid(),1);
-
-    -- Negative #1: an attempt from Blueprint TWO must not write to Blueprint ONE.
-    BEGIN
-        INSERT INTO "LearnerExerciseAttempts"
-            ("LearnerCourseId","CurriculumBlueprintId","CurriculumExerciseId",
-             "ClientEventId","LearnerExerciseOutcomeTypeId")
-        VALUES (enrollment_one,blueprint_one,exercise_two,gen_random_uuid(),1);
-        RAISE EXCEPTION 'Cross-blueprint exercise attempt was accepted';
-    EXCEPTION WHEN foreign_key_violation THEN NULL;
-    END;
-
-    -- Negative #2: progress must not reference a foreign level.
-    BEGIN
-        INSERT INTO "LearnerCourseProgress"
-            ("LearnerCourseId","CurriculumBlueprintId","CurriculumLevelId",
-             "LearnerProgressStatusTypeId")
-        VALUES (enrollment_one,blueprint_one,level_two,1);
-        RAISE EXCEPTION 'Cross-blueprint progress was accepted';
-    EXCEPTION WHEN foreign_key_violation THEN NULL;
-    END;
-
-    -- Negative #3: SharedCourse content cannot embed an exercise of another blueprint.
-    BEGIN
-        INSERT INTO "SharedCourseExerciseContent"
-            ("SharedCourseInstanceId","CurriculumBlueprintId",
-             "CurriculumExerciseId","SchemaVersion","Payload","ContentFingerprint")
-        VALUES (shared_one,blueprint_one,exercise_two,1,'{}'::jsonb,repeat('b',64));
-        RAISE EXCEPTION 'Cross-blueprint shared course content was accepted';
-    EXCEPTION WHEN foreign_key_violation THEN NULL;
-    END;
-
-    -- Negative #4: a real Lesson from a foreign Blueprint must not appear in
-    -- LearningActivitySessions for the learner's pinned course.
-    BEGIN
-        INSERT INTO "LearningActivitySessions"
-            ("ClientSessionId","ProfileId","LearningActivityKindTypeId",
-             "LearnerCourseId","CurriculumBlueprintId","CurriculumLessonId",
-             "StartedAt","LastActivityAt")
-        VALUES (gen_random_uuid(),profile_id,1,enrollment_one,blueprint_one,
-                lesson_two,now(),now());
-        RAISE EXCEPTION 'Cross-blueprint learning activity was accepted';
-    EXCEPTION WHEN foreign_key_violation THEN NULL;
-    END;
-
-    FOR result_case IN
-        SELECT fixture.ended_at, fixture.end_reason
-        FROM (VALUES (NULL::timestamptz, 1::smallint), (now(), NULL::smallint)) AS fixture(ended_at, end_reason)
-    LOOP
-        BEGIN
-            INSERT INTO "LearningActivitySessions" (
-                "ClientSessionId", "ProfileId", "LearningActivityKindTypeId",
-                "StartedAt", "LastActivityAt", "EndedAt", "LearningSessionEndReasonTypeId")
-            VALUES (gen_random_uuid(), profile_id, 2, now(), now(), result_case.ended_at, result_case.end_reason);
-            RAISE EXCEPTION 'Learning session accepted an incomplete end pair';
-        EXCEPTION WHEN check_violation THEN
-            GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
-            IF rejected_constraint <> 'CK_LearningActivitySessions_EndReason' THEN
-                RAISE;
-            END IF;
-        END;
-    END LOOP;
-    INSERT INTO "LearningActivitySessions" (
-        "ClientSessionId", "ProfileId", "LearningActivityKindTypeId",
-        "StartedAt", "LastActivityAt", "EndedAt", "LearningSessionEndReasonTypeId")
-    VALUES (gen_random_uuid(), profile_id, 2, now(), now(), now(), 1);
 
     -- Positive control for progress subtype: one parent and matching detail.
     INSERT INTO "Works" ("MediaTypeId","CanonicalTitle")

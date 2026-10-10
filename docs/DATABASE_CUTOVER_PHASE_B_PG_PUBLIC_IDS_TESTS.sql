@@ -25,10 +25,6 @@ BEGIN
             ('PlaybackSessions'),
             ('ReaderBookmarks'),
             ('ReaderHighlights'),
-            ('LearningCourses'),
-            ('LearningUnits'),
-            ('LearningContexts'),
-            ('LearningCards'),
             ('Notifications'),
             ('LibraryRoots')
         ) AS item(name)

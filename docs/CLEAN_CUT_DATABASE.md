@@ -2,6 +2,17 @@
 
 **Status:** Owner-approved **target-state contract**, 2026-10-09. **Not implemented**. The current `dev` schema and runtime remain operational until a separately authorized atomic cutover.
 
+**Owner scope revision, 2026-10-10: cutover WITHOUT Learning.** Learning, curriculum,
+cards/FSRS, learning contexts/scopes and gamification are deferred. They are not
+part of the fresh baseline, Phase-B completion gates or D/E feature-preservation
+requirements. Keep only the [rough later plan](DATABASE_CUTOVER_DEFERRED_LEARNING.md),
+not reserved tables, dormant endpoints or compatibility paths. Existing runtime
+Learning wiring is removed coherently in D/E before the final cutover; this scope
+decision does not authorize changing the active database or deleting user data.
+Reader/player, subtitles, translation, AI, media progress and ordinary localization
+remain in scope independently of Learning. This revision overrides earlier
+Learning inclusion in this document, the Phase-A inventory and issue plans.
+
 **Scope:** One clean PostgreSQL install baseline for the test-only Jularr deployment, after completing the schema contract. No old-database backfill, permanent compatibility bridges, dual-write, AniLingo/SQLite compatibility or migration chain is required for this cutover. Do **not** delete existing migrations, modify runtime tables, reset an instance, or deploy from this planning document. Once the fresh baseline is installed, subsequent feature changes use ordinary forward-only migrations against the new schema.
 
 This document is the **owner's current product decision** on clean-cut identity, naming, relationships and implementation rules. It supersedes contradictory *target-state* assumptions in `DOMAIN.md`, `ARCHITECTURE.md`, `DOMAIN-AUDIT.md`, `MEDIA_CORE.md`, `IMPLEMENTATION-ROADMAP.md` and old issues. It does not claim those files or today's code have been converted. General database safety and engineering constraints in `DATABASE_CONVENTIONS.md` / central Agent Control remain in force.
@@ -10,7 +21,7 @@ This document is the **owner's current product decision** on clean-cut identity,
 
 1. **One canonical work:** `Works.Id BIGINT` (C# `long`) for Movie, Series, Book, Manga, LightNovel, Music **and Game**. Anime is a classification of a Movie/Series Work, **not** a competing Work type; audiobook is a format/edition/asset of a Book Work where canonical book identity is shared. Every media-related feature references the same Work identity.
 2. **Games decision supersedes the current Games-owned root:** the final schema has no independent `Games.Id`. Keep genuine game-specific platform/release/version/launcher concerns as extension data associated with a Work or WorkVersion.
-3. **Account is not Profile:** Account handles sign-in/security/instance roles; Profile owns personal state, locale, restrictions, progress, watchlist, ratings, Learning and service-sync connections. Profile survives reassignment to another Account without changing its ID or copying personal data.
+3. **Account is not Profile:** Account handles sign-in/security/instance roles; Profile owns personal state, locale, restrictions, progress, watchlist, ratings and service-sync connections. Profile survives reassignment to another Account without changing its ID or copying personal data.
 4. **One owner per fact:** no second progress, artwork, media-metadata, acquisition, translation, job, media-session or file pipeline per module. Specialized records may extend common roots but must not duplicate canonical identity or state.
 5. **Logical vs physical:** Work > optional Season/Episode or Volume/Chapter/Track > Edition > Version > MediaAsset > StoredFile > MediaTrack/technical analysis. Logical catalog exists without local NAS/files. GamePlatform and game-specific release details are extensions, not identities competing with Work.
 6. **Read from database:** UI/list/watchlist/card reads never call NAS or third-party providers. Discovery/acquisition/scan/detection workers update authoritative facts or rebuildable read projections; reads resolve locally with bounded SQL.
@@ -160,7 +171,7 @@ Remove the legacy **tables, readers, writers, duplicate services/tests/config/ro
 - `AudiobookEditionMetadata` -> `WorkEditions`, `EditionExternalIdentities`, edition credits, technical analysis.
 - `UiProfileLocales` -> `Profiles.UiLocaleId`, without removing central UI localization catalog.
 
-Do not delete domain-distinct specialized tables merely to reach a low table count: Learning curriculum/cards/reviews, acquisition policy/search/requests, storage reconciliation, game platforms/releases, translations, permissions, file tracks and logs each have valid separate lifecycles.
+Do not delete in-scope domain-distinct specialized tables merely to reach a low table count: acquisition policy/search/requests, storage reconciliation, game platforms/releases, translations, permissions, file tracks and logs each have valid separate lifecycles. Learning exclusion is an explicit owner scope decision, not a table-count optimization.
 
 ## 5. Rules for EVERY future feature / agent
 
@@ -205,7 +216,7 @@ This is the implementation specification for **how** the target schema must be m
 
 ### 8.1 Schema completeness before next implementation layer
 
-Before generating migrations, deliver one reviewable target-schema inventory containing **every** EF-mapped and SQL-owned table, all columns with actual PostgreSQL types, nullability, PK/FKs, unique constraints, CHECK constraints, enum seed ids, sensible default values, storage ownership, read/write owner and lifecycle. Maintain a one-to-one disposition (keep/change/delete/new) for all current tables. Prove that all features—Games, learning, acquisition, media metadata, reading, player, subtitle/AI, offline devices, admin, storage reconciliation, localization, requests and operations—still have a canonical data destination. Review the physical schema (including all explicit `migrationBuilder.Sql`/raw SQL stores), not just the EF snapshot.
+Before generating migrations, deliver one reviewable target-schema inventory containing **every in-scope** EF-mapped and SQL-owned table, all columns with actual PostgreSQL types, nullability, PK/FKs, unique constraints, CHECK constraints, enum seed ids, sensible default values, storage ownership, read/write owner and lifecycle. Maintain a one-to-one disposition (keep/change/delete/new/deferred) for current tables; Learning is explicitly deferred by the owner. Prove that Games, acquisition, media metadata, reading, player, subtitle/AI, offline devices, admin, storage reconciliation, localization, requests and operations still have a canonical data destination. Review the physical schema (including all explicit `migrationBuilder.Sql`/raw SQL stores), not just the EF snapshot.
 
 **Do not move to writing the final baseline with any unresolved cross-table invariants.** The domain design is approved, but its complete physical DDL and query plans are not yet approved or implemented.
 
