@@ -184,12 +184,16 @@ public sealed class RequestPagesRenderTests
         }
 
         StringAssert.Contains(users, "Disabled / pending");
-        StringAssert.Contains(users, "class=\"rre-user-identity\"");
+        StringAssert.Contains(users, "class=\"rre-user-table\"");
+        StringAssert.Contains(users, "scope=\"col\">Request rule profile</th>");
+        StringAssert.Contains(users, "scope=\"col\">Request limit</th>");
+        StringAssert.Contains(users, "scope=\"col\">Configured approval rule</th>");
+        StringAssert.Contains(users, "class=\"rre-user-link\"");
         Assert.IsFalse(users.Contains("rre-user-edit", StringComparison.Ordinal));
         StringAssert.Contains(users, "class=\"rre-user-row is-selected\"");
         StringAssert.Contains(users, "data-rre-editor");
         StringAssert.Contains(users, "name=\"userId\" value=\"directory-owner\"");
-        StringAssert.Contains(users, "rre-user-media");
+        Assert.IsFalse(users.Contains("rre-user-media", StringComparison.Ordinal));
         var queue = await host.GetHtmlAsync("/Admin/Requests", asOwner: true);
         Assert.IsFalse(queue.Contains("data-admreq-filter-apply", StringComparison.Ordinal));
         Assert.IsFalse(queue.Contains("Apply filters</button>", StringComparison.Ordinal));

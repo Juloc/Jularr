@@ -5,11 +5,11 @@
 .rre-editor .sr-only, .rre-users-list .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .rre-workspace .button, .rre-users-workspace .button { border-radius: 999px; }
 .rre-editor, .rre-list, .rre-transition { padding: 20px; border-radius: var(--radius-card, 18px); box-shadow: var(--shadow-card); }
-.rre-list-head, .rre-profile-name, .rre-editor-actions, .rre-profile-actions, .rre-user-row-head, .rre-user-context, .rre-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.rre-list-head, .rre-profile-name, .rre-editor-actions, .rre-profile-actions, .rre-user-context, .rre-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .rre-list-head { justify-content: space-between; margin-bottom: 16px; }
 .rre-profile { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-top: 1px solid var(--border); background: transparent; }
 .rre-profile.is-selected { background: var(--accent-soft); }
-.rre-user-row.is-selected { background: var(--accent-soft); }
+.rre-user-row.is-selected { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .rre-profile-select { display: grid; gap: 6px; min-width: 0; width: 100%; padding: 12px; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: start; font: inherit; cursor: pointer; }
 .rre-profile-summary { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: 11px; }
 .rre-profile-media { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -51,23 +51,36 @@
 .rre-editor-actions { padding-top: 16px; border-top: 1px solid var(--border); }
 .rre-editor-actions .button { min-height: 40px; min-width: 100px; border-radius: 999px; }
 .rre-mobile-back { display: none; }
-.rre-user-search { display: flex; gap: 10px; }
+.rre-users-workspace .rre-users-list { padding: 12px 0 0; overflow: hidden; }
+.rre-user-count { margin: 10px 16px; font-size: 11px; }
+.rre-user-search { display: flex; gap: 10px; margin: 0 16px; }
 .rre-user-search input { flex: 1; }
 .rre-user-search .button { min-width: 42px; padding: 8px; }
-.rre-user-row { display: block; padding: 14px 12px; border-top: 1px solid var(--border); border-radius: 0; color: var(--text); text-decoration: none; }
-.rre-user-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rre-user-table-wrap { overflow-x: auto; }
+.rre-user-table-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rre-user-table { width: 100%; min-width: 500px; table-layout: fixed; border-collapse: collapse; color: var(--text); font-size: 11px; }
+.rre-user-column { width: 32%; }
+.rre-rule-column { width: 23%; }
+.rre-limit-column { width: 21%; }
+.rre-approval-column { width: 24%; }
+.rre-user-table th { height: 38px; padding: 8px 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 9px; font-weight: 650; text-align: start; text-transform: uppercase; line-height: 1.4; }
+.rre-user-table td { height: 64px; padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; line-height: 1.5; overflow-wrap: anywhere; }
+.rre-user-row { position: relative; cursor: pointer; }
+.rre-user-row:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rre-user-row.is-selected td:first-child { box-shadow: inset 3px 0 var(--accent); }
 .rre-user-row:hover { background: var(--surface-2); }
-.rre-user-row.is-selected:hover { background: var(--accent-soft); }
-.admreq .rre-user-row-head .admreq-requester-avatar { width: 32px; height: 32px; font-size: 12px; }
-.rre-user-row-head { gap: 14px; }
-.rre-user-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
-.rre-user-identity > .admreq-requester { max-width: 100%; font-weight: 750; }
-.rre-user-identity > .admreq-requester > span:last-child { overflow-wrap: anywhere; }
-.rre-user-identity .status-pill, .rre-user-summary .status-pill { min-height: 24px; padding: 3px 8px; font-size: 10px; }
-.rre-user-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 14px; margin: 9px 0; padding-inline-start: 39px; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
-.rre-user-profile { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 6px; min-width: 0; }
-.rre-user-profile strong { color: var(--text); }
-.rre-user-media { padding-inline-start: 39px; gap: 6px; }
+.rre-user-row.is-selected:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.rre-user-link { display: block; color: var(--text); text-decoration: none; }
+.rre-user-link::after { content: ""; position: absolute; inset: 0; }
+.rre-user-link:focus-visible { outline: none; }
+.admreq .rre-user-identity .admreq-requester-avatar { width: 28px; height: 28px; font-size: 11px; }
+.rre-user-identity { display: block; min-width: 0; }
+.rre-user-identity > .admreq-requester { min-width: 0; max-width: 100%; font-size: 12px; font-weight: 750; }
+.rre-user-identity > .admreq-requester > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rre-user-role { display: block; padding-inline-start: 37px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10px; }
+.rre-user-profile { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.rre-user-assignment { display: block; color: var(--muted); font-size: 10px; }
+.rre-user-value { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .rre-user-context { margin: 18px 0; font-size: 13px; }
 .rre-pagination { justify-content: center; padding-top: 15px; }
 .rre-transition { margin-top: 20px; }
@@ -90,11 +103,35 @@
     .rre-mobile-back { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; }
     .rre-users-workspace:not(.rre-mobile-editor):has(> .rre-list) > .rre-editor { display: none; }
 }
+@media (max-width: 1200px) {
+    .rre-users-workspace.rre-has-user:has(> .rre-list) { grid-template-columns: minmax(0, 1fr); }
+    .rre-users-workspace.rre-mobile-editor > .rre-list { display: none; }
+    .rre-users-workspace:not(.rre-mobile-editor):has(> .rre-list) > .rre-editor { display: none; }
+    .rre-users-workspace .rre-mobile-back { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+}
+@media (max-width: 640px) {
+    .rre-user-table-wrap { overflow-x: visible; }
+    .rre-user-table { display: block; min-width: 0; }
+    .rre-user-table colgroup { display: none; }
+    .rre-user-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .rre-user-table tbody { display: block; }
+    .rre-user-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); grid-template-areas: "identity identity" "profile limit" "approval limit"; gap: 4px 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
+    .rre-user-table td { display: block; height: auto; min-width: 0; padding: 0; border: 0; }
+    .rre-user-table td:first-child { grid-area: identity; }
+    .rre-user-table td:nth-child(2) { grid-area: profile; }
+    .rre-user-table td:nth-child(3) { grid-area: limit; text-align: end; }
+    .rre-user-table td:nth-child(4) { grid-area: approval; color: var(--muted); font-size: 10px; }
+    .rre-user-row.is-selected { box-shadow: inset 3px 0 var(--accent); }
+    .rre-user-row.is-selected td:first-child { box-shadow: none; }
+    .rre-user-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .rre-user-identity { flex: 1; }
+    .rre-user-role { max-width: 45%; padding-inline-start: 0; }
+    .rre-user-profile { display: inline-block; max-width: 55%; vertical-align: bottom; }
+    .rre-user-assignment { display: inline; margin-inline-start: 6px; }
+}
 @media (max-width: 480px) {
     .rre-editor, .rre-list, .rre-transition { padding: 16px; }
     .rre-fields { grid-template-columns: minmax(0, 1fr); gap: 18px; }
     .rre-users-workspace .rre-fields > .rre-field:not(.rre-field-wide) > :first-child { min-height: 0; }
     .rre-tags { gap: 6px; }
-    .rre-user-row { padding: 12px 0; }
-    .rre-user-summary, .rre-user-media { padding-inline-start: 0; }
 }

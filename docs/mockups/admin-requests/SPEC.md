@@ -90,7 +90,7 @@ Recommended columns:
 
 Filter comboboxes apply single choices immediately. Multiple choices are committed by the combobox's Apply action or when leaving/closing its popup; Cancel restores the applied selection. There is no second page-level or mobile-sheet Apply button.
 
-The Users directory uses compact, divided rows rather than individual cards: aligned avatar/name and role, then profile, inheritance, quota and configured approval summary with shared media tags. The entire row opens its user, without a separate Edit button; the first result is selected on entry. Save and Cancel remain in the shared editor. Long values wrap within their slot without overflowing the viewport. The shared rule editor and its desktop two-pane/mobile list-to-editor flow remain unchanged.
+The Users directory is a compact table with account identity/role, rule profile/assignment, request limit and configured approval columns. Do not repeat media-tag stacks in each row. The entire row opens its user through its native link, without a separate Edit button; the first result is selected on entry. Save and Cancel remain in the shared editor. Desktop keeps the table beside the editor; narrower screens use the existing list-to-editor flow. On phones the same table data reflows into compact rows: identity/role above profile, quota and configured approval, with no horizontal scrolling. Long names/profile names use ellipsis with their full value in a tooltip.
 
 Use compact request rows with:
 - artwork
