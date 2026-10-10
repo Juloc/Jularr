@@ -192,6 +192,7 @@ CREATE TABLE "Works" (
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_Works" PRIMARY KEY ("Id"),
+    CONSTRAINT "UX_Works_Id_MediaTypeId" UNIQUE ("Id","MediaTypeId"),
     CONSTRAINT "FK_Works_MediaTypes" FOREIGN KEY ("MediaTypeId") REFERENCES "MediaTypes" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "CK_Works_CanonicalTitle" CHECK (length(btrim("CanonicalTitle")) > 0)
 );
@@ -497,14 +498,21 @@ CREATE TABLE "GamePlatforms" (
     CONSTRAINT "PK_GamePlatforms" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_GamePlatforms_Key" UNIQUE ("Key")
 );
+-- WorkId is a constrained duplicate of WorkVersions.WorkId, NOT a second Game root.
+-- Proposal: MediaTypes(game)=7. B01 MUST freeze enum : byte values before baseline.
+-- A constant generated discriminator plus two composite FK paths enforce BOTH:
+-- (1) the chosen WorkVersion belongs to the Work; and (2) the Work is a game.
 CREATE TABLE "GameReleases" (
     "WorkVersionId" bigint NOT NULL,
+    "WorkId" bigint NOT NULL,
+    "GameMediaTypeId" smallint GENERATED ALWAYS AS (7::smallint) STORED,
     "GamePlatformId" bigint NOT NULL,
     "Region" varchar(16),
     "RevisionLabel" text,
     "LauncherMetadata" jsonb,
     CONSTRAINT "PK_GameReleases" PRIMARY KEY ("WorkVersionId"),
-    CONSTRAINT "FK_GameReleases_WorkVersions" FOREIGN KEY ("WorkVersionId") REFERENCES "WorkVersions" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_GameReleases_WorkVersions" FOREIGN KEY ("WorkVersionId","WorkId") REFERENCES "WorkVersions" ("Id","WorkId") ON DELETE RESTRICT,
+    CONSTRAINT "FK_GameReleases_GameWorks" FOREIGN KEY ("WorkId","GameMediaTypeId") REFERENCES "Works" ("Id","MediaTypeId") ON DELETE RESTRICT,
     CONSTRAINT "FK_GameReleases_GamePlatforms" FOREIGN KEY ("GamePlatformId") REFERENCES "GamePlatforms" ("Id") ON DELETE RESTRICT
 );
 CREATE INDEX "IX_GameReleases_GamePlatformId" ON "GameReleases" ("GamePlatformId");
