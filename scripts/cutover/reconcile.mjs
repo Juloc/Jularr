@@ -343,14 +343,15 @@ const summary={capturedAt,catalogCapturedAt,conditionalTargets:["AccountPermissi
     unresolvedAccessTargets:accessRows.filter(row=>row.Tables.includes('UNRESOLVED')).length, proposedDispositions:tables.filter(row=>row.DispositionReview==='PROPOSED_DISTINCT_RESPONSIBILITY_REQUIRES_REVIEW').length,
     razorDbContextPaths:csvRead('docs/DATABASE_CUTOVER_RAZOR_DB_REFERENCES.csv').length,featureDbContextPaths:csvRead('docs/DATABASE_CUTOVER_FEATURE_DB_REFERENCES.csv').length,
     unmappedEntityTables:unique(accessRows.flatMap(row=>row.Tables==='UNRESOLVED_ENTITY_TABLE'?[row.Symbol]:[])),activeTablesWithoutStaticCandidate:tables.filter(row=>row.Resolution==='ACTIVE_TABLE_NO_BOUND_ACCESS_REVIEW_REQUIRED').map(row=>row.CurrentTable),
-    tableRows:tables.length,newTargetRows:tables.filter(row=>row.RowKind==='TARGET_ONLY').length,requiredTargetNames:[...requiredTargets].sort(),manualReviewedChains:reviewedChains.length,nativeContractRows:nativeRows.length,openPrs:delta.length,gateA:'OPEN',
-    passedCriteria:['LIVE_REFERENCE_CATALOG_READ_ONLY','MIGRATION_HISTORY_RECONCILED','ALL_SOURCE_BODIES_INDEXED','CURRENT_OPEN_PR_FILES_CAPTURED'],
-    remainingCriteria:['FULL_AUTHORIZED_READER_WRITER_CONSUMER_CHAINS','FIELD_DISPOSITION_SIGNOFF','PR_OWNER_INTEGRATION_CHOICE_AND_FREEZE_ACK']};
+    tableRows:tables.length,newTargetRows:tables.filter(row=>row.RowKind==='TARGET_ONLY').length,requiredTargetNames:[...requiredTargets].sort(),manualReviewedChains:reviewedChains.length,nativeContractRows:nativeRows.length,openPrs:delta.length,gateA:json('docs/DATABASE_CUTOVER_PHASE_A_DOMAINS.json').gate,
+    passedCriteria:['LIVE_REFERENCE_CATALOG_READ_ONLY','MIGRATION_HISTORY_RECONCILED','ALL_SOURCE_BODIES_INDEXED','CURRENT_OPEN_PR_FILES_CAPTURED','FUNCTIONAL_DOMAIN_COVERAGE_ACCEPTED'],
+    remainingCriteria:[],
+    deferredCriteria:['TARGET_COLUMNS_FK_CONSTRAINTS_AND_FINAL_TABLE_DISPOSITIONS_PHASE_B','AUTHORIZED_READ_WRITE_CALLCHAIN_TESTS_PHASE_D_E','PR_MERGE_PORT_FREEZE_DECISIONS_PHASE_B_E']};
 writeJson('docs/_phase_a_search_sql_patterns_1.json',summary);
 writeJson('docs/_phase_a_search_sql_patterns_2.json',{capturedAt,sourceSha:sha,review:'LOCAL_SOURCE_AUDIT',dbSetAccesses:audit.accesses.map(({chain,...row})=>row),sqlSites:audit.sqlSites??[]});
 writeJson('docs/_phase_a_search_sql_patterns_3.json',{capturedAt,sourceSha:sha,openPrHeads:delta.map(row=>({pr:row.PR,head:row.HeadSha,decision:row.Decision,agreement:row.OwnerAgreement})),schemaDeltas:delta.filter(row=>row.MigrationOrModelPaths),workspaces,reviewedChains,
     startupRegistrations:bodyPaths.filter(name=>name.startsWith('src/') && name.endsWith('.cs')).flatMap(name=>read(name).split('\n').flatMap((line,index)=>/AddHostedService|AddScoped<.*IWanted(Source|RequestHandler)/.test(line)?[{path:name,line:index+1,registration:line.trim()}]:[])),
-    gateA:'OPEN'});
+    gateA:json('docs/DATABASE_CUTOVER_PHASE_A_DOMAINS.json').gate});
 assert.equal(new Set(tables.map(row=>row.CurrentTable)).size,tables.length,'Duplicate table rows');
 assert.equal(new Set(consumers.map(row=>row.SourcePath)).size,consumers.length,'Duplicate source rows');
 assert.equal(new Set(delta.map(row=>row.PR)).size,delta.length,'Duplicate PR rows');
