@@ -14,8 +14,14 @@
   "indexes": 426,
   "publicFunctions": 31,
   "extensions": [
-    {"name":"pg_trgm","version":"1.6"},
-    {"name":"plpgsql","version":"1.0"}
+    {
+      "name": "pg_trgm",
+      "version": "1.6"
+    },
+    {
+      "name": "plpgsql",
+      "version": "1.0"
+    }
   ],
   "views": 0,
   "triggers": 0,
@@ -120,16 +126,19 @@
   "manualReviewedChains": 12,
   "nativeContractRows": 44,
   "openPrs": 17,
-  "gateA": "OPEN",
+  "gateA": "PASSED",
   "passedCriteria": [
     "LIVE_REFERENCE_CATALOG_READ_ONLY",
     "MIGRATION_HISTORY_RECONCILED",
     "ALL_SOURCE_BODIES_INDEXED",
-    "CURRENT_OPEN_PR_FILES_CAPTURED"
+    "CURRENT_OPEN_PR_FILES_CAPTURED",
+    "GROUPED_FUNCTIONAL_COVERAGE_APPROVED",
+    "CRITICAL_RISKS_EXPLICITLY_CARRIED_TO_LATER_GATES"
   ],
-  "remainingCriteria": [
-    "FULL_AUTHORIZED_READER_WRITER_CONSUMER_CHAINS",
-    "FIELD_DISPOSITION_SIGNOFF",
-    "PR_OWNER_INTEGRATION_CHOICE_AND_FREEZE_ACK"
+  "remainingCriteria": [],
+  "deferredCriteria": [
+    "EXACT_TARGET_DDL_PHASE_B",
+    "WRITE_PERMISSION_AND_RESOURCE_CALLCHAINS_PHASE_D_E",
+    "FEATURE_PR_MERGE_AND_SCHEMA_FREEZE_PHASE_B_E"
   ]
 }
