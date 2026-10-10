@@ -33,13 +33,15 @@ public sealed class ServiceContext
 {
     public ServiceCaller Access { get; }
     public SqlContext.SqlReadCommands ReadSql { get; }
-    public LogicContext Logic { get; }
+    private readonly LogicContext? _logic;
 
-    internal ServiceContext(ServiceCaller caller, SqlContext sql)
+    public LogicContext Logic => _logic ?? throw new InvalidOperationException("Read services cannot access mutating Logic commands.");
+
+    internal ServiceContext(ServiceCaller caller, SqlContext sql, bool canMutate)
     {
         Access = caller;
         sql.SetAuthorizedScope(caller.AccountId, caller.ProfileId);
         ReadSql = sql.ReadSql;
-        Logic = new LogicContext(sql);
+        _logic = canMutate ? new LogicContext(sql) : null;
     }
 }
