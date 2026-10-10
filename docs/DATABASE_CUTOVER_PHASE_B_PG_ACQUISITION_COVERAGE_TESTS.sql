@@ -31,7 +31,6 @@ BEGIN
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
 
-  INSERT INTO "AcquisitionKindTypes" ("Id","Key") VALUES (1,'ci-usenet');
   INSERT INTO "Operations" ("OperationKindKey","OperationStatusTypeId")
   VALUES ('ci-download',1) RETURNING "Id" INTO op;
   INSERT INTO "AcquisitionDownloadClients"

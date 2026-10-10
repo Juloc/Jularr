@@ -39,7 +39,7 @@ FROM "Works"
 WHERE "CanonicalTitle" LIKE 'Phase B WorkCard %'
 ORDER BY "Id"
 LIMIT 1 \gset
-INSERT INTO "ImageTypes" ("Id", "Key") VALUES (1, 'cover'), (2, 'banner');
+
 INSERT INTO "ImageTypeTargets" ("ImageTypeId", "ImageTargetKindTypeId") VALUES (1, 1), (2, 1);
 INSERT INTO "Images" ("StorageKey", "MimeType")
 VALUES ('phase-b-watchlist-cover', 'image/png')

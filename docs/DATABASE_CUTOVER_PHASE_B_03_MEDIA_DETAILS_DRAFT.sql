@@ -31,7 +31,13 @@ CREATE TABLE "WorkCreditRoleTypes" (
     CONSTRAINT "CK_WorkCreditRoleTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_WorkCreditRoleTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
--- Required: author, narrator, illustrator etc.; exact byte enum seed IDs pending.
+INSERT INTO "WorkCreditRoleTypes" ("Id", "Key")
+VALUES
+    (1, 'cast'),
+    (2, 'crew'),
+    (3, 'author'),
+    (4, 'narrator'),
+    (5, 'illustrator');
 CREATE TABLE "WorkCredits" (
     "WorkEditionId" bigint NOT NULL,
     "PersonId" bigint NOT NULL,

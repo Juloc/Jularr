@@ -7,9 +7,10 @@
 14 DDL-Abschnitte, 175 Target-Tabellen, 46 Type-Kataloge und 22 separate öffentliche
 Ressourcen-UUIDs. Interne Ressourcen-PKs/FKs und Joins bleiben bigint; Secrets
 bleiben unabhängig davon kryptografisch zufällig und gehasht/geschützt.
-23 Type-Kataloge mit 112 Codes besitzen jetzt explizite C#-byte-Verträge,
-identische Seeds sowie lokale PostgreSQL- und CI-Nachweise. 23 Kataloge sind
-noch offen. Diese Zahlen sind kein Gate-B-Abschluss.
+Alle 46 bestehenden Type-Kataloge mit 235 Codes besitzen explizite C#-byte-
+Verträge und identische Seeds. Der Verifier lehnt nicht definierte Kataloge ab.
+Der vollständige DDL-Bootstrap sowie fünf betroffene SQL-Suites sind lokal auf
+PostgreSQL 18.6 geprüft. Diese Zahlen sind kein Gate-B-Abschluss.
 
 Account Groups ist durch aktuellen Owner-Auftrag eingeschlossen; seine neutrale
 Foundation und der paginierte Owner-Read sind geprüft. Persönliche Learning-
@@ -18,7 +19,12 @@ berechtigungsgeprüften paginierten Read. Bestehende Kursoptionen sind erhalten.
 Geplante Notifications-Verträge wurden direkt mit PR #842 abgeglichen;
 Category/Audience/Severity sind jetzt durch einen Composite-FK gekoppelt.
 
-Die verbleibenden Fach-/Seed- und vollständigen Query-Nachweise stehen in
+Learning-SkipReason ist nur bei Status Skipped erlaubt; abgeschlossene
+Learning-Sessions benötigen eine passende EndReason. Detection-Runs erzwingen
+konsistente Running-/Succeeded-/Failed-/Cancelled-Ergebnisse. Erfolgreiche
+No-Match-Runs und erneute Runs mit gleichem Fingerprint bleiben zulässig.
+
+Die verbleibenden Fach- und vollständigen Query-Nachweise stehen in
 [DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md). Insbesondere Quiet-Hours-/
 Digest-/Endpoint-Persistenz, Inbox-Recurrence und weitere Auth-/Provider-/
 Work-Facts bleiben offen. Keine Runtime-Portierung, EF-Baseline oder aktive

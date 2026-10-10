@@ -67,9 +67,6 @@ BEGIN
         END IF;
     END LOOP;
 
-    INSERT INTO "MediaTypes" ("Id","Key")
-    VALUES (1,'phase-b-public-id-media')
-    ON CONFLICT DO NOTHING;
     IF NOT EXISTS (SELECT 1 FROM "MediaTypes" WHERE "Id"=1) THEN
        RAISE EXCEPTION 'Test MediaType id=1 fixture absent';
     END IF;

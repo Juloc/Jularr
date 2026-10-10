@@ -42,6 +42,9 @@ DECLARE
     person_id bigint;
     season_one bigint;
     episode_one bigint;
+    target_status smallint;
+    rejected_constraint text;
+    result_case record;
 BEGIN
     INSERT INTO "UiLocales" ("Locale","Name") VALUES ('en','English')
     RETURNING "Id" INTO locale_id;
@@ -87,8 +90,6 @@ BEGIN
     INSERT INTO "CurriculumLessons" ("CurriculumChapterId","CurriculumBlueprintId","Ordinal")
     VALUES (chapter_two,blueprint_two,1) RETURNING "Id" INTO lesson_two;
 
-    INSERT INTO "CurriculumExerciseKindTypes" ("Id","Key") VALUES (1,'ci-quiz');
-    INSERT INTO "CurriculumExercisePhaseTypes" ("Id","Key") VALUES (1,'ci-practice');
     INSERT INTO "CurriculumExercises"
         ("CurriculumLessonId","CurriculumBlueprintId","Key","Ordinal",
          "CurriculumExerciseKindTypeId","CurriculumExercisePhaseTypeId")
@@ -110,15 +111,31 @@ BEGIN
     VALUES (profile_id,shared_one,blueprint_one)
     RETURNING "Id" INTO enrollment_one;
 
-    INSERT INTO "LearnerProgressStatusTypes" ("Id","Key") VALUES (1,'ci-new');
-    INSERT INTO "LearnerExerciseOutcomeTypes" ("Id","Key") VALUES (1,'ci-accepted');
-    INSERT INTO "LearningActivityKindTypes" ("Id","Key") VALUES (1,'ci-learning');
-
     -- Positive control: an item inside the same pinned blueprint must succeed.
     INSERT INTO "LearnerCourseProgress"
         ("LearnerCourseId","CurriculumBlueprintId","CurriculumLevelId",
          "LearnerProgressStatusTypeId")
     VALUES (enrollment_one,blueprint_one,level_one,1);
+    FOR target_status IN 1..3 LOOP
+        BEGIN
+            UPDATE "LearnerCourseProgress"
+            SET "LearnerProgressStatusTypeId" = target_status,
+                "LearnerProgressSkipReasonTypeId" = 1
+            WHERE "LearnerCourseId" = enrollment_one AND "CurriculumLevelId" = level_one;
+            RAISE EXCEPTION 'Non-skipped status % accepted a skip reason', target_status;
+        EXCEPTION WHEN check_violation THEN
+            GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
+            IF rejected_constraint <> 'CK_LearnerCourseProgress_SkipReason' THEN
+                RAISE;
+            END IF;
+        END;
+    END LOOP;
+    UPDATE "LearnerCourseProgress"
+    SET "LearnerProgressStatusTypeId" = 4, "LearnerProgressSkipReasonTypeId" = 2
+    WHERE "LearnerCourseId" = enrollment_one AND "CurriculumLevelId" = level_one;
+    UPDATE "LearnerCourseProgress"
+    SET "LearnerProgressStatusTypeId" = 1, "LearnerProgressSkipReasonTypeId" = NULL
+    WHERE "LearnerCourseId" = enrollment_one AND "CurriculumLevelId" = level_one;
     INSERT INTO "LearnerExerciseAttempts"
         ("LearnerCourseId","CurriculumBlueprintId","CurriculumExerciseId",
          "ClientEventId","LearnerExerciseOutcomeTypeId")
@@ -166,6 +183,28 @@ BEGIN
         RAISE EXCEPTION 'Cross-blueprint learning activity was accepted';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
+
+    FOR result_case IN
+        SELECT fixture.ended_at, fixture.end_reason
+        FROM (VALUES (NULL::timestamptz, 1::smallint), (now(), NULL::smallint)) AS fixture(ended_at, end_reason)
+    LOOP
+        BEGIN
+            INSERT INTO "LearningActivitySessions" (
+                "ClientSessionId", "ProfileId", "LearningActivityKindTypeId",
+                "StartedAt", "LastActivityAt", "EndedAt", "LearningSessionEndReasonTypeId")
+            VALUES (gen_random_uuid(), profile_id, 2, now(), now(), result_case.ended_at, result_case.end_reason);
+            RAISE EXCEPTION 'Learning session accepted an incomplete end pair';
+        EXCEPTION WHEN check_violation THEN
+            GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
+            IF rejected_constraint <> 'CK_LearningActivitySessions_EndReason' THEN
+                RAISE;
+            END IF;
+        END;
+    END LOOP;
+    INSERT INTO "LearningActivitySessions" (
+        "ClientSessionId", "ProfileId", "LearningActivityKindTypeId",
+        "StartedAt", "LastActivityAt", "EndedAt", "LearningSessionEndReasonTypeId")
+    VALUES (gen_random_uuid(), profile_id, 2, now(), now(), now(), 1);
 
     -- Positive control for progress subtype: one parent and matching detail.
     INSERT INTO "Works" ("MediaTypeId","CanonicalTitle")
@@ -251,7 +290,7 @@ BEGIN
 
     -- Positive cover assignment, then reject one image assigned to two targets
     -- in a single row. A second invalid case proves Type/Target-kind pairing.
-    INSERT INTO "ImageTypes" ("Id","Key") VALUES (1,'ci-cover');
+
     INSERT INTO "ImageTypeTargets" ("ImageTypeId","ImageTargetKindTypeId")
     VALUES (1,1);
     INSERT INTO "Images" ("StorageKey","MimeType")
@@ -280,7 +319,6 @@ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
 
-
     -- T02: an owner-less Profile MUST NOT survive deferred membership validation.
     BEGIN
         INSERT INTO "Profiles" ("OwnerAccountId","DisplayName","UiLocaleId")
@@ -302,7 +340,6 @@ BEGIN
     VALUES (edition_one,work_for_image,'Movie v1') RETURNING "Id" INTO version_one;
     INSERT INTO "WorkVersions" ("WorkEditionId","WorkId","VersionLabel")
     VALUES (edition_two,other_work,'Game v1') RETURNING "Id" INTO version_two;
-    INSERT INTO "MediaAssetTypes" ("Id","Key") VALUES (1,'ci-file');
 
     -- T04: an asset cannot bind a WorkVersion to somebody else's Work.
     BEGIN
@@ -357,7 +394,7 @@ BEGIN
         RAISE EXCEPTION 'GameRelease with a foreign WorkVersion was accepted';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
-    INSERT INTO "GameReleaseFileRoleTypes" ("Id","Key") VALUES (1,'ci-disc');
+
     INSERT INTO "GameReleaseStoredFiles"
         ("WorkVersionId","StoredFileId","DiscNumber","GameReleaseFileRoleTypeId")
     VALUES (version_two,file_two,1,1);
@@ -409,7 +446,7 @@ BEGIN
     END;
 
     -- T13: overlapping valid segments are permitted, reversed time is prohibited.
-    INSERT INTO "MediaSegmentSourceTypes" ("Id","Key") VALUES (1,'ci-manual');
+
     INSERT INTO "MediaSegments"
         ("MediaAssetId","MediaSegmentTypeId","MediaSegmentSourceTypeId","StartMs","EndMs")
     VALUES (asset_one,1,1,0,1200),(asset_one,1,1,800,1500);
@@ -420,13 +457,41 @@ BEGIN
         RAISE EXCEPTION 'Reverse-time MediaSegment was accepted';
     EXCEPTION WHEN check_violation THEN NULL;
     END;
-    INSERT INTO "MediaDetectionTypes" ("Id","Key") VALUES (1,'ci-intro');
-    INSERT INTO "MediaDetectionStatusTypes" ("Id","Key") VALUES (1,'ci-success');
+
     INSERT INTO "MediaDetectionRuns"
         ("MediaAssetId","MediaDetectionTypeId","MediaDetectionStatusTypeId",
          "InputFingerprint","DetectorVersion","MatchCount","FinishedAt")
-    VALUES (asset_one,1,1,'ci-fixture-fingerprint','ci-v1',0,now());
+    VALUES (asset_one,1,2,'ci-fixture-fingerprint','ci-v1',0,now()),
+           (asset_one,1,2,'ci-fixture-fingerprint','ci-v1',0,now());
     -- Success with MatchCount=0 must NOT be forced into a failed run.
+    INSERT INTO "MediaDetectionRuns" (
+        "MediaAssetId", "MediaDetectionTypeId", "MediaDetectionStatusTypeId",
+        "InputFingerprint", "DetectorVersion", "FinishedAt", "ErrorCode")
+    VALUES (asset_one, 1, 1, 'running', 'v1', NULL, NULL),
+           (asset_one, 1, 3, 'failed', 'v1', now(), 'probe_failed'),
+           (asset_one, 1, 4, 'cancelled', 'v1', now(), NULL);
+    FOR result_case IN
+        SELECT fixture.status, fixture.finished_at, fixture.match_count, fixture.error_code
+        FROM (VALUES
+            (1::smallint, now(), 0, NULL::text),
+            (2::smallint, NULL::timestamptz, 0, NULL::text),
+            (3::smallint, now(), 0, 'probe_failed'),
+            (4::smallint, now(), 0, NULL::text)) AS fixture(status, finished_at, match_count, error_code)
+    LOOP
+        BEGIN
+            INSERT INTO "MediaDetectionRuns" (
+                "MediaAssetId", "MediaDetectionTypeId", "MediaDetectionStatusTypeId",
+                "InputFingerprint", "DetectorVersion", "FinishedAt", "MatchCount", "ErrorCode")
+            VALUES (asset_one, 1, result_case.status, 'invalid', 'v1',
+                    result_case.finished_at, result_case.match_count, result_case.error_code);
+            RAISE EXCEPTION 'Detection status % accepted an inconsistent result', result_case.status;
+        EXCEPTION WHEN check_violation THEN
+            GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
+            IF rejected_constraint <> 'CK_MediaDetectionRuns_Result' THEN
+                RAISE;
+            END IF;
+        END;
+    END LOOP;
 
     -- T20: canonical Wanted follows the Work/Unit identity, not an unrelated Work.
     BEGIN

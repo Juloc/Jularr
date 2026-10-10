@@ -109,7 +109,7 @@ BEGIN
     INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")
     VALUES (work_id, edition_id)
     RETURNING "Id" INTO version_id;
-    INSERT INTO "MediaAssetTypes" ("Id", "Key") VALUES (1, 'phase-b-reader');
+
     INSERT INTO "MediaAssets" ("WorkId", "WorkVersionId", "MediaAssetTypeId")
     VALUES (work_id, version_id, 1)
     RETURNING "Id" INTO asset_id;

@@ -85,8 +85,9 @@ for (const line of read('DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv').trim(
     verified.add(enumName);
     values += members.length;
 }
-if (verified.size === 0 || verified.size !== contracts.size)
+const catalogTables = [...ddl.matchAll(/CREATE TABLE "(\w+Types)" \(/g)].map(match => match[1]);
+if (pending !== 0 || verified.size !== catalogTables.length || verified.size !== contracts.size)
 {
-    throw new Error('Every declared byte enum must have exactly one matching manifest and DDL seed contract.');
+    throw new Error('Every persisted type catalog must have exactly one explicit byte contract, manifest row and DDL seed statement.');
 }
 process.stdout.write(`Verified ${verified.size} defined byte contracts and ${values} seed values; ${pending} catalogs still unresolved.\n`);

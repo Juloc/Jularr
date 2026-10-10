@@ -60,7 +60,26 @@ Die neuen DDL-Dateien 04–06 ergänzen Monitoring/Wanted/RequestTargets und Not
 
 ## Belegte Enum-Quellwerte
 
-Die tatsächlichen alten C#-Werte und der korrigierte AccountRole-Entwurf stehen in [DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md](DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md). Das neue Target-Seed-Manifest und die Byte-Umstellung müssen in B01 gesondert bestätigt werden.
+Die alten C#-Werte stehen im [historischen Enum-Abgleich](DATABASE_CUTOVER_PHASE_B_ENUM_AUDIT.md).
+Maßgeblich für B01 sind jetzt die 46 expliziten Byte-Verträge in
+[TYPE_CONTRACTS.cs](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), ihre 235 Seeds und
+das [vollständig definierte Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv).
+Alle bestehenden Kataloge sind zahlen-/keygenau abgeglichen und auf PostgreSQL 18.6
+geprüft. Die neuen Codes sind ausdrücklich kein automatisches Legacy-int-Mapping.
+Neue fachlich erforderliche persistierte Enums müssen denselben Nachweis erhalten.
+
+Curriculum hat die sechs geplanten Renderer Presentation, MultipleChoice,
+Matching, Cloze, Ordering und ShortAnswer. Listening/Reading sind Lernziele bzw.
+Modalitäten, keine zusätzlichen Renderer; Writing/Speaking-Skilllabels aktivieren
+keine unimplementierte Handschrift-/Sprachauswertung. AcquisitionKind bleibt die
+operative Suchfähigkeits-Taxonomie, nicht ein zweiter Satz Work-Roots.
+WorkFactTypes adressiert ausschließlich die neun expliziten MetadataFacts-Felder
+für Provenienz; es entsteht kein frei definierbarer FactKey/Value-Speicher.
+
+Physisch geprüft sind außerdem SkipReason nur bei Skipped, vollständige Session-
+Endpaare und Detection-Ergebnisse passend zum Status. No-Match und bewusste
+Wiederholung bleiben gültig. Die übrige fachliche Abdeckung und Query-Gates
+sind weiterhin offen; das geschlossene Seed-Manifest ist kein Gate-B-GO.
 
 ## Konkrete Korrekturen vor Freigabe
 

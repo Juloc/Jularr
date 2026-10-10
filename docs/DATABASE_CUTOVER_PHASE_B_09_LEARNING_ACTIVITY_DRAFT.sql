@@ -3,7 +3,6 @@
 -- NEVER use global Operations/JularrEvent as a high-frequency Learning activity ledger.
 -- No new XP balance, derived streak counter, badge-progress, heartbeat or currency.
 -- Execute only after drafts 01..08 on a fresh disposable PostgreSQL database.
--- All type IDs/keys require final byte enum seed signoff; NO old enum IDs implied.
 BEGIN;
 
 CREATE TABLE "LearningActivityKindTypes" (
@@ -14,6 +13,14 @@ CREATE TABLE "LearningActivityKindTypes" (
     CONSTRAINT "CK_LearningActivityKindTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_LearningActivityKindTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
+INSERT INTO "LearningActivityKindTypes" ("Id", "Key")
+VALUES
+    (1, 'lesson'),
+    (2, 'review'),
+    (3, 'vocabulary_practice'),
+    (4, 'sentence_practice'),
+    (5, 'script_practice'),
+    (6, 'media_practice');
 -- Lesson, Review, VocabularyPractice, SentencePractice, ScriptPractice, MediaPractice.
 CREATE TABLE "LearningSessionEndReasonTypes" (
     "Id" smallint NOT NULL,
@@ -23,6 +30,11 @@ CREATE TABLE "LearningSessionEndReasonTypes" (
     CONSTRAINT "CK_LearningSessionEndReasonTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_LearningSessionEndReasonTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
+INSERT INTO "LearningSessionEndReasonTypes" ("Id", "Key")
+VALUES
+    (1, 'completed'),
+    (2, 'exited'),
+    (3, 'abandoned');
 -- Completed, Exited, Abandoned. Session existence does NOT mean course completion.
 
 CREATE TABLE "LearningActivitySessions" (
@@ -51,7 +63,8 @@ CREATE TABLE "LearningActivitySessions" (
     CONSTRAINT "FK_LearningActivitySessions_EndReasonTypes" FOREIGN KEY ("LearningSessionEndReasonTypeId") REFERENCES "LearningSessionEndReasonTypes" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "CK_LearningActivitySessions_Scope" CHECK (num_nonnulls("LearnerCourseId","LearningCourseId") <= 1),
     CONSTRAINT "CK_LearningActivitySessions_Time" CHECK (
-        "LastActivityAt" >= "StartedAt" AND ("EndedAt" IS NULL OR "EndedAt" >= "StartedAt")),
+        "LastActivityAt" >= "StartedAt" AND ("EndedAt" IS NULL OR "EndedAt" >= "LastActivityAt")),
+    CONSTRAINT "CK_LearningActivitySessions_EndReason" CHECK (("EndedAt" IS NULL) = ("LearningSessionEndReasonTypeId" IS NULL)),
     CONSTRAINT "CK_LearningActivitySessions_Active" CHECK ("ClientActiveMilliseconds" >= 0 AND "ActiveSeconds" >= 0)
 );
 CREATE INDEX "IX_LearningActivitySessions_Profile_Started" ON "LearningActivitySessions"
@@ -84,6 +97,13 @@ CREATE TABLE "LearningActivityEventKindTypes" (
     CONSTRAINT "CK_LearningActivityEventKindTypes_Id" CHECK ("Id" BETWEEN 0 AND 255),
     CONSTRAINT "CK_LearningActivityEventKindTypes_Key" CHECK (length(btrim("Key")) > 0)
 );
+INSERT INTO "LearningActivityEventKindTypes" ("Id", "Key")
+VALUES
+    (1, 'exercise_completed'),
+    (2, 'review_completed'),
+    (3, 'lesson_completed'),
+    (4, 'practice_item_completed'),
+    (5, 'session_completed');
 -- ExerciseCompleted / ReviewCompleted / LessonCompleted /
 -- PracticeItemCompleted / SessionCompleted. NOT JularrEvent notifications.
 
