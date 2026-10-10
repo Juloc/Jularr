@@ -121,6 +121,12 @@ public sealed class PlexLibraryAdapterTests
               {"ratingKey":"734","title":"Dune","type":"movie","Guid":[{"id":"tmdb://438631"}]},
               {"ratingKey":"734","title":"Dune","type":"movie","Guid":[{"id":"tmdb://438631"}]}
             ]}}
+            """,
+            """
+            {"MediaContainer":{"librarySectionID":29,"Metadata":[
+              {"ratingKey":"734","title":"Dune","type":"movie","librarySectionID":"invalid",
+               "Guid":[{"id":"tmdb://438631"}]}
+            ]}}
             """
         };
 
@@ -131,6 +137,32 @@ public sealed class PlexLibraryAdapterTests
                 Server, "private-token", "instance-123", "734", CancellationToken.None);
             Assert.IsNull(item);
         }
+    }
+
+    [TestMethod]
+    public async Task MalformedMetadataEntriesCannotCrashTheProviderParser()
+    {
+        foreach (var response in new[] { "[]", """{"MediaContainer":null}""" })
+        {
+            using var client = new HttpClient(new Handler(_ => Json(response)));
+            await Assert.ThrowsExactlyAsync<InvalidDataException>(() =>
+                new PlexLibraryClient(client).GetSectionsAsync(
+                    Server, "private-token", "instance-123", CancellationToken.None));
+        }
+
+        using var metadataClient = new HttpClient(new Handler(_ => Json(
+            """
+            {"MediaContainer":{"totalSize":4,"Metadata":[
+              null,42,"not-an-item",
+              {"ratingKey":"734","title":"Dune","type":"movie",
+               "Guid":[null,42,"not-a-guid",{"id":"tmdb://438631"}]}
+            ]}}
+            """)));
+        var page = await new PlexLibraryClient(metadataClient).GetItemsAsync(
+            Server, "private-token", "instance-123", "1", 0, 4,
+            CancellationToken.None);
+        Assert.AreEqual(1, page.Items.Count);
+        Assert.AreEqual("tmdb", page.Items[0].ExternalIds.Single().Provider);
     }
 
     [TestMethod]
