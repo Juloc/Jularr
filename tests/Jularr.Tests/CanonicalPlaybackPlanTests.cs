@@ -207,6 +207,45 @@ public sealed class CanonicalPlaybackPlanTests
         Assert.AreEqual(candidate.StoredFileId, sortedPlan.MediaFileId,
             "The verified rendition remains selectable even when its path sorts ahead of the source.");
 
+        // The database can still reference a derivative that the cache sweeper has evicted.
+        // A missing output must never cause playback to select an unavailable version.
+        var temporarilyMissing = earlierPath + ".unavailable";
+        File.Move(earlierPath, temporarilyMissing);
+        try
+        {
+            var missingPrepared = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, missingPrepared.MediaFileId,
+                "When the prepared bytes are gone, live transcoding from the original remains possible.");
+            var missingReplan = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader",
+                input with { ReplacesSessionId = verified.Session.Id }, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, missingReplan.MediaFileId,
+                "Re-planning cannot reuse the old session's vanished derivative.");
+        }
+        finally
+        {
+            File.Move(temporarilyMissing, earlierPath);
+        }
+
+        // A source removed on disk, but not yet detached by a library scan, cannot
+        // turn a prepared cache file into the sole playable version of that Work.
+        var originalPath = original.Path;
+        var missingSourcePath = originalPath + ".unavailable";
+        File.Move(originalPath, missingSourcePath);
+        try
+        {
+            var missingOriginal = (await planner.PlanAsync(
+                PlaybackVideoTarget.Movie(movie.Id), "reader", input, CancellationToken.None))!;
+            Assert.AreEqual(original.StoredFileId, missingOriginal.MediaFileId,
+                "The source must remain the canonical choice when its bytes are missing.");
+            Assert.AreEqual(PlaybackDeliveryMode.Unavailable, missingOriginal.Plan.Mode);
+        }
+        finally
+        {
+            File.Move(missingSourcePath, originalPath);
+        }
+
         var local = (await planner.PlanAsync(
             PlaybackVideoTarget.Movie(movie.Id), "reader",
             input with { RemoteAddress = IPAddress.Loopback, Network = null }, CancellationToken.None))!;

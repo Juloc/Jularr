@@ -258,7 +258,9 @@ public sealed class PlaybackPlanService(
             {
                 var originalsAndSelected = await mediaInventory.GetManyAsync(
                     [candidates[0].StoredFileId, selected.StoredFileId], cancellationToken);
-                if (originalsAndSelected.TryGetValue(candidates[0].StoredFileId, out var originAnalysis) &&
+                if (input.Wake &&
+                    File.Exists(candidates[0].Path) && File.Exists(selected.Path) &&
+                    originalsAndSelected.TryGetValue(candidates[0].StoredFileId, out var originAnalysis) &&
                     originalsAndSelected.TryGetValue(selected.StoredFileId, out var renditionAnalysis) &&
                     PlaybackPreparedRenditionEligibility.IsEligible(
                         candidates[0], originAnalysis, selected, renditionAnalysis))
@@ -303,7 +305,8 @@ public sealed class PlaybackPlanService(
                 if (!analyses.TryGetValue(candidate.StoredFileId, out var analysis) ||
                     analysis is not { Status: MediaAnalysisStatus.Succeeded, ProbeVersion: MediaInventoryService.CurrentProbeVersion, Technical: { } technical } ||
                     (candidate.StoredFileId != source.StoredFileId &&
-                     !PlaybackPreparedRenditionEligibility.IsEligible(source, sourceAnalysis, candidate, analysis)))
+                     (!input.Wake || !File.Exists(source.Path) || !File.Exists(candidate.Path) ||
+                      !PlaybackPreparedRenditionEligibility.IsEligible(source, sourceAnalysis, candidate, analysis))))
                 {
                     continue;
                 }
