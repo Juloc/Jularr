@@ -168,12 +168,23 @@ const readerQueries = [
     {
         name: 'reader_bookmarks',
         start: '-- Service BOOKMARKS:',
-        end: '-- Service HIGHLIGHTS:'
+        end: '-- Service HIGHLIGHTS:',
+        types: 'bigint,bigint,uuid,integer,bigint',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId', 'PageSize', 'Offset']
     },
     {
         name: 'reader_highlights',
         start: '-- Service HIGHLIGHTS:',
-        end: null
+        end: '-- Service PAGES:',
+        types: 'bigint,bigint,uuid,integer,bigint',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId', 'PageSize', 'Offset']
+    },
+    {
+        name: 'reader_pages',
+        start: '-- Service PAGES:',
+        end: null,
+        types: 'bigint,bigint,uuid,integer,integer,integer',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkEditionPublicId', 'ContentRevision', 'StartPageIndex', 'PageSize']
     }
 ];
 
@@ -187,7 +198,7 @@ for (const query of readerQueries)
     }
 
     let sql = readerFile.slice(start, end).trim();
-    for (const [index, name] of ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId', 'PageSize', 'Offset'].entries())
+    for (const [index, name] of query.parameters.entries())
     {
         if (!sql.includes(`@${name}`))
         {
@@ -200,5 +211,7 @@ for (const query of readerQueries)
         throw new Error(`Unbound SQL placeholder in canonical ${query.name} query.`);
     }
     writeFileSync(resolve(outputDirectory, `phase_b_${query.name}_prepared.sql`),
-        'PREPARE phase_b_' + query.name + '(bigint,bigint,uuid,integer,bigint) AS\n' + sql + '\n');
+        `PREPARE phase_b_${query.name}(${query.types}) AS
+${sql}
+`);
 }
