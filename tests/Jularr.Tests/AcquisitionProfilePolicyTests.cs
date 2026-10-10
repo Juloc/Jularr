@@ -33,7 +33,7 @@ public sealed class AcquisitionProfilePolicyTests
         [MediaAcquisitionKind.Tv, "Show.S01E01.720p.WEB-DL.H264-GRP"],
         [MediaAcquisitionKind.Anime, "Show.S01E01.720p.WEB-DL.H264-GRP"],
         [MediaAcquisitionKind.Book, "Frank Herbert - Dune (1965) PDF"],
-        [MediaAcquisitionKind.LightNovel, "Frieren Vol 01 ZIP"],
+        [MediaAcquisitionKind.LightNovel, "Frieren Vol 01 EPUB"],
         [MediaAcquisitionKind.Manga, "Frieren Vol 01 ZIP"],
         [MediaAcquisitionKind.Music, "Artist - Album (2020) MP3-256"]
     ];
