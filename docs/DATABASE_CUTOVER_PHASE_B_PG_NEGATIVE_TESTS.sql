@@ -27,6 +27,19 @@ DECLARE
     other_profile_id bigint;
     image_id bigint;
     chapter_id bigint;
+    asset_one bigint;
+    asset_other bigint;
+    file_one bigint;
+    file_two bigint;
+    library_root_id bigint;
+    edition_one bigint;
+    edition_two bigint;
+    version_one bigint;
+    version_two bigint;
+    other_work bigint;
+    game_platform_id bigint;
+    season_one bigint;
+    episode_one bigint;
 BEGIN
     INSERT INTO "UiLocales" ("Locale","Name") VALUES ('en','English')
     RETURNING "Id" INTO locale_id;
@@ -213,6 +226,152 @@ BEGIN
         VALUES (image_id,1,1,chapter_id);
         RAISE EXCEPTION 'ImageAssignment with incorrect target kind was accepted';
     EXCEPTION WHEN check_violation THEN NULL;
+    END;
+
+
+    -- T02: an owner-less Profile MUST NOT survive deferred membership validation.
+    BEGIN
+        INSERT INTO "Profiles" ("OwnerAccountId","DisplayName","UiLocaleId")
+        VALUES (account_id,'Missing Owner Membership',locale_id);
+        SET CONSTRAINTS "FK_Profiles_OwnerAccountProfiles" IMMEDIATE;
+        RAISE EXCEPTION 'Profile without owner membership was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    -- Build two separate Works and fully consistent media/version/file chains.
+    -- The media and file-role codes are SCRATCH-ONLY; target enum seeds remain unsigned.
+    INSERT INTO "Works" ("MediaTypeId","CanonicalTitle")
+    VALUES (7,'Phase B Game Work') RETURNING "Id" INTO other_work;
+    INSERT INTO "WorkEditions" ("WorkId","Name") VALUES (work_for_image,'Movie Edition')
+        RETURNING "Id" INTO edition_one;
+    INSERT INTO "WorkEditions" ("WorkId","Name") VALUES (other_work,'Game Edition')
+        RETURNING "Id" INTO edition_two;
+    INSERT INTO "WorkVersions" ("WorkEditionId","WorkId","VersionLabel")
+    VALUES (edition_one,work_for_image,'Movie v1') RETURNING "Id" INTO version_one;
+    INSERT INTO "WorkVersions" ("WorkEditionId","WorkId","VersionLabel")
+    VALUES (edition_two,other_work,'Game v1') RETURNING "Id" INTO version_two;
+    INSERT INTO "MediaAssetTypes" ("Id","Key") VALUES (1,'ci-file');
+
+    -- T04: an asset cannot bind a WorkVersion to somebody else's Work.
+    BEGIN
+        INSERT INTO "MediaAssets" ("WorkVersionId","WorkId","MediaAssetTypeId")
+        VALUES (version_one,other_work,1);
+        RAISE EXCEPTION 'Cross-Work media asset was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    INSERT INTO "MediaAssets" ("WorkVersionId","WorkId","MediaAssetTypeId")
+    VALUES (version_one,work_for_image,1) RETURNING "Id" INTO asset_one;
+    INSERT INTO "MediaAssets" ("WorkVersionId","WorkId","MediaAssetTypeId")
+    VALUES (version_two,other_work,1) RETURNING "Id" INTO asset_other;
+    INSERT INTO "LibraryRoots" ("DisplayName","RootPath")
+    VALUES ('Phase B Root','/phase-b-ci') RETURNING "Id" INTO library_root_id;
+
+    -- T05: a StoredFile cannot assert a version differing from its MediaAsset.
+    BEGIN
+        INSERT INTO "StoredFiles"
+            ("LibraryRootId","MediaAssetId","WorkVersionId","NormalizedRelativePath")
+        VALUES (library_root_id,asset_one,version_two,'ci-bad-version');
+        RAISE EXCEPTION 'Cross-Version stored file was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    INSERT INTO "StoredFiles"
+        ("LibraryRootId","MediaAssetId","WorkVersionId","NormalizedRelativePath","IsPresent")
+    VALUES (library_root_id,asset_one,version_one,'ci-movie-file',true)
+    RETURNING "Id" INTO file_one;
+    INSERT INTO "StoredFiles"
+        ("LibraryRootId","MediaAssetId","WorkVersionId","NormalizedRelativePath","IsPresent")
+    VALUES (library_root_id,asset_other,version_two,'ci-game-disc-1',true)
+    RETURNING "Id" INTO file_two;
+
+    -- T06: game release files must come from precisely the release's WorkVersion.
+    INSERT INTO "GamePlatforms" ("Key","Name") VALUES ('ci-platform','Test Platform')
+        RETURNING "Id" INTO game_platform_id;
+    INSERT INTO "GameReleases" ("WorkVersionId","GamePlatformId")
+    VALUES (version_two,game_platform_id);
+    INSERT INTO "GameReleaseFileRoleTypes" ("Id","Key") VALUES (1,'ci-disc');
+    INSERT INTO "GameReleaseStoredFiles"
+        ("WorkVersionId","StoredFileId","DiscNumber","GameReleaseFileRoleTypeId")
+    VALUES (version_two,file_two,1,1);
+    BEGIN
+        INSERT INTO "GameReleaseStoredFiles"
+            ("WorkVersionId","StoredFileId","DiscNumber","GameReleaseFileRoleTypeId")
+        VALUES (version_two,file_one,2,1);
+        RAISE EXCEPTION 'Foreign WorkVersion file was accepted for game release';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+    -- T07 remains explicitly OPEN: GameRelease itself must additionally be game-only.
+
+    -- T08: neither the Work nor the selected File may point to a different asset.
+    BEGIN
+        INSERT INTO "PlaybackSessions"
+            ("ProfileId","WorkId","MediaAssetId","PlaybackModeKey")
+        VALUES (profile_id,work_for_image,asset_other,'ci-direct');
+        RAISE EXCEPTION 'PlaybackSession with foreign Work/Asset was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+    BEGIN
+        INSERT INTO "PlaybackSessions"
+            ("ProfileId","WorkId","MediaAssetId","StoredFileId","PlaybackModeKey")
+        VALUES (profile_id,other_work,asset_other,file_one,'ci-direct');
+        RAISE EXCEPTION 'PlaybackSession with foreign StoredFile was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    -- T10: media progress Episode FK must resolve inside its declared Work.
+    INSERT INTO "WorkSeasons" ("WorkId","SeasonNumber")
+    VALUES (work_for_image,1) RETURNING "Id" INTO season_one;
+    INSERT INTO "WorkEpisodes" ("WorkId","WorkSeasonId","OrderIndex")
+    VALUES (work_for_image,season_one,1) RETURNING "Id" INTO episode_one;
+    BEGIN
+        INSERT INTO "MediaProgress"
+            ("ProfileId","WorkId","WorkEpisodeId","ProgressPositionTypeId")
+        VALUES (profile_id,other_work,episode_one,1);
+        RAISE EXCEPTION 'MediaProgress to another Works Episode was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+
+    -- T11: NULLS NOT DISTINCT must reject two root progress rows for same profile/work.
+    BEGIN
+        INSERT INTO "MediaProgress" ("ProfileId","WorkId","ProgressPositionTypeId")
+        VALUES (profile_id,work_for_image,1);
+        RAISE EXCEPTION 'Duplicate root MediaProgress was accepted';
+    EXCEPTION WHEN unique_violation THEN NULL;
+    END;
+
+    -- T13: overlapping valid segments are permitted, reversed time is prohibited.
+    INSERT INTO "MediaSegmentSourceTypes" ("Id","Key") VALUES (1,'ci-manual');
+    INSERT INTO "MediaSegments"
+        ("MediaAssetId","MediaSegmentTypeId","MediaSegmentSourceTypeId","StartMs","EndMs")
+    VALUES (asset_one,1,1,0,1200),(asset_one,1,1,800,1500);
+    BEGIN
+        INSERT INTO "MediaSegments"
+            ("MediaAssetId","MediaSegmentTypeId","MediaSegmentSourceTypeId","StartMs","EndMs")
+        VALUES (asset_one,1,1,900,100);
+        RAISE EXCEPTION 'Reverse-time MediaSegment was accepted';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    INSERT INTO "MediaDetectionTypes" ("Id","Key") VALUES (1,'ci-intro');
+    INSERT INTO "MediaDetectionStatusTypes" ("Id","Key") VALUES (1,'ci-success');
+    INSERT INTO "MediaDetectionRuns"
+        ("MediaAssetId","MediaDetectionTypeId","MediaDetectionStatusTypeId",
+         "InputFingerprint","DetectorVersion","MatchCount","FinishedAt")
+    VALUES (asset_one,1,1,'ci-fixture-fingerprint','ci-v1',0,now());
+    -- Success with MatchCount=0 must NOT be forced into a failed run.
+
+    -- T20: canonical Wanted follows the Work/Unit identity, not an unrelated Work.
+    BEGIN
+        INSERT INTO "WantedItems" ("WorkId","WorkEpisodeId")
+        VALUES (other_work,episode_one);
+        RAISE EXCEPTION 'Wanted item for foreign episode was accepted';
+    EXCEPTION WHEN foreign_key_violation THEN NULL;
+    END;
+    INSERT INTO "WantedItems" ("WorkId") VALUES (other_work);
+    BEGIN
+        INSERT INTO "WantedItems" ("WorkId") VALUES (other_work);
+        RAISE EXCEPTION 'Duplicate wanted root with NULL unit columns was accepted';
+    EXCEPTION WHEN unique_violation THEN NULL;
     END;
 
     RAISE NOTICE 'Phase B positive and negative relational scope tests passed';
