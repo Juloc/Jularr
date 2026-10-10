@@ -71,6 +71,13 @@ Ruhezeiten/DST, Digest, geschützte Endpoints und aktuelle Route-Revalidierung.
 Elf DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
 Zielpersistenz, keinen existierenden externen Transport oder Runtime-Cutover.
 
+Die [Reader-READs](DATABASE_CUTOVER_PHASE_B_READER_QUERIES_DRAFT.sql) führen
+Bookmark-/Highlight-Paging in je einem statischen SELECT aus, prüfen aktuelle
+Account/Profile-Mitgliedschaft vor LIMIT und geben nur öffentliche UUIDs aus.
+Das zugehörige [PostgreSQL-Testset](DATABASE_CUTOVER_PHASE_B_PG_READER_QUERY_TESTS.sql)
+prüft fremde Accounts, Profil-/Work-Isolation, Entzug und Disable.
+Die Highlight-Sortierung hat einen Profilindex; Content/Playable bleibt offen.
+
 Der [Auth-Vertrag](DATABASE_CUTOVER_PHASE_B_AUTH_CONTRACT.md) ergänzt feste
 Challenge-Zwecke, Credential-Epoch, Session-CAS, TOTP-/Recovery-Replay und
 browsergebundenen Plex-Consent. Hash-Lookup und Self-Session-Paging nutzen ihre
