@@ -12,7 +12,7 @@ function corruptEvidence(mutate, expected) {
     try {
         fs.mkdirSync(path.join(directory,'docs'));
         fs.mkdirSync(path.join(directory,'scripts/cutover'),{recursive:true});
-        for (const name of fs.readdirSync('docs').filter(name=>name.startsWith('DATABASE_CUTOVER_') && name.endsWith('.csv') || name.startsWith('_phase_a_') && name.endsWith('.json'))) {
+        for (const name of fs.readdirSync('docs').filter(name=>name.startsWith('DATABASE_CUTOVER_') && name.endsWith('.csv') || name.startsWith('_phase_a_') && name.endsWith('.json') || name==='DATABASE_CUTOVER_PHASE_A_DOMAINS.json')) {
             fs.copyFileSync(path.join('docs',name),path.join(directory,'docs',name));
         }
         fs.copyFileSync('scripts/cutover/Program.cs',path.join(directory,'scripts/cutover/Program.cs'));
@@ -24,10 +24,11 @@ function corruptEvidence(mutate, expected) {
         fs.rmSync(resolved,{recursive:true});
     }
 }
-test('consistent captured evidence stays open while review gaps exist',()=> {
+test('functional domain coverage completes Phase A while fine-grained audit remains for B/D/E',()=> {
     const result = verifyInventory();
-    assert.equal(result.gateA,'OPEN');
-    assert.ok(result.gaps.unsignedAccessChains>0);
+    assert.equal(result.gateA,'PASSED');
+    assert.equal(result.domains,19);
+    assert.ok(result.deferredDetailAudit.unsignedAccessChains>0);
 });
 test('missing live table rejects inventory even when totals were changed',()=>corruptEvidence(root=> {
     const file = path.join(root,'docs/DATABASE_CUTOVER_INVENTORY_TABLES.csv');
@@ -41,10 +42,10 @@ test('mixed consumer source commit rejects inventory',()=>corruptEvidence(root=>
     const file = path.join(root,'docs/DATABASE_CUTOVER_CONSUMERS.csv');
     const rows = csvRead(file); rows[0].SourceSha='different-commit'; csvWrite(file,rows);
 },/Mixed source SHAs/));
-test('green gate cannot override unsigned authorization and disposition rows',()=>corruptEvidence(root=> {
-    const file = path.join(root,'docs/_phase_a_search_sql_patterns_1.json');
-    const summary = json(file); summary.gateA='PASSED'; writeJson(file,summary);
-},/Gate A contradicts review gaps/));
+test('a missing functional domain rejects Phase A even if catalog evidence is intact',()=>corruptEvidence(root=> {
+    const file = path.join(root,'docs/DATABASE_CUTOVER_PHASE_A_DOMAINS.json');
+    const coverage = json(file); coverage.domains.pop(); writeJson(file,coverage);
+},/Functional domain coverage missing/));
 test('startup metadata cannot contain copied source bodies',()=>corruptEvidence(root=> {
     const file = path.join(root,'docs/_phase_a_search_sql_patterns_3.json');
     const context = json(file); context.startupRegistrations[0].registration+='\nsecond source line'; writeJson(file,context);
