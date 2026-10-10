@@ -85,7 +85,7 @@ public sealed class AdminWantedPageRenderTests
         StringAssert.Contains(html, "name=\"returnUrl\" value=\"/Admin/Wanted\"");
 
         Assert.IsTrue(
-            Regex.IsMatch(html, "<a class=\"admin-nav-item active\"[^>]*href=\"/Admin/Wanted\""),
+            Regex.IsMatch(html, "<a class=\"nav-item active\"[^>]*href=\"/Admin/Wanted\"[^>]*aria-current=\"page\""),
             "The admin navigation links to Wanted and marks it as the current page.");
         Assert.IsFalse(html.Contains("/Acquisition#wanted", StringComparison.Ordinal));
     }

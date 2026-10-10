@@ -483,12 +483,12 @@ public sealed class UsenetModel(
                     "/Settings/Acquisition"));
 
         checks.Add(BookPolicy is null
-            ? new UsenetCheck("access", UsenetCheckState.Unknown, string.Empty, "/Admin/Requests")
+            ? new UsenetCheck("access", UsenetCheckState.Unknown, string.Empty, "/Admin/Capabilities/Manual")
             : new UsenetCheck(
                 "access",
                 UsenetCheckState.Ok,
                 Ui[$"admin.requests.manual.{AcquisitionAccessNames.Manual(BookPolicy.Manual)}"],
-                "/Admin/Requests"));
+                "/Admin/Capabilities/Manual"));
 
         return checks;
     }

@@ -169,6 +169,30 @@ public sealed class RequestOptionsTests
     }
 
     [TestMethod]
+    public async Task QualityChoices_FollowResolvedRuleAndSparseUserOverrides_NotTheArchivedGlobalSetting()
+    {
+        await using var fixture = await AcquisitionAccessFixture.CreateAsync();
+        var settings = await fixture.Settings.SetRequesterQualityProfilesAsync(["old-global"]);
+        var values = RequestRuleValues.Standard with { QualityProfileIds = ["rule-quality"] };
+        settings = await fixture.Settings.SaveProfileAsync(null, "Trusted", null, values, settings.Revision, CancellationToken.None);
+        var id = settings.Rules.Profiles.Last().Id;
+        settings = await fixture.Settings.SaveUserRuleAsync("alice", id, values, false, settings.Revision, CancellationToken.None);
+        var alice = fixture.Service("alice", AccountRole.User);
+        await Assert.ThrowsExactlyAsync<AcquisitionAccessDeniedException>(() => alice.SubmitAsync(AnimeDraft(new() { QualityProfileId = "old-global" }, "denied-global"), CancellationToken.None));
+        var first = await alice.SubmitAsync(AnimeDraft(new() { QualityProfileId = "rule-quality" }, "allowed-rule"), CancellationToken.None);
+        Assert.AreEqual("rule-quality", first.Options.QualityProfileId);
+        settings = await fixture.Settings.SaveProfileAsync(id, "Trusted", null, values with { QualityProfileIds = ["changed-quality"] }, settings.Revision, CancellationToken.None);
+        await alice.SubmitAsync(AnimeDraft(new() { QualityProfileId = "changed-quality" }, "inherited-update"), CancellationToken.None);
+        settings = await fixture.Settings.SaveUserRuleAsync("alice", id, values with { QualityProfileIds = [] }, true, settings.Revision, CancellationToken.None);
+        Assert.IsNotNull(settings.Rules.Users["alice"].Overrides.QualityProfileIds);
+        Assert.IsNull(settings.Rules.Users["alice"].Overrides.Kinds);
+        await Assert.ThrowsExactlyAsync<AcquisitionAccessDeniedException>(() => alice.SubmitAsync(AnimeDraft(new() { QualityProfileId = "changed-quality" }, "denied-override"), CancellationToken.None));
+        await alice.SubmitAsync(AnimeDraft(new(), "normal-defaults"), CancellationToken.None);
+        await fixture.Settings.SaveUserRuleAsync("alice", id, values, false, settings.Revision, CancellationToken.None);
+        await alice.SubmitAsync(AnimeDraft(new() { QualityProfileId = "changed-quality" }, "restored-inheritance"), CancellationToken.None);
+    }
+
+    [TestMethod]
     public async Task RequestersMayOnlyPickQualityProfilesTheOwnerOpenedToRequests()
     {
         await using var fixture = await AcquisitionAccessFixture.CreateAsync();

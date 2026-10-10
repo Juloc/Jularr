@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Jularr.Web.Features.Auth;
 
+
 public sealed class OwnerAuthService(
     AppDbContext db,
     IPasswordHasher<OwnerAccount> passwordHasher)
@@ -357,6 +358,24 @@ public sealed class OwnerAuthService(
                 x.IsEnabled,
                 x.CreatedAt))
             .SingleOrDefaultAsync(cancellationToken);
+
+    /// <summary>Bounded account-name lookup for authorized Admin search; credentials are never projected.</summary>
+    public async Task<IReadOnlyList<LocalAccountSummary>> SearchAsync(string query, CancellationToken cancellationToken = default)
+    {
+        var normalized = query.Trim().ToUpperInvariant();
+        if (normalized.Length == 0)
+        {
+            return [];
+        }
+
+        return await db.Database.SqlQuery<LocalAccountSummary>($"""
+            SELECT "Id", "UserName", "Role", "IsEnabled", "CreatedAt"
+            FROM "OwnerAccounts"
+            WHERE strpos("NormalizedUserName", {normalized}) > 0
+            ORDER BY "UserName"
+            LIMIT 8
+            """).ToListAsync(cancellationToken);
+    }
 
     public async Task RenameAsync(
         string accountId,

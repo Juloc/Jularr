@@ -37,27 +37,11 @@
             <span>@ui["settings.scope.personal"]</span>
         </div>
         <p class="muted">@ui["settings.language.description"]</p>
-        <a class="button" asp-page="/Legacy/Settings/Language">@ui["settings.language.manage"]</a>
+        <a class="button" asp-page="/LocalizationPreferences/Index">@ui["settings.language.manage"]</a>
     </section>
 
-    <section class="panel">
-        <div class="panel-heading">
-            <h2>@ui["settings.learning.title"]</h2>
-            <span>@ui["settings.scope.personal"]</span>
-        </div>
-        <p class="muted">@ui["settings.learning.description"]</p>
-        <a class="button" asp-page="/Settings/Learning">@ui["settings.learning.manage"]</a>
-    </section>
-
-    <section class="panel">
-        <div class="panel-heading">
-            <h2>@ui["settings.ai.title"]</h2>
-            <span>@ui["settings.scope.personal"]</span>
-        </div>
-        <p class="muted">@ui["settings.ai.description"]</p>
-        <a class="button" asp-page="/Settings/Ai">@ui["settings.ai.manage"]</a>
-    </section>
-
+    @if (Model.SettingsDestinations.Contains("/Settings/AniList"))
+    {
     <section class="panel">
         <div class="panel-heading">
             <h2>@ui["settings.anilist.title"]</h2>
@@ -66,7 +50,7 @@
         <p class="muted">@ui["settings.anilist.description"]</p>
         <a class="button" asp-page="/Settings/AniList">@ui["settings.anilist.manage"]</a>
     </section>
-
+    }
 
     @if (Model.PlexConnectionVisible)
     {
@@ -80,6 +64,8 @@
         </section>
     }
 
+    @if (Model.CanConfigureBooks)
+    {
     <section class="panel">
         <div class="panel-heading">
             <h2>@ui["settings.books.title"]</h2>
@@ -88,7 +74,10 @@
         <p class="muted">@ui["settings.books.description"]</p>
         <a class="button" asp-page="/Legacy/Settings/Books">@ui["settings.books.manage"]</a>
     </section>
+    }
 
+    @if (Model.SettingsDestinations.Contains("/Settings/Offline"))
+    {
     <section class="panel">
         <div class="panel-heading">
             <h2>@ui["settings.offline.title"]</h2>
@@ -97,6 +86,7 @@
         <p class="muted">@ui["settings.offline.description"]</p>
         <a class="button" asp-page="/Settings/Offline">@ui["settings.offline.manage"]</a>
     </section>
+    }
 
     <section class="panel">
         <div class="panel-heading">

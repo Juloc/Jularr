@@ -1,0 +1,2 @@
+@model string
+<span class="admreq-requester"><span class="admreq-requester-avatar" aria-hidden="true">@(string.IsNullOrWhiteSpace(Model) ? "?" : System.Globalization.StringInfo.GetNextTextElement(Model).ToUpperInvariant())</span><span>@Model</span></span>

@@ -2,13 +2,24 @@
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
     var onDiscover = ViewData["DiscoverFilter"] is not null;
+    var inAdmin = ViewData["AdminSearch"] is true;
 }
-@* Global search in the content header. On the Home/Discover surface the field belongs to that page's form (id dc-form): typing there is Search
-   mode of the same page. Everywhere else it opens that surface with ?q= (Ctrl/Cmd+K focuses it, pwa.js). *@
-<form class="app-search" role="search" method="get" action="/">
+@* The owning navigation context decides search scope, including legacy Admin routes outside /Admin. Discover retains its existing form. *@
+<form class="app-search" role="search" method="get" action="@(inAdmin ? "/Admin/Search" : "/")" data-admin-search="@(inAdmin ? "" : null)">
     <partial name="_AppIcon" model="@("search")" />
-    <input type="search" name="q" maxlength="120" value="@(onDiscover ? Context.Request.Query["q"].ToString() : "")" autocomplete="off" spellcheck="false" enterkeyhint="search"
+    <input type="search" name="q" maxlength="120" value="@(onDiscover || Context.Request.Path == "/Admin/Search" ? Context.Request.Query["q"].ToString() : "")" autocomplete="off" spellcheck="false" enterkeyhint="search"
            data-app-search form="@(onDiscover ? "dc-form" : null)" data-dc-search="@(onDiscover ? "" : null)"
-           aria-label="@ui["nav.search"]"
-           placeholder="@ui["nav.searchPlaceholder"]" />
+           aria-label="@ui[inAdmin ? "admin.search.title" : "nav.search"]" aria-controls="@(inAdmin ? "admin-search-preview" : null)" aria-expanded="@(inAdmin ? "false" : null)"
+           placeholder="@ui[inAdmin ? "admin.search.placeholder" : "nav.searchPlaceholder"]" />
 </form>
+@if (inAdmin)
+{
+    <link rel="stylesheet" href="~/css/admin-search.css" asp-append-version="true" />
+    <script src="~/js/admin-search.js" asp-append-version="true" defer></script>
+    <section class="admin-search-preview" id="admin-search-preview" popover data-admin-search-preview aria-label="@ui["admin.search.title"]">
+        <p class="admin-search-message" data-admin-search-loading>@ui["admin.search.loading"]</p>
+        <p class="admin-search-message" data-admin-search-error role="alert" hidden>@ui["admin.search.error"]</p>
+        <div data-admin-search-results aria-live="polite"></div>
+        <a class="admin-search-all" data-admin-search-all href="/Admin/Search">@ui["admin.search.all"]</a>
+    </section>
+}

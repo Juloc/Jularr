@@ -17,6 +17,8 @@ Approving a request can create/update the corresponding canonical Wanted/acquisi
 
 ## Tabs
 
+Section navigation uses `Requests | Rules | Users`, in that order, through the shared navigation catalog and section component. The queue is the first tab. Rules retains the existing settings route and forms. Users initially lists real accounts read-only under the existing user-directory authorization; account management remains separate. The shared header breadcrumbs identify the current view without duplicate page titles or top-right view-switching buttons.
+
 Primary tabs:
 - All
 - Open
@@ -26,6 +28,8 @@ Primary tabs:
 - Rejected
 
 Counts may be shown as small neutral pills.
+
+All includes completed requests. Status tabs are the visible lifecycle filter; do not add a redundant Status dropdown or Season filter.
 
 ## Request information
 
@@ -70,7 +74,7 @@ Use:
 - Admin sidebar
 - state tabs
 - search
-- filters for media type, language, status, requester
+- filters for media type, language and requester
 - request table
 - pagination
 
@@ -84,7 +88,11 @@ Recommended columns:
 
 ## Mobile layout
 
-Use large stacked request cards with:
+Filter comboboxes apply single choices immediately. Multiple choices are committed by the combobox's Apply action or when leaving/closing its popup; Cancel restores the applied selection. There is no second page-level or mobile-sheet Apply button.
+
+The Users directory is a compact table with account identity/role, rule profile/assignment, request limit and configured approval columns. Do not repeat media-tag stacks in each row. The entire row opens its user through its native link, without a separate Edit button; the first result is selected on entry. Save and Cancel remain in the shared editor. Desktop keeps the table beside the editor; narrower screens use the existing list-to-editor flow. On phones the same table data reflows into compact rows: identity/role above profile, quota and configured approval, with no horizontal scrolling. Long names/profile names use ellipsis with their full value in a tooltip.
+
+Use compact request rows with:
 - artwork
 - title/unit
 - media type

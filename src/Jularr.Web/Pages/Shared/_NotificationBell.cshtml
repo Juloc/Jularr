@@ -9,11 +9,16 @@
         ? 0
         : await new NotificationStore(NotificationBellDb).CountUnreadAsync(profileId, Context.RequestAborted);
 }
-<a class="notification-bell app-header-button" href="/Notifications"
+<button class="notification-bell app-header-button" type="button" popovertarget="notification-preview" aria-expanded="false" aria-controls="notification-preview"
    aria-label="@(unread > 0 ? ui.Format("notifications.bell.aria", ("count", unread)) : ui["notifications.bell.ariaNone"])">
     <partial name="_AppIcon" model="@("bell")" />
     @if (unread > 0)
     {
         <span class="notification-bell-badge" aria-hidden="true">@(unread > 99 ? "99+" : unread.ToString())</span>
     }
-</a>
+</button>
+<section class="header-preview" id="notification-preview" popover data-header-preview data-preview-url="/Notifications?handler=Preview" aria-label="@ui["notifications.inbox.title"]">
+    <div data-preview-content aria-live="polite"></div>
+    <p data-preview-loading>@ui["shell.preview.loading"]</p>
+    <p data-preview-error role="alert" hidden>@ui["shell.preview.error"]</p>
+</section>

@@ -1,0 +1,49 @@
+@page
+@model Jularr.Web.Pages.Admin.Capabilities.ManualModel
+@using Jularr.Web.Features.Acquisition.Access
+@{
+    var ui = Model.Ui;
+    ViewData["Title"] = ui["admin.requests.policiesHeading"];
+}
+@section Head {
+    <link rel="stylesheet" href="~/css/requests.css" asp-append-version="true" />
+}
+<header class="page-header">
+    <h1>@ui["admin.requests.policiesHeading"]</h1>
+    <a class="button" href="/Admin/Requests/Settings">@ui["admin.requests.settingsSummary"]</a>
+</header>
+<section class="panel access-policies">
+    <div class="panel-heading">
+        <h2>@ui["admin.requests.policiesHeading"]</h2>
+    </div>
+    <p class="muted">@ui["admin.requests.policiesHelp"]</p>
+    <form method="post" asp-page-handler="Save">
+        <table class="access-policy-table">
+            <thead>
+                <tr>
+                    <th scope="col">@ui["admin.requests.column.media"]</th>
+                    <th scope="col">@ui["admin.requests.column.manual"]</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var policy in Model.Policies)
+                {
+                    var name = AcquisitionAccessNames.Kind(policy.Kind);
+                    <tr>
+                        <th scope="row">@ui["admin.requests.kind." + name]</th>
+                        <td>
+                            <select name="manual.@name" aria-label="@ui["admin.requests.column.manual"]">
+                                @foreach (var mode in Enum.GetValues<ManualAddMode>())
+                                {
+                                    var value = AcquisitionAccessNames.Manual(mode);
+                                    <option value="@value" selected="@(mode == policy.Manual)">@ui["admin.requests.manual." + value]</option>
+                                }
+                            </select>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <button class="button button-primary" type="submit">@ui["common.save"]</button>
+    </form>
+</section>

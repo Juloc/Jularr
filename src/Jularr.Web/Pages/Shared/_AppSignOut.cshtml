@@ -3,7 +3,7 @@
 @{
     var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
 }
-@* Sign out of the shell: the header account menu and the phone Profile page share this form. The model is the button's CSS class. *@
+@* The shared header account menu owns sign-out on desktop and mobile. The model supplies its button class. *@
 <form method="post" asp-page="/Account/Logout" data-offline-logout>
     <button class="@Model" type="submit">
         <partial name="_AppIcon" model="@("signOut")" />

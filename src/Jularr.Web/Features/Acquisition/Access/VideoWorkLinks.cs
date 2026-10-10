@@ -5,6 +5,7 @@ using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Providers;
 using Jularr.Web.Features.Operations;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Jularr.Web.Features.Acquisition.Access;
 
@@ -130,6 +131,49 @@ public sealed class VideoRequestWorkResolver(AppDbContext db)
 
         return works;
     }
+
+    /// <summary>Season numbers selected by TV requests, resolved only against their own canonical Work.</summary>
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<int>>> ResolveSeasonNumbersAsync(IEnumerable<AcquisitionRequest> requests, CancellationToken cancellationToken)
+    {
+        var selected = requests
+            .Where(request => request.Kind == MediaAcquisitionKind.Tv)
+            .Select(request => (RequestId: request.Id, Payload: VideoRequestPayload.Parse(request.PayloadJson)))
+            .Where(item => item.Payload is not null)
+            .Select(item => (item.RequestId, Payload: item.Payload!))
+            .ToArray();
+        if (selected.Length == 0)
+        {
+            return new Dictionary<Guid, IReadOnlyList<int>>();
+        }
+
+        var seasonIds = selected.SelectMany(item => item.Payload.Requested?.SeasonIds ?? []).Distinct().ToArray();
+        var episodeIds = selected.SelectMany(item => item.Payload.Requested?.EpisodeIds ?? []).Distinct().ToArray();
+        var seasons = seasonIds.Length == 0
+            ? []
+            : await db.WorkSeasons.AsNoTracking().Where(season => seasonIds.Contains(season.Id)).Select(season => new { season.Id, season.WorkId, season.SeasonNumber }).ToArrayAsync(cancellationToken);
+        var episodes = episodeIds.Length == 0
+            ? []
+            : await db.WorkEpisodes.AsNoTracking().Where(episode => episodeIds.Contains(episode.Id)).Select(episode => new { episode.Id, episode.WorkId, episode.SeasonNumber }).ToArrayAsync(cancellationToken);
+
+        // Approval consumes the payload choice; its persisted intent remains the authoritative coverage afterwards.
+        const string persistedSeasonsSql = """
+            SELECT DISTINCT t."RequestId"::uuid AS "RequestId", e."SeasonNumber"
+            FROM "RequestTargets" t JOIN "WorkEpisodes" e ON e."Id" = t."TargetId" AND e."WorkId" = t."WorkId"
+            WHERE t."RequestId" = ANY(@requestIds) AND t."TargetKind" = 1
+            """;
+        var requestIds = selected.Select(item => item.RequestId.ToString()).ToArray();
+        var persisted = await db.Database.SqlQueryRaw<RequestSeasonRow>(persistedSeasonsSql, new NpgsqlParameter("requestIds", requestIds)).ToListAsync(cancellationToken);
+        return selected.ToDictionary(
+            item => item.RequestId,
+            item => (IReadOnlyList<int>)seasons.Where(season => season.WorkId == item.Payload.WorkId && (item.Payload.Requested?.SeasonIds.Contains(season.Id) ?? false)).Select(season => season.SeasonNumber)
+                .Concat(episodes.Where(episode => episode.WorkId == item.Payload.WorkId && (item.Payload.Requested?.EpisodeIds.Contains(episode.Id) ?? false)).Select(episode => episode.SeasonNumber))
+                .Concat(persisted.Where(row => row.RequestId == item.RequestId).Select(row => row.SeasonNumber))
+                .Distinct()
+                .Order()
+                .ToArray());
+    }
+
+    private sealed record RequestSeasonRow(Guid RequestId, int SeasonNumber);
 
     /// <summary>
     /// The Admin media address of the Movie or Series a Movie/TV download operation belongs to, by operation id. The

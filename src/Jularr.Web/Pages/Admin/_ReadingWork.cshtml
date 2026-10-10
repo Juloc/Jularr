@@ -32,7 +32,7 @@
     var shownFiles = view.Files.Skip((page - 1) * ReadingWorkModel.ChaptersPerPage).Take(ReadingWorkModel.ChaptersPerPage).Select(file => (file, readable: ReadingWorkModel.Readable(file.SourcePath))).ToList();
     var unreadable = shownFiles.Where(item => !item.readable).Select(item => item.file.Name).ToList();
 }
-<partial name="_AdminNavigation" model="Model.Ui" />
+<partial name="_AdminSectionLinks" />
 
 @if (Model.Notice is not null)
 {

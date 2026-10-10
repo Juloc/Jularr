@@ -67,6 +67,22 @@ public sealed record WorkIdentityChangeView(
 /// </summary>
 public sealed class WorkQueryService(AppDbContext db)
 {
+    public async Task<(IReadOnlyList<Work> Items, int Page, int PageCount)> ReadManagementPageAsync(IReadOnlyCollection<WorkMediaType> mediaTypes, bool animeEnabled, string? search, int page, CancellationToken cancellationToken)
+    {
+        var query = db.Works.AsNoTracking().Where(work => work.IsAnime ? animeEnabled : mediaTypes.Contains(work.MediaType));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var text = search.Trim().ToLowerInvariant();
+            query = query.Where(work => work.CanonicalTitle.ToLower().Contains(text));
+        }
+
+        var count = await query.CountAsync(cancellationToken);
+        var pageCount = Math.Max(1, (int)Math.Ceiling(count / 50d));
+        page = Math.Clamp(page, 1, pageCount);
+        var items = await query.OrderBy(work => work.CanonicalTitle).ThenBy(work => work.Id).Skip((page - 1) * 50).Take(50).ToArrayAsync(cancellationToken);
+        return (items, page, pageCount);
+    }
+
     /// <summary>Resolves the stable Jularr work id a provider identity points at, or null.</summary>
     public async Task<long?> FindWorkIdByExternalIdentityAsync(
         WorkMediaType mediaType,

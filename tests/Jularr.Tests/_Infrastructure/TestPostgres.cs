@@ -45,7 +45,7 @@ public static class TestPostgres
 
     private static string BaseConnectionString =>
         Environment.GetEnvironmentVariable("JULARR_TEST_DB")
-        ?? "Host=localhost;Port=5433;Username=jularr;Password=devtest;Include Error Detail=true";
+        ?? "Host=127.0.0.1;Port=5433;Username=jularr;Password=devtest;Include Error Detail=true";
 
     /// <summary>
     /// Called by the <c>UseSqlite</c> test shim. Returns a PostgreSQL connection string for a database
@@ -118,8 +118,9 @@ public static class TestPostgres
         }
     }
 
-    private static string ConnectionFor(string database) =>
-        new NpgsqlConnectionStringBuilder(BaseConnectionString) { Database = database }.ConnectionString;
+    // Every isolated database otherwise retains its own idle connection pool across the three CI shards.
+    // Release fixture connections on disposal; concurrent tests still open independent real connections.
+    private static string ConnectionFor(string database) => new NpgsqlConnectionStringBuilder(BaseConnectionString) { Database = database, Pooling = false }.ConnectionString;
 
     private static void EnsureInitialized()
     {

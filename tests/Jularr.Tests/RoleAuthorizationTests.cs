@@ -51,6 +51,8 @@ public sealed class RoleAuthorizationTests
         ["Jularr.Web.Pages.Library.AnimeRepairModel"] = JularrPolicies.AdminMedia,
         ["Jularr.Web.Pages.Settings.SubtitlesModel"] = JularrPolicies.AdminMedia,
 
+        ["Jularr.Web.Pages.Admin.Capabilities.ManualModel"] = JularrPolicies.AcquisitionSettings,
+        ["Jularr.Web.Pages.Admin.Requests.SettingsModel"] = JularrPolicies.AcquisitionSettings,
         ["Jularr.Web.Pages.Admin.ReadingSourcesModel"] = JularrPolicies.AcquisitionSettings,
         ["Jularr.Web.Pages.Admin.UsenetModel"] = JularrPolicies.AcquisitionSettings,
         ["Jularr.Web.Pages.Settings.AcquisitionModel"] = JularrPolicies.AcquisitionSettings,
@@ -67,6 +69,9 @@ public sealed class RoleAuthorizationTests
 
         ["Jularr.Web.Pages.Library.RenameModel"] = JularrPolicies.MediaRename,
 
+        ["Jularr.Web.Pages.Admin.LibraryModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.SearchModel"] = JularrPolicies.AdminMedia,
+        ["Jularr.Web.Pages.Admin.Requests.UsersModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.AiModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.AppearanceModel"] = JularrPolicies.AdminSystem,
         ["Jularr.Web.Pages.Admin.Capabilities.IndexModel"] = JularrPolicies.AdminSystem,

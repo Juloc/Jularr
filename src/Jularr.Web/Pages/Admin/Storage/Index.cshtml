@@ -21,7 +21,7 @@
     <a class="button" asp-page="/Admin/System">@ui["admin.scans.mediaRoots"]</a>
 </header>
 
-<partial name="_AdminNavigation" model="Model.Ui" />
+<partial name="_AdminSectionLinks" />
 
 @if (!string.IsNullOrWhiteSpace(Model.Error))
 {

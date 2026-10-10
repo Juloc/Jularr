@@ -3,36 +3,49 @@ using System.Text.Json;
 namespace Jularr.Web.Features.Acquisition.Access;
 
 /// <summary>
-/// The one canonical store of the owner's request settings (auto-approval rules and the quality profiles
-/// requesters may pick). It is durable-but-not-relational configuration, so it uses the JSON settings-store
+/// The canonical request configuration: reusable rules, sparse user overrides, approval migration and quality profiles
+/// requesters may pick. It is durable-but-not-relational configuration, so it uses the JSON settings-store
 /// pattern under <c>/data</c> (like <c>MediaCapabilityStore</c>) rather than an EF table.
 /// </summary>
-public sealed class AcquisitionRequestSettingsStore
+public sealed partial class AcquisitionRequestSettingsStore
 {
     public const string FileName = "request-settings.json";
 
-    private static readonly JsonSerializerOptions JsonOptions =
-        new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    private readonly SemaphoreSlim gate = new(1, 1);
-    private readonly string path;
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly string _path;
 
     public AcquisitionRequestSettingsStore(string dataRoot)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataRoot);
-        path = Path.Combine(dataRoot, "acquisition", FileName);
+        _path = Path.Combine(dataRoot, "acquisition", FileName);
+    }
+
+    public async Task InitializeAsync(CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var settings = await LoadUnlockedAsync(cancellationToken);
+            await SaveUnlockedAsync(settings, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     public async Task<AcquisitionRequestSettings> LoadAsync(CancellationToken cancellationToken = default)
     {
-        await gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken);
         try
         {
             return await LoadUnlockedAsync(cancellationToken);
         }
         finally
         {
-            gate.Release();
+            _gate.Release();
         }
     }
 
@@ -40,62 +53,49 @@ public sealed class AcquisitionRequestSettingsStore
     public Task<AcquisitionRequestSettings> AddRuleAsync(AutoApprovalRule rule, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(rule);
-        return MutateAsync(
-            settings => settings with { AutoApprovalRules = [.. settings.AutoApprovalRules, rule] },
-            cancellationToken);
+        return MutateAsync(settings => settings with { AutoApprovalRules = [.. settings.AutoApprovalRules, rule], Rules = settings.Rules with { HasApprovalTransition = true } }, cancellationToken);
     }
 
     public Task<AcquisitionRequestSettings> RemoveRuleAsync(string ruleId, CancellationToken cancellationToken = default) =>
-        MutateAsync(
-            settings => settings with
-            {
-                AutoApprovalRules = [.. settings.AutoApprovalRules.Where(rule => rule.Id != ruleId)]
-            },
-            cancellationToken);
+        MutateAsync(settings => settings with { AutoApprovalRules = [.. settings.AutoApprovalRules.Where(rule => rule.Id != ruleId)] }, cancellationToken);
 
-    public Task<AcquisitionRequestSettings> SetRuleEnabledAsync(
-        string ruleId,
-        bool enabled,
-        CancellationToken cancellationToken = default) =>
-        MutateAsync(
-            settings => settings with
-            {
-                AutoApprovalRules =
-                [
-                    .. settings.AutoApprovalRules.Select(rule => rule.Id == ruleId ? rule with { Enabled = enabled } : rule)
-                ]
-            },
-            cancellationToken);
+    public Task<AcquisitionRequestSettings> SetRuleEnabledAsync(string ruleId, bool enabled, CancellationToken cancellationToken = default) =>
+        MutateAsync(settings => settings with { AutoApprovalRules = [.. settings.AutoApprovalRules.Select(rule => rule.Id == ruleId ? rule with { Enabled = enabled } : rule)] }, cancellationToken);
 
-    /// <summary>Replaces the quality profiles requesters may pick (none = requesters cannot pick one).</summary>
-    public Task<AcquisitionRequestSettings> SetRequesterQualityProfilesAsync(
-        IEnumerable<string> profileIds,
-        CancellationToken cancellationToken = default)
+    /// <summary>Compatibility for the former global setting: edits the default rule's quality choices. Evaluation uses only resolved rule values.</summary>
+    public Task<AcquisitionRequestSettings> SetRequesterQualityProfilesAsync(IEnumerable<string> profileIds, CancellationToken cancellationToken = default)
     {
         string[] ids = [.. profileIds.Where(id => !string.IsNullOrWhiteSpace(id)).Select(id => id.Trim()).Distinct(StringComparer.Ordinal)];
-        return MutateAsync(settings => settings with { RequesterQualityProfileIds = ids }, cancellationToken);
+        return MutateAsync(settings => settings with
+        {
+            RequesterQualityProfileIds = ids,
+            Rules = settings.Rules with
+            {
+                Profiles = settings.Rules.Profiles.Select(profile => profile.Id == settings.Rules.DefaultId ? profile with { Values = profile.Values with { QualityProfileIds = ids } } : profile).ToArray()
+            }
+        }, cancellationToken);
     }
 
-    private async Task<AcquisitionRequestSettings> MutateAsync(
-        Func<AcquisitionRequestSettings, AcquisitionRequestSettings> mutate,
-        CancellationToken cancellationToken)
+    private async Task<AcquisitionRequestSettings> MutateAsync(Func<AcquisitionRequestSettings, AcquisitionRequestSettings> mutate, CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken);
+        await _gate.WaitAsync(cancellationToken);
         try
         {
-            var updated = mutate(await LoadUnlockedAsync(cancellationToken));
+            var current = await LoadUnlockedAsync(cancellationToken);
+            var updated = mutate(current) with { Revision = checked(current.Revision + 1) };
+            updated.Rules.Validate();
             await SaveUnlockedAsync(updated, cancellationToken);
             return updated;
         }
         finally
         {
-            gate.Release();
+            _gate.Release();
         }
     }
 
     private async Task<AcquisitionRequestSettings> LoadUnlockedAsync(CancellationToken cancellationToken)
     {
-        if (!File.Exists(path))
+        if (!File.Exists(_path))
         {
             return AcquisitionRequestSettings.Default;
         }
@@ -103,18 +103,16 @@ public sealed class AcquisitionRequestSettingsStore
         PersistedSettings? persisted;
         try
         {
-            persisted = JsonSerializer.Deserialize<PersistedSettings>(
-                await File.ReadAllTextAsync(path, cancellationToken),
-                JsonOptions);
+            persisted = JsonSerializer.Deserialize<PersistedSettings>(await File.ReadAllTextAsync(_path, cancellationToken), s_jsonOptions);
         }
         catch (JsonException exception)
         {
-            throw new InvalidDataException($"Request settings '{path}' are invalid JSON.", exception);
+            throw new InvalidDataException($"Request settings '{_path}' are invalid JSON.", exception);
         }
 
         if (persisted is null)
         {
-            return AcquisitionRequestSettings.Default;
+            throw new InvalidDataException("Request settings cannot be null.");
         }
 
         List<AutoApprovalRule> rules = [];
@@ -145,37 +143,47 @@ public sealed class AcquisitionRequestSettingsStore
                     : null));
         }
 
-        return new AcquisitionRequestSettings(
-            rules,
-            [.. (persisted.RequesterQualityProfileIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id))]);
+        var savedQualityIds = (persisted.RequesterQualityProfileIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).ToArray();
+        // Legacy approval quotas cannot become submission limits without changing their meaning.
+        var configuration = persisted.Rules ?? RequestRuleConfiguration.Standard with
+        {
+            Profiles = [new(1, "Standard", null, RequestRuleValues.Standard with { Limit = null })],
+            HasApprovalTransition = rules.Count > 0
+        };
+        configuration.Validate();
+        // Profiles written before per-rule quality choices inherit the saved global choices exactly once.
+        configuration = configuration with
+        {
+            Profiles = configuration.Profiles.Select(profile => profile with { Values = profile.Values with { QualityProfileIds = profile.Values.QualityProfileIds ?? savedQualityIds } }).ToArray()
+        };
+        return new AcquisitionRequestSettings(rules, savedQualityIds)
+        {
+            Rules = configuration.Validate(),
+            Revision = persisted.Revision
+        };
     }
 
     private async Task SaveUnlockedAsync(AcquisitionRequestSettings settings, CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
 
         var persisted = new PersistedSettings(
             [
-                .. settings.AutoApprovalRules.Select(rule => new PersistedRule(
-                    rule.Id,
-                    rule.Name,
-                    rule.Enabled,
-                    [.. rule.Kinds.Select(AcquisitionAccessNames.Kind)],
-                    [.. rule.ProfileIds],
+                .. settings.AutoApprovalRules.Select(rule => new PersistedRule(rule.Id, rule.Name, rule.Enabled, [.. rule.Kinds.Select(AcquisitionAccessNames.Kind)], [.. rule.ProfileIds],
                     rule.Quota is { } quota ? new PersistedQuota(quota.MaxRequests, quota.PeriodDays) : null))
             ],
-            [.. settings.RequesterQualityProfileIds]);
+            [.. settings.RequesterQualityProfileIds], settings.Rules, settings.Revision);
 
-        var temporary = $"{path}.tmp-{Guid.NewGuid():N}";
+        var temporary = $"{_path}.tmp-{Guid.NewGuid():N}";
         try
         {
-            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(persisted, JsonOptions), cancellationToken);
+            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(persisted, s_jsonOptions), cancellationToken);
             if (OperatingSystem.IsLinux())
             {
                 File.SetUnixFileMode(temporary, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             }
 
-            File.Move(temporary, path, overwrite: true);
+            File.Move(temporary, _path, overwrite: true);
         }
         finally
         {
@@ -206,7 +214,9 @@ public sealed class AcquisitionRequestSettingsStore
 
     private sealed record PersistedSettings(
         List<PersistedRule>? AutoApprovalRules,
-        List<string>? RequesterQualityProfileIds);
+        List<string>? RequesterQualityProfileIds,
+        RequestRuleConfiguration? Rules = null,
+        long Revision = 0);
 
     private sealed record PersistedRule(
         string Id,

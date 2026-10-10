@@ -1,0 +1,43 @@
+@model Jularr.Web.Features.Shell.NotificationPreview
+@using Jularr.Web.Features.Notifications
+@{
+    var ui = Model.Ui;
+}
+<div class="header-preview-title"><h2>@ui["notifications.inbox.title"]</h2><span data-preview-unread="@Model.Unread" data-preview-label="@(Model.Unread > 0 ? ui.Format("notifications.bell.aria", ("count", Model.Unread)) : ui["notifications.bell.ariaNone"])">@Model.Unread</span></div>
+<div class="header-preview-list">
+    @if (Model.Items.Count == 0)
+    {
+        <p class="muted">@ui["notifications.inbox.emptyUnread"]</p>
+    }
+    @foreach (var item in Model.Items)
+    {
+        var text = ui.Format(item.MessageKey, (item.MessageParams ?? new Dictionary<string, string>()).Select(pair => (pair.Key, (object?)pair.Value)).ToArray());
+        var href = NotificationLinks.LocalPath(item.DeepLink);
+        var severity = item.Severity.ToString().ToLowerInvariant();
+        <article class="header-preview-item header-preview-@severity">
+            <span class="header-preview-icon"><partial name="_AppIcon" model='@(severity == "error" ? "pulse" : "bell")' /></span>
+            <div>
+                @if (href is not null)
+                {
+                    <a href="@href">@text</a>
+                }
+                else
+                {
+                    <span>@text</span>
+                }
+                <time data-local-time datetime="@item.UpdatedAtUtc.ToString("O")">@item.UpdatedAtUtc.ToLocalTime().ToString("g")</time>
+            </div>
+            <span class="notification-dot" aria-label="@ui["notifications.inbox.filterUnread"]"></span>
+        </article>
+    }
+</div>
+<div class="header-preview-footer">
+    <a class="button button-secondary" href="/Notifications">@ui["shell.notifications.viewAll"]</a>
+    @if (Model.Unread > 0)
+    {
+        <form method="post" action="/Notifications?handler=ReadPreview" data-preview-mark-read>
+            @Html.AntiForgeryToken()
+            <button class="button button-secondary" type="submit">@ui["notifications.inbox.markAllRead"]</button>
+        </form>
+    }
+</div>

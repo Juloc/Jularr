@@ -10,8 +10,34 @@ namespace Jularr.Web.Features.Acquisition.Wanted;
 // Records what an approved request explicitly asks for, as rows the reconciler reads next to Monitoring: the Work (the whole title) or single episodes.
 // Only a request somebody made (submitted or approved) records intent; one the Wanted pass or Monitoring opened for a Work stays derived from Monitoring.
 // It is idempotent and a pending request has no intent yet.
-public sealed class RequestIntent(AppDbContext db, TimeProvider clock)
+public sealed class RequestIntent(AppDbContext db, TimeProvider clock, WantedReconciler? wanted = null)
 {
+    public async Task<bool> RemoveAsync(Guid requestId, Func<Task<bool>> deleteRequest, CancellationToken cancellationToken)
+    {
+        if (wanted is null)
+        {
+            throw new InvalidOperationException("Wanted reconciliation must be configured for request deletion.");
+        }
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // Approval locks the request before its intent; deletion uses the same order and freezes linked recovery state until commit.
+        await db.Database.ExecuteSqlRawAsync(WantedSql.LockRequestForDeletion, [new NpgsqlParameter("requestId", requestId.ToString())], cancellationToken);
+        var workIds = await db.Database.SqlQueryRaw<long>(WantedSql.RemoveRequestTargets, new NpgsqlParameter("requestId", requestId.ToString())).ToListAsync(cancellationToken);
+        if (!await deleteRequest())
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return false;
+        }
+
+        foreach (var workId in workIds.Distinct())
+        {
+            await wanted.ReconcileAsync(workId, cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return true;
+    }
+
     // Creates or approves a request and records what it names as one unit, so an approved request never exists without its intent. A change that
     // returns null (the request was moved on meanwhile) records nothing; bind gives a request its canonical Work first.
     public async Task<AcquisitionRequest?> ChangeAndRecordAsync(Func<Task<AcquisitionRequest?>> change, Func<AcquisitionRequest, Task<AcquisitionRequest>>? bind, CancellationToken cancellationToken)

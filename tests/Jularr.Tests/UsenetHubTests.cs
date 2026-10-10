@@ -107,6 +107,16 @@ public sealed class UsenetHubTests
     public void SearchTestRunsBooksMangaOrLightNovels(string? value, MediaAcquisitionKind expected) =>
         Assert.AreEqual(expected, UsenetModel.ParseTestKind(value));
 
+    [TestMethod]
+    public async Task ManualAddingSetupLinksToCapabilitiesInsteadOfTheRequestQueue()
+    {
+        await using var video = await VideoAcquisitionTestHost.CreateAsync(MediaAcquisitionKind.Movie, "Dune", 2021, "438631", "Dune.2021.1080p.WEB-DL.x264-GROUP");
+        await using var host = await VideoAdminPageHost.CreateAsync(video);
+        var html = await host.GetHtmlAsync("/Admin/Usenet");
+        StringAssert.Contains(html, "Who may add books by hand");
+        StringAssert.Contains(html, "href=\"/Admin/Capabilities/Manual\"");
+    }
+
     private static DownloadClientEntry Client(DownloadClientSettings settings) =>
         new(Guid.NewGuid(), "SABnzbd", DownloadClientType.Sabnzbd, Enabled: true, Priority: 1, settings, Secret: null);
 }

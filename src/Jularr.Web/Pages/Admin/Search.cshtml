@@ -1,0 +1,8 @@
+@page
+@model Jularr.Web.Pages.Admin.SearchModel
+@{
+    ViewData["Title"] = Model.Ui["admin.search.title"];
+}
+<section class="admin-search-page" aria-label="@Model.Ui["admin.search.title"]">
+    <partial name="_AdminSearchResults" model="Model" />
+</section>

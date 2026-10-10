@@ -4,9 +4,8 @@
   /**
    * DOM wiring for the offline library (#221 part 1/2): the reusable
    * "Save offline" action (Pages/Shared/_OfflineLibraryAction.cshtml), the
-   * Settings → Offline page, the compact global download indicator
-   * (Pages/Shared/_AppAccountFooter.cshtml, rendered on every authenticated
-   * page) and the Library "Offline" filter (Pages/Books/Index.cshtml,
+   * Settings → Offline page, the shared personal download preview
+   * and the Library "Offline" filter (Pages/Books/Index.cshtml,
    * Pages/Novels/Index.cshtml). Pure decisions and I/O live in
    * offline-library.js / offline-library-storage.js / offline-library-manager.js;
    * this file only reads/writes the DOM.
@@ -175,50 +174,106 @@
     await refresh();
   };
 
-  /**
-   * Compact global download indicator (issue #221's UX section): shown on
-   * every authenticated page (Pages/Shared/_AppAccountFooter.cshtml, which
-   * can render twice per page — desktop sidebar + mobile "more" sheet — so
-   * every matching element is wired independently). Hidden entirely when
-   * nothing is downloading, so it never distracts on the common case.
-   */
-  const renderDownloadIndicator = async (root) => {
+  // Offline state belongs to the signed-in profile's browser storage, not the server acquisition queue.
+  const renderDownloadPreview = async (root) => {
+    const list = root.querySelector("[data-offline-preview-list]");
+    const loading = root.querySelector("[data-offline-preview-loading]");
+    const error = root.querySelector("[data-offline-preview-error]");
+    const badge = document.querySelector("[data-offline-download-count]");
     let instance;
-    try {
-      instance = await manager();
-    } catch {
-      return;
-    }
+    let revision = 0;
 
     const refresh = async () => {
-      const books = await instance.listBooks();
-      const bookDownloadingCount = books.filter((b) => b.status === "downloading").length;
-      let mediaDownloading = [];
+      const current = ++revision;
+      const open = root.matches(":popover-open");
+      loading.hidden = !open;
+      error.hidden = true;
       try {
-        mediaDownloading = (await window.JularrOfflineMediaManager?.packages?.() || [])
-          .filter((item) => item.state === "downloading");
-      } catch { /* The text-library indicator remains useful when media storage is unavailable. */ }
-      const downloadingCount = bookDownloadingCount + mediaDownloading.length;
-      root.hidden = downloadingCount === 0;
-      if (downloadingCount > 0) {
-        const total = mediaDownloading.reduce((sum, item) => sum + (item.sizeBytes || 0), 0);
-        const complete = mediaDownloading.reduce((sum, item) => sum + (item.resources || []).reduce((resourceTotal, resource) => {
-          const chunks = Math.min(resource.completedChunks || 0,
-            window.JularrOfflineMedia?.chunkCount(resource.sizeBytes || 0) || 0);
-          return resourceTotal + Math.min(resource.sizeBytes || 0, chunks * (window.JularrOfflineMedia?.CHUNK_BYTES || 0));
-        }, 0), 0);
-        root.textContent = total > 0
-          ? format("offlineLibrary.indicator.mediaProgress", { count: downloadingCount, percent: Math.round(complete / total * 100) })
-          : format("offlineLibrary.indicator.downloading", { count: downloadingCount });
+        instance ||= await manager();
+        const [books, media] = await Promise.all([instance.listBooks(), window.JularrOfflineMediaManager?.packages?.() || []]);
+        if (current !== revision) return;
+        const records = [
+          ...books.map(book => ({ title: book.manifest.title, state: book.status, updatedAt: book.updatedAt })),
+          ...media.map(pkg => ({ title: pkg.title, state: pkg.state === "ready" ? "available" : pkg.state, updatedAt: pkg.updatedAt, package: pkg }))
+        ];
+        const active = records.filter(item => item.state === "downloading").length;
+        if (badge) {
+          badge.hidden = active === 0;
+          badge.textContent = active > 99 ? "99+" : String(active);
+        }
+        if (!open || !root.matches(":popover-open")) return;
+        list.replaceChildren();
+        records.sort((left, right) => Number(right.state === "downloading") - Number(left.state === "downloading")
+          || new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+        if (!records.length) {
+          const empty = document.createElement("p");
+          empty.className = "muted";
+          empty.textContent = text("offlineLibrary.settings.empty");
+          list.append(empty);
+        }
+        for (const item of records.slice(0, 6)) {
+          const row = document.createElement("article");
+          row.className = "header-preview-item";
+          row.append(root.querySelector("[data-offline-preview-icon]").content.cloneNode(true));
+          const content = document.createElement("div");
+          const title = document.createElement("a");
+          title.href = "/Settings/Offline";
+          title.textContent = item.title;
+          title.title = item.title;
+          const state = document.createElement("span");
+          state.className = "header-preview-meta";
+          state.textContent = stateLabel(item.state);
+          content.append(title, state);
+          const updatedAt = new Date(item.updatedAt);
+          if (item.updatedAt != null && !Number.isNaN(updatedAt.getTime())) {
+            const time = document.createElement("time");
+            time.dateTime = updatedAt.toISOString();
+            time.textContent = updatedAt.toLocaleString(document.documentElement.lang);
+            content.append(time);
+          }
+          if (item.package?.sizeBytes > 0 && item.state === "downloading") {
+            const progress = document.createElement("progress");
+            progress.max = item.package.sizeBytes;
+            progress.value = mediaDownloadedBytes(item.package);
+            progress.setAttribute("aria-label", item.title);
+            content.append(progress);
+          }
+          row.append(content);
+          list.append(row);
+        }
+      } catch {
+        if (current === revision && root.matches(":popover-open")) {
+          list.replaceChildren();
+          error.hidden = false;
+        }
+      } finally {
+        if (current === revision) {
+          loading.hidden = true;
+          root.dispatchEvent(new Event("jularr:header-preview-updated"));
+        }
       }
     };
 
-    root.setAttribute("aria-label", text("offlineLibrary.indicator.aria"));
-    instance.onChange(() => { void refresh(); });
-    window.addEventListener("jularr:offline-media-progress", () => { void refresh(); });
-    window.addEventListener("jularr:offline-media-ready", () => { void refresh(); });
-    await refresh();
+    root.addEventListener("toggle", event => {
+      if (event.newState === "open") void refresh();
+    });
+    ["jularr:offline-media-progress", "jularr:offline-media-ready", "jularr:offline-media-removed"].forEach(name => {
+      window.addEventListener(name, () => { void refresh(); });
+    });
+    try {
+      instance = await manager();
+      instance.onChange(() => { void refresh(); });
+      await refresh();
+    } catch {
+      loading.hidden = true;
+    }
   };
+
+  const mediaDownloadedBytes = pkg => (pkg.resources || []).reduce((total, resource) => {
+    const core = window.JularrOfflineMedia;
+    const chunks = Math.min(resource.completedChunks || 0, core?.chunkCount(resource.sizeBytes || 0) || 0);
+    return total + Math.min(resource.sizeBytes || 0, chunks * (core?.CHUNK_BYTES || 0));
+  }, 0);
 
   /**
    * Library "Offline" filter (issue #221's UX section): purely a client-side
@@ -271,7 +326,7 @@
   const initialize = () => {
     document.querySelectorAll("[data-offline-save]").forEach((root) => { void renderAction(root); });
     document.querySelectorAll("[data-offline-settings-page]").forEach((root) => { void renderSettingsPage(root); });
-    document.querySelectorAll("[data-offline-download-indicator]").forEach((root) => { void renderDownloadIndicator(root); });
+    document.querySelectorAll("[data-offline-download-preview]").forEach((root) => { void renderDownloadPreview(root); });
     document.querySelectorAll("[data-offline-library-filter]").forEach((root) => { void renderLibraryFilter(root); });
   };
 

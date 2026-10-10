@@ -18,7 +18,6 @@
 
     @foreach (var group in section.Groups!)
     {
-        @* The Unfinished list is one group under its own page title, so it needs no second heading. *@
         <section class="profile-group" aria-labelledby="@(section.Groups!.Count > 1 ? "profile-group-" + group.TitleKey.Replace('.', '-') : null)">
             @if (section.Groups!.Count > 1)
             {
@@ -62,8 +61,5 @@
                 </ul>
             </nav>
         }
-        <div class="profile-shell-footer">
-            <partial name="_AppAccountFooter" />
-        </div>
     </div>
 }
