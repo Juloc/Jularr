@@ -48,6 +48,11 @@ BEGIN
         ('CK_Notifications_ExactlyOneRecipient','c'),
         ('CK_NotificationDeliveries_ExactlyOneRecipient','c'),
         ('UX_Notifications_Event_Recipient','u'),
+        ('UX_Notifications_Group_Recipient','u'),
+        ('FK_Notifications_EventGroup','f'),
+        ('FK_NotificationEvents_InboxAudience','f'),
+        ('FK_NotificationEvents_EventProfile','f'),
+        ('PK_NotificationEvents','p'),
         ('UX_NotificationDeliveries_Event_Recipient_Channel','u'),
         ('FK_AcquisitionDownloadWantedItems_BindingWork','f'),
         ('FK_AcquisitionDownloadWantedItems_TargetWork','f'),
@@ -73,7 +78,7 @@ BEGIN
             'FK_MediaProgress_ReadingProgressPositions',
             'FK_MediaProgress_GameProgressPositions',
             'FK_Profiles_OwnerAccountProfiles'
-        ) AND condeferrable AND condeferred
+        ) AND condeferrable AND condeferred AND confdeltype = 'a'
     ) <> 4 THEN
         RAISE EXCEPTION 'Progress total subtype and profile-owner cyclic FKs must be DEFERRABLE INITIALLY DEFERRED';
     END IF;

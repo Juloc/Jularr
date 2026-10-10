@@ -79,10 +79,43 @@ for (const query of [
         file: 'DATABASE_CUTOVER_PHASE_B_ADMIN_QUERIES_DRAFT.sql',
         declaration: 'PREPARE phase_b_groups(bigint,integer,bigint) AS\n',
         parameters: ['ActorAccountId', 'PageSize', 'Offset']
+    },
+    {
+        name: 'inbox',
+        file: 'DATABASE_CUTOVER_PHASE_B_NOTIFICATION_QUERIES_DRAFT.sql',
+        start: '-- Service READ:',
+        end: '-- Logic ENSURE:',
+        declaration: 'PREPARE phase_b_inbox(bigint,bigint,boolean,integer,bigint) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'UnreadOnly', 'PageSize', 'Offset']
+    },
+    {
+        name: 'inbox_ensure',
+        file: 'DATABASE_CUTOVER_PHASE_B_NOTIFICATION_QUERIES_DRAFT.sql',
+        start: '-- Logic ENSURE:',
+        end: '-- Logic RECORD:',
+        declaration: 'PREPARE phase_b_inbox_ensure(uuid,bigint) AS\n',
+        parameters: ['EventId', 'RecipientProfileId']
+    },
+    {
+        name: 'inbox_record',
+        file: 'DATABASE_CUTOVER_PHASE_B_NOTIFICATION_QUERIES_DRAFT.sql',
+        start: '-- Logic RECORD:',
+        declaration: 'PREPARE phase_b_inbox_record(bigint,bigint,uuid) AS\n',
+        parameters: ['NotificationId', 'RecipientProfileId', 'EventId']
     }
 ])
 {
     let sql = readFileSync(fileURLToPath(new URL(`../docs/${query.file}`, import.meta.url)), 'utf8').replaceAll('\r\n', '\n').trim();
+    if (query.start)
+    {
+        const start = sql.indexOf(query.start);
+        const end = query.end ? sql.indexOf(query.end) : sql.length;
+        if (start < 0 || end <= start)
+        {
+            throw new Error(`Canonical ${query.name} section is missing or out of order.`);
+        }
+        sql = sql.slice(start, end).trim();
+    }
     for (const [index, parameter] of query.parameters.entries())
     {
         const placeholder = `@${parameter}`;

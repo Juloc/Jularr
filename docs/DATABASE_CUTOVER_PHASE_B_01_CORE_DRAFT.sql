@@ -77,7 +77,7 @@ CREATE INDEX "IX_AccountProfiles_ProfileId" ON "AccountProfiles" ("ProfileId", "
 -- must be created together in Logic, and ownership transfer must keep the new owner linked.
 ALTER TABLE "Profiles" ADD CONSTRAINT "FK_Profiles_OwnerAccountProfiles"
     FOREIGN KEY ("OwnerAccountId","Id") REFERENCES "AccountProfiles" ("AccountId","ProfileId")
-    ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+    ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 
 CREATE TABLE "AccountPasswords" (
     "AccountId" bigint NOT NULL,

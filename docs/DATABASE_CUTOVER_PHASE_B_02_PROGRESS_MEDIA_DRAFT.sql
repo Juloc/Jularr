@@ -95,11 +95,11 @@ CREATE TABLE "GameProgressPositions" (
     CONSTRAINT "CK_GameProgressPositions_Percent" CHECK ("ProgressPercent" IS NULL OR "ProgressPercent" BETWEEN 0 AND 100)
 );
 ALTER TABLE "MediaProgress" ADD CONSTRAINT "FK_MediaProgress_TimeProgressPositions"
-    FOREIGN KEY ("TimePositionId") REFERENCES "TimeProgressPositions" ("MediaProgressId") ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+    FOREIGN KEY ("TimePositionId") REFERENCES "TimeProgressPositions" ("MediaProgressId") ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 ALTER TABLE "MediaProgress" ADD CONSTRAINT "FK_MediaProgress_ReadingProgressPositions"
-    FOREIGN KEY ("ReadingPositionId") REFERENCES "ReadingProgressPositions" ("MediaProgressId") ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+    FOREIGN KEY ("ReadingPositionId") REFERENCES "ReadingProgressPositions" ("MediaProgressId") ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 ALTER TABLE "MediaProgress" ADD CONSTRAINT "FK_MediaProgress_GameProgressPositions"
-    FOREIGN KEY ("GamePositionId") REFERENCES "GameProgressPositions" ("MediaProgressId") ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+    FOREIGN KEY ("GamePositionId") REFERENCES "GameProgressPositions" ("MediaProgressId") ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 -- Due to both directions, insert/update parent and its exact detail in ONE SQL transaction.
 -- Offline checkpoints need an idempotent event contract in the Phase-B decision register.
 

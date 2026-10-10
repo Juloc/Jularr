@@ -103,23 +103,23 @@ BEGIN
     END;
 
     -- A canonical Profile event is visible only in its own Profile inbox.
-    INSERT INTO "Notifications" ("EventId","ProfileId")
-    VALUES (event_id,profile_id);
+    INSERT INTO "Notifications" ("EventId", "ProfileId", "NotificationGroupKey")
+    VALUES (event_id, profile_id, 'event:' || event_id::text);
     BEGIN
-        INSERT INTO "Notifications" ("EventId","ProfileId")
-        VALUES (event_id,other_profile_id);
+        INSERT INTO "Notifications" ("EventId", "ProfileId", "NotificationGroupKey")
+        VALUES (event_id, other_profile_id, 'event:' || event_id::text);
         RAISE EXCEPTION 'Wrong Profile received Event';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
     BEGIN
-        INSERT INTO "Notifications" ("EventId","AccountId")
-        VALUES (event_id,account_id);
+        INSERT INTO "Notifications" ("EventId", "AccountId", "NotificationGroupKey")
+        VALUES (event_id, account_id, 'event:' || event_id::text);
         RAISE EXCEPTION 'Profile event incorrectly delivered to Admin account inbox';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
     BEGIN
-        INSERT INTO "Notifications" ("EventId","ProfileId")
-        VALUES (event_id,profile_id);
+        INSERT INTO "Notifications" ("EventId", "ProfileId", "NotificationGroupKey")
+        VALUES (event_id, profile_id, 'event:' || event_id::text);
         RAISE EXCEPTION 'Duplicate Profile inbox item was accepted';
     EXCEPTION WHEN unique_violation THEN NULL;
     END;
@@ -179,16 +179,21 @@ BEGIN
         ("NotificationEventCategoryTypeId","EventAudienceTypeId","EventSeverityTypeId","MessageKey")
     VALUES (8,2,3,'notifications.event.storageProblem')
     RETURNING "Id" INTO admin_event_id;
-    INSERT INTO "Notifications" ("EventId","AccountId")
-    VALUES (admin_event_id,account_id);
+    INSERT INTO "Notifications" ("EventId", "AccountId", "NotificationGroupKey")
+    VALUES (admin_event_id, account_id, 'event:' || admin_event_id::text);
     INSERT INTO "NotificationDeliveries" ("EventId","AccountId","NotificationChannelTypeId")
     VALUES (admin_event_id,account_id,1);
     BEGIN
-        INSERT INTO "Notifications" ("EventId","ProfileId")
-        VALUES (admin_event_id,profile_id);
+        INSERT INTO "Notifications" ("EventId", "ProfileId", "NotificationGroupKey")
+        VALUES (admin_event_id, profile_id, 'event:' || admin_event_id::text);
         RAISE EXCEPTION 'Admin event incorrectly delivered to Profile inbox';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;
+    INSERT INTO "NotificationEvents" ("NotificationId", "EventId", "ProfileId", "NotificationGroupKey")
+    SELECT inbox."Id", inbox."EventId", inbox."ProfileId", inbox."NotificationGroupKey"
+    FROM "Notifications" AS inbox
+    WHERE inbox."ProfileId" = profile_id OR inbox."AccountId" = account_id;
+    SET CONSTRAINTS ALL IMMEDIATE;
     RAISE NOTICE 'Phase B event audience, inbox isolation and delivery-attempt constraints passed';
 END $phase_b_event_test$;
 ROLLBACK;

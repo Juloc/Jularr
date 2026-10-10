@@ -26,7 +26,7 @@ Neun DDL-Dateien, in dieser Reihenfolge:
 Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
 nicht als leere oder optionale Baseline-Dateien behalten.
 
-Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 130
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 131
 Target-Tabellen. Die 28 bestehenden Type-Kataloge haben 145 feste Codes in
 [C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
 [Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
@@ -55,12 +55,14 @@ Der frühere Commit 6926d0b6 hat alle damals vorhandenen Seeds, Typgrenzen und
 Detection-/Learning-Zustandsregeln lokal und in CI geprüft. Dieser Nachweis ist
 historisch und kein Nachweis für den geänderten Umfang ohne Learning.
 
-Die aktuelle Fassung ist auf einer zweiten frischen PostgreSQL-18.6-Datenbank
-ohne Learning aufgebaut: alle neun DDL-Dateien, Katalog-, Seed-, Type-Grenz-,
-Negativ- und Public-ID-Suites bestanden. Tatsächlich 130 Tabellen; die
-Katalogassertions prüfen ausdrücklich die Abwesenheit von Learning. Die
-28 C#-Byte-Verträge kompilieren ohne Warnungen/Fehler. CI am neuen PR-Head
-bleibt der zusätzliche Nachweis; keine vollständige Anwendungssuite ausgeführt.
+Die aktuelle Fassung wurde frisch auf PostgreSQL 18.6 aufgebaut. Inbox-Gruppen
+haben einen namespaced Schlüssel und genau einmal erfasste Event-Mitgliedschaft;
+eine Commit-Constraint prüft Zähler, letzte Occurrence und Source-Event. Statische
+READs autorisieren vor Paging; Read/Dismissal ändern keine Chronologie. Echte
+parallele Sessions prüfen Recurrence und Replay. Profile-/Progress-Zyklen nutzen
+deferred NO ACTION für explizite Deletes ohne Cascade; Orphans bleiben verboten.
+Fokussierte PG-Tests und EXPLAIN sind nachgewiesen, die restlichen Gates bleiben
+offen. Keine vollständige Anwendungssuite oder aktive DB-Änderung.
 
 [DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md) nennt verbleibende Fach- und
 Query-Anforderungen. Nicht alle übrigen Funktionsverträge sind abgeschlossen.

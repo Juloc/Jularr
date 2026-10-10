@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "docs/DATABASE_CUTOVER_PHASE_B_*.sql"
+      - "docs/DATABASE_CUTOVER_PHASE_B_*.sh"
       - "scripts/prepare-phase-b-queries.mjs"
       - "scripts/verify-phase-b-type-contracts.mjs"
       - "docs/DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs"
@@ -77,6 +78,7 @@ jobs:
       - name: Exercise positive and expected-negative relational integrity cases
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_NEGATIVE_TESTS.sql
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_CYCLIC_LIFECYCLE_TESTS.sql
 
       - name: Verify byte type catalogs and required keys
         run: |
@@ -92,6 +94,11 @@ jobs:
 
       - name: Prepare exact canonical static queries
         run: node scripts/prepare-phase-b-queries.mjs /tmp
+
+      - name: Verify notification recurrence, replay, dismissal and scoped pagination
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_NOTIFICATION_QUERY_TESTS.sql
+          bash docs/DATABASE_CUTOVER_PHASE_B_PG_NOTIFICATION_CONCURRENCY_TEST.sh
 
       - name: Execute WorkCard SELECT against 1000 scratch root rows
         run: |
@@ -128,7 +135,7 @@ jobs:
           count="$(psql -X -A -t -v ON_ERROR_STOP=1 -c \
             "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public' AND c.relname NOT LIKE 'pg_%'")"
           echo "Target draft tables: $count"
-          if [ "$count" -ne 130 ]; then
-            echo "Expected 130 proposed Phase B tables; unexpected DDL drift" >&2
+          if [ "$count" -ne 131 ]; then
+            echo "Expected 131 proposed Phase B tables; unexpected DDL drift" >&2
             exit 1
           fi

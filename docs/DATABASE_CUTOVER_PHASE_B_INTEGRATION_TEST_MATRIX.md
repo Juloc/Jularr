@@ -15,8 +15,9 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 | Progress/Reader | Genau ein Positionstyp, Reader-/Edition-/Work-Zuordnung, nullable Dimensionspaare, Revision/CAS und Offline-Replay |
 | Images/Segments/Detection | Genau ein typisiertes Bildziel, valide Zeitspannen, legitime Überlappung, No-Match und wiederholte Detection-Runs |
 | Wanted/Acquisition | Exact-Target-Unique, Cross-Work-Ablehnung, Pack-Coverage und Download-Bindings |
-| Events/Notifications | Aktuelle Profile-/Admin-Audience, feste Category-Policy, Scope-Isolation und Delivery-Versuche |
-| Watchlist/Continue/Groups Reads | Statische typisierte PREPAREs aus kanonischen Queries, Autorisierung vor Root-Paging, deterministische Seiten |
+| Events/Notifications | Profile-/Admin-Audience, Category-Policy, Recurrence/Replay/Dismissal, Commit-Zählerintegrität und zwei parallele Gruppierungs-Sessions |
+| Zyklische Lifecycles | Pflicht-Owner und alle drei Progress-Subtypen: Orphans verboten, explizite Deletes im selben Tx erlaubt, keine Cascade |
+| Watchlist/Continue/Groups/Inbox Reads | Statische typisierte PREPAREs, Autorisierung vor Root-Paging, deterministische Seiten und Rollen-/Membership-Entzug |
 | Worker Claims | Zwei reale PostgreSQL-Sessions, SKIP LOCKED, Retry-Fälligkeit und keine Doppelvergabe |
 | Öffentliche IDs | Separate UUID-Adresse, interne bigint-FKs; PublicId gewährt keine Berechtigung |
 
