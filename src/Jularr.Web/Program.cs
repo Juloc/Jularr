@@ -122,6 +122,42 @@ builder.Services.AddHttpClient<Jularr.Web.Features.Plex.PlexAuthClient>(client =
     AllowAutoRedirect = false
 });
 
+builder.Services.AddHttpClient<Jularr.Web.Features.ExternalPlayback.Plex.PlexLibraryClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false
+});
+builder.Services.AddHttpClient<Jularr.Web.Features.ExternalPlayback.Plex.PlexResourceDiscoveryClient>(client =>
+{
+    client.BaseAddress = new Uri("https://clients.plex.tv/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AllowAutoRedirect = false
+});
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.ExternalPlayback.Plex.PlexServerGrantStore(
+        services.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+        services.GetRequiredService<TimeProvider>()));
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerSelectionService>();
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexServerCatalogScanService>();
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.ExternalPlayback.Plex.PlexCatalogCheckpointStore(
+        services.GetRequiredService<TimeProvider>()));
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexCatalogReconciliationService>();
+builder.Services.AddSingleton<Jularr.Web.Features.ExternalPlayback.Plex.PlexCatalogReconciliationJobs>();
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWorkMatcher>();
+builder.Services.AddSingleton(services =>
+    new Jularr.Web.Features.ExternalPlayback.Plex.PlexProfileConnectionStore(
+        services.GetRequiredService<IDataProtectionProvider>()));
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexProfileConnectionService>();
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexItemAccessService>();
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexWebDestinationService>();
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexOnDemandTargetResolver>();
+builder.Services.AddScoped<Jularr.Web.Features.ExternalPlayback.Plex.PlexExternalPlaybackAction>();
+
 // Per-media-type capability policy (#436): canonical JSON settings store under /data plus the
 // resolution/guard service consumed by the request experience (#597), permission-derived shell
 // (#598) and provider-driven discovery (#595).

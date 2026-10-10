@@ -4,6 +4,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Devices;
 using Jularr.Web.Features.Plex;
+using Jularr.Web.Features.ExternalPlayback.Plex;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -22,7 +23,8 @@ public sealed class PlexModel(
     MediaCapabilityStore capabilities,
     PlexAuthClient plex,
     SecurityEventLog securityEvents,
-    PlexIdentitySettingsStore settingsStore) : PageModel
+    PlexIdentitySettingsStore settingsStore,
+    PlexProfileConnectionStore mediaConnections) : PageModel
 {
     private const string NonceCookie = "Jularr.Plex.Flow";
 
@@ -38,6 +40,13 @@ public sealed class PlexModel(
     [BindProperty(SupportsGet = true)]
     public string ReturnUrl { get; set; } = "/";
 
+    [BindProperty]
+    public bool ConsentToPlexMedia { get; set; }
+
+    public bool MediaFlowPending { get; private set; }
+    public PlexProfileConnectionStatus? MediaConnection { get; private set; }
+    public bool PlexMediaEnabled => settings.CanConnectMedia;
+
     public bool HasVerifiedIdentity { get; private set; }
     public bool PlexLinked { get; private set; }
     private PlexIdentitySettings settings =
@@ -45,7 +54,7 @@ public sealed class PlexModel(
 
     public bool AutoProvisionEnabled =>
         settings.CanLogin && settings.AutoProvisionEnabled;
-    public bool CanUsePlex => settings.CanLogin || settings.CanLink;
+    public bool CanUsePlex => settings.CanLogin || settings.CanLink || settings.CanConnectMedia;
     public string? MessageKey { get; private set; }
     private string ClientIdentifier => settings.ClientIdentifier;
     private bool LoginEnabled => settings.CanLogin;
@@ -73,8 +82,15 @@ public sealed class PlexModel(
                 x => x.AccountId == accountId && x.Provider == "plex",
                 cancellationToken);
         var isLinkedAccount = accountId is not null;
-        if (!PlexLinked &&
-            (!CanUsePlex || isLinkedAccount && !LinkEnabled ||
+        if (accountId is not null)
+        {
+            MediaConnection = await mediaConnections.GetStatusAsync(
+                accountId, cancellationToken);
+        }
+
+        if (!PlexLinked && MediaConnection is null &&
+            (!CanUsePlex ||
+                isLinkedAccount && !LinkEnabled && !PlexMediaEnabled ||
                 !isLinkedAccount && !LoginEnabled))
         {
             return NotFound();
@@ -119,6 +135,16 @@ public sealed class PlexModel(
             }
         }
 
+        return await StartPinFlowAsync(
+            "login", currentAccountId, "Finish", cancellationToken);
+    }
+
+    private async Task<IActionResult> StartPinFlowAsync(
+        string purpose,
+        string? currentAccountId,
+        string finishHandler,
+        CancellationToken cancellationToken)
+    {
         var scheme = Request.Scheme;
         if (scheme != Uri.UriSchemeHttps &&
             (HttpContext.Connection.RemoteIpAddress is not { } ip ||
@@ -139,6 +165,7 @@ public sealed class PlexModel(
             ClientIdentifier = ClientIdentifier,
             BrowserNonceHash = HashNonce(nonce),
             StartedAccountId = currentAccountId,
+            Purpose = purpose,
             ReturnPath = SafeReturnUrl(ReturnUrl),
             ExpiresAtUtc = DateTime.UtcNow.AddMinutes(5)
         };
@@ -163,7 +190,7 @@ public sealed class PlexModel(
 
         var callback = Url.Page(
             "/Account/Plex",
-            pageHandler: "Finish",
+            pageHandler: finishHandler,
             values: new { flow = attempt.Id },
             protocol: Request.Scheme);
 
@@ -179,6 +206,143 @@ public sealed class PlexModel(
             + "&context%5Bdevice%5D%5Bproduct%5D=Jularr"
             + "&forwardUrl=" + Uri.EscapeDataString(callback);
         return Redirect(authUrl);
+    }
+
+    public async Task<IActionResult> OnPostStartMediaAsync(
+        CancellationToken cancellationToken)
+    {
+        await LoadSettingsAsync(cancellationToken);
+        var accountId = OwnerAuthService.GetAccountId(User);
+        if (!PlexMediaEnabled || accountId is null ||
+            User.Identity?.IsAuthenticated != true)
+        {
+            return Forbid();
+        }
+
+        if (!ConsentToPlexMedia)
+        {
+            MessageKey = "account.plex.mediaDenied";
+            return Page();
+        }
+
+        if (await accountAuth.GetEnabledAccountAsync(
+            accountId, cancellationToken) is null)
+        {
+            return Forbid();
+        }
+
+        return await StartPinFlowAsync(
+            "media", accountId, "FinishMedia", cancellationToken);
+    }
+
+    public async Task<IActionResult> OnGetFinishMediaAsync(
+        CancellationToken cancellationToken)
+    {
+        await LoadSettingsAsync(cancellationToken);
+        var accountId = OwnerAuthService.GetAccountId(User);
+        if (accountId is null || !PlexMediaEnabled ||
+            User.Identity?.IsAuthenticated != true)
+        {
+            return Forbid();
+        }
+
+        var attempt = await GetAttemptAsync(cancellationToken, "media");
+        if (attempt is null || attempt.StartedAccountId != accountId)
+        {
+            return BadRequest();
+        }
+
+        PlexVerifiedIdentity? verified;
+        try
+        {
+            verified = await plex.ResolveVerifiedIdentityAsync(
+                attempt.PinId, attempt.ClientIdentifier, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            MediaFlowPending = true;
+            MessageKey = "account.plex.unavailable";
+            return Page();
+        }
+
+        if (verified is null)
+        {
+            MediaFlowPending = true;
+            MessageKey = "account.plex.mediaPending";
+            return Page();
+        }
+
+        if (await accountAuth.GetEnabledAccountAsync(
+            accountId, cancellationToken) is null)
+        {
+            return Forbid();
+        }
+
+        attempt.VerifiedPlexAccountId = verified.AccountId;
+        await db.SaveChangesAsync(cancellationToken);
+
+        // Claim before writing the grant so concurrent callbacks cannot restore a revoked connection.
+        var claimed = await db.PlexLoginAttempts
+            .Where(x => x.Id == attempt.Id &&
+                x.Purpose == "media" &&
+                x.StartedAccountId == accountId &&
+                x.VerifiedPlexAccountId == verified.AccountId &&
+                x.ExpiresAtUtc > DateTime.UtcNow)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(x => x.Purpose, "media-final"),
+                cancellationToken);
+        if (claimed != 1)
+        {
+            return BadRequest();
+        }
+
+        try
+        {
+            await mediaConnections.SaveVerifiedAsync(
+                accountId, verified.AccountId,
+                null, verified.AccessToken, cancellationToken);
+        }
+        catch (Exception error)
+            when (error is IOException or UnauthorizedAccessException)
+        {
+            await db.PlexLoginAttempts
+                .Where(x => x.Id == attempt.Id && x.Purpose == "media-final")
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(x => x.Purpose, "media"),
+                    CancellationToken.None);
+            MediaFlowPending = true;
+            MessageKey = "account.plex.unavailable";
+            return Page();
+        }
+
+        if (!await ConsumeAttemptAsync(
+            attempt, CancellationToken.None, "media-final"))
+        {
+            await mediaConnections.DisconnectMatchingAsync(
+                accountId, verified.AccountId, verified.AccessToken,
+                CancellationToken.None);
+            return BadRequest();
+        }
+
+        return RedirectToPage("/Account/Plex");
+    }
+
+    public async Task<IActionResult> OnPostDisconnectMediaAsync(
+        CancellationToken cancellationToken)
+    {
+        var accountId = OwnerAuthService.GetAccountId(User);
+        if (accountId is null || User.Identity?.IsAuthenticated != true)
+        {
+            return Forbid();
+        }
+
+        await db.PlexLoginAttempts
+            .Where(x => x.StartedAccountId == accountId &&
+                (x.Purpose == "media" || x.Purpose == "media-final"))
+            .ExecuteDeleteAsync(cancellationToken);
+        await mediaConnections.DisconnectAsync(
+            accountId, cancellationToken);
+        return RedirectToPage("/Account/Plex");
     }
 
     public async Task<IActionResult> OnGetFinishAsync(
@@ -468,7 +632,8 @@ public sealed class PlexModel(
     }
 
     private async Task<PlexLoginAttempt?> GetAttemptAsync(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string purpose = "login")
     {
         if (Flow == Guid.Empty ||
             !Request.Cookies.TryGetValue(NonceCookie, out var nonce) ||
@@ -478,7 +643,7 @@ public sealed class PlexModel(
         }
 
         var attempt = await db.PlexLoginAttempts.SingleOrDefaultAsync(
-            x => x.Id == Flow && x.ExpiresAtUtc > DateTime.UtcNow,
+            x => x.Id == Flow && x.Purpose == purpose && x.ExpiresAtUtc > DateTime.UtcNow,
             cancellationToken);
         if (attempt is null)
         {
@@ -494,10 +659,12 @@ public sealed class PlexModel(
 
     private async Task<bool> ConsumeAttemptAsync(
         PlexLoginAttempt attempt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? purpose = null)
     {
         var deleted = await db.PlexLoginAttempts.Where(
             x => x.Id == attempt.Id &&
+                x.Purpose == (purpose ?? attempt.Purpose) &&
                 x.VerifiedPlexAccountId != null &&
                 x.ExpiresAtUtc > DateTime.UtcNow)
             .ExecuteDeleteAsync(cancellationToken);

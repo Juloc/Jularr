@@ -15,6 +15,8 @@ using Jularr.Web.Features.InstantPlay;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Jularr.Web.Features.Auth;
+using Jularr.Web.Features.ExternalPlayback.Plex;
+using Jularr.Web.Features.Plex;
 using Jularr.Web.Features.ClientApi;
 using Jularr.Web.Features.Events;
 using Jularr.Web.Features.Library;
@@ -36,6 +38,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
 namespace Jularr.Tests;
@@ -162,6 +165,22 @@ internal sealed class VideoDetailPageTestHost : IAsyncDisposable
                     services.AddScoped<WantedReconciler>();
                     services.AddScoped<VideoAcquisitionEngine>();
                     services.AddInstantPlay();
+                    services.AddSingleton(new PlexIdentitySettingsStore(
+                        new ConfigurationBuilder().Build(),
+                        Path.Combine(root, "plex-provider")));
+                    services.AddSingleton(new PlexServerGrantStore(
+                        protection, TimeProvider.System,
+                        Path.Combine(root, "plex-servers")));
+                    services.AddSingleton(new PlexProfileConnectionStore(
+                        protection, Path.Combine(root, "plex-profiles")));
+                    services.AddHttpClient<PlexLibraryClient>();
+                    services.AddScoped<PlexWorkMatcher>();
+                    services.AddScoped<PlexProfileConnectionService>();
+                    services.AddScoped<PlexItemAccessService>();
+                    services.AddScoped<PlexWebDestinationService>();
+                    services.AddScoped<PlexOnDemandTargetResolver>();
+                    services.AddScoped<PlexExternalPlaybackAction>();
+
                     services.AddSingleton<IMediaProbeRunner>(probe);
                     services.AddSingleton<MediaInventoryService>();
                     services.AddScoped<CanonicalMediaStorageService>();

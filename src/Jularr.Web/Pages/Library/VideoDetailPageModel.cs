@@ -2,6 +2,7 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.InstantPlay;
+using Jularr.Web.Features.ExternalPlayback.Plex;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
@@ -30,6 +31,7 @@ public abstract class VideoDetailPageModel(
     ConsumerAcquisitionQuery acquisition,
     WorkMetadataRefreshQueue metadataRefresh,
     WatchlistStore watchlist,
+    PlexExternalPlaybackAction plexExternal,
     ILogger<VideoDetailPageModel> logger) : PageModel
 {
     private static readonly HashSet<string> PlayingWords = new(
@@ -85,6 +87,8 @@ public abstract class VideoDetailPageModel(
 
     /// <summary>False on a manager-only instance: no page element links into the player.</summary>
     public bool PlaybackEnabled { get; private set; }
+
+    public bool OffersPlexExternalPlayback { get; private set; }
 
     /// <summary>
     /// The consumer state of the title's open request for the hero target, in the words every consumer surface uses; null when there is no
@@ -151,6 +155,35 @@ public abstract class VideoDetailPageModel(
         return RedirectToPage(new { workId });
     }
 
+    /// <summary>
+    /// Secondary external handoff: never starts Jularr Playback or changes
+    /// acquisition state. Rechecks profile and Plex permissions on click.
+    /// </summary>
+    public async Task<IActionResult> OnPostOpenInPlexAsync(
+        long workId,
+        CancellationToken cancellationToken)
+    {
+        var access = await appShell.GetMediaAccessAsync(User, cancellationToken);
+        var detail = await query.GetAsync(
+            account.ProfileId, workId, MediaType,
+            access.VisibleMediaTypes, cancellationToken);
+        if (detail is null)
+        {
+            return NotFound();
+        }
+
+        var uri = await plexExternal.OpenAsync(
+            User, workId, detail.Title, cancellationToken);
+        if (uri is not null)
+        {
+            return Redirect(uri.AbsoluteUri);
+        }
+
+        TempData["Status"] = (await UiRequestLocalization.GetBundleAsync(
+            HttpContext, db))["library.external.plex.unavailable"];
+        return RedirectToPage(PageRoute(workId));
+    }
+
     /// <summary>Puts the title on the profile's watchlist. Idempotent: following it again changes nothing.</summary>
     public async Task<IActionResult> OnPostFollowAsync(long workId, CancellationToken cancellationToken) => await SetFollowAsync(workId, follow: true, cancellationToken);
 
@@ -191,6 +224,8 @@ public abstract class VideoDetailPageModel(
         }
 
         Detail = detail;
+        OffersPlexExternalPlayback = await plexExternal.IsOfferVisibleAsync(
+            User, cancellationToken);
         await PromoteMetadataRefreshAsync(workId, detail.Metadata, cancellationToken);
         HasTrailer = MediaType == WorkMediaType.Movie && detail.Metadata?.PlayableTrailer is not null;
         if (HasTrailer)

@@ -149,5 +149,13 @@
             <button type="submit" class="button button-primary prov-save" asp-page="/Admin/Providers" asp-page-handler="Save" asp-route-provider="@key">@ui["admin.providers.save"]</button>
         </div>
     </form>
+    @if (provider.Key == "plex")
+    {
+        <p class="admset-actions">
+            <a class="button" asp-page="/Admin/Plex">
+                @ui["admin.plex.manageServers"]
+            </a>
+        </p>
+    }
 </section>
 <script src="~/js/provider-test.js" asp-append-version="true" defer></script>

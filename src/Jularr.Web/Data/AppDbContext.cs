@@ -198,6 +198,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(x => x.BrowserNonceHash).HasMaxLength(64);
             entity.Property(x => x.StartedAccountId).HasMaxLength(32);
             entity.Property(x => x.VerifiedPlexAccountId).HasMaxLength(160);
+            entity.Property(x => x.Purpose).HasMaxLength(12).HasDefaultValue("login");
             entity.Property(x => x.ReturnPath).HasMaxLength(512);
             entity.HasOne<OwnerAccount>()
                 .WithMany()

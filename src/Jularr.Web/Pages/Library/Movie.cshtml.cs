@@ -1,6 +1,7 @@
 using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.InstantPlay;
+using Jularr.Web.Features.ExternalPlayback.Plex;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Library;
 using Jularr.Web.Features.MediaCore;
@@ -21,7 +22,8 @@ public sealed class MovieDetailModel(
     ConsumerAcquisitionQuery acquisition,
     WorkMetadataRefreshQueue metadataRefresh,
     WatchlistStore watchlist,
-    ILogger<VideoDetailPageModel> logger) : VideoDetailPageModel(db, account, appShell, query, policies, intents, acquisition, metadataRefresh, watchlist, logger)
+    PlexExternalPlaybackAction plexExternal,
+    ILogger<VideoDetailPageModel> logger) : VideoDetailPageModel(db, account, appShell, query, policies, intents, acquisition, metadataRefresh, watchlist, plexExternal, logger)
 {
     protected override WorkMediaType MediaType => WorkMediaType.Movie;
 

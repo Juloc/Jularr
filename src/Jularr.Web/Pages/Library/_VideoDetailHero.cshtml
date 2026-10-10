@@ -184,6 +184,17 @@
                 }
             }
 
+            @if (Model.OffersPlexExternalPlayback)
+            {
+                <form method="post" asp-page-handler="OpenInPlex"
+                      asp-route-workId="@detail.WorkId" class="ad-external-action">
+                    <button type="submit" class="ad-secondary">
+                        <partial name="_AnimeDetailIcon" model='"play"' />
+                        <span>@ui["library.external.plex.open"]</span>
+                    </button>
+                </form>
+            }
+
             @if (Model.IsOnWatchlist is bool onWatchlist)
             {
                 <partial name="_WatchlistAction" model="new WatchlistActionView(onWatchlist, Model.PageRoute(detail.WorkId), ui)" />

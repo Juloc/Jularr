@@ -2,6 +2,9 @@ using Jularr.Web.Data;
 using Jularr.Web.Features.Acquisition.Access;
 using Jularr.Web.Features.Auth;
 using Jularr.Web.Features.Discovery;
+using Jularr.Web.Features.ExternalPlayback.Plex;
+using Jularr.Web.Features.Shell;
+using Microsoft.EntityFrameworkCore;
 using Jularr.Web.Features.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -10,7 +13,13 @@ namespace Jularr.Web.Pages.Requests;
 
 /// <param name="Notice">The outcome of an action that did not go through, as a catalog key; null when there is nothing to tell.</param>
 /// <param name="Embedded">Whether the panel sits in the status dialog (which has its own close button) instead of on the page.</param>
-public sealed record RequestStatusPanel(UiTextBundle Ui, RequestStatusView View, DateTime NowUtc, string? Notice, bool Embedded);
+public sealed record RequestStatusPanel(
+    UiTextBundle Ui,
+    RequestStatusView View,
+    DateTime NowUtc,
+    string? Notice,
+    bool Embedded,
+    bool ShowPlex = false);
 
 /// <summary>
 /// The status surface of one of the signed-in profile's own requests (docs/mockups/request-status-details): the current consumer state,
@@ -24,9 +33,11 @@ public sealed class DetailsModel(
     RequestStatusQuery status,
     AcquisitionRequestService requests,
     VideoRequestScopeResolver scopes,
-    TimeProvider clock) : PageModel
+    TimeProvider clock,
+    PlexExternalPlaybackAction? plexExternal = null,
+    IAppShellService? appShell = null) : PageModel
 {
-    private static readonly IReadOnlySet<string> s_noticeKeys = new HashSet<string>(StringComparer.Ordinal) { "changed", "failed" };
+    private static readonly IReadOnlySet<string> s_noticeKeys = new HashSet<string>(StringComparer.Ordinal) { "changed", "failed", "plexUnavailable" };
 
     public RequestStatusPanel Panel { get; private set; } = null!;
 
@@ -61,6 +72,49 @@ public sealed class DetailsModel(
 
         var outcome = await requests.RetryAsync(id, cancellationToken);
         return await AnswerAsync(id, panel, outcome == RequestRetryOutcome.NotRetryable ? "changed" : null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens the request's canonical Work externally using the same
+    /// permission-checked Plex action as the Movie/Series hero.
+    /// Never guesses a Work from title or lets the browser choose one.
+    /// </summary>
+    public async Task<IActionResult> OnPostOpenInPlexAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (plexExternal is null || appShell is null)
+        {
+            return NotFound();
+        }
+
+        var request = await status.FindOwnAsync(
+            id, account.ProfileId, cancellationToken);
+        if (request?.WorkId is not long workId || workId <= 0 ||
+            request.Kind is not (MediaAcquisitionKind.Movie or
+                MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime))
+        {
+            return NotFound();
+        }
+
+        var work = await db.Works.AsNoTracking()
+            .Where(x => x.Id == workId)
+            .Select(x => new { x.MediaType, x.IsAnime })
+            .SingleOrDefaultAsync(cancellationToken);
+        var mediaAccess = await appShell.GetMediaAccessAsync(
+            User, cancellationToken);
+        if (work is null ||
+            !mediaAccess.IsWorkVisible(work.MediaType, work.IsAnime))
+        {
+            return NotFound();
+        }
+
+        var destination = await plexExternal.OpenAsync(
+            User, workId, request.Title, cancellationToken);
+        return destination is not null
+            ? Redirect(destination.AbsoluteUri)
+            : Redirect(AcquisitionRequestService.StatusPath(id)
+                + "?notice=plexUnavailable");
     }
 
     /// <summary>The settings of the shared Request dialog with the saved values preselected, for editing a request that still waits for approval.</summary>
@@ -160,7 +214,17 @@ public sealed class DetailsModel(
 
         var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         ViewData["Title"] = view.Request.Title;
-        Panel = new RequestStatusPanel(ui, view, clock.GetUtcNow().UtcDateTime, notice is not null && s_noticeKeys.Contains(notice) ? $"requests.detail.error.{notice}" : null, embedded);
+        var showPlex = view.Request.WorkId is > 0 &&
+            (view.Request.Kind is MediaAcquisitionKind.Movie or
+                MediaAcquisitionKind.Tv or MediaAcquisitionKind.Anime) &&
+            plexExternal is not null &&
+            await plexExternal.IsOfferVisibleAsync(User, cancellationToken);
+        Panel = new RequestStatusPanel(
+            ui, view, clock.GetUtcNow().UtcDateTime,
+            notice is not null && s_noticeKeys.Contains(notice)
+                ? $"requests.detail.error.{notice}"
+                : null,
+            embedded, showPlex);
         return true;
     }
 }
