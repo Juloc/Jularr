@@ -155,6 +155,11 @@ public sealed class SqlContext : IAsyncDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(sql);
         RequireActive();
 
+        if (!write)
+        {
+            SqlReadGuard.RequireReadStatement(sql);
+        }
+
         if (write && _mode != SqlAccessMode.ReadWrite)
         {
             throw new InvalidOperationException("Write commands require a read-write transaction.");
