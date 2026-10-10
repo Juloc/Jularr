@@ -266,7 +266,7 @@ public sealed class SqlContext : IAsyncDisposable
             return await command.ExecuteScalarAsync(cancellationToken);
         }
 
-        public async Task<T?> ReadOptionalAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
+        public async Task<T?> ReadOptionalAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default) where T : class
         {
             await using var command = context.CreateCommand(sql, false, parameters);
             await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
@@ -285,7 +285,7 @@ public sealed class SqlContext : IAsyncDisposable
             return result;
         }
 
-        public async Task<T> ReadRequiredAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
+        public async Task<T> ReadRequiredAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default) where T : class
         {
             var result = await ReadOptionalAsync<T>(sql, parameters, cancellationToken);
             return result is null ? throw new KeyNotFoundException("The required database resource was not found.") : result;
