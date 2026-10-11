@@ -14,16 +14,13 @@ namespace Jularr.Backend.Infrastructure.Sql
         public SqlContext.SqlReadCommands ReadSql => _sql.ReadSql;
 
         public Task<T> ReadRequiredAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class =>
-            _sql.ReadSql.ReadRequiredAsync<T>(sql, cancellationToken);
+            _sql.LogicReads.ReadRequiredAsync<T>(sql, cancellationToken);
 
-        public Task<T> ReadForUpdateAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) =>
-            _sql.RequireLogicSql().ReadForUpdateAsync<T>(sql, cancellationToken);
+        public Task<T?> ReadOptionalAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class =>
+            _sql.LogicReads.ReadOptionalAsync<T>(sql, cancellationToken);
 
         public Task<int> ExecuteAsyncForAffectedRows(SqlStatement sql, CancellationToken cancellationToken = default) =>
             _sql.RequireLogicSql().ExecuteAsync(sql, cancellationToken);
-
-        public Task<T> ExecuteReturningAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) =>
-            _sql.RequireLogicSql().ExecuteReturningAsync<T>(sql, cancellationToken);
 
         internal void SetTransactionalAccessCheck(Func<LogicContext, CancellationToken, Task> check)
         {
@@ -37,7 +34,7 @@ namespace Jularr.Backend.Infrastructure.Sql
             _transactionalAccessCheck = check;
         }
 
-        // Each batch rechecks access inside its own transaction.
+        // Each batch rechecks access.
         public Task<TResult> ExecuteBatchAsync<TResult>(Func<LogicContext, CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(action);

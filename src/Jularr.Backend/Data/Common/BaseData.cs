@@ -84,7 +84,7 @@ namespace Jularr.Backend.Data.Common
 
                 foreach (var (input, _) in GetFields(source.GetType()))
                 {
-                    // Only equally named properties are copied; aliases are assigned by the caller.
+                    // Copy provided, equally named fields.
                     if (!source.IsProvided(input.Name) || !targets.TryGetValue(input.Name, out var target))
                     {
                         continue;
@@ -103,7 +103,7 @@ namespace Jularr.Backend.Data.Common
                 }
             }
 
-            // Validate all changed values before touching the destination.
+            // Apply validated changes together.
             foreach (var (property, value) in changes)
             {
                 property.SetValue(this, value);
@@ -153,7 +153,7 @@ namespace Jularr.Backend.Data.Common
                 throw new InvalidOperationException("A data list update requires a declared Id field.");
             }
 
-            // Stage every row before applying any list changes.
+            // Stage before changing any row.
             var staged = new Dictionary<object, (BaseData Original, BaseData Copy)>();
 
             foreach (var item in Items)

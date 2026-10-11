@@ -148,11 +148,11 @@ namespace Jularr.Backend.Tests
                     @DisplayName AS "DisplayName"
                 """;
 
-            var value = await sql.ReadSql.ReadRequiredAsync<RequiredName>(statement, new RequiredName("O'Brien"));
+            var value = await sql.ReadSql.ReadRequiredAsync<RequiredName>(new SqlStatement { Statement = statement, Parameters = { new RequiredName("O'Brien") } });
             Assert.AreEqual("O'Brien", value.DisplayName);
-            var optional = await sql.ReadSql.ReadRequiredAsync<OptionalName>(statement, new OptionalName(null));
+            var optional = await sql.ReadSql.ReadRequiredAsync<OptionalName>(new SqlStatement { Statement = statement, Parameters = { new OptionalName(null) } });
             Assert.IsNull(optional.DisplayName);
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => sql.ReadSql.ReadRequiredAsync<RequiredName>(statement, new OptionalName(null)));
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => sql.ReadSql.ReadRequiredAsync<RequiredName>(new SqlStatement { Statement = statement, Parameters = { new OptionalName(null) } }));
         }
     }
 }

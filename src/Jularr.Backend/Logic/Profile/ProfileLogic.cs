@@ -37,14 +37,14 @@ namespace Jularr.Backend.Logic.Profile
             ProfileUpdateData profile;
             try
             {
-                profile = await context.ExecuteReturningAsync<ProfileUpdateData>(sql, cancellationToken);
+                profile = await context.ReadRequiredAsync<ProfileUpdateData>(sql, cancellationToken);
             }
             catch (KeyNotFoundException)
             {
                 throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
             }
 
-            // The deferred ownership FK is satisfied within this same transaction.
+            // Establish ownership before commit.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -60,7 +60,7 @@ namespace Jularr.Backend.Logic.Profile
             }
         }
 
-        public static Task<ProfileUpdateData> ReadProfileForUpdateAsync(
+        public static Task<ProfileUpdateData> ReadProfileAsync(
             this LogicContext context,
             long profileId,
             CancellationToken cancellationToken)
@@ -81,7 +81,7 @@ namespace Jularr.Backend.Logic.Profile
                 """;
             sql.Parameters.Add(new ProfileParameters(profileId));
 
-            return context.ReadForUpdateAsync<ProfileUpdateData>(sql, cancellationToken);
+            return context.ReadRequiredAsync<ProfileUpdateData>(sql, cancellationToken);
         }
 
         public static async Task UpdateProfileAsync(
@@ -92,6 +92,7 @@ namespace Jularr.Backend.Logic.Profile
             ArgumentNullException.ThrowIfNull(context);
             ArgumentNullException.ThrowIfNull(updateData);
 
+            // Validate the merged entity.
             updateData.Validate();
 
             var sql = new SqlStatement();
@@ -108,6 +109,7 @@ namespace Jularr.Backend.Logic.Profile
                 """;
             sql.Parameters.Add(updateData);
 
+            // Translate reference failures.
             int affected;
             try
             {

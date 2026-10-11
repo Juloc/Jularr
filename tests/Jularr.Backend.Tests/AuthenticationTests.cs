@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Public.Authentication.V1;
-using Jularr.Backend.Infrastructure.Plex;
+using Jularr.Integrations.Plex;
 using Jularr.Backend.Service.Core;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -185,11 +185,26 @@ namespace Jularr.Backend.Tests
         [DataRow("wrong-server", HttpStatusCode.Forbidden)]
         [DataRow("expired", HttpStatusCode.Unauthorized)]
         [DataRow("unavailable", HttpStatusCode.ServiceUnavailable)]
+        [DataRow("provider-disabled", HttpStatusCode.Forbidden)]
         public async Task Plex_InvalidProofOrProvider_NoAccountOrSessionIsCreated(string failure, HttpStatusCode expected)
         {
             await using var host = await Host.CreateAsync(plexEnabled: true);
             await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            if (failure == "provider-disabled")
+            {
+                await host.Fixture.RunSqlAsync("UPDATE \"Providers\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'plex'");
+            }
+
             using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/plex");
+            if (failure == "provider-disabled")
+            {
+                Assert.AreEqual(expected, started.StatusCode);
+                Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountAuthChallenges\""));
+                Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountExternalLogins\""));
+                Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\""));
+                return;
+            }
+
             var attempt = (await started.Content.ReadFromJsonAsync<StartPlexResultV1>())!;
             host.Plex.Confirmed = failure != "unconfirmed";
             host.Plex.ServerIdentifier = failure == "wrong-server" ? "another-server" : "connected-server";

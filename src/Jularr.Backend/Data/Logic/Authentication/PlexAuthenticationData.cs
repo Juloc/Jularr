@@ -111,13 +111,12 @@ namespace Jularr.Backend.Data.Logic.Authentication
 
     public sealed class PlexIdentityData : BaseData
     {
-        public PlexIdentityData(string externalAccountId, string email, string displayName, bool emailVerified, string accessToken)
+        public PlexIdentityData(string externalAccountId, string email, string displayName, bool emailVerified)
         {
             ExternalAccountId = externalAccountId;
             Email = email;
             DisplayName = displayName;
             EmailVerified = emailVerified;
-            AccessToken = accessToken;
         }
 
         [DataField(typeof(AccountExternalLoginFields), nameof(AccountExternalLoginFields.ExternalAccountId))]
@@ -126,8 +125,6 @@ namespace Jularr.Backend.Data.Logic.Authentication
         public string Email { get; }
         public string DisplayName { get; }
         public bool EmailVerified { get; }
-        [JsonIgnore]
-        public string AccessToken { get; }
     }
 
     public sealed class ExternalLoginData : BaseData

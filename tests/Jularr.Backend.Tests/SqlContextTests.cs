@@ -16,7 +16,7 @@ namespace Jularr.Backend.Tests
             await using (var setup = new SqlContext(database))
             {
                 await setup.BeginAsync(SqlAccessMode.ReadWrite);
-                await setup.RequireLogicSql().ExecuteAsync("CREATE SEQUENCE \"SqlContextReadOnlySequence\"");
+                await setup.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "CREATE SEQUENCE \"SqlContextReadOnlySequence\"" });
                 await setup.CommitAsync();
             }
 
@@ -24,11 +24,11 @@ namespace Jularr.Backend.Tests
             {
                 await read.BeginAsync(SqlAccessMode.ReadOnly);
 
-                Assert.AreEqual("on", await read.ReadSql.ExecuteScalarAsync("SELECT current_setting('transaction_read_only')"));
+                Assert.AreEqual("on", await read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('transaction_read_only')" }));
                 Assert.ThrowsExactly<InvalidOperationException>(() => read.RequireLogicSql());
 
                 var error = await Assert.ThrowsExactlyAsync<PostgresException>(
-                    () => read.ReadSql.ExecuteScalarAsync("SELECT nextval('\"SqlContextReadOnlySequence\"')"));
+                    () => read.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT nextval('\"SqlContextReadOnlySequence\"')" }));
 
                 Assert.AreEqual("25006", error.SqlState);
             }
@@ -36,9 +36,9 @@ namespace Jularr.Backend.Tests
             await using (var write = new SqlContext(database))
             {
                 await write.BeginAsync(SqlAccessMode.ReadWrite);
-                Assert.AreEqual("off", await write.ReadSql.ExecuteScalarAsync("SELECT current_setting('transaction_read_only')"));
+                Assert.AreEqual("off", await write.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('transaction_read_only')" }));
 
-                await write.RequireLogicSql().ExecuteAsync("CREATE TEMP TABLE \"SqlContextWriteProbe\" (\"Id\" integer)");
+                await write.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "CREATE TEMP TABLE \"SqlContextWriteProbe\" (\"Id\" integer)" });
                 await write.CommitAsync();
             }
         }
@@ -51,18 +51,18 @@ namespace Jularr.Backend.Tests
             await context.BeginAsync(SqlAccessMode.ReadWrite);
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("UPDATE \"Accounts\" SET \"Id\" = 1 RETURNING \"Id\""));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "UPDATE \"Accounts\" SET \"Id\" = 1 RETURNING \"Id\"" }));
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("WITH \"Deleted\" AS (DELETE FROM \"Accounts\" RETURNING \"Id\") SELECT * FROM \"Deleted\""));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "WITH \"Deleted\" AS (DELETE FROM \"Accounts\" RETURNING \"Id\") SELECT * FROM \"Deleted\"" }));
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("SELECT 1; DELETE FROM \"Accounts\""));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1; DELETE FROM \"Accounts\"" }));
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("SELECT * FROM \"Accounts\" FOR UPDATE"));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT * FROM \"Accounts\" FOR UPDATE" }));
 
-            Assert.AreEqual("UPDATE", await context.ReadSql.ExecuteScalarAsync("SELECT 'UPDATE'::text /* DROP TABLE \"Accounts\" */"));
+            Assert.AreEqual("UPDATE", await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 'UPDATE'::text /* DROP TABLE \"Accounts\" */" }));
         }
 
         [TestMethod]
@@ -75,16 +75,16 @@ namespace Jularr.Backend.Tests
                 await context.BeginAsync(SqlAccessMode.ReadWrite);
                 var sql = context.RequireLogicSql();
 
-                await sql.ExecuteAsync("CREATE TABLE \"SqlContextCommitProbe\" (\"Id\" bigint PRIMARY KEY)");
-                var backendId = await context.ReadSql.ExecuteScalarAsync("SELECT pg_backend_pid()");
-                var transactionId = await context.ReadSql.ExecuteScalarAsync("SELECT txid_current()");
+                await sql.ExecuteAsync(new SqlStatement { Statement = "CREATE TABLE \"SqlContextCommitProbe\" (\"Id\" bigint PRIMARY KEY)" });
+                var backendId = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_backend_pid()" });
+                var transactionId = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT txid_current()" });
 
-                await sql.ExecuteAsync("INSERT INTO \"SqlContextCommitProbe\" (\"Id\") VALUES (1)");
-                await sql.ExecuteAsync("INSERT INTO \"SqlContextCommitProbe\" (\"Id\") VALUES (2)");
+                await sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"SqlContextCommitProbe\" (\"Id\") VALUES (1)" });
+                await sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"SqlContextCommitProbe\" (\"Id\") VALUES (2)" });
 
-                Assert.AreEqual(backendId, await context.ReadSql.ExecuteScalarAsync("SELECT pg_backend_pid()"));
-                Assert.AreEqual(transactionId, await context.ReadSql.ExecuteScalarAsync("SELECT txid_current()"));
-                Assert.AreEqual(2L, await context.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"SqlContextCommitProbe\""));
+                Assert.AreEqual(backendId, await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT pg_backend_pid()" }));
+                Assert.AreEqual(transactionId, await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT txid_current()" }));
+                Assert.AreEqual(2L, await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"SqlContextCommitProbe\"" }));
 
                 await context.CommitAsync();
                 await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => context.CommitAsync());
@@ -92,7 +92,7 @@ namespace Jularr.Backend.Tests
 
             await using var verify = new SqlContext(database);
             await verify.BeginAsync(SqlAccessMode.ReadOnly);
-            Assert.AreEqual(2L, await verify.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"SqlContextCommitProbe\""));
+            Assert.AreEqual(2L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"SqlContextCommitProbe\"" }));
         }
 
         [TestMethod]
@@ -105,11 +105,11 @@ namespace Jularr.Backend.Tests
                 await context.BeginAsync(SqlAccessMode.ReadWrite);
                 var sql = context.RequireLogicSql();
 
-                await sql.ExecuteAsync("CREATE TABLE \"SqlContextRollbackProbe\" (\"Id\" bigint PRIMARY KEY)");
-                await sql.ExecuteAsync("INSERT INTO \"SqlContextRollbackProbe\" (\"Id\") VALUES (1)");
+                await sql.ExecuteAsync(new SqlStatement { Statement = "CREATE TABLE \"SqlContextRollbackProbe\" (\"Id\" bigint PRIMARY KEY)" });
+                await sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"SqlContextRollbackProbe\" (\"Id\") VALUES (1)" });
 
                 var error = await Assert.ThrowsExactlyAsync<PostgresException>(
-                    () => sql.ExecuteAsync("INSERT INTO \"SqlContextRollbackProbe\" (\"Id\") VALUES (1)"));
+                    () => sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"SqlContextRollbackProbe\" (\"Id\") VALUES (1)" }));
 
                 Assert.AreEqual("23505", error.SqlState);
             }
@@ -119,7 +119,7 @@ namespace Jularr.Backend.Tests
 
             // Npgsql does not materialize PostgreSQL regclass as System.Object.
             // Query the supported boolean scalar instead of reading the regclass value.
-            var missing = await verify.ReadSql.ExecuteScalarAsync("SELECT to_regclass('\"SqlContextRollbackProbe\"') IS NULL");
+            var missing = await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT to_regclass('\"SqlContextRollbackProbe\"') IS NULL" });
             Assert.AreEqual(true, missing);
         }
 
@@ -130,7 +130,7 @@ namespace Jularr.Backend.Tests
             await using var context = new SqlContext(database);
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("SELECT 1"));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }));
 
             await context.BeginAsync(SqlAccessMode.ReadWrite);
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
@@ -138,7 +138,7 @@ namespace Jularr.Backend.Tests
 
             await context.CommitAsync();
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("SELECT 1"));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT 1" }));
         }
 
         private static NpgsqlDataSource CreateDataSource()

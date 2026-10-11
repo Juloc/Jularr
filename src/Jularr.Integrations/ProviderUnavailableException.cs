@@ -1,4 +1,4 @@
-namespace Jularr.Backend.Data.Common
+namespace Jularr.Integrations
 {
     public sealed class ProviderUnavailableException : Exception
     {

@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
-using Jularr.Backend.Infrastructure.Plex;
+using Jularr.Integrations.Plex;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
@@ -27,9 +27,12 @@ namespace Jularr.Backend.Service.Core
 
         public static IServiceCollection AddJularrServices(this IServiceCollection services, NpgsqlDataSource database, params Assembly[] assemblies)
         {
+            // Discover concrete services.
             var serviceTypes = assemblies.Distinct().SelectMany(assembly => assembly.GetTypes())
                 .Where(type => type.IsVisible && !type.IsAbstract && !type.ContainsGenericParameters && typeof(Service).IsAssignableFrom(type))
                 .Distinct().ToArray();
+
+            // Register shared infrastructure.
             services.AddSingleton(database);
             services.TryAddSingleton(TimeProvider.System);
             services.TryAddSingleton<UiLocalizationCache>();
@@ -43,6 +46,8 @@ namespace Jularr.Backend.Service.Core
             services.AddScoped<SessionAuthentication>();
             services.AddScoped<SessionCookieEvents>();
             services.AddDataProtection();
+
+            // Validate trusted auth configuration.
             services.AddOptions<AuthenticationOptions>()
                 .Validate(options => options.SessionLifetimeHours is >= 1 and <= 720, "Session lifetime must be 1-720 hours.")
                 .Validate(options => !options.PlexRegistrationEnabled || options.PlexLoginEnabled
@@ -52,6 +57,8 @@ namespace Jularr.Backend.Service.Core
                     && uri.Scheme == "https" && uri.AbsolutePath == "/" && uri.UserInfo.Length == 0
                     && uri.Query.Length == 0 && uri.Fragment.Length == 0, "Plex registration requires a configured HTTPS server and libraries.")
                 .ValidateOnStart();
+
+            // Harden session cookies.
             services.PostConfigure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
                 options.EventsType = typeof(SessionCookieEvents);
@@ -60,12 +67,16 @@ namespace Jularr.Backend.Service.Core
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Strict;
             });
+
+            // Bound external communication.
             services.AddHttpClient<PlexClient>(http =>
             {
                 http.Timeout = TimeSpan.FromSeconds(10);
                 http.MaxResponseContentBufferSize = 1024 * 1024;
             }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
                 .RemoveAllLoggers();
+
+            // Throttle public requests.
             services.AddRateLimiter(options =>
             {
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -87,6 +98,8 @@ namespace Jularr.Backend.Service.Core
                         })
                         .ExecuteAsync(context.HttpContext));
             });
+
+            // Bind each service runtime.
             services.AddScoped<ServiceRuntime>();
             foreach (var type in serviceTypes)
             {
@@ -151,6 +164,7 @@ namespace Jularr.Backend.Service.Core
                     throw new InvalidOperationException("A read endpoint cannot require a request body.");
                 }
 
+                // Bind the shared HTTP adapter.
                 var factory = typeof(ServiceApi).GetMethod(noData ? nameof(CreateParameterHandler) : nameof(CreateBodyHandler), BindingFlags.Static | BindingFlags.NonPublic)!;
                 var handler = (Delegate)factory.MakeGenericMethod([type, .. arguments]).Invoke(null, null)!;
                 var route = endpoints.MapMethods(endpoint.Route, [method], handler)
@@ -200,12 +214,12 @@ namespace Jularr.Backend.Service.Core
                 return Results.Ok<object>(result);
             };
 
-        // Razor callers use the same committed authentication result without an HTTP round-trip.
+        // Razor shares committed auth effects.
         public static async Task ApplyAuthenticationAsync(HttpContext http, IServiceOutput result, IAntiforgery antiforgery)
         {
             http.Response.Headers.CacheControl = "no-store";
 
-            // Session effects run only after the service transaction has committed.
+            // Publish the committed session.
             if (result is ISessionResult { Session: { } session })
             {
                 var principal = new ClaimsPrincipal(new ClaimsIdentity([

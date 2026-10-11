@@ -149,7 +149,7 @@ namespace Jularr.Backend.Logic.Localization
                 FOR UPDATE OF message;
                 """;
             sql.Parameters.Add(data);
-            var source = await context.ReadForUpdateAsync<UiCatalogTextData>(sql, cancellationToken);
+            var source = await context.ReadRequiredAsync<UiCatalogTextData>(sql, cancellationToken);
             UiTextPlaceholders.RequireMatching(source.Text, data.Text);
 
             sql = new SqlStatement();

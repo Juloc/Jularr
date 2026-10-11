@@ -38,20 +38,16 @@ namespace Jularr.Backend.Logic.Session
                 """;
             sql.Parameters.Add(new SessionAccountParameters(account.Id));
 
-            long? profileId = null;
-            try
-            {
-                profileId = (await context.ReadForUpdateAsync<ProfileUpdateData>(sql, cancellationToken)).Id;
-            }
-            catch (KeyNotFoundException)
-            {
-                // Account authentication is valid even when no unguarded Profile can be selected.
-            }
+            // A profile remains optional.
+            var profile = await context.ReadOptionalAsync<ProfileUpdateData>(sql, cancellationToken);
+            var profileId = profile?.Id;
 
+            // Issue a separate secret.
             var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             var credentials = new SessionCredentialsData(Guid.NewGuid(), account.Id, profileId,
                 SHA256.HashData(Encoding.UTF8.GetBytes(token)), token, account.CredentialRevision, DateTime.UtcNow.Add(lifetime));
 
+            // Store the session hash.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -69,7 +65,7 @@ namespace Jularr.Backend.Logic.Session
             return credentials;
         }
 
-        public static async Task<SessionAuthenticationData> ReadSessionForUpdateAsync(
+        public static async Task<SessionAuthenticationData> ReadSessionAsync(
             this LogicContext context,
             SessionParameters parameters,
             CancellationToken cancellationToken)
@@ -94,8 +90,6 @@ namespace Jularr.Backend.Logic.Session
                     session."PublicId" = @SessionPublicId
                     AND session."RotationRevision" = @SessionRevision
                     AND session."TokenHash" = @SessionTokenHash
-                    AND account."Id" = @ActorAccountId
-                    AND profile."Id" = @ActiveProfileId
                     AND session."RevokedAt" IS NULL
                     AND session."ExpiresAt" > statement_timestamp()
                     AND session."CredentialRevision" = account."CredentialRevision"
@@ -107,7 +101,7 @@ namespace Jularr.Backend.Logic.Session
 
             try
             {
-                return await context.ReadForUpdateAsync<SessionAuthenticationData>(sql, cancellationToken);
+                return await context.ReadRequiredAsync<SessionAuthenticationData>(sql, cancellationToken);
             }
             catch (KeyNotFoundException)
             {

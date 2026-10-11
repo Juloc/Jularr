@@ -1,6 +1,5 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Account;
-using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.Logic.Authentication
 {
@@ -17,17 +16,6 @@ namespace Jularr.Backend.Data.Logic.Authentication
 
         [DataField(typeof(AccountExternalLoginFields), nameof(AccountExternalLoginFields.ExternalAccountId))]
         public string ExternalAccountId { get; }
-    }
-
-    public sealed class PlexProviderData : BaseData
-    {
-        public PlexProviderData(long id)
-        {
-            Id = id;
-        }
-
-        [DataField(typeof(ProviderFields), nameof(ProviderFields.Id))]
-        public long Id { get; }
     }
 
     public sealed class AuthChallengeIdData : BaseData

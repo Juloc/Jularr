@@ -16,7 +16,7 @@ documents need not be reread for every task.
 - Keep coherent control flow together. No forwarding wrappers, artificial mini-methods, speculative interfaces or dependencies.
 - Wrap long signatures, calls and expressions at logical boundaries; do not reformat unrelated code.
 - Propagate cancellation and finite I/O timeouts. Dispose owned resources; preserve exception meaning and do not swallow failures.
-- Use blank lines to group related steps and short comments for intent or invariants. Avoid dense call chains and comments that repeat the code. XML docs only for reusable contracts needing non-obvious caller guidance.
+- Group meaningful steps with blank lines and short section comments, normally 1-5 words. Apply this throughout handwritten backend/integration code, not just new services. Avoid dense call chains, continuous registration blocks and comments repeating simple properties. XML docs only for reusable contracts needing non-obvious caller guidance.
 - No issue numbers, history or specification prose in source comments. Use documentation for that material.
 
 ## Structure and ownership
@@ -38,6 +38,7 @@ use the same services through the shared API adapter.
 - `Logic/<Feature>`: canonical mutations, business validation, locking and transactional state changes. Logic uses neutral Data types, not Service or HTTP types.
 - Call logic extensions directly on `Context`, such as `Context.UpdateProfileAsync(...)`; no `Context.Sql.SomeDomainFunction(...)` or extra domain wrapper.
 - `Service/Core`: shared invocation and authorization lifecycle. `Infrastructure/Sql`: SQL execution, parameter binding and connection/transaction ownership.
+- `src/Jularr.Integrations/<Provider>`: external protocols and their transport results only; no Backend dependency, database rules, roles or session authorization. Plex is implemented. NAS file access and manufacturer administration are separate responsibilities in this same library, once their scope is decided. No extra web host.
 - Service constructors do not take `ServiceRuntime`. Shared registration binds it once; direct callers use `runtime.Create<TService>()`. No global runtime or service locator.
 - API exposure is explicit through `[ServiceEndpoint(method, route)]` on the service class. Shared `ServiceApi` handles discovery, DI, binding and antiforgery; `ServiceExceptionHandler` handles errors. No feature-specific endpoint/registration classes or repeated HTTP try/catch.
 - `PublicService` is the fourth service area, not an Account role. It requires no existing session, grants no protected resource scope and still uses the shared validation/transaction lifecycle. Login/session business rules belong to its concrete service and Logic; public exposure alone does not authenticate credentials.
@@ -52,9 +53,11 @@ use the same services through the shared API adapter.
 - A session UUID is an identifier, not a bearer secret. Keep token secrets separate, persist their hashes and never expose them in results or logs.
 - Put each SQL raw-string literal directly in the executing method on `sql.Statement`; pass that SQL object to the context. No SQL constants, external query catalogs or string-built value substitution.
 - Bind typed parameter/data objects through `sql.Parameters.Add(...)`. Trusted actor/profile IDs come from the verified invocation context, never request data.
+- SQL infrastructure has no Account/Profile/auth state and injects no entity IDs. Bind needed trusted values explicitly from the verified caller. Session Logic reads and locks the session by its proof; the gate compares its current Account/Profile with the verified caller.
 - Uppercase SQL keywords; double-quote PascalCase table/column names; use clear aliases and explicit columns, never `SELECT *`.
 - Format multi-line queries by clause (`SELECT`, `FROM`, `JOIN`, `WHERE`, `SET`); one selected/assigned column per line and aligned conditions.
 - Service reads are read-only. All domain writes and reads with mutation locks belong to Logic.
+- Use ordinary `ReadRequiredAsync` / `ReadOptionalAsync` for single-row SQL, including Logic locks and mutation `RETURNING`. Put `FOR UPDATE` / `FOR SHARE` in SQL; no separate `ReadForUpdateAsync` or `ExecuteReturningAsync` path. Commands accept `SqlStatement`, not duplicate string/parameter overloads. Read-only and Logic facades share execution but retain their transaction/read guards.
 - One service operation owns one `SqlContext` connection and transaction shared across all participating Logic calls. No inner connection, independent transaction or early commit.
 - Revalidate mutable authorization in the write transaction and hold appropriate locks. Fail closed for missing, disabled, revoked or foreign resources without leaking private state.
 - Cookie middleware verifies the current database session once per HTTP request; the shared gate consumes that verified proof and resolves the permission, including ownership requirements. Direct invocations without middleware revalidate each invocation. Service `ValidatePermissions` compares request entity IDs with verified auth IDs. Do not repeat ownership, membership or session checks in each service or entity SQL. Writes revalidate and lock session state through `Logic/Session` in the same transaction.

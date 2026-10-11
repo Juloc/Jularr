@@ -30,6 +30,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
+            // Resolve optional signed-in state.
             long? accountId = null;
             long? profileId = null;
             var principal = _http.HttpContext?.User;
@@ -41,6 +42,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 profileId = session.ProfileId;
             }
 
+            // Expose available login methods.
             return new AuthenticationResultV1(_options.PlexLoginEnabled,
                 _options.PlexLoginEnabled && _options.PlexRegistrationEnabled, accountId, profileId);
         }
@@ -62,7 +64,10 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
+            // Verify credentials under lock.
             var account = await Context.AuthenticatePasswordAsync(new AccountEmailParameters(Data.Email), Data.Password, CancellationToken);
+
+            // Issue the session atomically.
             var session = await Context.CreateSessionAsync(account, TimeSpan.FromHours(_options.SessionLifetimeHours), CancellationToken);
 
             return new LoginResultV1(session);
@@ -78,6 +83,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
+            // Request approval, never auto-enable.
             var account = new AccountCreationData(Data.Email, Data.DisplayName, false, null);
             await Context.CreateRegistrationRequestAsync(account, Data.Password, Data.UiLocaleId, CancellationToken);
 

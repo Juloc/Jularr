@@ -5,7 +5,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Authentication;
 using Jularr.Backend.Data.Public.Authentication.V1;
-using Jularr.Backend.Infrastructure.Plex;
+using Jularr.Integrations.Plex;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Authentication;
 using Jularr.Backend.Service.Core;
@@ -41,11 +41,16 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 throw new SecurityException("Plex sign-in is disabled.");
             }
 
+            // Create browser-bound device proof.
             var publicId = Guid.NewGuid();
             var clientIdentifier = "jularr-" + publicId.ToString("N");
             var nonce = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+
+            // Request the external PIN.
             var pin = await _plex.CreatePinAsync(clientIdentifier, CancellationToken);
             var expiresAt = DateTime.UtcNow.AddMinutes(5);
+
+            // Protect the signing key.
             byte[] protectedKey;
             try
             {
@@ -59,10 +64,10 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
             var challenge = new PlexChallengeCreationData(publicId, SHA256.HashData(Encoding.UTF8.GetBytes(nonce)),
                 protectedKey, expiresAt);
 
-            // Provider I/O is outside the short database transaction.
+            // Persist after external I/O.
             await Context.ExecuteBatchAsync(async (context, token) =>
             {
-                await context.CreatePlexFlowAsync(challenge, pin, clientIdentifier, token);
+                await context.CreatePlexFlowAsync(challenge, pin.Id, clientIdentifier, token);
                 return true;
             }, CancellationToken);
 
@@ -99,12 +104,14 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 throw new SecurityException("Plex sign-in is disabled.");
             }
 
+            // Match the initiating browser.
             var nonce = _http.HttpContext?.Request.Cookies[ServiceApi.AuthenticationNonceCookieName]
                 ?? throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
             var parameters = new PlexChallengeParameters(Parameters.AuthChallengePublicId, nonce);
             var flow = await Context.ExecuteBatchAsync(
-                (context, token) => context.ReadPlexFlowForUpdateAsync(parameters, token), CancellationToken);
+                (context, token) => context.ReadPlexFlowAsync(parameters, token), CancellationToken);
 
+            // Restore the device key.
             byte[] privateKey;
             try
             {
@@ -115,10 +122,11 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
             }
 
-            PlexIdentityData? identity;
+            // Poll outside database transactions.
+            PlexIdentity? identity;
             try
             {
-                identity = await _plex.ReadIdentityAsync(flow, privateKey, CancellationToken);
+                identity = await _plex.ReadIdentityAsync(flow.ExternalPinId, flow.ClientIdentifier, privateKey, CancellationToken);
             }
             finally
             {
@@ -130,7 +138,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 return new LoginResultV1(null);
             }
 
-            // The library grant is a registration rule, not a dependency for linked-account login.
+            // Registration alone requires library access.
             var needsRegistration = await Context.ExecuteBatchAsync(async (context, token) =>
             {
                 var sql = new SqlStatement();
@@ -147,11 +155,22 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 return (bool)(await context.ReadSql.ExecuteScalarAsync(sql, token))!;
             }, CancellationToken);
 
+            // Check the configured library.
             var hasAccess = needsRegistration
-                && await _plex.HasRegistrationLibraryAccessAsync(flow, identity, CancellationToken);
+                && _options.PlexRegistrationEnabled
+                && await _plex.HasLibraryAccessAsync(flow.ClientIdentifier, identity.AccessToken,
+                    _options.PlexServerUri!, _options.PlexServerIdentifier,
+                    _options.PlexRegistrationLibraryKeys, CancellationToken);
             var registration = new PlexRegistrationData(hasAccess, _options.PlexRequireApproval, _options.PlexUiLocaleId);
+
+            // Validate the database identity.
+            var identityData = new PlexIdentityData(identity.ExternalAccountId, identity.Email,
+                identity.DisplayName, identity.EmailVerified);
+            identityData.Validate();
+
+            // Complete atomically.
             var completed = await Context.ExecuteBatchAsync(
-                (context, token) => context.CompletePlexAsync(parameters, identity, registration,
+                (context, token) => context.CompletePlexAsync(parameters, identityData, registration,
                     TimeSpan.FromHours(_options.SessionLifetimeHours), token), CancellationToken);
 
             return new LoginResultV1(completed.Session, completed.RequiresApproval);

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Jularr.Backend.Service.Public.Localization.V1
 {
-    // Passive cache only: SQL, fallback and service access remain in the read services.
+    // Passive cache; services own reads.
     public sealed class UiLocalizationCache : IDisposable
     {
         private readonly TimeProvider _time;
@@ -19,6 +19,7 @@ namespace Jularr.Backend.Service.Public.Localization.V1
         internal async Task<T> GetOrLoadAsync<T>(long uiLocaleId, Func<Task<T>> load, CancellationToken cancellationToken)
             where T : BaseData, IServiceOutput
         {
+            // Coalesce concurrent cache misses.
             await _loadLock.WaitAsync(cancellationToken);
             try
             {
@@ -29,6 +30,7 @@ namespace Jularr.Backend.Service.Public.Localization.V1
                     return entry.Value;
                 }
 
+                // Account for retained text memory.
                 var result = await load();
                 var size = result switch
                 {
