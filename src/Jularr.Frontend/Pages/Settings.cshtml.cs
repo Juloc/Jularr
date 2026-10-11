@@ -7,6 +7,7 @@ public sealed class SettingsModel : PreparedPage
     protected override void Define(Page page)
     {
         page.Title("settings.title");
+        page.Asset("Pages/Settings.entry.scss");
         page.Navigation("nav.settings");
         page.Content.Add(new UiSettingsGroup("settings.general", [
             new("settings.appearance"), new("settings.language"), new("settings.accessibility")

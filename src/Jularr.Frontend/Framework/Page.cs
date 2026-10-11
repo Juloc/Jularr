@@ -35,8 +35,13 @@ public sealed class Page
     public string? TitleKey { get; private set; }
     public string? NavigationKey { get; private set; }
     public List<IUiComponent> Content { get; } = [];
+    public List<string> AssetEntries { get; } = [];
 
     public void Title(string key) => TitleKey = key;
+    public void Asset(string entry)
+    {
+        if (!AssetEntries.Contains(entry, StringComparer.Ordinal)) AssetEntries.Add(entry);
+    }
     public void Navigation(string key) => NavigationKey = key;
 
     public void Use(Page definition)
@@ -46,5 +51,6 @@ public sealed class Page
         TitleKey = definition.TitleKey;
         NavigationKey = definition.NavigationKey;
         Content.AddRange(definition.Content);
+        foreach (var asset in definition.AssetEntries) Asset(asset);
     }
 }

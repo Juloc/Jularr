@@ -25,6 +25,7 @@ public sealed class IndexModel : PreparedPage
     {
         page.Title("discover.title");
         page.Navigation("nav.home");
+        page.Asset("Pages/Index.entry.scss");
 
         // One route owns the composition. Components are reusable building blocks.
         // No UI is manufactured until the authorized Backend supplies visible scopes.
@@ -33,11 +34,11 @@ public sealed class IndexModel : PreparedPage
             return;
         }
 
-        page.Content.Add(new NavigationTabs(data.MediaTypes, "discover.mediaTypes", "discover-scopes"));
+        page.Content.Add(new NavigationTabs(data.MediaTypes, "discover.mediaTypes", "media"));
 
         if (data.BrowseViews.Count > 0)
         {
-            page.Content.Add(new NavigationTabs(data.BrowseViews, "discover.browseViews", "discover-browse"));
+            page.Content.Add(new NavigationTabs(data.BrowseViews, "discover.browseViews", "browse"));
         }
 
         if (data.Hero is not null) page.Content.Add(data.Hero);

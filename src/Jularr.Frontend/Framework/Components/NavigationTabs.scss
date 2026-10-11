@@ -1,18 +1,17 @@
-.discover-scopes,
-.discover-browse {
+.navigation-tabs {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px;
 
-    a {
+    &__link {
         padding: 8px 14px;
         border: 1px solid var(--border);
         border-radius: 999px;
         color: var(--muted);
         text-decoration: none;
 
-        &.is-active {
+        &--active {
             border-color: var(--accent);
             color: var(--accent);
         }
