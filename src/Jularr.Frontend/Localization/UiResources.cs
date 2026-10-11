@@ -61,6 +61,7 @@ public static class UiResources
         new("media.manga", "Manga"),
         new("media.movies", "Movies"),
         new("media.series", "Series"),
+        new("nav.breadcrumb", "Breadcrumb"),
         new("nav.admin", "Admin"),
         new("nav.back", "Back"),
         new("nav.calendar", "Calendar"),

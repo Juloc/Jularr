@@ -49,6 +49,44 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   are not guessed. Tables need real typed data and authorized reads for
   sorting/paging/filtering. Unbound structures never imply successful loads.
 
+## Page identity and approved UX (MANDATORY)
+
+- **The shared Topbar breadcrumb/current-page label is the sole page title.**
+  Every shelled page sets `page.Title(resourceKey)`, which the layout renders
+  in the Topbar. **Never** repeat the same title as an `H1`, `UiHeading`,
+  hero title, banner, card heading, or description at the top of the content.
+  No automatic "page description" below the breadcrumb. Standalone unauthenticated
+  pages without the shared Topbar (e.g. Login) may use a semantic `H1`.
+- Local section headings are allowed only when they genuinely separate distinct
+  content, not when they echo the current breadcrumb. Contextual explanations
+  are shown only for meaningful tasks or failure/help states, never as filler.
+- Read the relevant approved `docs/mockups/<feature>/SPEC.md` **and** the
+  canonical current implementation before preparing/changing the page. Specs
+  own the information architecture: do not invent an alternative scaffold.
+  Where a newer owner decision overrides a legacy spec, explicitly record it.
+- Never render a headings-only `UiTable`, disabled pseudo-toolbar, fake cards
+  or an unbound static filter list as a "prepared page". A real table is
+  `Table<TData>` with typed fields and actual authorized Backend results;
+  server paging, sorting, filters and allowed actions follow the real contract.
+  If the contract is unavailable, do not render a false table. Record the
+  missing integration instead.
+- **Discover/Home at `/` is capability-driven.** Media-type tabs are the
+  intersection of enabled instance modules, active-profile visibility/policy
+  and available discovery capabilities. A disabled/hidden type must disappear
+  from the media-type bar, its browse views, Hero candidates and shelves.
+  `All` contains only eligible types and cannot silently include disabled
+  provider results. Books, Light Novels and Manga remain distinct.
+- Discover separates media-type scope, browse view and filters. Its All
+  landing has a shared Hero/Continue followed by per-enabled-type shelves
+  in the approved order; only provider-supported rankings may appear. The
+  header owns the **one** global Search and Filter entry; do not add another
+  search/filter field inside Discover. User/profile ordering is respected.
+  Backend supplies effective capability/order/provider data; do not copy
+  old `Jularr.Web` persistence or invent a new module toggle in Frontend.
+- Apply the same module/profile visibility gate to Watchlist, Library and
+  every other media-type navigation, plus playback routes/actions when the
+  instance Playback module is disabled.
+
 ## UI localization (MANDATORY, no exceptions)
 
 - **English is the canonical source/fallback language**. Do **not** choose

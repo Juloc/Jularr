@@ -7,6 +7,7 @@
     var isPlayer = currentPage?.Definition.IsPlayer ?? false;
     var title = ViewData["Title"] as string
         ?? (currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey] : T["app.name"]);
+    ViewData["Title"] = title;
 }
 <!DOCTYPE html>
 <html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system">

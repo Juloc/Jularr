@@ -10,7 +10,7 @@
         <span class="brand-symbol" aria-hidden="true">J</span>
         <span>@T["app.name"]</span>
     </a>
-    <span class="app-header-location">@pageLabel</span>
+    <nav class="app-header-location" aria-label="@T["nav.breadcrumb"]"><span aria-current="page">@pageLabel</span></nav>
     <div class="app-header-actions">
         <button class="icon-button" type="button" disabled aria-label="@T["shell.search"]" title="@T["shell.search"]">
             <partial name="_Icon" model='"search"' />
