@@ -1,7 +1,11 @@
-using System.Globalization;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.Core.Localization;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Localization;
+using Jularr.Frontend.Pages.Shared;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Localization;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages(options =>
@@ -10,41 +14,58 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/ShellPreview");
 });
+
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.LoginPath = "/Account/Login";
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Strict;
-    });
+    .AddCookie(options => options.LoginPath = "/Account/Login");
 builder.Services.AddAuthorization();
-builder.Services.AddSingleton<UiText>();
+
+builder.Services.AddJularrServices(builder.Configuration);
+builder.Services.AddJularrLocalization(UiResources.English);
+builder.Services.AddScoped<UiText>();
 builder.Services.AddSingleton<ShellNavigation>();
-builder.Services.Configure<RequestLocalizationOptions>(options =>
-{
-    var cultures = new[] { CultureInfo.GetCultureInfo("en"), CultureInfo.GetCultureInfo("de") };
-    options.DefaultRequestCulture = new RequestCulture("en");
-    options.SupportedCultures = cultures;
-    options.SupportedUICultures = cultures;
-});
+builder.Services.AddSingleton<FrontendAssets>();
 
 var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler(handler => handler.Run(async context =>
-    {
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        await Results.Problem(statusCode: 500, title: "request_failed").ExecuteAsync(context);
-    }));
+    app.UseExceptionHandler();
     app.UseHsts();
 }
+
 app.UseHttpsRedirection();
-app.UseStaticFiles();
-app.UseRequestLocalization();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        // Content fingerprints make these public assets immutable across releases.
+        // Other resources (if any) must revalidate, never use the immutable policy.
+        var immutable = context.Context.Request.Path.StartsWithSegments("/build/assets")
+            && Regex.IsMatch(context.File.Name, @"-[A-Za-z0-9_-]{8,}\.");
+        context.Context.Response.Headers.CacheControl = immutable
+            ? "public,max-age=31536000,immutable"
+            : "public,no-cache";
+    }
+});
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Resolve the full DB-backed language pack once per Razor request, after authorization.
+// Static resources and API service requests do not pass through localization rendering.
+app.Use(async (context, next) =>
+{
+    if (context.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)
+    {
+        context.Response.Headers.CacheControl = "private,no-store";
+        await context.RequestServices.GetRequiredService<UiText>()
+            .InitializeAsync(context);
+    }
+
+    await next(context);
+});
+
+app.MapJularrServices();
 app.MapRazorPages();
 app.Run();
 

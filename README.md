@@ -20,8 +20,8 @@ Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 ## Backend im gemeinsamen Host
 
 Das Frontend braucht eine ProjectReference auf `../Jularr.Backend/Jularr.Backend.csproj`.
-Die Host-Anbindung ist noch nicht in dessen `Program.cs` eingebaut; dieser Bereich
-bleibt beim Frontend. Razor verwendet Services und deren Datenverträge; der Host
+Die Host-Anbindung ist in dessen `Program.cs` eingebaut.
+Razor verwendet Services und deren Datenverträge; der Host
 verwendet die vorgesehenen `Service/Core`-Adapter für Registrierung und Authentifizierung.
 Datenbankkonfiguration, Connection und Transaction gehören vollständig ins Backend.
 
@@ -184,9 +184,9 @@ eine Seite. `Version` berücksichtigt alle Fallback-Schichten. Ein späterer Off
 kann pro lokalem Profile komplette Pakete speichern und gleiche Sprachen deduplizieren.
 Export, Offline-Speicher und Synchronisierung sind noch nicht implementiert.
 
-Frontend-Dateien bleiben unverändert. Der Frontend-Verbraucher muss `UiText`, die
-temporären Frontend-Übersetzungen und hart codierten Kulturen auf diese Registrierung
-und direkte Public-Service-Aufrufe umstellen, nicht als zweites Übersetzungssystem weiterbetreiben.
+Das Frontend registriert seine englischen Deklarationen über `UiResources.English`.
+`UiText` lädt den gemeinsamen Katalog über die Public-Services und teilt das Paket
+zwischen Seite und Layout. Es gibt keinen separaten Frontend-Übersetzungsspeicher.
 
 ## Prüfung und offene Integration
 
@@ -195,7 +195,7 @@ Betroffene Tests liegen unter `tests/Jularr.Backend.Tests`; PostgreSQL-Tests ver
 `JULARR_TEST_DB` auf `127.0.0.1:15433`, Benutzer `jularr_test`, Administrationsdatenbank
 `jularr_test_admin`. Sie erstellen und entfernen nur eigene zufällig benannte Datenbanken.
 
-Noch offen: Frontend-Host-/Formular-Anbindung, explizite Owner-Ersteinrichtung,
+Noch offen: Formular-Anbindung, explizite Owner-Ersteinrichtung,
 Freigabe-/E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf, Logout/Rotation,
 Profile-Auswahl mit PIN und alte Android-/TV-Verbraucher. Accounts mit bestätigter
 2FA werden derzeit ohne Anmeldung abgelehnt, nicht am zweiten Faktor vorbeigeführt.

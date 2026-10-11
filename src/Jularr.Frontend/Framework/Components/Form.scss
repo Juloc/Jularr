@@ -1,0 +1,17 @@
+.ui-form { display: grid; gap: 16px; }
+.ui-field { display: grid; gap: 6px; }
+.ui-field > label { font-weight: 650; font-size: 13px; }
+.ui-field > input, .ui-field > select, .ui-field > textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 13px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+}
+.ui-field > input:disabled { opacity: .75; }
+.ui-field input[aria-invalid="true"] { border-color: var(--danger); }
+.field-error { margin: 0; color: var(--danger); font-size: 12px; }
+.ui-checkbox { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.ui-checkbox input { accent-color: var(--accent); width: 17px; height: 17px; }

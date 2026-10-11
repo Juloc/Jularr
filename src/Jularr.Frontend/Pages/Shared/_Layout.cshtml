@@ -1,25 +1,31 @@
-@using System.Globalization
 @inject UiText T
+@inject FrontendAssets Assets
 @{
     var isPreview = ViewData["ShellPreview"] is true;
     var currentPage = ViewContext.ViewData.Model as JularrPage;
     var showShell = (User.Identity?.IsAuthenticated == true || isPreview)
         && (currentPage?.Definition.Shell ?? true);
-    var title = ViewData["Title"] as string ?? T["app.name"];
+    var isPlayer = currentPage?.Definition.IsPlayer ?? false;
+    var title = currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey]
+        : ViewData["Title"] as string ?? T["app.name"];
+    ViewData["Title"] = title;
+    var pageAssets = currentPage?.Definition.AssetEntries.ToArray() ?? [];
 }
 <!DOCTYPE html>
-<html lang="@CultureInfo.CurrentUICulture.Name" dir="ltr" data-skin="clean" data-mode="system">
+<html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#17161e" />
     <title>@title · @T["app.name"]</title>
-    <link rel="stylesheet" href="~/css/frontend.css" asp-append-version="true" />
-    <script src="~/js/theme.js" asp-append-version="true" defer></script>
+    @Assets.Styles("Assets/Shared/shell.entry.scss")
+    @Assets.Styles(pageAssets)
+    @Assets.Scripts("Modules/Appearance/theme.entry.ts")
+    @Assets.Scripts(pageAssets)
     @await RenderSectionAsync("Head", required: false)
 </head>
-<body class="@(showShell ? "app-page" : "auth-page")">
+<body class="@(isPlayer ? "player-page" : showShell ? "app-page" : "auth-page")">
     <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
     @if (showShell)
     {
@@ -30,7 +36,7 @@
     }
     else
     {
-        <main class="auth-main" id="main-content" tabindex="-1">@RenderBody()</main>
+        <main class="@(isPlayer ? "player-main" : "auth-main")" id="main-content" tabindex="-1">@RenderBody()</main>
     }
     @await RenderSectionAsync("Scripts", required: false)
 </body>

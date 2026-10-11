@@ -1,0 +1,8 @@
+// Shared image primitive: the owning Page or Module imports this when it renders media.
+.media-image {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    object-fit: cover;
+}

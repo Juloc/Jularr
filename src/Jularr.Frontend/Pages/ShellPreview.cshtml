@@ -3,17 +3,19 @@
 @inject UiText T
 @{
     ViewData["ShellPreview"] = true;
-    ViewData["Title"] = T["shell.preview"];
+    ViewData["Title"] = Model.Definition.TitleKey is { } titleKey ? T[titleKey] : T["shell.preview"];
 }
-<h1 class="page-title">@T["shell.preview"]</h1>
-@foreach (var component in Model.Definition.Content)
-{
-    <partial name="_UiComponent" model="component" />
-}
-<div class="preview-controls" role="group" aria-label="Appearance">
-    <button class="button" type="button" data-set-skin="clean">Clean</button>
-    <button class="button" type="button" data-set-skin="original">Original</button>
-    <button class="button" type="button" data-set-mode="light">Light</button>
-    <button class="button" type="button" data-set-mode="dark">Dark</button>
-    <button class="button" type="button" data-set-mode="system">System</button>
+<nav class="preview-screen-links" aria-label="@T["shell.preview"]">
+    @foreach (var view in Jularr.Frontend.Pages.ShellPreviewModel.Views)
+    {
+        <a href="/ShellPreview?view=@view.Slug" aria-current="@(Model.SelectedView == view.Slug ? "page" : null)">@T[view.LabelKey]</a>
+    }
+</nav>
+<partial name="_PageBody" model="Model.Definition" />
+<div class="preview-controls" role="group" aria-label="@T["preview.appearance"]">
+    <button class="button" type="button" data-set-skin="clean">@T["preview.skin.clean"]</button>
+    <button class="button" type="button" data-set-skin="original">@T["preview.skin.original"]</button>
+    <button class="button" type="button" data-set-mode="light">@T["preview.mode.light"]</button>
+    <button class="button" type="button" data-set-mode="dark">@T["preview.mode.dark"]</button>
+    <button class="button" type="button" data-set-mode="system">@T["preview.mode.system"]</button>
 </div>

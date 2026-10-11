@@ -1,59 +1,9 @@
+@using Jularr.Frontend.Pages.Shared
 @inject UiText T
 @inject ShellNavigation Navigation
+@inject FrontendAssets Assets
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
-    var isPreview = ViewData["ShellPreview"] is true;
-    var pageLabel = ViewData["Title"] as string ?? T["nav.home"];
+    var titleKey = (ViewContext.ViewData.Model as JularrPage)?.Definition.TitleKey ?? "nav.home";
 }
-<header class="app-header">
-    <a class="app-header-brand" href="/" aria-label="@T["app.name"]">
-        <span class="brand-symbol" aria-hidden="true">J</span>
-        <span>@T["app.name"]</span>
-    </a>
-    <span class="app-header-location">@pageLabel</span>
-    <div class="app-header-actions">
-        <button class="icon-button" type="button" disabled aria-label="@T["shell.search"]" title="@T["shell.search"]">
-            <partial name="_Icon" model='"search"' />
-        </button>
-        <button class="icon-button" type="button" disabled aria-label="@T["shell.notifications"]" title="@T["shell.notifications"]">
-            <partial name="_Icon" model='"bell"' />
-        </button>
-        <span class="account-avatar" aria-hidden="true"><partial name="_Icon" model='"user"' /></span>
-    </div>
-</header>
-<aside class="app-sidebar">
-    <a class="sidebar-brand" href="/">
-        <span class="brand-symbol" aria-hidden="true">J</span>
-        <span>@T["app.name"]</span>
-    </a>
-    <nav class="sidebar-navigation" aria-label="@T["nav.primary"]">
-        @foreach (var link in Navigation.Primary)
-        {
-            var active = string.Equals(currentPath, link.Href, StringComparison.OrdinalIgnoreCase);
-            <a class="nav-link @(active ? "is-active" : "")" href="@link.Href" aria-current="@(active ? "page" : null)">
-                <partial name="_Icon" model="link.Icon" />
-                <span>@T[link.Key]</span>
-            </a>
-        }
-    </nav>
-    <nav class="sidebar-navigation sidebar-secondary" aria-label="@T["nav.primary"]">
-        @foreach (var link in Navigation.Secondary)
-        {
-            var active = currentPath.StartsWith(link.Href, StringComparison.OrdinalIgnoreCase);
-            <a class="nav-link @(active ? "is-active" : "")" href="@link.Href" aria-current="@(active ? "page" : null)">
-                <partial name="_Icon" model="link.Icon" />
-                <span>@T[link.Key]</span>
-            </a>
-        }
-    </nav>
-</aside>
-<nav class="mobile-navigation" aria-label="@T["nav.mobile"]">
-    @foreach (var link in Navigation.Mobile)
-    {
-        var active = string.Equals(currentPath, link.Href, StringComparison.OrdinalIgnoreCase);
-        <a href="@link.Href" class="mobile-link @(active ? "is-active" : "")" aria-current="@(active ? "page" : null)">
-            <partial name="_Icon" model="link.Icon" />
-            <span>@T[link.Key]</span>
-        </a>
-    }
-</nav>
+@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets), T))

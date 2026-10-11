@@ -1,32 +1,3 @@
 @model IUiComponent
 @inject UiText T
-@switch (Model)
-{
-    case Panel panel:
-        <section class="ui-panel">
-            @foreach (var child in panel.Content)
-            {
-                <partial name="_UiComponent" model="child" />
-            }
-        </section>
-        break;
-    case MasterDetail masterDetail:
-        <div class="ui-master-detail">
-            <section class="ui-master">
-                @foreach (var child in masterDetail.Master)
-                {
-                    <partial name="_UiComponent" model="child" />
-                }
-            </section>
-            <section class="ui-detail">
-                @foreach (var child in masterDetail.Detail)
-                {
-                    <partial name="_UiComponent" model="child" />
-                }
-            </section>
-        </div>
-        break;
-    case Jularr.Frontend.Pages.PreviewText text:
-        <p>@T[text.Key]</p>
-        break;
-}
+@(new UiHtml(Model, T))
