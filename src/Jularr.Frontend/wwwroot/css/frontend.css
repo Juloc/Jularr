@@ -325,5 +325,5 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
     .app-header-location { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    *, *::before, *::after { scroll-behavior: auto; transition-duration: .01ms; animation-duration: .01ms; }
 }
