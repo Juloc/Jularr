@@ -116,8 +116,10 @@ public sealed class SqlContextTests
         await using var verify = new SqlContext(database);
         await verify.BeginAsync(SqlAccessMode.ReadOnly);
 
-        var relation = await verify.ReadSql.ExecuteScalarAsync("SELECT to_regclass('\"SqlContextRollbackProbe\"')");
-        Assert.IsTrue(relation is null or DBNull);
+        // Npgsql does not materialize PostgreSQL regclass as System.Object.
+        // Query the supported boolean scalar instead of reading the regclass value.
+        var missing = await verify.ReadSql.ExecuteScalarAsync("SELECT to_regclass('\"SqlContextRollbackProbe\"') IS NULL");
+        Assert.AreEqual(true, missing);
     }
 
     [TestMethod]
