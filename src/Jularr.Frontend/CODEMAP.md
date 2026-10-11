@@ -27,8 +27,17 @@ Shared conventions and Backend ownership:
   interface and encoder wiring, **no type switch**.
 - [Elements.cs](Framework/Elements.cs): minimal encoded C# HTML DSL;
   `Div`, `H1`, `Text`, `Button` and related small primitives.
-- [Components](Framework/Components): component-owned HTML for typed tables,
-  navigation, panels, master/detail, tabs, settings, forms and Player.
+- [Components](Framework/Components): reusable typed tables, field-aware
+  forms, navigational controls and layout primitives.
+- [Split.cs](Framework/Components/Split.cs): generic two-area layout with
+  optional `MasterDetail(detailOpen, backHref)` mode; Mobile list/editor
+  switching is driven by server-selected state, not a second component.
+- [Tabs.cs](Framework/Components/Tabs.cs): actual SSR tab navigation
+  with exactly one selected pane. [NavigationTabs.cs](Framework/Components/NavigationTabs.cs)
+  is for navigation-only lists with no local tab content.
+- [Section.cs](Framework/Components/Section.cs) and
+  [ItemList.cs](Framework/Components/ItemList.cs): reusable localized
+  grouping and read-only lists, used by Settings instead of `SettingsGroup`.
 - [NavigationTabs.cs](Framework/Components/NavigationTabs.cs):
   reusable, localized accessible navigation tabs driven by supplied links.
 - [MediaShelf.cs](Framework/Components/MediaShelf.cs):
@@ -36,20 +45,18 @@ Shared conventions and Backend ownership:
 - [Discover/Index.cshtml.cs](Pages/Index.cshtml.cs): **owns the page composition**
   (enabled media-type navigation, browse navigation, Hero, Continue and
   type-grouped shelves); awaits the authorized instance/profile discovery read.
-- [BaseField.cs](Framework/BaseField.cs),
-  [Form.cs](Framework/Components/Form.cs): typed backend DataField metadata
-  and its display-only form contract. No invented save operation.
-- [ShellNavigation.cs](Framework/ShellNavigation.cs):
-  unconditional shell routes only, until the Backend returns effective
-  instance/profile navigation; [AdminNavigation.cs](Framework/AdminNavigation.cs)
-  owns Request/Rule links.
-- [ShellHeader](Framework/Components/ShellHeader.cs),
-  [ShellSidebar](Framework/Components/ShellSidebar.cs),
-  [ShellMobileNavigation](Framework/Components/ShellMobileNavigation.cs),
-  [Brand](Framework/Components/Brand.cs),
-  [Icon](Framework/Components/Icon.cs): standalone C#-rendered chrome and
-  their colocated SCSS; no duplicate content heading, dead actions or static
-  assumption that optional media modules are enabled.
+- [BaseField.cs](Framework/BaseField.cs) and
+  [Form.cs](Framework/Components/Form.cs): `Form<TData>` owns label/input
+  markup using canonical backend `DataField` metadata. No invented save
+  action; controls remain disabled until an authorized handler is bound.
+- [Shell.cs](Pages/Shared/Shell.cs) and
+  [Shell.scss](Pages/Shared/Shell.scss): Jularr-specific Header, Sidebar,
+  Mobile navigation and their private helpers in **one** shell owner.
+  Navigation exposes only unconditional routes pending backend capabilities.
+- [Brand.cs](Pages/Shared/Brand.cs): shared Jularr brand for Shell and Login;
+  [Icon.cs](Framework/Components/Icon.cs): generic fingerprinted SVG primitive.
+- [AdminNavigation.cs](Framework/AdminNavigation.cs):
+  Requests/Rules/Users section links.
 - [Shared layout](Pages/Shared/_Layout.cshtml):
   document shell, asset/locale setup and RenderBody only.
   [App shell](Pages/Shared/_AppShell.cshtml): delegates actual markup
@@ -58,9 +65,10 @@ Shared conventions and Backend ownership:
   [Ui component boundary](Pages/Shared/_UiComponent.cshtml):
   thin Razor-to-C# bridges.
 - [Login Page](Pages/Account/Login.cshtml.cs) and
-  [Login SCSS](Pages/Account/Login.entry.scss): minimal login C# composition
-  with no fake providers or live password handlers; sign-in and active-profile
-  transition await a canonical Backend handler.
+  [Login SCSS](Pages/Account/Login.entry.scss): short declarative Login
+  composition using `Form<LoginDataV1>` and shared Brand. Backend
+  currently exposes email/password fields only; live Login, provider
+  capabilities and profile selection are not wired.
 - [Vite build](vite.config.ts), [package.json](package.json),
   [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
   compile/fingerprint Sass and TypeScript from colocated `*.entry.scss`

@@ -28,14 +28,18 @@ Admin routes: `/Admin/Requests`, `/Admin/Rules`,
 `/Admin/Works/{id:long}`, `/Admin/Library`.
 
 The routes prepare actual layouts but do not invent service data. Table rows and filters only render from genuine authorized Backend results.
-Login is assembled in the C# PageModel and uses the reusable Brand component.
-Login controls intentionally remain disabled until an authenticated Backend
+Login is assembled using one typed `Form<LoginDataV1>` in its C# PageModel.
+Labels and inputs come from the reusable form renderer and canonical
+DataField metadata, not page-local HTML builders. Existing Login backend
+data supports email/password; username login has no confirmed backend contract.
+Login controls intentionally remain disabled until the authenticated Backend
 session flow is bound; configured providers and passkeys are not guessed.
-The Header, Sidebar and Mobile navigation use independent framework components.
-Topbar breadcrumb is the single visible page title; the Login page alone uses
-a screen-reader heading without a second visible title. The shell currently
-offers only unconditional Home/Settings navigation; authorized module/profile
-links are pending. Admin authorization, canonical typed media/
+The Jularr-specific application Shell belongs to `Pages/Shared/Shell.cs`,
+including its private header/sidebar/mobile helpers; the Razor bridge calls it
+once. Brand is shared across Shell and Login; only generic components remain
+in Framework. The Topbar Breadcrumb is the sole visible page title.
+The shell currently offers only unconditional Home/Settings navigation;
+authorized module/profile links are pending. Admin authorization, canonical typed media/
 request services, profile locale preference and Player PlaybackPlan integration
 remain pending. Do not expose the prepared routes as production-ready.
 
@@ -82,3 +86,8 @@ Asset ownership: styles/scripts/SVG live next to the relevant Page,
 component or optional module; shared shell styles are the only global
 SCSS entry. New CSS uses BEM selectors and `@use` for Sass modules.
 
+
+The two-area `Split` can optionally enable Master/Detail mobile behavior
+without introducing a parallel component. `Tabs` uses route-based selection
+and renders just the active pane. Settings uses generic `UiSection` and
+`ItemList`, not a special Settings-only framework component.

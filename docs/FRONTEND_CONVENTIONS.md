@@ -42,7 +42,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   URL schemes, use semantic tags, accessible names, keyboard/focus states,
   reduced motion, responsive layout and antiforgery for real POST forms.
 - A page owns its independent `.cshtml.cs` definition and thin `.cshtml`
-  entry. Reuse `Table<T>`, `Form<T>`, `MasterDetail`, menus, media cards
+  entry. Reuse `Table<T>`, `Form<T>`, `Split`, tabs, menus, media cards
   and other domain-neutral components rather than copying UI code.
 - **Pages compose components; components never contain the complete screen.**
   Page-specific information hierarchy, media-type ordering, browse-mode choice,
@@ -56,6 +56,28 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   `BaseData`/`DataField`; missing select options or save procedures
   are not guessed. Tables need real typed data and authorized reads for
   sorting/paging/filtering. Unbound structures never imply successful loads.
+- **Generic layout versus optional behavior:** `Split` is the one
+  canonical two-area layout. Master/Detail is an **optional mode of Split**,
+  not a second Framework component. The owning page supplies the selected
+  item and a real back route. Mobile detail/list switching must remain
+  keyboard-accessible, server-authoritative and must not invent selections.
+- **Tabs are navigation, not stacked H2 sections.** Route-backed
+  `Tabs` renders a single selected pane; `NavigationTabs` handles
+  navigation-only scopes. Neither duplicates the global Breadcrumb heading.
+- Put Jularr-specific shell presentation in `Pages/Shared/Shell.cs`,
+  including helpers only used there. `_AppShell.cshtml` remains a thin
+  one-call Razor bridge. Cross-page Brand may have its own shared C# file;
+  generic components stay under `Framework/Components`.
+- Pages describe forms via `Form<TData>` field selectors and optional
+  labels/autocomplete; **the Form owns HTML labels, controls, ids, disabled
+  states and backend DataField metadata**. Do not copy input/label helper
+  classes into each page. Do not activate submission, provider buttons,
+  session persistence or password reveal actions without a real, authorized
+  backend operation and antiforgery handling.
+- Settings is a page, not a special `SettingsGroup` renderer.
+  Reuse semantic `UiSection` and generic `ItemList` while actual
+  settings operations are not connected.
+
 
 ## Page identity and approved UX (MANDATORY)
 
