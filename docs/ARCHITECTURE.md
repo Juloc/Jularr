@@ -631,7 +631,7 @@ This is a boundary guide, not permission to perform a giant folder-only refactor
 ## 20. Coding rules for agents
 
 Before implementing a vertical slice, an agent must:
-1. read `DOMAIN.md`, `DOMAIN-AUDIT.md`, `ARCHITECTURE.md` and the relevant UX spec;
+1. follow `AGENTS.md` and the current owner-approved contract for the touched responsibility; read only applicable focused sections, not every historical audit;
 2. identify owning modules and existing implementation;
 3. state what is reused, evolved and removed;
 4. avoid introducing a parallel model/service;
@@ -670,45 +670,20 @@ Agents must not:
 
 Do not consider a feature complete solely because it builds.
 
-## 22. Migration strategy
+## 22. Database clean-cut execution
 
-No big-bang rewrite.
+The staged legacy backfill/dual-schema migration plan formerly shown here is historical and **not** the approved target. [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md) owns schema/domain target rules; [#880](https://github.com/Juloc/Jularr/issues/880) and the [execution plan in PR #941](https://github.com/Juloc/Jularr/blob/docs/service-data-logic-contract-20261010/docs/DATABASE_CUTOVER_EXECUTION_PLAN.md) own cutover sequencing and safety gates.
 
-Order:
-1. complete canonical schemas/contracts missing from MediaCore/Library/Progress;
-2. add safe migration/backfill from one legacy domain at a time;
-3. move reads to canonical contracts;
-4. move writes to canonical contracts;
-5. verify parity and data preservation;
-6. remove legacy write path;
-7. remove bridge/read path;
-8. drop obsolete schema only after verification and supported migration window.
+- Build and test the new baseline on an isolated disposable PostgreSQL database first.
+- Move all backend, web, native, worker and provider consumers to the new canonical model before the coordinated runtime cutover.
+- **Never reset the existing test database or modify production state without separate explicit authorization.**
+- No legacy backfill, separate Games root, permanent dual-write or compatibility migrations in the target. Subsequent feature changes use normal forward-only migrations.
+- Existing functionality and media/storage/credential safety still require parity testing.
 
-During transition, one side must be declared authoritative. Avoid uncontrolled dual-write systems.
+## 23. Architecture gates and discovery identity
 
-## 23. Architecture gates before feature coding resumes
-
-Required:
-- `DOMAIN.md` accepted;
-- `DOMAIN-AUDIT.md` accepted;
-- this architecture accepted;
-- `UX.md` complete enough to define navigation/screens/platform behavior;
-- approved mockups for major screens;
-- dependency-ordered implementation roadmap.
-
-Critical bug/security fixes remain allowed. New feature work must not expand legacy architecture while these gates are incomplete.
-
-### Canonical search/discovery identity
-
-Provider records are discovery/metadata inputs, never parallel domain identities.
-
-For watch/read/listen media, Search and recommendation adapters resolve provider hits through canonical Work identity before normal presentation. Series/Anime remain `Work -> Season -> Episode`; one Work can have multiple provider mappings, including AniList entries for seasons/parts/specials.
-
-For Games, Search/Discover resolves through the isolated Games module to canonical `Game` identity and optional GameRelease/platform presentation context. A Game is not converted into a Work.
-
-The shared presentation contract is therefore conceptually a **typed canonical target + optional provider/presentation target**:
-- Media target -> Work;
-- Games target -> Game.
-
-Default surfaces deduplicate by the owning domain's canonical identity. Provider-native views may expose individual provider entries, but durable actions first resolve back to the canonical target. This rule is shared by Search, Discover, Home and Requests; Library/Calendar use only the target kinds they explicitly support.
-
+- Jularr remains a modular monolith with one canonical owner per responsibility. New work follows `AGENTS.md`, the active target contracts, and relevant approved UI specs; historical `DOMAIN.md`/`DOMAIN-AUDIT.md` are references, not independent authority.
+- A provider record is evidence for discovery or metadata, not a second durable media identity.
+- **Every media type, including Games, resolves to canonical `Works.Id`.** Anime remains a classification for movie/series. Provider-native seasons, parts, specials, platforms and game releases may be presentation/extension records, not competing root identities.
+- Search, Discover, Home, Library and Requests resolve durable actions to Work with the appropriate optional structure, edition, version or game platform/release context.
+- New feature work must not recreate old parallel identities, progress stores or acquisition pipelines. Verify authorization, parity, screens and canonical contract before merging.

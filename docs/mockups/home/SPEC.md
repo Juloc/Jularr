@@ -4,7 +4,7 @@ Status: approved UX direction for the Jularr Home page.
 
 ## One Home/Discover surface (binding product decision, 2026-10-07)
 
-This decision supersedes every conflicting rule in this specification and in `docs/mockups/home/SPEC.md`. It was extended on 2026-10-07 (Discover completion): provider ownership, browse views, filters, paging, live search, Hero pool and the card action.
+This decision supersedes conflicting earlier Home rules here and in `docs/mockups/discover/SPEC.md`. It was extended on 2026-10-07 (Discover completion): provider ownership, browse views, filters, paging, live search, Hero pool and the card action.
 
 ### One surface, three concepts
 - Home and Discover are one consumer experience at `/`. An empty global Search is the normal Home/Discover surface. `/Discover` is only a permanent redirect to `/` that keeps the query string; there is one render implementation.
@@ -244,7 +244,7 @@ The mockups are binding visual references for layout/hierarchy. Agents may adapt
 
 ## Canonical identity on Home rows
 
-Recommendation rows use the same typed canonical identity resolution as Discover/Search. Watch/read/listen media resolve to canonical Work; Games resolve to canonical Game through the isolated Games module. For Anime/Series, one canonical Work is shown once by default even when AniList or another provider returns separate season/part entries. Opening a provider-derived recommendation resolves to the owning domain's canonical target and optional presentation target. Home must not create provider-specific duplicate cards that disagree with Discover or Library/Games.
+Recommendation rows use canonical Work identity for **all media types, including Games**. Game platform/release data extends the Work and does not create a separate canonical Game root. For Anime/Series, one canonical Work is shown once by default even when AniList or another provider returns separate season/part entries. Opening a provider-derived recommendation resolves to the owning domain's canonical target and optional presentation target. Home must not create provider-specific duplicate cards that disagree with Discover or Library/Games.
 
 
 

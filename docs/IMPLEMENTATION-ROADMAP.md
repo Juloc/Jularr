@@ -1,6 +1,6 @@
 # Jularr dependency-ordered implementation roadmap
 
-Status: planning roadmap. **The owner-approved clean-cut target is [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md).** This roadmap must be read using that target; its former legacy-backfill phases are superseded. This does not authorize editing existing migrations or resetting current instances before a separately approved cutover.
+Status: **product/dependency roadmap, not the executable SQL cutover schedule**. The owner-approved target is [CLEAN_CUT_DATABASE.md](CLEAN_CUT_DATABASE.md); the technical A–H cutover, current non-Learning Phase-B scope and its explicit destructive-reset gate are tracked in [#880](https://github.com/Juloc/Jularr/issues/880) and the [execution plan](https://github.com/Juloc/Jularr/blob/docs/service-data-logic-contract-20261010/docs/DATABASE_CUTOVER_EXECUTION_PLAN.md). Learning is deferred from the current database baseline, not discarded as a future feature. Later feature phases below are long-range planning, not cutover prerequisites.
 
 ## Phase 0 — Freeze and contracts
 
@@ -13,15 +13,11 @@ Status: planning roadmap. **The owner-approved clean-cut target is [CLEAN_CUT_DA
 
 Exit gate: migrations can target stable canonical contracts; no unresolved polymorphic-target or progress identity design.
 
-## Phase 1 — Single clean-cut PostgreSQL persistence foundation
+## Phase 1 — PostgreSQL foundation (execution delegated)
 
-1. Inventory all EF and raw SQL tables and their owners; finalize the complete target field/FK/constraint/enum/index inventory for **every** approved module, including Games-as-Works, Account/Profile auth, reading/game positions, image assignments and media segment detection.
-2. Ensure all current feature consumers have an explicit target destination. Confirm data-retention policy and separate cutover authorization for test-only state.
-3. As **one coordinated cutover**, remove the old EF migration chain, old runtime bridges/duplicate stores and obsolete entity models, create a single fresh PostgreSQL baseline with canonical enum seeds and accurate EF snapshot, and reset only the authorized test database.
-4. Adapt Account/Profile, MediaCore/Games, Learning, Library, acquisition, player/reader, web/Android/TV contracts and tests together. No dual-source read/write or legacy-compatibility path.
-5. Validate clean setup, canonical FKs/uniques/CHECKs, initial seed/setup, login/passkeys/2FA, profile transfer, watchlist, all media, reader/game progress, files, artwork, localization, jobs, segments and performance-critical SQL.
+The binding technical sequence and gate criteria live only in [#880](https://github.com/Juloc/Jularr/issues/880) and its execution plan, not this product roadmap. Finalize the non-Learning target DDL, test a fresh isolated baseline, implement Service/Data/Logic and migrate affected consumers, verify parity, then seek **separate authorization** before resetting any existing database. Do not silently reincorporate deferred Learning or use the old EF migration chain.
 
-Exit gate: full greenfield PostgreSQL install and all affected clients use **one** canonical model; no old-schema bridge is still required. Future small changes use normal migrations from this baseline.
+Exit gate: the separately approved technical cutover has passed all backend/client validation and no old-schema runtime bridge remains.
 
 ## Phase 2 — Shared application/API contracts
 

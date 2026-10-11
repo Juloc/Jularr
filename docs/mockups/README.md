@@ -118,8 +118,14 @@ Whenever an Original Jularr mockup intentionally uses the Jularr mascot/anime gi
 
 ## Planning references
 
-- `../PLANNING-AUDIT.md` — coverage, architecture consistency and open-issue audit.
-- `../CROSS-SPEC-CONSISTENCY-AUDIT.md` — cross-document semantic consistency and remaining product decision.
+- [Historical planning and cross-spec audits (snapshot)](https://github.com/Juloc/Jularr/tree/backup/docs-specs-pre-audit-20261011/docs) — October 2026 context only, not current authority.
+- [`../audit/2026-10-11/CONFLICTS.md`](../audit/2026-10-11/CONFLICTS.md) — current known documentation conflicts and unresolved product decisions.
 - `../IMPLEMENTATION-ROADMAP.md` — dependency-ordered implementation sequence.
+
+## Compact specification format for future rewrites
+
+Keep only screen-specific decisions in each `SPEC.md`: **purpose and entry**, **visible content/data source**, **actions and effective authorization**, **loading/empty/error/success states**, **responsive/keyboard/TV differences**, **approved image reference**, **acceptance tests**. Refer to the canonical UI foundation, Data/Service/Logic contract and global UX once; do not repeat SQL schema, common component definitions or phased implementation plans in every page.
+
+Existing specifications remain authoritative until their individual replacement has been checked for feature and visual parity. The original complete 11.10.2026 specification set is retained in [the backup branch](https://github.com/Juloc/Jularr/tree/backup/docs-specs-pre-audit-20261011/docs/mockups). A screenshot or a short spec is not by itself proof that the original behavior is implemented.
 
 Only create platform images that are actually needed. Important screens should receive approved Desktop/Mobile/Tablet/TV references according to their SPEC before their implementation is considered complete.
