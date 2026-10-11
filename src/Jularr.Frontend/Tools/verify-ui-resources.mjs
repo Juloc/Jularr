@@ -28,6 +28,8 @@ function inspect(directory) {
     for (const match of source.matchAll(/["']([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_-]+)+)["']/g)) {
       // Razor Tag Helper model expressions are C# property access, not UI keys.
       if (source.slice(Math.max(0, match.index - 6), match.index).endsWith("model=")) continue;
+      // Asset/file extensions are not localization keys.
+      if (/\.(?:json|css|scss|js|mjs|ts|svg|png|webp|avif|cs|cshtml)$/.test(match[1])) continue;
       if (!declared.has(match[1])) {
         errors.push(`${path.relative(frontend, full)}: undeclared UI resource ${match[1]}`);
       }
