@@ -26,6 +26,8 @@ function inspect(directory) {
     if (!/\.(?:cs|cshtml)$/.test(item.name) || full === catalogFile) continue;
     const source = fs.readFileSync(full, "utf8");
     for (const match of source.matchAll(/["']([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_-]+)+)["']/g)) {
+      // Razor Tag Helper model expressions are C# property access, not UI keys.
+      if (source.slice(Math.max(0, match.index - 6), match.index).endsWith("model=")) continue;
       if (!declared.has(match[1])) {
         errors.push(`${path.relative(frontend, full)}: undeclared UI resource ${match[1]}`);
       }
