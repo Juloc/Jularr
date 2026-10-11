@@ -8,7 +8,7 @@
     <ProjectReference Include="../Jularr.Backend/Jularr.Backend.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Assets/Generated/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="Assets/Generated/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="EnsureCompiledFrontendAssets" BeforeTargets="Publish"
           Condition="'$(Configuration)' == 'Release'">
