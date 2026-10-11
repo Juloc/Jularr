@@ -1,17 +1,18 @@
-namespace Jularr.Data.Common;
-
-public interface IServiceOutput
+namespace Jularr.Backend.Data.Common
 {
-}
-
-public readonly record struct NoData;
-
-public sealed class UpdateResult : BaseData, IServiceOutput
-{
-    public UpdateResult(bool success)
+    public interface IServiceOutput
     {
-        Success = success;
     }
 
-    public bool Success { get; }
+    public readonly record struct NoData;
+
+    public sealed class UpdateResult : BaseResponse
+    {
+        public UpdateResult(bool success)
+        {
+            Success = success;
+        }
+
+        public bool Success { get; }
+    }
 }

@@ -1,52 +1,56 @@
-namespace Jularr.Infrastructure.Sql;
-
-public sealed class LogicContext
+namespace Jularr.Backend.Infrastructure.Sql
 {
-    private readonly SqlContext _sql;
-    private Func<LogicContext, CancellationToken, Task>? _transactionalAccessCheck;
-
-    internal LogicContext(SqlContext sql)
+    public sealed class LogicContext
     {
-        _sql = sql;
-    }
+        private readonly SqlContext _sql;
+        private Func<LogicContext, CancellationToken, Task>? _transactionalAccessCheck;
 
-    public SqlContext.SqlLogicCommands Sql => _sql.RequireLogicSql();
-    public SqlContext.SqlReadCommands ReadSql => _sql.ReadSql;
-
-    public Task<T> ReadRequiredAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class =>
-        _sql.ReadSql.ReadRequiredAsync<T>(sql, cancellationToken);
-
-    public Task<T> ReadForUpdateAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) =>
-        _sql.RequireLogicSql().ReadForUpdateAsync<T>(sql, cancellationToken);
-
-    public Task<int> ExecuteAsyncForAffectedRows(SqlStatement sql, CancellationToken cancellationToken = default) =>
-        _sql.RequireLogicSql().ExecuteAsync(sql, cancellationToken);
-
-    internal void SetTransactionalAccessCheck(Func<LogicContext, CancellationToken, Task> check)
-    {
-        ArgumentNullException.ThrowIfNull(check);
-
-        if (_transactionalAccessCheck is not null)
+        internal LogicContext(SqlContext sql)
         {
-            throw new InvalidOperationException("The verified transactional gate cannot be replaced.");
+            _sql = sql;
         }
 
-        _transactionalAccessCheck = check;
-    }
+        public SqlContext.SqlLogicCommands Sql => _sql.RequireLogicSql();
+        public SqlContext.SqlReadCommands ReadSql => _sql.ReadSql;
 
-    // Each batch rechecks access inside its own transaction.
-    public Task<TResult> ExecuteBatchAsync<TResult>(Func<LogicContext, CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(action);
+        public Task<T> ReadRequiredAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class =>
+            _sql.ReadSql.ReadRequiredAsync<T>(sql, cancellationToken);
 
-        if (_transactionalAccessCheck is null)
+        public Task<T> ReadForUpdateAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) =>
+            _sql.RequireLogicSql().ReadForUpdateAsync<T>(sql, cancellationToken);
+
+        public Task<int> ExecuteAsyncForAffectedRows(SqlStatement sql, CancellationToken cancellationToken = default) =>
+            _sql.RequireLogicSql().ExecuteAsync(sql, cancellationToken);
+
+        public Task<T> ExecuteReturningAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) =>
+            _sql.RequireLogicSql().ExecuteReturningAsync<T>(sql, cancellationToken);
+
+        internal void SetTransactionalAccessCheck(Func<LogicContext, CancellationToken, Task> check)
         {
-            throw new InvalidOperationException("Short Execute batches require a centrally verified transactional gate.");
+            ArgumentNullException.ThrowIfNull(check);
+
+            if (_transactionalAccessCheck is not null)
+            {
+                throw new InvalidOperationException("The verified transactional gate cannot be replaced.");
+            }
+
+            _transactionalAccessCheck = check;
         }
 
-        return _sql.RunShortWriteBatchAsync(
-            token => action(this, token),
-            token => _transactionalAccessCheck(this, token),
-            cancellationToken);
+        // Each batch rechecks access inside its own transaction.
+        public Task<TResult> ExecuteBatchAsync<TResult>(Func<LogicContext, CancellationToken, Task<TResult>> action, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(action);
+
+            if (_transactionalAccessCheck is null)
+            {
+                throw new InvalidOperationException("Short Execute batches require a centrally verified transactional gate.");
+            }
+
+            return _sql.RunShortWriteBatchAsync(
+                token => action(this, token),
+                token => _transactionalAccessCheck(this, token),
+                cancellationToken);
+        }
     }
 }

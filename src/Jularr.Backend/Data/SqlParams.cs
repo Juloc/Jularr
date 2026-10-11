@@ -1,230 +1,231 @@
 using System.Collections.Concurrent;
 using System.Reflection;
-using Jularr.Data.Common;
+using Jularr.Backend.Data.Common;
 using Npgsql;
 using NpgsqlTypes;
 
-namespace Jularr.Data;
-
-public sealed class SqlParams
+namespace Jularr.Backend.Data
 {
-    private static readonly ConcurrentDictionary<(Type Type, string Name), PropertyInfo> Properties = new();
-    private static readonly ConcurrentDictionary<PropertyInfo, DataFieldAttribute[]> Fields = new();
-
-    private static readonly IReadOnlyDictionary<Type, NpgsqlDbType> DefaultTypes =
-        new Dictionary<Type, NpgsqlDbType>
-        {
-            [typeof(long)] = NpgsqlDbType.Bigint,
-            [typeof(int)] = NpgsqlDbType.Integer,
-            [typeof(short)] = NpgsqlDbType.Smallint,
-            [typeof(byte)] = NpgsqlDbType.Smallint,
-            [typeof(string)] = NpgsqlDbType.Text,
-            [typeof(bool)] = NpgsqlDbType.Boolean,
-            [typeof(Guid)] = NpgsqlDbType.Uuid,
-            [typeof(decimal)] = NpgsqlDbType.Numeric,
-            [typeof(float)] = NpgsqlDbType.Real,
-            [typeof(double)] = NpgsqlDbType.Double,
-            [typeof(DateTime)] = NpgsqlDbType.TimestampTz,
-            [typeof(DateTimeOffset)] = NpgsqlDbType.TimestampTz,
-            [typeof(DateOnly)] = NpgsqlDbType.Date,
-            [typeof(TimeOnly)] = NpgsqlDbType.Time,
-            [typeof(byte[])] = NpgsqlDbType.Bytea
-        };
-
-    private readonly object? source;
-    private readonly HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<(string Name, NpgsqlDbType Type, object Value)> entries = [];
-
-    private SqlParams(object? source)
+    public sealed class SqlParams
     {
-        this.source = source;
-    }
+        private static readonly ConcurrentDictionary<(Type Type, string Name), PropertyInfo> Properties = new();
+        private static readonly ConcurrentDictionary<PropertyInfo, DataFieldAttribute[]> Fields = new();
 
-    public static SqlParams From<T>(T data) where T : notnull
-    {
-        ArgumentNullException.ThrowIfNull(data);
-        return new SqlParams(data);
-    }
+        private static readonly IReadOnlyDictionary<Type, NpgsqlDbType> DefaultTypes =
+            new Dictionary<Type, NpgsqlDbType>
+            {
+                [typeof(long)] = NpgsqlDbType.Bigint,
+                [typeof(int)] = NpgsqlDbType.Integer,
+                [typeof(short)] = NpgsqlDbType.Smallint,
+                [typeof(byte)] = NpgsqlDbType.Smallint,
+                [typeof(string)] = NpgsqlDbType.Text,
+                [typeof(bool)] = NpgsqlDbType.Boolean,
+                [typeof(Guid)] = NpgsqlDbType.Uuid,
+                [typeof(decimal)] = NpgsqlDbType.Numeric,
+                [typeof(float)] = NpgsqlDbType.Real,
+                [typeof(double)] = NpgsqlDbType.Double,
+                [typeof(DateTime)] = NpgsqlDbType.TimestampTz,
+                [typeof(DateTimeOffset)] = NpgsqlDbType.TimestampTz,
+                [typeof(DateOnly)] = NpgsqlDbType.Date,
+                [typeof(TimeOnly)] = NpgsqlDbType.Time,
+                [typeof(byte[])] = NpgsqlDbType.Bytea
+            };
 
-    public static SqlParams Create() => new(null);
+        private readonly object? source;
+        private readonly HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<(string Name, NpgsqlDbType Type, object Value)> entries = [];
 
-    public SqlParams Add(string name) => AddProperty(name, null);
-
-    public SqlParams Add(string name, NpgsqlDbType type) => AddProperty(name, type);
-
-    public SqlParams Add<T>(string name, T value) =>
-        AddValue(name, typeof(T), value, null);
-
-    public SqlParams Add<T>(string name, T value, NpgsqlDbType type) =>
-        AddValue(name, typeof(T), value, type);
-
-    public NpgsqlParameter[] ToArray() =>
-    [
-        .. entries.Select(entry => new NpgsqlParameter(entry.Name, entry.Type)
+        private SqlParams(object? source)
         {
-            Value = entry.Value
-        })
-    ];
-
-    private SqlParams AddProperty(string name, NpgsqlDbType? databaseType)
-    {
-        if (source is null)
-        {
-            throw new InvalidOperationException("A transport object is required for property parameters.");
+            this.source = source;
         }
 
-        ValidateName(name);
-
-        var property = Properties.GetOrAdd((source.GetType(), name), static key =>
+        public static SqlParams From<T>(T data) where T : notnull
         {
-            var result = key.Type.GetProperty(key.Name, BindingFlags.Public | BindingFlags.Instance);
-
-            if (result?.GetMethod is null || !result.GetMethod.IsPublic
-                || result.GetIndexParameters().Length != 0)
-            {
-                throw new ArgumentException("Unknown or unreadable transport property.", "name");
-            }
-
-            return result;
-        });
-
-        var value = property.GetValue(source);
-        var field = Fields.GetOrAdd(property, static key => key.GetCustomAttributes<DataFieldAttribute>().ToArray()).SingleOrDefault();
-
-        if (field is not null)
-        {
-            var clrType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-            if (clrType != field.Field.ClrType || databaseType is { } explicitType && explicitType != field.Field.DatabaseType)
-            {
-                throw new ArgumentException("The parameter type conflicts with its data field.", nameof(databaseType));
-            }
-
-            field.Validate(value, name);
-
-            databaseType = field.Field.DatabaseType;
+            ArgumentNullException.ThrowIfNull(data);
+            return new SqlParams(data);
         }
 
-        return AddValue(name, property.PropertyType, value, databaseType);
-    }
+        public static SqlParams Create() => new(null);
 
-    private SqlParams AddValue(string name, Type declaredType, object? value, NpgsqlDbType? databaseType)
-    {
-        ValidateName(name);
+        public SqlParams Add(string name) => AddProperty(name, null);
 
-        if (names.Contains(name))
+        public SqlParams Add(string name, NpgsqlDbType type) => AddProperty(name, type);
+
+        public SqlParams Add<T>(string name, T value) =>
+            AddValue(name, typeof(T), value, null);
+
+        public SqlParams Add<T>(string name, T value, NpgsqlDbType type) =>
+            AddValue(name, typeof(T), value, type);
+
+        public NpgsqlParameter[] ToArray() =>
+        [
+            .. entries.Select(entry => new NpgsqlParameter(entry.Name, entry.Type)
+            {
+                Value = entry.Value
+            })
+        ];
+
+        private SqlParams AddProperty(string name, NpgsqlDbType? databaseType)
         {
-            throw new ArgumentException("SQL parameter was already added.", nameof(name));
+            if (source is null)
+            {
+                throw new InvalidOperationException("A transport object is required for property parameters.");
+            }
+
+            ValidateName(name);
+
+            var property = Properties.GetOrAdd((source.GetType(), name), static key =>
+            {
+                var result = key.Type.GetProperty(key.Name, BindingFlags.Public | BindingFlags.Instance);
+
+                if (result?.GetMethod is null || !result.GetMethod.IsPublic
+                    || result.GetIndexParameters().Length != 0)
+                {
+                    throw new ArgumentException("Unknown or unreadable transport property.", "name");
+                }
+
+                return result;
+            });
+
+            var value = property.GetValue(source);
+            var field = Fields.GetOrAdd(property, static key => key.GetCustomAttributes<DataFieldAttribute>().ToArray()).SingleOrDefault();
+
+            if (field is not null)
+            {
+                var clrType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+                if (clrType != field.Field.ClrType || databaseType is { } explicitType && explicitType != field.Field.DatabaseType)
+                {
+                    throw new ArgumentException("The parameter type conflicts with its data field.", nameof(databaseType));
+                }
+
+                field.Validate(value, name);
+
+                databaseType = field.Field.DatabaseType;
+            }
+
+            return AddValue(name, property.PropertyType, value, databaseType);
         }
 
-        var actualType = Nullable.GetUnderlyingType(declaredType) ?? declaredType;
-        var resolvedType = databaseType ?? ResolveType(actualType);
-
-        if (databaseType is { } explicitType)
+        private SqlParams AddValue(string name, Type declaredType, object? value, NpgsqlDbType? databaseType)
         {
-            bool isCompatible;
+            ValidateName(name);
 
-            if (actualType.IsArray && actualType != typeof(byte[]))
+            if (names.Contains(name))
             {
-                var elementType = actualType.GetElementType()!;
-                isCompatible = actualType.GetArrayRank() == 1
-                    && (elementType == typeof(string)
-                        || elementType == typeof(int)
-                        || elementType == typeof(long)
-                        || elementType == typeof(bool)
-                        || elementType == typeof(Guid))
-                    && explicitType == (NpgsqlDbType.Array | ResolveType(elementType));
-            }
-            else
-            {
-                isCompatible = explicitType == ResolveType(actualType)
-                    || (actualType == typeof(string)
-                        && explicitType is NpgsqlDbType.Jsonb or NpgsqlDbType.Citext or NpgsqlDbType.Varchar);
+                throw new ArgumentException("SQL parameter was already added.", nameof(name));
             }
 
-            if (!isCompatible)
+            var actualType = Nullable.GetUnderlyingType(declaredType) ?? declaredType;
+            var resolvedType = databaseType ?? ResolveType(actualType);
+
+            if (databaseType is { } explicitType)
             {
-                throw new ArgumentException(
-                    "The PostgreSQL type is incompatible with the declared CLR type.",
-                    nameof(databaseType));
+                bool isCompatible;
+
+                if (actualType.IsArray && actualType != typeof(byte[]))
+                {
+                    var elementType = actualType.GetElementType()!;
+                    isCompatible = actualType.GetArrayRank() == 1
+                        && (elementType == typeof(string)
+                            || elementType == typeof(int)
+                            || elementType == typeof(long)
+                            || elementType == typeof(bool)
+                            || elementType == typeof(Guid))
+                        && explicitType == (NpgsqlDbType.Array | ResolveType(elementType));
+                }
+                else
+                {
+                    isCompatible = explicitType == ResolveType(actualType)
+                        || (actualType == typeof(string)
+                            && explicitType is NpgsqlDbType.Jsonb or NpgsqlDbType.Citext or NpgsqlDbType.Varchar);
+                }
+
+                if (!isCompatible)
+                {
+                    throw new ArgumentException(
+                        "The PostgreSQL type is incompatible with the declared CLR type.",
+                        nameof(databaseType));
+                }
             }
+
+            if (actualType.IsEnum)
+            {
+                if (Enum.GetUnderlyingType(actualType) != typeof(byte))
+                {
+                    throw new NotSupportedException("Only persisted byte-backed enums are supported.");
+                }
+
+                if (resolvedType != NpgsqlDbType.Smallint)
+                {
+                    throw new ArgumentException("Persisted byte-backed enums require PostgreSQL smallint.", nameof(databaseType));
+                }
+
+                value = value is null ? null : Convert.ToInt16(value);
+            }
+            else if (actualType == typeof(byte))
+            {
+                if (resolvedType == NpgsqlDbType.Smallint && value is not null)
+                {
+                    value = Convert.ToInt16(value);
+                }
+            }
+
+            if (value is DateTime dateTime && resolvedType == NpgsqlDbType.TimestampTz
+                && dateTime.Kind != DateTimeKind.Utc)
+            {
+                throw new ArgumentException("PostgreSQL timestamptz requires a UTC DateTime.", nameof(value));
+            }
+
+            if (value is DateTimeOffset dateTimeOffset && resolvedType == NpgsqlDbType.TimestampTz
+                && dateTimeOffset.Offset != TimeSpan.Zero)
+            {
+                throw new ArgumentException("PostgreSQL timestamptz requires a UTC DateTimeOffset.", nameof(value));
+            }
+
+            names.Add(name);
+            entries.Add((name, resolvedType, value ?? DBNull.Value));
+
+            return this;
         }
 
-        if (actualType.IsEnum)
+        private static NpgsqlDbType ResolveType(Type type)
         {
-            if (Enum.GetUnderlyingType(actualType) != typeof(byte))
+            if (type.IsEnum)
             {
+                if (Enum.GetUnderlyingType(type) == typeof(byte))
+                {
+                    return NpgsqlDbType.Smallint;
+                }
+
                 throw new NotSupportedException("Only persisted byte-backed enums are supported.");
             }
 
-            if (resolvedType != NpgsqlDbType.Smallint)
+            if (DefaultTypes.TryGetValue(type, out var resolved))
             {
-                throw new ArgumentException("Persisted byte-backed enums require PostgreSQL smallint.", nameof(databaseType));
+                return resolved;
             }
 
-            value = value is null ? null : Convert.ToInt16(value);
+            throw new NotSupportedException($"No PostgreSQL mapping is defined for {type.Name}.");
         }
-        else if (actualType == typeof(byte))
+
+        private static void ValidateName(string name)
         {
-            if (resolvedType == NpgsqlDbType.Smallint && value is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+            for (var i = 0; i < name.Length; i++)
             {
-                value = Convert.ToInt16(value);
+                var character = name[i];
+                var valid = IsLetter(character) || character == '_'
+                    || (i > 0 && char.IsAsciiDigit(character));
+
+                if (!valid)
+                {
+                    throw new ArgumentException("SQL parameter names must be simple ASCII identifiers.", nameof(name));
+                }
             }
         }
 
-        if (value is DateTime dateTime && resolvedType == NpgsqlDbType.TimestampTz
-            && dateTime.Kind != DateTimeKind.Utc)
-        {
-            throw new ArgumentException("PostgreSQL timestamptz requires a UTC DateTime.", nameof(value));
-        }
-
-        if (value is DateTimeOffset dateTimeOffset && resolvedType == NpgsqlDbType.TimestampTz
-            && dateTimeOffset.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException("PostgreSQL timestamptz requires a UTC DateTimeOffset.", nameof(value));
-        }
-
-        names.Add(name);
-        entries.Add((name, resolvedType, value ?? DBNull.Value));
-
-        return this;
+        private static bool IsLetter(char value) => value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
     }
-
-    private static NpgsqlDbType ResolveType(Type type)
-    {
-        if (type.IsEnum)
-        {
-            if (Enum.GetUnderlyingType(type) == typeof(byte))
-            {
-                return NpgsqlDbType.Smallint;
-            }
-
-            throw new NotSupportedException("Only persisted byte-backed enums are supported.");
-        }
-
-        if (DefaultTypes.TryGetValue(type, out var resolved))
-        {
-            return resolved;
-        }
-
-        throw new NotSupportedException($"No PostgreSQL mapping is defined for {type.Name}.");
-    }
-
-    private static void ValidateName(string name)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        for (var i = 0; i < name.Length; i++)
-        {
-            var character = name[i];
-            var valid = IsLetter(character) || character == '_'
-                || (i > 0 && char.IsAsciiDigit(character));
-
-            if (!valid)
-            {
-                throw new ArgumentException("SQL parameter names must be simple ASCII identifiers.", nameof(name));
-            }
-        }
-    }
-
-    private static bool IsLetter(char value) => value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
 }

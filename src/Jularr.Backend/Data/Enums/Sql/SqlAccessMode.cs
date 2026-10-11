@@ -1,7 +1,8 @@
-namespace Jularr.Data.Enums.Sql;
-
-public enum SqlAccessMode : byte
+namespace Jularr.Backend.Data.Enums.Sql
 {
-    ReadOnly,
-    ReadWrite
+    public enum SqlAccessMode : byte
+    {
+        ReadOnly,
+        ReadWrite
+    }
 }

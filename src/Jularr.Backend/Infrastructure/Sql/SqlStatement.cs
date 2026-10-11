@@ -1,7 +1,8 @@
-namespace Jularr.Infrastructure.Sql;
-
-public sealed class SqlStatement
+namespace Jularr.Backend.Infrastructure.Sql
 {
-    public string Statement { get; set; } = string.Empty;
-    public List<object> Parameters { get; } = [];
+    public sealed class SqlStatement
+    {
+        public string Statement { get; set; } = string.Empty;
+        public List<object> Parameters { get; } = [];
+    }
 }

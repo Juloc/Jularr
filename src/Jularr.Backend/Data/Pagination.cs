@@ -1,71 +1,72 @@
 using Npgsql;
 
-namespace Jularr.Data;
-
-public sealed record PageRequest
+namespace Jularr.Backend.Data
 {
-    public const int DefaultPageSize = 25;
-    public const int MaximumPageSize = 100;
-    public const long MaximumOffset = 100_000;
-
-    public int Page { get; }
-
-    public int PageSize { get; }
-
-    public long Offset { get; }
-
-    public PageRequest(int page = 1, int pageSize = DefaultPageSize)
+    public sealed record PageRequest
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(page);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumPageSize);
+        public const int DefaultPageSize = 25;
+        public const int MaximumPageSize = 100;
+        public const long MaximumOffset = 100_000;
 
-        var offset = checked(((long)page - 1) * pageSize);
-        if (offset > MaximumOffset)
+        public int Page { get; }
+
+        public int PageSize { get; }
+
+        public long Offset { get; }
+
+        public PageRequest(int page = 1, int pageSize = DefaultPageSize)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(page),
-                "Page exceeds the maximum offset. Use a bounded sequential query instead.");
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(page);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(pageSize, MaximumPageSize);
+
+            var offset = checked(((long)page - 1) * pageSize);
+            if (offset > MaximumOffset)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(page),
+                    "Page exceeds the maximum offset. Use a bounded sequential query instead.");
+            }
+
+            Page = page;
+            PageSize = pageSize;
+            Offset = offset;
         }
 
-        Page = page;
-        PageSize = pageSize;
-        Offset = offset;
+        public NpgsqlParameter[] ToSqlParameters() =>
+            SqlParams.From(this)
+                .Add(nameof(PageSize))
+                .Add(nameof(Offset))
+                .ToArray();
     }
 
-    public NpgsqlParameter[] ToSqlParameters() =>
-        SqlParams.From(this)
-            .Add(nameof(PageSize))
-            .Add(nameof(Offset))
-            .ToArray();
-}
-
-public sealed record PageResult<T>(
-    IReadOnlyList<T> Items,
-    int Page,
-    int PageSize,
-    long? TotalCount = null,
-    bool? HasMore = null)
-{
-    public static PageResult<T> From(
-        IReadOnlyList<T> items,
-        PageRequest request,
-        long? totalCount = null,
-        bool? hasMore = null)
+    public sealed record PageResult<T>(
+        IReadOnlyList<T> Items,
+        int Page,
+        int PageSize,
+        long? TotalCount = null,
+        bool? HasMore = null)
     {
-        ArgumentNullException.ThrowIfNull(items);
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (items.Count > request.PageSize)
+        public static PageResult<T> From(
+            IReadOnlyList<T> items,
+            PageRequest request,
+            long? totalCount = null,
+            bool? hasMore = null)
         {
-            throw new ArgumentException("Page contains more items than requested.", nameof(items));
-        }
+            ArgumentNullException.ThrowIfNull(items);
+            ArgumentNullException.ThrowIfNull(request);
 
-        if (totalCount < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(totalCount));
-        }
+            if (items.Count > request.PageSize)
+            {
+                throw new ArgumentException("Page contains more items than requested.", nameof(items));
+            }
 
-        return new PageResult<T>(items, request.Page, request.PageSize, totalCount, hasMore);
+            if (totalCount < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(totalCount));
+            }
+
+            return new PageResult<T>(items, request.Page, request.PageSize, totalCount, hasMore);
+        }
     }
 }

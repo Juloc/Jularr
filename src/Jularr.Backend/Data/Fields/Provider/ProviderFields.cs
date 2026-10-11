@@ -1,10 +1,11 @@
-using Jularr.Data.Fields;
+using Jularr.Backend.Data.Fields;
 
-namespace Jularr.Data.Fields.Provider;
-
-public static class ProviderFields
+namespace Jularr.Backend.Data.Fields.Provider
 {
-    public static readonly LongField Id = new() { Minimum = 1 };
-    public static readonly StringField Key = new();
-    public static readonly BoolField IsEnabled = new();
+    public static class ProviderFields
+    {
+        public static readonly LongField Id = new() { Minimum = 1 };
+        public static readonly StringField Key = new();
+        public static readonly BoolField IsEnabled = new();
+    }
 }

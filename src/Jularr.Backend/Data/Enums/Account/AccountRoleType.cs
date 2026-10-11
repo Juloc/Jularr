@@ -1,8 +1,9 @@
-namespace Jularr.Data.Enums.Account;
-
-public enum AccountRoleType : byte
+namespace Jularr.Backend.Data.Enums.Account
 {
-    Owner = 1,
-    User = 2,
-    MediaManager = 3
+    public enum AccountRoleType : byte
+    {
+        Owner = 1,
+        User = 2,
+        MediaManager = 3
+    }
 }

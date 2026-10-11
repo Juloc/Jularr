@@ -1,10 +1,11 @@
-namespace Jularr.Data.Enums.Service;
-
-public enum ServiceOperationType : byte
+namespace Jularr.Backend.Data.Enums.Service
 {
-    Read,
-    Create,
-    Update,
-    Delete,
-    Execute
+    public enum ServiceOperationType : byte
+    {
+        Read,
+        Create,
+        Update,
+        Delete,
+        Execute
+    }
 }

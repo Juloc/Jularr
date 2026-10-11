@@ -1,8 +1,9 @@
-namespace Jularr.Data.Enums.Service;
-
-public enum ModuleRequirementMode : byte
+namespace Jularr.Backend.Data.Enums.Service
 {
-    None,
-    All,
-    Any
+    public enum ModuleRequirementMode : byte
+    {
+        None,
+        All,
+        Any
+    }
 }

@@ -1,10 +1,11 @@
-namespace Jularr.Data.Enums.Sql;
-
-internal enum SqlBindingSource : byte
+namespace Jularr.Backend.Data.Enums.Sql
 {
-    Parameters,
-    Data,
-    Actor,
-    Profile,
-    Page
+    internal enum SqlBindingSource : byte
+    {
+        Parameters,
+        Data,
+        Actor,
+        Profile,
+        Page
+    }
 }

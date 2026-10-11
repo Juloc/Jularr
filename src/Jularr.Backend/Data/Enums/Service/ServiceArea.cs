@@ -1,9 +1,10 @@
-namespace Jularr.Data.Enums.Service;
-
-public enum ServiceArea : byte
+namespace Jularr.Backend.Data.Enums.Service
 {
-    User,
-    Admin,
-    System,
-    Public
+    public enum ServiceArea : byte
+    {
+        User,
+        Admin,
+        System,
+        Public
+    }
 }

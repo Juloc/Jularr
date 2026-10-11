@@ -1,128 +1,129 @@
-using Jularr.Data;
+using Jularr.Backend.Data;
 
-namespace Jularr.Service.Core;
-
-public sealed record ServiceSortKey<TSort>
-    where TSort : struct, Enum
+namespace Jularr.Backend.Service.Core
 {
-    public TSort Value { get; }
-    public bool IsDefault { get; }
-
-    private ServiceSortKey(TSort value, bool isDefault)
+    public sealed record ServiceSortKey<TSort>
+        where TSort : struct, Enum
     {
-        Value = value;
-        IsDefault = isDefault;
-    }
+        public TSort Value { get; }
+        public bool IsDefault { get; }
 
-    public static ServiceSortKey<TSort> Default(TSort value) => new(value, true);
-
-    public static ServiceSortKey<TSort> Additional(TSort value) => new(value, false);
-}
-
-public abstract class UserListService<TParameters, TSort> : UserReadService<TParameters>
-    where TSort : struct, Enum
-{
-    private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;
-
-    protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
-    protected abstract TSort? GetRequestedSort(TParameters parameters);
-    protected abstract PageRequest GetPageRequest(TParameters parameters);
-
-    protected sealed override void ValidateParameters(TParameters parameters)
-    {
-        _ = GetPageRequest(parameters);
-        _ = ResolveSortKey(parameters);
-    }
-
-    public override void ValidateDefinition()
-    {
-        base.ValidateDefinition();
-        ValidateSortKeys();
-    }
-
-    protected TSort ResolveSortKey(TParameters parameters)
-    {
-        var sorts = ValidateSortKeys();
-        var requested = GetRequestedSort(parameters) ?? sorts.Single(sort => sort.IsDefault).Value;
-
-        if (!sorts.Any(sort => EqualityComparer<TSort>.Default.Equals(sort.Value, requested)))
+        private ServiceSortKey(TSort value, bool isDefault)
         {
-            throw new ArgumentOutOfRangeException(nameof(parameters), "The requested sort key is not allowed.");
+            Value = value;
+            IsDefault = isDefault;
         }
 
-        return requested;
+        public static ServiceSortKey<TSort> Default(TSort value) => new(value, true);
+
+        public static ServiceSortKey<TSort> Additional(TSort value) => new(value, false);
     }
 
-    private IReadOnlyList<ServiceSortKey<TSort>> ValidateSortKeys()
+    public abstract class UserListService<TParameters, TSort> : UserReadService<TParameters>
+        where TSort : struct, Enum
     {
-        if (_sortKeys is not null)
+        private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;
+
+        protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
+        protected abstract TSort? GetRequestedSort(TParameters parameters);
+        protected abstract PageRequest GetPageRequest(TParameters parameters);
+
+        protected sealed override void ValidateParameters(TParameters parameters)
         {
+            _ = GetPageRequest(parameters);
+            _ = ResolveSortKey(parameters);
+        }
+
+        public override void ValidateDefinition()
+        {
+            base.ValidateDefinition();
+            ValidateSortKeys();
+        }
+
+        protected TSort ResolveSortKey(TParameters parameters)
+        {
+            var sorts = ValidateSortKeys();
+            var requested = GetRequestedSort(parameters) ?? sorts.Single(sort => sort.IsDefault).Value;
+
+            if (!sorts.Any(sort => EqualityComparer<TSort>.Default.Equals(sort.Value, requested)))
+            {
+                throw new ArgumentOutOfRangeException(nameof(parameters), "The requested sort key is not allowed.");
+            }
+
+            return requested;
+        }
+
+        private IReadOnlyList<ServiceSortKey<TSort>> ValidateSortKeys()
+        {
+            if (_sortKeys is not null)
+            {
+                return _sortKeys;
+            }
+
+            var keys = GetSortKeys()?.ToArray() ?? throw new InvalidOperationException("List services require sort keys.");
+            if (keys.Length == 0 || keys.Count(key => key.IsDefault) != 1
+                || keys.Any(key => !Enum.IsDefined(key.Value))
+                || keys.Select(key => key.Value).Distinct().Count() != keys.Length)
+            {
+                throw new InvalidOperationException("Sort keys must be valid and unique, with exactly one default.");
+            }
+
+            _sortKeys = Array.AsReadOnly(keys);
             return _sortKeys;
         }
+    }
 
-        var keys = GetSortKeys()?.ToArray() ?? throw new InvalidOperationException("List services require sort keys.");
-        if (keys.Length == 0 || keys.Count(key => key.IsDefault) != 1
-            || keys.Any(key => !Enum.IsDefined(key.Value))
-            || keys.Select(key => key.Value).Distinct().Count() != keys.Length)
+    public abstract class AdminListService<TParameters, TSort> : AdminReadService<TParameters>
+        where TSort : struct, Enum
+    {
+        private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;
+
+        protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
+        protected abstract TSort? GetRequestedSort(TParameters parameters);
+        protected abstract PageRequest GetPageRequest(TParameters parameters);
+
+        protected sealed override void ValidateParameters(TParameters parameters)
         {
-            throw new InvalidOperationException("Sort keys must be valid and unique, with exactly one default.");
+            _ = GetPageRequest(parameters);
+            _ = ResolveSortKey(parameters);
         }
 
-        _sortKeys = Array.AsReadOnly(keys);
-        return _sortKeys;
-    }
-}
-
-public abstract class AdminListService<TParameters, TSort> : AdminReadService<TParameters>
-    where TSort : struct, Enum
-{
-    private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;
-
-    protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
-    protected abstract TSort? GetRequestedSort(TParameters parameters);
-    protected abstract PageRequest GetPageRequest(TParameters parameters);
-
-    protected sealed override void ValidateParameters(TParameters parameters)
-    {
-        _ = GetPageRequest(parameters);
-        _ = ResolveSortKey(parameters);
-    }
-
-    public override void ValidateDefinition()
-    {
-        base.ValidateDefinition();
-        ValidateSortKeys();
-    }
-
-    protected TSort ResolveSortKey(TParameters parameters)
-    {
-        var sorts = ValidateSortKeys();
-        var requested = GetRequestedSort(parameters) ?? sorts.Single(sort => sort.IsDefault).Value;
-
-        if (!sorts.Any(sort => EqualityComparer<TSort>.Default.Equals(sort.Value, requested)))
+        public override void ValidateDefinition()
         {
-            throw new ArgumentOutOfRangeException(nameof(parameters), "The requested sort key is not allowed.");
+            base.ValidateDefinition();
+            ValidateSortKeys();
         }
 
-        return requested;
-    }
-
-    private IReadOnlyList<ServiceSortKey<TSort>> ValidateSortKeys()
-    {
-        if (_sortKeys is not null)
+        protected TSort ResolveSortKey(TParameters parameters)
         {
+            var sorts = ValidateSortKeys();
+            var requested = GetRequestedSort(parameters) ?? sorts.Single(sort => sort.IsDefault).Value;
+
+            if (!sorts.Any(sort => EqualityComparer<TSort>.Default.Equals(sort.Value, requested)))
+            {
+                throw new ArgumentOutOfRangeException(nameof(parameters), "The requested sort key is not allowed.");
+            }
+
+            return requested;
+        }
+
+        private IReadOnlyList<ServiceSortKey<TSort>> ValidateSortKeys()
+        {
+            if (_sortKeys is not null)
+            {
+                return _sortKeys;
+            }
+
+            var keys = GetSortKeys()?.ToArray() ?? throw new InvalidOperationException("List services require sort keys.");
+            if (keys.Length == 0 || keys.Count(key => key.IsDefault) != 1
+                || keys.Any(key => !Enum.IsDefined(key.Value))
+                || keys.Select(key => key.Value).Distinct().Count() != keys.Length)
+            {
+                throw new InvalidOperationException("Sort keys must be valid and unique, with exactly one default.");
+            }
+
+            _sortKeys = Array.AsReadOnly(keys);
             return _sortKeys;
         }
-
-        var keys = GetSortKeys()?.ToArray() ?? throw new InvalidOperationException("List services require sort keys.");
-        if (keys.Length == 0 || keys.Count(key => key.IsDefault) != 1
-            || keys.Any(key => !Enum.IsDefined(key.Value))
-            || keys.Select(key => key.Value).Distinct().Count() != keys.Length)
-        {
-            throw new InvalidOperationException("Sort keys must be valid and unique, with exactly one default.");
-        }
-
-        _sortKeys = Array.AsReadOnly(keys);
-        return _sortKeys;
     }
 }

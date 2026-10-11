@@ -1,88 +1,105 @@
-# Jularr Backend
+# Jularr clean start
 
-Backend-Neustart: gemeinsames Framework, Account-/Auth-/Session-Basistabellen,
-genau ein Profile-Read und ein Profile-Update. Kein Frontend, kein EF, keine alten Feature-Bereiche.
+Ein ASP.NET-Host: `Jularr.Frontend` startet Razor Pages und API.
+`Jularr.Backend` ist eine referenzierte .NET-Klassenbibliothek mit Services, Logic,
+Data und PostgreSQL-Zugriff. Kein alter Web-Bereich, kein EF.
 
-Arbeitsregeln: [AGENTS.md](AGENTS.md), Code-/SQL-Konventionen:
-[CONVENTIONS.md](docs/CONVENTIONS.md), Navigation: [CODEMAP.md](docs/CODEMAP.md).
+Regeln: [AGENTS.md](AGENTS.md), [CONVENTIONS.md](docs/CONVENTIONS.md).
+Navigation: [CODEMAP.md](docs/CODEMAP.md).
 
-- `Data.User.Profile.V1`: öffentliche Parameter, Eingaben und Ergebnisse.
-- `Data.Logic.<Entity>`: neutrale Logic-Daten; `Data.Fields.<Entity>`: Felddefinitionen;
-  `Data.Enums.<Entity>`: zugehörige Enums.
-- `Service.User.Profile.V1`: Permission, zusätzliche Zugriffsprüfung, `OnRead`/`OnUpdate`.
-- `Logic.Profile`: Laden mit Sperre, Geschäftsvalidierung und transaktionaler Writer.
-- `Infrastructure.Sql`: parametrisierte SQL-Objekte und gemeinsame Connection/Transaction.
-- `database/Account.sql`: zusammenhängende Account-/Auth-/Session-Baseline; [Umfang](database/README.md).
+## Backend im gemeinsamen Host
 
-Das Framework registriert Services gemeinsam über `AddJularrServices` und
-`MapJularrServices`. Nur mit `[ServiceEndpoint("GET", "/api/...")]` markierte
-Klassen werden veröffentlicht; System-Services bleiben intern. Es gibt keine
-Profile-spezifischen Registrierungs- oder Endpoint-Klassen. Parameter-/Body-Binding,
-Antiforgery und bereinigte `ProblemDetails` laufen zentral. Das Attribut ersetzt
-nicht die Berechtigungsprüfung. ASP.NET-Binding und Fehlerbehandlung verwenden
-die [offiziellen Framework-Mechanismen](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/parameter-binding?view=aspnetcore-10.0).
-
-Typisierte Daten erben von `BaseData`; `BaseDataList<T>` bindet JSON-Listen.
-Feldklassen definieren PostgreSQL-Typ, Pflichtwert und gegebenenfalls Länge.
-Die gemeinsame Prüfung läuft vor Service-Ausführung und SQL-Binding; Logic
-prüft Geschäftsregeln. Profile liefert Locale als `UiLocaleId` (`long`).
-`BaseData.SetData(params BaseData[])` übernimmt vorhandene Eingaben in beschreibbare
-Properties mit identischem Namen. Es gibt keine automatische Umbenennung anhand der
-Felddefinition. Weggelassene Eingaben bleiben unverändert; explizites null wird geprüft.
-Listen werden über ihre `Id` zugeordnet, nicht per Position. Unterschiedliche Namen
-werden im Service ausdrücklich zugewiesen:
+Das Frontend braucht eine ProjectReference auf `../Jularr.Backend/Jularr.Backend.csproj`.
+Die Host-Anbindung ist noch nicht in dessen `Program.cs` eingebaut; dieser Bereich
+bleibt beim Frontend. Zusätzlich zu Razor, Cookie-Authentication und Authorization:
 
 ```csharp
-updateData.Id = Parameters.ProfileId;
-updateData.SetData(Data);
+using Jularr.Backend.Service.Core;
+using Npgsql;
+
+var connectionString = builder.Configuration["JULARR_DB"]
+    ?? throw new InvalidOperationException("JULARR_DB must be configured explicitly.");
+builder.Services.AddJularrServices(
+    new NpgsqlDataSourceBuilder(connectionString).Build(), typeof(ServiceRuntime).Assembly);
+builder.Services.Configure<AuthenticationOptions>(builder.Configuration.GetSection("Authentication"));
 ```
 
-`GuidField.Required` verbietet null; `AllowEmpty` betrifft separat `Guid.Empty`.
-Session-Kennungen dürfen nicht leer sein, WebAuthn-AAGUID darf den Null-Guid enthalten.
-`UiLocales` ist der UI-Sprachkatalog (z. B. `de-DE`); Profile speichern dessen `UiLocaleId`.
-Übersetzungen sind damit noch nicht implementiert.
+Nach `Build()`: `app.UseExceptionHandler()` für den registrierten zentralen Handler,
+`app.UseRouting()`, `app.UseRateLimiter()`, `app.UseAuthentication()` und
+`app.UseAuthorization()`; dann `app.MapJularrServices()` neben `app.MapRazorPages()`.
+Keine zweite Cookie-Registrierung. Backend ergänzt die vorhandene Cookie-Konfiguration
+um DB-validierende Events, Secure/HttpOnly/SameSite und deaktivierte Sliding Expiration.
+Der Host muss Data-Protection-Schlüssel dauerhaft und geschützt verwalten.
+Keine automatische Schema-Installation oder Migration; [Baseline](database/README.md).
 
-Services bekommen keine Runtime im Konstruktor; die gemeinsame Registrierung
-bindet sie einmal. Direkte Aufrufe verwenden `runtime.Create<TService>()`.
-`PublicService` ergänzt User/Admin/System für Aufrufe ohne vorausgesetzte Session;
-dies ist ein Service-Bereich, keine vierte Account-Rolle. Unbekannte geschützte
-Permissions sowie noch nicht konfigurierte Admin-/System-Zugänge bleiben abgelehnt.
+Razor ruft per DI dieselben Services direkt auf, beispielsweise
+`await login.ExecuteAsync<LoginResultV1>(new LoginDataV1(email, password))`.
+Nach erfolgreichem Auth-Aufruf übernimmt
+`await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery)`
+die Cookie-/Challenge-Effekte. Keine eigene Passwortprüfung und kein HTTP zum eigenen Backend.
+Razor-POSTs brauchen weiterhin Antiforgery; die öffentliche Login-Seite sollte die
+registrierte Rate-Limit-Policy `public` verwenden. API-Endpunkte deklarieren das selbst.
 
-SQL steht unmittelbar in der ausführenden Methode in `sql.Statement`.
-Parameter/Daten werden mit `sql.Parameters.Add(...)` gebunden. Die Logic-Aufrufe
-stehen direkt auf `Context`: `ReadProfileForUpdateAsync` → `SetData` → `UpdateProfileAsync`.
-Ressourcen-IDs sind intern und extern bigint/long. Session-/Token-IDs sind davon getrennt.
+## Verfügbare Services
 
-`ReadProfileV1` verwendet `ReadProfileParametersV1` und liefert `ReadProfileResultV1`
-mit eigener `Id`. `UpdateProfileV1` verwendet `UpdateProfileParametersV1` und
-`UpdateProfileDataV1`; ein gemeinsamer Writer ändert `DisplayName` und `UiLocaleId`
-und liefert `UpdateResult`. Parameter heißen vollständig `ProfileId`.
-Lesen verlangt die aktive Account/Profile-Zuordnung,
-Ändern zusätzlich Profile-Eigentum. Keine Admin-Abkürzung und kein unbekannter Grant.
-Die zentrale Session-Prüfung liefert die Auth-IDs; der Service prüft das angefragte
-Profil gegen `Auth.ProfileId` und bei Änderungen dessen Eigentümer. Entity-SQL
-wiederholt die Session-/Mitgliedschaftsprüfung nicht.
-Nicht konfigurierte Module werden abgelehnt; die beiden Profile-Services benötigen keine.
+Alle öffentlichen Verträge liegen unter `Jularr.Backend.Data.<Area>.<Feature>.V1`,
+Services entsprechend unter `Jularr.Backend.Service.<Area>.<Feature>.V1`.
+Parameter erben von `BaseParameters`, Antworten von `BaseResponse`, Eingaben und
+neutrale Logic-Daten von `BaseData`. Leere Parameter können bei direkten Aufrufen
+entfallen; erforderliche Ressourcen-IDs bleiben ausdrücklich erforderlich.
+SQL steht unmittelbar in `sql.Statement`; Logic teilt Connection und Transaction.
 
-## Start und Tests
+| Route | Verhalten |
+| --- | --- |
+| `GET /api/v1/auth` | Auth-Zustand, Plex-Flags und Antiforgery-Header |
+| `POST /api/v1/auth/login` | E-Mail/Passwort, persistente DB-Session und geschütztes Cookie |
+| `POST /api/v1/auth/register` | Deaktivierte Registrierungsanfrage mit eigenem Profile |
+| `POST /api/v1/auth/plex` | Browsergebundener Plex-PIN-/JWT-Versuch und AuthorizationUrl |
+| `POST /api/v1/auth/plex/{authChallengePublicId:guid}` | Bestätigung abfragen; Session oder Freigabeanfrage |
+| `GET /api/v1/profiles/{profileId:long}` | Aktives, zugeordnetes Profile lesen |
+| `PUT /api/v1/profiles/{profileId:long}` | DisplayName/UiLocaleId über den kanonischen Writer ändern |
 
-`JULARR_DB` muss explizit gesetzt werden. Der Host erstellt oder migriert keine
-Datenbank. Schema-Installation erfolgt nur bewusst in einer frischen Ziel-Datenbank.
-Die beiden Routen sind `GET /api/v1/profiles/{profileId:long}` und
-`PUT /api/v1/profiles/{profileId:long}`; Update benötigt den Antiforgery-Token aus GET.
+API-Mutationen brauchen Cookie und `RequestVerificationToken` aus dem GET-Header.
+Nach Login den erneuerten Header verwenden. Plex-Abfragen nicht häufiger als alle
+fünf Sekunden senden. Ein Versuch läuft nach fünf Minuten ab und ist nur einmal abschließbar.
+HTTP-Fehler und Feldvalidierung werden zentral als bereinigte ProblemDetails ausgegeben.
+Session-/Plex-Geheimnisse erscheinen nicht im JSON; die DB speichert Session-Secret-Hashes.
 
-`dotnet build Jularr.sln` baut das Backend. `dotnet test Jularr.sln` benötigt
-`JULARR_TEST_DB` mit einem isolierten PostgreSQL auf `127.0.0.1:15433`, Benutzer
-`jularr_test`, Administrationsdatenbank `jularr_test_admin`. Tests erstellen nur
-eigene zufällig benannte Datenbanken; App-Verbindungen werden abgelehnt.
+Die zentrale Middleware prüft Session-Secret, Ablauf, Widerruf, CredentialRevision
+und Account/Profile-Zuordnung. Schreibzugriffe prüfen und sperren den aktuellen
+Zustand erneut in derselben Transaktion. `profile.self.update` verlangt Eigentum
+im gemeinsamen Permission-Gate; im Profile-Service steht nur der Abgleich mit `Auth.ProfileId`.
+Profile-PINs werden nicht durch automatische Auswahl umgangen: Login kann zunächst
+eine Account-Session ohne aktives Profile erstellen.
 
-## Bewusste Integrationsgrenze
+## Plex-Konfiguration
 
-Die Session-Prüfung erwartet geschützte Cookie-Claims `jularr.session_id` und
-`jularr.session_revision`, prüft den tatsächlichen AccountSessions-Zustand und
-sperrt ihn über `Logic.Session` erneut in der Schreibtransaktion. Die Session-UUID
-ist kein Bearer-Secret. Es gibt noch keine DB-validierende Auth-Middleware;
-die Prüfung läuft derzeit im gemeinsamen ServiceGate.
-Login/Session-Ausstellung, sämtliche bisherigen Razor-/Android-/TV-Verbraucher,
-weitere Profile-Funktionen und Profil-Einstellungen sind noch nicht umgestellt.
-Der isolierte Backend-Neustart ersetzt keine aktive Installation und schließt Phase B nicht ab.
+Plex ist standardmäßig aus. Konfiguration unter `Authentication`:
+
+- `SessionLifetimeHours`: 24, zulässig 1–720.
+- `PlexLoginEnabled`, `PlexRegistrationEnabled`: jeweils false.
+- `PlexRequireApproval`: true; neue Plex-Accounts bleiben bis zur Freigabe deaktiviert.
+- `PlexUiLocaleId`: 1, muss auf einen aktivierten Locale-Eintrag zeigen.
+- `PlexServerUri`: ausdrücklich konfigurierte HTTPS-Basisadresse des verbundenen Servers.
+- `PlexServerIdentifier`: dessen tatsächliche machineIdentifier.
+- `PlexRegistrationLibraryKeys`: erlaubte Library-Section-IDs, z. B. `["7"]`.
+
+Plex-Neuregistrierung braucht eine bestätigte E-Mail und Zugriff auf mindestens eine
+dieser Libraries mit dem **Token des anmeldenden Plex-Nutzers**. Server-Identität wird
+abgeglichen; URLs aus Plex-Ressourcen werden nicht als Ziel übernommen.
+Verknüpfungen werden ausschließlich anhand Provider + bestätigter externer ID gefunden,
+niemals anhand einer gleichen E-Mail. Registrierung erstellt keinen ersten Owner.
+
+## Prüfung und offene Integration
+
+`dotnet build src/Jularr.Backend/Jularr.Backend.csproj` baut nur die Bibliothek.
+Betroffene Tests liegen unter `tests/Jularr.Backend.Tests`; PostgreSQL-Tests verlangen
+`JULARR_TEST_DB` auf `127.0.0.1:15433`, Benutzer `jularr_test`, Administrationsdatenbank
+`jularr_test_admin`. Sie erstellen und entfernen nur eigene zufällig benannte Datenbanken.
+
+Noch offen: Frontend-Host-/Formular-Anbindung, explizite Owner-Ersteinrichtung,
+Freigabe-/E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf, Logout/Rotation,
+Profile-Auswahl mit PIN und alte Android-/TV-Verbraucher. Accounts mit bestätigter
+2FA werden derzeit ohne Anmeldung abgelehnt, nicht am zweiten Faktor vorbeigeführt.
+Plex wurde mit kontrollierten Provider-Antworten getestet, noch nicht gegen eine echte Installation.
+Weitere Profile-Funktionen und Phase B sind nicht Teil dieses Schnitts.

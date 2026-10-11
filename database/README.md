@@ -25,10 +25,13 @@ Cross-field rules and relationships are enforced by schema constraints and, when
 implemented, Logic. Email is unique/case-insensitive; display names are non-unique.
 There is no UserName, NormalizedUserName or CanManage compatibility column.
 
-Schema availability is not authentication implementation. Login/session issuance,
-rotation/revocation services, password verification, WebAuthn/TOTP protocols and
-request-level database-backed cookie validation are not implemented yet. Existing
-Profile calls still use ServiceGate; replacing that path is the next auth slice.
+The baseline seeds the Plex provider, while runtime Plex features default to off.
+Public login verifies password hashes and issues hashed-secret sessions. Public
+registration creates disabled requests; Plex attempts use expiring, browser-bound,
+single-use challenges with protected device keys. Cookie middleware validates the
+database session; mutations lock its current state through the shared gate.
+Rotation/revocation endpoints, WebAuthn/TOTP completion and email/approval workflows
+are not implemented yet. Confirmed TOTP factors fail closed during login.
 PlaybackSessions are a separate domain. Conditional AccountPermissions overrides
 are not introduced as a parallel authorization engine. Broader Profile settings,
 groups and transfers are outside this base-table slice.

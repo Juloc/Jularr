@@ -1,76 +1,77 @@
 using System.Text.Json.Serialization;
-using Jularr.Data.Common;
-using Jularr.Data.Fields.Profile;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Fields.Profile;
 
-namespace Jularr.Data.User.Profile.V1;
-
-public sealed class ReadProfileParametersV1 : BaseData
+namespace Jularr.Backend.Data.User.Profile.V1
 {
-    public ReadProfileParametersV1(long profileId)
+    public sealed class ReadProfileParametersV1 : BaseParameters
     {
-        ProfileId = profileId;
+        public ReadProfileParametersV1(long profileId)
+        {
+            ProfileId = profileId;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
     }
 
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
-    public long ProfileId { get; }
-}
-
-public sealed class UpdateProfileParametersV1 : BaseData
-{
-    public UpdateProfileParametersV1(long profileId)
+    public sealed class UpdateProfileParametersV1 : BaseParameters
     {
-        ProfileId = profileId;
+        public UpdateProfileParametersV1(long profileId)
+        {
+            ProfileId = profileId;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
     }
 
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
-    public long ProfileId { get; }
-}
-
-[JsonConverter(typeof(PartialDataJsonConverter<UpdateProfileDataV1>))]
-public sealed class UpdateProfileDataV1 : BaseData
-{
-    private string? _displayName;
-    private long? _uiLocaleId;
-
-    public UpdateProfileDataV1() : base(trackChanges: true)
+    [JsonConverter(typeof(PartialDataJsonConverter<UpdateProfileDataV1>))]
+    public sealed class UpdateProfileDataV1 : BaseData
     {
+        private string? _displayName;
+        private long? _uiLocaleId;
+
+        public UpdateProfileDataV1() : base(trackChanges: true)
+        {
+        }
+
+        public UpdateProfileDataV1(string displayName) : this()
+        {
+            DisplayName = displayName;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName), false)]
+        public string? DisplayName
+        {
+            get => _displayName;
+            init => SetField(ref _displayName, value);
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId), false)]
+        public long? UiLocaleId
+        {
+            get => _uiLocaleId;
+            init => SetField(ref _uiLocaleId, value);
+        }
     }
 
-    public UpdateProfileDataV1(string displayName) : this()
+    public sealed class ReadProfileResultV1 : BaseResponse
     {
-        DisplayName = displayName;
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId)
+        {
+            Id = id;
+            DisplayName = displayName;
+            UiLocaleId = uiLocaleId;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
+        public string DisplayName { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
+        public long UiLocaleId { get; }
     }
-
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName), false)]
-    public string? DisplayName
-    {
-        get => _displayName;
-        init => SetField(ref _displayName, value);
-    }
-
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId), false)]
-    public long? UiLocaleId
-    {
-        get => _uiLocaleId;
-        init => SetField(ref _uiLocaleId, value);
-    }
-}
-
-public sealed class ReadProfileResultV1 : BaseData, IServiceOutput
-{
-    public ReadProfileResultV1(long id, string displayName, long uiLocaleId)
-    {
-        Id = id;
-        DisplayName = displayName;
-        UiLocaleId = uiLocaleId;
-    }
-
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
-    public long Id { get; }
-
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
-    public string DisplayName { get; }
-
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
-    public long UiLocaleId { get; }
 }

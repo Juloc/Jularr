@@ -7,9 +7,9 @@ and [.NET naming guidelines](https://learn.microsoft.com/en-us/dotnet/standard/d
 as the baseline. The explicit repository choices below take precedence; external
 documents need not be reread for every task.
 
-- Four spaces, no tabs; Allman braces for declarations and control flow; file-scoped namespaces.
+- Four spaces, no tabs; Allman braces for declarations, control flow and block-scoped namespaces.
 - PascalCase for types, methods, properties and constants; camelCase for parameters and locals; `_camelCase` for private instance fields; `I` prefix for interfaces.
-- Use descriptive names, not technical abbreviations. Namespaces follow the folder and responsibility, not the assembly name alone.
+- Use descriptive names, not technical abbreviations. Backend namespaces start with `Jularr.Backend` and follow the folder path, e.g. `Jularr.Backend.Service.User.Profile.V1`.
 - Async methods use `Async` when naming is under our control. Framework hooks retain their declared names, such as `OnRead` and `OnUpdate`.
 - Prefer `string`, `long`, `bool` and other C# aliases; use `var` when the initializer makes the type clear.
 - Use nullable types accurately; do not hide missing values with defaults or unjustified null-forgiving operators.
@@ -22,13 +22,16 @@ documents need not be reread for every task.
 ## Structure and ownership
 
 Keep one modular monolith and one canonical owner per responsibility. Current
-implementation is one backend project, not separate projects for every layer.
+implementation is one backend class library hosted by `Jularr.Frontend`, not separate
+webservers or projects for every layer. Razor uses DI service calls; external clients
+use the same services through the shared API adapter.
 
-- `src/Jularr.Backend/Data/User/<Feature>/V1`: related public typed parameters, input data and results together. `V1` is the agreed contract version, not a legacy fallback.
+- `src/Jularr.Backend/Data/<Area>/<Feature>/V1`: related public typed parameters, input data and results together, including Public authentication. `V1` is the agreed contract version, not a legacy fallback.
 - `Data/Logic/<Entity>`: neutral lookup and mutation data for Logic. `Data/Fields/<Entity>`: canonical database field definitions. `Data/Enums/<Entity>`: enums grouped by their entity or framework owner. `Data/Common`: genuinely shared contracts only.
 - Canonical field definitions declare CLR/PostgreSQL types, nullability and value limits once; parameter/data properties reuse the same definition. Fields do not carry table/column metadata. Required/optional variants use the existing overloads.
 - Versioned services and their public contracts consistently use the `V1` suffix. Parameters use entity-qualified names (`ProfileId`); results use `Id` for their own entity and qualified names for referenced entities.
-- Data contracts are explicit classes with named properties and constructors, not positional records. They derive from `BaseData`; typed collections use `BaseDataList<T>`. Field classes use C# names (`LongField`, `StringField`, `GuidField`, etc.) and own database type rules, required values and lengths; basic validation runs centrally before service execution or SQL binding, not in each procedure.
+- Data contracts are explicit classes with named properties and constructors, not positional records. Service parameters derive from `BaseParameters`, results from `BaseResponse`, inputs and neutral Logic data from `BaseData`; these share field validation. Typed collections use `BaseDataList<T>`. Empty parameter contracts can be omitted on direct calls; required resource parameters cannot. Field classes use C# names (`LongField`, `StringField`, `GuidField`, etc.) and own database type rules, required values and lengths; basic validation runs centrally before service execution or SQL binding, not in each procedure.
+- Keep Data properties explicit. Secret properties use `JsonIgnore`; do not hide transport secrets behind private fields or explicit interfaces. Backing fields remain appropriate for partial input change tracking.
 - `BaseData.SetData(params BaseData[])` copies provided values into writable properties with exactly the same name. It does not infer aliases from field definitions: assign `updateData.Id = Parameters.ProfileId` explicitly. Omitted partial fields stay unchanged; explicit null is validated separately. List updates match declared `Id` properties, never positions, and reject unknown or duplicate rows before applying changes.
 - `Service/User/<Feature>/V1`: declared permissions, result types, module requirements, extra access checks, static SELECTs and orchestration through operation hooks.
 - Services do not write tables or contain mutation business rules. Thin HTTP endpoints bind input and expose service results; they do not duplicate permissions or persistence.
@@ -54,11 +57,11 @@ implementation is one backend project, not separate projects for every layer.
 - Service reads are read-only. All domain writes and reads with mutation locks belong to Logic.
 - One service operation owns one `SqlContext` connection and transaction shared across all participating Logic calls. No inner connection, independent transaction or early commit.
 - Revalidate mutable authorization in the write transaction and hold appropriate locks. Fail closed for missing, disabled, revoked or foreign resources without leaking private state.
-- The shared gate resolves the session and permission. Service `ValidatePermissions` compares request entity IDs with verified auth IDs and checks any required ownership. Do not repeat membership/session predicates in entity SELECTs or updates. Writes revalidate and lock session state through `Logic/Session` in the same transaction, without a Profile-specific mutation branch.
+- Cookie middleware verifies the current database session once per HTTP request; the shared gate consumes that verified proof and resolves the permission, including ownership requirements. Direct invocations without middleware revalidate each invocation. Service `ValidatePermissions` compares request entity IDs with verified auth IDs. Do not repeat ownership, membership or session checks in each service or entity SQL. Writes revalidate and lock session state through `Logic/Session` in the same transaction.
 - Commit only after successful validation, execution and result checks; any failure rolls the whole operation back. Check expected affected-row counts.
 - Enforce relationships, uniqueness and required values in the schema as well as business rules in Logic. Do not bypass integrity constraints.
 - Avoid N+1 queries, application filtering of whole tables and per-row save loops; use bounded reads and set-based writes where needed.
-- Never install or migrate the active database automatically. Schema tests use explicit isolated PostgreSQL connections and only their own disposable databases.
+- During clean cut, edit only the explicit fresh baseline, not migrations. Never install or migrate the active database automatically. Schema tests use explicit isolated PostgreSQL connections and only their own disposable databases.
 
 ## Tests and documentation
 

@@ -1,24 +1,25 @@
-using Jularr.Data.Common;
-using Jularr.Data.Fields.Account;
-using Jularr.Data.Fields.Profile;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Fields.Account;
+using Jularr.Backend.Data.Fields.Profile;
 
-namespace Jularr.Data.Logic.Session;
-
-public sealed class SessionAuthenticationData : BaseData
+namespace Jularr.Backend.Data.Logic.Session
 {
-    public SessionAuthenticationData(long accountId, long profileId, long profileOwnerAccountId)
+    public sealed class SessionAuthenticationData : BaseData
     {
-        AccountId = accountId;
-        ProfileId = profileId;
-        ProfileOwnerAccountId = profileOwnerAccountId;
+        public SessionAuthenticationData(long accountId, long? profileId, long? profileOwnerAccountId)
+        {
+            AccountId = accountId;
+            ProfileId = profileId;
+            ProfileOwnerAccountId = profileOwnerAccountId;
+        }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
+        public long AccountId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id), false)]
+        public long? ProfileId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.OwnerAccountId), false)]
+        public long? ProfileOwnerAccountId { get; }
     }
-
-    [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
-    public long AccountId { get; }
-
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
-    public long ProfileId { get; }
-
-    [DataField(typeof(ProfileFields), nameof(ProfileFields.OwnerAccountId))]
-    public long ProfileOwnerAccountId { get; }
 }
