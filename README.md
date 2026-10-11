@@ -21,18 +21,15 @@ Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
 Das Frontend braucht eine ProjectReference auf `../Jularr.Backend/Jularr.Backend.csproj`.
 Die Host-Anbindung ist noch nicht in dessen `Program.cs` eingebaut; dieser Bereich
-bleibt beim Frontend. Zusätzlich zu Razor, Cookie-Authentication und Authorization:
+bleibt beim Frontend. Razor verwendet Services und deren Datenverträge; der Host
+verwendet die vorgesehenen `Service/Core`-Adapter für Registrierung und Authentifizierung.
+Datenbankkonfiguration, Connection und Transaction gehören vollständig ins Backend.
 
-```csharp
-using Jularr.Backend.Service.Core;
-using Npgsql;
-
-var connectionString = builder.Configuration["JULARR_DB"]
-    ?? throw new InvalidOperationException("JULARR_DB must be configured explicitly.");
-builder.Services.AddJularrServices(
-    new NpgsqlDataSourceBuilder(connectionString).Build(), typeof(ServiceRuntime).Assembly);
-builder.Services.Configure<AuthenticationOptions>(builder.Configuration.GetSection("Authentication"));
-```
+Offene Framework-Anpassung: `AddJularrServices` erwartet derzeit noch eine
+`NpgsqlDataSource`, und Logic-/SQL-Typen sind öffentlich. Vor der Frontend-Anbindung
+muss die Backend-Registrierung den Aufbau der Datenquelle übernehmen und der direkte
+Zugriff auf Logic/SQL durch interne Sichtbarkeit begrenzt werden. Das Frontend soll
+weder Npgsql initialisieren noch SQL oder Logic aufrufen.
 
 Nach `Build()`: `app.UseExceptionHandler()` für den registrierten zentralen Handler,
 `app.UseRouting()`, `app.UseRateLimiter()`, `app.UseAuthentication()` und
