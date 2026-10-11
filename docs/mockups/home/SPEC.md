@@ -244,7 +244,7 @@ The mockups are binding visual references for layout/hierarchy. Agents may adapt
 
 ## Canonical identity on Home rows
 
-Recommendation rows use the same typed canonical identity resolution as Discover/Search. Watch/read/listen media resolve to canonical Work; Games resolve to canonical Game through the isolated Games module. For Anime/Series, one canonical Work is shown once by default even when AniList or another provider returns separate season/part entries. Opening a provider-derived recommendation resolves to the owning domain's canonical target and optional presentation target. Home must not create provider-specific duplicate cards that disagree with Discover or Library/Games.
+Recommendation rows use canonical Work identity for **all media types, including Games**. Game platform/release data extends the Work and does not create a separate canonical Game root. For Anime/Series, one canonical Work is shown once by default even when AniList or another provider returns separate season/part entries. Opening a provider-derived recommendation resolves to the owning domain's canonical target and optional presentation target. Home must not create provider-specific duplicate cards that disagree with Discover or Library/Games.
 
 
 

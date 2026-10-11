@@ -16,3 +16,7 @@ The outdated top-level `PLANNING-AUDIT.md` and `CROSS-SPEC-CONSISTENCY-AUDIT.md`
 The separate `docs/mockups/home/README.md` was also removed: the authoritative Home/Discover `SPEC.md` already contains the theme, hero, visual, fallback, navigation and responsive rules. Full older text and image references remain in the backup snapshot. All 74 page/flow `SPEC.md` files and their images **remain present** until safe, feature-complete replacements exist. Active links to deleted audits were redirected to the historical snapshot or to the current owner.
 
 Additional targeted corrections: database Service-vs-Logic ownership, old Games identity and backfill guidance in `ARCHITECTURE.md`, product roadmap vs cutover tracker and the self-reference in Home. These are draft-branch edits, not changes on `dev`.
+
+## First Page-Spec deduplication
+
+`docs/mockups/discover/SPEC.md` no longer duplicates the shared Home/Discover block. **Fourteen subsections were checked for exact equality** against Home before replacement with a link (approximately 10 KiB of repeated prose). Both screen-specific specs remain; Games wording in both has been reconciled with canonical `Works.Id`. This is not a redesign or a completed review of the other 72 specs.
