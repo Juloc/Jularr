@@ -3,7 +3,7 @@
 @{
     ViewData["Title"] = T[Model.TitleKey ?? "app.name"];
 }
-<div class="skeleton-screen @(Model.Shell ? "" : "screen-player")">
+<div class="page-screen @(Model.IsPlayer ? "screen-player" : "")">
     @foreach (var component in Model.Content)
     {
         <partial name="_UiComponent" model="component" />
