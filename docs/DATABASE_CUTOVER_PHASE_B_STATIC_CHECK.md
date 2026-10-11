@@ -1,10 +1,10 @@
 # Phase B — aktueller Entwurfsumfang ohne Learning
 
 Aktueller Owner-Auftrag vom 10.10.2026: Learning wird zurückgestellt.
-Der aktuelle DDL-Satz ist 01, 02, 03, 04, 06, 07, 11, 12, 14, 15, 16, 17. Nummernlücken sind
+Der aktuelle DDL-Satz ist 01, 02, 03, 04, 06, 07, 11, 12, 14, 15, 16, 17, 18. Nummernlücken sind
 bewusst entfernte Learning-Teile, keine optionalen Baseline-Abhängigkeiten.
 
-Statischer Stand: 141 Target-Tabellen, 29 Type-Kataloge mit 154 expliziten
+Statischer Stand: 143 Target-Tabellen, 31 Type-Kataloge mit 160 expliziten
 Byte-Vertrags-/Seedwerten, 24 getrennte öffentliche Ressourcen-UUIDs.
 Interne Ressourcen-PKs/FKs/Joins bleiben bigint. Der Verifier prüft die
 vollständige Übereinstimmung von C# byte, Seed-Manifest und statischem SQL.
@@ -15,10 +15,10 @@ Der [spätere Learning-Plan](DATABASE_CUTOVER_DEFERRED_LEARNING.md) reserviert
 keine Tabellen, Codes oder Runtime-Fallbacks.
 
 Frühe Zahlen/CI-Belege sind historische Stände. Die aktuelle Fassung wurde
-frisch auf wegwerfbarem PostgreSQL 18.6 geprüft: zwölf DDL-Dateien sowie die
+frisch auf wegwerfbarem PostgreSQL 18.6 geprüft: dreizehn DDL-Dateien sowie die
 betroffenen Katalog-, Event-, Inbox-, Lifecycle- und Negativ-Suites. Der Inbox-
 READ nutzt Profile-/Account-LastOccurredAt-Indizes vor Paging; zwei unabhängige
-Sessions prüfen Recurrence, Replay und Commit-Integrität. Neue Tabellenzahl 141.
+Sessions prüfen Recurrence, Replay und Commit-Integrität. Neue Tabellenzahl 143.
 Kein aktiver DB-Eingriff und keine vollständige Anwendungssuite; CI prüft den
 jeweiligen PR-Head zusätzlich.
 
@@ -41,6 +41,14 @@ geprüft. Abgeleitete Items benötigen eine akzeptierte Page bei Commit; Restart
 und Rollback sind atomar. Admin-Grants werden vor Section-Aggregation gepaged;
 Work-Kandidaten sind nach Account/Profile und aktueller Grant-Generation gefiltert.
 Keine echte Remote-ACL, DNS-/SSRF- oder Client-Prüfung wird daraus abgeleitet.
+
+Part 18 ersetzt die Revision-only-CAS-Abfrage durch kanonische START/TARGET/
+CHECKPOINT/RECEIPT/SNAPSHOT/COMPLETION-Queries. Root und obligatorisches Detail sowie
+Revision/Position/immutable Hash-Beleg sind jeweils atomar; Reader bindet die
+unveränderliche Contentrevision und tatsächliche Quellseite. Explizite Completion
+mit Herkunft/Unmark, SQL-Präfix bei Episodenlücken/Specials, 1000 Continue-Roots
+und zwei berechtigte Accounts prüfen die konkreten Konflikt-/Rollback-Grenzen.
+Getypte Reader-Varianten/Locators/Publish und Replay-Retention bleiben offen.
 
 Statische Prüfungen ersetzen weder PostgreSQL-Tests noch Autorisierung,
 repräsentative Query-/Indexpläne oder die spätere EF-/Runtime-Abnahme.

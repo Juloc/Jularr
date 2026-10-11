@@ -45,6 +45,8 @@ BEGIN
     INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "StorageKey")
     VALUES (other_work_id, other_edition_id, 'phase-b-other-reader-content')
     RETURNING "Id" INTO other_content_id;
+    INSERT INTO "ReaderPages" ("ReaderContentId", "PageIndex")
+    VALUES (content_id, 0), (other_content_id, 0);
     INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId")
     VALUES (profile_id, work_id, 2)
     RETURNING "Id" INTO progress_id;
@@ -77,7 +79,7 @@ BEGIN
 
     BEGIN
         UPDATE "ReadingProgressPositions"
-        SET "WorkId" = other_work_id, "ReaderContentId" = NULL
+        SET "WorkId" = other_work_id, "ReaderContentId" = NULL, "PageIndex" = NULL
         WHERE "MediaProgressId" = progress_id;
         RAISE EXCEPTION 'Reading position accepted a foreign parent Work';
     EXCEPTION WHEN foreign_key_violation THEN
@@ -100,10 +102,10 @@ BEGIN
     END;
 
     UPDATE "ReadingProgressPositions"
-    SET "ReaderContentId" = NULL
+    SET "ReaderContentId" = NULL, "PageIndex" = NULL
     WHERE "MediaProgressId" = progress_id;
     UPDATE "ReadingProgressPositions"
-    SET "ReaderContentId" = content_id
+    SET "ReaderContentId" = content_id, "PageIndex" = 0
     WHERE "MediaProgressId" = progress_id;
 
     INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")

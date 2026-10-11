@@ -194,6 +194,26 @@ ORDER BY
     page_root."WorkId" DESC;
 
 -- 2. Bounded Continue list, never cross-profile, deterministic ordering.
+WITH "ContinueRoots" AS MATERIALIZED (
+    SELECT
+        progress."Id", progress."PublicId", progress."WorkId", progress."WorkEpisodeId",
+        progress."WorkChapterId", progress."WorkTrackId", progress."WorkEditionId",
+        progress."ProgressPositionTypeId", progress."Revision", progress."LastActivityAt"
+    FROM
+        "MediaProgress" AS progress
+    INNER JOIN
+        "AccountProfiles" AS membership
+        ON membership."ProfileId" = progress."ProfileId" AND membership."AccountId" = @ActorAccountId
+    INNER JOIN
+        "Accounts" AS account ON account."Id" = membership."AccountId" AND account."IsEnabled" = TRUE
+    WHERE
+        progress."ProfileId" = @ActiveProfileId AND progress."IsCompleted" = FALSE
+        AND @PageSize BETWEEN 1 AND 100 AND @Offset BETWEEN 0 AND 100000
+    ORDER BY
+        progress."LastActivityAt" DESC, progress."Id" DESC
+    LIMIT @PageSize
+    OFFSET @Offset
+)
 SELECT
     progress."PublicId" AS "MediaProgressId",
     work."PublicId" AS "WorkId",
@@ -203,17 +223,13 @@ SELECT
     edition."PublicId" AS "WorkEditionId",
     progress."ProgressPositionTypeId",
     progress."Revision",
-    progress."LastActivityAt"
+    progress."LastActivityAt",
+    time_position."PositionMs", time_position."DurationMs",
+    reader_edition."PublicId" AS "ReaderEditionId", content."ContentRevision",
+    reading_position."PageIndex", reading_position."TextLocator", reading_position."ProgressPermille",
+    game_position."PlayedMs", game_position."ProgressPercent"
 FROM
-    "MediaProgress" AS progress
-INNER JOIN
-    "AccountProfiles" AS account_profile
-    ON account_profile."ProfileId" = progress."ProfileId"
-    AND account_profile."AccountId" = @ActorAccountId
-INNER JOIN
-    "Accounts" AS account
-    ON account."Id" = account_profile."AccountId"
-    AND account."IsEnabled" = TRUE
+    "ContinueRoots" AS progress
 INNER JOIN
     "Works" AS work ON work."Id" = progress."WorkId"
 LEFT JOIN
@@ -224,14 +240,19 @@ LEFT JOIN
     "WorkTracks" AS track ON track."Id" = progress."WorkTrackId"
 LEFT JOIN
     "WorkEditions" AS edition ON edition."Id" = progress."WorkEditionId"
-WHERE
-    progress."ProfileId" = @ActiveProfileId
-    AND progress."IsCompleted" = FALSE
+LEFT JOIN
+    "TimeProgressPositions" AS time_position ON time_position."MediaProgressId" = progress."Id"
+LEFT JOIN
+    "ReadingProgressPositions" AS reading_position ON reading_position."MediaProgressId" = progress."Id"
+LEFT JOIN
+    "ReaderContent" AS content ON content."Id" = reading_position."ReaderContentId"
+LEFT JOIN
+    "WorkEditions" AS reader_edition ON reader_edition."Id" = content."WorkEditionId"
+LEFT JOIN
+    "GameProgressPositions" AS game_position ON game_position."MediaProgressId" = progress."Id"
 ORDER BY
     progress."LastActivityAt" DESC,
-    progress."Id" DESC
-LIMIT @PageSize
-OFFSET @Offset;
+    progress."Id" DESC;
 
 -- 3. Logic-only short transaction: atomically claim due queued jobs.
 -- @PendingStatusTypeId, @RunningStatusTypeId MUST be trusted server enum IDs,
@@ -269,37 +290,3 @@ RETURNING
     operation."OperationKindKey",
     operation."Input",
     operation."AttemptCount";
-
--- 4. Logic-only bounded optimistic checkpoint revision gate (B03).
--- This UPDATE is one statement INSIDE a shared SQL transaction containing
--- the corresponding Time/Reading/Game detail mutation and immutable
--- MediaProgressCheckpointEvents row. The service must check the event ID first,
--- then claim this exact expected revision; no stale writer may overwrite newer
--- progress or Completed state. Event replay returns its prior result, not DML.
--- @ActiveProfileId must come from validated ServiceContext, never raw DTO.
--- 0 updated rows = conflict/not found; the caller may not treat it as success.
-UPDATE
-    "MediaProgress" AS progress
-SET
-    "Revision" = progress."Revision" + 1,
-    "LastActivityAt" = now()
-WHERE
-    progress."Id" = @MediaProgressId
-  AND progress."ProfileId" = @ActiveProfileId
-  AND progress."Revision" = @ExpectedRevision
-  AND EXISTS (
-      SELECT
-          1
-      FROM
-          "AccountProfiles" AS account_profile
-      INNER JOIN
-          "Accounts" AS account
-          ON account."Id" = account_profile."AccountId"
-      WHERE
-          account_profile."AccountId" = @ActorAccountId
-        AND account_profile."ProfileId" = progress."ProfileId"
-        AND account."IsEnabled" = TRUE
-  )
-RETURNING
-    progress."Id",
-    progress."Revision";

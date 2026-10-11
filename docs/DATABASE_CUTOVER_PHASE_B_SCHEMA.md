@@ -11,7 +11,7 @@ später eine eigene Freigabe.
 
 ## Aktueller Umfang
 
-Zwölf DDL-Dateien, in dieser Reihenfolge:
+Dreizehn DDL-Dateien, in dieser Reihenfolge:
 
 1. [01 Core](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql)
 2. [02 Progress/Media](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql)
@@ -25,12 +25,13 @@ Zwölf DDL-Dateien, in dieser Reihenfolge:
 10. [15 Notification Lifecycle](DATABASE_CUTOVER_PHASE_B_15_NOTIFICATION_LIFECYCLE_DRAFT.sql)
 11. [16 Auth Lifecycle](DATABASE_CUTOVER_PHASE_B_16_AUTH_LIFECYCLE_DRAFT.sql)
 12. [17 Provider Lifecycle](DATABASE_CUTOVER_PHASE_B_17_PROVIDER_LIFECYCLE_DRAFT.sql)
+13. [18 Progress/Reader Lifecycle](DATABASE_CUTOVER_PHASE_B_18_PROGRESS_READER_LIFECYCLE_DRAFT.sql)
 
 Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
 nicht als leere oder optionale Baseline-Dateien behalten.
 
-Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 141
-Target-Tabellen. Die 29 bestehenden Type-Kataloge haben 154 feste Codes in
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 143
+Target-Tabellen. Die 31 bestehenden Type-Kataloge haben 160 feste Codes in
 [C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
 [Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
 Der Verifier lehnt undefinierte Kataloge ab. Keine Übernahme alter int-Enumcodes.
@@ -69,7 +70,7 @@ offen. Keine vollständige Anwendungssuite oder aktive DB-Änderung.
 
 Der [Notification-Vertrag](DATABASE_CUTOVER_PHASE_B_NOTIFICATION_CONTRACT.md) enthält
 Ruhezeiten/DST, Digest, geschützte Endpoints und aktuelle Route-Revalidierung.
-Zwölf DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
+Dreizehn DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
 Zielpersistenz, keinen existierenden externen Transport oder Runtime-Cutover.
 
 Die [Reader-READs](DATABASE_CUTOVER_PHASE_B_READER_QUERIES_DRAFT.sql) führen
@@ -105,6 +106,16 @@ Der [Auth-Vertrag](DATABASE_CUTOVER_PHASE_B_AUTH_CONTRACT.md) ergänzt feste
 Challenge-Zwecke, Credential-Epoch, Session-CAS, TOTP-/Recovery-Replay und
 browsergebundenen Plex-Consent. Hash-Lookup und Self-Session-Paging nutzen ihre
 Indizes; zwei reale Sessions bestätigen genau einen Rotation-/Recovery-Gewinner.
+
+Der [Progress-Vertrag](DATABASE_CUTOVER_PHASE_B_PROGRESS_CONTRACT.md) ersetzt
+Revision-only-CAS durch atomare Root-/Subtype-Erzeugung und einen gemeinsamen
+Time-/Reader-/Game-Writer mit immutable Hash-Replay-Belegen. Reader-Anker binden
+Edition und unveränderliche Contentrevision; Completed erhält explizite Herkunft
+und darf nur durch manuelle UserAction entfernt werden. Continue enrichert nur
+gepagte Roots; CompletedThrough ist ein SQL-Präfix mit echten Lücken/Specials.
+1000 Continue-Roots und zwei unterschiedliche berechtigte Accounts prüfen Paging,
+erste Root-Erzeugung, stale Writes und Rollback. Vollständige Reader-Varianten/
+Locator-/Publish-Verträge und Replay-Retention sind weiterhin offen.
 
 [DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md) nennt verbleibende Fach- und
 Query-Anforderungen. Nicht alle übrigen Funktionsverträge sind abgeschlossen.

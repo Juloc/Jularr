@@ -33,8 +33,11 @@ BEGIN
        INSERT INTO "Works" ("MediaTypeId","CanonicalTitle")
        VALUES (1,'Phase B Continue A '||i) RETURNING "Id" INTO w;
        INSERT INTO "MediaProgress"
-          ("ProfileId","WorkId","ProgressPositionTypeId","IsCompleted","LastActivityAt")
-       VALUES (p_a,w,1,i=6,now()-(i*interval '1 minute'))
+          ("ProfileId","WorkId","ProgressPositionTypeId","IsCompleted","LastActivityAt",
+           "CompletionReasonTypeId", "CompletedAt", "CompletedByAccountId")
+       VALUES (p_a,w,1,i=6,now()-(i*interval '1 minute'),
+           CASE WHEN i=6 THEN 3 END, CASE WHEN i=6 THEN now() END,
+           CASE WHEN i=6 THEN (SELECT "OwnerAccountId" FROM "Profiles" WHERE "Id"=p_a) END)
        RETURNING "Id" INTO progress_id;
        INSERT INTO "TimeProgressPositions" ("MediaProgressId","PositionMs","DurationMs")
        VALUES (progress_id,1000*i,30000);

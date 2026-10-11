@@ -38,6 +38,20 @@ public enum ProgressPositionType : byte
     Game = 3
 }
 
+public enum ProgressCompletionReason : byte
+{
+    PlaybackEnded = 1,
+    ReaderFinished = 2,
+    UserMarked = 3
+}
+
+public enum ProgressCheckpointSource : byte
+{
+    LiveClient = 1,
+    OfflineClient = 2,
+    UserAction = 3
+}
+
 public enum ImageTargetKind : byte
 {
     Work = 1,

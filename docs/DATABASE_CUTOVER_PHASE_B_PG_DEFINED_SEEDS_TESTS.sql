@@ -27,6 +27,12 @@ BEGIN
             ('ProgressPositionTypes', 1, 'time'),
             ('ProgressPositionTypes', 2, 'reading'),
             ('ProgressPositionTypes', 3, 'game'),
+            ('ProgressCompletionReasonTypes', 1, 'playback_ended'),
+            ('ProgressCompletionReasonTypes', 2, 'reader_finished'),
+            ('ProgressCompletionReasonTypes', 3, 'user_marked'),
+            ('ProgressCheckpointSourceTypes', 1, 'live_client'),
+            ('ProgressCheckpointSourceTypes', 2, 'offline_client'),
+            ('ProgressCheckpointSourceTypes', 3, 'user_action'),
             ('ImageTargetKindTypes', 1, 'work'),
             ('ImageTargetKindTypes', 2, 'work_chapter'),
             ('ImageTargetKindTypes', 3, 'media_chapter'),
@@ -184,6 +190,14 @@ BEGIN
             catalog."Id",
             catalog."Key"
         FROM "ProgressPositionTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ProgressCompletionReasonTypes', catalog."Id", catalog."Key"
+        FROM "ProgressCompletionReasonTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ProgressCheckpointSourceTypes', catalog."Id", catalog."Key"
+        FROM "ProgressCheckpointSourceTypes" AS catalog
         UNION ALL
         SELECT
             'ImageTargetKindTypes',

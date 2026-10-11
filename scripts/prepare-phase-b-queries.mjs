@@ -8,7 +8,6 @@ const boundaries = [
     source.indexOf('WITH "PageRoots" AS MATERIALIZED'),
     source.indexOf('-- 2. Bounded Continue list'),
     source.indexOf('-- 3. Logic-only short transaction'),
-    source.indexOf('-- 4. Logic-only bounded optimistic checkpoint'),
     source.length
 ];
 
@@ -26,7 +25,7 @@ const queries = [
     },
     {
         name: 'continue',
-        start: 'SELECT',
+        start: 'WITH "ContinueRoots"',
         declaration: 'PREPARE phase_b_continue(bigint,bigint,integer,bigint) AS\n',
         parameters: ['ActorAccountId', 'ActiveProfileId', 'PageSize', 'Offset']
     },
@@ -35,12 +34,6 @@ const queries = [
         start: 'WITH claimed AS',
         declaration: 'PREPARE phase_b_claim(smallint,smallint,integer,text) AS\n',
         parameters: ['PendingStatusTypeId', 'RunningStatusTypeId', 'BatchSize', 'TrustedWorkerKey']
-    },
-    {
-        name: 'progress_cas',
-        start: 'UPDATE\n    "MediaProgress" AS progress',
-        declaration: 'PREPARE phase_b_progress_cas(bigint,bigint,bigint,bigint) AS\n',
-        parameters: ['MediaProgressId', 'ActorAccountId', 'ActiveProfileId', 'ExpectedRevision']
     }
 ];
 
@@ -92,6 +85,59 @@ const authQueries = [
 
 for (const query of [
     ...authQueries,
+    {
+        name: 'progress_start',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
+        start: '-- Logic START:',
+        end: '-- Service TARGET:',
+        declaration: 'PREPARE phase_b_progress_start(bigint,bigint,uuid,uuid,uuid,uuid,uuid,smallint,timestamptz) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId', 'EpisodePublicId',
+            'ChapterPublicId', 'TrackPublicId', 'EditionPublicId', 'PositionTypeId', 'Now']
+    },
+    {
+        name: 'progress_target',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
+        start: '-- Service TARGET:',
+        end: '-- Logic CHECKPOINT:',
+        declaration: 'PREPARE phase_b_progress_target(bigint,bigint,uuid,uuid,uuid,uuid,uuid,smallint) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId', 'EpisodePublicId',
+            'ChapterPublicId', 'TrackPublicId', 'EditionPublicId', 'PositionTypeId']
+    },
+    {
+        name: 'progress_checkpoint',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
+        start: '-- Logic CHECKPOINT:',
+        end: '-- Service RECEIPT:',
+        declaration: 'PREPARE phase_b_progress_checkpoint(bigint,bigint,uuid,bigint,uuid,bytea,smallint,timestamptz,timestamptz,smallint,boolean,bigint,bigint,uuid,integer,integer,jsonb,smallint,bigint,numeric) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'ProgressPublicId', 'ExpectedRevision',
+            'ClientEventId', 'PayloadHash', 'SourceTypeId', 'Now', 'ClientOccurredAt',
+            'CompletionReasonTypeId', 'ClearCompletion', 'PositionMs', 'DurationMs',
+            'ReaderEditionPublicId', 'ContentRevision', 'PageIndex', 'TextLocator',
+            'ProgressPermille', 'PlayedMs', 'ProgressPercent']
+    },
+    {
+        name: 'progress_receipt',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
+        start: '-- Service RECEIPT:',
+        end: '-- Service SNAPSHOT:',
+        declaration: 'PREPARE phase_b_progress_receipt(bigint,bigint,uuid,uuid,bytea) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'ClientEventId', 'ProgressPublicId', 'PayloadHash']
+    },
+    {
+        name: 'progress_snapshot',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
+        start: '-- Service SNAPSHOT:',
+        end: '-- Service COMPLETION:',
+        declaration: 'PREPARE phase_b_progress_snapshot(bigint,bigint,uuid) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'ProgressPublicId']
+    },
+    {
+        name: 'progress_completion',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
+        start: '-- Service COMPLETION:',
+        declaration: 'PREPARE phase_b_progress_completion(bigint,bigint,uuid) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId']
+    },
     {
         name: 'provider_grants',
         file: 'DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql',

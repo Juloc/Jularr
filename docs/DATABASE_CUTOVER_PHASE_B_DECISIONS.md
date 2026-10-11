@@ -4,8 +4,8 @@ Status: OPEN. Maßgeblich ist der aktuelle Owner-Auftrag vom 10.10.2026:
 Cutover ohne Learning. Frühere Learning-Blocker sind bewusst aus dem Scope
 genommen, nicht technisch als fertig erklärt.
 
-Aktueller Entwurf: zwölf DDL-Dateien, 141 Tabellen, 29 feste Type-Kataloge mit
-154 expliziten Byte-Codes und 24 öffentlichen Ressourcen-UUIDs. Counts sind
+Aktueller Entwurf: dreizehn DDL-Dateien, 143 Tabellen, 31 feste Type-Kataloge mit
+160 expliziten Byte-Codes und 24 öffentlichen Ressourcen-UUIDs. Counts sind
 Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime.
 
 ## Aktuelle Abnahmematrix
@@ -13,8 +13,8 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | ID | Stand | Vor Gate B erforderlicher Nachweis |
 | --- | --- | --- |
 | B01 Types/Seeds | Alle bestehenden Kataloge definiert; keine freien Legacy-int-Mappings | C# byte, Manifest und statische Seeds identisch; neue erforderliche Kataloge erhalten denselben Nachweis |
-| B02 Account/Profile/Auth | Zweckgebundene Challenges, Account-Epoch, Rotation/Revoke, TOTP-/Recovery-Replay und Transfer physisch geprüft | Plex-Login/Linking und Medien-Consent nutzen getrennte feste Zwecke; Provider-Capability-Default-off und Zugriffstests in B10 ergänzt; Grant-Lifecycle weiterhin abschließen; WebAuthn-Protokollprüfung gehört in D |
-| B03 Progress/Offline | Total-Subtype, Cross-Work, Revision-CAS und Replay modelliert/getestet | Reader-Anchor-/Editionrevisionen, Completed-Provenienz und repräsentative Konflikt-/Concurrency-Fälle vollständig |
+| B02 Account/Profile/Auth | Zweckgebundene Challenges, Account-Epoch, Rotation/Revoke, TOTP-/Recovery-Replay und Transfer physisch geprüft | Plex-Login/Linking und Medien-Consent nutzen getrennte feste Zwecke; Provider-Capability-Default-off, Grant-Lifecycle und Zugriffstests in B10 ergänzt; WebAuthn-Protokollprüfung gehört in D |
+| B03 Progress/Offline | Atomare Root-/Subtype-Erzeugung, gemeinsamer Time/Reader/Game-Checkpoint samt unveränderlichem Hash-Beleg, aktuelle Membership/CAS, Edition-/Contentrevision, explizite Completion/Unmark, SQL-CompletedThrough und zwei echte konkurrierende Accounts geprüft | Vollständige getypte Reflow-/FixedPage-/Variant-Anker einschließlich Bookmarks/Highlights in B05; unterstützte Offline-/Replay-Retention in B12 abschließen |
 | B04 Work Facts/Titel | Ein Work; explizite MetadataFacts, Titelprovenienz, Namespaces | Vollständige Medien-/Edition-/Credit-/Locale-Fakten und statische Title-Resolution-/Search-Queries |
 | B05 Music/Reader/AI | Keine Learning-Anforderung mehr; übrige Funktionen bleiben | Artists/Recordings, Reader-Inhalte/Bookmarks/Highlights sowie AI-/Translate-Persistenz vollständig; keine parallelen Roots |
 | B06 Games/File Chain | Game-only und Work/Version/Asset/File-Composite-FKs vorhanden | Genuine Plattform-/Release-/Multidisc-/Hash-Funktionen erhalten; Typ 7 ist jetzt expliziter Game-Byte-Vertrag |
@@ -26,7 +26,7 @@ Inventarkontrollen, keine Abnahmeziele. Kein Eingriff in aktive DBs oder Runtime
 | B12 Operations/Events | Gemeinsame Operations, Leases/Claims und Delivery-Versuche vorhanden | Retry/Cancellation/Restart/Retention sowie benötigte After-Commit-/Outbox-Effekte; keine externe I/O im DB-Tx |
 | B13 Account Groups | Neutrale Gruppen, Mitgliedschaft, UUID und Owner-Paging vorhanden | Gruppen bleiben Policy-Selektoren, keine Rollen oder automatische Rechte; D/E implementiert Verbraucher/UI |
 | B14 Config/Calendar/Discovery | Keine Learning-Einstellungen im Target | Alle übrigen echten Settings/Rules/Schedules/Discovery-Fakten ihrem kanonischen Owner zuordnen; kein EAV |
-| B15 Typed Reads/Indizes | Watchlist/Continue/Groups/Inbox/Auth, Reader-Bookmarks/-Highlights/-Pages und profilgebundene AcquisitionRequest-History sowie Claim/CAS, Auth- und Inbox-Logic statisch; profilautorisierte Reader-Tests + EXPLAIN ergänzt | Weiter fehlende Reader-Content-Delivery-/Playable-/Search-/Arr-Detail-/Jobs-Reads und repräsentative EXPLAIN-/Berechtigungsbelege |
+| B15 Typed Reads/Indizes | 31 getypte statische Queries: Watchlist/Continue/Groups/Inbox/Auth/Provider/Reader/Request-History, Claims und atomare Logic; Continue paged vor Positions-Enrichment, exakter Progress-Snapshot und Completion-Präfix in SQL; 1000er Continue-Paging und parallele Progress-Writes geprüft | Weiter fehlende Reader-Content-Delivery-/Playable-/Search-/Arr-Detail-/Jobs-Reads und repräsentative EXPLAIN-/Berechtigungsbelege |
 | B16 Physische DDL | Nur isolierter PostgreSQL 18; aktuelle Fassung erneut prüfen | Reproduzierbarer frischer Bootstrap, Seeds/FKs/CHECKs und fokussierte Integritäts-/Rollback-/Isolationstests |
 
 ## Verbindliche Grenzen
