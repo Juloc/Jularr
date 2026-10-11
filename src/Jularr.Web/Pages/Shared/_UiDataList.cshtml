@@ -1,0 +1,65 @@
+@model Jularr.Web.Ui.Pages.UiTableView
+@using Jularr.Web.Ui.Pages
+
+@if (Model.Mode == UiTableMode.Cards)
+{
+    <section class="ui-data-cards" aria-label="@Model.Label">
+        @foreach (var card in Model.Cards)
+        {
+            <article class="ui-data-card" id="@card.Anchor">
+                <div class="ui-data-card-cover" aria-hidden="true">
+                    @if (!string.IsNullOrWhiteSpace(card.CoverUrl))
+                    {
+                        <img src="@card.CoverUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                    }
+                </div>
+                <div class="ui-data-card-content">
+                    @if (!string.IsNullOrWhiteSpace(card.Subtitle))
+                    {
+                        <span class="ui-data-card-subtitle">@card.Subtitle</span>
+                    }
+                    <h2>@card.Title</h2>
+                    @if (Model.DetailsPartial is { } details)
+                    {
+                        <partial name="@details" model="@card.Item" />
+                    }
+                </div>
+            </article>
+        }
+    </section>
+}
+else
+{
+    <div class="ui-data-table-scroll">
+        <table class="ui-data-table">
+            <caption class="visually-hidden">@Model.Label</caption>
+            <thead>
+                <tr>
+                    @foreach (var header in Model.Headers)
+                    {
+                        <th scope="col">@header</th>
+                    }
+                    @if (Model.DetailsPartial is not null)
+                    {
+                        <th scope="col">@Model.DetailsHeader</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.Rows)
+                {
+                    <tr id="@row.Anchor">
+                        @foreach (var value in row.Values)
+                        {
+                            <td>@value</td>
+                        }
+                        @if (Model.DetailsPartial is { } details)
+                        {
+                            <td><partial name="@details" model="@row.Item" /></td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
