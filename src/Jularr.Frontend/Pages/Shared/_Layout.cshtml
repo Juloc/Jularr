@@ -1,4 +1,3 @@
-@using System.Globalization
 @inject UiText T
 @{
     var isPreview = ViewData["ShellPreview"] is true;
@@ -6,10 +5,11 @@
     var showShell = (User.Identity?.IsAuthenticated == true || isPreview)
         && (currentPage?.Definition.Shell ?? true);
     var isPlayer = currentPage?.Definition.IsPlayer ?? false;
-    var title = ViewData["Title"] as string ?? (currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey] : T["app.name"]);
+    var title = ViewData["Title"] as string
+        ?? (currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey] : T["app.name"]);
 }
 <!DOCTYPE html>
-<html lang="@CultureInfo.CurrentUICulture.Name" dir="ltr" data-skin="clean" data-mode="system">
+<html lang="@T.Locale" dir="@(T.IsRightToLeft ? "rtl" : "ltr")" data-skin="clean" data-mode="system">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
