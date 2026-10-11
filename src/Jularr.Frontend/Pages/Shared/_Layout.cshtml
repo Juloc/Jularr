@@ -2,8 +2,9 @@
 @inject UiText T
 @{
     var isPreview = ViewData["ShellPreview"] is true;
+    var currentPage = ViewContext.ViewData.Model as JularrPage;
     var showShell = (User.Identity?.IsAuthenticated == true || isPreview)
-        && ViewData["ShowShell"] is not false;
+        && (currentPage?.Definition.Shell ?? true);
     var title = ViewData["Title"] as string ?? T["app.name"];
 }
 <!DOCTYPE html>
