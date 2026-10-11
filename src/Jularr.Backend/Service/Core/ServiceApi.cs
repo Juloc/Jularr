@@ -6,10 +6,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Plex;
 using Jularr.Backend.Service.Core.Localization;
+using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -29,6 +31,8 @@ namespace Jularr.Backend.Service.Core
                 .Where(type => type.IsVisible && !type.IsAbstract && !type.ContainsGenericParameters && typeof(Service).IsAssignableFrom(type))
                 .Distinct().ToArray();
             services.AddSingleton(database);
+            services.TryAddSingleton(TimeProvider.System);
+            services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
             services.AddHttpContextAccessor();
             services.AddAntiforgery();
