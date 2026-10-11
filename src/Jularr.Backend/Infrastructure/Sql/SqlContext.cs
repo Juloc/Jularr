@@ -12,6 +12,7 @@ namespace Jularr.Backend.Infrastructure.Sql
         private NpgsqlConnection? _connection;
         private NpgsqlTransaction? _transaction;
         private SqlAccessMode? _mode;
+        private IsolationLevel? _pendingReadIsolation;
         private bool _finished;
         private long? _actorAccountId;
         private long? _activeProfileId;
@@ -73,6 +74,19 @@ namespace Jularr.Backend.Infrastructure.Sql
             }
         }
 
+        internal void PrepareReadTransaction(IsolationLevel isolationLevel)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_mode is not null || _connection is not null || _transaction is not null || _finished)
+            {
+                throw new InvalidOperationException("A SQL transaction has already been configured.");
+            }
+
+            // A cached read keeps the same lifecycle without opening a database connection.
+            _mode = SqlAccessMode.ReadOnly;
+            _pendingReadIsolation = isolationLevel;
+        }
+
         internal void SetAuthorizedScope(long? actorAccountId, long? activeProfileId)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -106,6 +120,15 @@ namespace Jularr.Backend.Infrastructure.Sql
 
         public async Task CommitAsync(CancellationToken cancellationToken = default)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_pendingReadIsolation is not null)
+            {
+                _pendingReadIsolation = null;
+                _finished = true;
+                return;
+            }
+
             RequireActive();
             await _transaction!.CommitAsync(cancellationToken);
             _finished = true;
@@ -165,6 +188,7 @@ namespace Jularr.Backend.Infrastructure.Sql
             _transaction = null;
             _connection = null;
             _mode = null;
+            _pendingReadIsolation = null;
 
             try
             {
@@ -244,10 +268,37 @@ namespace Jularr.Backend.Infrastructure.Sql
             }
         }
 
+        private async Task<NpgsqlCommand> CreateReadCommandAsync(string sql, object? parameters, CancellationToken cancellationToken)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_pendingReadIsolation is { } isolation)
+            {
+                _pendingReadIsolation = null;
+                await BeginAsync(SqlAccessMode.ReadOnly, isolation, cancellationToken);
+            }
+
+            return CreateCommand(sql, false, parameters);
+        }
+
         private sealed record NoSqlParameters;
 
         public sealed class SqlReadCommands(SqlContext context)
         {
+            public async Task<IReadOnlyList<T>> ReadListAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default)
+            {
+                ArgumentNullException.ThrowIfNull(sql);
+                await using var command = await context.CreateReadCommandAsync(sql.Statement, sql, cancellationToken);
+                await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+                var items = new List<T>();
+
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    items.Add(SqlExecutor.MapRow<T>(reader));
+                }
+
+                return items;
+            }
+
             public Task<object?> ExecuteScalarAsync(SqlStatement sql, CancellationToken cancellationToken = default)
             {
                 ArgumentNullException.ThrowIfNull(sql);
@@ -268,19 +319,19 @@ namespace Jularr.Backend.Infrastructure.Sql
 
             public async Task<object?> ExecuteScalarAsync(string sql, CancellationToken cancellationToken = default)
             {
-                await using var command = context.CreateCommand(sql, false);
+                await using var command = await context.CreateReadCommandAsync(sql, null, cancellationToken);
                 return await command.ExecuteScalarAsync(cancellationToken);
             }
 
             public async Task<object?> ExecuteScalarAsync(string sql, object parameters, CancellationToken cancellationToken = default)
             {
-                await using var command = context.CreateCommand(sql, false, parameters);
+                await using var command = await context.CreateReadCommandAsync(sql, parameters, cancellationToken);
                 return await command.ExecuteScalarAsync(cancellationToken);
             }
 
             public async Task<T?> ReadOptionalAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default) where T : class
             {
-                await using var command = context.CreateCommand(sql, false, parameters);
+                await using var command = await context.CreateReadCommandAsync(sql, parameters, cancellationToken);
                 await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
 
                 if (!await reader.ReadAsync(cancellationToken))
@@ -306,7 +357,7 @@ namespace Jularr.Backend.Infrastructure.Sql
             public async Task<PageResult<T>> ReadPageAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
             {
                 var request = SqlExecutor.GetPageRequest(parameters);
-                await using var command = context.CreateCommand(sql, false, parameters);
+                await using var command = await context.CreateReadCommandAsync(sql, parameters, cancellationToken);
                 await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
                 var items = new List<T>();
 

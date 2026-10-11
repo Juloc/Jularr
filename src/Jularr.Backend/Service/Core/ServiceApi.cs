@@ -6,9 +6,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Plex;
+using Jularr.Backend.Service.Core.Localization;
+using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -28,6 +31,8 @@ namespace Jularr.Backend.Service.Core
                 .Where(type => type.IsVisible && !type.IsAbstract && !type.ContainsGenericParameters && typeof(Service).IsAssignableFrom(type))
                 .Distinct().ToArray();
             services.AddSingleton(database);
+            services.TryAddSingleton(TimeProvider.System);
+            services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
             services.AddHttpContextAccessor();
             services.AddAntiforgery();
@@ -73,7 +78,13 @@ namespace Jularr.Backend.Service.Core
                         QueueLimit = 0
                     }));
                 options.OnRejected = (context, token) => new ValueTask(
-                    Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "rate_limit_exceeded")
+                    Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "rate_limit_exceeded",
+                        extensions: new Dictionary<string, object?>
+                        {
+                            ["code"] = "rate_limit_exceeded",
+                            ["resourceKey"] = ServiceErrorResources.GetKey("rate_limit_exceeded"),
+                            ["traceId"] = context.HttpContext.TraceIdentifier
+                        })
                         .ExecuteAsync(context.HttpContext));
             });
             services.AddScoped<ServiceRuntime>();

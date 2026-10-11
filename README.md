@@ -90,6 +90,89 @@ abgeglichen; URLs aus Plex-Ressourcen werden nicht als Ziel übernommen.
 Verknüpfungen werden ausschließlich anhand Provider + bestätigter externer ID gefunden,
 niemals anhand einer gleichen E-Mail. Registrierung erstellt keinen ersten Owner.
 
+## Gemeinsamer PostgreSQL-Textkatalog
+
+Nach `AddJularrServices(...)` registriert der Host einmal alle englischen Frontend-Texte.
+Referenz: [Frontend-Skeletons #960](https://github.com/Juloc/Jularr/pull/960).
+`englishTexts` unten ist die vereinigte Schlüssel/Englisch-Liste aus dessen
+ConsumerSources, AdminSources und englischen Shell-/Login-Texten, kein zusätzlicher Store.
+
+```csharp
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Service.Core.Localization;
+
+builder.Services.AddJularrLocalization(
+    englishTexts.Select(entry => new UiTextResource(entry.Key, entry.Value)));
+```
+
+Backend-Fehlerressourcen werden automatisch ergänzt. Widersprüchliches Englisch für
+denselben Schlüssel wird abgelehnt. Beim Hoststart werden Ressourcen idempotent
+synchronisiert, nie das Schema installiert/migriert. Neue Texte brauchen keine SQL-Importe;
+entfernte Deklarationen werden nicht gelöscht. Das frische Schema muss ausdrücklich
+installiert sein; bestehende aktive Datenbanken werden während des Clean Cut nicht verändert.
+
+Razor injiziert `ReadUiTextsV1` aus `Jularr.Backend.Service.Public.Localization.V1`,
+lädt einmal pro Request und verwendet danach synchrone String-Lookups:
+
+```csharp
+using Jularr.Backend.Data.Public.Localization.V1;
+
+var texts = await readUiTexts.ExecuteAsync<ReadUiTextsResultV1>(
+    new ReadUiTextsParametersV1(profile.UiLocaleId), cancellationToken);
+var heading = texts["discover.title"];
+```
+
+`ReadUiTextsResultV1` enthält `UiLocaleId`, `Locale`,
+`IsRightToLeft`, die opake `Version` und `Texts`. Fehlende Schlüssel liefern ihren
+Schlüssel; die normalen Strings müssen wie sonst durch Razor HTML-kodiert werden.
+Der Host wählt die anonyme Kultur, z. B. anhand Accept-Language. `ReadUiLocalesV1`
+liefert die aktivierten Sprachkennungen und IDs für diese Auswahl und die Sprachliste:
+`await readUiLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: cancellationToken)`.
+Auch anonyme Textaufrufe verwenden die gewählte ID; für Englisch dessen Katalog-ID,
+keine hart codierte `1`. Profile bleiben ID-basiert.
+Das Request-Bundle wird auch im Layout wiederverwendet; keine HTTP-/JS-Sprachanfragen.
+
+Fallback je Schlüssel: exakte aktivierte Sprache → aktivierte Elternsprache →
+englischer DB-Originaltext. Generated/Reviewed brauchen aktuelle MessageVersion;
+Outdated/Missing werden übersprungen. Manual bleibt auch bei verändertem Original
+verwendbar und wird nie automatisch überschrieben. Fehlende Übersetzungszeilen sind Missing.
+Der sprachweise Cache ist auf ungefähr 4 MiB begrenzt und enthält keine Beschreibungen.
+Sprachpakete und Sprachliste werden höchstens 30 Sekunden wiederverwendet und dann
+beim nächsten Bedarf neu geladen. Warm Requests öffnen keine DB-Verbindung, laufen
+aber durch denselben Public-Gate und dieselbe Feldvalidierung. Die gemeinsame
+Read-Transaction wird erst beim ersten SQL-Aufruf geöffnet; Writes bleiben unverändert.
+Nach Änderungen gilt diese maximale Cache-Verzögerung.
+
+Die statische SELECT-Abfrage steht direkt im Public-Service auf `sql.Statement`.
+PostgreSQL bestimmt die BCP-47-Elterncodes durch sukzessives Entfernen des letzten
+Tag-Segments, priorisiert gültige Übersetzungen mit `DISTINCT ON` und verwendet
+`COALESCE` für den englischen Originaltext. `jsonb_object_agg` liefert das komplette
+aufgelöste Paket in einer Abfrage; keine C#-Fallback-Schleifen oder inneren Connections.
+Externe Clients nutzen dieselben Services über `GET /api/v1/localization/locales`
+und `GET /api/v1/localization/texts/{uiLocaleId:long}`. Razor macht dafür keinen HTTP-Aufruf.
+
+KI-Kontext liegt nur in `UiTranslationMessages.Description`. Neue Schlüssel starten
+ohne Beschreibung; die Synchronisierung erfindet und überschreibt sie nicht.
+`Logic/Localization` bereitet spätere Admin-Bearbeitung mit Versionsschutz und dem
+kanonischen Translation-Writer vor. Benannte Platzhalter wie `{name}` werden geprüft.
+Diese Writer sind keine API-Endpunkte und ersetzen keine Admin-Berechtigungsprüfung.
+KI-Anforderung, Kontextpflege-Oberfläche und Admin-Services sind noch nicht implementiert.
+Normale Seitenaufrufe und Hoststart führen keine KI-Übersetzung aus.
+
+ProblemDetails enthält `code`, `resourceKey`, `traceId` und bei Feldfehlern `errors`
+(Codes) plus `errorResourceKeys`. Der gemeinsame Katalog enthält `errors.*`; es gibt
+keine lokalisierte Exception oder zweite Fehlerübersetzung. Für direkte Razor-Aufrufe
+liefert `ServiceErrorResources.GetKey(code)` denselben Schlüssel.
+
+Offline-Vorbereitung: `Texts` ist ein vollständiges aufgelöstes Sprachpaket, nicht nur
+eine Seite. `Version` berücksichtigt alle Fallback-Schichten. Ein späterer Offline-Sync
+kann pro lokalem Profile komplette Pakete speichern und gleiche Sprachen deduplizieren.
+Export, Offline-Speicher und Synchronisierung sind noch nicht implementiert.
+
+Frontend-Dateien bleiben unverändert. Der Frontend-Verbraucher muss `UiText`, die
+temporären Frontend-Übersetzungen und hart codierten Kulturen auf diese Registrierung
+und direkte Public-Service-Aufrufe umstellen, nicht als zweites Übersetzungssystem weiterbetreiben.
+
 ## Prüfung und offene Integration
 
 `dotnet build src/Jularr.Backend/Jularr.Backend.csproj` baut nur die Bibliothek.

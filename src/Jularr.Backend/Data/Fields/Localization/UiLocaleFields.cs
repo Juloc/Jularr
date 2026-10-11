@@ -10,5 +10,6 @@ namespace Jularr.Backend.Data.Fields.Localization
         public static readonly StringField Name = new();
         public static readonly BoolField IsEnabled = new();
         public static readonly BoolField IsRightToLeft = new();
+        public static readonly LongField CatalogVersion = new() { Minimum = 1 };
     }
 }

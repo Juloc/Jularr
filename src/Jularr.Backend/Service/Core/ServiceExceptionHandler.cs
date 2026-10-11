@@ -1,5 +1,6 @@
 using System.Security;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Service.Core.Localization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
@@ -28,10 +29,19 @@ namespace Jularr.Backend.Service.Core
                 ArgumentException => (StatusCodes.Status400BadRequest, "invalid_request"),
                 _ => (StatusCodes.Status500InternalServerError, "internal_error")
             };
-            var extensions = new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier };
+            var extensions = new Dictionary<string, object?>
+            {
+                ["code"] = title,
+                ["resourceKey"] = ServiceErrorResources.GetKey(title),
+                ["traceId"] = context.TraceIdentifier
+            };
             if (exception is DataValidationException validation)
             {
                 extensions["errors"] = new Dictionary<string, string[]> { [validation.Field] = [validation.Code] };
+                extensions["errorResourceKeys"] = new Dictionary<string, string[]>
+                {
+                    [validation.Field] = [ServiceErrorResources.GetKey("validation." + validation.Code)]
+                };
             }
 
             await Results.Problem(statusCode: status, title: title, extensions: extensions).ExecuteAsync(context);

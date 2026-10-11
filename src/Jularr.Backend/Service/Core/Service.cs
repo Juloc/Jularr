@@ -127,7 +127,14 @@ namespace Jularr.Backend.Service.Core
             if (needsTransaction)
             {
                 var mode = definition.OperationType == ServiceOperationType.Read ? SqlAccessMode.ReadOnly : SqlAccessMode.ReadWrite;
-                await sql.BeginAsync(mode, isolation ?? IsolationLevel.ReadCommitted, cancellationToken);
+                if (mode == SqlAccessMode.ReadOnly)
+                {
+                    sql.PrepareReadTransaction(isolation ?? IsolationLevel.ReadCommitted);
+                }
+                else
+                {
+                    await sql.BeginAsync(mode, isolation ?? IsolationLevel.ReadCommitted, cancellationToken);
+                }
             }
 
             var canMutate = definition.OperationType != ServiceOperationType.Read;
@@ -240,6 +247,9 @@ namespace Jularr.Backend.Service.Core
         protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
 
         public Task<IServiceOutput> ExecuteAsync(TParameters parameters = default!, CancellationToken cancellationToken = default) => base.ExecuteAsync(parameters, default, cancellationToken);
+
+        public Task<TOutput> ExecuteAsync<TOutput>(TParameters parameters = default!, CancellationToken cancellationToken = default) where TOutput : IServiceOutput
+            => base.ExecuteAsync<TOutput>(parameters, default, cancellationToken);
     }
 
     public abstract class UserService<TParameters> : UserService<TParameters, NoData>
