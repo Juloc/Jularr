@@ -191,9 +191,32 @@ BEGIN
             ('ReaderWritingModeTypes', 1, 'horizontal_tb'),
             ('ReaderWritingModeTypes', 2, 'vertical_rl'),
             ('ReaderWritingModeTypes', 3, 'vertical_lr'),
+            ('MusicAlbumTypes', 1, 'album'),
+            ('MusicAlbumTypes', 2, 'ep'),
+            ('MusicAlbumTypes', 3, 'single'),
+            ('MusicAlbumTypes', 4, 'compilation'),
+            ('MusicAlbumTypes', 5, 'live'),
+            ('MusicAlbumTypes', 6, 'soundtrack'),
+            ('MusicAlbumTypes', 7, 'other'),
+            ('MonitoringRelationTypes', 1, 'person'),
+            ('MonitoringRelationTypes', 2, 'studio'),
+            ('MonitoringRelationTypes', 3, 'collection'),
+            ('MonitoringRelationTypes', 4, 'artist'),
             ('WorkMediaClassificationTypes', 1, 'anime')
     ),
     actual(target_table, id, key) AS (
+        SELECT
+            'MusicAlbumTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "MusicAlbumTypes" AS catalog
+        UNION ALL
+        SELECT
+            'MonitoringRelationTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "MonitoringRelationTypes" AS catalog
+        UNION ALL
         SELECT
             'ReaderLayoutTypes',
             catalog."Id",

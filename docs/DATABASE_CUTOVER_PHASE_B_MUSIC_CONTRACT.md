@@ -1,4 +1,4 @@
-# Phase B — Music-Identität und wiederverwendbare Recordings
+# Phase B — Music-Identität, Releases und Track-Platzierungen
 
 Isolierter Zielvertrag, keine Runtime-Portierung. Music-Alben bleiben Works,
 Track-Platzierungen WorkTracks, Dateien MediaAssets/StoredFiles. Keine MusicWorks,
@@ -26,20 +26,35 @@ Recording-IDs bleiben externe Strings, nicht unsere PublicId. Pro Objekt und
 Provider-Namespace existiert genau eine aktuelle Zuordnung; eine Korrektur wird
 vom autorisierten Metadata-Logic-Owner explizit geschrieben. Keine Namensheuristik.
 
-## Recording und Reads
+## Album, Release und Recording
 
-Ein Recording kann in mehreren Album-Track-Platzierungen vorkommen. Die
-WorkTrackRecordings-Beziehung ist optional durch Abwesenheit; ein unaufgelöster
-Track erhält kein erfundenes Recording. Track-Titel bleiben Placement-Fakten,
-Recording-Titel und DurationMs gehören zum Recording. Dateien werden nicht hier
-gespeichert. Referenzierte Identitäten/Recordings werden nicht kaskadierend gelöscht.
+MusicAlbums erweitert ausschließlich Music-Works (Typ 6), ohne zweiten Work-Root.
+Sieben neue feste Albumtyp-Codes unterscheiden Album, EP, Single, Compilation,
+Live, Soundtrack und Other. Veröffentlichungsdatum bleibt in WorkMetadataFacts;
+ReleaseGroup-Identität in WorkExternalIdentities. Ein konkretes Release ist eine
+WorkEdition mit eigener EditionExternalIdentity, kein zweites Album. Die gewählte
+TrackListWorkEditionId muss zum selben Work gehören.
 
-[Drei statische Service-Reads](DATABASE_CUTOVER_PHASE_B_MUSIC_QUERIES_DRAFT.sql)
+MusicTrackPlacements erweitert einen WorkTrack um genaue Release-/Disc-/Track-
+Zuordnung, optionale Placement-Dauer und optionales MusicRecordingId. Composite-
+FKs sichern denselben Work für Track und Release; Edition/Disc/Track ist eindeutig.
+Ein Recording kann auf mehreren Alben oder Releases vorkommen. Unaufgelöste
+Recordings bleiben NULL; keine erfundene Provideridentität. Track-Titel bleiben
+in WorkTracks, Recording-Titel und Recording-Dauer in MusicRecordings. Die
+unvollständige alte Recording-Brücke ist entfernt, nicht als Fallback behalten.
+Referenzierte Identitäten/Recordings werden nicht kaskadierend gelöscht.
+
+Physische Zuordnung zu MediaAssets/StoredFiles und Probe-/Cache-Lifecycle bleiben
+in B11 offen. Diese Faktenprüfung ist kein vollständiger Import-/Playback-Nachweis.
+
+## Reads und Monitoring
+
+[Fünf statische Service-Reads](DATABASE_CUTOVER_PHASE_B_MUSIC_QUERIES_DRAFT.sql)
 verwenden aktuelle enabled Accounts und Profile-Membership, UUID-Adressen und
 explizit gebundene long/UUID/int-Parameter. Die Listen verwenden Page 1, Size 25,
 maximal 100, checked Offset maximal 100000 und eindeutige Sortierung. Data validiert
 PageRequest vor SQL; PostgreSQL lehnt negative OFFSET zusätzlich explizit ab.
-Recording-Roots werden vor Enrichment paginiert. Kein GET schreibt oder ruft
+Recording-/Album-/Placement-Roots werden vor Enrichment paginiert. Kein GET schreibt oder ruft
 MusicBrainz, NAS oder einen Importer auf. Music-Modul-/Capability-Gates werden im
 kanonischen Service in D portiert; keine aus AddedByProfileId erfundene Privatbibliothek.
 
@@ -50,6 +65,17 @@ Sharing/Entzug/Disable, stabile Tie-Breaker und 1000er Paging. EXPLAIN belegt
 Artist-Sortindex, einmalige Autorisierung, Recording-Credit-Index vor LIMIT und
 nur die ausgewählten Recording-PK-Lookups.
 
-B05 bleibt offen für Album-/Release-/Disc-Fakten, Artist-Monitoring und AI/Translate.
-Monitoring/Requests nutzen in B08 den gemeinsamen Owner; keine Artist-eigene Queue.
+Der [gemeinsame Monitoring-Vertrag](DATABASE_CUTOVER_PHASE_B_MONITORING_CONTRACT.md)
+definiert Artist All/None/Future als kurze atomare Commands mit Operations-Beleg.
+Keine gespeicherte Future-Mode, kein Music-eigenes Wanted oder zweiter Scheduler.
+Lifecycle-/Placement-/Paralleltests prüfen All/None/Future, später entdeckte Alben,
+identischen Retry, geändertes Payload, Entzug/Disable, Rollback, vier Relation-
+Quellen, explizite Off-Priorität, erhaltene Track-Entscheidungen und Cross-Work-
+Rejection. Dieselbe Person kann mehrere konkrete Crew-Rollen auf einer Edition
+haben; exakte doppelte Credits einschließlich NULL-Rolle bleiben verboten.
+EXPLAIN auf 1000 Alben/Tracks belegt LIMIT vor den Detail-Lookups. Drei wirklich
+überlappende Sessions prüfen Command/Retry/Metadata unter demselben Artist-Mutex.
+
+B05 bleibt offen für AI/Translate. B08 behält allgemeine Monitoring-Commands,
+Requests und Wanted-/Import-Reconciliation; B12 Operations-Retention/After-Commit.
 Dieser Nachweis ist keine vollständige Music- oder Gate-B-Abnahme.

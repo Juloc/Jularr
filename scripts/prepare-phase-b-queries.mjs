@@ -119,7 +119,9 @@ const readerAnnotationQueries = [
 const musicQueries = [
     ['music_artists', 'Service ARTISTS:', 'Service ARTIST:', 'bigint,bigint,integer,bigint', ['ActorAccountId', 'ActiveProfileId', 'PageSize', 'Offset']],
     ['music_artist', 'Service ARTIST:', 'Service RECORDINGS:', 'bigint,bigint,uuid', ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId']],
-    ['music_recordings', 'Service RECORDINGS:', null, 'bigint,bigint,uuid,integer,bigint', ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId', 'PageSize', 'Offset']]
+    ['music_recordings', 'Service RECORDINGS:', 'Service ALBUMS:', 'bigint,bigint,uuid,integer,bigint', ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId', 'PageSize', 'Offset']],
+    ['music_albums', 'Service ALBUMS:', 'Service TRACKS:', 'bigint,bigint,uuid,integer,bigint', ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId', 'PageSize', 'Offset']],
+    ['music_tracks', 'Service TRACKS:', null, 'bigint,bigint,uuid,integer,bigint', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'PageSize', 'Offset']]
 ].map(([name, start, end, types, parameters]) => ({
     name,
     file: 'DATABASE_CUTOVER_PHASE_B_MUSIC_QUERIES_DRAFT.sql',
@@ -129,7 +131,28 @@ const musicQueries = [
     parameters
 }));
 
+const monitoringQueries = [
+    ['monitoring_begin_artist', 'Logic BEGIN_ARTIST:', 'Logic RESET_ARTIST:', 'bigint,bigint,uuid,uuid,boolean,boolean,timestamptz',
+        ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId', 'CommandPublicId', 'IsMonitored', 'OnlyFuture', 'Now']],
+    ['monitoring_reset_artist', 'Logic RESET_ARTIST:', 'Logic SOURCE_ON:', 'bigint,bigint,bigint', ['ActorAccountId', 'ActiveProfileId', 'OperationId']],
+    ['monitoring_source_on', 'Logic SOURCE_ON:', 'Logic SOURCE_OFF:', 'bigint,bigint,bigint,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'OperationId', 'Now']],
+    ['monitoring_source_off', 'Logic SOURCE_OFF:', 'Logic FUTURE_ARTIST:', 'bigint,bigint,bigint', ['ActorAccountId', 'ActiveProfileId', 'OperationId']],
+    ['monitoring_future_artist', 'Logic FUTURE_ARTIST:', 'Logic COMPLETE_ARTIST:', 'bigint,bigint,bigint', ['ActorAccountId', 'ActiveProfileId', 'OperationId']],
+    ['monitoring_complete_artist', 'Logic COMPLETE_ARTIST:', 'Service RECEIPT:', 'bigint,bigint,bigint,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'OperationId', 'Now']],
+    ['monitoring_receipt', 'Service RECEIPT:', 'Service EFFECTIVE:', 'bigint,bigint,uuid,uuid,boolean,boolean',
+        ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId', 'CommandPublicId', 'IsMonitored', 'OnlyFuture']],
+    ['monitoring_effective', 'Service EFFECTIVE:', null, 'bigint,bigint,uuid[]', ['ActorAccountId', 'ActiveProfileId', 'WorkPublicIds']]
+].map(([name, start, end, types, parameters]) => ({
+    name,
+    file: 'DATABASE_CUTOVER_PHASE_B_MONITORING_QUERIES_DRAFT.sql',
+    start: `-- ${start}`,
+    end: end ? `-- ${end}` : null,
+    declaration: `PREPARE phase_b_${name}(${types}) AS\n`,
+    parameters
+}));
+
 for (const query of [
+    ...monitoringQueries,
     ...musicQueries,
     ...authQueries,
     ...readerContentQueries,

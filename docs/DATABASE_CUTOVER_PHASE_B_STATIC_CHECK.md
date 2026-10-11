@@ -4,7 +4,7 @@ Aktueller Owner-Auftrag vom 10.10.2026: Learning wird zurückgestellt.
 Der aktuelle DDL-Satz ist 01, 02, 03, 04, 06, 07, 11, 12, 14, 15, 16, 17, 18, 19. Nummernlücken sind
 bewusst entfernte Learning-Teile, keine optionalen Baseline-Abhängigkeiten.
 
-Statischer Stand: 153 Target-Tabellen, 38 Type-Kataloge mit 187 expliziten
+Statischer Stand: 157 Target-Tabellen, 40 Type-Kataloge mit 198 expliziten
 Byte-Vertrags-/Seedwerten, 26 getrennte öffentliche Ressourcen-UUIDs.
 Interne Ressourcen-PKs/FKs/Joins bleiben bigint. Der Verifier prüft die
 vollständige Übereinstimmung von C# byte, Seed-Manifest und statischem SQL.
@@ -18,7 +18,7 @@ Frühe Zahlen/CI-Belege sind historische Stände. Die aktuelle Fassung wurde
 frisch auf wegwerfbarem PostgreSQL 18.6 geprüft: vierzehn DDL-Dateien sowie die
 betroffenen Katalog-, Event-, Inbox-, Lifecycle- und Negativ-Suites. Der Inbox-
 READ nutzt Profile-/Account-LastOccurredAt-Indizes vor Paging; zwei unabhängige
-Sessions prüfen Recurrence, Replay und Commit-Integrität. Neue Tabellenzahl 153.
+Sessions prüfen Recurrence, Replay und Commit-Integrität. Aktuelle Tabellenzahl 157.
 Kein aktiver DB-Eingriff und keine vollständige Anwendungssuite; CI prüft den
 jeweiligen PR-Head zusätzlich.
 
@@ -59,3 +59,11 @@ Ordinal-Indexfeed nach einmaliger Scope-Auflösung. Keine Runtime-Parser-Abnahme
 Statische Prüfungen ersetzen weder PostgreSQL-Tests noch Autorisierung,
 repräsentative Query-/Indexpläne oder die spätere EF-/Runtime-Abnahme.
 Die [offenen Gates](DATABASE_CUTOVER_PHASE_B_DECISIONS.md) bleiben explizit.
+
+Music ergänzt sieben Albumtypen und vier Relationtypen, exakte Release-/Disc-
+Placements, nullable Recordings und gemeinsamen Artist-Follow. Fünf Music-Reads
+und acht Monitoring-Statements sind Teil der 56 getypten Queries. Frischer
+Bootstrap und alle 32 SQL-/Parallel-Suites sind lokal grün. LIMIT liegt gemessen
+vor den Album-/Track-Details; ein realer Command/Retry/Metadata-Race schützt
+später entdeckte Alben. Tabellen-/Spalten-/Typ-/FK-Ziele des vollständigen
+157-Zeilen-Manifests stimmen mit PostgreSQL überein. Kein Runtime-/Gate-B-GO.

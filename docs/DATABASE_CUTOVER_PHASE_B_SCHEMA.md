@@ -31,8 +31,8 @@ Vierzehn DDL-Dateien, in dieser Reihenfolge:
 Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
 nicht als leere oder optionale Baseline-Dateien behalten.
 
-Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 153
-Target-Tabellen. Die 38 bestehenden Type-Kataloge haben 187 feste Codes in
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 157
+Target-Tabellen. Die 40 bestehenden Type-Kataloge haben 198 feste Codes in
 [C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
 [Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
 Der Verifier lehnt undefinierte Kataloge ab. Keine Übernahme alter int-Enumcodes.

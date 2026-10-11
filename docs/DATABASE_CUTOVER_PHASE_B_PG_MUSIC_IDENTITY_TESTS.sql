@@ -33,13 +33,16 @@ INSERT INTO "MusicRecordingArtists" ("MusicRecordingId", "MusicArtistId", "Credi
 VALUES (:recording_id, :artist_id, 'Credited name');
 INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (6, 'Music identity album A') RETURNING "Id" AS work_a \gset
 INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (6, 'Music identity album B') RETURNING "Id" AS work_b \gset
+INSERT INTO "MusicAlbums" ("WorkId", "MusicAlbumTypeId") VALUES (:work_a, 1), (:work_b, 1);
 INSERT INTO "WorkMusicArtists" ("WorkId", "MusicArtistId") VALUES (:work_a, :artist_id), (:work_b, :artist_id);
 INSERT INTO "WorkTracks" ("WorkId", "OrderIndex", "DisplayName") VALUES (:work_a, 0, 'Placement A') RETURNING "Id" AS track_a \gset
 INSERT INTO "WorkTracks" ("WorkId", "OrderIndex", "DisplayName") VALUES (:work_b, 0, 'Placement B') RETURNING "Id" AS track_b \gset
-INSERT INTO "WorkTrackRecordings" ("WorkTrackId", "MusicRecordingId") VALUES (:track_a, :recording_id), (:track_b, :recording_id);
 INSERT INTO "WorkEditions" ("WorkId", "Name") VALUES (:work_a, 'Music credits') RETURNING "Id" AS edition_id \gset
+INSERT INTO "WorkEditions" ("WorkId", "Name") VALUES (:work_b, 'Music credits B') RETURNING "Id" AS edition_b \gset
+INSERT INTO "MusicTrackPlacements" ("WorkTrackId", "WorkId", "WorkEditionId", "DiscNumber", "TrackNumber", "MusicRecordingId")
+VALUES (:track_a, :work_a, :edition_id, 1, 1, :recording_id), (:track_b, :work_b, :edition_b, 1, 1, :recording_id);
 INSERT INTO "WorkCredits" ("WorkEditionId", "PersonId", "WorkCreditRoleTypeId") VALUES (:edition_id, :artist_id, 2);
-SELECT 1 / CASE WHEN (SELECT count(*) FROM "WorkTrackRecordings" WHERE "MusicRecordingId" = :recording_id) = 2 THEN 1 ELSE 0 END;
+SELECT 1 / CASE WHEN (SELECT count(*) FROM "MusicTrackPlacements" WHERE "MusicRecordingId" = :recording_id) = 2 THEN 1 ELSE 0 END;
 EXECUTE phase_b_music_artist(:actor_id, :profile_id, :'artist_public') \gset
 SELECT 1 / CASE WHEN :'ArtistPublicId'::uuid = :'artist_public'::uuid AND :'DisplayName' = 'Artist''s Ensemble' THEN 1 ELSE 0 END;
 EXECUTE phase_b_music_recordings(:actor_id, :profile_id, :'artist_public', 25, 0) \gset
@@ -200,7 +203,7 @@ BEGIN
         RAISE EXCEPTION 'Recording with placements deleted';
     EXCEPTION WHEN foreign_key_violation OR restrict_violation THEN
         GET STACKED DIAGNOSTICS rejected = CONSTRAINT_NAME;
-        IF rejected <> 'FK_WorkTrackRecordings_MusicRecordings' THEN RAISE; END IF;
+        IF rejected <> 'FK_MusicTrackPlacements_Recordings' THEN RAISE; END IF;
     END;
 END $music_identity$;
 SAVEPOINT music_rollback;

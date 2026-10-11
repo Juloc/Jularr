@@ -119,6 +119,7 @@ CREATE TABLE "Collections" (
     "Name" text NOT NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_Collections" PRIMARY KEY ("Id"),
+    CONSTRAINT "UX_Collections_Id_ProfileId" UNIQUE ("Id", "ProfileId"),
     CONSTRAINT "FK_Collections_Profiles" FOREIGN KEY ("ProfileId") REFERENCES "Profiles" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "CK_Collections_Name" CHECK (length(btrim("Name")) > 0)
 );
@@ -132,6 +133,8 @@ CREATE TABLE "CollectionWorks" (
     CONSTRAINT "FK_CollectionWorks_Collections" FOREIGN KEY ("CollectionId") REFERENCES "Collections" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_CollectionWorks_Works" FOREIGN KEY ("WorkId") REFERENCES "Works" ("Id") ON DELETE RESTRICT
 );
+
+CREATE INDEX "IX_CollectionWorks_Work" ON "CollectionWorks" ("WorkId", "CollectionId");
 
 CREATE TABLE "ProfileRatings" (
     "ProfileId" bigint NOT NULL,

@@ -20,8 +20,8 @@ BEGIN
         AND key.atttypid = 'text'::regtype
         AND key.attnotnull;
 
-    IF catalog_count <> 38 THEN
-        RAISE EXCEPTION 'Expected 38 current draft type catalogs, found %', catalog_count;
+    IF catalog_count <> 40 THEN
+        RAISE EXCEPTION 'Expected 40 current draft type catalogs, found %', catalog_count;
     END IF;
 
     IF EXISTS (

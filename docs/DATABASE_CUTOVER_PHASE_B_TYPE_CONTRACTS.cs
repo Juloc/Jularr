@@ -334,6 +334,25 @@ public enum WorkFactType : byte
     ProductionCountries = 9
 }
 
+public enum MusicAlbumType : byte
+{
+    Album = 1,
+    Ep = 2,
+    Single = 3,
+    Compilation = 4,
+    Live = 5,
+    Soundtrack = 6,
+    Other = 7
+}
+
+public enum MonitoringRelationType : byte
+{
+    Person = 1,
+    Studio = 2,
+    Collection = 3,
+    Artist = 4
+}
+
 public enum WorkMediaClassification : byte
 {
     Anime = 1
