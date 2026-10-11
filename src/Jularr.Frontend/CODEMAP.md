@@ -29,9 +29,13 @@ Shared conventions and Backend ownership:
   `Div`, `H1`, `Text`, `Button` and related small primitives.
 - [Components](Framework/Components): component-owned HTML for typed tables,
   navigation, panels, master/detail, tabs, settings, forms and Player.
-- [Discover.cs](Framework/Components/Discover.cs): capability-driven type bar,
-  provider-supported browse views and truthful per-type shelves; requires
-  an authorized instance/profile discovery read, never a static module list.
+- [NavigationTabs.cs](Framework/Components/NavigationTabs.cs):
+  reusable, localized accessible navigation tabs driven by supplied links.
+- [MediaShelf.cs](Framework/Components/MediaShelf.cs):
+  reusable media shelf with truthful title, optional browse link and real cards.
+- [Discover/Index.cshtml.cs](Pages/Index.cshtml.cs): **owns the page composition**
+  (enabled media-type navigation, browse navigation, Hero, Continue and
+  type-grouped shelves); awaits the authorized instance/profile discovery read.
 - [BaseField.cs](Framework/BaseField.cs),
   [Form.cs](Framework/Components/Form.cs): typed backend DataField metadata
   and its display-only form contract. No invented save operation.

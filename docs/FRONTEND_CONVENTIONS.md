@@ -44,6 +44,14 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - A page owns its independent `.cshtml.cs` definition and thin `.cshtml`
   entry. Reuse `Table<T>`, `Form<T>`, `MasterDetail`, menus, media cards
   and other domain-neutral components rather than copying UI code.
+- **Pages compose components; components never contain the complete screen.**
+  Page-specific information hierarchy, media-type ordering, browse-mode choice,
+  conditional Hero/Continue placement and screen-specific state belong in the
+  owning PageModel. Reusable, small pieces such as `NavigationTabs`,
+  `MediaShelf`, `MediaCard`, `Table<T>` and `Form<T>` own only their
+  presentation and interaction contract. Do not create feature-sized
+  `Framework/Components/Discover.cs`, `Requests.cs`, etc. to hide a page.
+  Small page-only helper records can remain beside the PageModel.
 - Real form fields derive required/type/length/range metadata from Backend
   `BaseData`/`DataField`; missing select options or save procedures
   are not guessed. Tables need real typed data and authorized reads for
