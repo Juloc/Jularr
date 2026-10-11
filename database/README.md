@@ -6,6 +6,7 @@ embedded as `Jularr.Database.Account.sql` for isolated tests. The host never app
 Included tables:
 
 - Accounts, AccountRoleTypes, Profiles, AccountProfiles and UiLocales.
+- UiTranslationMessages, UiTranslations and UiTranslationStatusTypes share UiLocales.
 - AccountPasswords, AccountPasskeys, AccountTotpFactors and AccountRecoveryCodes.
 - Providers, AccountExternalLogins and AccountExternalAuthFlows.
 - AccountSessions, AccountAuthChallenges and AuthChallengePurposeTypes.
@@ -19,13 +20,21 @@ WebAuthn Aaguid is protocol metadata, not an entity or session identifier.
 
 Every column has a canonical field in Data/Fields, grouped by Account, Profile,
 Session, Provider or Localization. Enums live separately in Data/Enums by owner.
-Role and challenge-purpose enum values match
+Role, challenge-purpose and translation-status enum values match
 the smallint seeds. Fields describe value types and limits, not tables or SQL.
 Cross-field rules and relationships are enforced by schema constraints and, when
 implemented, Logic. Email is unique/case-insensitive; display names are non-unique.
 There is no UserName, NormalizedUserName or CanManage compatibility column.
 
 The baseline seeds the Plex provider, while runtime Plex features default to off.
+Localization registration synchronizes the English locale and resource declarations
+at host startup, never the schema. Message descriptions belong only to PostgreSQL
+and start as null until explicitly supplied. Source synchronization never writes
+descriptions or translated text. Source/context changes increment message versions,
+mark generated/reviewed translations outdated and increment locale catalog revisions;
+manual translations are preserved. Translation saves increment the affected locale's
+revision. Future administrator services must use the canonical Logic writers.
+No translation generation, migration or active database installation happens implicitly.
 Public login verifies password hashes and issues hashed-secret sessions. Public
 registration creates disabled requests; Plex attempts use expiring, browser-bound,
 single-use challenges with protected device keys. Cookie middleware validates the

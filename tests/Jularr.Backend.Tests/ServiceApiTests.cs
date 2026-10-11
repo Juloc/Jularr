@@ -47,7 +47,11 @@ namespace Jularr.Backend.Tests
 
             using var invalid = await client.PostAsJsonAsync("/api/test/" + id, new EchoData(" "));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
-            Assert.IsTrue((await invalid.Content.ReadAsStringAsync()).Contains("invalid_data", StringComparison.Ordinal));
+            using var error = System.Text.Json.JsonDocument.Parse(await invalid.Content.ReadAsStringAsync());
+            Assert.AreEqual("invalid_data", error.RootElement.GetProperty("code").GetString());
+            Assert.AreEqual("errors.invalid_data", error.RootElement.GetProperty("resourceKey").GetString());
+            Assert.AreEqual("errors.validation.required", error.RootElement.GetProperty("errorResourceKeys")
+                .GetProperty("Value")[0].GetString());
             using var failed = await client.PostAsJsonAsync("/api/test/" + id, new EchoData("fail"));
             Assert.AreEqual(HttpStatusCode.InternalServerError, failed.StatusCode);
             Assert.IsFalse((await failed.Content.ReadAsStringAsync()).Contains("private error", StringComparison.Ordinal));

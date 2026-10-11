@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Enums.Account;
+using Jularr.Backend.Data.Enums.Localization;
 using System.Reflection;
 using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Common;
@@ -29,6 +30,9 @@ namespace Jularr.Backend.Tests
                 ["Profiles"] = typeof(ProfileFields),
                 ["AccountProfiles"] = typeof(AccountProfileFields),
                 ["UiLocales"] = typeof(UiLocaleFields),
+                ["UiTranslationMessages"] = typeof(UiTranslationMessageFields),
+                ["UiTranslations"] = typeof(UiTranslationFields),
+                ["UiTranslationStatusTypes"] = typeof(UiTranslationStatusTypeFields),
                 ["Providers"] = typeof(ProviderFields),
                 ["AccountPasswords"] = typeof(AccountPasswordFields),
                 ["AccountPasskeys"] = typeof(AccountPasskeyFields),
@@ -100,7 +104,9 @@ namespace Jularr.Backend.Tests
                 """
                 SELECT 'role' AS catalog, "Id", "Key" FROM "AccountRoleTypes"
                 UNION ALL
-                SELECT 'purpose' AS catalog, "Id", "Key" FROM "AuthChallengePurposeTypes";
+                SELECT 'purpose' AS catalog, "Id", "Key" FROM "AuthChallengePurposeTypes"
+                UNION ALL
+                SELECT 'translation' AS catalog, "Id", "Key" FROM "UiTranslationStatusTypes";
                 """;
             var actual = new List<string>();
             await using (var reader = await command.ExecuteReaderAsync())
@@ -124,7 +130,12 @@ namespace Jularr.Backend.Tests
                 $"purpose:{(byte)AuthChallengePurposeType.PasskeySignIn}:passkey_sign_in",
                 $"purpose:{(byte)AuthChallengePurposeType.ExternalLogin}:external_login",
                 $"purpose:{(byte)AuthChallengePurposeType.ExternalLink}:external_link",
-                $"purpose:{(byte)AuthChallengePurposeType.ProviderMediaConsent}:provider_media_consent"
+                $"purpose:{(byte)AuthChallengePurposeType.ProviderMediaConsent}:provider_media_consent",
+                $"translation:{(byte)UiTranslationStatusType.Missing}:missing",
+                $"translation:{(byte)UiTranslationStatusType.Generated}:generated",
+                $"translation:{(byte)UiTranslationStatusType.Reviewed}:reviewed",
+                $"translation:{(byte)UiTranslationStatusType.Manual}:manual",
+                $"translation:{(byte)UiTranslationStatusType.Outdated}:outdated"
             }, actual);
         }
 

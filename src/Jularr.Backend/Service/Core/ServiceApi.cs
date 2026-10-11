@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Plex;
+using Jularr.Backend.Service.Core.Localization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -73,7 +74,13 @@ namespace Jularr.Backend.Service.Core
                         QueueLimit = 0
                     }));
                 options.OnRejected = (context, token) => new ValueTask(
-                    Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "rate_limit_exceeded")
+                    Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "rate_limit_exceeded",
+                        extensions: new Dictionary<string, object?>
+                        {
+                            ["code"] = "rate_limit_exceeded",
+                            ["resourceKey"] = ServiceErrorResources.GetKey("rate_limit_exceeded"),
+                            ["traceId"] = context.HttpContext.TraceIdentifier
+                        })
                         .ExecuteAsync(context.HttpContext));
             });
             services.AddScoped<ServiceRuntime>();

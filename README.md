@@ -90,6 +90,71 @@ abgeglichen; URLs aus Plex-Ressourcen werden nicht als Ziel übernommen.
 Verknüpfungen werden ausschließlich anhand Provider + bestätigter externer ID gefunden,
 niemals anhand einer gleichen E-Mail. Registrierung erstellt keinen ersten Owner.
 
+## Gemeinsamer PostgreSQL-Textkatalog
+
+Nach `AddJularrServices(...)` registriert der Host einmal alle englischen Frontend-Texte.
+Referenz: [Frontend-Skeletons #960](https://github.com/Juloc/Jularr/pull/960).
+`englishTexts` unten ist die vereinigte Schlüssel/Englisch-Liste aus dessen
+ConsumerSources, AdminSources und englischen Shell-/Login-Texten, kein zusätzlicher Store.
+
+```csharp
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Service.Core.Localization;
+
+builder.Services.AddJularrLocalization(
+    englishTexts.Select(entry => new UiTextResource(entry.Key, entry.Value)));
+```
+
+Backend-Fehlerressourcen werden automatisch ergänzt. Widersprüchliches Englisch für
+denselben Schlüssel wird abgelehnt. Beim Hoststart werden Ressourcen idempotent
+synchronisiert, nie das Schema installiert/migriert. Neue Texte brauchen keine SQL-Importe;
+entfernte Deklarationen werden nicht gelöscht. Das frische Schema muss ausdrücklich
+installiert sein; bestehende aktive Datenbanken werden während des Clean Cut nicht verändert.
+
+Razor lädt einmal pro Request über DI und verwendet danach synchrone String-Lookups:
+
+```csharp
+var texts = await catalog.GetByLocaleIdAsync(profile.UiLocaleId, cancellationToken);
+// Ohne Profile: await catalog.GetAsync(CultureInfo.CurrentUICulture, cancellationToken).
+var heading = texts["discover.title"];
+```
+
+`catalog` ist `IUiTextCatalog`. `UiTextBundle` enthält `UiLocaleId`, `Locale`,
+`IsRightToLeft`, die opake `Version` und `Texts`. Fehlende Schlüssel liefern ihren
+Schlüssel; die normalen Strings müssen wie sonst durch Razor HTML-kodiert werden.
+Der Host wählt die anonyme Kultur, z. B. anhand Accept-Language. Profile bleiben ID-basiert.
+Das Request-Bundle wird auch im Layout wiederverwendet; keine HTTP-/JS-Sprachanfragen.
+
+Fallback je Schlüssel: exakte aktivierte Sprache → aktivierte Elternsprache →
+englischer DB-Originaltext. Generated/Reviewed brauchen aktuelle MessageVersion;
+Outdated/Missing werden übersprungen. Manual bleibt auch bei verändertem Original
+verwendbar und wird nie automatisch überschrieben. Fehlende Übersetzungszeilen sind Missing.
+Der sprachweise Cache ist auf ungefähr 4 MiB begrenzt und enthält keine Beschreibungen.
+Warm Requests brauchen keine Textabfragen; DB-Sprachrevisionen werden höchstens alle
+30 Sekunden abgeglichen. Nach Änderungen gilt diese maximale Verzögerung.
+
+KI-Kontext liegt nur in `UiTranslationMessages.Description`. Neue Schlüssel starten
+ohne Beschreibung; die Synchronisierung erfindet und überschreibt sie nicht.
+`Logic/Localization` bereitet spätere Admin-Bearbeitung mit Versionsschutz und dem
+kanonischen Translation-Writer vor. Benannte Platzhalter wie `{name}` werden geprüft.
+Diese Writer sind keine API-Endpunkte und ersetzen keine Admin-Berechtigungsprüfung.
+KI-Anforderung, Kontextpflege-Oberfläche und Admin-Services sind noch nicht implementiert.
+Normale Seitenaufrufe und Hoststart führen keine KI-Übersetzung aus.
+
+ProblemDetails enthält `code`, `resourceKey`, `traceId` und bei Feldfehlern `errors`
+(Codes) plus `errorResourceKeys`. Der gemeinsame Katalog enthält `errors.*`; es gibt
+keine lokalisierte Exception oder zweite Fehlerübersetzung. Für direkte Razor-Aufrufe
+liefert `ServiceErrorResources.GetKey(code)` denselben Schlüssel.
+
+Offline-Vorbereitung: `Texts` ist ein vollständiges aufgelöstes Sprachpaket, nicht nur
+eine Seite. `Version` berücksichtigt alle Fallback-Schichten. Ein späterer Offline-Sync
+kann pro lokalem Profile komplette Pakete speichern und gleiche Sprachen deduplizieren.
+Export, Offline-Speicher und Synchronisierung sind noch nicht implementiert.
+
+Frontend-Dateien bleiben unverändert. Der Frontend-Verbraucher muss `UiText`, die
+temporären Frontend-Übersetzungen und hart codierten Kulturen auf diese Registrierung
+und DI-Lookups umstellen, nicht als zweites Übersetzungssystem weiterbetreiben.
+
 ## Prüfung und offene Integration
 
 `dotnet build src/Jularr.Backend/Jularr.Backend.csproj` baut nur die Bibliothek.

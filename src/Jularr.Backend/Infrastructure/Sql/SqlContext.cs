@@ -248,6 +248,21 @@ namespace Jularr.Backend.Infrastructure.Sql
 
         public sealed class SqlReadCommands(SqlContext context)
         {
+            public async Task<IReadOnlyList<T>> ReadListAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default)
+            {
+                ArgumentNullException.ThrowIfNull(sql);
+                await using var command = context.CreateCommand(sql.Statement, false, sql);
+                await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
+                var items = new List<T>();
+
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    items.Add(SqlExecutor.MapRow<T>(reader));
+                }
+
+                return items;
+            }
+
             public Task<object?> ExecuteScalarAsync(SqlStatement sql, CancellationToken cancellationToken = default)
             {
                 ArgumentNullException.ThrowIfNull(sql);
