@@ -1,22 +1,13 @@
 project: Jularr
 repository: Juloc/Jularr
-coordination:
-  repository: Juloc/agent-control
-  issue: 1
-  hubUrl: null
-relatedRepositories:
-  - Juloc/agent-control
 validation:
   - dotnet restore Jularr.sln
   - dotnet build Jularr.sln --no-restore
   - dotnet test Jularr.sln --no-build
 protectedPaths:
   - AGENTS.md
+  - docs/CONVENTIONS.md
   - .agent/project.yaml
 notes:
-  - "Validation semantics: the validation list above is the RELEASE / explicit-full-validation gate (restore, build, full test). It is NOT the completion step of an ordinary slice: normal slices run the affected project build and directly affected focused tests only (see jularr-task). The central project schema allows only a flat validation list, so this note is the canonical disambiguation."
-  - "Branch workflow: agents commit and push directly to the unprotected dev branch (no PR per change). main stays protected; dev is promoted to main by one PR. Releases and publishing run only from main."
-  - GitHub is the durable source of truth.
-  - Keep Jularr a modular monolith; do not introduce microservices or duplicate state/configuration paths.
-  - Razor Pages are page boundaries; shared UI belongs in reusable components/partials.
-  - Prefer focused tests for parsing, scanning, aggregation and scheduling behavior rather than trivial plumbing.
+  - "The validation list is the release / explicit-full-validation gate, not ordinary slice completion."
+  - "Working rules live in AGENTS.md and docs/CONVENTIONS.md; navigation is in docs/CODEMAP.md."

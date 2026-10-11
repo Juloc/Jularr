@@ -1,14 +1,76 @@
+using System.Text.Json.Serialization;
 using Jularr.Data.Common;
-using Jularr.Data.Profile;
+using Jularr.Data.Fields.Profile;
 
 namespace Jularr.Data.User.Profile.V1;
 
-public sealed record ProfileParameters(
-    [property: DataField(typeof(ProfileFields), nameof(ProfileFields.PublicId))] Guid PublicId);
+public sealed class ReadProfileParametersV1 : BaseData
+{
+    public ReadProfileParametersV1(long profileId)
+    {
+        ProfileId = profileId;
+    }
 
-public sealed record UpdateProfileDataV1(
-    [property: DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))] string DisplayName);
+    [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+    public long ProfileId { get; }
+}
 
-public sealed record ProfileDetails(
-    [property: DataField(typeof(ProfileFields), nameof(ProfileFields.PublicId))] Guid PublicId,
-    [property: DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))] string DisplayName) : IServiceOutput;
+public sealed class UpdateProfileParametersV1 : BaseData
+{
+    public UpdateProfileParametersV1(long profileId)
+    {
+        ProfileId = profileId;
+    }
+
+    [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+    public long ProfileId { get; }
+}
+
+[JsonConverter(typeof(PartialDataJsonConverter<UpdateProfileDataV1>))]
+public sealed class UpdateProfileDataV1 : BaseData
+{
+    private string? _displayName;
+    private long? _uiLocaleId;
+
+    public UpdateProfileDataV1() : base(trackChanges: true)
+    {
+    }
+
+    public UpdateProfileDataV1(string displayName) : this()
+    {
+        DisplayName = displayName;
+    }
+
+    [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName), false)]
+    public string? DisplayName
+    {
+        get => _displayName;
+        init => SetField(ref _displayName, value);
+    }
+
+    [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId), false)]
+    public long? UiLocaleId
+    {
+        get => _uiLocaleId;
+        init => SetField(ref _uiLocaleId, value);
+    }
+}
+
+public sealed class ReadProfileResultV1 : BaseData, IServiceOutput
+{
+    public ReadProfileResultV1(long id, string displayName, long uiLocaleId)
+    {
+        Id = id;
+        DisplayName = displayName;
+        UiLocaleId = uiLocaleId;
+    }
+
+    [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+    public long Id { get; }
+
+    [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
+    public string DisplayName { get; }
+
+    [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
+    public long UiLocaleId { get; }
+}

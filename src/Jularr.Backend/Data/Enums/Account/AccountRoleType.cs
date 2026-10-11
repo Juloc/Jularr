@@ -1,4 +1,4 @@
-namespace Jularr.Data.Common;
+namespace Jularr.Data.Enums.Account;
 
 public enum AccountRoleType : byte
 {

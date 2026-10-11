@@ -1,3 +1,4 @@
+using Jularr.Data.Enums.Service;
 using System.Reflection;
 using Jularr.Infrastructure.Sql;
 using Jularr.Service.Core;

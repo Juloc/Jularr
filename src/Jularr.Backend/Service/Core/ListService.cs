@@ -19,7 +19,7 @@ public sealed record ServiceSortKey<TSort>
     public static ServiceSortKey<TSort> Additional(TSort value) => new(value, false);
 }
 
-public abstract class UserListService<TParameters, TSort>(ServiceRuntime runtime) : UserReadService<TParameters>(runtime)
+public abstract class UserListService<TParameters, TSort> : UserReadService<TParameters>
     where TSort : struct, Enum
 {
     private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;
@@ -73,7 +73,7 @@ public abstract class UserListService<TParameters, TSort>(ServiceRuntime runtime
     }
 }
 
-public abstract class AdminListService<TParameters, TSort>(ServiceRuntime runtime) : AdminReadService<TParameters>(runtime)
+public abstract class AdminListService<TParameters, TSort> : AdminReadService<TParameters>
     where TSort : struct, Enum
 {
     private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;

@@ -1,14 +1,9 @@
+using Jularr.Data.Enums.Sql;
 using System.Data;
 using Jularr.Data;
 using Npgsql;
 
 namespace Jularr.Infrastructure.Sql;
-
-public enum SqlAccessMode : byte
-{
-    ReadOnly,
-    ReadWrite
-}
 
 public sealed class SqlContext : IAsyncDisposable
 {

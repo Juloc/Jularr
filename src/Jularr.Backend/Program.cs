@@ -1,4 +1,4 @@
-using Jularr.Service.User.Profile.V1;
+using Jularr.Service.Core;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Npgsql;
 
@@ -12,8 +12,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         options.Cookie.SameSite = SameSiteMode.Strict;
     });
-builder.Services.AddProfileServices(new NpgsqlDataSourceBuilder(connectionString).Build());
+builder.Services.AddJularrServices(new NpgsqlDataSourceBuilder(connectionString).Build(), typeof(ServiceRuntime).Assembly);
 var app = builder.Build();
+app.UseExceptionHandler();
+app.UseStatusCodePages(async status =>
+    await Results.Problem(statusCode: status.HttpContext.Response.StatusCode, title: "request_failed").ExecuteAsync(status.HttpContext));
 app.UseAuthentication();
-app.MapProfileEndpoints();
+app.MapJularrServices();
 app.Run();

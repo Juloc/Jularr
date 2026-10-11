@@ -1,3 +1,4 @@
+using Jularr.Data.Enums.Service;
 using Jularr.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
@@ -29,19 +30,19 @@ public sealed class ProfileServiceGateTests
         using var scope = services.CreateScope();
         var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
         var read = scope.ServiceProvider.GetRequiredService<ReadProfileV1>();
-        var parameters = new ProfileParameters(fixture.ProfileAPublicId);
+        var parameters = new ReadProfileParametersV1(fixture.ProfileAId);
 
         accessor.HttpContext = new DefaultHttpContext();
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(parameters));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ReadProfileResultV1>(parameters));
 
         accessor.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "owner")], "Cookies"));
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(parameters));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ReadProfileResultV1>(parameters));
 
         accessor.HttpContext.User = Principal(Guid.NewGuid());
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(parameters));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ReadProfileResultV1>(parameters));
 
         accessor.HttpContext.User = Principal(fixture.SessionPublicId, "untrusted");
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(parameters));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ReadProfileResultV1>(parameters));
     }
 
     [TestMethod]
@@ -59,13 +60,13 @@ public sealed class ProfileServiceGateTests
         SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId);
         var read = scope.ServiceProvider.GetRequiredService<ReadProfileV1>();
         var rename = scope.ServiceProvider.GetRequiredService<UpdateProfileV1>();
-        var parameters = new ProfileParameters(fixture.ProfileAPublicId);
-        await read.ExecuteAsync<ProfileDetails>(parameters);
+        var parameters = new ReadProfileParametersV1(fixture.ProfileAId);
+        await read.ExecuteAsync<ReadProfileResultV1>(parameters);
 
         await fixture.RunSqlAsync(mutation);
 
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(parameters));
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => rename.ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1("Denied")));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ReadProfileResultV1>(parameters));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => rename.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(parameters.ProfileId), new UpdateProfileDataV1("Denied")));
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
     }
 
@@ -77,12 +78,12 @@ public sealed class ProfileServiceGateTests
         using var services = CreateServices(fixture);
         using var scope = services.CreateScope();
         SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId);
-        var parameters = new ProfileParameters(fixture.ProfileAPublicId);
+        var parameters = new ReadProfileParametersV1(fixture.ProfileAId);
 
-        var read = await scope.ServiceProvider.GetRequiredService<ReadProfileV1>().ExecuteAsync<ProfileDetails>(parameters);
+        var read = await scope.ServiceProvider.GetRequiredService<ReadProfileV1>().ExecuteAsync<ReadProfileResultV1>(parameters);
         Assert.AreEqual("Profile A", read.DisplayName);
         await Assert.ThrowsExactlyAsync<SecurityException>(() => scope.ServiceProvider.GetRequiredService<UpdateProfileV1>()
-            .ExecuteAsync<UpdateResult>(parameters, new UpdateProfileDataV1("Denied")));
+            .ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(parameters.ProfileId), new UpdateProfileDataV1("Denied")));
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
     }
 
@@ -96,8 +97,8 @@ public sealed class ProfileServiceGateTests
         var gate = scope.ServiceProvider.GetRequiredService<IServiceGate>();
         var caller = await gate.RequireCallerAsync(ServiceArea.User, default);
 
-        await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new ServicePermission("profile.anything"), [], default));
-        await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new ServicePermission("profile.self.read"), [new ResourceTarget("profile", 202)], default));
+        await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new ServicePermission("profile.anything"), default));
+        await Assert.ThrowsExactlyAsync<KeyNotFoundException>(() => scope.ServiceProvider.GetRequiredService<ReadProfileV1>().ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileBId)));
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireCallerAsync(ServiceArea.Admin, default));
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireModulesAsync(ModuleRequirement.All("Movie"), default));
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireModulesAsync(ModuleRequirement.Any("Novel", "Unknown"), default));
@@ -112,10 +113,10 @@ public sealed class ProfileServiceGateTests
         using var scope = services.CreateScope();
         SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId);
         var gate = new RevokingGate(scope.ServiceProvider.GetRequiredService<IServiceGate>(), fixture);
-        var rename = new UpdateProfileV1(new ServiceRuntime(fixture.Database, gate));
+        var rename = new ServiceRuntime(fixture.Database, gate).Create<UpdateProfileV1>();
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => rename.ExecuteAsync<UpdateResult>(
-            new ProfileParameters(fixture.ProfileAPublicId), new UpdateProfileDataV1("Denied")));
+            new UpdateProfileParametersV1(fixture.ProfileAId), new UpdateProfileDataV1("Denied")));
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
     }
 
@@ -126,13 +127,14 @@ public sealed class ProfileServiceGateTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
-        builder.Services.AddProfileServices(fixture.Database);
+        builder.Services.AddJularrServices(fixture.Database, typeof(ServiceRuntime).Assembly);
         await using var app = builder.Build();
+        app.UseExceptionHandler();
         app.UseAuthentication();
-        app.MapProfileEndpoints();
+        app.MapJularrServices();
         await app.StartAsync();
         using var client = app.GetTestClient();
-        var path = "/api/v1/profiles/" + fixture.ProfileAPublicId;
+        var path = "/api/v1/profiles/" + fixture.ProfileAId;
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
 
@@ -142,13 +144,14 @@ public sealed class ProfileServiceGateTests
         client.DefaultRequestHeaders.Add("Cookie", cookie);
         using var read = await client.GetAsync(path);
         Assert.AreEqual(HttpStatusCode.OK, read.StatusCode);
-        var result = await read.Content.ReadFromJsonAsync<ProfileDetails>();
-        Assert.AreEqual(fixture.ProfileAPublicId, result!.PublicId);
+        var result = await read.Content.ReadFromJsonAsync<ReadProfileResultV1>();
+        Assert.AreEqual(fixture.ProfileAId, result!.Id);
+        Assert.AreEqual(1L, result.UiLocaleId);
         var body = await read.Content.ReadAsStringAsync();
         Assert.IsFalse(body.Contains("accountId", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(body.Contains("ownerAccountId", StringComparison.OrdinalIgnoreCase));
 
-        using var noCsrf = await client.PutAsJsonAsync(path + "/name", new UpdateProfileDataV1("Denied"));
+        using var noCsrf = await client.PutAsJsonAsync(path, new UpdateProfileDataV1("Denied"));
         Assert.AreEqual(HttpStatusCode.BadRequest, noCsrf.StatusCode);
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
 
@@ -156,12 +159,30 @@ public sealed class ProfileServiceGateTests
         client.DefaultRequestHeaders.Remove("Cookie");
         client.DefaultRequestHeaders.Add("Cookie", cookie + "; " + csrfCookie);
         client.DefaultRequestHeaders.Add("RequestVerificationToken", read.Headers.GetValues("RequestVerificationToken").Single());
-        using var update = await client.PutAsJsonAsync(path + "/name", new UpdateProfileDataV1("  Updated  "));
+        using var invalidData = await client.PutAsJsonAsync(path, new UpdateProfileDataV1(" "));
+        Assert.AreEqual(HttpStatusCode.BadRequest, invalidData.StatusCode);
+        Assert.IsTrue((await invalidData.Content.ReadAsStringAsync()).Contains("invalid_data", StringComparison.Ordinal));
+        Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
+
+        using var update = await client.PutAsJsonAsync(path, new UpdateProfileDataV1("  Updated  "));
         Assert.AreEqual(HttpStatusCode.OK, update.StatusCode);
         Assert.IsTrue((await update.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
         Assert.AreEqual("Updated", await fixture.NameAsync(fixture.ProfileAId));
 
-        using var foreign = await client.GetAsync("/api/v1/profiles/" + fixture.ProfileBPublicId);
+        using var locale = await client.PutAsJsonAsync(path, new UpdateProfileDataV1 { UiLocaleId = 2 });
+        Assert.AreEqual(HttpStatusCode.OK, locale.StatusCode);
+        var afterLocale = await client.GetFromJsonAsync<ReadProfileResultV1>(path);
+        Assert.AreEqual("Updated", afterLocale!.DisplayName);
+        Assert.AreEqual(2L, afterLocale.UiLocaleId);
+
+        using var unknownLocale = await client.PutAsJsonAsync(path, new UpdateProfileDataV1 { DisplayName = "Not applied", UiLocaleId = 999 });
+        Assert.AreEqual(HttpStatusCode.BadRequest, unknownLocale.StatusCode);
+        Assert.IsTrue((await unknownLocale.Content.ReadAsStringAsync()).Contains("unknown_reference", StringComparison.Ordinal));
+        var afterInvalidLocale = await client.GetFromJsonAsync<ReadProfileResultV1>(path);
+        Assert.AreEqual("Updated", afterInvalidLocale!.DisplayName);
+        Assert.AreEqual(2L, afterInvalidLocale.UiLocaleId);
+
+        using var foreign = await client.GetAsync("/api/v1/profiles/" + fixture.ProfileBId);
         Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
         await fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"RevokedAt\" = now()");
         Assert.AreEqual(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);
@@ -172,7 +193,7 @@ public sealed class ProfileServiceGateTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddProfileServices(fixture.Database);
+        services.AddJularrServices(fixture.Database, typeof(ServiceRuntime).Assembly);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 
@@ -182,8 +203,8 @@ public sealed class ProfileServiceGateTests
     private static ClaimsPrincipal Principal(Guid sessionId, string scheme = "Cookies") =>
         new(new ClaimsIdentity([
             new Claim(ClaimTypes.NameIdentifier, "reference-account"),
-            new Claim(ProfileServiceGate.SessionRevisionClaimType, "1"),
-            new Claim(ProfileServiceGate.SessionClaimType, sessionId.ToString("D"))], scheme));
+            new Claim(ServiceGate.SessionRevisionClaimType, "1"),
+            new Claim(ServiceGate.SessionClaimType, sessionId.ToString("D"))], scheme));
 
     private sealed class RevokingGate(IServiceGate gate, Fixture fixture) : IServiceGate
     {
@@ -193,13 +214,13 @@ public sealed class ProfileServiceGateTests
         public Task<ServiceCaller> RequireCallerAsync(ServiceArea area, CancellationToken cancellationToken) =>
             gate.RequireCallerAsync(area, cancellationToken);
 
-        public async Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, IReadOnlyList<ResourceTarget> targets, CancellationToken cancellationToken)
+        public async Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken)
         {
-            await gate.RequireAccessAsync(caller, permission, targets, cancellationToken);
+            await gate.RequireAccessAsync(caller, permission, cancellationToken);
             await fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"RevokedAt\" = now()");
         }
 
-        public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, IReadOnlyList<ResourceTarget> targets, LogicContext context, CancellationToken cancellationToken) =>
-            gate.RequireTransactionalAccessAsync(caller, permission, targets, context, cancellationToken);
+        public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken) =>
+            gate.RequireTransactionalAccessAsync(caller, permission, context, cancellationToken);
     }
 }

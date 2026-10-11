@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
-using Jularr.Data.Common;
 using Jularr.Data;
+using Jularr.Data.Common;
+using Jularr.Data.Enums.Sql;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -30,22 +31,22 @@ internal static class SqlExecutor
         }
 
         var bindings = Bindings.GetOrAdd((sql, parameters.GetType(), data?.GetType()), static key => CompileBindings(key.Sql, key.Parameters, key.Data));
-        var pageRequest = bindings.Any(binding => binding.Source == BindingSource.Page) ? GetPageRequest(parameters) : null;
+        var pageRequest = bindings.Any(binding => binding.Source == SqlBindingSource.Page) ? GetPageRequest(parameters) : null;
         var values = new NpgsqlParameter[bindings.Length];
 
         for (var index = 0; index < bindings.Length; index++)
         {
             var binding = bindings[index];
 
-            if (binding.Source == BindingSource.Actor)
+            if (binding.Source == SqlBindingSource.Actor)
             {
                 values[index] = SqlParams.Create().Add(binding.Name, actorAccountId ?? throw new InvalidOperationException("No verified ActorAccountId is available.")).ToArray()[0];
             }
-            else if (binding.Source == BindingSource.Profile)
+            else if (binding.Source == SqlBindingSource.Profile)
             {
                 values[index] = SqlParams.Create().Add(binding.Name, activeProfileId ?? throw new InvalidOperationException("No verified ActiveProfileId is available.")).ToArray()[0];
             }
-            else if (binding.Source == BindingSource.Page)
+            else if (binding.Source == SqlBindingSource.Page)
             {
                 var isPageSize = string.Equals(binding.Name, "PageSize", StringComparison.OrdinalIgnoreCase);
                 var number = isPageSize ? pageRequest!.PageSize : pageRequest!.Offset;
@@ -55,7 +56,7 @@ internal static class SqlExecutor
             }
             else
             {
-                var source = binding.Source == BindingSource.Parameters ? parameters : data!;
+                var source = binding.Source == SqlBindingSource.Parameters ? parameters : data!;
                 var property = source.GetType().GetProperty(binding.Name, BindingFlags.Public | BindingFlags.Instance);
                 if (property is null)
                 {
@@ -111,19 +112,19 @@ internal static class SqlExecutor
         foreach (var token in tokens)
         {
             var name = token.Name;
-            BindingSource source;
+            SqlBindingSource source;
 
             if (name.Equals("ActorAccountId", StringComparison.OrdinalIgnoreCase))
             {
-                source = BindingSource.Actor;
+                source = SqlBindingSource.Actor;
             }
             else if (name.Equals("ActiveProfileId", StringComparison.OrdinalIgnoreCase))
             {
-                source = BindingSource.Profile;
+                source = SqlBindingSource.Profile;
             }
             else if (name.Equals("Offset", StringComparison.OrdinalIgnoreCase) || name.Equals("PageSize", StringComparison.OrdinalIgnoreCase))
             {
-                source = BindingSource.Page;
+                source = SqlBindingSource.Page;
             }
             else
             {
@@ -151,17 +152,17 @@ internal static class SqlExecutor
                     throw new InvalidOperationException($"SQL parameter '{name}' must match its DTO property casing.");
                 }
 
-                source = inParameters is not null ? BindingSource.Parameters : BindingSource.Data;
+                source = inParameters is not null ? SqlBindingSource.Parameters : SqlBindingSource.Data;
             }
 
-            if (source is BindingSource.Actor or BindingSource.Profile or BindingSource.Page
-                && (parametersType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null && source is not BindingSource.Page
+            if (source is SqlBindingSource.Actor or SqlBindingSource.Profile or SqlBindingSource.Page
+                && (parametersType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null && source is not SqlBindingSource.Page
                     || dataType?.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null))
             {
                 throw new InvalidOperationException($"Reserved SQL parameter '{name}' cannot be provided by an untrusted DTO.");
             }
 
-            result.Add(new Binding(name, source, source is BindingSource.Parameters or BindingSource.Data ? token.DatabaseType : null));
+            result.Add(new Binding(name, source, source is SqlBindingSource.Parameters or SqlBindingSource.Data ? token.DatabaseType : null));
         }
 
         return [.. result];
@@ -491,18 +492,9 @@ internal static class SqlExecutor
         return Convert.ChangeType(value, type, System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private enum BindingSource : byte
-    {
-        Parameters,
-        Data,
-        Actor,
-        Profile,
-        Page
-    }
-
     private sealed record ParameterToken(string Name, NpgsqlDbType? DatabaseType);
 
-    private sealed record Binding(string Name, BindingSource Source, NpgsqlDbType? DatabaseType);
+    private sealed record Binding(string Name, SqlBindingSource Source, NpgsqlDbType? DatabaseType);
 
     private sealed record RowMap(ConstructorInfo Constructor, ParameterInfo[] Parameters, int[] Ordinals, bool[] Required);
 }

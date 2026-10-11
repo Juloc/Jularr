@@ -1,4 +1,4 @@
-using System.Data;
+using Jularr.Data.Enums.Service;
 using Jularr.Infrastructure.Sql;
 using Npgsql;
 
@@ -8,8 +8,8 @@ public interface IServiceGate
 {
     Task RequireModulesAsync(ModuleRequirement modules, CancellationToken cancellationToken);
     Task<ServiceCaller> RequireCallerAsync(ServiceArea area, CancellationToken cancellationToken);
-    Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, IReadOnlyList<ResourceTarget> targets, CancellationToken cancellationToken);
-    Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, IReadOnlyList<ResourceTarget> targets, LogicContext context, CancellationToken cancellationToken);
+    Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken);
+    Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken);
 }
 
 public sealed class ServiceRuntime(NpgsqlDataSource database, IServiceGate gate)
@@ -17,6 +17,18 @@ public sealed class ServiceRuntime(NpgsqlDataSource database, IServiceGate gate)
     public IServiceGate Gate { get; } = gate ?? throw new ArgumentNullException(nameof(gate));
 
     public SqlContext CreateSqlContext() => new(database);
+
+    public TService Create<TService>() where TService : Service, new()
+    {
+        return Create(new TService());
+    }
+
+    public TService Create<TService>(TService service) where TService : Service
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        service.BindRuntime(this);
+        return service;
+    }
 
     public void ValidateAll(IEnumerable<IServiceDefinition> definitions)
     {

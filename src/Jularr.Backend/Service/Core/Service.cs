@@ -1,12 +1,34 @@
 using System.Data;
 using Jularr.Data.Common;
+using Jularr.Data.Enums.Service;
+using Jularr.Data.Enums.Sql;
 using Jularr.Infrastructure.Sql;
 
 namespace Jularr.Service.Core;
 
-public abstract class Service<TParameters, TData> : IServiceDefinition
+public abstract class Service : IServiceDefinition
 {
-    private readonly ServiceRuntime _runtime;
+    private ServiceRuntime? _runtime;
+
+    protected ServiceRuntime Runtime => _runtime ?? throw new InvalidOperationException("The service runtime has not been bound.");
+
+    internal void BindRuntime(ServiceRuntime runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        if (Interlocked.CompareExchange(ref _runtime, runtime, null) is not null)
+        {
+            throw new InvalidOperationException("A service runtime can only be bound once.");
+        }
+    }
+
+    public abstract void ValidateDefinition();
+    public abstract ServiceOperationType OperationType { get; }
+    public abstract Type DefaultResultType { get; }
+    public abstract ServiceArea ServiceArea { get; }
+}
+
+public abstract class Service<TParameters, TData> : Service
+{
     private readonly Lazy<ServiceDefinition> _definition;
     private readonly AsyncLocal<Invocation?> _invocation = new();
 
@@ -18,9 +40,8 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
     protected Type ResultType => Current.ResultType;
     protected CancellationToken CancellationToken => Current.CancellationToken;
 
-    protected Service(ServiceRuntime runtime)
+    protected Service()
     {
-        _runtime = runtime;
         _definition = new Lazy<ServiceDefinition>(BuildDefinition);
     }
 
@@ -29,8 +50,6 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
     protected abstract IReadOnlyList<ServiceResultType> GetResultTypes();
     protected abstract ModuleRequirement GetInstanceModules(TParameters parameters);
     protected abstract ServicePermission GetPermission(TParameters parameters, Type resultType);
-    protected virtual ResourceTarget? GetResource(TParameters parameters) => null;
-    protected virtual IReadOnlyList<ResourceTarget> GetAdditionalResources(TParameters parameters) => [];
     protected virtual void ValidateParameters(TParameters parameters)
     {
     }
@@ -43,7 +62,10 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
     protected virtual Task<IServiceOutput> OnDelete() => throw new InvalidOperationException("The Delete hook is not implemented.");
     protected virtual Task<IServiceOutput> OnExecute() => throw new InvalidOperationException("The Execute hook is not implemented.");
 
-    public virtual void ValidateDefinition() => _ = _definition.Value;
+    public override void ValidateDefinition() => _ = _definition.Value;
+    public override ServiceOperationType OperationType => _definition.Value.OperationType;
+    public override Type DefaultResultType => _definition.Value.DefaultResultType;
+    public override ServiceArea ServiceArea => Area;
 
     public Task<IServiceOutput> ExecuteAsync(TParameters parameters, TData data, CancellationToken cancellationToken = default)
     {
@@ -65,7 +87,17 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
         ArgumentNullException.ThrowIfNull(data);
 
         var modules = GetInstanceModules(parameters) ?? throw new InvalidOperationException("The module requirement cannot be null.");
-        await _runtime.Gate.RequireModulesAsync(modules, cancellationToken);
+        await Runtime.Gate.RequireModulesAsync(modules, cancellationToken);
+        if (parameters is BaseData parameterData)
+        {
+            parameterData.Validate();
+        }
+
+        if (data is BaseData inputData)
+        {
+            inputData.Validate();
+        }
+
         ValidateParameters(parameters);
 
         if (!definition.ResultTypes.Contains(resultType))
@@ -73,31 +105,16 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
             throw new InvalidOperationException("The requested result type is not declared by this service.");
         }
 
-        var caller = await _runtime.Gate.RequireCallerAsync(Area, cancellationToken);
+        var caller = await Runtime.Gate.RequireCallerAsync(Area, cancellationToken);
         if (caller is null || caller.Area != Area || string.IsNullOrWhiteSpace(caller.PrincipalKey))
         {
             throw new UnauthorizedAccessException("The service caller has not been verified for this area.");
         }
 
         var permission = GetPermission(parameters, resultType) ?? throw new InvalidOperationException("A service permission must be declared.");
-        var primary = GetResource(parameters);
-        var additional = GetAdditionalResources(parameters) ?? throw new InvalidOperationException("Affected resources cannot be null.");
-        var targets = new List<ResourceTarget>(additional.Count + (primary.HasValue ? 1 : 0));
+        await Runtime.Gate.RequireAccessAsync(caller, permission, cancellationToken);
 
-        if (primary is { } resource)
-        {
-            targets.Add(resource);
-        }
-
-        targets.AddRange(additional);
-        if (targets.Any(target => target.Id <= 0 || string.IsNullOrWhiteSpace(target.Kind)))
-        {
-            throw new InvalidOperationException("All declared service resource targets must be valid.");
-        }
-
-        await _runtime.Gate.RequireAccessAsync(caller, permission, targets, cancellationToken);
-
-        await using var sql = _runtime.CreateSqlContext();
+        await using var sql = Runtime.CreateSqlContext();
         var isolation = GetTransaction(parameters);
         var needsTransaction = definition.OperationType != ServiceOperationType.Execute || isolation.HasValue;
 
@@ -113,13 +130,13 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
 
         if (canMutate && needsTransaction)
         {
-            await _runtime.Gate.RequireTransactionalAccessAsync(caller, permission, targets, context, cancellationToken);
+            await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, context, cancellationToken);
         }
         else if (definition.OperationType == ServiceOperationType.Execute)
         {
             // Execute batches must recheck access inside each short transaction.
             context.SetTransactionalAccessCheck(
-                (logic, token) => _runtime.Gate.RequireTransactionalAccessAsync(caller, permission, targets, logic, token));
+                (logic, token) => Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token));
         }
 
         var previous = _invocation.Value;
@@ -141,6 +158,18 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
             if (result is null || result.GetType() != resultType)
             {
                 throw new InvalidOperationException("The service returned an undeclared or incorrect result type.");
+            }
+
+            if (result is BaseData output)
+            {
+                try
+                {
+                    output.Validate();
+                }
+                catch (DataValidationException exception)
+                {
+                    throw new InvalidOperationException("The service returned invalid data.", exception);
+                }
             }
 
             if (needsTransaction)
@@ -179,22 +208,35 @@ public abstract class Service<TParameters, TData> : IServiceDefinition
     private sealed record Invocation(TParameters Parameters, TData Data, Type ResultType, ServiceCaller Caller, LogicContext Context, CancellationToken CancellationToken);
 }
 
-public abstract class UserService<TParameters, TData>(ServiceRuntime runtime) : Service<TParameters, TData>(runtime)
+public abstract class UserService<TParameters, TData> : Service<TParameters, TData>
 {
     protected sealed override ServiceArea Area => ServiceArea.User;
 }
 
-public abstract class AdminService<TParameters, TData>(ServiceRuntime runtime) : Service<TParameters, TData>(runtime)
+public abstract class AdminService<TParameters, TData> : Service<TParameters, TData>
 {
     protected sealed override ServiceArea Area => ServiceArea.Admin;
 }
 
-public abstract class SystemService<TParameters, TData>(ServiceRuntime runtime) : Service<TParameters, TData>(runtime)
+public abstract class SystemService<TParameters, TData> : Service<TParameters, TData>
 {
     protected sealed override ServiceArea Area => ServiceArea.System;
 }
 
-public abstract class UserService<TParameters>(ServiceRuntime runtime) : UserService<TParameters, NoData>(runtime)
+public abstract class PublicService<TParameters, TData> : Service<TParameters, TData>
+{
+    protected sealed override ServiceArea Area => ServiceArea.Public;
+    protected sealed override ServicePermission GetPermission(TParameters parameters, Type resultType) => ServicePermission.Public;
+}
+
+public abstract class PublicService<TParameters> : PublicService<TParameters, NoData>
+{
+    protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
+
+    public Task<IServiceOutput> ExecuteAsync(TParameters parameters, CancellationToken cancellationToken = default) => base.ExecuteAsync(parameters, default, cancellationToken);
+}
+
+public abstract class UserService<TParameters> : UserService<TParameters, NoData>
 {
     protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
 
@@ -204,9 +246,9 @@ public abstract class UserService<TParameters>(ServiceRuntime runtime) : UserSer
         => base.ExecuteAsync<TOutput>(parameters, default, cancellationToken);
 }
 
-public abstract class UserReadService<TParameters>(ServiceRuntime runtime) : UserService<TParameters>(runtime);
+public abstract class UserReadService<TParameters> : UserService<TParameters>;
 
-public abstract class AdminReadService<TParameters>(ServiceRuntime runtime) : AdminService<TParameters, NoData>(runtime)
+public abstract class AdminReadService<TParameters> : AdminService<TParameters, NoData>
 {
     protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
 

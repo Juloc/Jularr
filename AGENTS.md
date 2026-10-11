@@ -1,74 +1,33 @@
-# Juloc Agent Bootstrap
+# Jularr agent instructions
 
-Do not ask the user to repeat Agent Control, test, context or visual rules in task prompts.
+## Start here
 
-## Skill routing
+- Follow the current user request; explicit owner decisions override stale plans and legacy behavior.
+- Read [conventions](docs/CONVENTIONS.md) once per continuous session before implementation.
+- Use [CODEMAP](docs/CODEMAP.md) to find the relevant owner and focused tests. Read only the needed files and linked specifications; use targeted `rg` searches.
+- These local documents are authoritative. No Agent Hub, central Agent Control, claims ledger or mandatory external skills.
+- Do not scan all docs, issues, branches, worktrees or history, and do not delegate unless requested.
 
-| Work | Skills |
-| --- | --- |
-| Normal implementation, bug, issue | `jularr-task` |
-| UI, Razor, CSS, visual component | `jularr-task` + `jularr-ui` |
-| Acquisition, Wanted, Arr, Search, Selection, Import | `jularr-task` + `jularr-acquisition` |
-| Schema, EF, PostgreSQL | add `jularr-db-change` |
-| Playback, player, streaming | add `jularr-playback-work` |
-| Dev environment, Docker, local site, `dotnet watch` | `jularr-dev-env` |
-| Unattended ordered run | `jularr-task` + specialist skill + `jularr-overnight` |
-| Before a substantial commit | `jularr-review` (own diff, no subagent by default) |
+## Scope and safety
 
-## Fast startup
+- Extend the canonical owner; do not add parallel business rules or unnecessary abstractions.
+- Preserve unrelated and uncommitted changes. Do not reset, delete or overwrite user work without explicit authorization.
+- Never expose or commit secrets. Do not change an active database; use isolated databases for tests.
+- Ask only when a missing decision or permission materially changes scope or safety.
+- Current scope includes the isolated backend framework, Account/auth/session base tables and one Profile read/update. Broader Profile work and Phase B remain outside scope until requested.
 
-Once per continuous session:
+## Validation and Git
 
-1. Read `.agent/project.yaml`.
-2. Load the compact central runtime policy. Prefer Agent Hub `GET /v1/context?repository=Juloc/Jularr` and its `runtimePolicy`; without Hub access read `Juloc/agent-control/hub/runtime-policy.json` on `main`.
-3. Resolve coordination through Agent Hub when configured, otherwise through `Juloc/agent-control#1`, and claim the smallest necessary scope.
-4. Load the specialist skill for the current task.
+- Run only the affected build and necessary focused tests. Documentation-only changes need link/path and diff checks, not backend tests.
+- Full validation commands are in [.agent/project.yaml](.agent/project.yaml); run them only for a release or an explicit full-validation request.
+- Review your own diff before committing; state what was verified and any remaining integration gaps.
+- Work on the agreed branch. Currently `codex/backend-clean-start`; no push or merge into `dev`/`main` without explicit authorization. Never force push.
+- Both author and committer must be exactly `Juloc <juli.hiresch@gmail.com>`; no AI attribution or additional contributor trailers.
+- Before committing, run `node scripts/install-git-hooks.mjs`. Never bypass hooks with `--no-verify`.
+- Keep commit messages compact. Do not rewrite historical authorship.
 
-The large central engineering/maintainability/C#/database documents and this repository's detailed maintainability document are reference material. Do not reread them in full by default. Read only the section a concrete task reaches.
+## Documentation
 
-Per task:
-
-- start from the current user request;
-- read a concise feature `CODEMAP.md` first when one exists;
-- use targeted symbol/path search to find the canonical owner and focused tests;
-- read a linked issue/spec/mockup/ADR only when the current task actually depends on it;
-- stop broad discovery once the owner, entry point, persistence path and focused tests are known.
-
-Do not automatically read all issues, specs, mockups, docs, branches, PRs, worktrees or git history.
-
-Current explicit owner/user product decisions are the highest product authority. They override stale planning documents, old issue assumptions, old specs and existing implementation behavior. If a required product decision is genuinely undefined, stop that affected part instead of inventing a compromise.
-
-## Jularr implementation refinements
-
-The central compact runtime policy is binding. Jularr additionally requires:
-
-- Keep the modular monolith and one canonical owner per responsibility. No parallel state/config/business-rule path.
-- Extend the current owner before adding a service, store, helper, interface, factory, provider, manager, handler, configuration path or dependency.
-- New or intentionally touched C# follows current Microsoft/.NET naming/layout, four spaces, Allman braces and the repository line-width rules.
-- Default to **no source comment**. Use one short `//` comment only for a non-obvious invariant, constraint, trade-off or external quirk. Multi-line prose is exceptional.
-- XML documentation is only for reusable/public contracts whose callers need non-obvious information. Ordinary application types, enums, constants, methods and tests normally have no XML summaries.
-- Do not put issue numbers, spec prose, change history or obvious behavior narration in source comments.
-- Keep coherent control flow together; no forwarding wrappers or artificial mini-methods.
-- Propagate cancellation and real timeouts for I/O; preserve error meaning.
-- Avoid N+1 access, whole-dataset application filtering, repeated parsing/I/O and per-row save loops for bulk work.
-- When a new canonical path replaces an old Jularr-owned path, migrate required live state once and remove the superseded code, tests, config, UI and stale docs. Do not keep `Legacy*`, `V1*`, fallback or compatibility paths without a concrete supported requirement.
-- Tests protect behavior/regressions. Prefer concise `Subject_Condition_Result` names, data-driven cases for equivalent variants, no test XML prose and no redundant permutations.
-- The `validation` list in `.agent/project.yaml` is the release/explicit-full-validation gate, not ordinary slice completion.
-
-Feature CODEMAPs are navigation indexes only. Create one only when it materially reduces future discovery, normally 30-60 lines with purpose, owner/entry points, persistence, important callers and focused tests. Do not create one per folder or duplicate specs/architecture prose.
-
-## Authorship and branch workflow
-
-- Ordinary work lands directly on `dev`; never modify `main` for normal work and never force push.
-- Commits use the configured real contributor identity; no AI/agent/service attribution.
-- Run the repository-required hook/bootstrap step before committing and never bypass hooks with `--no-verify`.
-- Commit messages stay compact: one clear subject and only a few short bullets when non-obvious consequences need explanation.
-- CI verifies authorship again for pushes/PRs.
-
-## Coordination and fallback
-
-Re-check coordination when scope changes, `origin/dev` moves unexpectedly, concurrent work appears, or immediately before push. Do not reread the ledger repeatedly during an unchanged slice.
-
-If Agent Hub is unavailable, use the same compact policy and coordination ledger directly through GitHub. If central Agent Control cannot be read, continue from local instructions without broadening scope, preserve security/authorship/secret rules, avoid known overlap and record that central policy/coordination could not be refreshed.
-
-GitHub remains the durable source of truth.
+- Keep this file a short entry point, conventions in one linked document and CODEMAPs as navigation only.
+- Update affected documentation with the implementation; do not duplicate rules or retain obsolete paths.
+- In handoffs, report the outcome, focused verification and open work briefly; no large planning documents unless requested.

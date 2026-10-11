@@ -1,34 +1,28 @@
+using System.Security;
 using Jularr.Data.Common;
-using Jularr.Data.Profile;
+using Jularr.Data.Enums.Service;
 using Jularr.Data.User.Profile.V1;
-using Jularr.Logic.Profile;
 using Jularr.Infrastructure.Sql;
+using Jularr.Logic.Profile;
 using Jularr.Service.Core;
 
 namespace Jularr.Service.User.Profile.V1;
 
-public sealed class ReadProfileV1(ServiceRuntime runtime) : UserService<ProfileParameters>(runtime)
+[ServiceEndpoint("GET", "/api/v1/profiles/{profileId:long}")]
+public sealed class ReadProfileV1 : UserService<ReadProfileParametersV1>
 {
     protected override IReadOnlyList<ServiceResultType> GetResultTypes() =>
-        [ServiceResultType.Default<ProfileDetails>()];
+        [ServiceResultType.Default<ReadProfileResultV1>()];
 
-    protected override ModuleRequirement GetInstanceModules(ProfileParameters parameters) =>
+    protected override ModuleRequirement GetInstanceModules(ReadProfileParametersV1 parameters) =>
         ModuleRequirement.None;
 
-    protected override ServicePermission GetPermission(ProfileParameters parameters, Type resultType) =>
+    protected override ServicePermission GetPermission(ReadProfileParametersV1 parameters, Type resultType) =>
         new("profile.self.read");
 
-    protected override void ValidateParameters(ProfileParameters parameters)
+    protected override Task ValidatePermissions(ReadProfileParametersV1 parameters)
     {
-        if (parameters.PublicId == Guid.Empty)
-        {
-            throw new ArgumentException("Profile public ID is required.", nameof(parameters));
-        }
-    }
-
-    protected override Task ValidatePermissions(ProfileParameters parameters)
-    {
-        if (parameters.PublicId != Auth.ProfilePublicId)
+        if (parameters.ProfileId != Auth.ProfileId)
         {
             throw new KeyNotFoundException("The authorized profile was not found.");
         }
@@ -42,71 +36,44 @@ public sealed class ReadProfileV1(ServiceRuntime runtime) : UserService<ProfileP
         sql.Statement =
             """
             SELECT
-                profile."PublicId",
-                profile."DisplayName"
+                profile."Id",
+                profile."DisplayName",
+                profile."UiLocaleId"
             FROM
                 "Profiles" AS profile
             WHERE
-                profile."PublicId" = @PublicId
-                AND profile."Id" = @ActiveProfileId
-                AND EXISTS (
-                    SELECT
-                        1
-                    FROM
-                        "AccountProfiles" AS membership
-                    INNER JOIN
-                        "Accounts" AS account ON account."Id" = membership."AccountId"
-                    INNER JOIN
-                        "AccountSessions" AS session ON session."AccountId" = account."Id"
-                            AND session."ActiveProfileId" = membership."ProfileId"
-                    WHERE
-                        membership."ProfileId" = profile."Id"
-                        AND membership."AccountId" = @ActorAccountId
-                        AND account."IsEnabled" = TRUE
-                        AND session."PublicId" = @SessionPublicId
-                        AND session."RotationRevision" = @SessionRevision
-                        AND session."RevokedAt" IS NULL
-                        AND session."ExpiresAt" > statement_timestamp()
-                        AND session."CredentialRevision" = account."CredentialRevision"
-                );
+                profile."Id" = @ProfileId;
             """;
-        sql.Parameters.Add(new ProfileReadParameters(Parameters.PublicId, Auth.SessionPublicId!.Value, Auth.SessionRevision!.Value));
-        return await Context.ReadRequiredAsync<ProfileDetails>(sql, CancellationToken);
+        sql.Parameters.Add(Parameters);
+
+        return await Context.ReadRequiredAsync<ReadProfileResultV1>(sql, CancellationToken);
     }
 }
 
-public sealed class UpdateProfileV1(ServiceRuntime runtime)
-    : UserService<ProfileParameters, UpdateProfileDataV1>(runtime)
+[ServiceEndpoint("PUT", "/api/v1/profiles/{profileId:long}")]
+public sealed class UpdateProfileV1 : UserService<UpdateProfileParametersV1, UpdateProfileDataV1>
 {
     protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
 
     protected override IReadOnlyList<ServiceResultType> GetResultTypes() =>
         [ServiceResultType.Default<UpdateResult>()];
 
-    protected override ModuleRequirement GetInstanceModules(ProfileParameters parameters) =>
+    protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) =>
         ModuleRequirement.None;
 
-    protected override ServicePermission GetPermission(ProfileParameters parameters, Type resultType) =>
+    protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) =>
         new("profile.self.update");
 
-    protected override void ValidateParameters(ProfileParameters parameters)
+    protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters)
     {
-        if (parameters.PublicId == Guid.Empty)
-        {
-            throw new ArgumentException("Profile public ID is required.", nameof(parameters));
-        }
-    }
-
-    protected override Task ValidatePermissions(ProfileParameters parameters)
-    {
-        if (parameters.PublicId != Auth.ProfilePublicId)
+        if (parameters.ProfileId != Auth.ProfileId)
         {
             throw new KeyNotFoundException("The authorized profile was not found.");
         }
 
-        if (Auth.ProfileOwnerAccountId != Auth.AccountId || Auth.AccountId is null)
+        if (Auth.AccountId is null || Auth.ProfileOwnerAccountId != Auth.AccountId)
         {
-            throw new System.Security.SecurityException("Profile management requires ownership.");
+            throw new SecurityException("Profile management requires ownership.");
         }
 
         return Task.CompletedTask;
@@ -114,8 +81,12 @@ public sealed class UpdateProfileV1(ServiceRuntime runtime)
 
     protected override async Task<IServiceOutput> OnUpdate()
     {
-        var updateData = await Context.ReadProfileForUpdateAsync(Parameters.PublicId, CancellationToken);
-        updateData.SetData(new ProfileNameChange(Parameters.PublicId, Data.DisplayName));
+        var updateData = await Context.ReadProfileForUpdateAsync(Parameters.ProfileId, CancellationToken);
+
+        // Parameter and entity IDs have different names, so assign explicitly.
+        updateData.Id = Parameters.ProfileId;
+        updateData.SetData(Data);
+
         await Context.UpdateProfileAsync(updateData, CancellationToken);
         return new UpdateResult(true);
     }

@@ -1,3 +1,4 @@
+using Jularr.Data.Enums.Sql;
 using Jularr.Infrastructure.Sql;
 using Jularr.Tests.Infrastructure;
 using Npgsql;

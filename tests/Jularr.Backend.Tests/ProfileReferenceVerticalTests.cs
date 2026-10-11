@@ -1,5 +1,6 @@
+using Jularr.Data.Enums.Service;
 using Jularr.Data.Common;
-using Jularr.Data.Profile;
+using Jularr.Data.Fields.Profile;
 using Jularr.Data.User.Profile.V1;
 using Jularr.Infrastructure.Sql;
 using Jularr.Logic.Profile;
@@ -15,18 +16,18 @@ namespace Jularr.Tests;
 public sealed class ProfileReferenceVerticalTests
 {
     [TestMethod]
-    public async Task Read_UsesOpaquePublicIdAndOnlyTheActiveProfile()
+    public async Task Read_UsesLongIdAndOnlyTheActiveProfile()
     {
         await using var fixture = await ProfileFixture.CreateAsync();
         var gate = fixture.NewGate();
-        var service = new ReadProfileV1(new ServiceRuntime(fixture.Database, gate));
+        var service = new ServiceRuntime(fixture.Database, gate).Create<ReadProfileV1>();
 
-        var own = await service.ExecuteAsync<ProfileDetails>(new ProfileParameters(fixture.ProfileAPublicId));
-        Assert.AreEqual(fixture.ProfileAPublicId, own.PublicId);
+        var own = await service.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId));
+        Assert.AreEqual(fixture.ProfileAId, own.Id);
         Assert.AreEqual("Profile A", own.DisplayName);
 
         await Assert.ThrowsExactlyAsync<KeyNotFoundException>(
-            () => service.ExecuteAsync<ProfileDetails>(new ProfileParameters(fixture.ProfileBPublicId)));
+            () => service.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileBId)));
 
         Assert.IsFalse(gate.Events.Contains("transaction"));
         CollectionAssert.AreEqual(
@@ -40,16 +41,16 @@ public sealed class ProfileReferenceVerticalTests
         await using var fixture = await ProfileFixture.CreateAsync();
         var gate = fixture.NewGate();
         var runtime = new ServiceRuntime(fixture.Database, gate);
-        var rename = new UpdateProfileV1(runtime);
+        var rename = runtime.Create<UpdateProfileV1>();
         runtime.ValidateAll([rename]);
 
         var changed = await rename.ExecuteAsync<UpdateResult>(
-            new ProfileParameters(fixture.ProfileAPublicId),
+            new UpdateProfileParametersV1(fixture.ProfileAId),
             new UpdateProfileDataV1("  Display Name Updated  "));
 
         Assert.IsTrue(changed.Success);
-        var read = new ReadProfileV1(runtime);
-        var reloaded = await read.ExecuteAsync<ProfileDetails>(new ProfileParameters(fixture.ProfileAPublicId));
+        var read = runtime.Create<ReadProfileV1>();
+        var reloaded = await read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId));
         Assert.AreEqual("Display Name Updated", reloaded.DisplayName);
         Assert.AreEqual("Display Name Updated", await fixture.NameAsync(fixture.ProfileAId));
         Assert.AreEqual("Profile B", await fixture.NameAsync(fixture.ProfileBId));
@@ -57,18 +58,18 @@ public sealed class ProfileReferenceVerticalTests
     }
 
     [TestMethod]
-    public async Task Rename_RejectsAnotherProfilesUuidEvenWhenMembershipExists()
+    public async Task Update_ForeignProfileId_IsDeniedEvenWithMembership()
     {
         await using var fixture = await ProfileFixture.CreateAsync();
 
         await fixture.RunSqlAsync(
             "INSERT INTO \"AccountProfiles\" (\"AccountId\", \"ProfileId\") VALUES (41, 202)");
 
-        var rename = new UpdateProfileV1(new ServiceRuntime(fixture.Database, fixture.NewGate()));
+        var rename = new ServiceRuntime(fixture.Database, fixture.NewGate()).Create<UpdateProfileV1>();
 
         await Assert.ThrowsExactlyAsync<KeyNotFoundException>(
             () => rename.ExecuteAsync<UpdateResult>(
-                new ProfileParameters(fixture.ProfileBPublicId),
+                new UpdateProfileParametersV1(fixture.ProfileBId),
                 new UpdateProfileDataV1("Should Not Happen")));
 
         Assert.AreEqual("Profile B", await fixture.NameAsync(fixture.ProfileBId));
@@ -80,9 +81,9 @@ public sealed class ProfileReferenceVerticalTests
         await using var fixture = await ProfileFixture.CreateAsync();
         var gate = fixture.NewGate();
         var runtime = new ServiceRuntime(fixture.Database, gate);
-        var read = new ReadProfileV1(runtime);
-        var rename = new UpdateProfileV1(runtime);
-        var p = new ProfileParameters(fixture.ProfileAPublicId);
+        var read = runtime.Create<ReadProfileV1>();
+        var rename = runtime.Create<UpdateProfileV1>();
+        var p = new ReadProfileParametersV1(fixture.ProfileAId);
 
         await fixture.RunSqlAsync(
             """
@@ -94,16 +95,16 @@ public sealed class ProfileReferenceVerticalTests
             COMMIT;
             """);
 
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(p));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ReadProfileResultV1>(p));
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
-            () => rename.ExecuteAsync<UpdateResult>(p, new UpdateProfileDataV1("Denied")));
+            () => rename.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(p.ProfileId), new UpdateProfileDataV1("Denied")));
 
         await fixture.RunSqlAsync(
             "INSERT INTO \"AccountProfiles\" (\"AccountId\", \"ProfileId\") VALUES (41, 101)");
         await fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"ActiveProfileId\" = 101");
         await fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"IsEnabled\" = FALSE WHERE \"Id\" = 41");
 
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(p));
+        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ReadProfileResultV1>(p));
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
     }
 
@@ -113,11 +114,11 @@ public sealed class ProfileReferenceVerticalTests
         await using var fixture = await ProfileFixture.CreateAsync();
         var gate = fixture.NewGate();
         gate.DenyTransactionalWrite = true;
-        var rename = new UpdateProfileV1(new ServiceRuntime(fixture.Database, gate));
+        var rename = new ServiceRuntime(fixture.Database, gate).Create<UpdateProfileV1>();
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
             () => rename.ExecuteAsync<UpdateResult>(
-                new ProfileParameters(fixture.ProfileAPublicId),
+                new UpdateProfileParametersV1(fixture.ProfileAId),
                 new UpdateProfileDataV1("Denied")));
 
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
@@ -128,17 +129,17 @@ public sealed class ProfileReferenceVerticalTests
     public async Task InvalidNameRollsBackAndParameterBindingDoesNotInterpretSql()
     {
         await using var fixture = await ProfileFixture.CreateAsync();
-        var rename = new UpdateProfileV1(new ServiceRuntime(fixture.Database, fixture.NewGate()));
+        var rename = new ServiceRuntime(fixture.Database, fixture.NewGate()).Create<UpdateProfileV1>();
 
-        await Assert.ThrowsExactlyAsync<ArgumentException>(
+        await Assert.ThrowsExactlyAsync<DataValidationException>(
             () => rename.ExecuteAsync<UpdateResult>(
-                new ProfileParameters(fixture.ProfileAPublicId),
+                new UpdateProfileParametersV1(fixture.ProfileAId),
                 new UpdateProfileDataV1("   ")));
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
 
         const string literal = "Safe'); DROP TABLE \"Profiles\"; --";
         var changed = await rename.ExecuteAsync<UpdateResult>(
-            new ProfileParameters(fixture.ProfileAPublicId),
+            new UpdateProfileParametersV1(fixture.ProfileAId),
             new UpdateProfileDataV1(literal));
 
         Assert.IsTrue(changed.Success);
@@ -147,14 +148,14 @@ public sealed class ProfileReferenceVerticalTests
     }
 
     [TestMethod]
-    public async Task EmptyPublicIdRejectedBeforeDatabaseAccess()
+    public async Task InvalidProfileIdRejectedBeforeDatabaseAccess()
     {
         await using var fixture = await ProfileFixture.CreateAsync();
         var gate = fixture.NewGate();
-        var read = new ReadProfileV1(new ServiceRuntime(fixture.Database, gate));
+        var read = new ServiceRuntime(fixture.Database, gate).Create<ReadProfileV1>();
 
-        await Assert.ThrowsExactlyAsync<ArgumentException>(
-            () => read.ExecuteAsync<ProfileDetails>(new ProfileParameters(Guid.Empty)));
+        await Assert.ThrowsExactlyAsync<DataValidationException>(
+            () => read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(0)));
 
         CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
     }
@@ -163,39 +164,40 @@ public sealed class ProfileReferenceVerticalTests
     public async Task Update_LateFailure_RollsBackSharedLogicTransaction()
     {
         await using var fixture = await ProfileFixture.CreateAsync();
-        var service = new FailingUpdate(new ServiceRuntime(fixture.Database, fixture.NewGate()));
+        var service = new ServiceRuntime(fixture.Database, fixture.NewGate()).Create(new FailingUpdate());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.ExecuteAsync<UpdateResult>(
-            new ProfileParameters(fixture.ProfileAPublicId), new UpdateProfileDataV1("Pending")));
+            new UpdateProfileParametersV1(fixture.ProfileAId), new UpdateProfileDataV1("Pending")));
 
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
     }
 
-    private sealed class FailingUpdate(ServiceRuntime runtime) : UserService<ProfileParameters, UpdateProfileDataV1>(runtime)
+    private sealed class FailingUpdate : UserService<UpdateProfileParametersV1, UpdateProfileDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ProfileParameters parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(ProfileParameters parameters, Type resultType) => new("profile.self.update");
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var updateData = await Context.ReadProfileForUpdateAsync(Parameters.PublicId, CancellationToken);
-            updateData.SetData(new ProfileNameChange(Parameters.PublicId, Data.DisplayName));
+            var updateData = await Context.ReadProfileForUpdateAsync(Parameters.ProfileId, CancellationToken);
+            updateData.SetData(Data);
             await Context.UpdateProfileAsync(updateData, CancellationToken);
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    profile."PublicId",
-                    profile."DisplayName"
+                    profile."Id",
+                    profile."DisplayName",
+                    profile."UiLocaleId"
                 FROM
                     "Profiles" AS profile
                 WHERE
-                    profile."PublicId" = @PublicId;
+                    profile."Id" = @ProfileId;
                 """;
             sql.Parameters.Add(Parameters);
-            var pending = await Context.ReadRequiredAsync<ProfileDetails>(sql, CancellationToken);
+            var pending = await Context.ReadRequiredAsync<ReadProfileResultV1>(sql, CancellationToken);
             Assert.AreEqual("Pending", pending.DisplayName);
             throw new InvalidOperationException("Fail before commit.");
         }
@@ -209,8 +211,6 @@ public sealed class ProfileReferenceVerticalTests
         public long AccountAId { get; } = 41;
         public long ProfileAId { get; } = 101;
         public long ProfileBId { get; } = 202;
-        public Guid ProfileAPublicId { get; } = Guid.NewGuid();
-        public Guid ProfileBPublicId { get; } = Guid.NewGuid();
         public Guid SessionPublicId { get; } = Guid.NewGuid();
 
         private ProfileFixture(NpgsqlDataSource setup, NpgsqlDataSource database)
@@ -230,25 +230,24 @@ public sealed class ProfileReferenceVerticalTests
             try
             {
                 await fixture.RunBootstrapAsync("CREATE SCHEMA \"ProfileReference\";");
-                using var schema = typeof(ReadProfileV1).Assembly.GetManifestResourceStream("Jularr.Database.Profile.sql")
-                    ?? throw new InvalidOperationException("The profile schema is missing.");
+                using var schema = typeof(ReadProfileV1).Assembly.GetManifestResourceStream("Jularr.Database.Account.sql")
+                    ?? throw new InvalidOperationException("The account schema is missing.");
                 using var reader = new StreamReader(schema);
                 await fixture.RunBootstrapAsync(await reader.ReadToEndAsync());
                 await fixture.RunBootstrapAsync(
                     """
                     BEGIN;
-                    INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (1, 'de-DE', 'Deutsch');
+                    INSERT INTO "UiLocales" ("Id", "Locale", "Name") VALUES (1, 'de-DE', 'Deutsch'), (2, 'en-GB', 'English');
                     INSERT INTO "Accounts" ("Id", "Email", "DisplayName", "AccountRoleTypeId")
                     VALUES (41, 'a@example.test', 'Account A', 2), (42, 'b@example.test', 'Account B', 2);
-                    INSERT INTO "ProfileReference"."Profiles" ("Id", "PublicId", "OwnerAccountId", "DisplayName", "UiLocaleId")
-                    VALUES (101, @ProfileAPublicId, 41, 'Profile A', 1), (202, @ProfileBPublicId, 42, 'Profile B', 1);
+                    INSERT INTO "ProfileReference"."Profiles" ("Id", "OwnerAccountId", "DisplayName", "UiLocaleId")
+                    VALUES (101, 41, 'Profile A', 1), (202, 42, 'Profile B', 1);
                     INSERT INTO "ProfileReference"."AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 101), (42, 202);
                     INSERT INTO "ProfileReference"."AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "ExpiresAt")
                     VALUES (@SessionPublicId, 41, 101, decode(repeat('ab', 32), 'hex'), now() + interval '1 hour');
                     COMMIT;
                     """,
-                    SqlParams.Create().Add("ProfileAPublicId", fixture.ProfileAPublicId).Add("ProfileBPublicId", fixture.ProfileBPublicId)
-                        .Add("SessionPublicId", fixture.SessionPublicId).ToArray());
+                    SqlParams.Create().Add("SessionPublicId", fixture.SessionPublicId).ToArray());
                 return fixture;
             }
             catch
@@ -258,7 +257,7 @@ public sealed class ProfileReferenceVerticalTests
             }
         }
 
-        internal ProfileGate NewGate() => new(Database, AccountAId, ProfileAId, ProfileAPublicId, SessionPublicId);
+        internal ProfileGate NewGate() => new(Database, AccountAId, ProfileAId, SessionPublicId);
 
         public async Task<string> NameAsync(long profileId)
         {
@@ -304,7 +303,7 @@ public sealed class ProfileReferenceVerticalTests
 
     private sealed record LockedProfile(long Id);
 
-    internal sealed class ProfileGate(NpgsqlDataSource database, long accountId, long profileId, Guid profilePublicId, Guid sessionPublicId) : IServiceGate
+    internal sealed class ProfileGate(NpgsqlDataSource database, long accountId, long profileId, Guid sessionPublicId) : IServiceGate
     {
         public List<string> Events { get; } = [];
         public bool DenyTransactionalWrite { get; set; }
@@ -328,18 +327,16 @@ public sealed class ProfileReferenceVerticalTests
                 throw new UnauthorizedAccessException("Expected user service.");
             }
 
-            return Task.FromResult(new ServiceCaller(accountId, profileId, ServiceArea.User, sessionPublicId.ToString("D"), sessionPublicId, 1, profilePublicId, accountId));
+            return Task.FromResult(new ServiceCaller(accountId, profileId, ServiceArea.User, sessionPublicId.ToString("D"), sessionPublicId, 1, accountId));
         }
 
         public async Task RequireAccessAsync(
             ServiceCaller caller,
             ServicePermission permission,
-            IReadOnlyList<ResourceTarget> targets,
             CancellationToken cancellationToken)
         {
             Events.Add("access");
-            if (targets.Count != 0 ||
-                (permission.Key != "profile.self.read" && permission.Key != "profile.self.update"))
+            if (permission.Key != "profile.self.read" && permission.Key != "profile.self.update")
             {
                 throw new UnauthorizedAccessException("Invalid permission or target.");
             }
@@ -368,7 +365,6 @@ public sealed class ProfileReferenceVerticalTests
         public async Task RequireTransactionalAccessAsync(
             ServiceCaller caller,
             ServicePermission permission,
-            IReadOnlyList<ResourceTarget> targets,
             LogicContext context,
             CancellationToken cancellationToken)
         {

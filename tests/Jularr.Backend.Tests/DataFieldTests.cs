@@ -1,5 +1,12 @@
+using Jularr.Data.Enums.Sql;
+using Jularr.Data.Logic.Profile;
 using Jularr.Data.Common;
-using Jularr.Data.Profile;
+using System.Text.Json;
+using Jularr.Data.Fields;
+using Jularr.Data.Fields.Account;
+using Jularr.Data.Fields.Profile;
+using Jularr.Data.Fields.Session;
+using Jularr.Data.User.Profile.V1;
 using Jularr.Infrastructure.Sql;
 using Jularr.Tests.Infrastructure;
 using Jularr.Data;
@@ -11,6 +18,91 @@ namespace Jularr.Tests;
 [TestClass]
 public sealed class DataFieldTests
 {
+    private sealed class ProfileListChange : BaseData
+    {
+        public ProfileListChange(long id, string displayName)
+        {
+            Id = id;
+            DisplayName = displayName;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
+        public string DisplayName { get; }
+    }
+
+    [TestMethod]
+    public void SetData_PartialFields_DoNotRenameProfileIdToId()
+    {
+        var target = new ProfileUpdateData(101, "Name", 1);
+        target.SetData(new UpdateProfileParametersV1(999), new UpdateProfileDataV1 { UiLocaleId = 2 });
+        Assert.AreEqual(101L, target.Id);
+        Assert.AreEqual("Name", target.DisplayName);
+        Assert.AreEqual(2L, target.UiLocaleId);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var json = JsonSerializer.Serialize(new UpdateProfileDataV1 { UiLocaleId = 3 }, options);
+        Assert.AreEqual("{\"uiLocaleId\":3}", json);
+        target.SetData(JsonSerializer.Deserialize<UpdateProfileDataV1>(json, options)!);
+        Assert.AreEqual("Name", target.DisplayName);
+        target.SetData(new UpdateProfileDataV1("  Changed  "), new UpdateProfileDataV1 { UiLocaleId = 4 });
+        Assert.AreEqual("Changed", target.DisplayName);
+        Assert.AreEqual(4L, target.UiLocaleId);
+        Assert.ThrowsExactly<DataValidationException>(() => target.SetData(
+            JsonSerializer.Deserialize<UpdateProfileDataV1>("{\"displayName\":null}", options)!));
+        Assert.AreEqual("Changed", target.DisplayName);
+    }
+
+    [TestMethod]
+    public void SetData_Lists_MatchEntityIdsAndRejectUnknownRows()
+    {
+        var first = new ProfileUpdateData(101, "A", 1);
+        var second = new ProfileUpdateData(202, "B", 2);
+        var target = new BaseDataList<ProfileUpdateData>([first, second]);
+        target.SetData(new BaseDataList<ProfileListChange>([new(202, "B changed"), new(101, "A changed")]));
+        Assert.AreEqual("A changed", first.DisplayName);
+        Assert.AreEqual("B changed", second.DisplayName);
+        Assert.AreEqual(2L, second.UiLocaleId);
+        Assert.ThrowsExactly<DataValidationException>(() => target.SetData(
+            new BaseDataList<ProfileListChange>([new(101, "Not applied"), new(999, "Unknown")])));
+        Assert.AreEqual("A changed", first.DisplayName);
+    }
+
+    public static readonly StringField ShortLabel = new() { MaximumLength = 3, AllowBlank = false };
+
+    private sealed class LabelData : BaseData
+    {
+        public LabelData(string label)
+        {
+            Label = label;
+        }
+
+        [DataField(typeof(DataFieldTests), nameof(ShortLabel))]
+        public string Label { get; }
+    }
+
+    [TestMethod]
+    public void Data_RequiredLengthAndList_ValidateWithoutSql()
+    {
+        new LabelData("😀😀😀").Validate();
+        var list = JsonSerializer.Deserialize<BaseDataList<LabelData>>("[{\"Label\":\"ok\"}]")!;
+        list.Validate();
+        Assert.AreEqual("ok", list[0].Label);
+        Assert.AreEqual("[{\"Label\":\"ok\"}]", JsonSerializer.Serialize(list));
+        Assert.ThrowsExactly<DataValidationException>(() => new LabelData("1234").Validate());
+        Assert.ThrowsExactly<DataValidationException>(() => new LabelData("\0").Validate());
+        Assert.ThrowsExactly<DataValidationException>(() => new LabelData(" ").Validate());
+        Assert.ThrowsExactly<DataValidationException>(() => new BaseDataList<LabelData>([new("ok"), new("long")]).Validate());
+        Assert.ThrowsExactly<DataValidationException>(() => ProfileFields.UiLocaleId.Validate(0L, "UiLocaleId"));
+
+        // Nullability and the all-zero Guid are separate field rules.
+        Assert.ThrowsExactly<DataValidationException>(() => SessionFields.PublicId.Validate(null, "SessionPublicId"));
+        Assert.ThrowsExactly<DataValidationException>(() => SessionFields.PublicId.Validate(Guid.Empty, "SessionPublicId"));
+        AccountPasskeyFields.Aaguid.Validate(null, "Aaguid");
+        AccountPasskeyFields.Aaguid.Validate(Guid.Empty, "Aaguid");
+    }
+
     private sealed record RequiredName(
         [property: DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))] string? DisplayName);
 
@@ -26,10 +118,8 @@ public sealed class DataFieldTests
     [TestMethod]
     public void Field_RequiredAndOptional_ReuseOneDatabaseDefinition()
     {
-        Assert.AreEqual("Profiles", ProfileFields.DisplayName.Table);
-        Assert.AreEqual("DisplayName", ProfileFields.DisplayName.Column);
         Assert.AreEqual(typeof(string), ProfileFields.DisplayName.ClrType);
-        Assert.ThrowsExactly<ArgumentException>(() => SqlParams.From(new RequiredName(null)).Add("DisplayName"));
+        Assert.ThrowsExactly<DataValidationException>(() => SqlParams.From(new RequiredName(null)).Add("DisplayName"));
 
         var parameter = SqlParams.From(new OptionalName(null)).Add("DisplayName").ToArray().Single();
         Assert.AreEqual(NpgsqlDbType.Text, parameter.NpgsqlDbType);

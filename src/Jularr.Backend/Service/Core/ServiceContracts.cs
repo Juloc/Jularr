@@ -1,29 +1,7 @@
+using Jularr.Data.Enums.Service;
 using Jularr.Data.Common;
 
 namespace Jularr.Service.Core;
-
-public enum ServiceOperationType : byte
-{
-    Read,
-    Create,
-    Update,
-    Delete,
-    Execute
-}
-
-public enum ServiceArea : byte
-{
-    User,
-    Admin,
-    System
-}
-
-public enum ModuleRequirementMode : byte
-{
-    None,
-    All,
-    Any
-}
 
 public sealed record ModuleRequirement
 {
@@ -73,6 +51,7 @@ public sealed record ServiceResultType
 
 public sealed record ServicePermission
 {
+    public static ServicePermission Public { get; } = new("public");
     public string Key { get; }
 
     public ServicePermission(string key)
@@ -82,8 +61,6 @@ public sealed record ServicePermission
     }
 }
 
-public readonly record struct ResourceTarget(string Kind, long Id);
-
 public sealed record ServiceCaller(
     long? AccountId,
     long? ProfileId,
@@ -91,10 +68,12 @@ public sealed record ServiceCaller(
     string PrincipalKey,
     Guid? SessionPublicId = null,
     long? SessionRevision = null,
-    Guid? ProfilePublicId = null,
     long? ProfileOwnerAccountId = null);
 
 public interface IServiceDefinition
 {
     void ValidateDefinition();
+    ServiceOperationType OperationType { get; }
+    Type DefaultResultType { get; }
+    ServiceArea ServiceArea { get; }
 }

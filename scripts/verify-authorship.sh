@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-forbidden_identity_pattern='(^|[^[:alnum:]])(claude|julocae|chatgpt|codex|copilot)([^[:alnum:]]|$)|anthropic|openai'
-forbidden_trailer_pattern='^[[:space:]]*(co-authored-by|author|generated-by|assisted-by):.*(claude|julocae|chatgpt|codex|copilot|anthropic|openai)'
+required_identity='Juloc <juli.hiresch@gmail.com>'
+forbidden_trailer_pattern='^[[:space:]]*co-authored-by:|^[[:space:]]*(author|generated-by|assisted-by):.*(claude|julocae|chatgpt|codex|copilot|anthropic|openai)'
 
 failures=0
 
-fail_if_forbidden_identity() {
+verify_identity() {
   local label="$1"
   local value="$2"
 
-  if printf '%s\n' "$value" | grep -Eiq "$forbidden_identity_pattern"; then
-    echo "Authorship verification failed: ${label} must identify the real contributor, not an agent or AI service." >&2
+  if [[ "${value%%>*}>" != "$required_identity" ]]; then
+    echo "Authorship verification failed: ${label} must be exactly ${required_identity}." >&2
     failures=1
   fi
 }
@@ -20,7 +20,7 @@ fail_if_forbidden_trailer() {
   local message="$1"
 
   if printf '%s\n' "$message" | grep -Eiq "$forbidden_trailer_pattern"; then
-    echo "Authorship verification failed: commit messages must not contain AI or agent attribution trailers." >&2
+    echo "Authorship verification failed: commit messages must not contain co-author or AI attribution trailers." >&2
     failures=1
   fi
 }
@@ -29,8 +29,8 @@ verify_current_identity_and_message() {
   local message_file="$1"
 
   test -f "$message_file" || { echo "Authorship verification failed: commit message file was not found." >&2; exit 2; }
-  fail_if_forbidden_identity "author identity" "$(git var GIT_AUTHOR_IDENT)"
-  fail_if_forbidden_identity "committer identity" "$(git var GIT_COMMITTER_IDENT)"
+  verify_identity "author identity" "$(git var GIT_AUTHOR_IDENT)"
+  verify_identity "committer identity" "$(git var GIT_COMMITTER_IDENT)"
   fail_if_forbidden_trailer "$(<"$message_file")"
 }
 
@@ -39,8 +39,8 @@ verify_commit_range() {
   local commit
 
   while IFS= read -r commit; do
-    fail_if_forbidden_identity "author of ${commit}" "$(git show -s --format='%an <%ae>' "$commit")"
-    fail_if_forbidden_identity "committer of ${commit}" "$(git show -s --format='%cn <%ce>' "$commit")"
+    verify_identity "author of ${commit}" "$(git show -s --format='%an <%ae>' "$commit")"
+    verify_identity "committer of ${commit}" "$(git show -s --format='%cn <%ce>' "$commit")"
     fail_if_forbidden_trailer "$(git show -s --format='%B' "$commit")"
   done < <(git rev-list "$range")
 }

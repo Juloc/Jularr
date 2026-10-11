@@ -99,10 +99,7 @@ public sealed class SqlParams
                 throw new ArgumentException("The parameter type conflicts with its data field.", nameof(databaseType));
             }
 
-            if (field.Required && value is null)
-            {
-                throw new ArgumentException("A required data field cannot be null.", nameof(name));
-            }
+            field.Validate(value, name);
 
             databaseType = field.Field.DatabaseType;
         }
@@ -141,7 +138,7 @@ public sealed class SqlParams
             {
                 isCompatible = explicitType == ResolveType(actualType)
                     || (actualType == typeof(string)
-                        && explicitType is NpgsqlDbType.Jsonb or NpgsqlDbType.Citext);
+                        && explicitType is NpgsqlDbType.Jsonb or NpgsqlDbType.Citext or NpgsqlDbType.Varchar);
             }
 
             if (!isCompatible)

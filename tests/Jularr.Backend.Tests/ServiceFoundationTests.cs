@@ -1,3 +1,5 @@
+using Jularr.Data.Enums.Sql;
+using Jularr.Data.Enums.Service;
 using Jularr.Data.Common;
 using Jularr.Infrastructure.Sql;
 using Jularr.Service.Core;
@@ -24,7 +26,7 @@ public sealed class ServiceFoundationTests
         await using var database = CreateDataSource();
         var gate = new TestGate();
         var runtime = new ServiceRuntime(database, gate);
-        var service = new AccountReadService(runtime);
+        var service = runtime.Create(new AccountReadService());
         runtime.ValidateAll([service]);
 
         var result = await service.ExecuteAsync<AccountResult>(new AccountParameters(5));
@@ -39,7 +41,7 @@ public sealed class ServiceFoundationTests
     {
         await using var database = CreateDataSource();
         var gate = new TestGate { BlockModule = true };
-        var service = new AccountReadService(new ServiceRuntime(database, gate));
+        var service = new ServiceRuntime(database, gate).Create(new AccountReadService());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             () => service.ExecuteAsync<AccountResult>(new AccountParameters(5)));
@@ -52,7 +54,7 @@ public sealed class ServiceFoundationTests
     {
         await using var database = CreateDataSource();
         var gate = new TestGate();
-        var service = new AccountReadService(new ServiceRuntime(database, gate));
+        var service = new ServiceRuntime(database, gate).Create(new AccountReadService());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(
             () => service.ExecuteAsync<PrivateAccountResult>(new AccountParameters(5)));
@@ -65,7 +67,7 @@ public sealed class ServiceFoundationTests
     {
         await using var database = CreateDataSource();
         var gate = new TestGate();
-        var service = new AccountListService(new ServiceRuntime(database, gate));
+        var service = new ServiceRuntime(database, gate).Create(new AccountListService());
 
         await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
             () => service.ExecuteAsync<AccountResult>(new ListParameters(1, 25, (ListSort)255)));
@@ -89,7 +91,7 @@ public sealed class ServiceFoundationTests
         }
 
         var gate = new TestGate { Area = ServiceArea.Admin };
-        var service = new AccountWriteService(new ServiceRuntime(database, gate), new AccountWorkflowLogic());
+        var service = new ServiceRuntime(database, gate).Create(new AccountWriteService(new AccountWorkflowLogic()));
 
         var error = await Assert.ThrowsExactlyAsync<PostgresException>(
             () => service.ExecuteAsync<AccountResult>(new AccountParameters(5), new AccountData("test", Duplicate: true)));
@@ -114,7 +116,7 @@ public sealed class ServiceFoundationTests
         }
 
         var gate = new TestGate { Area = ServiceArea.System };
-        var service = new SystemBatchService(new ServiceRuntime(database, gate));
+        var service = new ServiceRuntime(database, gate).Create(new SystemBatchService());
 
         var error = await Assert.ThrowsExactlyAsync<PostgresException>(
             () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("batch")));
@@ -141,7 +143,7 @@ public sealed class ServiceFoundationTests
         }
 
         var gate = new TestGate { Area = ServiceArea.System, BlockSecondTransaction = true };
-        var service = new SystemBatchService(new ServiceRuntime(database, gate));
+        var service = new ServiceRuntime(database, gate).Create(new SystemBatchService());
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
             () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("blocked")));
@@ -156,7 +158,7 @@ public sealed class ServiceFoundationTests
     public async Task ReadService_CannotObtainLogicWriteCapability()
     {
         await using var database = CreateDataSource();
-        var service = new ReadWithForbiddenLogicService(new ServiceRuntime(database, new TestGate()));
+        var service = new ServiceRuntime(database, new TestGate()).Create(new ReadWithForbiddenLogicService());
 
         var result = await service.ExecuteAsync<AccountResult>(new AccountParameters(6));
         Assert.AreEqual("blocked", result.Name);
@@ -173,7 +175,7 @@ public sealed class ServiceFoundationTests
     {
         await using var database = CreateDataSource();
         var gate = new TestGate();
-        var service = new HookReadService(new ServiceRuntime(database, gate));
+        var service = new ServiceRuntime(database, gate).Create(new HookReadService());
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
             () => service.ExecuteAsync<AccountResult>(new AccountParameters(999)));
@@ -187,7 +189,7 @@ public sealed class ServiceFoundationTests
     public async Task OnRead_ConcurrentCalls_KeepInvocationStateIsolated()
     {
         await using var database = CreateDataSource();
-        var service = new HookReadService(new ServiceRuntime(database, new TestGate()));
+        var service = new ServiceRuntime(database, new TestGate()).Create(new HookReadService());
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         var first = service.ExecuteAsync<AccountResult>(new AccountParameters(11), timeout.Token);
         var second = service.ExecuteAsync<AccountResult>(new AccountParameters(22), timeout.Token);
@@ -207,7 +209,7 @@ public sealed class ServiceFoundationTests
         Assert.ThrowsExactly<InvalidOperationException>(() => service.ReadBoundParameters());
     }
 
-    private sealed class HookReadService(ServiceRuntime runtime) : UserService<AccountParameters>(runtime)
+    private sealed class HookReadService : UserService<AccountParameters>
     {
         private int _hookCalls;
         public int HookCalls => _hookCalls;
@@ -220,7 +222,6 @@ public sealed class ServiceFoundationTests
         protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
         protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.read");
 
-        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
 
         protected override Task ValidatePermissions(AccountParameters parameters)
         {
@@ -254,7 +255,7 @@ public sealed class ServiceFoundationTests
 
     private sealed record ListParameters(int Page, int PageSize, ListSort? Sort);
 
-    private sealed class AccountListService(ServiceRuntime runtime) : UserListService<ListParameters, ListSort>(runtime)
+    private sealed class AccountListService : UserListService<ListParameters, ListSort>
     {
         protected override IReadOnlyList<ServiceSortKey<ListSort>> GetSortKeys() =>
         [
@@ -267,18 +268,16 @@ public sealed class ServiceFoundationTests
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
         protected override ModuleRequirement GetInstanceModules(ListParameters parameters) => ModuleRequirement.None;
         protected override ServicePermission GetPermission(ListParameters parameters, Type resultType) => new("accounts.list");
-        protected override ResourceTarget? GetResource(ListParameters parameters) => null;
 
         protected override Task<IServiceOutput> OnRead()
             => Task.FromResult<IServiceOutput>(new AccountResult(1, "test"));
     }
 
-    private sealed class ReadWithForbiddenLogicService(ServiceRuntime runtime) : UserReadService<AccountParameters>(runtime)
+    private sealed class ReadWithForbiddenLogicService : UserReadService<AccountParameters>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
         protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
         protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.read");
-        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
 
         protected override async Task<IServiceOutput> OnRead()
         {
@@ -290,13 +289,12 @@ public sealed class ServiceFoundationTests
         }
     }
 
-    private sealed class SystemBatchService(ServiceRuntime runtime) : SystemService<AccountParameters, AccountData>(runtime)
+    private sealed class SystemBatchService : SystemService<AccountParameters, AccountData>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
         protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
         protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.system.execute");
-        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
 
         protected override async Task<IServiceOutput> OnExecute()
         {
@@ -320,7 +318,7 @@ public sealed class ServiceFoundationTests
         }
     }
 
-    private sealed class AccountReadService(ServiceRuntime runtime) : UserReadService<AccountParameters>(runtime)
+    private sealed class AccountReadService : UserReadService<AccountParameters>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
 
@@ -328,7 +326,6 @@ public sealed class ServiceFoundationTests
 
         protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.read");
 
-        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
 
         protected override async Task<IServiceOutput> OnRead()
         {
@@ -342,7 +339,7 @@ public sealed class ServiceFoundationTests
         }
     }
 
-    private sealed class AccountWriteService(ServiceRuntime runtime, AccountWorkflowLogic logic) : AdminService<AccountParameters, AccountData>(runtime)
+    private sealed class AccountWriteService(AccountWorkflowLogic logic) : AdminService<AccountParameters, AccountData>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
 
@@ -352,7 +349,6 @@ public sealed class ServiceFoundationTests
 
         protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.update");
 
-        protected override ResourceTarget? GetResource(AccountParameters parameters) => new("Account", parameters.AccountId);
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
@@ -402,15 +398,13 @@ public sealed class ServiceFoundationTests
             return Task.FromResult(new ServiceCaller(1, 2, Area, "test-user"));
         }
 
-        public Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, IReadOnlyList<ResourceTarget> targets, CancellationToken cancellationToken)
+        public Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken)
         {
             Events.Add("access");
-            Assert.AreEqual(1, targets.Count);
-            Assert.AreEqual("Account", targets[0].Kind);
             return Task.CompletedTask;
         }
 
-        public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, IReadOnlyList<ResourceTarget> targets, LogicContext context, CancellationToken cancellationToken)
+        public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken)
         {
             Events.Add("transaction");
             Assert.AreEqual("test-user", caller.PrincipalKey);

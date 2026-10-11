@@ -1,7 +1,5 @@
 name: Authorship
 
-# Runs for every pull request and push to main, including Android-only changes that CI ignores,
-# so it can be the only required status check on main.
 on:
   push:
     branches: [main, dev]
