@@ -1,0 +1,8341 @@
+{
+  "source": "https://github.com/Juloc/Jularr/blob/docs/cutoff-phase-b-schema-20261010/docs/DATABASE_CUTOVER_PHASE_B_SCHEMA.md",
+  "status": "DRAFT_NOT_SIGNED",
+  "snapshot": "Phase B SQL-DDL-Entwurf, Stand 2026-10-11",
+  "notice": "NOT NULL, PK und FK aus allen 14 DDL-Dateien inklusive ALTER TABLE extrahiert. Keine freigegebene Baseline.",
+  "tables": [
+    {
+      "name": "UiLocales",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Locale",
+          "type": "varchar(32)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsRightToLeft",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountRoleTypes",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Email",
+          "type": "citext",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AccountRoleTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AccountRoleTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EmailVerifiedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CredentialRevision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Profiles",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AccountProfiles",
+            "column": "ProfileId"
+          }
+        },
+        {
+          "name": "OwnerAccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Accounts",
+              "column": "Id"
+            },
+            {
+              "table": "AccountProfiles",
+              "column": "AccountId"
+            }
+          ]
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UiLocaleId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "PinHash",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "TimeZone",
+          "type": "varchar(100)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountProfiles",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountPasswords",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "PasswordHash",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ChangedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountPasskeys",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CredentialId",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicKey",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SignatureCounter",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Aaguid",
+          "type": "uuid",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Transports",
+          "type": "text[]",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "BackupEligible",
+          "type": "boolean",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "BackedUp",
+          "type": "boolean",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UserVerificationRequired",
+          "type": "boolean",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastUsedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "varchar(100)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RevokedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountTotpFactors",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "EncryptedSecret",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ConfirmedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastAcceptedStep",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RevokedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountRecoveryCodes",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CodeHash",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UsedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Providers",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsAccountLoginEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsAccountLinkEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsMediaConnectionEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsAccountAutoProvisionEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountGroups",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Name",
+          "type": "citext",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountGroupAccounts",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "AccountGroupId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AccountGroups",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AccountExternalLogins",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ExternalAccountId",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountAuthChallenges",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "TokenHash",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ExpiresAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ConsumedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AuthChallengePurposeTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AuthChallengePurposeTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CredentialRevision",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ProtectedState",
+          "type": "bytea",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountSessions",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Accounts",
+              "column": "Id"
+            },
+            {
+              "table": "AccountProfiles",
+              "column": "AccountId"
+            }
+          ]
+        },
+        {
+          "name": "ActiveProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "AccountProfiles",
+            "column": "ProfileId"
+          }
+        },
+        {
+          "name": "TokenHash",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ExpiresAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RevokedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastSeenAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CredentialRevision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RotationRevision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RotatedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaTypes",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Works",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "MediaTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CanonicalTitle",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkTitles",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UiLocaleId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Title",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsOriginal",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsPreferred",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "SourceReference",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsManualOverride",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkExternalIdentities",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderNamespace",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ExternalId",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Evidence",
+          "type": "jsonb",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ConfirmedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkMetadataFacts",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "FirstPublishedOn",
+          "type": "date",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RuntimeMs",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OriginalLanguage",
+          "type": "varchar(32)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CommunityRating",
+          "type": "numeric(4,2)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CommunityRatingCount",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Certification",
+          "type": "varchar(32)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CertificationCountry",
+          "type": "varchar(2)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Studios",
+          "type": "text[]",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ProductionCountries",
+          "type": "text[]",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkLocalizedValues",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UiLocaleId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Description",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Tagline",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkFactTypes",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkFieldProvenance",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkFactTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "WorkFactTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "SourceReference",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsManualOverride",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkRelationTypes",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkRelations",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "SourceWorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "TargetWorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkRelationTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "WorkRelationTypes",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Franchises",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "FranchiseWorks",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "FranchiseId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Franchises",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WorkMediaClassificationTypes",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkMediaClassifications",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkMediaClassificationTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "WorkMediaClassificationTypes",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WorkSeasons",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "SeasonNumber",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkEpisodes",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "WorkSeasons",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkSeasonId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkSeasons",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "EpisodeNumber",
+          "type": "numeric(9,3)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OrderIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsSpecial",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkVolumes",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "OrderIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkChapters",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "WorkVolumes",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkVolumeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkVolumes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ChapterNumber",
+          "type": "numeric(9,3)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OrderIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkTracks",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "OrderIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkEditions",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Region",
+          "type": "varchar(16)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkVersions",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "WorkId"
+          }
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "VersionLabel",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaAssetTypes",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaAssets",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkVersionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkVersions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkVersions",
+            "column": "WorkId"
+          }
+        },
+        {
+          "name": "MediaAssetTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaAssetTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "LibraryRoots",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RootPath",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsOnline",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastCheckedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "StoredFiles",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "LibraryRootId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "LibraryRoots",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MediaAssetId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaAssets",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkVersionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaAssets",
+            "column": "WorkVersionId"
+          }
+        },
+        {
+          "name": "NormalizedRelativePath",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SizeBytes",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsPresent",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastSeenAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaTrackTypes",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaTracks",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "StoredFileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "StoredFiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaTrackTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StreamIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Language",
+          "type": "varchar(32)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Codec",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "GamePlatforms",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "GameReleases",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "WorkVersionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "WorkVersions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "WorkVersions",
+              "column": "WorkId"
+            },
+            {
+              "table": "Works",
+              "column": "Id"
+            }
+          ]
+        },
+        {
+          "name": "GameMediaTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "MediaTypeId"
+          }
+        },
+        {
+          "name": "GamePlatformId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "GamePlatforms",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Region",
+          "type": "varchar(16)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RevisionLabel",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LauncherMetadata",
+          "type": "jsonb",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "GameReleaseFileRoleTypes",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "GameReleaseStoredFiles",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "WorkVersionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": [
+            {
+              "table": "GameReleases",
+              "column": "WorkVersionId"
+            },
+            {
+              "table": "StoredFiles",
+              "column": "WorkVersionId"
+            }
+          ]
+        },
+        {
+          "name": "StoredFileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "StoredFiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "DiscNumber",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SequenceNumber",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "GameReleaseFileRoleTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "GameReleaseFileRoleTypes",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "StoredFileHashes",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "StoredFileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "StoredFiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AlgorithmKey",
+          "type": "text",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "HashValue",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "VerifiedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProgressPositionTypes",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaProgress",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "WorkEpisodes",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkChapters",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkTracks",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEditions",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkEpisodeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEpisodes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkChapterId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkChapters",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkTrackId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkTracks",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProgressPositionTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ProgressPositionTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "TimePositionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "TimeProgressPositions",
+            "column": "MediaProgressId"
+          }
+        },
+        {
+          "name": "ReadingPositionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "ReadingProgressPositions",
+            "column": "MediaProgressId"
+          }
+        },
+        {
+          "name": "GamePositionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "GameProgressPositions",
+            "column": "MediaProgressId"
+          }
+        },
+        {
+          "name": "IsCompleted",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Revision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastActivityAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CompletionReasonTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "ProgressCompletionReasonTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CompletedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CompletedByAccountId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TimeProgressPositions",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "MediaProgressId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProgressPositionTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "ProgressPositionTypeId"
+          }
+        },
+        {
+          "name": "PositionMs",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DurationMs",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReadingProgressPositions",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "MediaProgressId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "MediaProgress",
+              "column": "WorkId"
+            },
+            {
+              "table": "ReaderContent",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "ProgressPositionTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "ProgressPositionTypeId"
+          }
+        },
+        {
+          "name": "ReaderContentId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "ReaderContent",
+              "column": "Id"
+            },
+            {
+              "table": "ReaderPages",
+              "column": "ReaderContentId"
+            }
+          ]
+        },
+        {
+          "name": "ProgressPermille",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Locator",
+          "type": "jsonb",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PageIndex",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "ReaderPages",
+            "column": "PageIndex"
+          }
+        }
+      ]
+    },
+    {
+      "name": "GameProgressPositions",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "MediaProgressId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProgressPositionTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "ProgressPositionTypeId"
+          }
+        },
+        {
+          "name": "PlayedMs",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ProgressPercent",
+          "type": "numeric(5,2)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WatchlistEntries",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AddedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Collections",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "CollectionWorks",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "CollectionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Collections",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AddedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProfileRatings",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Rating",
+          "type": "numeric(4,2)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaPlaybackHistory",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "MediaAssets",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "MediaAssetId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MediaAssets",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StartedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EndedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "PlaybackSessions",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "MediaAssets",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "MediaAssetId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "MediaAssets",
+              "column": "Id"
+            },
+            {
+              "table": "StoredFiles",
+              "column": "MediaAssetId"
+            }
+          ]
+        },
+        {
+          "name": "StoredFileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "StoredFiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "DeviceKey",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PlaybackModeKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "StartedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastActiveAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EndedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ImageTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ImageTargetKindTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ImageTypeTargets",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "ImageTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "ImageTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ImageTargetKindTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "ImageTargetKindTypes",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Images",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "StorageKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Sha256",
+          "type": "bytea",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "MimeType",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Width",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Height",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaChapters",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "MediaAssetId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaAssets",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StartMs",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EndMs",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OrderIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ImageAssignments",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ImageId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Images",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ImageTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ImageTypeTargets",
+            "column": "ImageTypeId"
+          }
+        },
+        {
+          "name": "ImageTargetKindTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ImageTypeTargets",
+            "column": "ImageTargetKindTypeId"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkChapterId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkChapters",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MediaChapterId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MediaChapters",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UiLocaleId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Region",
+          "type": "varchar(16)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Priority",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsManual",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaSegmentTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaSegmentSourceTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaSegments",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "MediaAssetId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaAssets",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MediaSegmentTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaSegmentTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MediaSegmentSourceTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaSegmentSourceTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StartMs",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EndMs",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsManualOverride",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaDetectionTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaDetectionStatusTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaDetectionRuns",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "MediaAssetId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaAssets",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MediaDetectionTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaDetectionTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MediaDetectionStatusTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaDetectionStatusTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "InputFingerprint",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DetectorVersion",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "MatchCount",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "StartedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "FinishedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ErrorCode",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderContent",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "WorkEditions",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkChapters",
+              "column": "WorkId"
+            },
+            {
+              "table": "ReaderContent",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkVersions",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "WorkEditions",
+              "column": "Id"
+            },
+            {
+              "table": "WorkVersions",
+              "column": "WorkEditionId"
+            }
+          ]
+        },
+        {
+          "name": "ContentRevision",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "StorageKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "WorkChapterId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkChapters",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "VariantKey",
+          "type": "varchar(100)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ReaderVariantTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderVariantTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ReaderLayoutTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderLayoutTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "LanguageTag",
+          "type": "varchar(32)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PageDirectionTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderPageDirectionTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "TextDirectionTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderTextDirectionTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WritingModeTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderWritingModeTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "HasTextLayer",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SourceReaderContentId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "ReaderContent",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "SourceWorkVersionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "WorkVersions",
+              "column": "Id"
+            },
+            {
+              "table": "StoredFiles",
+              "column": "WorkVersionId"
+            }
+          ]
+        },
+        {
+          "name": "SourceStoredFileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "StoredFiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ContentHash",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ParserVersion",
+          "type": "varchar(100)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "BuilderOperationId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "NodeCount",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PageCount",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SourcePageCount",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublishedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderPages",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ReaderContentId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderContent",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "PageIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "TextAnchor",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SourcePageIndex",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderBookmarks",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ReaderContentId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderContent",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Locator",
+          "type": "jsonb",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Label",
+          "type": "varchar(200)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Revision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderHighlights",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ReaderContentId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderContent",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StartLocator",
+          "type": "jsonb",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EndLocator",
+          "type": "jsonb",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Note",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SelectedText",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "StartPosition",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EndPosition",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AnchorRange",
+          "type": "int8range",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Revision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "UiTranslationMessages",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "UiTranslations",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "UiTranslationMessageId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "UiTranslationMessages",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UiLocaleId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Text",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsReviewed",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "OperationStatusTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Operations",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "OperationKindKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OperationStatusTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "OperationStatusTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "IdempotencyKey",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Input",
+          "type": "jsonb",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AttemptCount",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "NextAttemptAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ClaimedBy",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ClaimedUntil",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "StartedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "FinishedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "OperationLogs",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "OperationId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "EventKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SafeMessage",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ImageGenerationRequests",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "OperationId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Prompt",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AcceptedImageId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Images",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionRequestStatusTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionRequests",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionRequestStatusTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionRequestStatusTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "OperationId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ReadAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Profiles",
+              "column": "Id"
+            },
+            {
+              "table": "Events",
+              "column": "ProfileId"
+            }
+          ]
+        },
+        {
+          "name": "EventId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Events",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "NotificationGroupKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Events",
+            "column": "NotificationGroupKey"
+          }
+        },
+        {
+          "name": "LastOccurredAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DismissedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OccurrenceCount",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "HasProfileRecipient",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Events",
+            "column": "HasProfileAudience"
+          }
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "EditionExternalIdentities",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderNamespace",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ExternalId",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "People",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SortName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkCreditRoleTypes",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkCredits",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "PersonId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "People",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkCreditRoleTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkCreditRoleTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreditOrder",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RoleName",
+          "type": "varchar(100)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaTechnicalAnalyses",
+      "area": "Library/Storage/Games",
+      "fields": [
+        {
+          "name": "MediaAssetId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MediaAssets",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AnalyzedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DurationMs",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Width",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Height",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "BitRateBps",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SourceFingerprint",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MusicArtists",
+      "area": "Music",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "People",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AddedByProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastRefreshedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "PersonExternalIdentities",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "PersonId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "People",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderNamespace",
+          "type": "varchar(100)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ExternalId",
+          "type": "varchar(500)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MusicRecordings",
+      "area": "Music",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DurationMs",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MusicRecordingExternalIdentities",
+      "area": "Music",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "MusicRecordingId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MusicRecordings",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderNamespace",
+          "type": "varchar(100)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ExternalId",
+          "type": "varchar(500)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MusicAlbumTypes",
+      "area": "Music",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MusicAlbums",
+      "area": "Music",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "WorkEditions",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "MusicMediaTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "MediaTypeId"
+          }
+        },
+        {
+          "name": "MusicAlbumTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MusicAlbumTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "TrackListWorkEditionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MusicRecordingArtists",
+      "area": "Music",
+      "fields": [
+        {
+          "name": "MusicRecordingId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MusicRecordings",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MusicArtistId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MusicArtists",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreditOrder",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreditName",
+          "type": "varchar(200)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MusicTrackPlacements",
+      "area": "Music",
+      "fields": [
+        {
+          "name": "WorkTrackId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "WorkTracks",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "WorkTracks",
+              "column": "WorkId"
+            },
+            {
+              "table": "MusicAlbums",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEditions",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "DiscNumber",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "TrackNumber",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DurationMs",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "MusicRecordingId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MusicRecordings",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WorkMusicArtists",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MusicAlbums",
+            "column": "WorkId"
+          }
+        },
+        {
+          "name": "MusicArtistId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MusicArtists",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreditOrder",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreditName",
+          "type": "varchar(200)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkMonitoringDecisions",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "WorkSeasons",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEpisodes",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkVolumes",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkChapters",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkTracks",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEditions",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkSeasonId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkSeasons",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEpisodeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEpisodes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkVolumeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkVolumes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkChapterId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkChapters",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkTrackId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkTracks",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "IsMonitored",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MonitoringRelationTypes",
+      "area": "Monitoring",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "WorkMonitoringSources",
+      "area": "Monitoring",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "MonitoringRelationTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MonitoringRelationTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "PersonId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "People",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StudioName",
+          "type": "varchar(200)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CollectionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Collections",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MusicArtistId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MusicArtists",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "RoleNames",
+          "type": "text[]",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AddedByProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Collections",
+              "column": "ProfileId"
+            },
+            {
+              "table": "Profiles",
+              "column": "Id"
+            }
+          ]
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionRequestTargets",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AcquisitionRequestId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionRequests",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "AcquisitionRequests",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkSeasons",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEpisodes",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkVolumes",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkChapters",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkTracks",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEditions",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkSeasonId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkSeasons",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEpisodeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEpisodes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkVolumeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkVolumes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkChapterId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkChapters",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkTrackId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkTracks",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WantedItems",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "WorkSeasons",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEpisodes",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkVolumes",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkChapters",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkTracks",
+              "column": "WorkId"
+            },
+            {
+              "table": "WorkEditions",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkSeasonId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkSeasons",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEpisodeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEpisodes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkVolumeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkVolumes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkChapterId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkChapters",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkTrackId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkTracks",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEditionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEditions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationEventCategoryTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EventAudienceTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "EventAudienceTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "EventSeverityTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "EventSeverityTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AllowsDigest",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "BypassesQuietHours",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationChannelTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationTimingTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationSubscriptions",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "NotificationEventCategoryTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationEventCategoryTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "NotificationTimingTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "NotificationTimingTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationSubscriptionChannels",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationSubscriptions",
+            "column": "ProfileId"
+          }
+        },
+        {
+          "name": "NotificationEventCategoryTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationSubscriptions",
+            "column": "NotificationEventCategoryTypeId"
+          }
+        },
+        {
+          "name": "NotificationChannelTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationChannelTypes",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "NotificationProfileChannels",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "NotificationChannelTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationChannelTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "MediaProgressCheckpointEvents",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "MediaProgress",
+              "column": "ProfileId"
+            },
+            {
+              "table": "Profiles",
+              "column": "Id"
+            }
+          ]
+        },
+        {
+          "name": "MediaProgressId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ClientEventId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AcceptedRevision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ClientOccurredAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AcceptedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ActorAccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProgressCheckpointSourceTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ProgressCheckpointSourceTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "PayloadHash",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CompletionReasonTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "ProgressCompletionReasonTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ClearsCompletion",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CompletionPositionTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "ProgressPositionTypeId"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ProviderMediaConnections",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ExternalAccountId",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ConsentedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CredentialsStorageKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsWatchlistSyncEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsProgressSyncEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Revision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RevokedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProviderServerGrants",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ExternalServerId",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CredentialsStorageKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ApprovedByAccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ApprovedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Revision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ApprovedEndpoint",
+          "type": "varchar(2048)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "VerifiedOwnerExternalAccountId",
+          "type": "varchar(200)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RevokedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProviderGrantLibrarySections",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "ProviderServerGrantId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "ProviderServerGrants",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ExternalSectionId",
+          "type": "text",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProviderCatalogCheckpoints",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "ProviderServerGrantId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "ProviderGrantLibrarySections",
+            "column": "ProviderServerGrantId"
+          }
+        },
+        {
+          "name": "ExternalSectionId",
+          "type": "text",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "ProviderGrantLibrarySections",
+            "column": "ExternalSectionId"
+          }
+        },
+        {
+          "name": "NextStart",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PagesScanned",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Generation",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "GrantRevision",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OperationId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "RequestedByAccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "TotalSize",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastPageStart",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CompletedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionQualityProfiles",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "varchar(120)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsUpgradeAllowed",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpgradeCutoffQuality",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpgradeMinimumQualitySteps",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "MinimumSizeBytes",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "MaximumSizeBytes",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AllowAmbiguousIdentity",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionQualityProfileQualities",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "AcquisitionQualityProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionQualityProfiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "QualityKey",
+          "type": "text",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "IsAllowed",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "QualityOrder",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionQualityProfileLanguages",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "AcquisitionQualityProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionQualityProfiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "LanguageTag",
+          "type": "varchar(35)",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Ordinal",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionRuleFieldTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionRuleMatchTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionRuleEffectTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionQualityProfileRules",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "AcquisitionQualityProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionQualityProfiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Ordinal",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Name",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AcquisitionRuleFieldTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionRuleFieldTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionRuleMatchTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionRuleMatchTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionRuleEffectTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionRuleEffectTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MatchValue",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Score",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionKindTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionKindDefaultProfiles",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "AcquisitionKindTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionKindTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionQualityProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionQualityProfiles",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "WorkAcquisitionQualityProfiles",
+      "area": "Works/Metadata/Units",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionQualityProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionQualityProfiles",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionIndexerTypeTypes",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionIndexers",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AcquisitionIndexerTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionIndexerTypeTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "BaseUrl",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CredentialStorageKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AutomaticSearch",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "InteractiveSearch",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Priority",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SearchLimit",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastVerifiedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CapabilitiesVersion",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Capabilities",
+          "type": "jsonb",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionIndexerKinds",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "AcquisitionIndexerId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionIndexers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionKindTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionKindTypes",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionProfileIndexers",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "AcquisitionQualityProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionQualityProfiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionIndexerId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionIndexers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "IsAllowed",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsPreferred",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsFallbackOnly",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionDownloadClients",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "BaseUrl",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CredentialStorageKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "IsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Priority",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionDownloadClientCategories",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "AcquisitionDownloadClientId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionDownloadClients",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionKindTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionKindTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "Category",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionDownloadBindings",
+      "area": "Jobs/Acquisition/Playback/Locale",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "OperationId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionDownloadClientId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionDownloadClients",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ExternalDownloadId",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AcquisitionKindTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionKindTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AcquisitionRequestId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "AcquisitionRequests",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "AcquisitionRequests",
+              "column": "WorkId"
+            },
+            {
+              "table": "Works",
+              "column": "Id"
+            }
+          ]
+        },
+        {
+          "name": "ImportStateKey",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "LastImportResultCode",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "EventAudienceTypes",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RequiresProfile",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "EventSeverityTypes",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "uuid",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "NotificationEventCategoryTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "NotificationEventCategoryTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "EventAudienceTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "NotificationEventCategoryTypes",
+              "column": "EventAudienceTypeId"
+            },
+            {
+              "table": "EventAudienceTypes",
+              "column": "Id"
+            }
+          ]
+        },
+        {
+          "name": "EventSeverityTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "NotificationEventCategoryTypes",
+              "column": "EventSeverityTypeId"
+            },
+            {
+              "table": "EventSeverityTypes",
+              "column": "Id"
+            }
+          ]
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "HasProfileAudience",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "EventAudienceTypes",
+            "column": "RequiresProfile"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "RelatedOperationId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "MessageKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "MessageParams",
+          "type": "jsonb",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DeepLink",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DedupKey",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "NotificationGroupKey",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationEvents",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "NotificationId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Notifications",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "EventId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Events",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Notifications",
+              "column": "ProfileId"
+            },
+            {
+              "table": "Events",
+              "column": "ProfileId"
+            }
+          ]
+        },
+        {
+          "name": "HasProfileRecipient",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Notifications",
+              "column": "HasProfileRecipient"
+            },
+            {
+              "table": "Events",
+              "column": "HasProfileAudience"
+            }
+          ]
+        },
+        {
+          "name": "NotificationGroupKey",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Notifications",
+              "column": "NotificationGroupKey"
+            },
+            {
+              "table": "Events",
+              "column": "NotificationGroupKey"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NotificationDeliveries",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "EventId",
+          "type": "uuid",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Events",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Events",
+              "column": "ProfileId"
+            },
+            {
+              "table": "Profiles",
+              "column": "Id"
+            },
+            {
+              "table": "NotificationDigestBatches",
+              "column": "ProfileId"
+            },
+            {
+              "table": "NotificationPushEndpoints",
+              "column": "ProfileId"
+            },
+            {
+              "table": "NotificationExternalOccurrences",
+              "column": "ProfileId"
+            }
+          ]
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Accounts",
+              "column": "Id"
+            },
+            {
+              "table": "NotificationPushEndpoints",
+              "column": "AccountId"
+            }
+          ]
+        },
+        {
+          "name": "HasProfileRecipient",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Events",
+            "column": "HasProfileAudience"
+          }
+        },
+        {
+          "name": "NotificationChannelTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "NotificationChannelTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "OperationId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Operations",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DeliveredAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "NotificationDigestBatchId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "NotificationDigestBatches",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "NotificationPushEndpointId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "NotificationPushEndpoints",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "RecipientProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Profiles",
+              "column": "Id"
+            },
+            {
+              "table": "NotificationPushEndpoints",
+              "column": "ProfileId"
+            }
+          ]
+        },
+        {
+          "name": "DirectEventId",
+          "type": "uuid",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "NotificationExternalOccurrences",
+            "column": "ImmediateEventId"
+          }
+        },
+        {
+          "name": "CancelledAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CancellationCode",
+          "type": "varchar(80)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationDeliveryAttempts",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "NotificationDeliveryId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "NotificationDeliveries",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AttemptNumber",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "Succeeded",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DurationMs",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ErrorCode",
+          "type": "varchar(120)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "AttemptedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AcquisitionDownloadWantedItems",
+      "area": "Acquisition/Wanted",
+      "fields": [
+        {
+          "name": "AcquisitionDownloadBindingId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AcquisitionDownloadBindings",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WantedItemId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "WantedItems",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "AcquisitionDownloadBindings",
+              "column": "WorkId"
+            },
+            {
+              "table": "WantedItems",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "ConfirmedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationSchedules",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "QuietHoursEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "QuietHoursStart",
+          "type": "time(0)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "QuietHoursEnd",
+          "type": "time(0)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DigestEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "DigestLocalTime",
+          "type": "time(0)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "PopupsEnabled",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationDigestWeekdays",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationSchedules",
+            "column": "ProfileId"
+          }
+        },
+        {
+          "name": "IsoWeekday",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationDigestChannels",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationSchedules",
+            "column": "ProfileId"
+          }
+        },
+        {
+          "name": "NotificationChannelTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "NotificationChannelTypes",
+            "column": "Id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "NotificationPushEndpoints",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "PublicId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Accounts",
+              "column": "Id"
+            },
+            {
+              "table": "AccountSessions",
+              "column": "AccountId"
+            }
+          ]
+        },
+        {
+          "name": "AccountSessionId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "AccountSessions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "TransportKey",
+          "type": "varchar(80)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "EndpointHash",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ProtectedSubscription",
+          "type": "bytea",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "RevokedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationDigestBatches",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ScheduledLocalDate",
+          "type": "date",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ScheduledFor",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "WindowEndAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "CreatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "NotificationExternalOccurrences",
+      "area": "Notifications/Events",
+      "fields": [
+        {
+          "name": "NotificationDigestBatchId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "NotificationDigestBatches",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": [
+            {
+              "table": "NotificationDigestBatches",
+              "column": "ProfileId"
+            },
+            {
+              "table": "Events",
+              "column": "ProfileId"
+            }
+          ]
+        },
+        {
+          "name": "EventId",
+          "type": "uuid",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Events",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "NotificationEventCategoryTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Events",
+              "column": "NotificationEventCategoryTypeId"
+            },
+            {
+              "table": "NotificationEventCategoryTypes",
+              "column": "Id"
+            }
+          ]
+        },
+        {
+          "name": "AllowsDigest",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "NotificationEventCategoryTypes",
+            "column": "AllowsDigest"
+          }
+        },
+        {
+          "name": "ImmediateEventId",
+          "type": "uuid",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AuthChallengePurposeTypes",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "AccountExternalAuthFlows",
+      "area": "Accounts/Profiles/Auth",
+      "fields": [
+        {
+          "name": "AccountAuthChallengeId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "AccountAuthChallenges",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "AuthChallengePurposeTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "AccountAuthChallenges",
+            "column": "AuthChallengePurposeTypeId"
+          }
+        },
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StartedProfileId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ExternalPinId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ClientIdentifier",
+          "type": "varchar(200)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "VerifiedExternalAccountId",
+          "type": "varchar(200)",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ReturnPath",
+          "type": "varchar(2048)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "PlexSettings",
+      "area": "Provider/External Media",
+      "fields": [
+        {
+          "name": "ProviderId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Providers",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProviderKey",
+          "type": "text",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "Providers",
+            "column": "Key"
+          }
+        },
+        {
+          "name": "RequireApproval",
+          "type": "boolean",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ClientIdentifier",
+          "type": "varchar(200)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "UpdatedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProviderCatalogItems",
+      "area": "Provider/External Media",
+      "fields": [
+        {
+          "name": "ProviderServerGrantId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "ProviderCatalogCheckpoints",
+            "column": "ProviderServerGrantId"
+          }
+        },
+        {
+          "name": "ExternalItemKey",
+          "type": "varchar(200)",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ExternalSectionId",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ProviderCatalogCheckpoints",
+            "column": "ExternalSectionId"
+          }
+        },
+        {
+          "name": "Generation",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ProviderCatalogCheckpoints",
+            "column": "Generation"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": [
+            {
+              "table": "Works",
+              "column": "Id"
+            },
+            {
+              "table": "WorkEpisodes",
+              "column": "WorkId"
+            }
+          ]
+        },
+        {
+          "name": "WorkEpisodeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "WorkEpisodes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "SourcePageStart",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "VerifiedAt",
+          "type": "timestamptz",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProgressCompletionReasonTypes",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ProgressCheckpointSourceTypes",
+      "area": "Progress/Personal",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderLayoutTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderVariantTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderNodeTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderTextBlockTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderPageDirectionTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderTextDirectionTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderWritingModeTypes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "smallint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Key",
+          "type": "text",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    },
+    {
+      "name": "ReaderContentNodes",
+      "area": "Images/Reader/Timeline",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "ReaderContentId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderContent",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "StableId",
+          "type": "varchar(200)",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "OrderIndex",
+          "type": "integer",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "ReaderNodeTypeId",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": {
+            "table": "ReaderNodeTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ReaderTextBlockTypeId",
+          "type": "smallint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "ReaderTextBlockTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CharacterCount",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "HeadingLevel",
+          "type": "smallint",
+          "notNull": true,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SourceReaderContentId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": [
+            {
+              "table": "ReaderContent",
+              "column": "SourceReaderContentId"
+            },
+            {
+              "table": "ReaderContentNodes",
+              "column": "ReaderContentId"
+            }
+          ]
+        },
+        {
+          "name": "SourceNodeId",
+          "type": "bigint",
+          "notNull": false,
+          "pk": false,
+          "fk": {
+            "table": "ReaderContentNodes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "SourcePageIndex",
+          "type": "integer",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        },
+        {
+          "name": "SourceRegion",
+          "type": "jsonb",
+          "notNull": false,
+          "pk": false,
+          "fk": null
+        }
+      ]
+    }
+  ]
+}
