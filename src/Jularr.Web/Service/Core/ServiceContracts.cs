@@ -84,7 +84,7 @@ public sealed record ServicePermission
 
 public readonly record struct ResourceTarget(string Kind, long Id);
 
-public sealed record ServiceCaller(long? AccountId, long? ProfileId, ServiceArea Area, string PrincipalKey);
+public sealed record ServiceCaller(long? AccountId, long? ProfileId, ServiceArea Area, string PrincipalKey, Guid? SessionPublicId = null, long? SessionRevision = null);
 
 public interface IServiceDefinition
 {
