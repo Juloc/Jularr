@@ -1,0 +1,1057 @@
+{
+  "source": "https://github.com/Juloc/Jularr/blob/dev/docs/CLEAN_CUT_DATABASE.md",
+  "snapshot": "Ursprünglicher fachlicher SQL-Cutoff-Plan, 2026-10-09",
+  "definitionComplete": false,
+  "notice": "Nur explizit benannte Tabellen und nachweisbar definierte Felder. Nicht genannte Felder sind im damaligen Entwurf nicht bestimmt. null bedeutet nicht festgelegt.",
+  "tables": [
+    {
+      "name": "Accounts",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Email",
+          "type": "citext",
+          "notNull": true,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "EmailVerifiedAt",
+          "type": "timestamptz",
+          "notNull": false,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "DisplayName",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "AccountRoleTypeId",
+          "type": "smallint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "AccountRoleTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UserName",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "NormalizedUserName",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "`Id bigint`, `Email citext UNIQUE NOT NULL`, `EmailVerifiedAt timestamptz NULL`, **non-unique** `DisplayName`, `AccountRoleTypeId smallint FK`, enabled/timestamps. No `UserName` or `NormalizedUserName` login identity.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountRoleTypes",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "Built-in `Owner`, `MediaManager`, `User`; instance-level roles, not profile ownership.",
+      "definitionComplete": false
+    },
+    {
+      "name": "Profiles",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "OwnerAccountId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "DisplayName",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "UiLocaleId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "`Id bigint`, `OwnerAccountId bigint FK Accounts`, non-unique `DisplayName`, `UiLocaleId bigint FK UiLocales`, selection PIN hash (optional), restrictions/preferences.",
+      "definitionComplete": false,
+      "conditional": true
+    },
+    {
+      "name": "AccountProfiles",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [
+        {
+          "name": "AccountId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Accounts",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "Composite PK `(AccountId,ProfileId)`, FKs to `Accounts` and `Profiles`; which Accounts may **select/use** a Profile; **no `CanManage` field**. Profile management by `Profiles.OwnerAccountId` or authorized instance-role action.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountPasswords",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "Password hash & rotation metadata; per Account, no secret plaintext.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountPasskeys",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "WebAuthn credential id, public key, flags, counters and metadata; **never private keys**.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountTotpFactors",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "Encrypted TOTP secret and one-way hashed recovery codes; own lifecycles.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountRecoveryCodes",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "Encrypted TOTP secret and one-way hashed recovery codes; own lifecycles.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountExternalLogins",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "External provider login identity linked to Account; unique external provider identity. **Distinct from profile-scoped service sync Connections**.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountAuthChallenges",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "Bounded/expiring verification, reset, enrollment and WebAuthn challenges.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountSessions",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "Durable Account sign-in/refresh and revocation; current Profile selected in this context; token secret stored hashed.",
+      "definitionComplete": false
+    },
+    {
+      "name": "PlaybackSessions",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [
+        {
+          "name": "EndedAt",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "Active **or ended** playback, asset/file/device/mode and `EndedAt`; separate domain from AccountSessions.",
+      "definitionComplete": false
+    },
+    {
+      "name": "AccountPermissions",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [],
+      "contract": "Only explicit overrides if supported by effective authorization contracts; avoid parallel role engines.",
+      "definitionComplete": false,
+      "conditional": true
+    },
+    {
+      "name": "UiLocales",
+      "area": "Accounts / Profiles / authentication",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "Locale",
+          "type": "varchar",
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "`Id bigint PK`, `Locale varchar(...) UNIQUE` plus names/direction/enabled state.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaTypes",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Seeded types `Movie`, `Series`, `Book`, `Manga`, `LightNovel`, `Music`, **`Game`**. Anime is a classification of Movie/Series.",
+      "definitionComplete": false
+    },
+    {
+      "name": "Works",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "Id",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": null
+        },
+        {
+          "name": "MediaTypeId",
+          "type": "smallint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "MediaTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "CanonicalTitle",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "Canonical `Id bigint`, `MediaTypeId smallint FK MediaTypes`, `CanonicalTitle` as a deliberately managed resolved/display projection, dates.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkTitles",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Original/localized/alternate/search titles with provenance; authoritative titles are **not duplicated** in separate localized-facts tables.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkExternalIdentities",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Correctable provider mappings, namespace and evidence; never an alternative Work ID.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkMetadataFacts",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical facts, localized **non-title** values, provenance/manual-override protection.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkLocalizedValues",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical facts, localized **non-title** values, provenance/manual-override protection.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkFieldProvenance",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical facts, localized **non-title** values, provenance/manual-override protection.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkRelations",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "Directed prequel/adaptation links are **not** the same as group membership; franchise membership references `WorkId bigint`.",
+      "definitionComplete": false
+    },
+    {
+      "name": "Franchises",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "Directed prequel/adaptation links are **not** the same as group membership; franchise membership references `WorkId bigint`.",
+      "definitionComplete": false
+    },
+    {
+      "name": "FranchiseWorks",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "Directed prequel/adaptation links are **not** the same as group membership; franchise membership references `WorkId bigint`.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkMediaClassifications",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Join of Works to fixed classification types, including Anime; no separate Anime table.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkSeasons",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical logical units; their internal IDs use bigint in the new baseline, FK to Work; no legacy episode/chapter id.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkEpisodes",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical logical units; their internal IDs use bigint in the new baseline, FK to Work; no legacy episode/chapter id.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkVolumes",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical logical units; their internal IDs use bigint in the new baseline, FK to Work; no legacy episode/chapter id.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkChapters",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical logical units; their internal IDs use bigint in the new baseline, FK to Work; no legacy episode/chapter id.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkTracks",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Canonical logical units; their internal IDs use bigint in the new baseline, FK to Work; no legacy episode/chapter id.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkEditions",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "MediaAssetTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "One edition/version/asset/file/inventory chain for all formats. Asset kind as `MediaAssetTypeId` FK; technical stream kind as `MediaTrackTypeId` FK.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkVersions",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "MediaAssetTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "One edition/version/asset/file/inventory chain for all formats. Asset kind as `MediaAssetTypeId` FK; technical stream kind as `MediaTrackTypeId` FK.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaAssets",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "MediaAssetTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "One edition/version/asset/file/inventory chain for all formats. Asset kind as `MediaAssetTypeId` FK; technical stream kind as `MediaTrackTypeId` FK.",
+      "definitionComplete": false
+    },
+    {
+      "name": "StoredFiles",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "MediaAssetTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "One edition/version/asset/file/inventory chain for all formats. Asset kind as `MediaAssetTypeId` FK; technical stream kind as `MediaTrackTypeId` FK.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaTracks",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "MediaAssetTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "One edition/version/asset/file/inventory chain for all formats. Asset kind as `MediaAssetTypeId` FK; technical stream kind as `MediaTrackTypeId` FK.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaTechnicalAnalyses",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "MediaAssetTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "One edition/version/asset/file/inventory chain for all formats. Asset kind as `MediaAssetTypeId` FK; technical stream kind as `MediaTrackTypeId` FK.",
+      "definitionComplete": false
+    },
+    {
+      "name": "LibraryRoots",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "MediaAssetTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaTrackTypeId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "One edition/version/asset/file/inventory chain for all formats. Asset kind as `MediaAssetTypeId` FK; technical stream kind as `MediaTrackTypeId` FK.",
+      "definitionComplete": false
+    },
+    {
+      "name": "EditionExternalIdentities",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Generic ISBN/ASIN/provider identity and audiobook narrators, publishers etc.; no permanent `AudiobookEditionMetadata` duplicate.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WorkCredits",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Generic ISBN/ASIN/provider identity and audiobook narrators, publishers etc.; no permanent `AudiobookEditionMetadata` duplicate.",
+      "definitionComplete": false
+    },
+    {
+      "name": "GamePlatforms",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "Genuine dynamic platform identities.",
+      "definitionComplete": false
+    },
+    {
+      "name": "GameReleases",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "WorkVersionId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "WorkVersions",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "GamePlatformId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "GamePlatforms",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "**Game-specific extension** with `WorkVersionId bigint PK/FK WorkVersions`, `GamePlatformId bigint FK GamePlatforms`, revision/region/release details. Do not create `Games.Id`.",
+      "definitionComplete": false
+    },
+    {
+      "name": "GameReleaseStoredFiles",
+      "area": "Work / metadata / editions / Games",
+      "fields": [
+        {
+          "name": "WorkVersionId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "GameReleases",
+            "column": "WorkVersionId"
+          }
+        },
+        {
+          "name": "StoredFileId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "StoredFiles",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "Only where ordered/disc/multi-file release membership is needed: `WorkVersionId -> GameReleases.WorkVersionId` and `StoredFileId -> StoredFiles.Id`, disc/sequence/file-role type. The WorkVersionId is the shared PK/FK of the GameRelease extension; there is no independent GameRelease root. Avoid duplicate `GameReleaseFiles` file identity.",
+      "definitionComplete": false
+    },
+    {
+      "name": "StoredFileHashes",
+      "area": "Work / metadata / editions / Games",
+      "fields": [],
+      "contract": "File-level checksum facts; preserve distinct release-level evidence only if technically necessary and normalized.",
+      "definitionComplete": false
+    },
+    {
+      "name": "Images",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "One image identity and file/hash/mime/dimensions; binaries live under owned storage, not PostgreSQL.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ImageTypes",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Poster/Cover/Banner/Backdrop/Logo/Chapter/Screenshot/etc.; translated via UI catalog, stable machine `Key`.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ImageAssignments",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [
+        {
+          "name": "ImageId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "Images",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ImageTypeId",
+          "type": "smallint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "ImageTypes",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "WorkChapterId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "MediaChapterId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "`ImageId`, `ImageTypeId`, locale/region/source/priority/manual choice; **exactly one** explicit target FK (`WorkId`, `WorkChapterId`, `MediaChapterId`, etc.); games use **WorkId**, not a GameId. CHECK for exactly-one target. This is an intentional generic relationship table exception.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ImageGenerationRequests",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Generation requests, prompt metadata, profile, operation, accepted Image ID; named presets only if configurable; **no global `ArtworkStyles` enum**.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ImageGenerationPresets",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Generation requests, prompt metadata, profile, operation, accepted Image ID; named presets only if configurable; **no global `ArtworkStyles` enum**.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaChapters",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [
+        {
+          "name": "MediaAssetId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "Named chapter/navigation timeline on exact `MediaAssetId`, start/end, chapter ordering, source; distinct from logical written `WorkChapters`.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaSegments",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [
+        {
+          "name": "MediaAssetId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "Skip markers on exact `MediaAssetId`: Intro/OP, Recap, Outro/ED, Credits, Preview. **Outro and Credits can overlap**, multiple markers per kind possible; manual corrections outrank imported/provider/detector markers.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaSegmentTypes",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Fixed `...Types` for marker meaning and source.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaSegmentSourceTypes",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Fixed `...Types` for marker meaning and source.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaDetectionRuns",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Detector kind, algorithm version, media/content fingerprint, status, number of matches, timestamps and error, **including successful no-match runs** to prevent infinite reprocessing.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaDetectionTypes",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Seeded fixed detector kind/status types.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaDetectionStatusTypes",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Seeded fixed detector kind/status types.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ReaderContent",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Canonical reading content/navigation annotations. Reader text anchors and edition content identity remain stable for sync.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ReaderPages",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Canonical reading content/navigation annotations. Reader text anchors and edition content identity remain stable for sync.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ReaderBookmarks",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Canonical reading content/navigation annotations. Reader text anchors and edition content identity remain stable for sync.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ReaderHighlights",
+      "area": "Images / reader / video timeline / detection",
+      "fields": [],
+      "contract": "Canonical reading content/navigation annotations. Reader text anchors and edition content identity remain stable for sync.",
+      "definitionComplete": false
+    },
+    {
+      "name": "MediaProgress",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "ProgressPositionTypeId",
+          "type": "smallint",
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "ProgressPositionTypes",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "Shared identity: `ProfileId bigint FK`, `WorkId bigint FK`, optional canonical target unit FK, `ProgressPositionTypeId smallint FK`, `IsCompleted`, timestamps. One current row per Profile + target.",
+      "definitionComplete": false,
+      "conditional": true
+    },
+    {
+      "name": "ProgressPositionTypes",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [],
+      "contract": "`Time`, `Reading`, `Game` fixed values.",
+      "definitionComplete": false
+    },
+    {
+      "name": "TimeProgressPositions",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [
+        {
+          "name": "MediaProgressId",
+          "type": null,
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "PositionMs",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        },
+        {
+          "name": "DurationMs",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "1:1 `MediaProgressId PK/FK`; `PositionMs`, `DurationMs`. Video/audio/music.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ReadingProgressPositions",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [
+        {
+          "name": "MediaProgressId",
+          "type": null,
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkEditionId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": null
+        }
+      ],
+      "contract": "1:1 `MediaProgressId PK/FK`; `WorkEditionId`, page index, text locator JSONB, per-mille and relevant content/version anchor. Reader/manga/novels.",
+      "definitionComplete": false
+    },
+    {
+      "name": "GameProgressPositions",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [
+        {
+          "name": "MediaProgressId",
+          "type": null,
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "MediaProgress",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "1:1 `MediaProgressId PK/FK`; play time and optional verified/explicit progress %. **Time played is not completion percent**. Savegames/activity sessions are separate if implemented.",
+      "definitionComplete": false,
+      "conditional": true
+    },
+    {
+      "name": "MediaPlaybackHistory",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [],
+      "contract": "Playback/history events independent of current progress. Reader and gameplay history likewise belong in explicit activity events if their semantics differ.",
+      "definitionComplete": false
+    },
+    {
+      "name": "WatchlistEntries",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [
+        {
+          "name": "ProfileId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Profiles",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "WorkId",
+          "type": "bigint",
+          "notNull": true,
+          "pk": true,
+          "fk": {
+            "table": "Works",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "Composite `(ProfileId,WorkId)` FK to Profiles/Works. No provider-ID composite masquerading as Work identity.",
+      "definitionComplete": false
+    },
+    {
+      "name": "Collections",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [],
+      "contract": "Profile ownership; Work-based membership and ratings, no separate Anime/Manga/etc. user lists.",
+      "definitionComplete": false
+    },
+    {
+      "name": "CollectionWorks",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [],
+      "contract": "Profile ownership; Work-based membership and ratings, no separate Anime/Manga/etc. user lists.",
+      "definitionComplete": false
+    },
+    {
+      "name": "ProfileRatings",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [],
+      "contract": "Profile ownership; Work-based membership and ratings, no separate Anime/Manga/etc. user lists.",
+      "definitionComplete": false
+    },
+    {
+      "name": "UiTranslationMessages",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [
+        {
+          "name": "UiLocaleId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UiTranslationMessageId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "UiTranslationMessages",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "**One** central catalog for UI/validation/errors; stable machine message key, language fallback exact -> parent -> English, generated/manual/review state. `UiTranslations` links `UiLocaleId -> UiLocales.Id` and `UiTranslationMessageId -> UiTranslationMessages.Id`; `UiTranslationMessages.Key` unique. No `ErrorTranslations` or duplicate Learning/player catalogs.",
+      "definitionComplete": false
+    },
+    {
+      "name": "UiTranslations",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [
+        {
+          "name": "UiLocaleId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "UiLocales",
+            "column": "Id"
+          }
+        },
+        {
+          "name": "UiTranslationMessageId",
+          "type": null,
+          "notNull": null,
+          "pk": null,
+          "fk": {
+            "table": "UiTranslationMessages",
+            "column": "Id"
+          }
+        }
+      ],
+      "contract": "**One** central catalog for UI/validation/errors; stable machine message key, language fallback exact -> parent -> English, generated/manual/review state. `UiTranslations` links `UiLocaleId -> UiLocales.Id` and `UiTranslationMessageId -> UiTranslationMessages.Id`; `UiTranslationMessages.Key` unique. No `ErrorTranslations` or duplicate Learning/player catalogs.",
+      "definitionComplete": false
+    },
+    {
+      "name": "Operations",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [],
+      "contract": "Existing shared background-operation owner reused by acquisitions, import, artwork, detection, media preparation etc.",
+      "definitionComplete": false
+    },
+    {
+      "name": "OperationLogs",
+      "area": "Progress, personal state, collections and UI",
+      "fields": [],
+      "contract": "Existing shared background-operation owner reused by acquisitions, import, artwork, detection, media preparation etc.",
+      "definitionComplete": false
+    }
+  ]
+}
