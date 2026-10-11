@@ -5,6 +5,7 @@ using Jularr.Web.Features.Localization;
 using Jularr.Web.Features.MediaCore;
 using Jularr.Web.Features.Shell;
 using Jularr.Web.Features.Watchlist;
+using Jularr.Web.Ui.Pages;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -17,9 +18,12 @@ public sealed class IndexModel(
     WatchlistLibraryResolver library,
     FranchiseStore franchises,
     FranchiseService franchiseService,
-    IAppShellService? shell = null) : PageModel
+    IAppShellService? shell = null) : JularrPage
 {
     public UiTextBundle Ui { get; private set; } = UiTextBundle.English;
+
+    [BindProperty(SupportsGet = true, Name = "view")]
+    public string? ViewMode { get; set; }
 
     [BindProperty(SupportsGet = true, Name = "page")]
     public int CurrentPage { get; set; } = 1;
@@ -58,8 +62,21 @@ public sealed class IndexModel(
         Math.Max(1L, ((FranchisePage.TotalCount ?? 0) + PageRequest.DefaultPageSize - 1)
             / PageRequest.DefaultPageSize);
 
+    protected override void Define(UiPage page)
+    {
+        page.Shell = true;
+        page.Navigation("watchlist");
+        page.Breadcrumb("watchlist.title");
+        page.Content.Add(new WatchlistTable(Items, Ui, ViewMode == "table" ? UiTableMode.Rows : UiTableMode.Cards));
+    }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
+        if (ViewMode is not null and not "cards" and not "table")
+        {
+            return BadRequest();
+        }
+
         Ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         var visible = shell is null
             ? WorkMediaTypes.All.ToHashSet()
@@ -115,6 +132,7 @@ public sealed class IndexModel(
             return BadRequest();
         }
 
+        PreparePage();
         return Page();
     }
 
@@ -193,5 +211,30 @@ public sealed class IndexModel(
         var ui = await UiRequestLocalization.GetBundleAsync(HttpContext, db);
         TempData["Status"] = ui[key];
         return RedirectToPage();
+    }
+}
+
+public sealed class WatchlistTable(
+    IReadOnlyList<WatchlistItem> items,
+    UiTextBundle ui,
+    UiTableMode mode) : BaseTable<WatchlistItem>(items)
+{
+    protected override void Define(Table<WatchlistItem> table)
+    {
+        table.Label = ui["watchlist.title"];
+        table.Mode = mode;
+        table.Anchor(item => $"target-{item.StableId:D}");
+
+        table.Rows.Text(ui["watchlist.title"], item => item.Title);
+        table.Rows.Text(ui["watchlist.franchises"], item =>
+            item.IsFromFranchise ? FranchiseLabels.Title(ui, item.FranchiseTitle) : null);
+
+        table.Cards.Cover(item => item.CoverImageUrl);
+        table.Cards.Title(item => item.Title);
+        table.Cards.Subtitle(item =>
+            ui[$"watchlist.type.{WatchlistMediaTypeNames.ToCategory(item.Identity.MediaType)}"]);
+        table.Cards.Details(
+            "/Pages/Legacy/Watchlist/_WatchlistItemDetails.cshtml",
+            ui["watchlist.open"]);
     }
 }
