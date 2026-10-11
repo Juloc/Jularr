@@ -419,3 +419,30 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
     .settings-group { padding: 14px 16px; }
     .page-table th { white-space: normal; }
 }
+
+/* Discover only renders these rails once permitted types and provider data exist. */
+.discover-scopes, .discover-browse {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.discover-scopes a, .discover-browse a {
+    padding: 8px 14px;
+    border-radius: 999px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    text-decoration: none;
+}
+.discover-scopes a.is-active, .discover-browse a.is-active {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.discover-shelf-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+}
+.discover-shelf-heading a { color: var(--accent); white-space: nowrap; }
+.discover-media-heading { font-size: 19px; margin: 16px 0 0; }
