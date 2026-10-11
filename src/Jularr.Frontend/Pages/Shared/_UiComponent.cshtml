@@ -51,7 +51,7 @@
         <div class="screen-empty" role="status">@T[empty.Key]</div>
         break;
     case UiScope scope:
-        <ul class="screen-scope" aria-label="Categories">
+        <ul class="screen-scope" aria-label="@T["discover.title"]">
             @foreach (var key in scope.Keys)
             {
                 <li>@T[key]</li>
@@ -72,7 +72,7 @@
         </div>
         break;
     case UiSubnav nav:
-        <nav class="screen-subnav" aria-label="Section">
+        <nav class="screen-subnav" aria-label="@T["nav.primary"]">
             @foreach (var item in nav.Items)
             {
                 var selected = string.Equals(Context.Request.Path.Value, item.Href, StringComparison.OrdinalIgnoreCase);
@@ -93,9 +93,9 @@
         break;
     case UiMediaColumns _:
         <div class="screen-media-columns">
-            <section><h2>Seasons / Structure</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
-            <section><h2>Episodes / Editions</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
-            <aside><h2>Related works</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></aside>
+            <section><h2>@T["details.structure"]</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
+            <section><h2>@T["details.units"]</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
+            <aside><h2>@T["details.related"]</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></aside>
         </div>
         break;
     case UiPlayer _:
