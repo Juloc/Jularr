@@ -1,0 +1,50 @@
+name: Frontend
+
+on:
+  pull_request:
+    paths:
+      - 'src/Jularr.Frontend/**'
+      - 'src/Jularr.Backend/**'
+      - 'docs/FRONTEND_CONVENTIONS.md'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches: [clean-start]
+    paths:
+      - 'src/Jularr.Frontend/**'
+      - 'src/Jularr.Backend/**'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  razor-and-ui-resources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore locked frontend toolchain
+        working-directory: src/Jularr.Frontend
+        run: npm ci --no-audit --no-fund
+      - name: Compile, typecheck and verify production assets
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm run check
+          npm test
+      - name: Verify canonical UI resource declarations
+        run: node src/Jularr.Frontend/Tools/verify-ui-resources.mjs
+      - name: Build Razor frontend and Backend dependencies
+        run: dotnet build src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release
+      - name: Verify production publish contains hashed assets and manifests
+        run: |
+          dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release --no-build --output /tmp/jularr-frontend
+          test -s /tmp/jularr-frontend/Assets/Generated/manifest.json
+          test -s /tmp/jularr-frontend/Assets/Generated/icons.json
+          test -n "$(find /tmp/jularr-frontend/wwwroot/build/assets -name '*-*.css' -print -quit)"
+          test -n "$(find /tmp/jularr-frontend/wwwroot/build/assets -name 'icons-*.svg' -print -quit)"

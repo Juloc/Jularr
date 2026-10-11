@@ -1,0 +1,32 @@
+.page-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.page-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: start;
+
+    th {
+        text-align: start;
+        background: var(--surface-hover);
+        border-bottom: 1px solid var(--border);
+        padding: 12px 15px;
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
+        color: var(--muted);
+    }
+
+    td {
+        padding: 12px 15px;
+        border-top: 1px solid var(--border);
+    }
+}
+
+@media (max-width: 650px) {
+    .page-table th { white-space: normal; }
+}
