@@ -2,6 +2,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Localization;
+using Jularr.Frontend.Pages.Shared;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Npgsql;
 using System.Text.RegularExpressions;

@@ -1,6 +1,8 @@
 using System.Text.Encodings.Web;
 
-namespace Jularr.Frontend.Framework;
+using Jularr.Frontend.Framework;
+
+namespace Jularr.Frontend.Pages.Shared;
 
 // Shared visual mark. Full pages decide where this small component belongs.
 public sealed class Brand(bool compact = false, bool login = false) : IUiComponent

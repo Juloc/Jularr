@@ -1,10 +1,9 @@
+@using Jularr.Frontend.Pages.Shared
 @inject UiText T
 @inject ShellNavigation Navigation
 @inject FrontendAssets Assets
 @{
     var currentPath = Context.Request.Path.Value ?? "/";
-    var pageTitleKey = (ViewContext.ViewData.Model as JularrPage)?.Definition.TitleKey ?? "nav.home";
+    var titleKey = (ViewContext.ViewData.Model as JularrPage)?.Definition.TitleKey ?? "nav.home";
 }
-@(new UiHtml(new ShellHeader(pageTitleKey), T))
-@(new UiHtml(new ShellSidebar(Navigation.Primary, Navigation.Secondary, currentPath, Assets), T))
-@(new UiHtml(new ShellMobileNavigation(Navigation.Mobile, currentPath, Assets), T))
+@(new UiHtml(new Shell(titleKey, currentPath, Navigation, Assets), T))

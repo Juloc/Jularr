@@ -1,0 +1,78 @@
+using System.Text.Encodings.Web;
+using Jularr.Frontend.Framework;
+
+namespace Jularr.Frontend.Pages.Shared;
+
+// One application shell, not a collection of application-specific public
+// Framework components. All shell-only helpers are local to this owner.
+public sealed class Shell(
+    string pageTitleKey, string currentPath, ShellNavigation navigation,
+    FrontendAssets assets) : IUiComponent
+{
+    public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
+    {
+        new Header(
+            new Brand(compact: true),
+            new Nav(new Span(new Text(pageTitleKey)).Attribute("aria-current", "page"))
+                .Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"])
+        ).Class("app-header").WriteTo(writer, encoder, texts);
+
+        new Aside(
+            new Brand(),
+            Links(navigation.Primary, "nav.primary", "sidebar-navigation", false, texts),
+            Links(navigation.Secondary, "nav.secondary",
+                "sidebar-navigation sidebar-secondary", false, texts)
+        ).Class("app-sidebar").WriteTo(writer, encoder, texts);
+
+        Links(navigation.Mobile, "nav.mobile", "mobile-navigation", true, texts)
+            .WriteTo(writer, encoder, texts);
+    }
+
+    private IUiComponent Links(
+        IReadOnlyList<ShellLink> links, string titleKey, string cssClass,
+        bool mobile, UiText texts)
+    {
+        var children = links.Select(link =>
+        {
+            var active = link.Href == "/"
+                ? currentPath == "/"
+                : string.Equals(currentPath, link.Href, StringComparison.OrdinalIgnoreCase)
+                    || currentPath.StartsWith(link.Href + "/", StringComparison.OrdinalIgnoreCase);
+
+            var className = mobile ? "mobile-link" : "nav-link";
+            var anchor = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key)))
+                .Class(active ? className + " is-active" : className)
+                .Attribute("href", link.Href);
+            if (active) anchor.Attribute("aria-current", "page");
+            return (IUiComponent)anchor;
+        }).ToArray();
+
+        return new Nav(children).Class(cssClass)
+            .Attribute("aria-label", texts[titleKey]);
+    }
+
+    private sealed class Aside(params IUiComponent[] children) : HtmlElement("aside", children);
+}
+
+public sealed record ShellLink(string Key, string Href, string Icon);
+
+// No hard-coded optional modules: only unconditional routes pending effective
+// profile/instance module visibility from the canonical Backend service.
+public sealed class ShellNavigation
+{
+    public IReadOnlyList<ShellLink> Primary { get; } =
+    [
+        new("nav.home", "/", "home")
+    ];
+
+    public IReadOnlyList<ShellLink> Secondary { get; } =
+    [
+        new("nav.settings", "/Settings", "settings")
+    ];
+
+    public IReadOnlyList<ShellLink> Mobile { get; } =
+    [
+        new("nav.home", "/", "home"),
+        new("nav.settings", "/Settings", "settings")
+    ];
+}
