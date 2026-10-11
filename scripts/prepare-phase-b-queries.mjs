@@ -151,7 +151,194 @@ const monitoringQueries = [
     parameters
 }));
 
+const aiQueries = [
+    [
+        "ai_settings",
+        "Service SETTINGS:",
+        "Service OPTIONS:",
+        "bigint,bigint",
+        [
+            "ActorAccountId",
+            "ActiveProfileId"
+        ]
+    ],
+    [
+        "ai_options",
+        "Service OPTIONS:",
+        "Service USAGE_TOTALS:",
+        "bigint,bigint,smallint",
+        [
+            "ActorAccountId",
+            "ActiveProfileId",
+            "AiOperationTypeId"
+        ]
+    ],
+    [
+        "ai_usage_totals",
+        "Service USAGE_TOTALS:",
+        "Service USAGE_GROUPS:",
+        "bigint,bigint,boolean,date,date",
+        [
+            "ActorAccountId",
+            "ActiveProfileId",
+            "AllProfiles",
+            "FromDay",
+            "ThroughDay"
+        ]
+    ],
+    [
+        "ai_usage_groups",
+        "Service USAGE_GROUPS:",
+        "Service ACTIVITY:",
+        "bigint,bigint,boolean,date,date,integer,bigint",
+        [
+            "ActorAccountId",
+            "ActiveProfileId",
+            "AllProfiles",
+            "FromDay",
+            "ThroughDay",
+            "PageSize",
+            "Offset"
+        ]
+    ],
+    [
+        "ai_activity",
+        "Service ACTIVITY:",
+        "Logic CREATE_SETTINGS:",
+        "bigint,bigint,boolean,integer,bigint",
+        [
+            "ActorAccountId",
+            "ActiveProfileId",
+            "AllProfiles",
+            "PageSize",
+            "Offset"
+        ]
+    ],
+    [
+        "ai_create_settings",
+        "Logic CREATE_SETTINGS:",
+        "Logic SAVE_SETTINGS:",
+        "bigint,bigint",
+        [
+            "ActorAccountId",
+            "ActiveProfileId"
+        ]
+    ],
+    [
+        "ai_save_settings",
+        "Logic SAVE_SETTINGS:",
+        "Logic RECORD_USAGE:",
+        "bigint,bigint,bigint,timestamptz,smallint,smallint,text,text,text,text,text,text,integer,integer,integer,integer,integer,integer,smallint,integer,boolean,text",
+        [
+            "ActorAccountId",
+            "ActiveProfileId",
+            "ExpectedRevision",
+            "Now",
+            "AiProviderTypeId",
+            "AiTranslationModeTypeId",
+            "BaseUrl",
+            "Model",
+            "ImageModel",
+            "ReasoningEffort",
+            "ServiceTier",
+            "Verbosity",
+            "MaxOutputTokens",
+            "ContextBudgetTokens",
+            "MaxRetries",
+            "TimeoutSeconds",
+            "DailyTokenBudget",
+            "SessionTokenBudget",
+            "BudgetWarningPercent",
+            "MaxConcurrentJobs",
+            "FallbackModelEnabled",
+            "CredentialStorageKey"
+        ]
+    ],
+    [
+        "ai_record_usage",
+        "Logic RECORD_USAGE:",
+        "Service USAGE_RECEIPT:",
+        "bigint,smallint,smallint,timestamptz,boolean,bigint,bigint,bigint,bigint,bigint,bigint,bigint,integer",
+        [
+            "OperationId",
+            "AiUsageKindTypeId",
+            "OperationStatusTypeId",
+            "RecordedAt",
+            "IsEstimated",
+            "InputTokens",
+            "CachedInputTokens",
+            "OutputTokens",
+            "ReasoningOutputTokens",
+            "ContextTokens",
+            "FullContextTokens",
+            "DurationMs",
+            "Retries"
+        ]
+    ],
+    [
+        "ai_usage_receipt",
+        "Service USAGE_RECEIPT:",
+        "Logic SAVE_OVERRIDE:",
+        "bigint,smallint,smallint,timestamptz,boolean,bigint,bigint,bigint,bigint,bigint,bigint,bigint,integer",
+        [
+            "OperationId",
+            "AiUsageKindTypeId",
+            "OperationStatusTypeId",
+            "RecordedAt",
+            "IsEstimated",
+            "InputTokens",
+            "CachedInputTokens",
+            "OutputTokens",
+            "ReasoningOutputTokens",
+            "ContextTokens",
+            "FullContextTokens",
+            "DurationMs",
+            "Retries"
+        ]
+    ],
+    [
+        "ai_save_override",
+        "Logic SAVE_OVERRIDE:",
+        "Service OVERRIDES:",
+        "bigint,bigint,bigint,timestamptz,smallint,text,text,text,integer,integer,integer,integer",
+        [
+            "ActorAccountId",
+            "ActiveProfileId",
+            "ExpectedRevision",
+            "Now",
+            "AiOperationTypeId",
+            "Model",
+            "ReasoningEffort",
+            "Verbosity",
+            "MaxOutputTokens",
+            "ContextBudgetTokens",
+            "MaxRetries",
+            "TimeoutSeconds"
+        ]
+    ],
+    [
+        "ai_overrides",
+        "Service OVERRIDES:",
+        null,
+        "bigint,bigint,integer,bigint",
+        [
+            "ActorAccountId",
+            "ActiveProfileId",
+            "PageSize",
+            "Offset"
+        ]
+    ]
+].map(([name, start, end, types, parameters]) => ({
+    name,
+    file: 'DATABASE_CUTOVER_PHASE_B_AI_QUERIES_DRAFT.sql',
+    start: `-- ${start}`,
+    end: end ? `-- ${end}` : null,
+    declaration: `PREPARE phase_b_${name}(${types}) AS\n`,
+    parameters
+}));
+
 for (const query of [
+    ...aiQueries,
     ...monitoringQueries,
     ...musicQueries,
     ...authQueries,

@@ -353,6 +353,47 @@ public enum MonitoringRelationType : byte
     Artist = 4
 }
 
+public enum AiProvider : byte
+{
+    Server = 1,
+    OpenAiCompatible = 2
+}
+
+public enum AiOperation : byte
+{
+    SentenceExplanation = 1,
+    NovelTranslation = 2,
+    BookTranslation = 3,
+    BookAnalysis = 4,
+    BookEdit = 5,
+    BookQa = 6,
+    BookMemory = 7,
+    NovelMapping = 8,
+    StoryContext = 9,
+    UiTranslation = 10,
+    ChapterArtwork = 11
+}
+
+public enum AiTranslationMode : byte
+{
+    Efficient = 1,
+    Quality = 2,
+    Maximum = 3
+}
+
+public enum AiUsageKind : byte
+{
+    Request = 1,
+    CacheHit = 2,
+    ResumedChunk = 3
+}
+
+public enum AiInvocationPhase : byte
+{
+    PreparingContext = 1,
+    ProviderCall = 2
+}
+
 public enum WorkMediaClassification : byte
 {
     Anime = 1
