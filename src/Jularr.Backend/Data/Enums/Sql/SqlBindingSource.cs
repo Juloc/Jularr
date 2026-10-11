@@ -4,8 +4,6 @@ namespace Jularr.Backend.Data.Enums.Sql
     {
         Parameters,
         Data,
-        Actor,
-        Profile,
         Page
     }
 }

@@ -37,6 +37,18 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(methodNames.Contains("ExecuteAsync"));
             Assert.IsFalse(methodNames.Contains("ReadForUpdateAsync"));
             Assert.IsFalse(methodNames.Contains("ExecuteReturningAsync"));
+
+            // Commands accept SQL objects only.
+            foreach (var facade in new[] { typeof(SqlContext.SqlReadCommands), typeof(SqlContext.SqlLogicCommands) })
+            {
+                var commands = facade.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(method => method.Name.EndsWith("Async"));
+                foreach (var command in commands)
+                {
+                    Assert.AreEqual(typeof(SqlStatement), command.GetParameters()[0].ParameterType);
+                    Assert.IsFalse(command.Name is "ReadForUpdateAsync" or "ExecuteReturningAsync");
+                }
+            }
         }
 
         [TestMethod]

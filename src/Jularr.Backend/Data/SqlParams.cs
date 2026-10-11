@@ -31,13 +31,13 @@ namespace Jularr.Backend.Data
                 [typeof(byte[])] = NpgsqlDbType.Bytea
             };
 
-        private readonly object? source;
-        private readonly HashSet<string> names = new(StringComparer.OrdinalIgnoreCase);
-        private readonly List<(string Name, NpgsqlDbType Type, object Value)> entries = [];
+        private readonly object? _source;
+        private readonly HashSet<string> _names = new(StringComparer.OrdinalIgnoreCase);
+        private readonly List<(string Name, NpgsqlDbType Type, object Value)> _entries = [];
 
         private SqlParams(object? source)
         {
-            this.source = source;
+            _source = source;
         }
 
         public static SqlParams From<T>(T data) where T : notnull
@@ -60,7 +60,7 @@ namespace Jularr.Backend.Data
 
         public NpgsqlParameter[] ToArray() =>
         [
-            .. entries.Select(entry => new NpgsqlParameter(entry.Name, entry.Type)
+            .. _entries.Select(entry => new NpgsqlParameter(entry.Name, entry.Type)
             {
                 Value = entry.Value
             })
@@ -68,14 +68,15 @@ namespace Jularr.Backend.Data
 
         private SqlParams AddProperty(string name, NpgsqlDbType? databaseType)
         {
-            if (source is null)
+            if (_source is null)
             {
                 throw new InvalidOperationException("A transport object is required for property parameters.");
             }
 
             ValidateName(name);
 
-            var property = Properties.GetOrAdd((source.GetType(), name), static key =>
+            // Reuse validated property metadata.
+            var property = Properties.GetOrAdd((_source.GetType(), name), static key =>
             {
                 var result = key.Type.GetProperty(key.Name, BindingFlags.Public | BindingFlags.Instance);
 
@@ -88,9 +89,10 @@ namespace Jularr.Backend.Data
                 return result;
             });
 
-            var value = property.GetValue(source);
+            var value = property.GetValue(_source);
             var field = Fields.GetOrAdd(property, static key => key.GetCustomAttributes<DataFieldAttribute>().ToArray()).SingleOrDefault();
 
+            // Apply canonical field rules.
             if (field is not null)
             {
                 var clrType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
@@ -111,7 +113,7 @@ namespace Jularr.Backend.Data
         {
             ValidateName(name);
 
-            if (names.Contains(name))
+            if (_names.Contains(name))
             {
                 throw new ArgumentException("SQL parameter was already added.", nameof(name));
             }
@@ -183,8 +185,8 @@ namespace Jularr.Backend.Data
                 throw new ArgumentException("PostgreSQL timestamptz requires a UTC DateTimeOffset.", nameof(value));
             }
 
-            names.Add(name);
-            entries.Add((name, resolvedType, value ?? DBNull.Value));
+            _names.Add(name);
+            _entries.Add((name, resolvedType, value ?? DBNull.Value));
 
             return this;
         }

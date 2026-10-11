@@ -16,19 +16,17 @@ namespace Jularr.Backend.Infrastructure.Sql
         private static readonly ConcurrentDictionary<(Type Type, string Columns), RowMap> RowMaps = new();
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-        internal static NpgsqlParameter[] Bind(string sql, object parameters, object? data, long? actorAccountId, long? activeProfileId)
+        internal static NpgsqlParameter[] Bind(SqlStatement statement)
         {
-            ArgumentNullException.ThrowIfNull(parameters);
-            if (parameters is SqlStatement statement)
+            if (statement.Parameters.Count > 2 || statement.Parameters.Any(source => source is null))
             {
-                if (data is not null || statement.Parameters.Count > 2 || statement.Parameters.Any(source => source is null))
-                {
-                    throw new ArgumentException("SQL statements accept up to two non-null parameter/data objects.", nameof(parameters));
-                }
-
-                parameters = statement.Parameters.FirstOrDefault() ?? new object();
-                data = statement.Parameters.ElementAtOrDefault(1);
+                throw new ArgumentException("SQL statements accept up to two non-null parameter/data objects.", nameof(statement));
             }
+
+            // Bind only explicitly supplied data.
+            var sql = statement.Statement;
+            var parameters = statement.Parameters.FirstOrDefault() ?? new object();
+            var data = statement.Parameters.ElementAtOrDefault(1);
 
             var bindings = Bindings.GetOrAdd((sql, parameters.GetType(), data?.GetType()), static key => CompileBindings(key.Sql, key.Parameters, key.Data));
             var pageRequest = bindings.Any(binding => binding.Source == SqlBindingSource.Page) ? GetPageRequest(parameters) : null;
@@ -38,15 +36,7 @@ namespace Jularr.Backend.Infrastructure.Sql
             {
                 var binding = bindings[index];
 
-                if (binding.Source == SqlBindingSource.Actor)
-                {
-                    values[index] = SqlParams.Create().Add(binding.Name, actorAccountId ?? throw new InvalidOperationException("No verified ActorAccountId is available.")).ToArray()[0];
-                }
-                else if (binding.Source == SqlBindingSource.Profile)
-                {
-                    values[index] = SqlParams.Create().Add(binding.Name, activeProfileId ?? throw new InvalidOperationException("No verified ActiveProfileId is available.")).ToArray()[0];
-                }
-                else if (binding.Source == SqlBindingSource.Page)
+                if (binding.Source == SqlBindingSource.Page)
                 {
                     var isPageSize = string.Equals(binding.Name, "PageSize", StringComparison.OrdinalIgnoreCase);
                     var number = isPageSize ? pageRequest!.PageSize : pageRequest!.Offset;
@@ -106,6 +96,8 @@ namespace Jularr.Backend.Infrastructure.Sql
         private static Binding[] CompileBindings(string sql, Type parametersType, Type? dataType)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+
+            // Resolve explicit property sources.
             var tokens = ScanParameters(sql);
             var result = new List<Binding>(tokens.Count);
 
@@ -114,15 +106,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                 var name = token.Name;
                 SqlBindingSource source;
 
-                if (name.Equals("ActorAccountId", StringComparison.OrdinalIgnoreCase))
-                {
-                    source = SqlBindingSource.Actor;
-                }
-                else if (name.Equals("ActiveProfileId", StringComparison.OrdinalIgnoreCase))
-                {
-                    source = SqlBindingSource.Profile;
-                }
-                else if (name.Equals("Offset", StringComparison.OrdinalIgnoreCase) || name.Equals("PageSize", StringComparison.OrdinalIgnoreCase))
+                if (name.Equals("Offset", StringComparison.OrdinalIgnoreCase) || name.Equals("PageSize", StringComparison.OrdinalIgnoreCase))
                 {
                     source = SqlBindingSource.Page;
                 }
@@ -155,11 +139,10 @@ namespace Jularr.Backend.Infrastructure.Sql
                     source = inParameters is not null ? SqlBindingSource.Parameters : SqlBindingSource.Data;
                 }
 
-                if (source is SqlBindingSource.Actor or SqlBindingSource.Profile or SqlBindingSource.Page
-                    && (parametersType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null && source is not SqlBindingSource.Page
-                        || dataType?.GetProperty(name, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null))
+                if (source == SqlBindingSource.Page && dataType?.GetProperty(name,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) is not null)
                 {
-                    throw new InvalidOperationException($"Reserved SQL parameter '{name}' cannot be provided by an untrusted DTO.");
+                    throw new InvalidOperationException($"Reserved pagination parameter '{name}' cannot be provided by mutation data.");
                 }
 
                 result.Add(new Binding(name, source, source is SqlBindingSource.Parameters or SqlBindingSource.Data ? token.DatabaseType : null));
@@ -189,6 +172,7 @@ namespace Jularr.Backend.Infrastructure.Sql
 
         private static IReadOnlyList<ParameterToken> ScanParameters(string sql)
         {
+            // Ignore literals and comments.
             var tokens = new Dictionary<string, ParameterToken>(StringComparer.OrdinalIgnoreCase);
 
             for (var index = 0; index < sql.Length;)
@@ -466,6 +450,7 @@ namespace Jularr.Backend.Infrastructure.Sql
 
             var type = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
+            // Deserialize structured JSON results.
             if (databaseType is "json" or "jsonb" && type != typeof(string))
             {
                 var json = value as string ?? JsonSerializer.Serialize(value);

@@ -86,7 +86,7 @@ namespace Jularr.Backend.Tests
             await using (var seed = new SqlContext(database))
             {
                 await seed.BeginAsync(SqlAccessMode.ReadWrite);
-                await seed.RequireLogicSql().ExecuteAsync("CREATE TABLE \"ServiceFoundationProbe\" (\"Id\" bigint PRIMARY KEY, \"Name\" text NOT NULL)");
+                await seed.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "CREATE TABLE \"ServiceFoundationProbe\" (\"Id\" bigint PRIMARY KEY, \"Name\" text NOT NULL)" });
                 await seed.CommitAsync();
             }
 
@@ -99,7 +99,7 @@ namespace Jularr.Backend.Tests
 
             await using var verify = new SqlContext(database);
             await verify.BeginAsync(SqlAccessMode.ReadOnly);
-            Assert.AreEqual(0L, await verify.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"ServiceFoundationProbe\""));
+            Assert.AreEqual(0L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"ServiceFoundationProbe\"" }));
             CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction" }, gate.Events.ToArray());
         }
 
@@ -111,7 +111,7 @@ namespace Jularr.Backend.Tests
             await using (var setup = new SqlContext(database))
             {
                 await setup.BeginAsync(SqlAccessMode.ReadWrite);
-                await setup.RequireLogicSql().ExecuteAsync("CREATE TABLE \"ServiceExecuteBatchProbe\" (\"Id\" bigint PRIMARY KEY)");
+                await setup.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "CREATE TABLE \"ServiceExecuteBatchProbe\" (\"Id\" bigint PRIMARY KEY)" });
                 await setup.CommitAsync();
             }
 
@@ -124,8 +124,8 @@ namespace Jularr.Backend.Tests
 
             await using var verify = new SqlContext(database);
             await verify.BeginAsync(SqlAccessMode.ReadOnly);
-            Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\""));
-            Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync("SELECT \"Id\" FROM \"ServiceExecuteBatchProbe\""));
+            Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\"" }));
+            Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT \"Id\" FROM \"ServiceExecuteBatchProbe\"" }));
 
             CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction", "transaction" }, gate.Events.ToArray());
         }
@@ -138,7 +138,7 @@ namespace Jularr.Backend.Tests
             await using (var setup = new SqlContext(database))
             {
                 await setup.BeginAsync(SqlAccessMode.ReadWrite);
-                await setup.RequireLogicSql().ExecuteAsync("CREATE TABLE \"ServiceExecuteBatchProbe\" (\"Id\" bigint PRIMARY KEY)");
+                await setup.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "CREATE TABLE \"ServiceExecuteBatchProbe\" (\"Id\" bigint PRIMARY KEY)" });
                 await setup.CommitAsync();
             }
 
@@ -150,7 +150,7 @@ namespace Jularr.Backend.Tests
 
             await using var verify = new SqlContext(database);
             await verify.BeginAsync(SqlAccessMode.ReadOnly);
-            Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync("SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\""));
+            Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\"" }));
             CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction", "transaction" }, gate.Events.ToArray());
         }
 
@@ -248,7 +248,7 @@ namespace Jularr.Backend.Tests
                 Assert.AreSame(context, Context);
                 Assert.AreSame(caller, Auth);
                 Assert.AreEqual(token, CancellationToken);
-                var id = await Context.ReadSql.ExecuteScalarAsync("SELECT @AccountId::bigint", Parameters, CancellationToken);
+                var id = await Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT @AccountId::bigint", Parameters = { Parameters } }, CancellationToken);
                 return new AccountResult((long)id!, "hook");
             }
         }
@@ -303,14 +303,14 @@ namespace Jularr.Backend.Tests
 
                 await Context.ExecuteBatchAsync(async (logic, token) =>
                 {
-                    await logic.Sql.ExecuteAsync("INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (1)", token);
+                    await logic.Sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (1)" }, token);
                     return true;
                 }, CancellationToken);
 
                 await Context.ExecuteBatchAsync(async (logic, token) =>
                 {
-                    await logic.Sql.ExecuteAsync("INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (2)", token);
-                    await logic.Sql.ExecuteAsync("INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (2)", token);
+                    await logic.Sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (2)" }, token);
+                    await logic.Sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"ServiceExecuteBatchProbe\" (\"Id\") VALUES (2)" }, token);
                     return true;
                 }, CancellationToken);
 
@@ -329,12 +329,9 @@ namespace Jularr.Backend.Tests
 
             protected override async Task<IServiceOutput> OnRead()
             {
-                var mode = await Context.ReadSql.ExecuteScalarAsync("SELECT current_setting('transaction_read_only')", CancellationToken);
-                var actorId = await Context.ReadSql.ExecuteScalarAsync("SELECT @ActorAccountId::bigint", CancellationToken);
-                var profileId = await Context.ReadSql.ExecuteScalarAsync("SELECT @ActiveProfileId::bigint", CancellationToken);
-
-                Assert.AreEqual(1L, actorId);
-                Assert.AreEqual(2L, profileId);
+                var mode = await Context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT current_setting('transaction_read_only')" }, CancellationToken);
+                Assert.AreEqual(1L, Auth.AccountId);
+                Assert.AreEqual(2L, Auth.ProfileId);
                 return new AccountResult(Parameters.AccountId, (string)mode!);
             }
         }
@@ -367,10 +364,10 @@ namespace Jularr.Backend.Tests
         private sealed class AccountWorkflowLogic
         {
             public Task<int> CreateAsync(LogicContext context, AccountParameters parameters, AccountData data, CancellationToken cancellationToken)
-                => context.Sql.ExecuteAsync("INSERT INTO \"ServiceFoundationProbe\" (\"Id\", \"Name\") VALUES (@AccountId, @Name)", parameters, data, cancellationToken);
+                => context.Sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"ServiceFoundationProbe\" (\"Id\", \"Name\") VALUES (@AccountId, @Name)", Parameters = { parameters, data } }, cancellationToken);
 
             public Task<int> UpdateAsync(LogicContext context, AccountParameters parameters, AccountData data, CancellationToken cancellationToken)
-                => context.Sql.ExecuteAsync("UPDATE \"ServiceFoundationProbe\" SET \"Name\" = @Name WHERE \"Id\" = @AccountId", parameters, data, cancellationToken);
+                => context.Sql.ExecuteAsync(new SqlStatement { Statement = "UPDATE \"ServiceFoundationProbe\" SET \"Name\" = @Name WHERE \"Id\" = @AccountId", Parameters = { parameters, data } }, cancellationToken);
         }
 
         private sealed class TestGate : IServiceGate

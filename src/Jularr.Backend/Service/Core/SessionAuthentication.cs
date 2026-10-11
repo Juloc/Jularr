@@ -30,7 +30,7 @@ namespace Jularr.Backend.Service.Core
 
         public Task<SessionAuthenticationData> ReadRequestAsync(HttpContext? http, CancellationToken cancellationToken)
         {
-            // Only a proof produced by cookie middleware is reused within this HTTP request.
+            // Reuse middleware proof only.
             if (http?.Items[typeof(SessionAuthentication)] is
                 ValueTuple<ClaimsPrincipal?, SessionAuthenticationData, SessionParameters> proof
                 && ReferenceEquals(proof.Item1, http.User))
@@ -39,7 +39,7 @@ namespace Jularr.Backend.Service.Core
                 return Task.FromResult(proof.Item2);
             }
 
-            // Direct invocations without middleware always revalidate mutable database state.
+            // Direct calls revalidate sessions.
             return ReadAsync(http?.User, cancellationToken);
         }
 
@@ -47,6 +47,7 @@ namespace Jularr.Backend.Service.Core
         {
             Parameters = null;
 
+            // Validate protected cookie claims.
             var identities = principal?.Identities.Where(identity => identity.IsAuthenticated
                 && identity.AuthenticationType == CookieAuthenticationDefaults.AuthenticationScheme).ToArray();
             var ids = identities?.SelectMany(identity => identity.FindAll(ServiceGate.SessionClaimType)).ToArray();
@@ -61,6 +62,7 @@ namespace Jularr.Backend.Service.Core
                 throw new UnauthorizedAccessException("A verified session is required.");
             }
 
+            // Verify current database state.
             var parameters = new SessionParameters(sessionId, revision, SHA256.HashData(Encoding.UTF8.GetBytes(tokens[0].Value)));
             var sql = new SqlStatement();
             sql.Statement =

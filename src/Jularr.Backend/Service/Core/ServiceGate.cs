@@ -61,10 +61,7 @@ namespace Jularr.Backend.Service.Core
             return _caller;
         }
 
-        public Task RequireAccessAsync(
-            ServiceCaller caller,
-            ServicePermission permission,
-            CancellationToken cancellationToken)
+        public Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             RequirePermission(caller, permission);
@@ -72,11 +69,7 @@ namespace Jularr.Backend.Service.Core
             return Task.CompletedTask;
         }
 
-        public async Task RequireTransactionalAccessAsync(
-            ServiceCaller caller,
-            ServicePermission permission,
-            LogicContext context,
-            CancellationToken cancellationToken)
+        public async Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken)
         {
             RequirePermission(caller, permission);
 
@@ -85,9 +78,9 @@ namespace Jularr.Backend.Service.Core
                 return;
             }
 
-            // Mutable session state is locked in the same transaction as the write.
+            // Lock mutable session state.
             var parameters = _sessions.Parameters ?? throw new UnauthorizedAccessException("The session is unavailable.");
-            var current = await context.ReadSessionForUpdateAsync(parameters, cancellationToken);
+            var current = await context.ReadSessionAsync(parameters, cancellationToken);
 
             if (current.AccountId != caller.AccountId || current.ProfileId != caller.ProfileId
                 || current.ProfileOwnerAccountId != caller.ProfileOwnerAccountId)
@@ -108,7 +101,7 @@ namespace Jularr.Backend.Service.Core
                 return;
             }
 
-            // Only the currently implemented protected grants are available.
+            // Grant implemented permissions only.
             if (caller.Area == ServiceArea.User && permission.Key is "profile.self.read" or "profile.self.update")
             {
                 if (permission.Key == "profile.self.update" && caller.ProfileOwnerAccountId != caller.AccountId)

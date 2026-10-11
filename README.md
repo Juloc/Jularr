@@ -4,8 +4,16 @@ Ein ASP.NET-Host: `Jularr.Frontend` startet Razor Pages und API.
 `Jularr.Backend` ist eine referenzierte .NET-Klassenbibliothek mit Services, Logic,
 Data und PostgreSQL-Zugriff. Kein alter Web-Bereich, kein EF.
 
+`Jularr.Integrations` bündelt externe Kommunikation als Klassenbibliothek.
+`Logic/Plex` enthält den Plex-Client, `Data/Plex` seine Protokollantworten
+und `Data/Common` gemeinsame Integrationsfehler. Backend-Services
+entscheiden weiterhin über Anmeldung, Bibliotheksfreigabe und Registrierung.
+Die bestehenden Host-Registrierungen bleiben unverändert. NAS ist noch nicht
+implementiert; Dateizugriff und Hersteller-Verwaltung sind noch abzugrenzen.
+
 Regeln: [AGENTS.md](AGENTS.md), [CONVENTIONS.md](docs/CONVENTIONS.md).
 Navigation: [CODEMAP.md](docs/CODEMAP.md).
+Nächste fachliche Schritte: [Backend-Slices](docs/BACKEND_NEXT.md) (Plan, keine Implementierung).
 
 ## Backend im gemeinsamen Host
 

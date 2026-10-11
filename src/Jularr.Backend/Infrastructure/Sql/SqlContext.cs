@@ -14,9 +14,6 @@ namespace Jularr.Backend.Infrastructure.Sql
         private SqlAccessMode? _mode;
         private IsolationLevel? _pendingReadIsolation;
         private bool _finished;
-        private long? _actorAccountId;
-        private long? _activeProfileId;
-        private bool _scopeInitialized;
         private int _shortBatchActive;
         private bool _disposed;
 
@@ -82,28 +79,9 @@ namespace Jularr.Backend.Infrastructure.Sql
                 throw new InvalidOperationException("A SQL transaction has already been configured.");
             }
 
-            // A cached read keeps the same lifecycle without opening a database connection.
+            // Cache hits avoid connections.
             _mode = SqlAccessMode.ReadOnly;
             _pendingReadIsolation = isolationLevel;
-        }
-
-        internal void SetAuthorizedScope(long? actorAccountId, long? activeProfileId)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-
-            if (_scopeInitialized)
-            {
-                throw new InvalidOperationException("The verified SQL caller scope cannot be replaced.");
-            }
-
-            if (actorAccountId is <= 0 || activeProfileId is <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(actorAccountId));
-            }
-
-            _actorAccountId = actorAccountId;
-            _activeProfileId = activeProfileId;
-            _scopeInitialized = true;
         }
 
         public SqlLogicCommands RequireLogicSql()
@@ -143,7 +121,7 @@ namespace Jularr.Backend.Infrastructure.Sql
             ArgumentNullException.ThrowIfNull(transactionalAccessCheck);
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            // One SqlContext cannot run parallel batches while opening its connection.
+            // Reject concurrent transaction batches.
             if (Interlocked.CompareExchange(ref _shortBatchActive, 1, 0) != 0)
             {
                 throw new InvalidOperationException("Concurrent SQL batches on one context are forbidden.");
@@ -170,7 +148,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                 }
                 finally
                 {
-                    // Commit and failures alike close the connection; failed batches roll back.
+                    // Dispose; unfinished work rolls back.
                     await CloseTransactionAsync();
                     _finished = false;
                 }
@@ -228,37 +206,38 @@ namespace Jularr.Backend.Infrastructure.Sql
             }
         }
 
-        private NpgsqlCommand CreateCommand(string sql, bool write, object? parameters = null, object? data = null)
+        // Both facades share binding and execution.
+        private async Task<NpgsqlCommand> CreateCommandAsync(
+            SqlStatement sql,
+            bool allowMutation,
+            CancellationToken cancellationToken)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(sql);
+            ArgumentNullException.ThrowIfNull(sql);
+            ArgumentException.ThrowIfNullOrWhiteSpace(sql.Statement);
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            // Open lazy read transactions.
+            if (_pendingReadIsolation is { } isolation)
+            {
+                _pendingReadIsolation = null;
+                await BeginAsync(SqlAccessMode.ReadOnly, isolation, cancellationToken);
+            }
+
             RequireActive();
-
-            if (!write)
+            if (allowMutation && _mode != SqlAccessMode.ReadWrite)
             {
-                SqlReadGuard.RequireReadStatement(sql);
+                throw new InvalidOperationException("Mutation commands require a read-write transaction.");
             }
 
-            if (write && _mode != SqlAccessMode.ReadWrite)
+            if (!allowMutation)
             {
-                throw new InvalidOperationException("Write commands require a read-write transaction.");
+                SqlReadGuard.RequireReadStatement(sql.Statement);
             }
 
-            var command = new NpgsqlCommand(sql, _connection!, _transaction);
+            var command = new NpgsqlCommand(sql.Statement, _connection!, _transaction);
             try
             {
-                if (parameters is not null)
-                {
-                    command.Parameters.AddRange(SqlExecutor.Bind(sql, parameters, data, _actorAccountId, _activeProfileId));
-                }
-                else if (data is not null)
-                {
-                    throw new InvalidOperationException("An SQL data object requires a parameters object.");
-                }
-                else if (sql.Contains('@'))
-                {
-                    command.Parameters.AddRange(SqlExecutor.Bind(sql, new NoSqlParameters(), null, _actorAccountId, _activeProfileId));
-                }
-
+                command.Parameters.AddRange(SqlExecutor.Bind(sql));
                 return command;
             }
             catch
@@ -268,26 +247,54 @@ namespace Jularr.Backend.Infrastructure.Sql
             }
         }
 
-        private async Task<NpgsqlCommand> CreateReadCommandAsync(string sql, object? parameters, CancellationToken cancellationToken)
+        internal SqlReadCommands LogicReads => _mode == SqlAccessMode.ReadWrite ? _logicSql : ReadSql;
+
+        public class SqlReadCommands
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_pendingReadIsolation is { } isolation)
+            private readonly SqlContext _context;
+            private readonly bool _allowMutation;
+
+            internal SqlReadCommands(SqlContext context, bool allowMutation = false)
             {
-                _pendingReadIsolation = null;
-                await BeginAsync(SqlAccessMode.ReadOnly, isolation, cancellationToken);
+                _context = context;
+                _allowMutation = allowMutation;
             }
 
-            return CreateCommand(sql, false, parameters);
-        }
+            public async Task<object?> ExecuteScalarAsync(SqlStatement sql, CancellationToken cancellationToken = default)
+            {
+                await using var command = await _context.CreateCommandAsync(sql, _allowMutation, cancellationToken);
+                return await command.ExecuteScalarAsync(cancellationToken);
+            }
 
-        private sealed record NoSqlParameters;
+            public async Task<T?> ReadOptionalAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class
+            {
+                await using var command = await _context.CreateCommandAsync(sql, _allowMutation, cancellationToken);
+                await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
 
-        public sealed class SqlReadCommands(SqlContext context)
-        {
+                // Require zero or one row.
+                if (!await reader.ReadAsync(cancellationToken))
+                {
+                    return null;
+                }
+
+                var result = SqlExecutor.MapRow<T>(reader);
+                if (await reader.ReadAsync(cancellationToken))
+                {
+                    throw new InvalidOperationException("A single-row query returned multiple results.");
+                }
+
+                return result;
+            }
+
+            public async Task<T> ReadRequiredAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class
+            {
+                return await ReadOptionalAsync<T>(sql, cancellationToken)
+                    ?? throw new KeyNotFoundException("The required database resource was not found.");
+            }
+
             public async Task<IReadOnlyList<T>> ReadListAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default)
             {
-                ArgumentNullException.ThrowIfNull(sql);
-                await using var command = await context.CreateReadCommandAsync(sql.Statement, sql, cancellationToken);
+                await using var command = await _context.CreateCommandAsync(sql, _allowMutation, cancellationToken);
                 await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
                 var items = new List<T>();
 
@@ -299,68 +306,16 @@ namespace Jularr.Backend.Infrastructure.Sql
                 return items;
             }
 
-            public Task<object?> ExecuteScalarAsync(SqlStatement sql, CancellationToken cancellationToken = default)
+            public async Task<PageResult<T>> ReadPageAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default)
             {
-                ArgumentNullException.ThrowIfNull(sql);
-                return ExecuteScalarAsync(sql.Statement, sql, cancellationToken);
-            }
-
-            public Task<T?> ReadOptionalAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class
-            {
-                ArgumentNullException.ThrowIfNull(sql);
-                return ReadOptionalAsync<T>(sql.Statement, sql, cancellationToken);
-            }
-
-            public Task<T> ReadRequiredAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default) where T : class
-            {
-                ArgumentNullException.ThrowIfNull(sql);
-                return ReadRequiredAsync<T>(sql.Statement, sql, cancellationToken);
-            }
-
-            public async Task<object?> ExecuteScalarAsync(string sql, CancellationToken cancellationToken = default)
-            {
-                await using var command = await context.CreateReadCommandAsync(sql, null, cancellationToken);
-                return await command.ExecuteScalarAsync(cancellationToken);
-            }
-
-            public async Task<object?> ExecuteScalarAsync(string sql, object parameters, CancellationToken cancellationToken = default)
-            {
-                await using var command = await context.CreateReadCommandAsync(sql, parameters, cancellationToken);
-                return await command.ExecuteScalarAsync(cancellationToken);
-            }
-
-            public async Task<T?> ReadOptionalAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default) where T : class
-            {
-                await using var command = await context.CreateReadCommandAsync(sql, parameters, cancellationToken);
-                await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
-
-                if (!await reader.ReadAsync(cancellationToken))
-                {
-                    return default;
-                }
-
-                var result = SqlExecutor.MapRow<T>(reader);
-                if (await reader.ReadAsync(cancellationToken))
-                {
-                    throw new InvalidOperationException("A required single-row query returned multiple results.");
-                }
-
-                return result;
-            }
-
-            public async Task<T> ReadRequiredAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default) where T : class
-            {
-                var result = await ReadOptionalAsync<T>(sql, parameters, cancellationToken);
-                return result is null ? throw new KeyNotFoundException("The required database resource was not found.") : result;
-            }
-
-            public async Task<PageResult<T>> ReadPageAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
-            {
+                var parameters = sql.Parameters.FirstOrDefault()
+                    ?? throw new InvalidOperationException("Paged SQL requires pagination parameters.");
                 var request = SqlExecutor.GetPageRequest(parameters);
-                await using var command = await context.CreateReadCommandAsync(sql, parameters, cancellationToken);
+                await using var command = await _context.CreateCommandAsync(sql, _allowMutation, cancellationToken);
                 await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
                 var items = new List<T>();
 
+                // Reject an unbounded page.
                 while (await reader.ReadAsync(cancellationToken))
                 {
                     if (items.Count >= request.PageSize)
@@ -375,61 +330,19 @@ namespace Jularr.Backend.Infrastructure.Sql
             }
         }
 
-        public sealed class SqlLogicCommands(SqlContext context)
+        public sealed class SqlLogicCommands : SqlReadCommands
         {
-            public Task<T> ExecuteReturningAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default)
+            private readonly SqlContext _context;
+
+            internal SqlLogicCommands(SqlContext context) : base(context, allowMutation: true)
             {
-                ArgumentNullException.ThrowIfNull(sql);
-                return ReadForUpdateAsync<T>(sql.Statement, sql, cancellationToken);
+                _context = context;
             }
 
-            public Task<int> ExecuteAsync(SqlStatement sql, CancellationToken cancellationToken = default)
+            public async Task<int> ExecuteAsync(SqlStatement sql, CancellationToken cancellationToken = default)
             {
-                ArgumentNullException.ThrowIfNull(sql);
-                return ExecuteAsync(sql.Statement, sql, cancellationToken);
-            }
-
-            public Task<T> ReadForUpdateAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default)
-            {
-                ArgumentNullException.ThrowIfNull(sql);
-                return ReadForUpdateAsync<T>(sql.Statement, sql, cancellationToken);
-            }
-
-            public async Task<int> ExecuteAsync(string sql, CancellationToken cancellationToken = default)
-            {
-                await using var command = context.CreateCommand(sql, true);
+                await using var command = await _context.CreateCommandAsync(sql, allowMutation: true, cancellationToken);
                 return await command.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            public async Task<int> ExecuteAsync(string sql, object parameters, CancellationToken cancellationToken = default)
-            {
-                await using var command = context.CreateCommand(sql, true, parameters);
-                return await command.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            public async Task<int> ExecuteAsync(string sql, object parameters, object data, CancellationToken cancellationToken = default)
-            {
-                await using var command = context.CreateCommand(sql, true, parameters, data);
-                return await command.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            public async Task<T> ReadForUpdateAsync<T>(string sql, object parameters, CancellationToken cancellationToken = default)
-            {
-                await using var command = context.CreateCommand(sql, true, parameters);
-                await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
-
-                if (!await reader.ReadAsync(cancellationToken))
-                {
-                    throw new KeyNotFoundException("The required database resource was not found.");
-                }
-
-                var result = SqlExecutor.MapRow<T>(reader);
-                if (await reader.ReadAsync(cancellationToken))
-                {
-                    throw new InvalidOperationException("The locked query returned multiple rows.");
-                }
-
-                return result;
             }
         }
     }

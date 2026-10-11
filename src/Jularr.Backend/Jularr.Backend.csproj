@@ -7,7 +7,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Npgsql" Version="10.0.3" />
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
+    <ProjectReference Include="../Jularr.Integrations/Jularr.Integrations.csproj" />
     <EmbeddedResource Include="../../database/Account.sql" LogicalName="Jularr.Database.Account.sql" />
   </ItemGroup>
 </Project>
