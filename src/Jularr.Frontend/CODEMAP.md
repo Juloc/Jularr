@@ -51,6 +51,8 @@ Shared conventions and Backend ownership:
   [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
   compile/fingerprint Sass and TypeScript from colocated `*.entry.scss`
   and `*.entry.ts` files without loading unused modules.
+- [Generated private manifests](Assets/Generated): build-only, published alongside
+  server content but never in `wwwroot`; regenerated from Vite and icon build.
 - [FrontendAssets.cs](Framework/FrontendAssets.cs): cached hashed manifest
   resolver for Razor styles, scripts and icon URLs, without request-time builds.
 - [Shared shell SCSS](Assets/Shared/shell.entry.scss),

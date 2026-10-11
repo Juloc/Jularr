@@ -56,8 +56,8 @@ dotnet publish -c Release
 
 The .NET host does not compile TypeScript, Sass or sprites at request time.
 `npm run build` produces hashed CSS/JS and a hashed shared SVG symbol
-sprite in `wwwroot/build/assets`. `FrontendAssets` reads the generated
-manifest once per process and includes only shell plus owning Page/Module
+sprite in `wwwroot/build/assets`. `FrontendAssets` reads the private published manifests from
+`Assets/Generated/` once per process and includes only shell plus owning Page/Module
 assets. Production publish fails when the manifests are missing. A clean
 deployment must run the Node build before publishing; dev can run
 `npm run watch` and rebuild icons on demand with `npm run build`.

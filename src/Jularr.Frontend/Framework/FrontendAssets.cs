@@ -18,7 +18,7 @@ public sealed class FrontendAssets(IWebHostEnvironment environment)
 
     private readonly Lazy<IReadOnlyDictionary<string, Entry>> _manifest = new(() =>
     {
-        var file = Path.Combine(environment.WebRootPath, "build", ".vite", "manifest.json");
+        var file = Path.Combine(environment.ContentRootPath, "Assets", "Generated", "manifest.json");
         if (!File.Exists(file))
             throw new InvalidOperationException("Frontend asset manifest is missing. Run npm ci and npm run build in src/Jularr.Frontend.");
 
@@ -34,7 +34,7 @@ public sealed class FrontendAssets(IWebHostEnvironment environment)
 
     private readonly Lazy<IconManifest> _icons = new(() =>
     {
-        var path = Path.Combine(environment.WebRootPath, "build", ".vite", "icons.json");
+        var path = Path.Combine(environment.ContentRootPath, "Assets", "Generated", "icons.json");
         if (!File.Exists(path)) throw new InvalidOperationException("The fingerprinted SVG sprite is missing. Run npm run build.");
         return JsonSerializer.Deserialize<IconManifest>(File.ReadAllText(path),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })

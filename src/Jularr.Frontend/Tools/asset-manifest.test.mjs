@@ -5,8 +5,8 @@ import { test } from "node:test";
 
 const root = resolve(import.meta.dirname, "..");
 const build = join(root, "wwwroot", "build");
-const manifest = JSON.parse(readFileSync(join(build, ".vite", "manifest.json"), "utf8"));
-const icons = JSON.parse(readFileSync(join(build, ".vite", "icons.json"), "utf8"));
+const manifest = JSON.parse(readFileSync(join(root, "Assets", "Generated", "manifest.json"), "utf8"));
+const icons = JSON.parse(readFileSync(join(root, "Assets", "Generated", "icons.json"), "utf8"));
 const files = Object.values(manifest).flatMap(entry => [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])].filter(Boolean));
 
 test("all published assets exist with content fingerprints", () => {

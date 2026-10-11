@@ -44,7 +44,7 @@ jobs:
       - name: Verify production publish contains hashed assets and manifests
         run: |
           dotnet publish src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release --no-build --output /tmp/jularr-frontend
-          test -s /tmp/jularr-frontend/wwwroot/build/.vite/manifest.json
-          test -s /tmp/jularr-frontend/wwwroot/build/.vite/icons.json
+          test -s /tmp/jularr-frontend/Assets/Generated/manifest.json
+          test -s /tmp/jularr-frontend/Assets/Generated/icons.json
           test -n "$(find /tmp/jularr-frontend/wwwroot/build/assets -name '*-*.css' -print -quit)"
           test -n "$(find /tmp/jularr-frontend/wwwroot/build/assets -name 'icons-*.svg' -print -quit)"

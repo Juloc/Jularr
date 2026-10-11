@@ -168,7 +168,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   CI. Production publish **must not proceed** without built assets.
   Nothing compiles Sass/JS or computes hashes on a live request.
 - Vite writes only minified/compiled output into `wwwroot/build/assets`
-  and emits the manifest at `wwwroot/build/.vite/manifest.json`.
+  and emits the manifest at `Assets/Generated/manifest.json` (private, copied to published host).
   `FrontendAssets` parses it once per process to render just the hashed
   CSS/JS for the shell and current page. Unused module bundles are not
   referenced by other pages.
