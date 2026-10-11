@@ -8,6 +8,7 @@ public static class UiResources
 {
     public static IReadOnlyList<UiTextResource> English { get; } =
     [
+        new("account.field.email", "Email"),
         new("account.field.password", "Password"),
         new("account.field.userName", "Username or email"),
         new("account.login.hidePassword", "Hide password"),
