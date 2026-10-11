@@ -106,7 +106,8 @@ namespace Jularr.Backend.Tests
             // The API adapter exposes the same services and JSON contract without authentication.
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
-            builder.Services.AddJularrServices(fixture.Database, typeof(ReadUiTextsV1).Assembly);
+            builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
+            builder.Services.AddJularrServices(builder.Configuration);
             builder.Services.AddJularrLocalization([]);
             await using var app = builder.Build();
             app.UseExceptionHandler();
@@ -147,7 +148,7 @@ namespace Jularr.Backend.Tests
         private static async Task SynchronizeAsync(Fixture fixture, params UiTextResource[] resources)
         {
             var services = new ServiceCollection();
-            services.AddSingleton(fixture.Database);
+            services.AddSingleton(new SqlDatabase(fixture.Database));
             services.AddJularrLocalization(resources);
             // The fixture retains ownership of its data source; this provider is registration-only.
             using var provider = services.BuildServiceProvider();

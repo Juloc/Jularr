@@ -9,14 +9,14 @@ namespace Jularr.Backend.Data.Fields
 {
     public abstract class DataField
     {
-        protected DataField(Type clrType, NpgsqlDbType databaseType)
+        private protected DataField(Type clrType, NpgsqlDbType databaseType)
         {
             ClrType = clrType;
             DatabaseType = databaseType;
         }
 
         public Type ClrType { get; }
-        public NpgsqlDbType DatabaseType { get; }
+        internal NpgsqlDbType DatabaseType { get; }
         public bool Required { get; init; } = true;
         public int? MaximumLength { get; init; }
 
@@ -88,7 +88,11 @@ namespace Jularr.Backend.Data.Fields
 
     public sealed class StringField : DataField
     {
-        public StringField(NpgsqlDbType databaseType = NpgsqlDbType.Text)
+        public StringField() : this(NpgsqlDbType.Text)
+        {
+        }
+
+        internal StringField(NpgsqlDbType databaseType)
             : base(typeof(string), databaseType)
         {
             if (databaseType is not (NpgsqlDbType.Text or NpgsqlDbType.Varchar or NpgsqlDbType.Citext))

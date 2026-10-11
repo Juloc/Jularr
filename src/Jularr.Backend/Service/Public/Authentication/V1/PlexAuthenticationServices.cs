@@ -24,7 +24,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
         private readonly IDataProtector _protector;
         private readonly AuthenticationOptions _options;
 
-        public StartPlexV1(PlexClient plex, IDataProtectionProvider protection, IOptions<AuthenticationOptions> options)
+        internal StartPlexV1(PlexClient plex, IDataProtectionProvider protection, IOptions<AuthenticationOptions> options)
         {
             _plex = plex;
             _protector = protection.CreateProtector("Jularr.Plex.DeviceKey.V1");
@@ -85,7 +85,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
         private readonly AuthenticationOptions _options;
         private readonly IHttpContextAccessor _http;
 
-        public CompletePlexV1(PlexClient plex, IDataProtectionProvider protection, IOptions<AuthenticationOptions> options, IHttpContextAccessor http)
+        internal CompletePlexV1(PlexClient plex, IDataProtectionProvider protection, IOptions<AuthenticationOptions> options, IHttpContextAccessor http)
         {
             _plex = plex;
             _protector = protection.CreateProtector("Jularr.Plex.DeviceKey.V1");

@@ -10,6 +10,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Npgsql;
 
 namespace Jularr.Backend.Tests
@@ -17,6 +22,60 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class ServiceApiTests
     {
+        [TestMethod]
+        public void Registration_MissingDatabaseConfiguration_IsRejected()
+        {
+            var services = new ServiceCollection();
+            var configuration = new ConfigurationBuilder().Build();
+
+            Assert.ThrowsExactly<InvalidOperationException>(() => services.AddJularrServices(configuration));
+            Assert.IsFalse(services.Any(descriptor => descriptor.ServiceType == typeof(SqlDatabase)));
+        }
+
+        [TestMethod]
+        public async Task Registration_BackendOwnsDatabase_DirectAndHttpServicesShareRuntime()
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["JULARR_DB"] = "Host=127.0.0.1;Port=1;Username=unused;Database=unused;Timeout=1",
+                ["Authentication:SessionLifetimeHours"] = "21"
+            });
+            builder.Services.AddJularrServices(builder.Configuration);
+            var app = builder.Build();
+            NpgsqlDataSource database;
+            try
+            {
+                // Resolve internal dependencies centrally.
+                database = app.Services.GetRequiredService<SqlDatabase>().DataSource;
+                Assert.IsNull(app.Services.GetService<NpgsqlDataSource>());
+                await using var scope = app.Services.CreateAsyncScope();
+                Assert.AreSame(database, scope.ServiceProvider.GetRequiredService<SqlDatabase>().DataSource);
+                Assert.AreEqual(21, scope.ServiceProvider.GetRequiredService<IOptions<AuthenticationOptions>>().Value.SessionLifetimeHours);
+                var service = scope.ServiceProvider.GetRequiredService<ReadAuthenticationV1>();
+                var result = await service.ExecuteAsync<AuthenticationResultV1>();
+                Assert.IsFalse(result.IsAuthenticated);
+
+                // Verify the shared HTTP adapter.
+                app.UseExceptionHandler();
+                app.UseRateLimiter();
+                app.MapJularrServices();
+                await app.StartAsync();
+                using var client = app.GetTestClient();
+                using var response = await client.GetAsync("/api/v1/auth");
+                Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+                Assert.IsFalse((await response.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.IsAuthenticated);
+            }
+            finally
+            {
+                await app.DisposeAsync();
+            }
+
+            // Host disposal closes its pool.
+            await Assert.ThrowsExactlyAsync<ObjectDisposedException>(async () => await database.OpenConnectionAsync());
+        }
+
         [TestMethod]
         public async Task Api_ExplicitPublicService_BindsAndUsesSharedErrors()
         {

@@ -6,7 +6,7 @@ using Npgsql;
 
 namespace Jularr.Backend.Logic.Profile
 {
-    public static class ProfileLogic
+    internal static class ProfileLogic
     {
         public static async Task CreateProfileAsync(this LogicContext context, ProfileCreationData data, CancellationToken cancellationToken)
         {

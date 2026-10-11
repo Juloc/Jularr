@@ -2,7 +2,7 @@ using Jularr.Backend.Data.Logic.Session;
 
 namespace Jularr.Backend.Data.Common
 {
-    public interface ISessionResult : IServiceOutput
+    internal interface ISessionResult : IServiceOutput
     {
         SessionCredentialsData? Session { get; }
     }

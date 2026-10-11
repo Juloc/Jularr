@@ -5,7 +5,7 @@ Navigation only. Rules: [CONVENTIONS.md](CONVENTIONS.md). Startup and gaps: [REA
 ## Host and Profile entry points
 
 - [Backend project](../src/Jularr.Backend/Jularr.Backend.csproj): class library; [Frontend Program](../src/Jularr.Frontend/Program.cs): the only web host. Backend host registration: [README](../README.md#backend-im-gemeinsamen-host).
-- [ServiceApi.cs](../src/Jularr.Backend/Service/Core/ServiceApi.cs): shared registration, explicit endpoint discovery, parameter/body binding and antiforgery.
+- [ServiceApi.cs](../src/Jularr.Backend/Service/Core/ServiceApi.cs): configuration-based host registration, Backend-owned data source, service DI, endpoint discovery, parameter/body binding and antiforgery.
 - [ServiceEndpointAttribute.cs](../src/Jularr.Backend/Service/Core/ServiceEndpointAttribute.cs): class-level API opt-in; unmarked services stay internal, System services cannot be exposed.
 - [ServiceExceptionHandler.cs](../src/Jularr.Backend/Service/Core/ServiceExceptionHandler.cs): central sanitized ProblemDetails, including binding and data validation failures.
 - [ReadUiTextsV1.cs](../src/Jularr.Backend/Service/Public/Localization/V1/ReadUiTextsV1.cs), [ReadUiLocalesV1.cs](../src/Jularr.Backend/Service/Public/Localization/V1/ReadUiLocalesV1.cs): canonical Public reads for Razor/API; SQL resolves fallback and aggregates the complete language pack. [UiLocalizationCache.cs](../src/Jularr.Backend/Service/Public/Localization/V1/UiLocalizationCache.cs) is passive caching; [registration](../src/Jularr.Backend/Service/Core/Localization/UiLocalizationRegistration.cs) synchronizes English declarations at startup.
@@ -33,8 +33,9 @@ Navigation only. Rules: [CONVENTIONS.md](CONVENTIONS.md). Startup and gaps: [REA
 - [BaseData.cs](../src/Jularr.Backend/Data/Common/BaseData.cs): cached field validation, same-name property merging, Id-based list merging and partial/list JSON binding.
 - [DataField.cs](../src/Jularr.Backend/Data/Fields/DataField.cs): C#-named field classes and their PostgreSQL types; [DataFieldAttribute.cs](../src/Jularr.Backend/Data/Common/DataFieldAttribute.cs): required/optional and length overrides.
 - [Service.cs](../src/Jularr.Backend/Service/Core/Service.cs): invocation lifecycle, operation hooks and shared transaction.
-- [ServiceRuntime.cs](../src/Jularr.Backend/Service/Core/ServiceRuntime.cs): gate, SqlContext factory and central runtime binding for direct service calls.
+- [ServiceRuntime.cs](../src/Jularr.Backend/Service/Core/ServiceRuntime.cs): internal gate, SqlContext factory and central runtime binding. Logic, SQL infrastructure and the Plex client are internal; consumers use services and Data contracts.
 - [SqlContext.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlContext.cs): one connection/transaction, shared ordinary reads and Logic execution; [SqlExecutor.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlExecutor.cs): explicit typed binding/mapping, no injected auth IDs; [LogicContext.cs](../src/Jularr.Backend/Infrastructure/Sql/LogicContext.cs): direct Logic calls and guarded short batches.
+- [SqlDatabase.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlDatabase.cs): internal shared data-source owner and host disposal.
 - [SqlParams.cs](../src/Jularr.Backend/Data/SqlParams.cs): typed object binding with cached field metadata and compiled getters.
 - [Pagination.cs](../src/Jularr.Backend/Data/Pagination.cs), [SqlStatement.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlStatement.cs): shared PageRequest and bounded page results; [ListService.cs](../src/Jularr.Backend/Service/Core/ListService.cs): once-per-invocation page hook.
 - [Account.sql](../database/Account.sql): the single fresh Account/Profile/auth/session/localization baseline; [schema scope](../database/README.md). [UiTranslationFields.cs](../src/Jularr.Backend/Data/Fields/Localization/UiTranslationFields.cs) and [UiTranslationStatusType.cs](../src/Jularr.Backend/Data/Enums/Localization/UiTranslationStatusType.cs) own translation fields/catalog values.
@@ -44,8 +45,8 @@ Navigation only. Rules: [CONVENTIONS.md](CONVENTIONS.md). Startup and gaps: [REA
 All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 
 - Profile behavior/rollback: `ProfileReferenceVerticalTests.cs`; authorization/HTTP: `ProfileServiceGateTests.cs`.
-- Invocation and boundaries: `ServiceFoundationTests.cs`, `ServiceArchitectureTests.cs`.
-- API opt-in, public binding and common errors: `ServiceApiTests.cs` (no database).
+- Invocation, internal visibility and PostgreSQL-free consumer signatures: `ServiceFoundationTests.cs`, `ServiceArchitectureTests.cs`.
+- Backend-owned data-source lifecycle, direct/API calls, API opt-in, public binding and common errors: `ServiceApiTests.cs` (no database).
 - Connection/transaction and SQL binding: `SqlContextTests.cs`, `SqlExecutorTests.cs`; metadata: `DataFieldTests.cs`.
 - Account/auth schema and catalog/field consistency: `AccountSchemaTests.cs`.
 - Shared localization, startup idempotence, manual protection, fallback, cache invalidation and rollback: `UiLocalizationTests.cs`.
@@ -54,8 +55,7 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 
 ## Not integrated
 
-Frontend host/forms and enforced Service-only access (Backend-owned database
-registration and internal Logic/SQL types), owner bootstrap, email/approval workflows, 2FA/WebAuthn completion,
+Frontend host/forms, owner bootstrap, email/approval workflows, 2FA/WebAuthn completion,
 session logout/rotation, old Android/TV consumers, full Profile management and settings.
 This reference backend does not complete Phase B or replace an active installation.
 

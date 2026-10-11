@@ -5,7 +5,7 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Localization
 {
-    public static class UiLocalizationLogic
+    internal static class UiLocalizationLogic
     {
         internal static async Task SynchronizeUiResourcesAsync(this LogicContext context,
             IReadOnlyList<UiTextResource> resources, CancellationToken cancellationToken)

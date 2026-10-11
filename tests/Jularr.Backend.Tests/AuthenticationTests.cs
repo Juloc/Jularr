@@ -254,7 +254,8 @@ namespace Jularr.Backend.Tests
                 var builder = WebApplication.CreateBuilder();
                 builder.WebHost.UseTestServer();
                 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
-                builder.Services.AddJularrServices(fixture.Database, typeof(ServiceRuntime).Assembly);
+                builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
+                builder.Services.AddJularrServices(builder.Configuration);
                 builder.Services.Configure<AuthenticationOptions>(options =>
                 {
                     options.PlexLoginEnabled = plexEnabled;

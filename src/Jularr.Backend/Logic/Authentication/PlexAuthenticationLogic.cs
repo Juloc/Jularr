@@ -11,7 +11,7 @@ using Jularr.Backend.Data.Logic.Provider;
 
 namespace Jularr.Backend.Logic.Authentication
 {
-    public static class PlexAuthenticationLogic
+    internal static class PlexAuthenticationLogic
     {
         public static async Task CreatePlexFlowAsync(this LogicContext context, PlexChallengeCreationData challenge, long externalPinId, string clientIdentifier, CancellationToken cancellationToken)
         {

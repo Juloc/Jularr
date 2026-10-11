@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Logic.Account
 {
-    public static class AccountLogic
+    internal static class AccountLogic
     {
         private static readonly PasswordHasher<AccountAuthenticationData> PasswordHasher = new(
             Options.Create(new PasswordHasherOptions { IterationCount = 600_000 }));

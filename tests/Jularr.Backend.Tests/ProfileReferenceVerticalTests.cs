@@ -208,6 +208,7 @@ namespace Jularr.Backend.Tests
             private readonly NpgsqlDataSource _setup;
 
             public NpgsqlDataSource Database { get; }
+            public string ConnectionString { get; }
             public long AccountAId { get; } = 41;
             public long ProfileAId { get; } = 101;
             public long ProfileBId { get; } = 202;
@@ -215,10 +216,11 @@ namespace Jularr.Backend.Tests
             public string SessionToken { get; } = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(
                 System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
-            private ProfileFixture(NpgsqlDataSource setup, NpgsqlDataSource database)
+            private ProfileFixture(NpgsqlDataSource setup, NpgsqlDataSource database, string connectionString)
             {
                 _setup = setup;
                 Database = database;
+                ConnectionString = connectionString;
             }
 
             public static async Task<ProfileFixture> CreateAsync()
@@ -227,7 +229,7 @@ namespace Jularr.Backend.Tests
                 var isolated = new NpgsqlConnectionStringBuilder(cs) { SearchPath = "\"ProfileReference\"" };
                 var setup = new NpgsqlDataSourceBuilder(isolated.ConnectionString).Build();
                 var database = new NpgsqlDataSourceBuilder(isolated.ConnectionString).Build();
-                var fixture = new ProfileFixture(setup, database);
+                var fixture = new ProfileFixture(setup, database, isolated.ConnectionString);
 
                 try
                 {

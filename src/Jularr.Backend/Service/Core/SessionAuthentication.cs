@@ -11,7 +11,7 @@ using Npgsql;
 
 namespace Jularr.Backend.Service.Core
 {
-    public sealed class SessionAuthentication
+    internal sealed class SessionAuthentication
     {
         private readonly NpgsqlDataSource _database;
 

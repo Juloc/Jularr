@@ -12,7 +12,7 @@ using Org.BouncyCastle.Security;
 
 namespace Jularr.Integrations.Logic.Plex
 {
-    public sealed class PlexClient
+    internal sealed class PlexClient
     {
         private readonly HttpClient _http;
 

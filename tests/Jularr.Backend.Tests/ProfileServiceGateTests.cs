@@ -130,7 +130,8 @@ namespace Jularr.Backend.Tests
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
             builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
-            builder.Services.AddJularrServices(fixture.Database, typeof(ServiceRuntime).Assembly);
+            builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
+            builder.Services.AddJularrServices(builder.Configuration);
             await using var app = builder.Build();
             app.UseExceptionHandler();
             app.UseRateLimiter();

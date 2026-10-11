@@ -1,6 +1,6 @@
 namespace Jularr.Backend.Infrastructure.Sql
 {
-    public sealed class LogicContext
+    internal sealed class LogicContext
     {
         private readonly SqlContext _sql;
         private Func<LogicContext, CancellationToken, Task>? _transactionalAccessCheck;

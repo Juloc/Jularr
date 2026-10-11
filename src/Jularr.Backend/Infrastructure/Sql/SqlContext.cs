@@ -5,7 +5,7 @@ using Npgsql;
 
 namespace Jularr.Backend.Infrastructure.Sql
 {
-    public sealed class SqlContext : IAsyncDisposable
+    internal sealed class SqlContext : IAsyncDisposable
     {
         private readonly NpgsqlDataSource _database;
         private readonly SqlLogicCommands _logicSql;

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace Jularr.Backend.Service.Core
 {
-    public sealed class SessionCookieEvents : CookieAuthenticationEvents
+    internal sealed class SessionCookieEvents : CookieAuthenticationEvents
     {
         private readonly SessionAuthentication _authentication;
 

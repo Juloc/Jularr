@@ -11,7 +11,7 @@ namespace Jularr.Backend.Service.Core
     {
         private ServiceRuntime? _runtime;
 
-        protected ServiceRuntime Runtime => _runtime ?? throw new InvalidOperationException("The service runtime has not been bound.");
+        private protected ServiceRuntime Runtime => _runtime ?? throw new InvalidOperationException("The service runtime has not been bound.");
 
         internal void BindRuntime(ServiceRuntime runtime)
         {
@@ -36,7 +36,7 @@ namespace Jularr.Backend.Service.Core
         private Invocation Current => _invocation.Value ?? throw new InvalidOperationException("Service state is only available during an authorized invocation.");
         protected TParameters Parameters => Current.Parameters;
         protected TData Data => Current.Data;
-        protected LogicContext Context => Current.Context;
+        private protected LogicContext Context => Current.Context;
         protected ServiceCaller Auth => Current.Caller;
         protected Type ResultType => Current.ResultType;
         protected CancellationToken CancellationToken => Current.CancellationToken;

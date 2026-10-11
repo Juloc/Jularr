@@ -7,7 +7,7 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Session
 {
-    public static class SessionLogic
+    internal static class SessionLogic
     {
         public static async Task<SessionCredentialsData> CreateSessionAsync(this LogicContext context, AccountAuthenticationData account, TimeSpan lifetime, CancellationToken cancellationToken)
         {

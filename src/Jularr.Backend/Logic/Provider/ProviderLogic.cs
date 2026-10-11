@@ -4,7 +4,7 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Provider
 {
-    public static class ProviderLogic
+    internal static class ProviderLogic
     {
         public static async Task<ProviderData> ReadEnabledProviderAsync(this LogicContext context, ProviderParameters parameters, CancellationToken cancellationToken)
         {

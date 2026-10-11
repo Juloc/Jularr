@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
@@ -7,8 +8,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Configuration;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.Plex;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.Public.Localization.V1;
@@ -25,7 +28,31 @@ namespace Jularr.Backend.Service.Core
     {
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
 
-        public static IServiceCollection AddJularrServices(this IServiceCollection services, NpgsqlDataSource database, params Assembly[] assemblies)
+        public static IServiceCollection AddJularrServices(this IServiceCollection services, IConfiguration configuration)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            // Own the database lifetime.
+            var connectionString = configuration["JULARR_DB"];
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException("JULARR_DB must be configured explicitly.");
+            }
+
+            services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
+            services.Configure<AuthenticationOptions>(configuration.GetSection("Authentication"));
+            return RegisterServices(services, [typeof(Service).Assembly]);
+        }
+
+        internal static IServiceCollection AddJularrServices(this IServiceCollection services, NpgsqlDataSource database, params Assembly[] assemblies)
+        {
+            // Tests own isolated data sources.
+            services.AddSingleton(new SqlDatabase(database));
+            return RegisterServices(services, assemblies);
+        }
+
+        private static IServiceCollection RegisterServices(IServiceCollection services, Assembly[] assemblies)
         {
             // Discover concrete services.
             var serviceTypes = assemblies.Distinct().SelectMany(assembly => assembly.GetTypes())
@@ -33,7 +60,6 @@ namespace Jularr.Backend.Service.Core
                 .Distinct().ToArray();
 
             // Register shared infrastructure.
-            services.AddSingleton(database);
             services.TryAddSingleton(TimeProvider.System);
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
@@ -43,7 +69,7 @@ namespace Jularr.Backend.Service.Core
             services.AddExceptionHandler<ServiceExceptionHandler>();
             services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
             services.AddScoped<IServiceGate, ServiceGate>();
-            services.AddScoped<SessionAuthentication>();
+            services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
             services.AddDataProtection();
 
@@ -100,12 +126,21 @@ namespace Jularr.Backend.Service.Core
             });
 
             // Bind each service runtime.
-            services.AddScoped<ServiceRuntime>();
+            services.AddScoped(provider => new ServiceRuntime(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<IServiceGate>()));
             foreach (var type in serviceTypes)
             {
+                // Compile internal constructor activation.
+                var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Single();
+                var providerParameter = Expression.Parameter(typeof(IServiceProvider), "provider");
+                var dependencies = constructor.GetParameters().Select(parameter => Expression.Convert(
+                    Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService),
+                        Type.EmptyTypes, providerParameter, Expression.Constant(parameter.ParameterType)), parameter.ParameterType));
+                var create = Expression.Lambda<Func<IServiceProvider, Service>>(Expression.New(constructor, dependencies), providerParameter).Compile();
+
+                // Bind the authorized runtime.
                 services.AddScoped(type, provider =>
                 {
-                    var service = (Service)ActivatorUtilities.CreateInstance(provider, type);
+                    var service = create(provider);
                     service.BindRuntime(provider.GetRequiredService<ServiceRuntime>());
                     return service;
                 });

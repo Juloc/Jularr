@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Jularr.Backend.Service.Core
 {
-    public sealed class ServiceExceptionHandler : IExceptionHandler
+    internal sealed class ServiceExceptionHandler : IExceptionHandler
     {
         public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
         {

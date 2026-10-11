@@ -10,7 +10,7 @@ namespace Jularr.Backend.Service.Public.Localization.V1
     {
         private readonly UiLocalizationCache _cache;
 
-        public ReadUiLocalesV1(UiLocalizationCache cache)
+        internal ReadUiLocalesV1(UiLocalizationCache cache)
         {
             _cache = cache;
         }

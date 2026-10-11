@@ -2,7 +2,7 @@ using Jularr.Backend.Data;
 
 namespace Jularr.Backend.Infrastructure.Sql
 {
-    public sealed class SqlStatement
+    internal sealed class SqlStatement
     {
         public string Statement { get; set; } = string.Empty;
         public List<object> Parameters { get; } = [];

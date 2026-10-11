@@ -5,7 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Jularr.Backend.Service.Public.Localization.V1
 {
     // Passive cache; services own reads.
-    public sealed class UiLocalizationCache : IDisposable
+    internal sealed class UiLocalizationCache : IDisposable
     {
         private readonly TimeProvider _time;
         private readonly MemoryCache _entries = new(new MemoryCacheOptions { SizeLimit = 4 * 1024 * 1024 });

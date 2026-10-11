@@ -6,7 +6,7 @@ using Jularr.Backend.Logic.Session;
 
 namespace Jularr.Backend.Service.Core
 {
-    public sealed class ServiceGate : IServiceGate
+    internal sealed class ServiceGate : IServiceGate
     {
         public const string SessionClaimType = "jularr.session_id";
         public const string SessionRevisionClaimType = "jularr.session_revision";

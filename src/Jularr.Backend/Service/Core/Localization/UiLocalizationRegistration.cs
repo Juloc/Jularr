@@ -4,7 +4,6 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Localization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Npgsql;
 
 namespace Jularr.Backend.Service.Core.Localization
 {
@@ -35,12 +34,12 @@ namespace Jularr.Backend.Service.Core.Localization
             public UiTextResource[] Resources { get; } = resources;
         }
 
-        private sealed class UiResourceSynchronization(NpgsqlDataSource database, UiResourceSource source) : IHostedService
+        private sealed class UiResourceSynchronization(SqlDatabase database, UiResourceSource source) : IHostedService
         {
             public async Task StartAsync(CancellationToken cancellationToken)
             {
                 // Synchronize resources, never install or migrate the schema.
-                await using var sql = new SqlContext(database);
+                await using var sql = new SqlContext(database.DataSource);
                 await sql.BeginAsync(SqlAccessMode.ReadWrite, cancellationToken: cancellationToken);
                 var context = new LogicContext(sql);
                 await context.SynchronizeUiResourcesAsync(source.Resources, cancellationToken);

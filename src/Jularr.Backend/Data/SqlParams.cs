@@ -7,7 +7,7 @@ using NpgsqlTypes;
 
 namespace Jularr.Backend.Data
 {
-    public sealed class SqlParams
+    internal sealed class SqlParams
     {
         private static readonly ConcurrentDictionary<Type, PropertyBinding[]> Bindings = new();
 

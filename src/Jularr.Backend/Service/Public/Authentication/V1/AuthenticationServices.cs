@@ -17,7 +17,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
         private readonly SessionAuthentication _sessions;
         private readonly IHttpContextAccessor _http;
 
-        public ReadAuthenticationV1(IOptions<AuthenticationOptions> options, SessionAuthentication sessions, IHttpContextAccessor http)
+        internal ReadAuthenticationV1(IOptions<AuthenticationOptions> options, SessionAuthentication sessions, IHttpContextAccessor http)
         {
             _options = options.Value;
             _sessions = sessions;
@@ -53,7 +53,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
     {
         private readonly AuthenticationOptions _options;
 
-        public LoginV1(IOptions<AuthenticationOptions> options)
+        internal LoginV1(IOptions<AuthenticationOptions> options)
         {
             _options = options.Value;
         }

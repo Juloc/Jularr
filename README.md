@@ -25,11 +25,19 @@ bleibt beim Frontend. Razor verwendet Services und deren Datenverträge; der Hos
 verwendet die vorgesehenen `Service/Core`-Adapter für Registrierung und Authentifizierung.
 Datenbankkonfiguration, Connection und Transaction gehören vollständig ins Backend.
 
-Offene Framework-Anpassung: `AddJularrServices` erwartet derzeit noch eine
-`NpgsqlDataSource`, und Logic-/SQL-Typen sind öffentlich. Vor der Frontend-Anbindung
-muss die Backend-Registrierung den Aufbau der Datenquelle übernehmen und der direkte
-Zugriff auf Logic/SQL durch interne Sichtbarkeit begrenzt werden. Das Frontend soll
-weder Npgsql initialisieren noch SQL oder Logic aufrufen.
+```csharp
+using Jularr.Backend.Service.Core;
+
+builder.Services.AddJularrServices(builder.Configuration);
+```
+
+Das Backend liest `JULARR_DB` und bindet den Abschnitt `Authentication` selbst.
+Die DI-Registrierung erstellt eine gemeinsame Datenquelle bei Bedarf und entsorgt
+sie mit dem Host. SQL-Verbindungen werden erst beim notwendigen Datenzugriff geöffnet.
+Services teilen innerhalb eines Aufrufs eine Connection und Transaction.
+Logic, SQL, Runtime, Auth-Prüfer, Cache und Plex-Client sind intern; das Frontend
+erhält die Services über DI. Die CLR-Feldmetadaten bleiben für Formulare verfügbar,
+PostgreSQL-Typmetadaten bleiben im Backend.
 
 Nach `Build()`: `app.UseExceptionHandler()` für den registrierten zentralen Handler,
 `app.UseRouting()`, `app.UseRateLimiter()`, `app.UseAuthentication()` und

@@ -21,7 +21,7 @@
 - Run only the affected build and necessary focused tests. Documentation-only changes need link/path and diff checks, not backend tests.
 - Full validation commands are in [.agent/project.yaml](.agent/project.yaml); run them only for a release or an explicit full-validation request.
 - Review your own diff before committing; state what was verified and any remaining integration gaps.
-- Current branch: `codex/local-clean-start-server`, based on `clean-start` after the authorized Integrations/formatting merge. Keep changes bundled and push the feature branch after focused verification. Preserve Frontend work; further merges into `clean-start` or writes to `dev`/`main` require explicit authorization. Never force push.
+- Current branch: `codex/backend-service-boundary`, based on `clean-start` after the authorized SQL/preview merge. Keep changes bundled and push the feature branch after focused verification. Preserve Frontend work; further merges into `clean-start` or writes to `dev`/`main` require explicit authorization. Never force push.
 - Both author and committer must be exactly `Juloc <juli.hiresch@gmail.com>`; no AI attribution or additional contributor trailers.
 - Before committing, run `node scripts/install-git-hooks.mjs`. Never bypass hooks with `--no-verify`.
 - Keep commit messages compact. Do not rewrite historical authorship.
