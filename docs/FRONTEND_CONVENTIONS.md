@@ -60,10 +60,13 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Local section headings are allowed only when they genuinely separate distinct
   content, not when they echo the current breadcrumb. Contextual explanations
   are shown only for meaningful tasks or failure/help states, never as filler.
-- Read the relevant approved `docs/mockups/<feature>/SPEC.md` **and** the
-  canonical current implementation before preparing/changing the page. Specs
-  own the information architecture: do not invent an alternative scaffold.
-  Where a newer owner decision overrides a legacy spec, explicitly record it.
+- Before preparing or changing a page, read its relevant approved
+  specification from [the `dev` mockups](https://github.com/Juloc/Jularr/tree/dev/docs/mockups)
+  (until those specs are transferred to `clean-start`), plus the applicable
+  current architecture and canonical implementation. The written spec owns
+  information hierarchy and interactions; do not copy the old `Jularr.Web`
+  storage or service classes into the new Backend. Where a newer owner
+  decision overrides a legacy spec, explicitly record it.
 - Never render a headings-only `UiTable`, disabled pseudo-toolbar, fake cards
   or an unbound static filter list as a "prepared page". A real table is
   `Table<TData>` with typed fields and actual authorized Backend results;
