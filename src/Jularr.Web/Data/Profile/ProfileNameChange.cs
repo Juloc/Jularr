@@ -1,4 +1,7 @@
+using Jularr.Data.Common;
+
 namespace Jularr.Data.Profile;
 
-// Neutral, unversioned Logic input. No User/Admin/System DTO dependencies.
-public sealed record ProfileNameChange(Guid PublicId, string DisplayName);
+public sealed record ProfileNameChange(
+    [property: DataField(typeof(ProfileFields), nameof(ProfileFields.PublicId))] Guid PublicId,
+    [property: DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))] string DisplayName);

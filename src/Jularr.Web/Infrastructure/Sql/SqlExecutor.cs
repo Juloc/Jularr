@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
+using Jularr.Data.Common;
 using Jularr.Web.Data;
 using Npgsql;
 using NpgsqlTypes;
@@ -50,9 +51,7 @@ internal static class SqlExecutor
                     throw new InvalidOperationException($"SQL parameter '{binding.Name}' is no longer a readable DTO property.");
                 }
 
-                // The existing SqlParams implementation supports primitive values and bytea,
-                // but not PostgreSQL arrays. Bind only the known typed, one-dimensional arrays.
-                // All other values reuse the central SqlParams type validation.
+                var databaseType = binding.DatabaseType;
                 if (property.PropertyType.IsArray && property.PropertyType != typeof(byte[]))
                 {
                     var arrayType = GetArrayDatabaseType(property.PropertyType);
@@ -61,18 +60,13 @@ internal static class SqlExecutor
                         throw new ArgumentException($"The SQL array cast for '{binding.Name}' does not match its CLR element type.");
                     }
 
-                    values[index] = new NpgsqlParameter(binding.Name, arrayType)
-                    {
-                        Value = property.GetValue(source) ?? DBNull.Value
-                    };
+                    databaseType = arrayType;
                 }
-                else
-                {
-                    var builder = SqlParams.From(source);
-                    values[index] = binding.DatabaseType.HasValue
-                        ? builder.Add(binding.Name, binding.DatabaseType.Value).ToArray()[0]
-                        : builder.Add(binding.Name).ToArray()[0];
-                }
+
+                var builder = SqlParams.From(source);
+                values[index] = databaseType.HasValue
+                    ? builder.Add(binding.Name, databaseType.Value).ToArray()[0]
+                    : builder.Add(binding.Name).ToArray()[0];
             }
         }
 
@@ -398,6 +392,11 @@ internal static class SqlExecutor
         for (var index = 0; index < map.Parameters.Length; index++)
         {
             var value = reader.GetValue(map.Ordinals[index]);
+            if (value is DBNull && map.Required[index])
+            {
+                throw new InvalidOperationException("Database NULL cannot map to a required data field.");
+            }
+
             arguments[index] = ConvertValue(value, map.Parameters[index].ParameterType, reader.GetDataTypeName(map.Ordinals[index]));
         }
 
@@ -431,7 +430,10 @@ internal static class SqlExecutor
 
             if (success && ordinals.Distinct().Count() == ordinals.Length)
             {
-                return new RowMap(constructor, parameters, ordinals);
+                var required = parameters.Select(parameter =>
+                    type.GetProperty(parameter.Name!, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                        ?.GetCustomAttribute<DataFieldAttribute>()?.Required == true).ToArray();
+                return new RowMap(constructor, parameters, ordinals, required);
             }
         }
 
@@ -491,5 +493,5 @@ internal static class SqlExecutor
 
     private sealed record Binding(string Name, BindingSource Source, NpgsqlDbType? DatabaseType);
 
-    private sealed record RowMap(ConstructorInfo Constructor, ParameterInfo[] Parameters, int[] Ordinals);
+    private sealed record RowMap(ConstructorInfo Constructor, ParameterInfo[] Parameters, int[] Ordinals, bool[] Required);
 }

@@ -1,55 +1,82 @@
-# Erste Framework-Referenzfunktion – Profilname (Review-Stop)
+# Profile: eine Read- und eine Update-Funktion
 
-**Ziel:** Prüfen, ob das vorhandene Service/Data/Logic-Framework zum tatsächlichen
-Umbau taugt. Nur diese kleine Funktion auf eigenem Branch; **keine** weitere
-Schema-Phase, keine neue Service-Engine, kein Store-Layer.
+Review-Stand auf dem Framework aus #943. Nach diesen beiden Funktionen stoppen;
+kein vollständiger Profile-Umbau, kein Merge nach dev, kein Datenbank-Cutover.
 
-## Konkreter Ablauf
+## Implementierter Ablauf
 
-1. Ein autorisierter Client verwendet ausschließlich `ProfileParameters.PublicId : Guid`.
-   `Profiles.Id bigint` sowie `AccountProfiles.AccountId/ProfileId bigint` bleiben
-   **interne** SQL-/Join-/Scope-Identitäten. UUID ist kein Passwort/Token.
-2. `GetProfile : UserReadService<ProfileParameters>` delegiert einen einzigen
-   statischen, parametrierten SELECT an die ReadSql-Fassade. Profil- und
-   Account-Zugehörigkeit sind in demselben SQL-Prädikat geprüft; PostgreSQL
-   `READ ONLY` kommt aus dem vorhandenen Framework.
-3. `RenameProfile : UserService<ProfileParameters, RenameProfileData>`
-   deklariert `ServiceOperationType.Update`. Nach dem zentralen
-   Modul-/Caller-/Permission-Gate und dem transaktionalen Recheck ruft
-   der Service genau eine neutrale `Jularr.Logic.Profile.ProfileLogic.RenameAsync`
-   auf. **Nur dort liegt das UPDATE**; der Ergebnis-SELECT läuft noch in
-   derselben Service-Transaktion/Connection.
-4. Ein fremdes, inzwischen abgemeldetes, deaktiviertes oder nicht zum aktiven
-   Profil gehörendes PublicId darf weder Daten lesen noch ändern. Der
-   SQL-Writer nutzt `@ActorAccountId` und `@ActiveProfileId` aus
-   dem vertrauenswürdigen `SqlContext`, niemals aus User-DTO-Feldern.
-5. Alle neuen Ziel-Vertragsklassen liegen gemeinsam in
-   `Data/User/Profile/V1/Profile.cs`; die Logic erhält ausschließlich
-   einen rollenfreien neutralen `Data/Profile/ProfileNameChange`.
+- `GetProfile`: `UserReadService<ProfileParameters>`, statischer SELECT in einer
+  echten PostgreSQL-READ-ONLY-Transaktion. Nur das aktive, zugängliche Profil.
+- `RenameProfile`: `UserService<ProfileParameters, RenameProfileData>`, Operation
+  `Update`. Logic prüft/trimmt den Namen und führt das UPDATE aus. Session-,
+  Account-, Membership- und Profile-Locks sowie UPDATE und Ergebnis-SELECT
+  verwenden dieselbe Service-Connection und -Transaktion. Fehler rollen zurück.
+- Die beiden HTTP-Adapter sind `GET /api/v1/profiles/{publicId}` und
+  `PUT /api/v1/profiles/{publicId}/name`. Cookie-Schreibzugriffe benötigen den
+  Antiforgery-Cookie und `RequestVerificationToken` aus der GET-Antwort.
 
-## Review-Dateien
+`profile.self.read` und `profile.self.rename` sind keine frei vergebenen Grants:
+`ProfileServiceGate` erkennt exakt diese beiden Operationen. Lesen verlangt eine
+aktuelle Session und Account/Profile-Mitgliedschaft. Umbenennen verlangt zusätzlich
+`Profiles.OwnerAccountId = ActorAccountId`. Mitgliedschaft allein ist kein
+Verwaltungsrecht. Unbekannte Permissions, Ressourcen, Module und Service-Areas
+werden abgelehnt. Diese User-Funktion führt keinen Admin-Bypass ein.
 
-- `src/Jularr.Web/Data/User/Profile/V1/Profile.cs`
-- `src/Jularr.Web/Service/User/Profile/V1/ProfileServices.cs`
-- `src/Jularr.Web/Logic/Profile/ProfileLogic.cs`
-- `tests/Jularr.Tests/ProfileReferenceVerticalTests.cs`
+## Data und Felder
 
-Die Tests nutzen pro Lauf ein **isoliertes PostgreSQL-Schema** mit der für
-diesen Anwendungsfall benötigten Teilmenge des Zielvertrags und einen
-**streng prüfenden** Fixture-Gate. Sie decken Lesen/Umbenennen,
-fremde UUID, mehrfach berechtigte Membership bei falschem aktivem Profil,
-Revocation, disabled Account, transaktional verweigerte Mutation,
-Rollback bei ungültiger Eingabe und sichere SQL-Parameter ab.
+Die öffentlichen Parameter, Eingaben und Ergebnisse stehen zusammen unter
+`Data.User.Profile.V1`. `ProfileFields` definiert einmal pro Feld Tabelle,
+Spalte, CLR- und PostgreSQL-Typ. Dieselbe Definition wird in öffentlichen und
+neutralen Data-Klassen verwendet. Der bestehende `SqlParams`-Binder verarbeitet
+nur im statischen SQL tatsächlich verwendete Eigenschaften; kein SQL-Generator
+und kein automatisches Binden aller Request-Felder.
 
-**Review-Grenze:** Der Gate im Test ist kein Production-AllowAll-Gate und
-wird nicht als solcher registriert. Reale ASP.NET-DI, Auth-Session-Verifikation,
-Pg-Baseline mit **allen** Zielconstraints und HTTP-/Android-/TV-Consumer
-bleiben unverändert, bis dieses Muster fachlich und technisch geprüft ist.
-Dieser Branch basiert auf dem noch nicht gemergten Framework-PR #943.
-Ein grüner fokussierter Test beweist nur die Referenzfunktion und keine
-Fertigstellung des gesamten Cutovers.
+```csharp
+[property: DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
+string DisplayName
 
-**Entscheid für das Review:** Ist diese klare Richtung
-Data → Service-Read/Orchestrierung → neutraler Logic-Writer →
-gemeinsamer SqlContext richtig? Nach Freigabe wird derselbe Ablauf
-auf die nächste echte Funktion angewendet, nicht eine neue Abstraktion erfunden.
+[property: DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName), false)]
+string? DisplayName
+```
+
+Der kurze Konstruktor bedeutet Pflichtfeld; die Überladung erlaubt optionale
+Werte. SQL-NULL behält seinen konkreten PostgreSQL-Typ. Pflichtfelder verweigern
+NULL beim Binden und beim Lesen. Optionalität ersetzt keine Geschäftsregel und
+ist noch kein PATCH-Vertrag für „nicht geliefert“ versus „explizit null“.
+JSON enthält weiterhin normale skalare Felder, keine Metadaten-Wrapper.
+
+## Auth- und Integrationsgrenze
+
+`AddProfileReferenceServices` registriert den konkreten Gate, Runtime und beide
+Services; `MapProfileReferenceEndpoints` verbindet die beiden HTTP-Adapter.
+Die Tests rufen diese echten Registrierungen auf, nicht einen AllowAll-Gate.
+
+Der Gate akzeptiert ausschließlich eine authentifizierte Cookie-Identität mit
+den signierten Claims `jularr.session_id` und `jularr.session_revision`. Die UUID bezeichnet einen Datensatz
+in `AccountSessions`, **keinen Bearer-Token**. Ablauf, Widerruf, CredentialRevision, RotationRevision,
+Account-Aktivierung und aktives Profile werden in PostgreSQL geprüft. Der
+Read-SELECT prüft den Sessionzustand nochmals; der Logic-Gate sperrt die Zeilen
+innerhalb der Schreibtransaktion. Interne IDs und Joins bleiben bigint/long.
+
+Noch **nicht** umgestellt: `Program.cs`, Login/Session-Ausstellung und
+`OwnerAuthService`/`CurrentAccountContext`; bestehende Profile-Razor-Seiten,
+Profil-Einstellungen, Devices/Notifications sowie Android/TV-Client-Routen.
+Alte String-ID-Cookies werden nicht umgedeutet. Die neue Registrierung und die
+neuen Routen sind deshalb noch nicht in der laufenden Anwendung aktiviert.
+Es gibt keine Dual-Writes und keine Live-Migration.
+
+## Nachweis
+
+`ProfileServiceGateTests`: echte DI, geschütztes Cookie, HTTP-Read/Update und
+Antiforgery gegen isoliertes PostgreSQL; Session-Widerruf/Ablauf, Credential-Wechsel,
+deaktivierter Account, fehlendes aktives Profil, Membership ohne Eigentum,
+unbekannte Berechtigungen und Module. `ProfileReferenceVerticalTests`: Fremdprofil,
+Gate-Reihenfolge, atomare Mutation und Rollback. `DataFieldTests`: gemeinsame
+Felddefinition, Required/Optional, echte PostgreSQL-NULL- und Parameterabbildung.
+Framework-READ-ONLY und Transaktionsverhalten sind zusätzlich in den bestehenden
+`SqlContextTests`/`ServiceFoundationTests` abgesichert.
+
+Das Testschema enthält die für diese Operationen benötigten Zielspalten und
+Constraints, nicht die vollständige neue Datenbank-Baseline. Grüne Tests bedeuten
+keinen abgeschlossenen Cutover und kein vollständig implementiertes Framework
+für alle zukünftigen Admin-/System-/Worker-Funktionen.

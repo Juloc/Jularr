@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using Jularr.Data.Common;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -8,6 +9,7 @@ namespace Jularr.Web.Data;
 public sealed class SqlParams
 {
     private static readonly ConcurrentDictionary<(Type Type, string Name), PropertyInfo> Properties = new();
+    private static readonly ConcurrentDictionary<PropertyInfo, DataFieldAttribute[]> Fields = new();
 
     private static readonly IReadOnlyDictionary<Type, NpgsqlDbType> DefaultTypes =
         new Dictionary<Type, NpgsqlDbType>
@@ -86,7 +88,26 @@ public sealed class SqlParams
             return result;
         });
 
-        return AddValue(name, property.PropertyType, property.GetValue(source), databaseType);
+        var value = property.GetValue(source);
+        var field = Fields.GetOrAdd(property, static key => key.GetCustomAttributes<DataFieldAttribute>().ToArray()).SingleOrDefault();
+
+        if (field is not null)
+        {
+            var clrType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+            if (clrType != field.Field.ClrType || databaseType is { } explicitType && explicitType != field.Field.DatabaseType)
+            {
+                throw new ArgumentException("The parameter type conflicts with its data field.", nameof(databaseType));
+            }
+
+            if (field.Required && value is null)
+            {
+                throw new ArgumentException("A required data field cannot be null.", nameof(name));
+            }
+
+            databaseType = field.Field.DatabaseType;
+        }
+
+        return AddValue(name, property.PropertyType, value, databaseType);
     }
 
     private SqlParams AddValue(string name, Type declaredType, object? value, NpgsqlDbType? databaseType)

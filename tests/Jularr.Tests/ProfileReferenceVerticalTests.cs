@@ -4,6 +4,7 @@ using Jularr.Logic.Profile;
 using Jularr.Service.Core;
 using Jularr.Service.User.Profile.V1;
 using Jularr.Tests.Infrastructure;
+using Jularr.Web.Data;
 using Npgsql;
 
 namespace Jularr.Tests;
@@ -37,7 +38,7 @@ public sealed class ProfileReferenceVerticalTests
         await using var fixture = await ProfileFixture.CreateAsync();
         var gate = fixture.NewGate();
         var runtime = new ServiceRuntime(fixture.Database, gate);
-        var rename = new RenameProfile(runtime, new ProfileLogic());
+        var rename = new RenameProfile(runtime);
         runtime.ValidateAll([rename]);
 
         var changed = await rename.ExecuteAsync<ProfileDetails>(
@@ -56,11 +57,10 @@ public sealed class ProfileReferenceVerticalTests
     {
         await using var fixture = await ProfileFixture.CreateAsync();
 
-        // A may also be a member of B, but the current active Profile remains A.
         await fixture.RunSqlAsync(
-            $"INSERT INTO \"AccountProfiles\" (\"AccountId\",\"ProfileId\") VALUES ({fixture.AccountAId},{fixture.ProfileBId})");
+            "INSERT INTO \"AccountProfiles\" (\"AccountId\", \"ProfileId\") VALUES (41, 202)");
 
-        var rename = new RenameProfile(new ServiceRuntime(fixture.Database, fixture.NewGate()), new ProfileLogic());
+        var rename = new RenameProfile(new ServiceRuntime(fixture.Database, fixture.NewGate()));
 
         await Assert.ThrowsExactlyAsync<KeyNotFoundException>(
             () => rename.ExecuteAsync<ProfileDetails>(
@@ -77,19 +77,27 @@ public sealed class ProfileReferenceVerticalTests
         var gate = fixture.NewGate();
         var runtime = new ServiceRuntime(fixture.Database, gate);
         var read = new GetProfile(runtime);
-        var rename = new RenameProfile(runtime, new ProfileLogic());
+        var rename = new RenameProfile(runtime);
         var p = new ProfileParameters(fixture.ProfileAPublicId);
 
         await fixture.RunSqlAsync(
-            $"DELETE FROM \"AccountProfiles\" WHERE \"AccountId\"={fixture.AccountAId} AND \"ProfileId\"={fixture.ProfileAId}");
+            """
+            BEGIN;
+            INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (42, 101);
+            UPDATE "Profiles" SET "OwnerAccountId" = 42 WHERE "Id" = 101;
+            UPDATE "AccountSessions" SET "ActiveProfileId" = NULL;
+            DELETE FROM "AccountProfiles" WHERE "AccountId" = 41 AND "ProfileId" = 101;
+            COMMIT;
+            """);
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(p));
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
             () => rename.ExecuteAsync<ProfileDetails>(p, new RenameProfileData("Denied")));
 
         await fixture.RunSqlAsync(
-            $"INSERT INTO \"AccountProfiles\" (\"AccountId\",\"ProfileId\") VALUES ({fixture.AccountAId},{fixture.ProfileAId})");
-        await fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"IsEnabled\"=false WHERE \"Id\"={fixture.AccountAId}");
+            "INSERT INTO \"AccountProfiles\" (\"AccountId\", \"ProfileId\") VALUES (41, 101)");
+        await fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"ActiveProfileId\" = 101");
+        await fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"IsEnabled\" = FALSE WHERE \"Id\" = 41");
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => read.ExecuteAsync<ProfileDetails>(p));
         Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
@@ -101,7 +109,7 @@ public sealed class ProfileReferenceVerticalTests
         await using var fixture = await ProfileFixture.CreateAsync();
         var gate = fixture.NewGate();
         gate.DenyTransactionalWrite = true;
-        var rename = new RenameProfile(new ServiceRuntime(fixture.Database, gate), new ProfileLogic());
+        var rename = new RenameProfile(new ServiceRuntime(fixture.Database, gate));
 
         await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
             () => rename.ExecuteAsync<ProfileDetails>(
@@ -116,9 +124,7 @@ public sealed class ProfileReferenceVerticalTests
     public async Task InvalidNameRollsBackAndParameterBindingDoesNotInterpretSql()
     {
         await using var fixture = await ProfileFixture.CreateAsync();
-        var rename = new RenameProfile(
-            new ServiceRuntime(fixture.Database, fixture.NewGate()),
-            new ProfileLogic());
+        var rename = new RenameProfile(new ServiceRuntime(fixture.Database, fixture.NewGate()));
 
         await Assert.ThrowsExactlyAsync<ArgumentException>(
             () => rename.ExecuteAsync<ProfileDetails>(
@@ -149,12 +155,9 @@ public sealed class ProfileReferenceVerticalTests
         CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
     }
 
-    // Strict integration fixture: no AllowAll gate, no production wiring and
-    // no changes to dev's live database. Each test uses a unique PG schema.
-    private sealed class ProfileFixture : IAsyncDisposable
+    internal sealed class ProfileFixture : IAsyncDisposable
     {
         private readonly NpgsqlDataSource _setup;
-        private readonly string _schema;
 
         public NpgsqlDataSource Database { get; }
         public long AccountAId { get; } = 41;
@@ -162,49 +165,68 @@ public sealed class ProfileReferenceVerticalTests
         public long ProfileBId { get; } = 202;
         public Guid ProfileAPublicId { get; } = Guid.NewGuid();
         public Guid ProfileBPublicId { get; } = Guid.NewGuid();
+        public Guid SessionPublicId { get; } = Guid.NewGuid();
 
-        private ProfileFixture(NpgsqlDataSource setup, NpgsqlDataSource database, string schema)
+        private ProfileFixture(NpgsqlDataSource setup, NpgsqlDataSource database)
         {
             _setup = setup;
             Database = database;
-            _schema = schema;
         }
 
         public static async Task<ProfileFixture> CreateAsync()
         {
             var cs = TestPostgres.ResolveConnectionString($"Data Source=profile-vertical-{Guid.NewGuid():N}");
             var setup = new NpgsqlDataSourceBuilder(cs).Build();
-            var schema = $"profile_reference_{Guid.NewGuid():N}";
-            var isolated = new NpgsqlConnectionStringBuilder(cs) { SearchPath = schema };
+            var isolated = new NpgsqlConnectionStringBuilder(cs) { SearchPath = "\"ProfileReference\"" };
             var database = new NpgsqlDataSourceBuilder(isolated.ConnectionString).Build();
-            var fixture = new ProfileFixture(setup, database, schema);
+            var fixture = new ProfileFixture(setup, database);
 
             try
             {
                 await fixture.RunBootstrapAsync(
-                    $"""
-                    CREATE SCHEMA "{schema}";
-                    CREATE TABLE "{schema}"."Accounts" (
+                    """
+                    BEGIN;
+                    CREATE SCHEMA "ProfileReference";
+                    CREATE TABLE "ProfileReference"."Accounts" (
                         "Id" bigint PRIMARY KEY,
-                        "IsEnabled" boolean NOT NULL
+                        "IsEnabled" boolean NOT NULL,
+                        "CredentialRevision" bigint NOT NULL DEFAULT 1
                     );
-                    CREATE TABLE "{schema}"."Profiles" (
+                    CREATE TABLE "ProfileReference"."Profiles" (
                         "Id" bigint PRIMARY KEY,
                         "PublicId" uuid NOT NULL UNIQUE,
+                        "OwnerAccountId" bigint NOT NULL REFERENCES "ProfileReference"."Accounts"("Id"),
                         "DisplayName" text NOT NULL CHECK (length(btrim("DisplayName"))>0),
                         "UpdatedAt" timestamptz NOT NULL DEFAULT now()
                     );
-                    CREATE TABLE "{schema}"."AccountProfiles" (
-                        "AccountId" bigint NOT NULL REFERENCES "{schema}"."Accounts"("Id"),
-                        "ProfileId" bigint NOT NULL REFERENCES "{schema}"."Profiles"("Id"),
+                    CREATE TABLE "ProfileReference"."AccountProfiles" (
+                        "AccountId" bigint NOT NULL REFERENCES "ProfileReference"."Accounts"("Id"),
+                        "ProfileId" bigint NOT NULL REFERENCES "ProfileReference"."Profiles"("Id"),
                         PRIMARY KEY ("AccountId","ProfileId")
                     );
-                    INSERT INTO "{schema}"."Accounts" VALUES (41,true),(42,true);
-                    INSERT INTO "{schema}"."Profiles" ("Id","PublicId","DisplayName")
-                    VALUES (101,'{fixture.ProfileAPublicId}','Profile A'),
-                           (202,'{fixture.ProfileBPublicId}','Profile B');
-                    INSERT INTO "{schema}"."AccountProfiles" VALUES (41,101),(42,202);
-                    """);
+                    ALTER TABLE "ProfileReference"."Profiles"
+                        ADD CONSTRAINT "FK_Profiles_OwnerAccountProfiles" FOREIGN KEY ("OwnerAccountId", "Id")
+                        REFERENCES "ProfileReference"."AccountProfiles" ("AccountId", "ProfileId") DEFERRABLE INITIALLY DEFERRED;
+                    CREATE TABLE "ProfileReference"."AccountSessions" (
+                        "PublicId" uuid PRIMARY KEY,
+                        "AccountId" bigint NOT NULL REFERENCES "ProfileReference"."Accounts"("Id"),
+                        "ActiveProfileId" bigint,
+                        "ExpiresAt" timestamptz NOT NULL,
+                        "RevokedAt" timestamptz,
+                        "CredentialRevision" bigint NOT NULL DEFAULT 1,
+                        "RotationRevision" bigint NOT NULL DEFAULT 1,
+                        FOREIGN KEY ("AccountId", "ActiveProfileId") REFERENCES "ProfileReference"."AccountProfiles"("AccountId", "ProfileId")
+                    );
+                    INSERT INTO "ProfileReference"."Accounts" ("Id", "IsEnabled") VALUES (41, TRUE), (42, TRUE);
+                    INSERT INTO "ProfileReference"."Profiles" ("Id", "PublicId", "OwnerAccountId", "DisplayName")
+                    VALUES (101, @ProfileAPublicId, 41, 'Profile A'), (202, @ProfileBPublicId, 42, 'Profile B');
+                    INSERT INTO "ProfileReference"."AccountProfiles" VALUES (41, 101), (42, 202);
+                    INSERT INTO "ProfileReference"."AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "ExpiresAt")
+                    VALUES (@SessionPublicId, 41, 101, now() + interval '1 hour');
+                    COMMIT;
+                    """,
+                    SqlParams.Create().Add("ProfileAPublicId", fixture.ProfileAPublicId).Add("ProfileBPublicId", fixture.ProfileBPublicId)
+                        .Add("SessionPublicId", fixture.SessionPublicId).ToArray());
                 return fixture;
             }
             catch
@@ -214,14 +236,14 @@ public sealed class ProfileReferenceVerticalTests
             }
         }
 
-        public ProfileGate NewGate() => new(Database, AccountAId, ProfileAId);
+        internal ProfileGate NewGate() => new(Database, AccountAId, ProfileAId, SessionPublicId);
 
         public async Task<string> NameAsync(long profileId)
         {
             await using var conn = await Database.OpenConnectionAsync();
             await using var command = new NpgsqlCommand(
                 "SELECT \"DisplayName\" FROM \"Profiles\" WHERE \"Id\"=@id", conn);
-            command.Parameters.AddWithValue("id", profileId);
+            command.Parameters.AddRange(SqlParams.Create().Add("id", profileId).ToArray());
             return (string)(await command.ExecuteScalarAsync()
                 ?? throw new InvalidOperationException("Missing profile row."));
         }
@@ -233,10 +255,14 @@ public sealed class ProfileReferenceVerticalTests
             await command.ExecuteNonQueryAsync();
         }
 
-        private async Task RunBootstrapAsync(string sql)
+        private async Task RunBootstrapAsync(string sql, NpgsqlParameter[]? parameters = null)
         {
             await using var conn = await _setup.OpenConnectionAsync();
             await using var command = new NpgsqlCommand(sql, conn);
+            if (parameters is not null)
+            {
+                command.Parameters.AddRange(parameters);
+            }
             await command.ExecuteNonQueryAsync();
         }
 
@@ -245,7 +271,7 @@ public sealed class ProfileReferenceVerticalTests
             await Database.DisposeAsync();
             try
             {
-                await RunBootstrapAsync($"DROP SCHEMA IF EXISTS \"{_schema}\" CASCADE");
+                await RunBootstrapAsync("DROP SCHEMA IF EXISTS \"ProfileReference\" CASCADE");
             }
             finally
             {
@@ -256,7 +282,7 @@ public sealed class ProfileReferenceVerticalTests
 
     private sealed record LockedProfile(long Id);
 
-    private sealed class ProfileGate(NpgsqlDataSource database, long accountId, long profileId) : IServiceGate
+    internal sealed class ProfileGate(NpgsqlDataSource database, long accountId, long profileId, Guid sessionPublicId) : IServiceGate
     {
         public List<string> Events { get; } = [];
         public bool DenyTransactionalWrite { get; set; }
@@ -280,7 +306,7 @@ public sealed class ProfileReferenceVerticalTests
                 throw new UnauthorizedAccessException("Expected user service.");
             }
 
-            return Task.FromResult(new ServiceCaller(accountId, profileId, ServiceArea.User, "isolated-test-user"));
+            return Task.FromResult(new ServiceCaller(accountId, profileId, ServiceArea.User, sessionPublicId.ToString("D"), sessionPublicId, 1));
         }
 
         public async Task RequireAccessAsync(
@@ -330,8 +356,6 @@ public sealed class ProfileReferenceVerticalTests
                 throw new UnauthorizedAccessException("Profile mutation is not permitted.");
             }
 
-            // Recheck and lock the actual authorized Account/Profile membership
-            // INSIDE the service's shared write transaction.
             await context.Sql.ReadForUpdateAsync<LockedProfile>(
                 """
                 SELECT profile."Id"

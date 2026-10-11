@@ -1,4 +1,5 @@
 using Jularr.Data.Common;
+using Jularr.Data.Profile;
 using Jularr.Data.User.Profile.V1;
 using Jularr.Logic.Profile;
 using Jularr.Service.Core;
@@ -9,20 +10,34 @@ internal static class ProfileReadSql
 {
     internal const string OwnProfile =
         """
-        SELECT profile."PublicId",
-               profile."DisplayName"
-        FROM "Profiles" AS profile
-        WHERE profile."PublicId" = @PublicId
-          AND profile."Id" = @ActiveProfileId
-          AND EXISTS (
-              SELECT 1
-              FROM "AccountProfiles" AS membership
-              JOIN "Accounts" AS account
-                ON account."Id" = membership."AccountId"
-              WHERE membership."ProfileId" = profile."Id"
-                AND membership."AccountId" = @ActorAccountId
-                AND account."IsEnabled" = true
-          );
+        SELECT
+            profile."PublicId",
+            profile."DisplayName"
+        FROM
+            "Profiles" AS profile
+        WHERE
+            profile."PublicId" = @PublicId
+            AND profile."Id" = @ActiveProfileId
+            AND EXISTS (
+                SELECT
+                    1
+                FROM
+                    "AccountProfiles" AS membership
+                INNER JOIN
+                    "Accounts" AS account ON account."Id" = membership."AccountId"
+                INNER JOIN
+                    "AccountSessions" AS session ON session."AccountId" = account."Id"
+                        AND session."ActiveProfileId" = membership."ProfileId"
+                WHERE
+                    membership."ProfileId" = profile."Id"
+                    AND membership."AccountId" = @ActorAccountId
+                    AND account."IsEnabled" = TRUE
+                    AND session."PublicId" = @SessionPublicId
+                    AND session."RotationRevision" = @SessionRevision
+                    AND session."RevokedAt" IS NULL
+                    AND session."ExpiresAt" > statement_timestamp()
+                    AND session."CredentialRevision" = account."CredentialRevision"
+            );
         """;
 }
 
@@ -37,8 +52,6 @@ public sealed class GetProfile(ServiceRuntime runtime) : UserReadService<Profile
     protected override ServicePermission GetPermission(ProfileParameters parameters, Type resultType) =>
         new("profile.self.read");
 
-    // The client provides a public UUID. There is no trusted internal bigint yet;
-    // SQL resolves it only within the authenticated active Profile and Account.
     protected override ResourceTarget? GetResource(ProfileParameters parameters) => null;
 
     protected override void ValidateParameters(ProfileParameters parameters)
@@ -57,11 +70,11 @@ public sealed class GetProfile(ServiceRuntime runtime) : UserReadService<Profile
         CancellationToken cancellationToken) =>
         await context.ReadSql.ReadRequiredAsync<ProfileDetails>(
             ProfileReadSql.OwnProfile,
-            parameters,
+            new ProfileReadParameters(parameters.PublicId, context.Access.SessionPublicId!.Value, context.Access.SessionRevision!.Value),
             cancellationToken);
 }
 
-public sealed class RenameProfile(ServiceRuntime runtime, ProfileLogic logic)
+public sealed class RenameProfile(ServiceRuntime runtime)
     : UserService<ProfileParameters, RenameProfileData>(runtime)
 {
     protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
@@ -92,17 +105,14 @@ public sealed class RenameProfile(ServiceRuntime runtime, ProfileLogic logic)
         ServiceContext context,
         CancellationToken cancellationToken)
     {
-        await logic.RenameAsync(
-            context.Logic,
+        await context.Logic.RenameProfileAsync(
             parameters.PublicId,
             data.DisplayName,
             cancellationToken);
 
-        // This SELECT participates in the SAME Service-owned RW transaction.
-        // No extra connection, repository, Store or direct UI mutation.
         return await context.ReadSql.ReadRequiredAsync<ProfileDetails>(
             ProfileReadSql.OwnProfile,
-            parameters,
+            new ProfileReadParameters(parameters.PublicId, context.Access.SessionPublicId!.Value, context.Access.SessionRevision!.Value),
             cancellationToken);
     }
 }
