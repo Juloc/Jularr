@@ -1,0 +1,26 @@
+.mobile-navigation { display: none; }
+@media (max-width: 780px) {
+    .mobile-navigation {
+        position: fixed;
+        z-index: 20;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+        padding: 8px 5px max(8px, env(safe-area-inset-bottom));
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+    }
+    .mobile-link {
+        display: grid;
+        justify-items: center;
+        gap: 3px;
+        padding: 6px 0;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 10px;
+        color: var(--muted);
+    }
+    .mobile-link.is-active { color: var(--accent); }
+}
