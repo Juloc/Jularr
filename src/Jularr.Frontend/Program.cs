@@ -32,7 +32,11 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Account/Login");
+    app.UseExceptionHandler(handler => handler.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await Results.Problem(statusCode: 500, title: "request_failed").ExecuteAsync(context);
+    }));
     app.UseHsts();
 }
 app.UseHttpsRedirection();
