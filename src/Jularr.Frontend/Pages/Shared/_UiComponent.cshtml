@@ -11,19 +11,22 @@
         </section>
         break;
     case MasterDetail masterDetail:
-        <div class="ui-master-detail">
+        <div class="ui-master-detail @(masterDetail.Detail.Count == 0 ? "is-master-only" : "")">
             <section class="ui-master">
                 @foreach (var child in masterDetail.Master)
                 {
                     <partial name="_UiComponent" model="child" />
                 }
             </section>
-            <section class="ui-detail">
-                @foreach (var child in masterDetail.Detail)
-                {
-                    <partial name="_UiComponent" model="child" />
-                }
-            </section>
+            @if (masterDetail.Detail.Count > 0)
+            {
+                <section class="ui-detail">
+                    @foreach (var child in masterDetail.Detail)
+                    {
+                        <partial name="_UiComponent" model="child" />
+                    }
+                </section>
+            }
         </div>
         break;
     case UiHeading heading:
