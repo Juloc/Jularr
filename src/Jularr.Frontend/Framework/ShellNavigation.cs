@@ -2,13 +2,13 @@ namespace Jularr.Frontend.Framework;
 
 public sealed record ShellLink(string Key, string Href, string Icon);
 
-// Only implemented destinations are linked; unavailable modules stay hidden.
+// Only unconditional routes are linked. Module/profile navigation awaits an
+// authorized effective-capabilities read. Never assume Watchlist is enabled.
 public sealed class ShellNavigation
 {
     public IReadOnlyList<ShellLink> Primary { get; } =
     [
-        new("nav.home", "/", "home"),
-        new("nav.watchlist", "/Watchlist", "bookmark")
+        new("nav.home", "/", "home")
     ];
 
     public IReadOnlyList<ShellLink> Secondary { get; } =
@@ -19,7 +19,6 @@ public sealed class ShellNavigation
     public IReadOnlyList<ShellLink> Mobile { get; } =
     [
         new("nav.home", "/", "home"),
-        new("nav.watchlist", "/Watchlist", "bookmark"),
         new("nav.settings", "/Settings", "settings")
     ];
 }

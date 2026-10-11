@@ -10,13 +10,13 @@ public sealed class ShellSidebar(
     {
         new Aside(
             new Brand(),
-            RenderNavigation(primary, "nav.primary", "sidebar-navigation"),
-            RenderNavigation(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary")
+            RenderNavigation(primary, "nav.primary", "sidebar-navigation", texts),
+            RenderNavigation(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary", texts)
         ).Class("app-sidebar").WriteTo(writer, encoder, texts);
     }
 
-    private Nav RenderNavigation(IReadOnlyList<ShellLink> links, string ariaKey, string classes) =>
-        (Nav)new Nav(links.Select(link =>
+    private IUiComponent RenderNavigation(IReadOnlyList<ShellLink> links, string ariaKey, string classes, UiText texts) =>
+        new Nav(links.Select(link =>
         {
             var active = IsActive(link);
             var anchor = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key)))
@@ -24,11 +24,7 @@ public sealed class ShellSidebar(
                 .Attribute("href", link.Href);
             if (active) anchor.Attribute("aria-current", "page");
             return (IUiComponent)anchor;
-        }).ToArray()).Class(classes).Attribute("aria-label", ariaKey switch
-        {
-            "nav.primary" => "Main navigation",
-            _ => "Secondary navigation"
-        });
+        }).ToArray()).Class(classes).Attribute("aria-label", texts[ariaKey]);
 
     private bool IsActive(ShellLink link) =>
         link.Href == "/" ? currentPath == "/" :

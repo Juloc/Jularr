@@ -73,6 +73,7 @@ public static class UiResources
         new("nav.library", "Library"),
         new("nav.mobile", "Mobile navigation"),
         new("nav.primary", "Main navigation"),
+        new("nav.secondary", "Secondary navigation"),
         new("nav.profile", "Profile"),
         new("nav.settings", "Settings"),
         new("nav.watchlist", "Watchlist"),

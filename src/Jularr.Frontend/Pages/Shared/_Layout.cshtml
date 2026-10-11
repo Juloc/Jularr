@@ -6,8 +6,8 @@
     var showShell = (User.Identity?.IsAuthenticated == true || isPreview)
         && (currentPage?.Definition.Shell ?? true);
     var isPlayer = currentPage?.Definition.IsPlayer ?? false;
-    var title = ViewData["Title"] as string
-        ?? (currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey] : T["app.name"]);
+    var title = currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey]
+        : ViewData["Title"] as string ?? T["app.name"];
     ViewData["Title"] = title;
     var pageAssets = currentPage?.Definition.AssetEntries.ToArray() ?? [];
 }
