@@ -26,6 +26,84 @@
             </section>
         </div>
         break;
+
+    case UiHeading heading:
+        <header class="screen-heading">
+            <h1>@T[heading.TitleKey]</h1>
+            @if (heading.DetailKey is not null)
+            {
+                <p>@T[heading.DetailKey]</p>
+            }
+        </header>
+        break;
+    case UiHero hero:
+        <section class="screen-hero" aria-label="@T[hero.HeadingKey]">
+            <div class="screen-hero-content">
+                <h2>@T[hero.HeadingKey]</h2>
+                <p>@T[hero.DescriptionKey]</p>
+            </div>
+        </section>
+        break;
+    case UiHint hint:
+        <p class="screen-hint">@T[hint.Key]</p>
+        break;
+    case UiEmpty empty:
+        <div class="screen-empty" role="status">@T[empty.Key]</div>
+        break;
+    case UiScope scope:
+        <ul class="screen-scope" aria-label="Categories">
+            @foreach (var key in scope.Keys)
+            {
+                <li>@T[key]</li>
+            }
+        </ul>
+        break;
+    case UiTable table:
+        <div class="screen-table-wrap">
+            <table class="screen-table">
+                <thead><tr>
+                    @foreach (var header in table.Headers)
+                    {
+                        <th scope="col">@T[header]</th>
+                    }
+                </tr></thead>
+                <tbody><tr><td colspan="@table.Headers.Count" class="screen-table-empty">@T[table.EmptyKey]</td></tr></tbody>
+            </table>
+        </div>
+        break;
+    case UiSubnav nav:
+        <nav class="screen-subnav" aria-label="Section">
+            @foreach (var item in nav.Items)
+            {
+                var selected = string.Equals(Context.Request.Path.Value, item.Href, StringComparison.OrdinalIgnoreCase);
+                <a href="@item.Href" class="@(selected ? "is-active" : "")" aria-current="@(selected ? "page" : null)">@T[item.Key]</a>
+            }
+        </nav>
+        break;
+    case UiGroup group:
+        <section class="screen-setting-group">
+            <h2>@T[group.NameKey]</h2>
+            <ul>
+                @foreach (var key in group.ItemKeys)
+                {
+                    <li>@T[key]</li>
+                }
+            </ul>
+        </section>
+        break;
+    case UiMediaColumns _:
+        <div class="screen-media-columns">
+            <section><h2>Seasons / Structure</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
+            <section><h2>Episodes / Editions</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
+            <aside><h2>Related works</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></aside>
+        </div>
+        break;
+    case UiPlayer _:
+        <div class="player-canvas" role="status">
+            <div class="player-canvas-icon" aria-hidden="true">▶</div>
+            <p>@T["player.unavailable"]</p>
+        </div>
+        break;
     case Jularr.Frontend.Pages.PreviewText text:
         <p>@T[text.Key]</p>
         break;
