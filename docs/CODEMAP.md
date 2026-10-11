@@ -6,6 +6,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 - [Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md): Pages, C# components, split/tabs, Login/Shell ownership, localization, Vite assets and focused UI tests.
 - [Frontend host](../src/Jularr.Frontend/Program.cs): one Razor/API application host.
+
 ## Host and Profile entry points
 
 - [Backend project](../src/Jularr.Backend/Jularr.Backend.csproj): class library; [Frontend Program](../src/Jularr.Frontend/Program.cs): the only web host. Backend host registration: [README](../README.md#backend-im-gemeinsamen-host).

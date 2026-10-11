@@ -24,6 +24,7 @@
 - Review your own diff before committing; state what was verified and any remaining integration gaps.
 - Current branch: `codex/backend-service-boundary`, integrating the merged Frontend into the service boundary. Keep changes bundled and push after focused verification. The owner authorized clean-start integration and continued Backend/Frontend implementation; preserve existing work, never force push, and never merge into `dev`/`main`.
 - Both author and committer must be exactly `Juloc <juli.hiresch@gmail.com>`; no AI attribution or additional contributor trailers.
+- Feature push checks exclude already merged `origin/clean-start` ancestors; newly contributed commits and target-branch pushes remain fully checked. Never rewrite historical authorship.
 - Before committing, run `node scripts/install-git-hooks.mjs`. Never bypass hooks with `--no-verify`.
 - Keep commit messages compact. Do not rewrite historical authorship.
 
