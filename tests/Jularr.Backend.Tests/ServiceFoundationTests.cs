@@ -70,13 +70,26 @@ namespace Jularr.Backend.Tests
             var service = new ServiceRuntime(database, gate).Create(new AccountListService());
 
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
-                () => service.ExecuteAsync<AccountResult>(new ListParameters(1, 25, (ListSort)255)));
+                () => service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(1, 25, (ListSort)255)));
             CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
 
             gate.Events.Clear();
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
-                () => service.ExecuteAsync<AccountResult>(new ListParameters(1, 101, ListSort.AccountId)));
+                () => service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(1, 101, ListSort.AccountId)));
             CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+        }
+
+        [TestMethod]
+        public async Task UserList_PageHook_IsEvaluatedOnceAndUsedBySql()
+        {
+            await using var database = CreateDataSource();
+            var service = new ServiceRuntime(database, new TestGate()).Create(new AccountListService());
+
+            var result = await service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(2, 1, null));
+
+            Assert.AreEqual(2L, result.Items.Single().AccountId);
+            Assert.AreEqual(2, result.Page);
+            Assert.AreEqual(1, service.PageRequests);
         }
 
         [TestMethod]
@@ -257,6 +270,8 @@ namespace Jularr.Backend.Tests
 
         private sealed class AccountListService : UserListService<ListParameters, ListSort>
         {
+            public int PageRequests { get; private set; }
+
             protected override IReadOnlyList<ServiceSortKey<ListSort>> GetSortKeys() =>
             [
                 ServiceSortKey<ListSort>.Default(ListSort.AccountId),
@@ -264,13 +279,34 @@ namespace Jularr.Backend.Tests
             ];
 
             protected override ListSort? GetRequestedSort(ListParameters parameters) => parameters.Sort;
-            protected override PageRequest GetPageRequest(ListParameters parameters) => new(parameters.Page, parameters.PageSize);
-            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
+            protected override PageRequest GetPageRequest(ListParameters parameters)
+            {
+                PageRequests++;
+                return new PageRequest(parameters.Page, parameters.PageSize);
+            }
+            protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<AccountResult>>()];
             protected override ModuleRequirement GetInstanceModules(ListParameters parameters) => ModuleRequirement.None;
             protected override ServicePermission GetPermission(ListParameters parameters, Type resultType) => new("accounts.list");
 
-            protected override Task<IServiceOutput> OnRead()
-                => Task.FromResult<IServiceOutput>(new AccountResult(1, "test"));
+            protected override async Task<IServiceOutput> OnRead()
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        item."Id" AS "AccountId",
+                        'test'::text AS "Name"
+                    FROM
+                        (VALUES (1::bigint), (2::bigint), (3::bigint)) AS item("Id")
+                    ORDER BY
+                        item."Id"
+                    LIMIT @PageSize
+                    OFFSET @Offset
+                    """;
+                sql.Page = Page;
+
+                return await Context.ReadSql.ReadPageAsync<AccountResult>(sql, CancellationToken);
+            }
         }
 
         private sealed class ReadWithForbiddenLogicService : UserReadService<AccountParameters>

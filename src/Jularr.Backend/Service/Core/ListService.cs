@@ -26,11 +26,10 @@ namespace Jularr.Backend.Service.Core
 
         protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
         protected abstract TSort? GetRequestedSort(TParameters parameters);
-        protected abstract PageRequest GetPageRequest(TParameters parameters);
+        protected abstract override PageRequest GetPageRequest(TParameters parameters);
 
         protected sealed override void ValidateParameters(TParameters parameters)
         {
-            _ = GetPageRequest(parameters);
             _ = ResolveSortKey(parameters);
         }
 
@@ -80,11 +79,10 @@ namespace Jularr.Backend.Service.Core
 
         protected abstract IReadOnlyList<ServiceSortKey<TSort>> GetSortKeys();
         protected abstract TSort? GetRequestedSort(TParameters parameters);
-        protected abstract PageRequest GetPageRequest(TParameters parameters);
+        protected abstract override PageRequest GetPageRequest(TParameters parameters);
 
         protected sealed override void ValidateParameters(TParameters parameters)
         {
-            _ = GetPageRequest(parameters);
             _ = ResolveSortKey(parameters);
         }
 

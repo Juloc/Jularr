@@ -35,7 +35,8 @@ Navigation only. Rules: [CONVENTIONS.md](CONVENTIONS.md). Startup and gaps: [REA
 - [Service.cs](../src/Jularr.Backend/Service/Core/Service.cs): invocation lifecycle, operation hooks and shared transaction.
 - [ServiceRuntime.cs](../src/Jularr.Backend/Service/Core/ServiceRuntime.cs): gate, SqlContext factory and central runtime binding for direct service calls.
 - [SqlContext.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlContext.cs): one connection/transaction, shared ordinary reads and Logic execution; [SqlExecutor.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlExecutor.cs): explicit typed binding/mapping, no injected auth IDs; [LogicContext.cs](../src/Jularr.Backend/Infrastructure/Sql/LogicContext.cs): direct Logic calls and guarded short batches.
-- [SqlParams.cs](../src/Jularr.Backend/Data/SqlParams.cs): typed parameter metadata and binding.
+- [SqlParams.cs](../src/Jularr.Backend/Data/SqlParams.cs): typed object binding with cached field metadata and compiled getters.
+- [Pagination.cs](../src/Jularr.Backend/Data/Pagination.cs), [SqlStatement.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlStatement.cs): shared PageRequest and bounded page results; [ListService.cs](../src/Jularr.Backend/Service/Core/ListService.cs): once-per-invocation page hook.
 - [Account.sql](../database/Account.sql): the single fresh Account/Profile/auth/session/localization baseline; [schema scope](../database/README.md). [UiTranslationFields.cs](../src/Jularr.Backend/Data/Fields/Localization/UiTranslationFields.cs) and [UiTranslationStatusType.cs](../src/Jularr.Backend/Data/Enums/Localization/UiTranslationStatusType.cs) own translation fields/catalog values.
 
 ## Focused tests
@@ -53,7 +54,8 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 
 ## Not integrated
 
-Frontend host/forms, owner bootstrap, email/approval workflows, 2FA/WebAuthn completion,
+Frontend host/forms and enforced Service-only access (Backend-owned database
+registration and internal Logic/SQL types), owner bootstrap, email/approval workflows, 2FA/WebAuthn completion,
 session logout/rotation, old Android/TV consumers, full Profile management and settings.
 This reference backend does not complete Phase B or replace an active installation.
 
@@ -61,3 +63,6 @@ This reference backend does not complete Phase B or replace an active installati
 
 [BACKEND_NEXT.md](BACKEND_NEXT.md): Admin foundation → Library → User/Home →
 Player → Arr+; proposed table owners and decisions needed before those slices.
+
+- [INSTANCE_SETUP.md](INSTANCE_SETUP.md): consolidated nine-page setup flow, canonical owners, proposed tables and bootstrap decisions; not implemented.
+- [LOCAL_PREVIEW.md](LOCAL_PREVIEW.md): isolated D: checkout, scheduled preview and current host integration gap; [runner](../scripts/run-clean-start-preview.ps1).

@@ -119,22 +119,29 @@ namespace Jularr.Backend.Tests
         public void Field_RequiredAndOptional_ReuseOneDatabaseDefinition()
         {
             Assert.AreEqual(typeof(string), ProfileFields.DisplayName.ClrType);
-            Assert.ThrowsExactly<DataValidationException>(() => SqlParams.From(new RequiredName(null)).Add("DisplayName"));
+            Assert.ThrowsExactly<DataValidationException>(() => SqlParams.Create().Add(new RequiredName(null)));
 
-            var parameter = SqlParams.From(new OptionalName(null)).Add("DisplayName").ToArray().Single();
+            var parameter = SqlParams.Create().Add(new OptionalName(null)).ToArray().Single();
             Assert.AreEqual(NpgsqlDbType.Text, parameter.NpgsqlDbType);
             Assert.AreEqual(DBNull.Value, parameter.Value);
 
-            var id = SqlParams.From(new OptionalId(null)).Add("Id").ToArray().Single();
+            var id = SqlParams.Create().Add(new OptionalId(null)).ToArray().Single();
             Assert.AreEqual(NpgsqlDbType.Bigint, id.NpgsqlDbType);
             Assert.AreEqual(DBNull.Value, id.Value);
         }
 
         [TestMethod]
-        public void Field_ConflictingClrOrSqlType_IsRejected()
+        public void Field_ConflictingClrType_IsRejected()
         {
-            Assert.ThrowsExactly<ArgumentException>(() => SqlParams.From(new InvalidName(1)).Add("DisplayName"));
-            Assert.ThrowsExactly<ArgumentException>(() => SqlParams.From(new RequiredName("Name")).Add("DisplayName", NpgsqlDbType.Jsonb));
+            Assert.ThrowsExactly<ArgumentException>(() => SqlParams.Create().Add(new InvalidName(1)));
+        }
+
+        [TestMethod]
+        public void PageResponse_InvalidItem_UsesCanonicalFieldValidation()
+        {
+            var result = new PageResult<ReadProfileResultV1>([new ReadProfileResultV1(0, "Name", 1)], new PageRequest());
+
+            Assert.ThrowsExactly<DataValidationException>(result.Validate);
         }
 
         [TestMethod]
