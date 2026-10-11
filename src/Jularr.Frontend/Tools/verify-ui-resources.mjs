@@ -44,6 +44,20 @@ function inspect(directory) {
       }
     }
 
+    // Pages use the Topbar breadcrumb as their only page title.
+    if (full.includes(path.sep + "Pages" + path.sep)) {
+      if (/new\s+UiHeading\s*\(/.test(source) || /new\s+UiTable\s*\(/.test(source)) {
+        errors.push(\`\${path.relative(frontend, full)}: redundant heading or headings-only table\`);
+      }
+      if (item.name.endsWith(".cshtml") && !full.includes(path.sep + "Account" + path.sep)
+          && /<h1(?:\s|>)/i.test(source)) {
+        errors.push(\`\${path.relative(frontend, full)}: page title belongs in Topbar\`);
+      }
+      if (/(?:UiScope|DiscoverScope)\s*\(\s*\[\s*["']media\./.test(source)) {
+        errors.push(\`\${path.relative(frontend, full)}: media scopes must be capability-filtered\`);
+      }
+    }
+
     if (/\bCurrentUICulture\.TwoLetterISOLanguageName\s*==/.test(source)
       || /\["(?:en|de)"\]\s*=/.test(source)) {
       errors.push(`${path.relative(frontend, full)}: hard-coded language selection`);

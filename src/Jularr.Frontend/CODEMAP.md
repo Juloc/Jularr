@@ -27,9 +27,11 @@ Shared conventions and Backend ownership:
   interface and encoder wiring, **no type switch**.
 - [Elements.cs](Framework/Elements.cs): minimal encoded C# HTML DSL;
   `Div`, `H1`, `Text`, `Button` and related small primitives.
-- [Components](Framework/Components): individual owners for headings,
-  toolbars, tables, navigation, scopes, panels, master/detail, tabs,
-  media layouts, forms and Player.
+- [Components](Framework/Components): component-owned HTML for typed tables,
+  navigation, panels, master/detail, tabs, settings, forms and Player.
+- [Discover.cs](Framework/Components/Discover.cs): capability-driven type bar,
+  provider-supported browse views and truthful per-type shelves; requires
+  an authorized instance/profile discovery read, never a static module list.
 - [BaseField.cs](Framework/BaseField.cs),
   [Form.cs](Framework/Components/Form.cs): typed backend DataField metadata
   and its display-only form contract. No invented save operation.
