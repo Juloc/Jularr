@@ -1,4 +1,5 @@
 using System.Globalization;
+using Jularr.Frontend.Localization;
 
 namespace Jularr.Frontend.Framework;
 
@@ -41,5 +42,7 @@ public sealed class UiText
 
     public string this[string key] => Messages.TryGetValue(key, out var item)
         ? CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "de" ? item.De : item.En
+        : ConsumerSources.English.TryGetValue(key, out var consumer) ? consumer
+        : AdminSources.English.TryGetValue(key, out var admin) ? admin
         : key;
 }

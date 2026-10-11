@@ -3,13 +3,15 @@
 @inject UiText T
 @{
     ViewData["ShellPreview"] = true;
-    ViewData["Title"] = T["shell.preview"];
+    ViewData["Title"] = Model.Definition.TitleKey is { } titleKey ? T[titleKey] : T["shell.preview"];
 }
-<h1 class="page-title">@T["shell.preview"]</h1>
-@foreach (var component in Model.Definition.Content)
-{
-    <partial name="_UiComponent" model="component" />
-}
+<nav class="preview-screen-links" aria-label="@T["shell.preview"]">
+    @foreach (var view in Jularr.Frontend.Pages.ShellPreviewModel.Views)
+    {
+        <a href="/ShellPreview?view=@view" aria-current="@(Model.SelectedView == view ? "page" : null)">@view</a>
+    }
+</nav>
+<partial name="_PageBody" model="Model.Definition" />
 <div class="preview-controls" role="group" aria-label="Appearance">
     <button class="button" type="button" data-set-skin="clean">Clean</button>
     <button class="button" type="button" data-set-skin="original">Original</button>

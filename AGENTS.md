@@ -4,6 +4,7 @@
 
 - Follow the current user request; explicit owner decisions override stale plans and legacy behavior.
 - Read [conventions](docs/CONVENTIONS.md) once per continuous session before implementation.
+- For Frontend work, also read [Frontend conventions](docs/FRONTEND_CONVENTIONS.md); use its [Frontend CODEMAP](src/Jularr.Frontend/CODEMAP.md) for UI ownership.
 - Use [CODEMAP](docs/CODEMAP.md) to find the relevant owner and focused tests. Read only the needed files and linked specifications; use targeted `rg` searches.
 - These local documents are authoritative. No Agent Hub, central Agent Control, claims ledger or mandatory external skills.
 - Do not scan all docs, issues, branches, worktrees or history, and do not delegate unless requested.

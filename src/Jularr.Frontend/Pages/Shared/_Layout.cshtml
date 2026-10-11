@@ -5,7 +5,8 @@
     var currentPage = ViewContext.ViewData.Model as JularrPage;
     var showShell = (User.Identity?.IsAuthenticated == true || isPreview)
         && (currentPage?.Definition.Shell ?? true);
-    var title = ViewData["Title"] as string ?? T["app.name"];
+    var isPlayer = currentPage?.Definition.IsPlayer ?? false;
+    var title = ViewData["Title"] as string ?? (currentPage?.Definition.TitleKey is { } titleKey ? T[titleKey] : T["app.name"]);
 }
 <!DOCTYPE html>
 <html lang="@CultureInfo.CurrentUICulture.Name" dir="ltr" data-skin="clean" data-mode="system">
@@ -19,7 +20,7 @@
     <script src="~/js/theme.js" asp-append-version="true" defer></script>
     @await RenderSectionAsync("Head", required: false)
 </head>
-<body class="@(showShell ? "app-page" : "auth-page")">
+<body class="@(isPlayer ? "player-page" : showShell ? "app-page" : "auth-page")">
     <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
     @if (showShell)
     {
@@ -30,7 +31,7 @@
     }
     else
     {
-        <main class="auth-main" id="main-content" tabindex="-1">@RenderBody()</main>
+        <main class="@(isPlayer ? "player-main" : "auth-main")" id="main-content" tabindex="-1">@RenderBody()</main>
     }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
