@@ -14,6 +14,8 @@ implementiert; Dateizugriff und Hersteller-Verwaltung sind noch abzugrenzen.
 Regeln: [AGENTS.md](AGENTS.md), [CONVENTIONS.md](docs/CONVENTIONS.md).
 Navigation: [CODEMAP.md](docs/CODEMAP.md).
 Nächste fachliche Schritte: [Backend-Slices](docs/BACKEND_NEXT.md) (Plan, keine Implementierung).
+Instanz-Einrichtung: [Wizard-Ablauf und Owner](docs/INSTANCE_SETUP.md) (Vorschlag).
+Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
 ## Backend im gemeinsamen Host
 
