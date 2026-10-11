@@ -4,6 +4,7 @@
 @using Jularr.Web.Features.Watchlist
 @{
     var ui = Model.Ui;
+    Layout = Model.PageDefinition.Shell ? "_Layout" : null;
     ViewData["Title"] = ui["watchlist.title"];
 }
 
