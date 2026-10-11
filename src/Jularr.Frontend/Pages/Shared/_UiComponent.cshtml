@@ -26,9 +26,8 @@
             </section>
         </div>
         break;
-
     case UiHeading heading:
-        <header class="screen-heading">
+        <header class="page-heading">
             <h1>@T[heading.TitleKey]</h1>
             @if (heading.DetailKey is not null)
             {
@@ -36,75 +35,118 @@
             }
         </header>
         break;
-    case UiHero hero:
-        <section class="screen-hero" aria-label="@T[hero.HeadingKey]">
-            <div class="screen-hero-content">
-                <h2>@T[hero.HeadingKey]</h2>
-                <p>@T[hero.DescriptionKey]</p>
-            </div>
-        </section>
-        break;
-    case UiHint hint:
-        <p class="screen-hint">@T[hint.Key]</p>
-        break;
-    case UiEmpty empty:
-        <div class="screen-empty" role="status">@T[empty.Key]</div>
+    case UiSubnav nav:
+        <nav class="page-subnav" aria-label="@T["nav.primary"]">
+            @foreach (var item in nav.Items)
+            {
+                var selected = string.Equals(Context.Request.Path.Value, item.Href, StringComparison.OrdinalIgnoreCase);
+                <a href="@item.Href" class="@(selected ? "is-active" : "")"
+                   aria-current="@(selected ? "page" : null)">@T[item.Key]</a>
+            }
+        </nav>
         break;
     case UiScope scope:
-        <ul class="screen-scope" aria-label="@T["discover.title"]">
+        <ul class="page-scope">
             @foreach (var key in scope.Keys)
             {
                 <li>@T[key]</li>
             }
         </ul>
         break;
+    case UiToolbar toolbar:
+        <div class="page-toolbar" aria-label="@T["toolbar.label"]">
+            @if (toolbar.Search)
+            {
+                <input type="search" disabled aria-label="@T["toolbar.search"]" placeholder="@T["toolbar.search"]" />
+            }
+            @if (toolbar.Filters)
+            {
+                <button type="button" disabled>@T["toolbar.filter"]</button>
+            }
+            @if (toolbar.Sort)
+            {
+                <button type="button" disabled>@T["toolbar.sort"]</button>
+            }
+            @if (toolbar.ViewSwitch)
+            {
+                <button type="button" disabled>@T["toolbar.view"]</button>
+            }
+        </div>
+        break;
     case UiTable table:
-        <div class="screen-table-wrap">
-            <table class="screen-table">
+        <div class="page-table-wrap">
+            <table class="page-table">
                 <thead><tr>
                     @foreach (var header in table.Headers)
                     {
                         <th scope="col">@T[header]</th>
                     }
                 </tr></thead>
-                <tbody><tr><td colspan="@table.Headers.Count" class="screen-table-empty">@T[table.EmptyKey]</td></tr></tbody>
+                <tbody></tbody>
             </table>
         </div>
         break;
-    case UiSubnav nav:
-        <nav class="screen-subnav" aria-label="@T["nav.primary"]">
-            @foreach (var item in nav.Items)
-            {
-                var selected = string.Equals(Context.Request.Path.Value, item.Href, StringComparison.OrdinalIgnoreCase);
-                <a href="@item.Href" class="@(selected ? "is-active" : "")" aria-current="@(selected ? "page" : null)">@T[item.Key]</a>
-            }
-        </nav>
+    case UiMediaRail rail:
+        <section class="media-rail">
+            <h2>@T[rail.HeadingKey]</h2>
+            <div class="media-rail-items"></div>
+        </section>
         break;
-    case UiGroup group:
-        <section class="screen-setting-group">
-            <h2>@T[group.NameKey]</h2>
+    case UiMediaGrid _:
+        <div class="media-grid"></div>
+        break;
+    case UiDetailHero _:
+        <header class="detail-hero"></header>
+        break;
+    case UiMediaColumns _:
+        <div class="detail-columns">
+            <section><h2>@T["details.structure"]</h2></section>
+            <section><h2>@T["details.units"]</h2></section>
+            <aside><h2>@T["details.related"]</h2></aside>
+        </div>
+        break;
+    case UiSettingsGroup group:
+        <section class="settings-group">
+            <h2>@T[group.HeadingKey]</h2>
             <ul>
-                @foreach (var key in group.ItemKeys)
+                @foreach (var item in group.Rows)
                 {
-                    <li>@T[key]</li>
+                    <li>
+                        <span class="settings-row-label">@T[item.Key]</span>
+                        @if (item.DescriptionKey is not null)
+                        {
+                            <span class="settings-row-description">@T[item.DescriptionKey]</span>
+                        }
+                    </li>
                 }
             </ul>
         </section>
         break;
-    case UiMediaColumns _:
-        <div class="screen-media-columns">
-            <section><h2>@T["details.structure"]</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
-            <section><h2>@T["details.units"]</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></section>
-            <aside><h2>@T["details.related"]</h2><div class="screen-empty">@T["skeleton.unconnected"]</div></aside>
-        </div>
+    case UiSection section:
+        <section class="page-section">
+            <h2>@T[section.HeadingKey]</h2>
+            @foreach (var item in section.Items)
+            {
+                <partial name="_UiComponent" model="item" />
+            }
+        </section>
         break;
     case UiPlayer _:
-        <div class="player-canvas" role="status">
-            <div class="player-canvas-icon" aria-hidden="true">▶</div>
-            <p>@T["player.unavailable"]</p>
+        <div class="player-surface">
+            <video class="player-video" controls playsinline preload="none"
+                   aria-label="@T["player.title"]"></video>
         </div>
         break;
-    case Jularr.Frontend.Pages.PreviewText text:
-        <p>@T[text.Key]</p>
+    case Tabs tabs:
+        @foreach (var tab in tabs.Items)
+        {
+            <section class="page-section">
+                <h2>@T[tab.Key]</h2>
+                @foreach (var item in tab.Content)
+                {
+                    <partial name="_UiComponent" model="item" />
+                }
+            </section>
+        }
         break;
 }
