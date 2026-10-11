@@ -6,6 +6,8 @@
 \i /tmp/phase_b_progress_target_prepared.sql
 \i /tmp/phase_b_progress_snapshot_prepared.sql
 BEGIN;
+INSERT INTO "Operations" ("OperationKindKey", "OperationStatusTypeId", "ClaimedBy", "ClaimedUntil")
+VALUES ('reader_parse', 2, 'reader-fixture', now() + INTERVAL '1 hour') RETURNING "Id" AS reader_operation \gset
 INSERT INTO "UiLocales" ("Locale", "Name") VALUES ('checkpoint-test', 'Checkpoint test')
 RETURNING "Id" AS locale_id \gset
 INSERT INTO "Accounts" ("Email", "DisplayName", "AccountRoleTypeId")
@@ -21,17 +23,30 @@ INSERT INTO "WorkEditions" ("WorkId", "Name") VALUES (:reader_work, 'Exact editi
 RETURNING "Id" AS edition_id, "PublicId" AS edition_public \gset
 INSERT INTO "WorkEditions" ("WorkId", "Name") VALUES (:reader_work, 'Other edition')
 RETURNING "Id" AS other_edition_id, "PublicId" AS other_edition_public \gset
-INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey")
-VALUES (:reader_work, :edition_id, 1, 'checkpoint-reader-1') RETURNING "Id" AS content_1 \gset
-INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey")
-VALUES (:reader_work, :edition_id, 2, 'checkpoint-reader-2') RETURNING "Id" AS content_2 \gset
-INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey")
-VALUES (:reader_work, :other_edition_id, 1, 'checkpoint-reader-other') RETURNING "Id" AS other_content \gset
+INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey", "ReaderLayoutTypeId",
+    "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
+VALUES (:reader_work, :edition_id, 1, 'checkpoint-reader-1', 2, decode(repeat('a1',32),'hex'), 'fixture', :reader_operation, 0, 10)
+RETURNING "Id" AS content_1 \gset
+INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey", "ReaderLayoutTypeId",
+    "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
+VALUES (:reader_work, :edition_id, 2, 'checkpoint-reader-2', 2, decode(repeat('a2',32),'hex'), 'fixture', :reader_operation, 0, 5)
+RETURNING "Id" AS content_2 \gset
+INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey", "ReaderLayoutTypeId",
+    "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
+VALUES (:reader_work, :edition_id, 3, 'checkpoint-reader-3', 1, decode(repeat('a3',32),'hex'), 'fixture', :reader_operation, 1, 0)
+RETURNING "Id" AS content_3 \gset
+INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey", "ReaderLayoutTypeId",
+    "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
+VALUES (:reader_work, :other_edition_id, 1, 'checkpoint-reader-other', 2, decode(repeat('a4',32),'hex'), 'fixture', :reader_operation, 0, 10)
+RETURNING "Id" AS other_content \gset
 INSERT INTO "ReaderPages" ("ReaderContentId", "PageIndex")
 SELECT :content_1, i FROM generate_series(0, 9) AS i;
 INSERT INTO "ReaderPages" ("ReaderContentId", "PageIndex")
-SELECT :content_2, i FROM generate_series(10, 19) AS i;
-INSERT INTO "ReaderPages" ("ReaderContentId", "PageIndex") VALUES (:other_content, 8);
+SELECT :content_2, i FROM generate_series(0, 4) AS i;
+INSERT INTO "ReaderPages" ("ReaderContentId", "PageIndex") SELECT :other_content, i FROM generate_series(0,9) AS i;
+INSERT INTO "ReaderContentNodes" ("ReaderContentId", "StableId", "OrderIndex", "ReaderNodeTypeId", "ReaderTextBlockTypeId", "CharacterCount")
+VALUES (:content_3, 'chapter-1:p1', 0, 1, 1, 100);
+UPDATE "ReaderContent" SET "PublishedAt"=now() WHERE "Id" IN (:content_1,:content_2,:content_3,:other_content);
 EXECUTE phase_b_progress_start(:actor_a,:profile_id,:'reader_work_public',NULL,NULL,NULL,:'edition_public',2,now()) \gset
 SELECT "Id" AS reader_id, "PublicId" AS reader_public FROM "MediaProgress" WHERE "PublicId"=:'MediaProgressId' \gset
 INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Checkpoint time')
@@ -69,9 +84,9 @@ SELECT 1 / CASE WHEN :Revision=5 AND NOT :'IsCompleted'::boolean THEN 1 ELSE 0 E
 
 -- A current revision and a stable event ID jointly protect the exact content anchor.
 SELECT gen_random_uuid() AS reader_event \gset
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',1,:'reader_event',decode(repeat('21',32),'hex'),2,now(),NULL,NULL,false,NULL,NULL,:'edition_public',1,8,NULL,1000,NULL,NULL) \gset
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',1,:'reader_event',decode(repeat('21',32),'hex'),2,now(),NULL,NULL,false,NULL,NULL,:'edition_public',1,'original','{"pageIndex":8}',1000,NULL,NULL) \gset
 SELECT 1 / CASE WHEN :Revision=2 AND NOT :'IsCompleted'::boolean THEN 1 ELSE 0 END;
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,:'reader_event',decode(repeat('21',32),'hex'),2,now(),NULL,NULL,false,NULL,NULL,:'edition_public',1,8,NULL,1000,NULL,NULL);
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,:'reader_event',decode(repeat('21',32),'hex'),2,now(),NULL,NULL,false,NULL,NULL,:'edition_public',1,'original','{"pageIndex":8}',1000,NULL,NULL);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_progress_receipt(:actor_a,:profile_id,:'reader_event',:'reader_public',decode(repeat('21',32),'hex')) \gset
 SELECT 1 / CASE WHEN :AcceptedRevision=2 AND :CurrentRevision=2 THEN 1 ELSE 0 END;
@@ -79,28 +94,28 @@ EXECUTE phase_b_progress_receipt(:actor_a,:profile_id,:'reader_event',:'reader_p
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_progress_receipt(:actor_b,:profile_id,:'reader_event',:'reader_public',decode(repeat('21',32),'hex'));
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('23',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'other_edition_public',1,8,NULL,1000,NULL,NULL);
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('23',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'other_edition_public',1,'original','{"pageIndex":8}',1000,NULL,NULL);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('23',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'edition_public',99,8,NULL,1000,NULL,NULL);
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('23',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'edition_public',99,'original','{"pageIndex":8}',1000,NULL,NULL);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('23',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'edition_public',2,8,NULL,1000,NULL,NULL);
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('23',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'edition_public',2,'original','{"pageIndex":8}',1000,NULL,NULL);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 SELECT 1 / CASE WHEN (SELECT "ReaderContentId"=:content_1 AND "PageIndex"=8 FROM "ReadingProgressPositions" WHERE "MediaProgressId"=:reader_id) THEN 1 ELSE 0 END;
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('24',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'edition_public',2,10,NULL,1000,NULL,NULL) \gset
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',2,gen_random_uuid(),decode(repeat('24',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,:'edition_public',2,'original','{"pageIndex":2}',1000,NULL,NULL) \gset
 SELECT 1 / CASE WHEN :Revision=3 AND NOT :'IsCompleted'::boolean THEN 1 ELSE 0 END;
-SELECT 1 / CASE WHEN (SELECT "ReaderContentId"=:content_2 AND "PageIndex"=10 FROM "ReadingProgressPositions" WHERE "MediaProgressId"=:reader_id) THEN 1 ELSE 0 END;
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',3,gen_random_uuid(),decode(repeat('25',32),'hex'),1,now(),NULL,2,false,NULL,NULL,:'edition_public',2,NULL,'{"blockId":"chapter-1:p1","characterOffset":42}',1000,NULL,NULL) \gset
+SELECT 1 / CASE WHEN (SELECT "ReaderContentId"=:content_2 AND "PageIndex"=2 FROM "ReadingProgressPositions" WHERE "MediaProgressId"=:reader_id) THEN 1 ELSE 0 END;
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',3,gen_random_uuid(),decode(repeat('25',32),'hex'),1,now(),NULL,2,false,NULL,NULL,:'edition_public',3,'original','{"blockId":"chapter-1:p1","characterOffset":42}',1000,NULL,NULL) \gset
 SELECT 1 / CASE WHEN :Revision=4 AND :'IsCompleted'::boolean THEN 1 ELSE 0 END;
 
 -- All three mutations roll back together, including completion provenance.
 SELECT gen_random_uuid() AS rolled_back_event \gset
 BEGIN;
-EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',4,:'rolled_back_event',decode(repeat('26',32),'hex'),3,now(),NULL,NULL,true,NULL,NULL,:'edition_public',2,10,NULL,900,NULL,NULL) \gset
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',4,:'rolled_back_event',decode(repeat('26',32),'hex'),3,now(),NULL,NULL,true,NULL,NULL,:'edition_public',3,'original','{"blockId":"chapter-1:p1","characterOffset":40}',900,NULL,NULL) \gset
 SELECT 1 / CASE WHEN :Revision=5 AND NOT :'IsCompleted'::boolean THEN 1 ELSE 0 END;
 ROLLBACK;
 SELECT 1 / CASE WHEN (SELECT "Revision"=4 AND "IsCompleted" FROM "MediaProgress" WHERE "Id"=:reader_id)
     AND NOT EXISTS (SELECT 1 FROM "MediaProgressCheckpointEvents" WHERE "ClientEventId"=:'rolled_back_event')
-    AND (SELECT "PageIndex" IS NULL AND "TextLocator"->>'characterOffset'='42'
+    AND (SELECT "PageIndex" IS NULL AND "Locator"->>'characterOffset'='42'
         FROM "ReadingProgressPositions" WHERE "MediaProgressId"=:reader_id) THEN 1 ELSE 0 END;
 
 EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'game_public',1,gen_random_uuid(),decode(repeat('31',32),'hex'),1,now(),NULL,NULL,false,NULL,NULL,NULL,NULL,NULL,NULL,NULL,600000,100) \gset
@@ -126,14 +141,26 @@ ROLLBACK;
 
 EXECUTE phase_b_progress_snapshot(:actor_a,:profile_id,:'reader_public') \gset
 SELECT 1 / CASE WHEN :Revision=4 AND :'IsCompleted'::boolean AND :CompletionReasonTypeId=2
-    AND :'ReaderEditionId'::uuid=:'edition_public'::uuid AND :ContentRevision=2
-    AND :'TextLocator'::jsonb->>'characterOffset'='42' THEN 1 ELSE 0 END;
+    AND :'ReaderEditionId'::uuid=:'edition_public'::uuid AND :ContentRevision=3
+    AND :'VariantKey'='original' AND :'Locator'::jsonb->>'characterOffset'='42' THEN 1 ELSE 0 END;
 EXECUTE phase_b_progress_snapshot(:actor_a,:profile_id,:'time_public') \gset
 SELECT 1 / CASE WHEN :Revision=5 AND NOT :'IsCompleted'::boolean AND :PositionMs=0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_progress_snapshot(:actor_a,:profile_id,:'game_public') \gset
 SELECT 1 / CASE WHEN :Revision=3 AND :'IsCompleted'::boolean AND :PlayedMs=600000 THEN 1 ELSE 0 END;
 EXECUTE phase_b_progress_snapshot(:actor_b,:profile_id,:'reader_public');
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
+
+BEGIN;
+SAVEPOINT malformed_checkpoint;
+\set ON_ERROR_STOP off
+EXECUTE phase_b_progress_checkpoint(:actor_a,:profile_id,:'reader_public',4,gen_random_uuid(),decode(repeat('aa',31),'hex'),3,now(),NULL,NULL,true,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+\set rejected_state :SQLSTATE
+\set rejected_message :LAST_ERROR_MESSAGE
+\set ON_ERROR_STOP on
+ROLLBACK TO SAVEPOINT malformed_checkpoint;
+SELECT 1 / CASE WHEN :'rejected_state'='23514'
+    AND strpos(:'rejected_message','CK_MediaProgressCheckpointEvents_Hash')>0 THEN 1 ELSE 0 END;
+COMMIT;
 
 DO $constraints$
 DECLARE
@@ -143,7 +170,6 @@ DECLARE
     other_edition bigint;
     actor_id bigint;
     profile_id bigint;
-    public_id uuid;
     receipt_count bigint;
 BEGIN
     SELECT progress."Id", position."ReaderContentId" INTO reader_id, content_id
@@ -152,8 +178,8 @@ BEGIN
     INNER JOIN "ReadingProgressPositions" AS position ON position."MediaProgressId"=progress."Id"
     WHERE work."CanonicalTitle"='Checkpoint reader';
     SELECT edition."Id" INTO other_edition FROM "WorkEditions" AS edition WHERE edition."Name"='Other edition';
-    SELECT progress."ProfileId", profile."OwnerAccountId", progress."PublicId"
-    INTO profile_id, actor_id, public_id
+    SELECT progress."ProfileId", profile."OwnerAccountId"
+    INTO profile_id, actor_id
     FROM "MediaProgress" AS progress INNER JOIN "Profiles" AS profile ON profile."Id"=progress."ProfileId"
     WHERE progress."Id"=reader_id;
     SELECT count(*) INTO receipt_count FROM "MediaProgressCheckpointEvents" WHERE "MediaProgressId"=reader_id;
@@ -166,14 +192,6 @@ BEGIN
     EXCEPTION WHEN foreign_key_violation THEN
         GET STACKED DIAGNOSTICS rejected = CONSTRAINT_NAME;
         IF rejected <> 'FK_MediaProgressCheckpointEvents_CompletionPosition' THEN RAISE; END IF;
-    END;
-    BEGIN
-        EXECUTE format('EXECUTE phase_b_progress_checkpoint(%s,%s,%L,4,gen_random_uuid(),decode(repeat(''aa'',31),''hex''),3,now(),NULL,NULL,true,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)',
-            actor_id, profile_id, public_id);
-        RAISE EXCEPTION 'Malformed hash accepted';
-    EXCEPTION WHEN check_violation THEN
-        GET STACKED DIAGNOSTICS rejected = CONSTRAINT_NAME;
-        IF rejected <> 'CK_MediaProgressCheckpointEvents_Hash' THEN RAISE; END IF;
     END;
     IF (SELECT "Revision" FROM "MediaProgress" WHERE "Id"=reader_id) <> 4
         OR (SELECT count(*) FROM "MediaProgressCheckpointEvents" WHERE "MediaProgressId"=reader_id) <> receipt_count
@@ -203,11 +221,11 @@ BEGIN
         IF rejected <> 'CK_ReadingProgressPositions_Anchor' THEN RAISE; END IF;
     END;
     BEGIN
-        UPDATE "ReadingProgressPositions" SET "TextLocator"=NULL,"PageIndex"=999 WHERE "MediaProgressId"=reader_id;
+        UPDATE "ReadingProgressPositions" SET "Locator"='{"pageIndex":999}' WHERE "MediaProgressId"=reader_id;
         RAISE EXCEPTION 'Nonexistent source page was accepted';
-    EXCEPTION WHEN foreign_key_violation THEN
+    EXCEPTION WHEN check_violation THEN
         GET STACKED DIAGNOSTICS rejected = CONSTRAINT_NAME;
-        IF rejected <> 'FK_ReadingProgressPositions_Page' THEN RAISE; END IF;
+        IF rejected <> 'CK_ReaderAnchor_ExactLocator' THEN RAISE; END IF;
     END;
     BEGIN
         UPDATE "MediaProgress" SET "IsCompleted"=false WHERE "Id"=reader_id;

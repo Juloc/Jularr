@@ -164,9 +164,78 @@ BEGIN
             ('WorkFactTypes', 7, 'certification_country'),
             ('WorkFactTypes', 8, 'studios'),
             ('WorkFactTypes', 9, 'production_countries'),
+            ('ReaderLayoutTypes', 1, 'reflowable_text'),
+            ('ReaderLayoutTypes', 2, 'image_sequence'),
+            ('ReaderLayoutTypes', 3, 'fixed_pages'),
+            ('ReaderVariantTypes', 1, 'original'),
+            ('ReaderVariantTypes', 2, 'official_translation'),
+            ('ReaderVariantTypes', 3, 'generated_translation'),
+            ('ReaderNodeTypes', 1, 'text'),
+            ('ReaderNodeTypes', 2, 'image'),
+            ('ReaderNodeTypes', 3, 'scene_break'),
+            ('ReaderNodeTypes', 4, 'fixed_region'),
+            ('ReaderTextBlockTypes', 1, 'paragraph'),
+            ('ReaderTextBlockTypes', 2, 'heading'),
+            ('ReaderTextBlockTypes', 3, 'quote'),
+            ('ReaderTextBlockTypes', 4, 'preformatted'),
+            ('ReaderTextBlockTypes', 5, 'list'),
+            ('ReaderTextBlockTypes', 6, 'table'),
+            ('ReaderTextBlockTypes', 7, 'footnote'),
+            ('ReaderTextBlockTypes', 8, 'formula'),
+            ('ReaderPageDirectionTypes', 1, 'auto'),
+            ('ReaderPageDirectionTypes', 2, 'left_to_right'),
+            ('ReaderPageDirectionTypes', 3, 'right_to_left'),
+            ('ReaderTextDirectionTypes', 1, 'auto'),
+            ('ReaderTextDirectionTypes', 2, 'left_to_right'),
+            ('ReaderTextDirectionTypes', 3, 'right_to_left'),
+            ('ReaderWritingModeTypes', 1, 'horizontal_tb'),
+            ('ReaderWritingModeTypes', 2, 'vertical_rl'),
+            ('ReaderWritingModeTypes', 3, 'vertical_lr'),
             ('WorkMediaClassificationTypes', 1, 'anime')
     ),
     actual(target_table, id, key) AS (
+        SELECT
+            'ReaderLayoutTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "ReaderLayoutTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ReaderVariantTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "ReaderVariantTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ReaderNodeTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "ReaderNodeTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ReaderTextBlockTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "ReaderTextBlockTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ReaderPageDirectionTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "ReaderPageDirectionTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ReaderTextDirectionTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "ReaderTextDirectionTypes" AS catalog
+        UNION ALL
+        SELECT
+            'ReaderWritingModeTypes',
+            catalog."Id",
+            catalog."Key"
+        FROM "ReaderWritingModeTypes" AS catalog
+        UNION ALL
         SELECT
             'AuthChallengePurposeTypes',
             catalog."Id",

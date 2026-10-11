@@ -83,8 +83,41 @@ const authQueries = [
     parameters
 }));
 
+const readerContentQueries = [
+    ['reader_content', 'Service CONTENT:', 'Service NODES:', 'bigint,bigint,uuid,text,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision']],
+    ['reader_nodes', 'Service NODES:', 'Internal Service SOURCE:', 'bigint,bigint,uuid,text,integer,integer,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision', 'StartOrderIndex', 'PageSize']],
+    ['reader_source', 'Internal Service SOURCE:', 'Logic PUBLISH:', 'bigint,bigint,uuid,text,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision']],
+    ['reader_publish', 'Logic PUBLISH:', null, 'bigint,bytea,timestamptz,text', ['ReaderContentId', 'ExpectedContentHash', 'Now', 'TrustedWorkerKey']]
+].map(([name, start, end, types, parameters]) => ({
+    name,
+    file: 'DATABASE_CUTOVER_PHASE_B_READER_CONTENT_QUERIES_DRAFT.sql',
+    start: `-- ${start}`,
+    end: end ? `-- ${end}` : null,
+    declaration: `PREPARE phase_b_${name}(${types}) AS\n`,
+    parameters
+}));
+
+const readerAnnotationQueries = [
+    ['reader_bookmark_create', 'BOOKMARK_CREATE:', 'HIGHLIGHT_CREATE:', 'bigint,bigint,uuid,text,integer,uuid,jsonb,text,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision', 'PublicId', 'Locator', 'Label', 'Now']],
+    ['reader_highlight_create', 'HIGHLIGHT_CREATE:', 'BOOKMARK_EDIT:', 'bigint,bigint,uuid,text,integer,uuid,jsonb,jsonb,text,text,timestamptz',
+        ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision', 'PublicId', 'StartLocator', 'EndLocator', 'SelectedText', 'Note', 'Now']],
+    ['reader_bookmark_edit', 'BOOKMARK_EDIT:', 'HIGHLIGHT_EDIT:', 'bigint,bigint,uuid,bigint,jsonb,text,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'PublicId', 'ExpectedRevision', 'Locator', 'Label', 'Now']],
+    ['reader_highlight_edit', 'HIGHLIGHT_EDIT:', 'BOOKMARK_DELETE:', 'bigint,bigint,uuid,bigint,jsonb,jsonb,text,text,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'PublicId', 'ExpectedRevision', 'StartLocator', 'EndLocator', 'SelectedText', 'Note', 'Now']],
+    ['reader_bookmark_delete', 'BOOKMARK_DELETE:', 'HIGHLIGHT_DELETE:', 'bigint,bigint,uuid,bigint', ['ActorAccountId', 'ActiveProfileId', 'PublicId', 'ExpectedRevision']],
+    ['reader_highlight_delete', 'HIGHLIGHT_DELETE:', null, 'bigint,bigint,uuid,bigint', ['ActorAccountId', 'ActiveProfileId', 'PublicId', 'ExpectedRevision']]
+].map(([name, start, end, types, parameters]) => ({
+    name,
+    file: 'DATABASE_CUTOVER_PHASE_B_READER_ANNOTATION_QUERIES_DRAFT.sql',
+    start: `-- Logic ${start}`,
+    end: end ? `-- Logic ${end}` : null,
+    declaration: `PREPARE phase_b_${name}(${types}) AS\n`,
+    parameters
+}));
+
 for (const query of [
     ...authQueries,
+    ...readerContentQueries,
+    ...readerAnnotationQueries,
     {
         name: 'progress_start',
         file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
@@ -108,11 +141,11 @@ for (const query of [
         file: 'DATABASE_CUTOVER_PHASE_B_PROGRESS_QUERIES_DRAFT.sql',
         start: '-- Logic CHECKPOINT:',
         end: '-- Service RECEIPT:',
-        declaration: 'PREPARE phase_b_progress_checkpoint(bigint,bigint,uuid,bigint,uuid,bytea,smallint,timestamptz,timestamptz,smallint,boolean,bigint,bigint,uuid,integer,integer,jsonb,smallint,bigint,numeric) AS\n',
+        declaration: 'PREPARE phase_b_progress_checkpoint(bigint,bigint,uuid,bigint,uuid,bytea,smallint,timestamptz,timestamptz,smallint,boolean,bigint,bigint,uuid,integer,text,jsonb,smallint,bigint,numeric) AS\n',
         parameters: ['ActorAccountId', 'ActiveProfileId', 'ProgressPublicId', 'ExpectedRevision',
             'ClientEventId', 'PayloadHash', 'SourceTypeId', 'Now', 'ClientOccurredAt',
             'CompletionReasonTypeId', 'ClearCompletion', 'PositionMs', 'DurationMs',
-            'ReaderEditionPublicId', 'ContentRevision', 'PageIndex', 'TextLocator',
+            'ReaderEditionPublicId', 'ContentRevision', 'VariantKey', 'Locator',
             'ProgressPermille', 'PlayedMs', 'ProgressPercent']
     },
     {
@@ -251,9 +284,23 @@ const readerQueries = [
     {
         name: 'reader_pages',
         start: '-- Service PAGES:',
+        end: '-- Service BOOKMARK:',
+        types: 'bigint,bigint,uuid,integer,text,integer,integer',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkEditionPublicId', 'ContentRevision', 'VariantKey', 'StartPageIndex', 'PageSize']
+    },
+    {
+        name: 'reader_bookmark',
+        start: '-- Service BOOKMARK:',
+        end: '-- Service HIGHLIGHT:',
+        types: 'bigint,bigint,uuid',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'PublicId']
+    },
+    {
+        name: 'reader_highlight',
+        start: '-- Service HIGHLIGHT:',
         end: null,
-        types: 'bigint,bigint,uuid,integer,integer,integer',
-        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkEditionPublicId', 'ContentRevision', 'StartPageIndex', 'PageSize']
+        types: 'bigint,bigint,uuid',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'PublicId']
     }
 ];
 

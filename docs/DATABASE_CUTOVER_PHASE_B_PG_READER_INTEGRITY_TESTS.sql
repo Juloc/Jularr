@@ -15,7 +15,10 @@ DECLARE
     asset_id bigint;
     invalid_dimensions record;
     rejected_constraint text;
+    builder_operation_id bigint;
 BEGIN
+    INSERT INTO "Operations" ("OperationKindKey", "OperationStatusTypeId", "ClaimedBy", "ClaimedUntil")
+    VALUES ('reader_parse', 2, 'reader-fixture', now() + INTERVAL '1 hour') RETURNING "Id" INTO builder_operation_id;
     INSERT INTO "UiLocales" ("Locale", "Name")
     VALUES ('phase-b-reader', 'Reader integrity')
     RETURNING "Id" INTO locale_id;
@@ -39,24 +42,29 @@ BEGIN
     INSERT INTO "WorkEditions" ("WorkId", "Name")
     VALUES (other_work_id, 'Other reader edition')
     RETURNING "Id" INTO other_edition_id;
-    INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "StorageKey")
-    VALUES (work_id, edition_id, 'phase-b-reader-content')
+    INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "StorageKey", "ReaderLayoutTypeId",
+        "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
+    VALUES (work_id, edition_id, 'phase-b-reader-content', 2, decode(repeat('a1',32),'hex'), 'fixture', builder_operation_id, 0, 1)
     RETURNING "Id" INTO content_id;
-    INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "StorageKey")
-    VALUES (other_work_id, other_edition_id, 'phase-b-other-reader-content')
+    INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "StorageKey", "ReaderLayoutTypeId",
+        "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
+    VALUES (other_work_id, other_edition_id, 'phase-b-other-reader-content', 2, decode(repeat('a2',32),'hex'), 'fixture', builder_operation_id, 0, 1)
     RETURNING "Id" INTO other_content_id;
     INSERT INTO "ReaderPages" ("ReaderContentId", "PageIndex")
     VALUES (content_id, 0), (other_content_id, 0);
+    UPDATE "ReaderContent" SET "PublishedAt"=now() WHERE "Id" IN (content_id,other_content_id);
     INSERT INTO "MediaProgress" ("ProfileId", "WorkId", "ProgressPositionTypeId")
     VALUES (profile_id, work_id, 2)
     RETURNING "Id" INTO progress_id;
-    INSERT INTO "ReadingProgressPositions" ("MediaProgressId", "WorkId", "ReaderContentId", "PageIndex")
-    VALUES (progress_id, work_id, content_id, 0);
+    INSERT INTO "ReadingProgressPositions" ("MediaProgressId", "WorkId", "ReaderContentId", "Locator")
+    VALUES (progress_id, work_id, content_id, '{"pageIndex":0}');
     SET CONSTRAINTS ALL IMMEDIATE;
 
     BEGIN
-        INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey")
-        VALUES (other_work_id, edition_id, 2, 'phase-b-invalid-reader-content');
+        INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey", "ReaderLayoutTypeId",
+            "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
+        VALUES (other_work_id, edition_id, 2, 'phase-b-invalid-reader-content', 2,
+            decode(repeat('a3',32),'hex'), 'fixture', builder_operation_id, 0, 1);
         RAISE EXCEPTION 'ReaderContent accepted a foreign WorkEdition';
     EXCEPTION WHEN foreign_key_violation THEN
         GET STACKED DIAGNOSTICS rejected_constraint = CONSTRAINT_NAME;
@@ -79,7 +87,7 @@ BEGIN
 
     BEGIN
         UPDATE "ReadingProgressPositions"
-        SET "WorkId" = other_work_id, "ReaderContentId" = NULL, "PageIndex" = NULL
+        SET "WorkId" = other_work_id, "ReaderContentId" = NULL, "Locator" = NULL
         WHERE "MediaProgressId" = progress_id;
         RAISE EXCEPTION 'Reading position accepted a foreign parent Work';
     EXCEPTION WHEN foreign_key_violation THEN
@@ -102,10 +110,10 @@ BEGIN
     END;
 
     UPDATE "ReadingProgressPositions"
-    SET "ReaderContentId" = NULL, "PageIndex" = NULL
+    SET "ReaderContentId" = NULL, "Locator" = NULL
     WHERE "MediaProgressId" = progress_id;
     UPDATE "ReadingProgressPositions"
-    SET "ReaderContentId" = content_id, "PageIndex" = 0
+    SET "ReaderContentId" = content_id, "Locator" = '{"pageIndex":0}'
     WHERE "MediaProgressId" = progress_id;
 
     INSERT INTO "WorkVersions" ("WorkId", "WorkEditionId")

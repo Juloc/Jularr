@@ -1,10 +1,10 @@
 # Phase B — aktueller Entwurfsumfang ohne Learning
 
 Aktueller Owner-Auftrag vom 10.10.2026: Learning wird zurückgestellt.
-Der aktuelle DDL-Satz ist 01, 02, 03, 04, 06, 07, 11, 12, 14, 15, 16, 17, 18. Nummernlücken sind
+Der aktuelle DDL-Satz ist 01, 02, 03, 04, 06, 07, 11, 12, 14, 15, 16, 17, 18, 19. Nummernlücken sind
 bewusst entfernte Learning-Teile, keine optionalen Baseline-Abhängigkeiten.
 
-Statischer Stand: 143 Target-Tabellen, 31 Type-Kataloge mit 160 expliziten
+Statischer Stand: 151 Target-Tabellen, 38 Type-Kataloge mit 187 expliziten
 Byte-Vertrags-/Seedwerten, 24 getrennte öffentliche Ressourcen-UUIDs.
 Interne Ressourcen-PKs/FKs/Joins bleiben bigint. Der Verifier prüft die
 vollständige Übereinstimmung von C# byte, Seed-Manifest und statischem SQL.
@@ -15,10 +15,10 @@ Der [spätere Learning-Plan](DATABASE_CUTOVER_DEFERRED_LEARNING.md) reserviert
 keine Tabellen, Codes oder Runtime-Fallbacks.
 
 Frühe Zahlen/CI-Belege sind historische Stände. Die aktuelle Fassung wurde
-frisch auf wegwerfbarem PostgreSQL 18.6 geprüft: dreizehn DDL-Dateien sowie die
+frisch auf wegwerfbarem PostgreSQL 18.6 geprüft: vierzehn DDL-Dateien sowie die
 betroffenen Katalog-, Event-, Inbox-, Lifecycle- und Negativ-Suites. Der Inbox-
 READ nutzt Profile-/Account-LastOccurredAt-Indizes vor Paging; zwei unabhängige
-Sessions prüfen Recurrence, Replay und Commit-Integrität. Neue Tabellenzahl 143.
+Sessions prüfen Recurrence, Replay und Commit-Integrität. Neue Tabellenzahl 151.
 Kein aktiver DB-Eingriff und keine vollständige Anwendungssuite; CI prüft den
 jeweiligen PR-Head zusätzlich.
 
@@ -48,7 +48,13 @@ Revision/Position/immutable Hash-Beleg sind jeweils atomar; Reader bindet die
 unveränderliche Contentrevision und tatsächliche Quellseite. Explizite Completion
 mit Herkunft/Unmark, SQL-Präfix bei Episodenlücken/Specials, 1000 Continue-Roots
 und zwei berechtigte Accounts prüfen die konkreten Konflikt-/Rollback-Grenzen.
-Getypte Reader-Varianten/Locators/Publish und Replay-Retention bleiben offen.
+Part 19 schließt getypte Reader-Varianten/Locators/Publish einschließlich
+Annotation-Writes physisch ab; Replay-Retention bleibt offen.
+
+Der [Reader-Vertrag](DATABASE_CUTOVER_PHASE_B_READER_CONTRACT.md) bindet sieben
+weitere byte-Kataloge, Source-Index und private Payload-Delivery. Drei parallele
+PG-Sessions prüfen Publication/late Writer; 1000 Knoten bestätigen den begrenzten
+Ordinal-Indexfeed nach einmaliger Scope-Auflösung. Keine Runtime-Parser-Abnahme.
 
 Statische Prüfungen ersetzen weder PostgreSQL-Tests noch Autorisierung,
 repräsentative Query-/Indexpläne oder die spätere EF-/Runtime-Abnahme.

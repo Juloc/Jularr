@@ -36,7 +36,7 @@ Keine externe I/O und kein versteckter Worker-Aufruf im Tx.
 Die 20 Parameter sind explizit gebunden: Account/Profile long, Progress/Event
 UUID, ExpectedRevision long, PayloadHash byte[32], Source byte, Now/ClientTime
 UTC-Zeitpunkte, CompletionReason byte?, ClearCompletion bool, Time-Werte long?,
-Edition UUID?, ContentRevision/PageIndex int?, TextLocator strukturiertes JSON?,
+Edition UUID?, ContentRevision int?, VariantKey string?, Locator geschlossenes JSON?,
 ProgressPermille short?, PlayedMs long?, ProgressPercent decimal?. Ein Payload
 mit Feldern eines anderen Positionstyps wird nicht übernommen.
 
@@ -87,15 +87,13 @@ den aktuellen getypten Positionssnapshot unter derselben Revision statt die
 Position anhand eines fehlenden Client-Felds auf null/0 zu löschen.
 
 ReaderContent ist eine unveränderliche Edition-/Work-/optionale Chapter-
-Revision. Neue Inhalte erhalten eine neue Revision; alte Anker werden nicht
-umgebogen. PageIndex referenziert eine tatsächliche Quellseite genau dieser
-Revision. Edition-/Chapter-Targets und Content müssen zusammenpassen, auch bei
-direkten relationalen Änderungen. Ungeöffneter Progress darf ohne Anker bestehen;
-ein vorhandener Anker benötigt Content und genau PageIndex oder TextLocator.
-TextLocator ist begrenztes strukturiertes JSON, kein EAV-Konfigurationspfad.
-Die vollständigen Reflow-Block-/FixedPage-/Viewport-/Variant-/Publish-Verträge
-und Bookmark-/Highlight-Validierung bleiben Bestandteil von B05; ein beliebiges
-JSON-Objekt ist dadurch noch nicht fachlich als gültiger Locator bewiesen.
+Revision mit verbindlichem VariantKey. Neue Bytes erhalten eine neue Revision;
+alte Anker werden nicht umgebogen. Nur veröffentlichte Inhalte dürfen gebunden
+werden; Edition-/Chapter-Targets und Content müssen zusammenpassen. Ungeöffneter
+Progress darf ohne Content/Locator bestehen. Part 19 validiert drei geschlossene
+Locator-Shapes gegen den genauen Index; PageIndex ist ausschließlich erzeugt,
+kein zweiter Schreibparameter. Der [Reader-Vertrag](DATABASE_CUTOVER_PHASE_B_READER_CONTRACT.md)
+schließt Varianten, Veröffentlichung und Annotationen physisch ab.
 
 Continue autorisiert vor Root-LIMIT und lädt getypte Positionen nur für diese
 Seite. Reader-Resume enthält öffentliche Edition und exakte Inhaltsrevision.

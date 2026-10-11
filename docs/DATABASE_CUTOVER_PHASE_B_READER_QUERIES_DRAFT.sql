@@ -6,7 +6,11 @@ SELECT
     work."PublicId" AS "WorkId",
     edition."PublicId" AS "WorkEditionId",
     content."ContentRevision",
-    bookmark."TextLocator",
+    content."VariantKey",
+    bookmark."Locator",
+    bookmark."Revision",
+    bookmark."Label",
+    bookmark."UpdatedAt",
     bookmark."CreatedAt"
 FROM
     "Accounts" AS account
@@ -31,6 +35,7 @@ WHERE
     account."Id" = @ActorAccountId
     AND account."IsEnabled" = TRUE
     AND work."PublicId" = @WorkPublicId
+    AND content."PublishedAt" IS NOT NULL
     AND @PageSize BETWEEN 1 AND 100
     AND @Offset BETWEEN 0 AND 100000
 ORDER BY
@@ -45,9 +50,13 @@ SELECT
     work."PublicId" AS "WorkId",
     edition."PublicId" AS "WorkEditionId",
     content."ContentRevision",
+    content."VariantKey",
+    highlight."Revision",
     highlight."StartLocator",
     highlight."EndLocator",
+    highlight."SelectedText",
     highlight."Note",
+    highlight."UpdatedAt",
     highlight."CreatedAt"
 FROM
     "Accounts" AS account
@@ -72,6 +81,7 @@ WHERE
     account."Id" = @ActorAccountId
     AND account."IsEnabled" = TRUE
     AND work."PublicId" = @WorkPublicId
+    AND content."PublishedAt" IS NOT NULL
     AND @PageSize BETWEEN 1 AND 100
     AND @Offset BETWEEN 0 AND 100000
 ORDER BY
@@ -81,39 +91,113 @@ LIMIT @PageSize
 OFFSET @Offset;
 
 -- Service PAGES:
+WITH "Scope" AS MATERIALIZED (
+    SELECT
+        content."Id",
+        work."PublicId" AS "WorkId",
+        edition."PublicId" AS "WorkEditionId",
+        content."ContentRevision",
+        content."VariantKey"
+    FROM
+        "Accounts" AS account
+    INNER JOIN
+        "AccountProfiles" AS membership ON membership."AccountId" = account."Id" AND membership."ProfileId" = @ActiveProfileId
+    INNER JOIN
+        "WorkEditions" AS edition ON edition."PublicId" = @WorkEditionPublicId
+    INNER JOIN
+        "Works" AS work ON work."Id" = edition."WorkId"
+    INNER JOIN
+        "ReaderContent" AS content ON content."WorkEditionId" = edition."Id" AND content."WorkId" = edition."WorkId"
+    WHERE
+        account."Id" = @ActorAccountId
+        AND account."IsEnabled" = TRUE
+        AND content."ContentRevision" = @ContentRevision
+        AND content."VariantKey" = @VariantKey
+        AND content."PublishedAt" IS NOT NULL
+        AND @StartPageIndex >= 0
+        AND @PageSize BETWEEN 1 AND 100
+)
 SELECT
-    work."PublicId" AS "WorkId",
-    edition."PublicId" AS "WorkEditionId",
-    content."ContentRevision",
+    scope."WorkId",
+    scope."WorkEditionId",
+    scope."ContentRevision",
+    scope."VariantKey",
     page."PageIndex",
+    page."SourcePageIndex",
     page."TextAnchor"
 FROM
-    "Accounts" AS account
+    "Scope" AS scope
+INNER JOIN LATERAL (
+    SELECT
+        page."PageIndex",
+        page."SourcePageIndex",
+        page."TextAnchor"
+    FROM
+        "ReaderPages" AS page
+    WHERE
+        page."ReaderContentId" = scope."Id"
+        AND page."PageIndex" >= @StartPageIndex
+    ORDER BY
+        page."PageIndex"
+    LIMIT @PageSize
+) AS page ON TRUE
+ORDER BY
+    page."PageIndex";
+
+-- Service BOOKMARK:
+SELECT
+    bookmark."PublicId",
+    bookmark."Revision",
+    edition."PublicId" AS "EditionPublicId",
+    content."VariantKey",
+    content."ContentRevision",
+    bookmark."Locator",
+    bookmark."Label",
+    bookmark."CreatedAt",
+    bookmark."UpdatedAt"
+FROM
+    "ReaderBookmarks" AS bookmark
 INNER JOIN
-    "AccountProfiles" AS membership
-        ON membership."AccountId" = account."Id"
-        AND membership."ProfileId" = @ActiveProfileId
+    "ReaderContent" AS content ON content."Id" = bookmark."ReaderContentId"
 INNER JOIN
-    "WorkEditions" AS edition
-        ON edition."PublicId" = @WorkEditionPublicId
+    "WorkEditions" AS edition ON edition."Id" = content."WorkEditionId"
 INNER JOIN
-    "Works" AS work
-        ON work."Id" = edition."WorkId"
+    "AccountProfiles" AS membership ON membership."ProfileId" = bookmark."ProfileId"
 INNER JOIN
-    "ReaderContent" AS content
-        ON content."WorkEditionId" = edition."Id"
-        AND content."WorkId" = edition."WorkId"
-        AND content."ContentRevision" = @ContentRevision
-INNER JOIN
-    "ReaderPages" AS page
-        ON page."ReaderContentId" = content."Id"
+    "Accounts" AS account ON account."Id" = membership."AccountId"
 WHERE
     account."Id" = @ActorAccountId
     AND account."IsEnabled" = TRUE
-    AND @StartPageIndex >= 0
-    AND @PageSize BETWEEN 1 AND 100
-    AND page."PageIndex" >= @StartPageIndex
-ORDER BY
-    page."PageIndex",
-    page."Id"
-LIMIT @PageSize;
+    AND membership."ProfileId" = @ActiveProfileId
+    AND bookmark."PublicId" = @PublicId
+    AND content."PublishedAt" IS NOT NULL;
+
+-- Service HIGHLIGHT:
+SELECT
+    highlight."PublicId",
+    highlight."Revision",
+    edition."PublicId" AS "EditionPublicId",
+    content."VariantKey",
+    content."ContentRevision",
+    highlight."StartLocator",
+    highlight."EndLocator",
+    highlight."SelectedText",
+    highlight."Note",
+    highlight."CreatedAt",
+    highlight."UpdatedAt"
+FROM
+    "ReaderHighlights" AS highlight
+INNER JOIN
+    "ReaderContent" AS content ON content."Id" = highlight."ReaderContentId"
+INNER JOIN
+    "WorkEditions" AS edition ON edition."Id" = content."WorkEditionId"
+INNER JOIN
+    "AccountProfiles" AS membership ON membership."ProfileId" = highlight."ProfileId"
+INNER JOIN
+    "Accounts" AS account ON account."Id" = membership."AccountId"
+WHERE
+    account."Id" = @ActorAccountId
+    AND account."IsEnabled" = TRUE
+    AND membership."ProfileId" = @ActiveProfileId
+    AND highlight."PublicId" = @PublicId
+    AND content."PublishedAt" IS NOT NULL;

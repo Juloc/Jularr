@@ -125,7 +125,8 @@ LEFT JOIN LATERAL (
     SELECT
         jsonb_agg(a."Language" ORDER BY a."Language") AS "Languages"
     FROM (
-        SELECT DISTINCT
+        SELECT
+            DISTINCT
             track."Language"
         FROM
             "WorkEditions" AS edition
@@ -152,7 +153,8 @@ LEFT JOIN LATERAL (
     SELECT
         jsonb_agg(s."Language" ORDER BY s."Language") AS "Languages"
     FROM (
-        SELECT DISTINCT
+        SELECT
+            DISTINCT
             track."Language"
         FROM
             "WorkEditions" AS edition
@@ -196,9 +198,16 @@ ORDER BY
 -- 2. Bounded Continue list, never cross-profile, deterministic ordering.
 WITH "ContinueRoots" AS MATERIALIZED (
     SELECT
-        progress."Id", progress."PublicId", progress."WorkId", progress."WorkEpisodeId",
-        progress."WorkChapterId", progress."WorkTrackId", progress."WorkEditionId",
-        progress."ProgressPositionTypeId", progress."Revision", progress."LastActivityAt"
+        progress."Id",
+        progress."PublicId",
+        progress."WorkId",
+        progress."WorkEpisodeId",
+        progress."WorkChapterId",
+        progress."WorkTrackId",
+        progress."WorkEditionId",
+        progress."ProgressPositionTypeId",
+        progress."Revision",
+        progress."LastActivityAt"
     FROM
         "MediaProgress" AS progress
     INNER JOIN
@@ -224,10 +233,16 @@ SELECT
     progress."ProgressPositionTypeId",
     progress."Revision",
     progress."LastActivityAt",
-    time_position."PositionMs", time_position."DurationMs",
-    reader_edition."PublicId" AS "ReaderEditionId", content."ContentRevision",
-    reading_position."PageIndex", reading_position."TextLocator", reading_position."ProgressPermille",
-    game_position."PlayedMs", game_position."ProgressPercent"
+    time_position."PositionMs",
+    time_position."DurationMs",
+    reader_edition."PublicId" AS "ReaderEditionId",
+    content."ContentRevision",
+    content."VariantKey",
+    reading_position."PageIndex",
+    reading_position."Locator",
+    reading_position."ProgressPermille",
+    game_position."PlayedMs",
+    game_position."ProgressPercent"
 FROM
     "ContinueRoots" AS progress
 INNER JOIN

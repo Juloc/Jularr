@@ -52,6 +52,61 @@ public enum ProgressCheckpointSource : byte
     UserAction = 3
 }
 
+public enum ReaderLayout : byte
+{
+    ReflowableText = 1,
+    ImageSequence = 2,
+    FixedPages = 3
+}
+
+public enum ReaderVariant : byte
+{
+    Original = 1,
+    OfficialTranslation = 2,
+    GeneratedTranslation = 3
+}
+
+public enum ReaderNode : byte
+{
+    Text = 1,
+    Image = 2,
+    SceneBreak = 3,
+    FixedRegion = 4
+}
+
+public enum ReaderTextBlock : byte
+{
+    Paragraph = 1,
+    Heading = 2,
+    Quote = 3,
+    Preformatted = 4,
+    List = 5,
+    Table = 6,
+    Footnote = 7,
+    Formula = 8
+}
+
+public enum ReaderPageDirection : byte
+{
+    Auto = 1,
+    LeftToRight = 2,
+    RightToLeft = 3
+}
+
+public enum ReaderTextDirection : byte
+{
+    Auto = 1,
+    LeftToRight = 2,
+    RightToLeft = 3
+}
+
+public enum ReaderWritingMode : byte
+{
+    HorizontalTb = 1,
+    VerticalRl = 2,
+    VerticalLr = 3
+}
+
 public enum ImageTargetKind : byte
 {
     Work = 1,

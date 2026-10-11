@@ -11,7 +11,7 @@ später eine eigene Freigabe.
 
 ## Aktueller Umfang
 
-Dreizehn DDL-Dateien, in dieser Reihenfolge:
+Vierzehn DDL-Dateien, in dieser Reihenfolge:
 
 1. [01 Core](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql)
 2. [02 Progress/Media](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql)
@@ -26,12 +26,13 @@ Dreizehn DDL-Dateien, in dieser Reihenfolge:
 11. [16 Auth Lifecycle](DATABASE_CUTOVER_PHASE_B_16_AUTH_LIFECYCLE_DRAFT.sql)
 12. [17 Provider Lifecycle](DATABASE_CUTOVER_PHASE_B_17_PROVIDER_LIFECYCLE_DRAFT.sql)
 13. [18 Progress/Reader Lifecycle](DATABASE_CUTOVER_PHASE_B_18_PROGRESS_READER_LIFECYCLE_DRAFT.sql)
+14. [19 Reader Content](DATABASE_CUTOVER_PHASE_B_19_READER_CONTENT_DRAFT.sql)
 
 Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
 nicht als leere oder optionale Baseline-Dateien behalten.
 
-Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 143
-Target-Tabellen. Die 31 bestehenden Type-Kataloge haben 160 feste Codes in
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 151
+Target-Tabellen. Die 38 bestehenden Type-Kataloge haben 187 feste Codes in
 [C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
 [Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
 Der Verifier lehnt undefinierte Kataloge ab. Keine Übernahme alter int-Enumcodes.
@@ -70,7 +71,7 @@ offen. Keine vollständige Anwendungssuite oder aktive DB-Änderung.
 
 Der [Notification-Vertrag](DATABASE_CUTOVER_PHASE_B_NOTIFICATION_CONTRACT.md) enthält
 Ruhezeiten/DST, Digest, geschützte Endpoints und aktuelle Route-Revalidierung.
-Dreizehn DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
+Vierzehn DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
 Zielpersistenz, keinen existierenden externen Transport oder Runtime-Cutover.
 
 Die [Reader-READs](DATABASE_CUTOVER_PHASE_B_READER_QUERIES_DRAFT.sql) führen
@@ -80,8 +81,10 @@ Account/Profile-Mitgliedschaft vor LIMIT und geben nur öffentliche UUIDs aus.
 Das zugehörige [PostgreSQL-Testset](DATABASE_CUTOVER_PHASE_B_PG_READER_QUERY_TESTS.sql)
 prüft fremde Accounts, Profil-/Work-Isolation, Entzug und Disable.
 Die Highlight-Sortierung hat einen Profilindex; ReaderPage-Reads binden die
-öffentliche Edition-ID und exakte ContentRevision. Content-Delivery/Playable
-bleibt offen.
+öffentliche Edition-ID, VariantKey und exakte ContentRevision. Der
+[Reader-Vertrag](DATABASE_CUTOVER_PHASE_B_READER_CONTRACT.md) ergänzt getypte
+Layouts/Anker, immutable Publication, private Delivery und Annotation-CAS.
+Playable bleibt offen.
 
 Die [Provider-Policy-SELECTs](DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql)
 trennen Login-, Linking- und Media-Consent-Challenges anhand ihrer festen
@@ -114,8 +117,8 @@ Edition und unveränderliche Contentrevision; Completed erhält explizite Herkun
 und darf nur durch manuelle UserAction entfernt werden. Continue enrichert nur
 gepagte Roots; CompletedThrough ist ein SQL-Präfix mit echten Lücken/Specials.
 1000 Continue-Roots und zwei unterschiedliche berechtigte Accounts prüfen Paging,
-erste Root-Erzeugung, stale Writes und Rollback. Vollständige Reader-Varianten/
-Locator-/Publish-Verträge und Replay-Retention sind weiterhin offen.
+erste Root-Erzeugung, stale Writes und Rollback. Part 19 schließt Reader-
+Varianten/Locator-/Publish-Verträge physisch; Replay-Retention bleibt offen.
 
 [DECISIONS](DATABASE_CUTOVER_PHASE_B_DECISIONS.md) nennt verbleibende Fach- und
 Query-Anforderungen. Nicht alle übrigen Funktionsverträge sind abgeschlossen.
