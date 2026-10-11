@@ -1,0 +1,35 @@
+name: Frontend
+
+on:
+  pull_request:
+    paths:
+      - 'src/Jularr.Frontend/**'
+      - 'src/Jularr.Backend/**'
+      - 'docs/FRONTEND_CONVENTIONS.md'
+      - '.github/workflows/frontend.yml'
+  push:
+    branches: [clean-start]
+    paths:
+      - 'src/Jularr.Frontend/**'
+      - 'src/Jularr.Backend/**'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  razor-and-ui-resources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify canonical UI resource declarations
+        run: node src/Jularr.Frontend/Tools/verify-ui-resources.mjs
+      - name: Build Razor frontend and Backend dependencies
+        run: dotnet build src/Jularr.Frontend/Jularr.Frontend.csproj --configuration Release
