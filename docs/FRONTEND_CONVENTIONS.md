@@ -140,6 +140,65 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Accept-Language once the session/profile preference contract exists.
   Offline language bundles for all local profiles are future-only.
 
+## Asset ownership, build and caching (MANDATORY)
+
+- **Colocation is mandatory:** assets owned by a Page live next to that
+  `Pages/**/<Page>.cshtml.cs`; assets belonging to an optional feature module
+  live under `Modules/<Module>/`; assets for a reusable component live beside
+  its `Framework/Components/<Component>.cs`. Shared shell tokens/icons and
+  global styles live in `Assets/Shared/` and `Assets/Icons/`.
+  Add `.ts`, `.scss` or `.svg` files **only when needed**; do not create
+  empty entry points or broad feature-sized Framework components.
+- Styles use **SCSS modules** (`@use`, no legacy `@import`) and **BEM**
+  selectors: `.media-shelf`, `.media-shelf__items`,
+  `.media-shelf--compact`. Component-specific selectors stay in their
+  owning stylesheet, no competing/global copies. Shared design tokens
+  are centralized; avoid deep Sass nesting and CSS selector specificity.
+  Existing shell CSS retains its historical class names until migrated.
+- Browser JS is TypeScript. Add `*.entry.ts` only when a Page/Module has
+  real client interactions. CSS-only entry points use `*.entry.scss`.
+  The [Vite configuration](../src/Jularr.Frontend/vite.config.ts) discovers
+  entries automatically; no central list of all Pages/Modules and no
+  per-component runtime injection by default. A Page opts in to owned
+  entries with `page.Asset("Pages/Index.entry.scss")` (or the module path).
+  Imported component Sass/TS is bundled only with the entry that needs it.
+  Don't import all optional Pages/Modules into the shared shell.
+- `npm ci` (locked package versions), `npm run check` (TypeScript, Vite,
+  SVG sprite), `npm test`, then `dotnet build` are required in Frontend
+  CI. Production publish **must not proceed** without built assets.
+  Nothing compiles Sass/JS or computes hashes on a live request.
+- Vite writes only minified/compiled output into `wwwroot/build/assets`
+  and emits the manifest at `wwwroot/build/.vite/manifest.json`.
+  `FrontendAssets` parses it once per process to render just the hashed
+  CSS/JS for the shell and current page. Unused module bundles are not
+  referenced by other pages.
+- SVG source icons may live with the owning Page/Module/Component or in the
+  shared icon library. The build creates one fingerprinted symbol sprite
+  and a private symbols manifest, referenced through `FrontendAssets.IconHref`.
+  No unversioned sprite URLs and no loading each small icon separately.
+- **Hash by content, not release number.** Fingerprinted CSS/JS/SVG
+  assets receive `Cache-Control: public,max-age=31536000,immutable`;
+  unchanged assets keep their URLs/cache across Jularr updates.
+  Nonfingerprinted public files revalidate. Page HTML and
+  account/profile-specific responses use private/no-store and must not
+  share caches across users. Always deploy new assets before the
+  HTML/manifest that references them, and retain old hashes during
+  rolling deployments until old pages have expired.
+- Media image components require dimensions (prevent layout shift),
+  `decoding="async"`, `loading="lazy"` below the fold and appropriately
+  sized `srcset/sizes` when the Backend returns variants. The critical
+  first visible Hero/LCP image must use eager/high priority and should not
+  be lazy-loaded. Do not lazy-load other above-the-fold critical assets.
+  Images must be authorized where necessary; the **Backend image service**
+  owns thumbnail conversion, cache/storage budgets, ETags and secure
+  response headers. Do not proxy arbitrary providers in Frontend or
+  invent a second image cache. The image component does **not** implement
+  server-side thumbnail caching by itself.
+- Avoid gratuitous bundles, network requests, CSS duplication, sync
+  image transforms and unrestricted external image URLs. Only
+  on-demand optional TS chunks should use dynamic import. Report measured
+  bytes/requests on real pages before introducing further infrastructure.
+
 ## Performance and checks
 
 - Avoid N+1 calls, unbounded lists, repeated field metadata reflection,

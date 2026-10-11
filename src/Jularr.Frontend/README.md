@@ -27,8 +27,7 @@ Admin routes: `/Admin/Requests`, `/Admin/Rules`,
 `/Admin/Requests/Users`, `/Admin/Wanted`, `/Admin/Works`,
 `/Admin/Works/{id:long}`, `/Admin/Library`.
 
-The routes prepare actual layouts but do not invent service data. Unbound
-toolbar controls are disabled; rows only render from real service outputs.
+The routes prepare actual layouts but do not invent service data. Table rows and filters only render from genuine authorized Backend results.
 Login remains presentation-only. Admin authorization, canonical typed media/
 request services, profile locale preference and Player PlaybackPlan integration
 remain pending. Do not expose the prepared routes as production-ready.
@@ -41,6 +40,38 @@ node src/Jularr.Frontend/Tools/verify-ui-resources.mjs
 dotnet build src/Jularr.Frontend/Jularr.Frontend.csproj
 ```
 
-Backend-only CI does not build Razor frontend. Always run targeted component
-and browser checks before merge; if the SDK/browser is unavailable, report
-the validation as not performed.
+Frontend CI builds Vite assets, checks the asset manifest, and builds Razor.
+Browser checks remain a separate required verification before production.
+
+## Asset build (required)
+
+```sh
+cd src/Jularr.Frontend
+npm ci --no-audit --no-fund
+npm run check
+npm test
+dotnet build -c Release
+dotnet publish -c Release
+```
+
+The .NET host does not compile TypeScript, Sass or sprites at request time.
+`npm run build` produces hashed CSS/JS and a hashed shared SVG symbol
+sprite in `wwwroot/build/assets`. `FrontendAssets` reads the generated
+manifest once per process and includes only shell plus owning Page/Module
+assets. Production publish fails when the manifests are missing. A clean
+deployment must run the Node build before publishing; dev can run
+`npm run watch` and rebuild icons on demand with `npm run build`.
+
+Static hashed assets have 1-year immutable public cache headers, and
+authorized server-rendered HTML uses private/no-store. Each modified asset
+gets a new content hash; unchanged assets survive application releases.
+For rolling deployments, retain the previous hashed assets until old HTML
+is no longer served. Browser image markup lazily decodes/loads noncritical
+media, reserves dimensions and can emit Backend-supplied responsive
+variants. The canonical Backend media image endpoint must still provide
+actual thumbnail resizing, ETag and authorization where required.
+
+Asset ownership: styles/scripts/SVG live next to the relevant Page,
+component or optional module; shared shell styles are the only global
+SCSS entry. New CSS uses BEM selectors and `@use` for Sass modules.
+

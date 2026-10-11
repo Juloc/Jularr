@@ -47,8 +47,23 @@ Shared conventions and Backend ownership:
   [Page body](Pages/Shared/_PageBody.cshtml),
   [Ui component boundary](Pages/Shared/_UiComponent.cshtml):
   Razor shell and C# component rendering.
-- [frontend.css](wwwroot/css/frontend.css) and
-  [theme.js](wwwroot/js/theme.js): presentation and minimal appearance logic.
+- [Vite build](vite.config.ts), [package.json](package.json),
+  [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
+  compile/fingerprint Sass and TypeScript from colocated `*.entry.scss`
+  and `*.entry.ts` files without loading unused modules.
+- [FrontendAssets.cs](Framework/FrontendAssets.cs): cached hashed manifest
+  resolver for Razor styles, scripts and icon URLs, without request-time builds.
+- [Shared shell SCSS](Assets/Shared/shell.entry.scss),
+  [appearance module](Modules/Appearance/theme.entry.ts),
+  [Discover CSS entry](Pages/Index.entry.scss),
+  [Settings CSS entry](Pages/Settings.entry.scss),
+  [Player CSS entry](Modules/Player/player.entry.scss): currently declared
+  page/module assets; component Sass imported only by their owners.
+- [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
+  deduplicated hashed sprite, with icons also allowed beside modules/pages.
+- [MediaImage.cs](Framework/Components/MediaImage.cs): accessible lazy or
+  priority image markup and optional responsive variants; Backend owns image
+  resizing, ETag/cache, permissions and thumbnail generation.
 
 ## Pages
 
@@ -72,6 +87,7 @@ Shared conventions and Backend ownership:
 ## Verification and integration gaps
 
 - Frontend UI-key coverage tool: [verify-ui-resources.mjs](Tools/verify-ui-resources.mjs).
+- [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
 - Backend service contracts for list data, forms, request/moderation,
   media, playback and genuine admin authorization remain pending.
 - Frontend compile/browser validation must be performed separately from
