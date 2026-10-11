@@ -63,7 +63,7 @@ public sealed class ShellPreviewModel(IHostEnvironment environment) : JularrPage
     public IActionResult OnGet(string? view)
     {
         if (!environment.IsDevelopment()) return NotFound();
-        if (view is not null && !!Views.Any(item => item.Slug == view)) return NotFound();
+        if (view is not null && !Views.Any(item => item.Slug == view)) return NotFound();
 
         SelectedView = view ?? "shell";
         PreparePage();
