@@ -7,4 +7,11 @@
   <ItemGroup>
     <ProjectReference Include="../Jularr.Backend/Jularr.Backend.csproj" />
   </ItemGroup>
+  <Target Name="EnsureCompiledFrontendAssets" BeforeTargets="Publish"
+          Condition="'$(Configuration)' == 'Release'">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/wwwroot/build/.vite/manifest.json')"
+           Text="Missing fingerprinted frontend assets. Run npm ci and npm run build in src/Jularr.Frontend before dotnet publish." />
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/wwwroot/build/.vite/icons.json')"
+           Text="Missing fingerprinted SVG sprite. Run npm run build before dotnet publish." />
+  </Target>
 </Project>

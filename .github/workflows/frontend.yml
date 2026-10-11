@@ -29,6 +29,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Restore locked frontend toolchain
+        working-directory: src/Jularr.Frontend
+        run: npm ci --no-audit --no-fund
+      - name: Compile, typecheck and verify production assets
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm run check
+          npm test
       - name: Verify canonical UI resource declarations
         run: node src/Jularr.Frontend/Tools/verify-ui-resources.mjs
       - name: Build Razor frontend and Backend dependencies

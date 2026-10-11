@@ -43,7 +43,7 @@ app.UseStaticFiles(new StaticFileOptions
         // Content fingerprints make these public assets immutable across releases.
         // Other resources (if any) must revalidate, never use the immutable policy.
         var immutable = context.Context.Request.Path.StartsWithSegments("/build/assets")
-            && Regex.IsMatch(context.File.Name, @"-[A-Za-z0-9_-]{8,}\\.");
+            && Regex.IsMatch(context.File.Name, @"-[A-Za-z0-9_-]{8,}\.");
         context.Context.Response.Headers.CacheControl = immutable
             ? "public,max-age=31536000,immutable"
             : "public,no-cache";
