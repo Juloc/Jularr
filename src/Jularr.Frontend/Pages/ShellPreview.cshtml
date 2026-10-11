@@ -11,14 +11,7 @@
         <a href="/ShellPreview?view=@view" aria-current="@(Model.SelectedView == view ? "page" : null)">@view</a>
     }
 </nav>
-@if (Model.SelectedView == "shell")
-{
-    <h1 class="page-title">@T["shell.preview"]</h1>
-}
-@foreach (var component in Model.Definition.Content)
-{
-    <partial name="_UiComponent" model="component" />
-}
+<partial name="_PageBody" model="Model.Definition" />
 <div class="preview-controls" role="group" aria-label="Appearance">
     <button class="button" type="button" data-set-skin="clean">Clean</button>
     <button class="button" type="button" data-set-skin="original">Original</button>
