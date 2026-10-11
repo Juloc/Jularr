@@ -1,0 +1,17 @@
+.settings-group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 22px;
+
+    h2 { margin: 0 0 10px; font-size: 16px; }
+    ul { margin: 0; padding: 0; list-style: none; }
+    li { display: grid; gap: 3px; padding: 12px 0; border-top: 1px solid var(--border); }
+}
+
+.settings-row-label { font-weight: 550; }
+.settings-row-description { color: var(--muted); font-size: 13px; }
+
+@media (max-width: 650px) {
+    .settings-group { padding: 14px 16px; }
+}

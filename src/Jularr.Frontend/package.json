@@ -1,0 +1,20 @@
+{
+  "name": "jularr-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "tsc --noEmit && npm run build",
+    "watch": "vite build --watch",
+    "test": "node --test Tools/*.test.mjs",
+    "verify:ui": "node Tools/verify-ui-resources.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "sass-embedded": "^1.93.2",
+    "svg-sprite": "^2.0.4",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7"
+  }
+}
