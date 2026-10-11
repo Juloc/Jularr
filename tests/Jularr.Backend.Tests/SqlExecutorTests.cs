@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Enums.Sql;
+using Jularr.Backend.Data;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Tests.Infrastructure;
 using Npgsql;
@@ -14,7 +15,7 @@ namespace Jularr.Backend.Tests
             Completed = 2
         }
 
-        private sealed record Inputs(long Id, string Name, Status State, int Page = 1, int PageSize = 25);
+        private sealed record Inputs(long Id, string Name, Status State);
 
         private sealed record UpdateFields(string Name);
 
@@ -38,8 +39,9 @@ namespace Jularr.Backend.Tests
                     @Name::text AS "Name",
                     @State::smallint AS "State"
                 """;
-            sql.Parameters.Add(new { Id = 14L, State = Status.Completed, Unused = new object() });
+            sql.Parameters.Add(new { Id = 14L, State = Status.Completed, Unused = "not referenced" });
             sql.Parameters.Add(new UpdateFields("O'Brien"));
+            sql.Parameters.Add(new { AnotherUnusedValue = 7L });
 
             var result = await context.ReadSql.ReadRequiredAsync<Result>(sql);
             Assert.AreEqual(14L, result.Id);
@@ -64,7 +66,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ReadRequired_BindsFullDtoWithoutAddingUnusedProperties()
+        public async Task ReadRequired_BindsFullDtoWithUnusedProperties()
         {
             await using var database = CreateDataSource();
             await using var context = new SqlContext(database);
@@ -99,14 +101,14 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task TypedPostgresArrays_RejectWrongCastAndUnsupportedElementType()
+        public async Task TypedPostgresArrays_LeaveSqlCastsToPostgresAndRejectUnsupportedElementType()
         {
             await using var database = CreateDataSource();
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
-            await Assert.ThrowsExactlyAsync<ArgumentException>(
-                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT cardinality(@Ids::integer[])", Parameters = { new { Ids = new long[] { 1, 2 } } } }));
+            var count = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT cardinality(@Ids::integer[])", Parameters = { new { Ids = new long[] { 1, 2 } } } });
+            Assert.AreEqual(2, count);
 
             await Assert.ThrowsExactlyAsync<NotSupportedException>(
                 () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT cardinality(@Ids)", Parameters = { new { Ids = new DateTime[] { DateTime.UtcNow } } } }));
@@ -159,7 +161,8 @@ namespace Jularr.Backend.Tests
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
-            const string sql = """
+            var sql = new SqlStatement();
+            sql.Statement = """
                 SELECT
                     "Rows"."Id",
                     jsonb_build_array(jsonb_build_object('id', "Rows"."Id")) AS "Children"
@@ -171,7 +174,8 @@ namespace Jularr.Backend.Tests
                 OFFSET @Offset
                 """;
 
-            var result = await context.ReadSql.ReadPageAsync<JsonResult>(new SqlStatement { Statement = sql, Parameters = { new Inputs(0, string.Empty, Status.Pending, Page: 2, PageSize: 2) } });
+            sql.Page = new PageRequest(2, 2);
+            var result = await context.ReadSql.ReadPageAsync<JsonResult>(sql);
 
             Assert.AreEqual(2, result.Page);
             Assert.AreEqual(1, result.Items.Count);
@@ -180,13 +184,14 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task ReadPage_RecognizesLowerCaseReservedSqlPlaceholders()
+        public async Task ReadPage_BindsExplicitPageWithLowerCaseSqlPlaceholders()
         {
             await using var database = CreateDataSource();
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
-            const string sql = """
+            var sql = new SqlStatement();
+            sql.Statement = """
                 SELECT "Values"."Id"
                 FROM (VALUES (10::bigint), (20::bigint), (30::bigint)) AS "Values"("Id")
                 ORDER BY "Values"."Id"
@@ -194,12 +199,27 @@ namespace Jularr.Backend.Tests
                 OFFSET @offset
                 """;
 
-            var result = await context.ReadSql.ReadPageAsync<SingleId>(new SqlStatement { Statement = sql, Parameters = { new { Page = 2, PageSize = 2 } } });
+            sql.Page = new PageRequest(2, 2);
+            var result = await context.ReadSql.ReadPageAsync<SingleId>(sql);
             Assert.AreEqual(1, result.Items.Count);
             Assert.AreEqual(30L, result.Items[0].Id);
         }
 
         private sealed record SingleId(long Id);
+
+        [TestMethod]
+        public async Task ReadPage_RequiresExplicitPageAndRejectsUnboundedRows()
+        {
+            await using var database = CreateDataSource();
+            await using var context = new SqlContext(database);
+            await context.BeginAsync(SqlAccessMode.ReadOnly);
+            var sql = new SqlStatement();
+            sql.Statement = "SELECT value::bigint AS \"Id\" FROM generate_series(1, 2) AS value";
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => context.ReadSql.ReadPageAsync<SingleId>(sql));
+            sql.Page = new PageRequest(1, 1);
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => context.ReadSql.ReadPageAsync<SingleId>(sql));
+        }
 
         [TestMethod]
         public async Task Write_UsesParametersAndDataFromSameContext()
@@ -216,16 +236,15 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task MissingAndDuplicateParameters_FailClosed()
+        public async Task MissingParameter_IsRejectedByPostgres()
         {
             await using var database = CreateDataSource();
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            var error = await Assert.ThrowsExactlyAsync<PostgresException>(
                 () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT @Missing", Parameters = { new { Id = 1 } } }));
-
-            Assert.AreEqual(1L, await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT @ActorAccountId", Parameters = { new { ActorAccountId = 1L } } }));
+            Assert.AreEqual("42703", error.SqlState);
         }
 
         [TestMethod]
@@ -235,7 +254,7 @@ namespace Jularr.Backend.Tests
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadWrite);
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(
+            await Assert.ThrowsExactlyAsync<ArgumentException>(
                 () => context.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "SELECT @Name", Parameters = { new { Name = "first" }, new { Name = "second" } } }));
         }
 

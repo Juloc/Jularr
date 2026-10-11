@@ -308,9 +308,7 @@ namespace Jularr.Backend.Infrastructure.Sql
 
             public async Task<PageResult<T>> ReadPageAsync<T>(SqlStatement sql, CancellationToken cancellationToken = default)
             {
-                var parameters = sql.Parameters.FirstOrDefault()
-                    ?? throw new InvalidOperationException("Paged SQL requires pagination parameters.");
-                var request = SqlExecutor.GetPageRequest(parameters);
+                var request = sql.Page ?? throw new InvalidOperationException("Paged SQL requires an explicit PageRequest.");
                 await using var command = await _context.CreateCommandAsync(sql, _allowMutation, cancellationToken);
                 await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken);
                 var items = new List<T>();
@@ -326,7 +324,7 @@ namespace Jularr.Backend.Infrastructure.Sql
                     items.Add(SqlExecutor.MapRow<T>(reader));
                 }
 
-                return PageResult<T>.From(items, request);
+                return new PageResult<T>(items, request);
             }
         }
 

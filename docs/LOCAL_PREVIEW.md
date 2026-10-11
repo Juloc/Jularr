@@ -31,8 +31,9 @@ the task and URL. Do not kill unrelated dotnet processes or remove other D: fold
 
 This is the unmodified clean-start Frontend preview, not an end-to-end authentication
 server. The two old `Jularr.Data.*` imports in Frontend `Framework/BaseField.cs`
-were corrected with explicit owner approval. The local HTTPS certificate is valid
-but not trusted; browsers may show a warning until the owner explicitly trusts it.
+were corrected with explicit owner approval. The existing local HTTPS certificate
+was trusted in the owner's CurrentUser store with approval; HTTPS was verified
+without a certificate bypass. Other machines/users need their own certificate trust.
 Its Program still lacks Backend service/API and PostgreSQL localization
 registration. Login and API business behavior are not wired there yet; no preview
 database is used or provisioned until that integration needs it. Any later database

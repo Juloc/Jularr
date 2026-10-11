@@ -8,12 +8,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jularr.Backend.Tests", "tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jularr.Integrations", "src\Jularr.Integrations\Jularr.Integrations.csproj", "{09D919FE-9E14-4766-AF16-4F960163D532}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jularr.Frontend", "src\Jularr.Frontend\Jularr.Frontend.csproj", "{8196CA40-F431-4C6B-B0C2-C74D1EB74BA4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8196CA40-F431-4C6B-B0C2-C74D1EB74BA4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8196CA40-F431-4C6B-B0C2-C74D1EB74BA4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8196CA40-F431-4C6B-B0C2-C74D1EB74BA4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8196CA40-F431-4C6B-B0C2-C74D1EB74BA4}.Release|Any CPU.Build.0 = Release|Any CPU
 		{09D919FE-9E14-4766-AF16-4F960163D532}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{09D919FE-9E14-4766-AF16-4F960163D532}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{09D919FE-9E14-4766-AF16-4F960163D532}.Release|Any CPU.ActiveCfg = Release|Any CPU

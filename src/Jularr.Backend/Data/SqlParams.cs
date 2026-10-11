@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq.Expressions;
 using System.Reflection;
 using Jularr.Backend.Data.Common;
 using Npgsql;
@@ -8,8 +9,7 @@ namespace Jularr.Backend.Data
 {
     public sealed class SqlParams
     {
-        private static readonly ConcurrentDictionary<(Type Type, string Name), PropertyInfo> Properties = new();
-        private static readonly ConcurrentDictionary<PropertyInfo, DataFieldAttribute[]> Fields = new();
+        private static readonly ConcurrentDictionary<Type, PropertyBinding[]> Bindings = new();
 
         private static readonly IReadOnlyDictionary<Type, NpgsqlDbType> DefaultTypes =
             new Dictionary<Type, NpgsqlDbType>
@@ -31,32 +31,32 @@ namespace Jularr.Backend.Data
                 [typeof(byte[])] = NpgsqlDbType.Bytea
             };
 
-        private readonly object? _source;
         private readonly HashSet<string> _names = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<(string Name, NpgsqlDbType Type, object Value)> _entries = [];
 
-        private SqlParams(object? source)
+        private SqlParams()
         {
-            _source = source;
         }
 
-        public static SqlParams From<T>(T data) where T : notnull
+        public static SqlParams Create() => new();
+
+        public SqlParams Add(object data)
         {
             ArgumentNullException.ThrowIfNull(data);
-            return new SqlParams(data);
+
+            // Reuse compiled field accessors.
+            foreach (var binding in Bindings.GetOrAdd(data.GetType(), CreateBindings))
+            {
+                var value = binding.Read(data);
+                binding.Field?.Validate(value, binding.Name);
+                AddValue(binding.Name, binding.ClrType, value, binding.DatabaseType);
+            }
+
+            return this;
         }
-
-        public static SqlParams Create() => new(null);
-
-        public SqlParams Add(string name) => AddProperty(name, null);
-
-        public SqlParams Add(string name, NpgsqlDbType type) => AddProperty(name, type);
 
         public SqlParams Add<T>(string name, T value) =>
             AddValue(name, typeof(T), value, null);
-
-        public SqlParams Add<T>(string name, T value, NpgsqlDbType type) =>
-            AddValue(name, typeof(T), value, type);
 
         public NpgsqlParameter[] ToArray() =>
         [
@@ -66,47 +66,34 @@ namespace Jularr.Backend.Data
             })
         ];
 
-        private SqlParams AddProperty(string name, NpgsqlDbType? databaseType)
+        private static PropertyBinding[] CreateBindings(Type type)
         {
-            if (_source is null)
+            var bindings = new List<PropertyBinding>();
+
+            // Compile metadata once per type.
+            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                throw new InvalidOperationException("A transport object is required for property parameters.");
-            }
-
-            ValidateName(name);
-
-            // Reuse validated property metadata.
-            var property = Properties.GetOrAdd((_source.GetType(), name), static key =>
-            {
-                var result = key.Type.GetProperty(key.Name, BindingFlags.Public | BindingFlags.Instance);
-
-                if (result?.GetMethod is null || !result.GetMethod.IsPublic
-                    || result.GetIndexParameters().Length != 0)
+                if (property.GetMethod?.IsPublic != true || property.GetIndexParameters().Length != 0)
                 {
-                    throw new ArgumentException("Unknown or unreadable transport property.", "name");
+                    continue;
                 }
 
-                return result;
-            });
-
-            var value = property.GetValue(_source);
-            var field = Fields.GetOrAdd(property, static key => key.GetCustomAttributes<DataFieldAttribute>().ToArray()).SingleOrDefault();
-
-            // Apply canonical field rules.
-            if (field is not null)
-            {
+                ValidateName(property.Name);
+                var field = property.GetCustomAttribute<DataFieldAttribute>();
                 var clrType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-                if (clrType != field.Field.ClrType || databaseType is { } explicitType && explicitType != field.Field.DatabaseType)
+                if (field is not null && clrType != field.Field.ClrType)
                 {
-                    throw new ArgumentException("The parameter type conflicts with its data field.", nameof(databaseType));
+                    throw new ArgumentException("The parameter type conflicts with its data field.");
                 }
 
-                field.Validate(value, name);
-
-                databaseType = field.Field.DatabaseType;
+                var databaseType = field?.Field.DatabaseType ?? ResolveType(clrType);
+                var source = Expression.Parameter(typeof(object), "source");
+                var value = Expression.Property(Expression.Convert(source, type), property);
+                var read = Expression.Lambda<Func<object, object?>>(Expression.Convert(value, typeof(object)), source).Compile();
+                bindings.Add(new PropertyBinding(property.Name, property.PropertyType, databaseType, field, read));
             }
 
-            return AddValue(name, property.PropertyType, value, databaseType);
+            return bindings.ToArray();
         }
 
         private SqlParams AddValue(string name, Type declaredType, object? value, NpgsqlDbType? databaseType)
@@ -123,27 +110,8 @@ namespace Jularr.Backend.Data
 
             if (databaseType is { } explicitType)
             {
-                bool isCompatible;
-
-                if (actualType.IsArray && actualType != typeof(byte[]))
-                {
-                    var elementType = actualType.GetElementType()!;
-                    isCompatible = actualType.GetArrayRank() == 1
-                        && (elementType == typeof(string)
-                            || elementType == typeof(int)
-                            || elementType == typeof(long)
-                            || elementType == typeof(bool)
-                            || elementType == typeof(Guid))
-                        && explicitType == (NpgsqlDbType.Array | ResolveType(elementType));
-                }
-                else
-                {
-                    isCompatible = explicitType == ResolveType(actualType)
-                        || (actualType == typeof(string)
-                            && explicitType is NpgsqlDbType.Jsonb or NpgsqlDbType.Citext or NpgsqlDbType.Varchar);
-                }
-
-                if (!isCompatible)
+                if (explicitType != ResolveType(actualType)
+                    && !(actualType == typeof(string) && explicitType is NpgsqlDbType.Jsonb or NpgsqlDbType.Citext or NpgsqlDbType.Varchar))
                 {
                     throw new ArgumentException(
                         "The PostgreSQL type is incompatible with the declared CLR type.",
@@ -193,6 +161,18 @@ namespace Jularr.Backend.Data
 
         private static NpgsqlDbType ResolveType(Type type)
         {
+            if (type.IsArray && type != typeof(byte[]))
+            {
+                var elementType = type.GetElementType()!;
+                if (type.GetArrayRank() != 1 || (elementType != typeof(string) && elementType != typeof(int)
+                    && elementType != typeof(long) && elementType != typeof(bool) && elementType != typeof(Guid)))
+                {
+                    throw new NotSupportedException("The PostgreSQL array element type is unsupported.");
+                }
+
+                return NpgsqlDbType.Array | ResolveType(elementType);
+            }
+
             if (type.IsEnum)
             {
                 if (Enum.GetUnderlyingType(type) == typeof(byte))
@@ -229,5 +209,7 @@ namespace Jularr.Backend.Data
         }
 
         private static bool IsLetter(char value) => value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
+
+        private sealed record PropertyBinding(string Name, Type ClrType, NpgsqlDbType DatabaseType, DataFieldAttribute? Field, Func<object, object?> Read);
     }
 }

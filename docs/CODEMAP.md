@@ -35,7 +35,7 @@ Navigation only. Rules: [CONVENTIONS.md](CONVENTIONS.md). Startup and gaps: [REA
 - [Service.cs](../src/Jularr.Backend/Service/Core/Service.cs): invocation lifecycle, operation hooks and shared transaction.
 - [ServiceRuntime.cs](../src/Jularr.Backend/Service/Core/ServiceRuntime.cs): gate, SqlContext factory and central runtime binding for direct service calls.
 - [SqlContext.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlContext.cs): one connection/transaction, shared ordinary reads and Logic execution; [SqlExecutor.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlExecutor.cs): explicit typed binding/mapping, no injected auth IDs; [LogicContext.cs](../src/Jularr.Backend/Infrastructure/Sql/LogicContext.cs): direct Logic calls and guarded short batches.
-- [SqlParams.cs](../src/Jularr.Backend/Data/SqlParams.cs): typed parameter metadata and binding.
+- [SqlParams.cs](../src/Jularr.Backend/Data/SqlParams.cs): cached field metadata/compiled getters and explicit object binding, no SQL parameter scanner. [Pagination.cs](../src/Jularr.Backend/Data/Pagination.cs), [SqlStatement.cs](../src/Jularr.Backend/Infrastructure/Sql/SqlStatement.cs): explicit PageRequest shared by binding and bounded page results; [ListService.cs](../src/Jularr.Backend/Service/Core/ListService.cs): once-per-invocation page hook.
 - [Account.sql](../database/Account.sql): the single fresh Account/Profile/auth/session/localization baseline; [schema scope](../database/README.md). [UiTranslationFields.cs](../src/Jularr.Backend/Data/Fields/Localization/UiTranslationFields.cs) and [UiTranslationStatusType.cs](../src/Jularr.Backend/Data/Enums/Localization/UiTranslationStatusType.cs) own translation fields/catalog values.
 
 ## Focused tests
