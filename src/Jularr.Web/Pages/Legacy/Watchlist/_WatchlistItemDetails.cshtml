@@ -1,0 +1,56 @@
+@model Jularr.Web.Features.Watchlist.WatchlistItem
+@using Jularr.Web.Features.Franchises
+@using Jularr.Web.Features.Localization
+@using Jularr.Web.Features.Watchlist
+@{
+    var ui = ViewData["UiTextBundle"] as UiTextBundle ?? UiTextBundle.English;
+    var format = WatchlistLabels.FormatKey(Model.Format) is { } key ? ui[key] : null;
+}
+<div class="watchlist-meta">
+    @if (Model.Year is { } year)
+    {
+        <span>@year</span>
+    }
+    @if (format is not null)
+    {
+        <span>@format</span>
+    }
+    @if (Model.LocalMediaId is not null)
+    {
+        <span class="watchlist-in-library">@ui["discover.card.inLibrary"]</span>
+    }
+</div>
+@if (!string.IsNullOrWhiteSpace(Model.NativeTitle) && Model.NativeTitle != Model.Title)
+{
+    <p class="watchlist-native">@Model.NativeTitle</p>
+}
+@if (Model.IsFromFranchise)
+{
+    <a class="watchlist-source" href="/Franchises/@Model.FranchiseId">
+        @ui.Format("watchlist.fromFranchise", ("name", FranchiseLabels.Title(ui, Model.FranchiseTitle)))
+    </a>
+}
+<div class="watchlist-actions">
+    @if (!string.IsNullOrWhiteSpace(Model.DetailsUrl))
+    {
+        var external = Model.LocalMediaId is null;
+        <a class="button" href="@Model.DetailsUrl" target="@(external ? "_blank" : null)" rel="@(external ? "noopener noreferrer" : null)">
+            @(external ? "AniList" : ui["watchlist.open"])
+        </a>
+    }
+    <form method="post" asp-page-handler="Remove">
+        <input type="hidden" name="mediaType" value="@Model.Identity.MediaType" />
+        <input type="hidden" name="provider" value="@Model.Identity.ProviderKey" />
+        <input type="hidden" name="externalId" value="@Model.Identity.ExternalKey" />
+        <button class="button" type="submit">@ui["watchlist.remove"]</button>
+    </form>
+    @if (!Model.IsFromFranchise && FranchiseService.CanSeed(Model.Identity))
+    {
+        <form method="post" asp-page-handler="FollowFranchise">
+            <input type="hidden" name="mediaType" value="@Model.Identity.MediaType" />
+            <input type="hidden" name="provider" value="@Model.Identity.ProviderKey" />
+            <input type="hidden" name="externalId" value="@Model.Identity.ExternalKey" />
+            <button class="button" type="submit">@ui["watchlist.followFranchise"]</button>
+        </form>
+    }
+</div>
