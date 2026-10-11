@@ -36,7 +36,7 @@ function inspect(directory) {
 
     // Visible Razor literal prose bypasses the DB catalog. Brand glyphs are not language strings.
     if (item.name.endsWith(".cshtml")) {
-      for (const match of source.matchAll(/>([^<>\\n]+)</g)) {
+      for (const match of source.matchAll(/>([^<>\n]+)</g)) {
         const literal = match[1].trim();
         if (literal && /[a-z]/i.test(literal) && !literal.includes("@") && literal !== "J") {
           errors.push(`${path.relative(frontend, full)}: raw visible Razor text ${literal}`);
