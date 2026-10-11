@@ -25,14 +25,14 @@ public sealed class IndexModel : PreparedPage
     {
         page.Title("discover.title");
         page.Navigation("nav.home");
-        page.Asset("Pages/Index.entry.scss");
-
         // One route owns the composition. Components are reusable building blocks.
         // No UI is manufactured until the authorized Backend supplies visible scopes.
         if (Discovery is not { MediaTypes.Count: > 0 } data)
         {
             return;
         }
+
+        page.Asset("Pages/Index.entry.scss");
 
         page.Content.Add(new NavigationTabs(data.MediaTypes, "discover.mediaTypes", "media"));
 
