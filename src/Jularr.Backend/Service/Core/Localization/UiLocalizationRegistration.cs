@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Localization;
+using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -28,7 +29,7 @@ namespace Jularr.Backend.Service.Core.Localization
 
             services.AddSingleton(new UiResourceSource(definitions.DistinctBy(resource => resource.Key).ToArray()));
             services.TryAddSingleton(TimeProvider.System);
-            services.TryAddSingleton<IUiTextCatalog, UiTextCatalog>();
+            services.TryAddSingleton<UiLocalizationCache>();
             services.AddHostedService<UiResourceSynchronization>();
             return services;
         }

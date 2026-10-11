@@ -111,18 +111,25 @@ synchronisiert, nie das Schema installiert/migriert. Neue Texte brauchen keine S
 entfernte Deklarationen werden nicht gelöscht. Das frische Schema muss ausdrücklich
 installiert sein; bestehende aktive Datenbanken werden während des Clean Cut nicht verändert.
 
-Razor lädt einmal pro Request über DI und verwendet danach synchrone String-Lookups:
+Razor injiziert `ReadUiTextsV1` aus `Jularr.Backend.Service.Public.Localization.V1`,
+lädt einmal pro Request und verwendet danach synchrone String-Lookups:
 
 ```csharp
-var texts = await catalog.GetByLocaleIdAsync(profile.UiLocaleId, cancellationToken);
-// Ohne Profile: await catalog.GetAsync(CultureInfo.CurrentUICulture, cancellationToken).
+using Jularr.Backend.Data.Public.Localization.V1;
+
+var texts = await readUiTexts.ExecuteAsync<ReadUiTextsResultV1>(
+    new ReadUiTextsParametersV1(profile.UiLocaleId), cancellationToken);
 var heading = texts["discover.title"];
 ```
 
-`catalog` ist `IUiTextCatalog`. `UiTextBundle` enthält `UiLocaleId`, `Locale`,
+`ReadUiTextsResultV1` enthält `UiLocaleId`, `Locale`,
 `IsRightToLeft`, die opake `Version` und `Texts`. Fehlende Schlüssel liefern ihren
 Schlüssel; die normalen Strings müssen wie sonst durch Razor HTML-kodiert werden.
-Der Host wählt die anonyme Kultur, z. B. anhand Accept-Language. Profile bleiben ID-basiert.
+Der Host wählt die anonyme Kultur, z. B. anhand Accept-Language. `ReadUiLocalesV1`
+liefert die aktivierten Sprachkennungen und IDs für diese Auswahl und die Sprachliste:
+`await readUiLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: cancellationToken)`.
+Auch anonyme Textaufrufe verwenden die gewählte ID; für Englisch dessen Katalog-ID,
+keine hart codierte `1`. Profile bleiben ID-basiert.
 Das Request-Bundle wird auch im Layout wiederverwendet; keine HTTP-/JS-Sprachanfragen.
 
 Fallback je Schlüssel: exakte aktivierte Sprache → aktivierte Elternsprache →
@@ -130,8 +137,19 @@ englischer DB-Originaltext. Generated/Reviewed brauchen aktuelle MessageVersion;
 Outdated/Missing werden übersprungen. Manual bleibt auch bei verändertem Original
 verwendbar und wird nie automatisch überschrieben. Fehlende Übersetzungszeilen sind Missing.
 Der sprachweise Cache ist auf ungefähr 4 MiB begrenzt und enthält keine Beschreibungen.
-Warm Requests brauchen keine Textabfragen; DB-Sprachrevisionen werden höchstens alle
-30 Sekunden abgeglichen. Nach Änderungen gilt diese maximale Verzögerung.
+Sprachpakete und Sprachliste werden höchstens 30 Sekunden wiederverwendet und dann
+beim nächsten Bedarf neu geladen. Warm Requests öffnen keine DB-Verbindung, laufen
+aber durch denselben Public-Gate und dieselbe Feldvalidierung. Die gemeinsame
+Read-Transaction wird erst beim ersten SQL-Aufruf geöffnet; Writes bleiben unverändert.
+Nach Änderungen gilt diese maximale Cache-Verzögerung.
+
+Die statische SELECT-Abfrage steht direkt im Public-Service auf `sql.Statement`.
+PostgreSQL bestimmt die BCP-47-Elterncodes durch sukzessives Entfernen des letzten
+Tag-Segments, priorisiert gültige Übersetzungen mit `DISTINCT ON` und verwendet
+`COALESCE` für den englischen Originaltext. `jsonb_object_agg` liefert das komplette
+aufgelöste Paket in einer Abfrage; keine C#-Fallback-Schleifen oder inneren Connections.
+Externe Clients nutzen dieselben Services über `GET /api/v1/localization/locales`
+und `GET /api/v1/localization/texts/{uiLocaleId:long}`. Razor macht dafür keinen HTTP-Aufruf.
 
 KI-Kontext liegt nur in `UiTranslationMessages.Description`. Neue Schlüssel starten
 ohne Beschreibung; die Synchronisierung erfindet und überschreibt sie nicht.
@@ -153,7 +171,7 @@ Export, Offline-Speicher und Synchronisierung sind noch nicht implementiert.
 
 Frontend-Dateien bleiben unverändert. Der Frontend-Verbraucher muss `UiText`, die
 temporären Frontend-Übersetzungen und hart codierten Kulturen auf diese Registrierung
-und DI-Lookups umstellen, nicht als zweites Übersetzungssystem weiterbetreiben.
+und direkte Public-Service-Aufrufe umstellen, nicht als zweites Übersetzungssystem weiterbetreiben.
 
 ## Prüfung und offene Integration
 

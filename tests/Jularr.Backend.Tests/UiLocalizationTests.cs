@@ -1,12 +1,19 @@
-using System.Globalization;
 using System.Reflection;
+using System.Net;
+using System.Net.Http.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Localization;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Localization;
+using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Localization;
 using Jularr.Backend.Service.Core.Localization;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.Public.Localization.V1;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Npgsql;
@@ -59,32 +66,62 @@ namespace Jularr.Backend.Tests
                 SELECT 5, "Id", 'Exact B', 4, "Version" FROM "UiTranslationMessages" WHERE "Key" = 'b';
                 """);
             var time = new CatalogClock();
-            using var catalog = new UiTextCatalog(fixture.Database, time);
-            var bundle = await catalog.GetByLocaleIdAsync(5);
+            using var cache = new UiLocalizationCache(time);
+            var runtime = new ServiceRuntime(fixture.Database,
+                new ServiceGate(new SessionAuthentication(fixture.Database), new HttpContextAccessor()));
+            var service = runtime.Create(new ReadUiTextsV1(cache));
+            var bundle = await service.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(5));
             Assert.AreEqual("Parent A", bundle["a"]);
             Assert.AreEqual("Exact B", bundle["b"]);
             Assert.AreEqual("English C", bundle["c"]);
             Assert.AreEqual("unregistered.key", bundle["unregistered.key"]);
-            var requests = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => catalog.GetAsync(CultureInfo.GetCultureInfo("de-CH"))));
+            var requests = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+                service.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(5))));
             Assert.IsTrue(requests.All(result => ReferenceEquals(bundle, result)));
 
             await SynchronizeAsync(fixture, new UiTextResource("a", "Changed A"));
             Assert.AreEqual((short)UiTranslationStatusType.Outdated,
                 await ScalarAsync<short>(fixture, "SELECT \"UiTranslationStatusTypeId\" FROM \"UiTranslations\" WHERE \"UiLocaleId\" = 4"));
             time.Advance();
-            var refreshed = await catalog.GetByLocaleIdAsync(5);
+            var refreshed = await service.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(5));
             Assert.AreNotEqual(bundle.Version, refreshed.Version);
             Assert.AreEqual("Changed A", refreshed["a"]);
             Assert.AreEqual("Exact B", refreshed["b"]);
 
             await fixture.RunSqlAsync("UPDATE \"UiLocales\" SET \"IsEnabled\" = FALSE WHERE \"Id\" = 5");
             time.Advance();
-            Assert.AreEqual("de", (await catalog.GetByLocaleIdAsync(5)).Locale);
-            Assert.AreEqual("en", (await catalog.GetAsync(CultureInfo.GetCultureInfo("fr-CA"))).Locale);
+            Assert.AreEqual("de", (await service.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(5))).Locale);
+            Assert.AreEqual("en", (await service.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(999))).Locale);
 
-            // Warm requests and all text lookups still work without the translation tables.
-            await fixture.RunSqlAsync("DROP TABLE \"UiTranslations\"; DROP TABLE \"UiTranslationMessages\"");
-            Assert.AreEqual("English C", (await catalog.GetAsync(CultureInfo.GetCultureInfo("fr-CA")))["c"]);
+            // A warm Public read needs no connection, but still applies canonical parameter validation.
+            await using var unavailable = new NpgsqlDataSourceBuilder(
+                "Host=127.0.0.1;Port=1;Username=unused;Database=unused;Timeout=1").Build();
+            var offlineRuntime = new ServiceRuntime(unavailable,
+                new ServiceGate(new SessionAuthentication(unavailable), new HttpContextAccessor()));
+            var offlineService = offlineRuntime.Create(new ReadUiTextsV1(cache));
+            Assert.AreEqual("English C", (await offlineService.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(999)))["c"]);
+            await Assert.ThrowsExactlyAsync<DataValidationException>(() =>
+                offlineService.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(0)));
+
+            // The API adapter exposes the same services and JSON contract without authentication.
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Services.AddJularrServices(fixture.Database, typeof(ReadUiTextsV1).Assembly);
+            builder.Services.AddJularrLocalization([]);
+            await using var app = builder.Build();
+            app.UseExceptionHandler();
+            app.UseRateLimiter();
+            app.MapJularrServices();
+            await app.StartAsync();
+            using var client = app.GetTestClient();
+            var response = await client.GetFromJsonAsync<ReadUiTextsResultV1>("/api/v1/localization/texts/5");
+            Assert.AreEqual("de", response!.Locale);
+            Assert.AreEqual("Changed A", response["a"]);
+            var locales = await client.GetFromJsonAsync<BaseDataList<UiLocaleDetailsV1>>("/api/v1/localization/locales");
+            Assert.IsNotNull(locales);
+            Assert.IsTrue(locales.Any(locale => locale.Locale == "en"));
+            Assert.IsFalse(locales.Any(locale => locale.Id == 5));
+            Assert.AreEqual(HttpStatusCode.BadRequest, (await client.GetAsync("/api/v1/localization/texts/0")).StatusCode);
         }
 
         [TestMethod]
