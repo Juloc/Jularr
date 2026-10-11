@@ -6,7 +6,6 @@
   "scripts": {
     "build": "vite build && node Tools/build-icons.mjs && node Tools/finish-assets.mjs",
     "check": "tsc --noEmit && npm run build",
-    "watch": "vite build --watch",
     "test": "node --test Tools/*.test.mjs",
     "verify:ui": "node Tools/verify-ui-resources.mjs"
   },
