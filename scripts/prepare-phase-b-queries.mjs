@@ -116,7 +116,21 @@ const readerAnnotationQueries = [
     parameters
 }));
 
+const musicQueries = [
+    ['music_artists', 'Service ARTISTS:', 'Service ARTIST:', 'bigint,bigint,integer,bigint', ['ActorAccountId', 'ActiveProfileId', 'PageSize', 'Offset']],
+    ['music_artist', 'Service ARTIST:', 'Service RECORDINGS:', 'bigint,bigint,uuid', ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId']],
+    ['music_recordings', 'Service RECORDINGS:', null, 'bigint,bigint,uuid,integer,bigint', ['ActorAccountId', 'ActiveProfileId', 'ArtistPublicId', 'PageSize', 'Offset']]
+].map(([name, start, end, types, parameters]) => ({
+    name,
+    file: 'DATABASE_CUTOVER_PHASE_B_MUSIC_QUERIES_DRAFT.sql',
+    start: `-- ${start}`,
+    end: end ? `-- ${end}` : null,
+    declaration: `PREPARE phase_b_${name}(${types}) AS\n`,
+    parameters
+}));
+
 for (const query of [
+    ...musicQueries,
     ...authQueries,
     ...readerContentQueries,
     ...readerAnnotationQueries,

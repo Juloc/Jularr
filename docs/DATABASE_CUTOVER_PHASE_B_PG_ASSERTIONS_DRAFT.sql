@@ -73,7 +73,11 @@ BEGIN
         ('FK_WorkTitles_Providers','f'),
         ('CK_AccountPasskeys_BackupState','c'),
         ('CK_WorkMetadataFacts_CommunityRating','c'),
-        ('FK_MusicArtists_People','f')
+        ('FK_MusicArtists_People','f'),
+        ('UX_PersonExternalIdentities_ProviderIdentity','u'),
+        ('FK_PersonExternalIdentities_People','f'),
+        ('UX_MusicRecordingExternalIdentities_ProviderIdentity','u'),
+        ('FK_MusicRecordingExternalIdentities_Recordings','f')
     )
     SELECT string_agg(r.name,', ' ORDER BY r.name)
     INTO missing

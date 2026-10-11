@@ -74,12 +74,11 @@ BEGIN
     END;
     INSERT INTO "People" ("DisplayName") VALUES ('Phase B Performer')
     RETURNING "Id" INTO person_id;
-    INSERT INTO "MusicArtists" ("DisplayName","PersonId")
-    VALUES ('Phase B Solo Artist',person_id);
-    INSERT INTO "MusicArtists" ("DisplayName") VALUES ('Phase B Ensemble');
+    INSERT INTO "MusicArtists" ("Id") VALUES (person_id);
+    INSERT INTO "People" ("DisplayName") VALUES ('Phase B Ensemble') RETURNING "Id" INTO person_id;
+    INSERT INTO "MusicArtists" ("Id") VALUES (person_id);
     BEGIN
-        INSERT INTO "MusicArtists" ("DisplayName","PersonId")
-        VALUES ('Invalid Performer',-1);
+        INSERT INTO "MusicArtists" ("Id") VALUES (-1);
         RAISE EXCEPTION 'MusicArtists accepted an unknown PersonId';
     EXCEPTION WHEN foreign_key_violation THEN NULL;
     END;

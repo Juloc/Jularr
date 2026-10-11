@@ -22,6 +22,8 @@ BEGIN
             ('WorkChapters'),
             ('WorkTracks'),
             ('WorkEditions'),
+            ('People'),
+            ('MusicRecordings'),
             ('MediaProgress'),
             ('Images'),
             ('Collections'),

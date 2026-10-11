@@ -31,13 +31,13 @@ Vierzehn DDL-Dateien, in dieser Reihenfolge:
 Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
 nicht als leere oder optionale Baseline-Dateien behalten.
 
-Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 151
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 153
 Target-Tabellen. Die 38 bestehenden Type-Kataloge haben 187 feste Codes in
 [C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
 [Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
 Der Verifier lehnt undefinierte Kataloge ab. Keine Übernahme alter int-Enumcodes.
 
-24 adressierbare Ressourcen besitzen separate öffentliche UUIDs. Interne
+26 adressierbare Ressourcen besitzen separate öffentliche UUIDs. Interne
 Ressourcen-PKs, FKs und Joins bleiben bigint/C# long. Öffentliche Identität ist
 keine Berechtigung; Session-/Reset-/Refresh-/Capability-Secrets bleiben unabhängig
 davon kryptografisch zufällig und gehasht bzw. geschützt.
@@ -85,6 +85,11 @@ Die Highlight-Sortierung hat einen Profilindex; ReaderPage-Reads binden die
 [Reader-Vertrag](DATABASE_CUTOVER_PHASE_B_READER_CONTRACT.md) ergänzt getypte
 Layouts/Anker, immutable Publication, private Delivery und Annotation-CAS.
 Playable bleibt offen.
+
+Der [Music-Vertrag](DATABASE_CUTOVER_PHASE_B_MUSIC_CONTRACT.md) verwendet einen
+gemeinsamen People-/Artist-PK, Namespaces und öffentliche UUIDs sowie wiederverwendbare
+Recordings. Credits und drei autorisierte Reads sind physisch geprüft, inklusive
+1000er Paging vor Recording-Enrichment. Album-/Release-/Monitoring-Fakten bleiben offen.
 
 Die [Provider-Policy-SELECTs](DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql)
 trennen Login-, Linking- und Media-Consent-Challenges anhand ihrer festen

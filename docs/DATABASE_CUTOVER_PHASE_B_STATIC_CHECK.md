@@ -4,8 +4,8 @@ Aktueller Owner-Auftrag vom 10.10.2026: Learning wird zurückgestellt.
 Der aktuelle DDL-Satz ist 01, 02, 03, 04, 06, 07, 11, 12, 14, 15, 16, 17, 18, 19. Nummernlücken sind
 bewusst entfernte Learning-Teile, keine optionalen Baseline-Abhängigkeiten.
 
-Statischer Stand: 151 Target-Tabellen, 38 Type-Kataloge mit 187 expliziten
-Byte-Vertrags-/Seedwerten, 24 getrennte öffentliche Ressourcen-UUIDs.
+Statischer Stand: 153 Target-Tabellen, 38 Type-Kataloge mit 187 expliziten
+Byte-Vertrags-/Seedwerten, 26 getrennte öffentliche Ressourcen-UUIDs.
 Interne Ressourcen-PKs/FKs/Joins bleiben bigint. Der Verifier prüft die
 vollständige Übereinstimmung von C# byte, Seed-Manifest und statischem SQL.
 
@@ -18,7 +18,7 @@ Frühe Zahlen/CI-Belege sind historische Stände. Die aktuelle Fassung wurde
 frisch auf wegwerfbarem PostgreSQL 18.6 geprüft: vierzehn DDL-Dateien sowie die
 betroffenen Katalog-, Event-, Inbox-, Lifecycle- und Negativ-Suites. Der Inbox-
 READ nutzt Profile-/Account-LastOccurredAt-Indizes vor Paging; zwei unabhängige
-Sessions prüfen Recurrence, Replay und Commit-Integrität. Neue Tabellenzahl 151.
+Sessions prüfen Recurrence, Replay und Commit-Integrität. Neue Tabellenzahl 153.
 Kein aktiver DB-Eingriff und keine vollständige Anwendungssuite; CI prüft den
 jeweiligen PR-Head zusätzlich.
 

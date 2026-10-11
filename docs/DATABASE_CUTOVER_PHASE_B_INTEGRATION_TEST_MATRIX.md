@@ -18,6 +18,7 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 | Progress/Reader | Atomarer Root plus genau ein Positionstyp, exakte Edition-/Contentrevision/Quellseite, Completion-Provenienz und manuelles Unmark, Hash-Replay/Payload-Konflikt, aktuelles Membership/CAS und gemeinsamer Rollback |
 | Reader Content/Annotations | Exakte veröffentlichte Edition/Kapitel/Variante/Revision, drei Locator-Shapes, dichte immutable Indizes, Source-FKs, private Delivery, CAS/Replay/Overlap und 1000er Node-Feed |
 | Reader chapter scope | Zwei Kapitel derselben Edition mit Revision 1; NULL-Vollinhalt eindeutig, keine Content-/Page-/Annotation-Fanouts, kein Cross-Chapter-Checkpoint oder direkter Write |
+| Music identity/recordings | Ein People-PK für Artist/Credits, Solo/Ensemble, getrennte Public-UUIDs und Provideridentitäten; gemeinsames Recording auf zwei Alben, Credit-Provenienz, Rollback/FK/Unique und autorisiertes 1000er Paging vor Enrichment |
 | Reader publication concurrency | Drei echte PG-Sessions: genau ein Publisher, kein verspäteter Index-Write oder halbfertiger veröffentlichter Inhalt |
 | Progress concurrency/completion | Zwei unterschiedliche berechtigte Accounts: genau ein Root-/Checkpoint-Gewinner, keine stale Position/Completion/Belege; lückenloser SQL-Episoden-Präfix mit Specials/Season-Grenzen und 1000 gleich datierten Continue-Roots |
 | Images/Segments/Detection | Genau ein typisiertes Bildziel, valide Zeitspannen, legitime Überlappung, No-Match und wiederholte Detection-Runs |

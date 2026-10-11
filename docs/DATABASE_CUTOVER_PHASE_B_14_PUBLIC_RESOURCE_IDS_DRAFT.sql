@@ -7,6 +7,13 @@
 -- Apply after 01..13 on an EMPTY ISOLATED PostgreSQL scratch database.
 BEGIN;
 
+ALTER TABLE "People"
+    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
+    ADD CONSTRAINT "UX_People_PublicId" UNIQUE ("PublicId");
+ALTER TABLE "MusicRecordings"
+    ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
+    ADD CONSTRAINT "UX_MusicRecordings_PublicId" UNIQUE ("PublicId");
+
 ALTER TABLE "Accounts"
     ADD COLUMN "PublicId" uuid NOT NULL DEFAULT gen_random_uuid(),
     ADD CONSTRAINT "UX_Accounts_PublicId" UNIQUE ("PublicId");
