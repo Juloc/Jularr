@@ -181,7 +181,7 @@ namespace Jularr.Backend.Tests
 
             protected override async Task<IServiceOutput> OnUpdate()
             {
-                var updateData = await Context.ReadProfileForUpdateAsync(Parameters.ProfileId, CancellationToken);
+                var updateData = await Context.ReadProfileAsync(Parameters.ProfileId, CancellationToken);
                 updateData.SetData(Data);
                 await Context.UpdateProfileAsync(updateData, CancellationToken);
                 var sql = new SqlStatement();
@@ -378,8 +378,8 @@ namespace Jularr.Backend.Tests
                     throw new UnauthorizedAccessException("Profile mutation is not permitted.");
                 }
 
-                await context.Sql.ReadForUpdateAsync<LockedProfile>(
-                    """
+                var sql = new SqlStatement();
+                sql.Statement = """
                     SELECT profile."Id"
                     FROM "Profiles" AS profile
                     JOIN "AccountProfiles" AS membership
@@ -390,9 +390,14 @@ namespace Jularr.Backend.Tests
                       AND membership."AccountId"=@ActorAccountId
                       AND account."IsEnabled"=true
                     FOR UPDATE OF profile, membership, account
-                    """,
-                    new object(),
-                    cancellationToken);
+                    """;
+                sql.Parameters.Add(new
+                {
+                    ActiveProfileId = caller.ProfileId!.Value,
+                    ActorAccountId = caller.AccountId!.Value
+                });
+
+                await context.ReadRequiredAsync<LockedProfile>(sql, cancellationToken);
             }
         }
     }

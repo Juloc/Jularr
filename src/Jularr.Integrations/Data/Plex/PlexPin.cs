@@ -1,10 +1,10 @@
 using System.Text.Json.Serialization;
 
-namespace Jularr.Backend.Data.Logic.Authentication
+namespace Jularr.Integrations.Data.Plex
 {
-    public sealed class PlexPinData
+    public sealed class PlexPin
     {
-        public PlexPinData(long id, string code, byte[] privateKey)
+        public PlexPin(long id, string code, byte[] privateKey)
         {
             Id = id;
             Code = code;
@@ -13,6 +13,7 @@ namespace Jularr.Backend.Data.Logic.Authentication
 
         public long Id { get; }
         public string Code { get; }
+
         [JsonIgnore]
         public byte[] PrivateKey { get; }
     }

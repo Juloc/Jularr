@@ -111,6 +111,7 @@ namespace Jularr.Backend.Service.Core
                 throw new InvalidOperationException("The requested result type is not declared by this service.");
             }
 
+            // Verify caller and permission.
             var caller = await Runtime.Gate.RequireCallerAsync(Area, cancellationToken);
             if (caller is null || caller.Area != Area || string.IsNullOrWhiteSpace(caller.PrincipalKey))
             {
@@ -120,6 +121,7 @@ namespace Jularr.Backend.Service.Core
             var permission = GetPermission(parameters, resultType) ?? throw new InvalidOperationException("A service permission must be declared.");
             await Runtime.Gate.RequireAccessAsync(caller, permission, cancellationToken);
 
+            // Own the transaction boundary.
             await using var sql = Runtime.CreateSqlContext();
             var isolation = GetTransaction(parameters);
             var needsTransaction = definition.OperationType != ServiceOperationType.Execute || isolation.HasValue;
@@ -138,7 +140,6 @@ namespace Jularr.Backend.Service.Core
             }
 
             var canMutate = definition.OperationType != ServiceOperationType.Read;
-            sql.SetAuthorizedScope(caller.AccountId, caller.ProfileId);
             var context = new LogicContext(sql);
 
             if (canMutate && needsTransaction)
@@ -147,11 +148,12 @@ namespace Jularr.Backend.Service.Core
             }
             else if (definition.OperationType == ServiceOperationType.Execute)
             {
-                // Execute batches must recheck access inside each short transaction.
+                // Recheck access per batch.
                 context.SetTransactionalAccessCheck(
                     (logic, token) => Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token));
             }
 
+            // Bind this invocation only.
             var previous = _invocation.Value;
             _invocation.Value = new Invocation(parameters, data, resultType, caller, context, cancellationToken);
             try
@@ -168,6 +170,7 @@ namespace Jularr.Backend.Service.Core
                     _ => throw new InvalidOperationException("The service operation is unavailable.")
                 });
 
+                // Validate before committing.
                 if (result is null || result.GetType() != resultType)
                 {
                     throw new InvalidOperationException("The service returned an undeclared or incorrect result type.");

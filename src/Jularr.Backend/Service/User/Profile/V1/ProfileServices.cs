@@ -31,6 +31,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
+            // Read the verified profile.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -75,12 +76,14 @@ namespace Jularr.Backend.Service.User.Profile.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var updateData = await Context.ReadProfileForUpdateAsync(Parameters.ProfileId, CancellationToken);
+            // Load and lock current data.
+            var updateData = await Context.ReadProfileAsync(Parameters.ProfileId, CancellationToken);
 
-            // Parameter and entity IDs have different names, so assign explicitly.
+            // Assign IDs; merge provided fields.
             updateData.Id = Parameters.ProfileId;
             updateData.SetData(Data);
 
+            // Use the canonical writer.
             await Context.UpdateProfileAsync(updateData, CancellationToken);
             return new UpdateResult(true);
         }

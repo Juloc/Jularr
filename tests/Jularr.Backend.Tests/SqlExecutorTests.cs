@@ -51,7 +51,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task SqlObject_SpoofedActor_IsRejected()
+        public async Task SqlObject_ActorName_IsAnOrdinaryExplicitParameter()
         {
             await using var database = CreateDataSource();
             await using var context = new SqlContext(database);
@@ -60,7 +60,7 @@ namespace Jularr.Backend.Tests
             sql.Statement = "SELECT @ActorAccountId::bigint";
             sql.Parameters.Add(new { ActorAccountId = 999L });
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => context.ReadSql.ExecuteScalarAsync(sql));
+            Assert.AreEqual(999L, await context.ReadSql.ExecuteScalarAsync(sql));
         }
 
         [TestMethod]
@@ -74,7 +74,7 @@ namespace Jularr.Backend.Tests
                 SELECT @Id::bigint AS "Id", @Name::text AS "Name", @State::smallint AS "State"
                 """;
 
-            var value = await context.ReadSql.ReadRequiredAsync<Result>(sql, new Inputs(14, "O'Brien", Status.Completed));
+            var value = await context.ReadSql.ReadRequiredAsync<Result>(new SqlStatement { Statement = sql, Parameters = { new Inputs(14, "O'Brien", Status.Completed) } });
 
             Assert.AreEqual(14L, value.Id);
             Assert.AreEqual("O'Brien", value.Name);
@@ -88,16 +88,13 @@ namespace Jularr.Backend.Tests
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
-            var count = await context.ReadSql.ExecuteScalarAsync(
-                "SELECT cardinality(@Ids::bigint[])", new { Ids = new long[] { 11, 13, 17 } });
+            var count = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT cardinality(@Ids::bigint[])", Parameters = { new { Ids = new long[] { 11, 13, 17 } } } });
             Assert.AreEqual(3, count);
 
-            var names = await context.ReadSql.ExecuteScalarAsync(
-                "SELECT array_to_string(@Names::text[], ',')", new { Names = new[] { "one", "two" } });
+            var names = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT array_to_string(@Names::text[], ',')", Parameters = { new { Names = new[] { "one", "two" } } } });
             Assert.AreEqual("one,two", names);
 
-            var empty = await context.ReadSql.ExecuteScalarAsync(
-                "SELECT COALESCE(cardinality(@Ids::bigint[]), 0)", new { Ids = (long[]?)null });
+            var empty = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COALESCE(cardinality(@Ids::bigint[]), 0)", Parameters = { new { Ids = (long[]?)null } } });
             Assert.AreEqual(0, empty);
         }
 
@@ -109,12 +106,10 @@ namespace Jularr.Backend.Tests
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
             await Assert.ThrowsExactlyAsync<ArgumentException>(
-                () => context.ReadSql.ExecuteScalarAsync(
-                    "SELECT cardinality(@Ids::integer[])", new { Ids = new long[] { 1, 2 } }));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT cardinality(@Ids::integer[])", Parameters = { new { Ids = new long[] { 1, 2 } } } }));
 
             await Assert.ThrowsExactlyAsync<NotSupportedException>(
-                () => context.ReadSql.ExecuteScalarAsync(
-                    "SELECT cardinality(@Ids)", new { Ids = new DateTime[] { DateTime.UtcNow } }));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT cardinality(@Ids)", Parameters = { new { Ids = new DateTime[] { DateTime.UtcNow } } } }));
         }
 
         [TestMethod]
@@ -124,7 +119,7 @@ namespace Jularr.Backend.Tests
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
-            var value = await context.ReadSql.ExecuteScalarAsync("SELECT @Update::bigint", new { Update = 7L });
+            var value = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT @Update::bigint", Parameters = { new { Update = 7L } } });
             Assert.AreEqual(7L, value);
         }
 
@@ -136,9 +131,7 @@ namespace Jularr.Backend.Tests
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ReadRequiredAsync<Result>(
-                    "SELECT 1::bigint AS \"Id\", 'bad'::text AS \"Name\", 250::smallint AS \"State\"",
-                    new { }));
+                () => context.ReadSql.ReadRequiredAsync<Result>(new SqlStatement { Statement = "SELECT 1::bigint AS \"Id\", 'bad'::text AS \"Name\", 250::smallint AS \"State\"", Parameters = { new { } } }));
         }
 
         [TestMethod]
@@ -149,16 +142,14 @@ namespace Jularr.Backend.Tests
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
             const string emptySql = "SELECT 1::bigint AS \"Id\" WHERE FALSE";
-            var optional = await context.ReadSql.ReadOptionalAsync<SingleId>(emptySql, new { });
+            var optional = await context.ReadSql.ReadOptionalAsync<SingleId>(new SqlStatement { Statement = emptySql, Parameters = { new { } } });
             Assert.IsNull(optional);
 
             await Assert.ThrowsExactlyAsync<KeyNotFoundException>(
-                () => context.ReadSql.ReadRequiredAsync<SingleId>(emptySql, new { }));
+                () => context.ReadSql.ReadRequiredAsync<SingleId>(new SqlStatement { Statement = emptySql, Parameters = { new { } } }));
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ReadRequiredAsync<SingleId>(
-                    "SELECT \"Values\".\"Id\" FROM (VALUES (1::bigint), (2::bigint)) AS \"Values\"(\"Id\")",
-                    new { }));
+                () => context.ReadSql.ReadRequiredAsync<SingleId>(new SqlStatement { Statement = "SELECT \"Values\".\"Id\" FROM (VALUES (1::bigint), (2::bigint)) AS \"Values\"(\"Id\")", Parameters = { new { } } }));
         }
 
         [TestMethod]
@@ -180,7 +171,7 @@ namespace Jularr.Backend.Tests
                 OFFSET @Offset
                 """;
 
-            var result = await context.ReadSql.ReadPageAsync<JsonResult>(sql, new Inputs(0, string.Empty, Status.Pending, Page: 2, PageSize: 2));
+            var result = await context.ReadSql.ReadPageAsync<JsonResult>(new SqlStatement { Statement = sql, Parameters = { new Inputs(0, string.Empty, Status.Pending, Page: 2, PageSize: 2) } });
 
             Assert.AreEqual(2, result.Page);
             Assert.AreEqual(1, result.Items.Count);
@@ -203,7 +194,7 @@ namespace Jularr.Backend.Tests
                 OFFSET @offset
                 """;
 
-            var result = await context.ReadSql.ReadPageAsync<SingleId>(sql, new { Page = 2, PageSize = 2 });
+            var result = await context.ReadSql.ReadPageAsync<SingleId>(new SqlStatement { Statement = sql, Parameters = { new { Page = 2, PageSize = 2 } } });
             Assert.AreEqual(1, result.Items.Count);
             Assert.AreEqual(30L, result.Items[0].Id);
         }
@@ -218,24 +209,23 @@ namespace Jularr.Backend.Tests
             await context.BeginAsync(SqlAccessMode.ReadWrite);
             var sql = context.RequireLogicSql();
 
-            await sql.ExecuteAsync("CREATE TABLE \"SqlExecutorWrite\" (\"Id\" bigint PRIMARY KEY, \"Name\" text NOT NULL)");
-            await sql.ExecuteAsync("INSERT INTO \"SqlExecutorWrite\" (\"Id\", \"Name\") VALUES (@Id, @Name)", new { Id = 8L }, new UpdateFields("test"));
-            Assert.AreEqual("test", await context.ReadSql.ExecuteScalarAsync("SELECT \"Name\" FROM \"SqlExecutorWrite\" WHERE \"Id\" = @Id", new { Id = 8L }));
+            await sql.ExecuteAsync(new SqlStatement { Statement = "CREATE TABLE \"SqlExecutorWrite\" (\"Id\" bigint PRIMARY KEY, \"Name\" text NOT NULL)" });
+            await sql.ExecuteAsync(new SqlStatement { Statement = "INSERT INTO \"SqlExecutorWrite\" (\"Id\", \"Name\") VALUES (@Id, @Name)", Parameters = { new { Id = 8L }, new UpdateFields("test") } });
+            Assert.AreEqual("test", await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT \"Name\" FROM \"SqlExecutorWrite\" WHERE \"Id\" = @Id", Parameters = { new { Id = 8L } } }));
             await context.CommitAsync();
         }
 
         [TestMethod]
-        public async Task MissingDuplicateAndReservedParameters_FailClosed()
+        public async Task MissingAndDuplicateParameters_FailClosed()
         {
             await using var database = CreateDataSource();
             await using var context = new SqlContext(database);
             await context.BeginAsync(SqlAccessMode.ReadOnly);
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("SELECT @Missing", new { Id = 1 }));
+                () => context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT @Missing", Parameters = { new { Id = 1 } } }));
 
-            await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.ReadSql.ExecuteScalarAsync("SELECT @ActorAccountId", new { ActorAccountId = 1L }));
+            Assert.AreEqual(1L, await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT @ActorAccountId", Parameters = { new { ActorAccountId = 1L } } }));
         }
 
         [TestMethod]
@@ -246,7 +236,7 @@ namespace Jularr.Backend.Tests
             await context.BeginAsync(SqlAccessMode.ReadWrite);
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
-                () => context.RequireLogicSql().ExecuteAsync("SELECT @Name", new { Name = "first" }, new { Name = "second" }));
+                () => context.RequireLogicSql().ExecuteAsync(new SqlStatement { Statement = "SELECT @Name", Parameters = { new { Name = "first" }, new { Name = "second" } } }));
         }
 
         [TestMethod]
@@ -264,10 +254,10 @@ namespace Jularr.Backend.Tests
                 /* nested @FourthFake /* @FifthFake */ */
                 """;
 
-            var result = await context.ReadSql.ExecuteScalarAsync("SELECT @Id::bigint, '@NotAParameter', $$@AlsoNotAParameter$$", new { Id = 17L });
+            var result = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT @Id::bigint, '@NotAParameter', $$@AlsoNotAParameter$$", Parameters = { new { Id = 17L } } });
             Assert.AreEqual(17L, result);
 
-            var value = await context.ReadSql.ExecuteScalarAsync(sql, new { Id = 17L });
+            var value = await context.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = sql, Parameters = { new { Id = 17L } } });
             Assert.AreEqual("@Fake", value);
         }
 

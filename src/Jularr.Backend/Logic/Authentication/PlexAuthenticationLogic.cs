@@ -6,42 +6,20 @@ using Jularr.Backend.Data.Logic.Authentication;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Account;
 using Jularr.Backend.Logic.Session;
+using Jularr.Backend.Logic.Provider;
+using Jularr.Backend.Data.Logic.Provider;
 
 namespace Jularr.Backend.Logic.Authentication
 {
     public static class PlexAuthenticationLogic
     {
-        public static async Task CreatePlexFlowAsync(
-            this LogicContext context,
-            PlexChallengeCreationData challenge,
-            PlexPinData pin,
-            string clientIdentifier,
-            CancellationToken cancellationToken)
+        public static async Task CreatePlexFlowAsync(this LogicContext context, PlexChallengeCreationData challenge, long externalPinId, string clientIdentifier, CancellationToken cancellationToken)
         {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    provider."Id"
-                FROM
-                    "Providers" AS provider
-                WHERE
-                    provider."Key" = 'plex'
-                    AND provider."IsEnabled" = TRUE
-                FOR SHARE OF
-                    provider;
-                """;
-            PlexProviderData provider;
-            try
-            {
-                provider = await context.ReadForUpdateAsync<PlexProviderData>(sql, cancellationToken);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new SecurityException("Plex sign-in is not configured.");
-            }
+            // Lock the configured provider.
+            var provider = await context.ReadEnabledProviderAsync(new ProviderParameters("plex"), cancellationToken);
 
-            sql = new SqlStatement();
+            // Store the one-time challenge.
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
@@ -52,8 +30,9 @@ namespace Jularr.Backend.Logic.Authentication
                     "Id";
                 """;
             sql.Parameters.Add(challenge);
-            var created = await context.ExecuteReturningAsync<AuthChallengeIdData>(sql, cancellationToken);
+            var created = await context.ReadRequiredAsync<AuthChallengeIdData>(sql, cancellationToken);
 
+            // Link the external attempt.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -62,17 +41,14 @@ namespace Jularr.Backend.Logic.Authentication
                 VALUES
                     (@AccountAuthChallengeId, @AuthChallengePurposeTypeId, @ProviderId, @ExternalPinId, @ClientIdentifier);
                 """;
-            sql.Parameters.Add(new PlexFlowCreationData(created.Id, provider.Id, pin.Id, clientIdentifier));
+            sql.Parameters.Add(new PlexFlowCreationData(created.Id, provider.Id, externalPinId, clientIdentifier));
             if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
             {
                 throw new InvalidOperationException("The external authentication attempt could not be created.");
             }
         }
 
-        public static async Task<PlexFlowData> ReadPlexFlowForUpdateAsync(
-            this LogicContext context,
-            PlexChallengeParameters parameters,
-            CancellationToken cancellationToken)
+        public static async Task<PlexFlowData> ReadPlexFlowAsync(this LogicContext context, PlexChallengeParameters parameters, CancellationToken cancellationToken)
         {
             parameters.Validate();
             var sql = new SqlStatement();
@@ -110,13 +86,14 @@ namespace Jularr.Backend.Logic.Authentication
             PlexFlowData flow;
             try
             {
-                flow = await context.ReadForUpdateAsync<PlexFlowData>(sql, cancellationToken);
+                flow = await context.ReadRequiredAsync<PlexFlowData>(sql, cancellationToken);
             }
             catch (KeyNotFoundException)
             {
                 throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
             }
 
+            // Verify the browser nonce.
             var proof = SHA256.HashData(Encoding.UTF8.GetBytes(parameters.BrowserNonce));
             if (!CryptographicOperations.FixedTimeEquals(proof, flow.TokenHash))
             {
@@ -134,7 +111,8 @@ namespace Jularr.Backend.Logic.Authentication
             TimeSpan sessionLifetime,
             CancellationToken cancellationToken)
         {
-            var flow = await context.ReadPlexFlowForUpdateAsync(parameters, cancellationToken);
+            // Lock and revalidate completion.
+            var flow = await context.ReadPlexFlowAsync(parameters, cancellationToken);
             var external = new ExternalLoginParameters(flow.ProviderId, identity.ExternalAccountId);
             var sql = new SqlStatement();
             sql.Statement =
@@ -163,16 +141,10 @@ namespace Jularr.Backend.Logic.Authentication
                 """;
             sql.Parameters.Add(external);
 
-            AccountAuthenticationData? account = null;
-            try
-            {
-                account = await context.ReadForUpdateAsync<AccountAuthenticationData>(sql, cancellationToken);
-            }
-            catch (KeyNotFoundException)
-            {
-                // A new identity must qualify independently; email similarity never links accounts.
-            }
+            // Never link by email.
+            var account = await context.ReadOptionalAsync<AccountAuthenticationData>(sql, cancellationToken);
 
+            // Qualify a new identity.
             if (account is null)
             {
                 if (!registration.HasLibraryAccess || !identity.EmailVerified)
@@ -202,6 +174,7 @@ namespace Jularr.Backend.Logic.Authentication
                 account = new AccountAuthenticationData(id, 1, null, !registration.RequiresApproval, false);
             }
 
+            // Require completed second-factor verification.
             if (account.RequiresSecondFactor)
             {
                 throw new UnauthorizedAccessException("A second factor is required.");
@@ -225,6 +198,7 @@ namespace Jularr.Backend.Logic.Authentication
                 throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
             }
 
+            // Pending accounts receive no session.
             if (!account.IsEnabled)
             {
                 return new PlexCompletionData(null, requiresApproval: true);

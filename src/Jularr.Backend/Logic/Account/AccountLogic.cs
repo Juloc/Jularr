@@ -49,16 +49,9 @@ namespace Jularr.Backend.Logic.Account
                 """;
             sql.Parameters.Add(parameters);
 
-            AccountAuthenticationData? account = null;
-            try
-            {
-                account = await context.ReadForUpdateAsync<AccountAuthenticationData>(sql, cancellationToken);
-            }
-            catch (KeyNotFoundException)
-            {
-                // Unknown emails still perform password-hash verification.
-            }
+            var account = await context.ReadOptionalAsync<AccountAuthenticationData>(sql, cancellationToken);
 
+            // Equal work for unknown accounts.
             var verification = PasswordHasher.VerifyHashedPassword(
                 account ?? MissingAccount, account?.PasswordHash ?? MissingPasswordHash, password);
             if (account is null || verification == PasswordVerificationResult.Failed
@@ -76,13 +69,9 @@ namespace Jularr.Backend.Logic.Account
             return account;
         }
 
-        public static async Task<long?> CreateAccountAsync(
-            this LogicContext context,
-            AccountCreationData data,
-            long uiLocaleId,
-            CancellationToken cancellationToken)
+        public static async Task<long?> CreateAccountAsync(this LogicContext context, AccountCreationData data, long uiLocaleId, CancellationToken cancellationToken)
         {
-            // Public registration never bootstraps an Owner account.
+            // Require an existing Owner.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -101,7 +90,7 @@ namespace Jularr.Backend.Logic.Account
                 """;
             try
             {
-                await context.ReadForUpdateAsync<AccountIdData>(sql, cancellationToken);
+                await context.ReadRequiredAsync<AccountIdData>(sql, cancellationToken);
             }
             catch (KeyNotFoundException)
             {
@@ -121,28 +110,21 @@ namespace Jularr.Backend.Logic.Account
                 """;
             sql.Parameters.Add(data);
 
-            AccountIdData account;
-            try
+            var account = await context.ReadOptionalAsync<AccountIdData>(sql, cancellationToken);
+            if (account is null)
             {
-                account = await context.ExecuteReturningAsync<AccountIdData>(sql, cancellationToken);
-            }
-            catch (KeyNotFoundException)
-            {
-                // Duplicate requests must not replace credentials or reveal an existing account.
+                // Never replace duplicate credentials.
                 return null;
             }
 
+            // Create ownership atomically.
             await context.CreateProfileAsync(new ProfileCreationData(account.Id, data.DisplayName, uiLocaleId), cancellationToken);
             return account.Id;
         }
 
-        public static async Task CreateRegistrationRequestAsync(
-            this LogicContext context,
-            AccountCreationData data,
-            string password,
-            long uiLocaleId,
-            CancellationToken cancellationToken)
+        public static async Task CreateRegistrationRequestAsync(this LogicContext context, AccountCreationData data, string password, long uiLocaleId, CancellationToken cancellationToken)
         {
+            // Hash before account creation.
             var hash = PasswordHasher.HashPassword(MissingAccount, password);
             var accountId = await context.CreateAccountAsync(data, uiLocaleId, cancellationToken);
 
@@ -152,10 +134,7 @@ namespace Jularr.Backend.Logic.Account
             }
         }
 
-        private static async Task WritePasswordAsync(
-            this LogicContext context,
-            AccountPasswordData data,
-            CancellationToken cancellationToken)
+        private static async Task WritePasswordAsync(this LogicContext context, AccountPasswordData data, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
             sql.Statement =

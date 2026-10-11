@@ -13,6 +13,7 @@ namespace Jularr.Backend.Infrastructure.Sql
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(sql);
 
+            // Inspect commands, not literal text.
             var tokens = Tokenize(sql);
             if (tokens.Count == 0 || tokens[0] is not ("SELECT" or "WITH"))
             {
