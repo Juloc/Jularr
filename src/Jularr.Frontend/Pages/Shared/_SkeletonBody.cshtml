@@ -1,0 +1,11 @@
+@model Page
+@inject UiText T
+@{
+    ViewData["Title"] = T[Model.TitleKey ?? "app.name"];
+}
+<div class="skeleton-screen @(Model.Shell ? "" : "screen-player")">
+    @foreach (var component in Model.Content)
+    {
+        <partial name="_UiComponent" model="component" />
+    }
+</div>
