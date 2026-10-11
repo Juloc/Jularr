@@ -161,13 +161,9 @@
         }
 
         const decision = mouseClicks.click(x, y, performance.now());
+        togglePlay();
         if (decision.action === "fullscreen") {
             void presentation.toggleFullscreen();
-        } else {
-            if (decision.action === "playPauseAndWait") togglePlay();
-            window.setTimeout(() => {
-                if (mouseClicks.settle(performance.now()).action === "playPause") togglePlay();
-            }, mouseClicks.delayMs + 20);
         }
     };
 
