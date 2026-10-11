@@ -39,14 +39,28 @@ Shared conventions and Backend ownership:
 - [BaseField.cs](Framework/BaseField.cs),
   [Form.cs](Framework/Components/Form.cs): typed backend DataField metadata
   and its display-only form contract. No invented save operation.
-- [ShellNavigation.cs](Framework/ShellNavigation.cs),
-  [AdminNavigation.cs](Framework/AdminNavigation.cs):
-  declared navigation destinations.
-- [Shared layout](Pages/Shared/_Layout.cshtml),
-  [App shell](Pages/Shared/_AppShell.cshtml),
+- [ShellNavigation.cs](Framework/ShellNavigation.cs):
+  unconditional shell routes only, until the Backend returns effective
+  instance/profile navigation; [AdminNavigation.cs](Framework/AdminNavigation.cs)
+  owns Request/Rule links.
+- [ShellHeader](Framework/Components/ShellHeader.cs),
+  [ShellSidebar](Framework/Components/ShellSidebar.cs),
+  [ShellMobileNavigation](Framework/Components/ShellMobileNavigation.cs),
+  [Brand](Framework/Components/Brand.cs),
+  [Icon](Framework/Components/Icon.cs): standalone C#-rendered chrome and
+  their colocated SCSS; no duplicate content heading, dead actions or static
+  assumption that optional media modules are enabled.
+- [Shared layout](Pages/Shared/_Layout.cshtml):
+  document shell, asset/locale setup and RenderBody only.
+  [App shell](Pages/Shared/_AppShell.cshtml): delegates actual markup
+  to component renderers.
   [Page body](Pages/Shared/_PageBody.cshtml),
   [Ui component boundary](Pages/Shared/_UiComponent.cshtml):
-  Razor shell and C# component rendering.
+  thin Razor-to-C# bridges.
+- [Login Page](Pages/Account/Login.cshtml.cs) and
+  [Login SCSS](Pages/Account/Login.entry.scss): minimal login C# composition
+  with no fake providers or live password handlers; sign-in and active-profile
+  transition await a canonical Backend handler.
 - [Vite build](vite.config.ts), [package.json](package.json),
   [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
   compile/fingerprint Sass and TypeScript from colocated `*.entry.scss`

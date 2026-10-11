@@ -28,7 +28,14 @@ Admin routes: `/Admin/Requests`, `/Admin/Rules`,
 `/Admin/Works/{id:long}`, `/Admin/Library`.
 
 The routes prepare actual layouts but do not invent service data. Table rows and filters only render from genuine authorized Backend results.
-Login remains presentation-only. Admin authorization, canonical typed media/
+Login is assembled in the C# PageModel and uses the reusable Brand component.
+Login controls intentionally remain disabled until an authenticated Backend
+session flow is bound; configured providers and passkeys are not guessed.
+The Header, Sidebar and Mobile navigation use independent framework components.
+Topbar breadcrumb is the single visible page title; the Login page alone uses
+a screen-reader heading without a second visible title. The shell currently
+offers only unconditional Home/Settings navigation; authorized module/profile
+links are pending. Admin authorization, canonical typed media/
 request services, profile locale preference and Player PlaybackPlan integration
 remain pending. Do not expose the prepared routes as production-ready.
 

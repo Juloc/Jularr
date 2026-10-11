@@ -22,6 +22,7 @@ test("shared asset and page/module entries have separate manifests", () => {
         "Modules/Appearance/theme.entry.ts",
         "Pages/Index.entry.scss",
         "Pages/Settings.entry.scss",
+        "Pages/Account/Login.entry.scss",
         "Modules/Player/player.entry.scss"
     ]) assert.ok(manifest[key], "missing entry " + key);
     assert.notEqual(manifest["Pages/Index.entry.scss"].file, manifest["Assets/Shared/shell.entry.scss"].file);
