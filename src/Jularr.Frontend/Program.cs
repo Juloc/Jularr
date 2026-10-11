@@ -4,6 +4,8 @@ using Jularr.Frontend.Framework;
 using Jularr.Frontend.Localization;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Npgsql;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages(options =>
@@ -24,6 +26,7 @@ builder.Services.AddJularrServices(
 builder.Services.AddJularrLocalization(UiResources.English);
 builder.Services.AddScoped<UiText>();
 builder.Services.AddSingleton<ShellNavigation>();
+builder.Services.AddSingleton<FrontendAssets>();
 
 var app = builder.Build();
 if (!app.Environment.IsDevelopment())
@@ -33,7 +36,19 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        // Content fingerprints make these public assets immutable across releases.
+        // Other resources (if any) must revalidate, never use the immutable policy.
+        var immutable = context.Context.Request.Path.StartsWithSegments("/build/assets")
+            && Regex.IsMatch(context.File.Name, @"-[A-Za-z0-9_-]{8,}\\.");
+        context.Context.Response.Headers.CacheControl = immutable
+            ? "public,max-age=31536000,immutable"
+            : "public,no-cache";
+    }
+});
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -43,8 +58,9 @@ app.UseAuthorization();
 // Static resources and API service requests do not pass through localization rendering.
 app.Use(async (context, next) =>
 {
-    if (!context.Request.Path.StartsWithSegments("/api"))
+    if (context.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)
     {
+        context.Response.Headers.CacheControl = "private,no-store";
         await context.RequestServices.GetRequiredService<UiText>()
             .InitializeAsync(context);
     }

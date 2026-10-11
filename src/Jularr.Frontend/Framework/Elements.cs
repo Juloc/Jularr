@@ -88,6 +88,7 @@ public sealed class Li(params IUiComponent[] children) : HtmlElement("li", child
 public sealed class A(params IUiComponent[] children) : HtmlElement("a", children);
 public sealed class Button(params IUiComponent[] children) : HtmlElement("button", children);
 public sealed class Input() : HtmlElement("input");
+public sealed class Img() : HtmlElement("img");
 public sealed class TableElement(params IUiComponent[] children) : HtmlElement("table", children);
 public sealed class Thead(params IUiComponent[] children) : HtmlElement("thead", children);
 public sealed class Tbody(params IUiComponent[] children) : HtmlElement("tbody", children);

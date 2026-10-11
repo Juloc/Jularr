@@ -30,6 +30,26 @@ public sealed class FrontendAssets(IWebHostEnvironment environment)
         return catalog;
     }, LazyThreadSafetyMode.ExecutionAndPublication);
 
+    private sealed record IconManifest(string File, Dictionary<string, string> Symbols);
+
+    private readonly Lazy<IconManifest> _icons = new(() =>
+    {
+        var path = Path.Combine(environment.WebRootPath, "build", ".vite", "icons.json");
+        if (!File.Exists(path)) throw new InvalidOperationException("The fingerprinted SVG sprite is missing. Run npm run build.");
+        return JsonSerializer.Deserialize<IconManifest>(File.ReadAllText(path),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidOperationException("Invalid icon manifest.");
+    }, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    public string IconHref(string name)
+    {
+        if (!_icons.Value.Symbols.TryGetValue(name, out var symbol))
+            throw new InvalidOperationException($"Unknown compiled icon: {name}");
+        if (symbol.Length == 0 || symbol.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_')))
+            throw new InvalidOperationException("Unsafe symbol in icon manifest.");
+        return AssetUrl(_icons.Value.File) + "#" + symbol;
+    }
+
     public IHtmlContent Styles(params string[] entries)
     {
         var builder = new HtmlContentBuilder();
