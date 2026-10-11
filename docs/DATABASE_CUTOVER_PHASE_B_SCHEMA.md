@@ -81,7 +81,7 @@ Account/Profile-Mitgliedschaft vor LIMIT und geben nur öffentliche UUIDs aus.
 Das zugehörige [PostgreSQL-Testset](DATABASE_CUTOVER_PHASE_B_PG_READER_QUERY_TESTS.sql)
 prüft fremde Accounts, Profil-/Work-Isolation, Entzug und Disable.
 Die Highlight-Sortierung hat einen Profilindex; ReaderPage-Reads binden die
-öffentliche Edition-ID, VariantKey und exakte ContentRevision. Der
+öffentliche Edition-ID, optionale Kapitel-ID, VariantKey und exakte ContentRevision. Der
 [Reader-Vertrag](DATABASE_CUTOVER_PHASE_B_READER_CONTRACT.md) ergänzt getypte
 Layouts/Anker, immutable Publication, private Delivery und Annotation-CAS.
 Playable bleibt offen.

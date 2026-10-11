@@ -125,8 +125,7 @@ BEGIN
         INNER JOIN "ReaderContent" AS content ON content."Id" = position."ReaderContentId"
         WHERE progress."Id" = progress_id
             AND ((progress."WorkEditionId" IS NOT NULL AND progress."WorkEditionId" <> content."WorkEditionId")
-                OR (progress."WorkChapterId" IS NOT NULL
-                    AND progress."WorkChapterId" IS DISTINCT FROM content."WorkChapterId"))
+                OR progress."WorkChapterId" IS DISTINCT FROM content."WorkChapterId")
     ) INTO invalid_target;
     IF invalid_target THEN
         RAISE EXCEPTION 'Reader anchor does not match the exact progress target'

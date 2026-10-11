@@ -31,11 +31,11 @@ INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "Stor
     "ContentHash", "ParserVersion", "BuilderOperationId", "NodeCount", "PageCount")
 VALUES (:work_id, :edition_id, 1, 'reader-content-original', 1, decode(repeat('a1',32),'hex'), 'fixture-v1', :operation_id, 1000, 0)
 RETURNING "Id" AS content_id \gset
-EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public','original',1);
+EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public',NULL,'original',1);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_source(:actor_id,:profile_id,:'edition_public','original',1);
+EXECUTE phase_b_reader_source(:actor_id,:profile_id,:'edition_public',NULL,'original',1);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','original',1,0,25);
+EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'original',1,0,25);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 INSERT INTO "ReaderContentNodes" ("ReaderContentId", "StableId", "OrderIndex", "ReaderNodeTypeId", "ReaderTextBlockTypeId", "CharacterCount")
 SELECT :content_id, 'paragraph-'||i, i, 1, 1, 100 FROM generate_series(0,999) AS i;
@@ -62,28 +62,28 @@ SELECT 1 / CASE WHEN :ROW_COUNT=1 THEN 1 ELSE 0 END;
 SET CONSTRAINTS ALL IMMEDIATE;
 EXECUTE phase_b_reader_publish(:content_id,decode(repeat('a1',32),'hex'),now(),'reader-content-builder');
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public','original',1) \gset
+EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public',NULL,'original',1) \gset
 SELECT 1 / CASE WHEN :ReaderLayoutTypeId=1 AND :NodeCount=1000 AND :PageCount=0
     AND :'LanguageTag'='und' AND :'VariantKey'='original' THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_source(:actor_id,:profile_id,:'edition_public','original',1) \gset
+EXECUTE phase_b_reader_source(:actor_id,:profile_id,:'edition_public',NULL,'original',1) \gset
 SELECT 1 / CASE WHEN :'StorageKey'='reader-content-original' THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','original',1,950,1) \gset
+EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'original',1,950,1) \gset
 SELECT 1 / CASE WHEN :OrderIndex=950 AND :'StableId'='paragraph-950' THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','original',1,950,25);
+EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'original',1,950,25);
 SELECT 1 / CASE WHEN :ROW_COUNT=25 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','original',1,990,100);
+EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'original',1,990,100);
 SELECT 1 / CASE WHEN :ROW_COUNT=10 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','original',1,-1,25);
+EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'original',1,-1,25);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','original',1,0,101);
+EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'original',1,0,101);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public','original''; DROP TABLE "Accounts";--',1);
+EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public',NULL,'original''; DROP TABLE "Accounts";--',1);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public','original',2);
+EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public',NULL,'original',2);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 ANALYZE "ReaderContent";
 ANALYZE "ReaderContentNodes";
-EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','original',1,950,25);
+EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'original',1,950,25);
 
 INSERT INTO "Operations" ("OperationKindKey", "OperationStatusTypeId", "ClaimedBy", "ClaimedUntil")
 VALUES ('reader_translate', 2, 'reader-content-builder', now()+INTERVAL '1 hour') RETURNING "Id" AS translation_operation \gset
@@ -96,9 +96,9 @@ SELECT :translation_id,'translated-0',0,1,1,120,:content_id,node."Id"
 FROM "ReaderContentNodes" AS node WHERE node."ReaderContentId"=:content_id AND node."OrderIndex"=0;
 EXECUTE phase_b_reader_publish(:translation_id,decode(repeat('a2',32),'hex'),now(),'reader-content-builder');
 SELECT 1 / CASE WHEN :ROW_COUNT=1 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public','de',1) \gset
+EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public',NULL,'de',1) \gset
 SELECT 1 / CASE WHEN :ReaderVariantTypeId=3 AND :'LanguageTag'='de' AND :NodeCount=1 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public','de',1,0,1) \gset
+EXECUTE phase_b_reader_nodes(:actor_id,:profile_id,:'edition_public',NULL,'de',1,0,1) \gset
 SELECT 1 / CASE WHEN :'SourceStableId'='paragraph-0' AND :'StableId'='translated-0' THEN 1 ELSE 0 END;
 
 INSERT INTO "ReaderContent" ("WorkId", "WorkEditionId", "ContentRevision", "StorageKey", "ReaderLayoutTypeId",
@@ -140,11 +140,11 @@ FROM (VALUES
 ) AS invalid(content_id,locator);
 
 SELECT gen_random_uuid() AS bookmark_public, gen_random_uuid() AS highlight_public \gset
-EXECUTE phase_b_reader_bookmark_create(:other_id,:profile_id,:'edition_public','original',1,:'bookmark_public','{"blockId":"paragraph-0","characterOffset":1}',NULL,now());
+EXECUTE phase_b_reader_bookmark_create(:other_id,:profile_id,:'edition_public',NULL,'original',1,:'bookmark_public','{"blockId":"paragraph-0","characterOffset":1}',NULL,now());
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_bookmark_create(:actor_id,:profile_id,:'edition_public','original',1,:'bookmark_public','{"blockId":"paragraph-0","characterOffset":1}','quote''; --',now()) \gset
+EXECUTE phase_b_reader_bookmark_create(:actor_id,:profile_id,:'edition_public',NULL,'original',1,:'bookmark_public','{"blockId":"paragraph-0","characterOffset":1}','quote''; --',now()) \gset
 SELECT 1 / CASE WHEN :Revision=1 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_bookmark_create(:actor_id,:profile_id,:'edition_public','original',1,:'bookmark_public','{"blockId":"paragraph-0","characterOffset":2}','replacement',now());
+EXECUTE phase_b_reader_bookmark_create(:actor_id,:profile_id,:'edition_public',NULL,'original',1,:'bookmark_public','{"blockId":"paragraph-0","characterOffset":2}','replacement',now());
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_bookmark(:actor_id,:profile_id,:'bookmark_public') \gset
 SELECT 1 / CASE WHEN :Revision=1 AND :'Label'='quote''; --' AND :'Locator'::jsonb->>'characterOffset'='1' THEN 1 ELSE 0 END;
@@ -156,7 +156,7 @@ EXECUTE phase_b_reader_bookmark_edit(:actor_id,:profile_id,:'bookmark_public',1,
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_bookmark_delete(:actor_id,:profile_id,:'bookmark_public',1);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_highlight_create(:actor_id,:profile_id,:'edition_public','original',1,:'highlight_public',
+EXECUTE phase_b_reader_highlight_create(:actor_id,:profile_id,:'edition_public',NULL,'original',1,:'highlight_public',
     '{"blockId":"paragraph-0","characterOffset":10}','{"blockId":"paragraph-0","characterOffset":15}','abcde','quote''; --',now()) \gset
 SELECT 1 / CASE WHEN :Revision=1 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_highlight_edit(:actor_id,:profile_id,:'highlight_public',1,
@@ -166,7 +166,7 @@ EXECUTE phase_b_reader_highlight_edit(:other_id,:profile_id,:'highlight_public',
     '{"blockId":"paragraph-0","characterOffset":10}','{"blockId":"paragraph-0","characterOffset":15}','abcde','forbidden',now());
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (:other_id,:profile_id);
-EXECUTE phase_b_reader_content(:other_id,:profile_id,:'edition_public','original',1);
+EXECUTE phase_b_reader_content(:other_id,:profile_id,:'edition_public',NULL,'original',1);
 SELECT 1 / CASE WHEN :ROW_COUNT=1 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_highlight_edit(:other_id,:profile_id,:'highlight_public',2,
     '{"blockId":"paragraph-0","characterOffset":10}','{"blockId":"paragraph-0","characterOffset":15}','abcde','shared',now()) \gset
@@ -174,9 +174,9 @@ SELECT 1 / CASE WHEN :Revision=3 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_highlight(:other_id,:profile_id,:'highlight_public') \gset
 SELECT 1 / CASE WHEN :Revision=3 AND :'SelectedText'='abcde' AND :'Note'='shared' THEN 1 ELSE 0 END;
 DELETE FROM "AccountProfiles" WHERE "AccountId"=:other_id AND "ProfileId"=:profile_id;
-EXECUTE phase_b_reader_source(:other_id,:profile_id,:'edition_public','original',1);
+EXECUTE phase_b_reader_source(:other_id,:profile_id,:'edition_public',NULL,'original',1);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_nodes(:other_id,:profile_id,:'edition_public','original',1,0,25);
+EXECUTE phase_b_reader_nodes(:other_id,:profile_id,:'edition_public',NULL,'original',1,0,25);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_highlight_delete(:other_id,:profile_id,:'highlight_public',3);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
@@ -188,7 +188,7 @@ SELECT 1 / CASE WHEN :ROW_COUNT=1 THEN 1 ELSE 0 END;
 ROLLBACK TO SAVEPOINT annotation_rollback;
 SELECT 1 / CASE WHEN EXISTS (SELECT 1 FROM "ReaderBookmarks" WHERE "PublicId"=:'bookmark_public' AND "Revision"=2) THEN 1 ELSE 0 END;
 UPDATE "Accounts" SET "IsEnabled"=FALSE WHERE "Id"=:actor_id;
-EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public','original',1);
+EXECUTE phase_b_reader_content(:actor_id,:profile_id,:'edition_public',NULL,'original',1);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_bookmark_delete(:actor_id,:profile_id,:'bookmark_public',2);
 SELECT 1 / CASE WHEN :ROW_COUNT=0 THEN 1 ELSE 0 END;

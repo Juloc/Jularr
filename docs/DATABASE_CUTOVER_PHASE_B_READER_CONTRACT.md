@@ -7,8 +7,10 @@ kanonischen ReaderContent-Owner; kein Book-/Manga-/PDF-Parallelmodell.
 ## Identität, Payload und Veröffentlichung
 
 Interne Content-/Node-/Page-/File-/Operation-Referenzen sind bigint/C# long.
-Öffentlich identifiziert Edition-UUID + VariantKey + ContentRevision genau eine
-Revision. Original, offizielle und generierte Übersetzung besitzen feste byte-
+Öffentlich identifiziert Edition-UUID + optionale Chapter-UUID + VariantKey + ContentRevision genau eine
+Revision. NULL Chapter bezeichnet nur den gesamten Editionsinhalt, nicht ein
+beliebiges Kapitel. Der NULLS-NOT-DISTINCT-Schlüssel erlaubt Revision 1 pro
+Kapitel und verhindert doppelte Vollinhalte. Original, offizielle und generierte Übersetzung besitzen feste byte-
 Codes. Sprache, Richtungen und Schreibmodus werden explizit normalisiert; keine
 alten int-Codes oder LegacyTranslation-Variante in der neuen Baseline.
 
@@ -68,7 +70,7 @@ gegen konkurrierende Inserts. Sie werden ausschließlich vom Ankertrigger erzeug
 
 [Logic-Writes](DATABASE_CUTOVER_PHASE_B_READER_ANNOTATION_QUERIES_DRAFT.sql)
 sperren den enabled Account und aktuelle Membership. Create bindet die genaue
-Edition/Variante/Revision, Edit/Delete benötigen zusätzlich ExpectedRevision.
+Edition/Kapitel/Variante/Revision, Edit/Delete benötigen zusätzlich ExpectedRevision.
 Edit behält Identität/Profil/Content und erhöht genau einmal die Revision.
 Create-Kollisionen überschreiben nichts; ein frischer autorisierter Einzel-READ
 prüft bestehenden Payload/Target. Gleiche UUID mit anderem Payload ist Konflikt,
@@ -90,6 +92,10 @@ Layouts, Varianten, Draft-Isolation, exakte Quellanker, CAS/Replay, Quoten,
 fremde Accounts, Sharing/Entzug/Disable, Rollback und einen 1000-Knoten-Feed mit
 EXPLAIN. [Drei PG-Sessions](DATABASE_CUTOVER_PHASE_B_PG_READER_CONCURRENCY_TEST.sh)
 prüfen genau einen Publisher und abgewiesene konkurrierende späte Index-Writes.
+[Kapitel-Regressionen](DATABASE_CUTOVER_PHASE_B_PG_READER_CHAPTER_TESTS.sql)
+prüfen zwei Kapitel mit derselben Revision/Variante, NULL-Vollinhalt ohne Fanout,
+exakte Content-/Node-/Page-/Delivery-/Annotation-Reads und Cross-Chapter-Ablehnung
+im kanonischen Checkpoint sowie bei direktem relationalem Write.
 Runtime-Parser/Delivery/Client-Portierung gehört in D/E, echte Ende-zu-Ende-
 Abnahme in F. Music-/AI-Fachpersistenz und Replay-/Artifact-Retention bleiben
 eigene offene B-Gates; dieser Reader-Nachweis schließt nicht Phase B insgesamt.

@@ -102,6 +102,7 @@ jobs:
       - name: Verify immutable Reader variants, exact locators and annotation writes
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_READER_CONTENT_TESTS.sql
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_READER_CHAPTER_TESTS.sql
           bash docs/DATABASE_CUTOVER_PHASE_B_PG_READER_CONCURRENCY_TEST.sh
 
       - name: Verify independent provider capability and live profile access gates

@@ -35,8 +35,11 @@ INNER JOIN
     "WorkEditions" AS edition ON edition."PublicId" = @EditionPublicId
 INNER JOIN
     "ReaderContent" AS content ON content."WorkEditionId" = edition."Id"
+LEFT JOIN
+    "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
 WHERE
-    content."VariantKey" = @VariantKey
+    chapter."PublicId" IS NOT DISTINCT FROM @ChapterPublicId
+    AND content."VariantKey" = @VariantKey
     AND content."ContentRevision" = @ContentRevision
     AND content."PublishedAt" IS NOT NULL
 ON CONFLICT ("PublicId") DO NOTHING
@@ -83,8 +86,11 @@ INNER JOIN
     "WorkEditions" AS edition ON edition."PublicId" = @EditionPublicId
 INNER JOIN
     "ReaderContent" AS content ON content."WorkEditionId" = edition."Id"
+LEFT JOIN
+    "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
 WHERE
-    content."VariantKey" = @VariantKey
+    chapter."PublicId" IS NOT DISTINCT FROM @ChapterPublicId
+    AND content."VariantKey" = @VariantKey
     AND content."ContentRevision" = @ContentRevision
     AND content."PublishedAt" IS NOT NULL
 ON CONFLICT ("PublicId") DO NOTHING

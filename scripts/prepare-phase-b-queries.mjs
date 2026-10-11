@@ -84,9 +84,10 @@ const authQueries = [
 }));
 
 const readerContentQueries = [
-    ['reader_content', 'Service CONTENT:', 'Service NODES:', 'bigint,bigint,uuid,text,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision']],
-    ['reader_nodes', 'Service NODES:', 'Internal Service SOURCE:', 'bigint,bigint,uuid,text,integer,integer,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision', 'StartOrderIndex', 'PageSize']],
-    ['reader_source', 'Internal Service SOURCE:', 'Logic PUBLISH:', 'bigint,bigint,uuid,text,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision']],
+    ['reader_content', 'Service CONTENT:', 'Service NODES:', 'bigint,bigint,uuid,uuid,text,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'ChapterPublicId', 'VariantKey', 'ContentRevision']],
+    ['reader_nodes', 'Service NODES:', 'Internal Service SOURCE:', 'bigint,bigint,uuid,uuid,text,integer,integer,integer',
+        ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'ChapterPublicId', 'VariantKey', 'ContentRevision', 'StartOrderIndex', 'PageSize']],
+    ['reader_source', 'Internal Service SOURCE:', 'Logic PUBLISH:', 'bigint,bigint,uuid,uuid,text,integer', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'ChapterPublicId', 'VariantKey', 'ContentRevision']],
     ['reader_publish', 'Logic PUBLISH:', null, 'bigint,bytea,timestamptz,text', ['ReaderContentId', 'ExpectedContentHash', 'Now', 'TrustedWorkerKey']]
 ].map(([name, start, end, types, parameters]) => ({
     name,
@@ -98,9 +99,10 @@ const readerContentQueries = [
 }));
 
 const readerAnnotationQueries = [
-    ['reader_bookmark_create', 'BOOKMARK_CREATE:', 'HIGHLIGHT_CREATE:', 'bigint,bigint,uuid,text,integer,uuid,jsonb,text,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision', 'PublicId', 'Locator', 'Label', 'Now']],
-    ['reader_highlight_create', 'HIGHLIGHT_CREATE:', 'BOOKMARK_EDIT:', 'bigint,bigint,uuid,text,integer,uuid,jsonb,jsonb,text,text,timestamptz',
-        ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'VariantKey', 'ContentRevision', 'PublicId', 'StartLocator', 'EndLocator', 'SelectedText', 'Note', 'Now']],
+    ['reader_bookmark_create', 'BOOKMARK_CREATE:', 'HIGHLIGHT_CREATE:', 'bigint,bigint,uuid,uuid,text,integer,uuid,jsonb,text,timestamptz',
+        ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'ChapterPublicId', 'VariantKey', 'ContentRevision', 'PublicId', 'Locator', 'Label', 'Now']],
+    ['reader_highlight_create', 'HIGHLIGHT_CREATE:', 'BOOKMARK_EDIT:', 'bigint,bigint,uuid,uuid,text,integer,uuid,jsonb,jsonb,text,text,timestamptz',
+        ['ActorAccountId', 'ActiveProfileId', 'EditionPublicId', 'ChapterPublicId', 'VariantKey', 'ContentRevision', 'PublicId', 'StartLocator', 'EndLocator', 'SelectedText', 'Note', 'Now']],
     ['reader_bookmark_edit', 'BOOKMARK_EDIT:', 'HIGHLIGHT_EDIT:', 'bigint,bigint,uuid,bigint,jsonb,text,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'PublicId', 'ExpectedRevision', 'Locator', 'Label', 'Now']],
     ['reader_highlight_edit', 'HIGHLIGHT_EDIT:', 'BOOKMARK_DELETE:', 'bigint,bigint,uuid,bigint,jsonb,jsonb,text,text,timestamptz', ['ActorAccountId', 'ActiveProfileId', 'PublicId', 'ExpectedRevision', 'StartLocator', 'EndLocator', 'SelectedText', 'Note', 'Now']],
     ['reader_bookmark_delete', 'BOOKMARK_DELETE:', 'HIGHLIGHT_DELETE:', 'bigint,bigint,uuid,bigint', ['ActorAccountId', 'ActiveProfileId', 'PublicId', 'ExpectedRevision']],
@@ -285,8 +287,8 @@ const readerQueries = [
         name: 'reader_pages',
         start: '-- Service PAGES:',
         end: '-- Service BOOKMARK:',
-        types: 'bigint,bigint,uuid,integer,text,integer,integer',
-        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkEditionPublicId', 'ContentRevision', 'VariantKey', 'StartPageIndex', 'PageSize']
+        types: 'bigint,bigint,uuid,uuid,integer,text,integer,integer',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkEditionPublicId', 'ChapterPublicId', 'ContentRevision', 'VariantKey', 'StartPageIndex', 'PageSize']
     },
     {
         name: 'reader_bookmark',

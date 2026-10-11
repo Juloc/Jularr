@@ -150,6 +150,10 @@ WITH "Actor" AS MATERIALIZED (
         "ReaderContent" AS content
     INNER JOIN
         "WorkEditions" AS edition ON edition."Id" = content."WorkEditionId"
+    INNER JOIN
+        "MediaProgress" AS progress ON progress."PublicId" = @ProgressPublicId
+            AND progress."ProfileId" = @ActiveProfileId
+            AND progress."WorkChapterId" IS NOT DISTINCT FROM content."WorkChapterId"
     WHERE
         edition."PublicId" = @ReaderEditionPublicId
         AND content."ContentRevision" = @ContentRevision
@@ -170,7 +174,7 @@ WITH "Actor" AS MATERIALIZED (
         "Content" AS content
         ON content."WorkId" = progress."WorkId"
         AND (progress."WorkEditionId" IS NULL OR progress."WorkEditionId" = content."WorkEditionId")
-        AND (progress."WorkChapterId" IS NULL OR progress."WorkChapterId" = content."WorkChapterId")
+        AND progress."WorkChapterId" IS NOT DISTINCT FROM content."WorkChapterId"
     WHERE
         progress."PublicId" = @ProgressPublicId
         AND progress."ProfileId" = @ActiveProfileId

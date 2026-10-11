@@ -127,7 +127,8 @@ ALTER TABLE "ReaderContent"
     ADD COLUMN "PageCount" integer NOT NULL,
     ADD COLUMN "SourcePageCount" integer,
     ADD COLUMN "PublishedAt" timestamptz,
-    ADD CONSTRAINT "UX_ReaderContent_Edition_Variant_Revision" UNIQUE ("WorkEditionId", "VariantKey", "ContentRevision"),
+    ADD CONSTRAINT "UX_ReaderContent_Edition_Chapter_Variant_Revision" UNIQUE NULLS NOT DISTINCT
+        ("WorkEditionId", "WorkChapterId", "VariantKey", "ContentRevision"),
     ADD CONSTRAINT "UX_ReaderContent_Id_Source" UNIQUE ("Id", "SourceReaderContentId"),
     ADD CONSTRAINT "FK_ReaderContent_Layout" FOREIGN KEY ("ReaderLayoutTypeId") REFERENCES "ReaderLayoutTypes" ("Id") ON DELETE RESTRICT,
     ADD CONSTRAINT "FK_ReaderContent_Variant" FOREIGN KEY ("ReaderVariantTypeId") REFERENCES "ReaderVariantTypes" ("Id") ON DELETE RESTRICT,

@@ -111,32 +111,32 @@ ANALYZE "ReaderHighlights";
 EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_reader_bookmarks(:actor_id, :profile_id, :'work_public_id', 25, 0);
 EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_reader_highlights(:actor_id, :profile_id, :'work_public_id', 25, 0);
 
-EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id', 1, 'pages', 1, 1) \gset
+EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 1, 1) \gset
 SELECT 1 / CASE WHEN :PageIndex = 1 AND :'TextAnchor' = 'page-one'
     AND :'WorkId'::uuid = :'work_public_id'::uuid THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id', 1, 'pages', 0, 25);
+EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 0, 25);
 SELECT 1 / CASE WHEN :ROW_COUNT = 3 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id', 2, 'pages', 0, 25);
+EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id',NULL, 2, 'pages', 0, 25);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id', 1, 'pages', -1, 25);
+EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', -1, 25);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id', 1, 'pages', 0, 101);
+EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 0, 101);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_pages(:other_id, :profile_id, :'edition_public_id', 1, 'pages', 0, 25);
+EXECUTE phase_b_reader_pages(:other_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 0, 25);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (:other_id, :profile_id);
-EXECUTE phase_b_reader_pages(:other_id, :profile_id, :'edition_public_id', 1, 'pages', 0, 25);
+EXECUTE phase_b_reader_pages(:other_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 0, 25);
 SELECT 1 / CASE WHEN :ROW_COUNT = 3 THEN 1 ELSE 0 END;
 DELETE FROM "AccountProfiles" WHERE "AccountId" = :other_id AND "ProfileId" = :profile_id;
-EXECUTE phase_b_reader_pages(:other_id, :profile_id, :'edition_public_id', 1, 'pages', 0, 25);
+EXECUTE phase_b_reader_pages(:other_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 0, 25);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 ANALYZE "ReaderPages";
-EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id', 1, 'pages', 0, 25);
+EXPLAIN (ANALYZE, BUFFERS) EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 0, 25);
 UPDATE "Accounts" SET "IsEnabled" = FALSE WHERE "Id" = :actor_id;
 EXECUTE phase_b_reader_bookmarks(:actor_id, :profile_id, :'work_public_id', 25, 0);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_reader_highlights(:actor_id, :profile_id, :'work_public_id', 25, 0);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
-EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id', 1, 'pages', 0, 25);
+EXECUTE phase_b_reader_pages(:actor_id, :profile_id, :'edition_public_id',NULL, 1, 'pages', 0, 25);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 ROLLBACK;

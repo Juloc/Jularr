@@ -16,7 +16,8 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 | Provider lifecycle | Revisionierte Consent-/Grant-Referenzen, Owner/Sections, Token-freie READs, Operation-Lease-/Generation-/Cursor-CAS, Commit-Accepted-Page, Restart/Rollback und 1000er Paging/Work-Isolation |
 | Assets/Files/Game/Playback | Identische Work-/Version-/Asset-/File-Zuordnung; Game-only und Multidisc-FKs |
 | Progress/Reader | Atomarer Root plus genau ein Positionstyp, exakte Edition-/Contentrevision/Quellseite, Completion-Provenienz und manuelles Unmark, Hash-Replay/Payload-Konflikt, aktuelles Membership/CAS und gemeinsamer Rollback |
-| Reader Content/Annotations | Exakte veröffentlichte Edition/Variante/Revision, drei Locator-Shapes, dichte immutable Indizes, Source-FKs, private Delivery, CAS/Replay/Overlap und 1000er Node-Feed |
+| Reader Content/Annotations | Exakte veröffentlichte Edition/Kapitel/Variante/Revision, drei Locator-Shapes, dichte immutable Indizes, Source-FKs, private Delivery, CAS/Replay/Overlap und 1000er Node-Feed |
+| Reader chapter scope | Zwei Kapitel derselben Edition mit Revision 1; NULL-Vollinhalt eindeutig, keine Content-/Page-/Annotation-Fanouts, kein Cross-Chapter-Checkpoint oder direkter Write |
 | Reader publication concurrency | Drei echte PG-Sessions: genau ein Publisher, kein verspäteter Index-Write oder halbfertiger veröffentlichter Inhalt |
 | Progress concurrency/completion | Zwei unterschiedliche berechtigte Accounts: genau ein Root-/Checkpoint-Gewinner, keine stale Position/Completion/Belege; lückenloser SQL-Episoden-Präfix mit Specials/Season-Grenzen und 1000 gleich datierten Continue-Roots |
 | Images/Segments/Detection | Genau ein typisiertes Bildziel, valide Zeitspannen, legitime Überlappung, No-Match und wiederholte Detection-Runs |

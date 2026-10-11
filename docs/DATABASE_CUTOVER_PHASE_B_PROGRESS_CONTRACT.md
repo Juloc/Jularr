@@ -89,8 +89,9 @@ Position anhand eines fehlenden Client-Felds auf null/0 zu löschen.
 ReaderContent ist eine unveränderliche Edition-/Work-/optionale Chapter-
 Revision mit verbindlichem VariantKey. Neue Bytes erhalten eine neue Revision;
 alte Anker werden nicht umgebogen. Nur veröffentlichte Inhalte dürfen gebunden
-werden; Edition-/Chapter-Targets und Content müssen zusammenpassen. Ungeöffneter
-Progress darf ohne Content/Locator bestehen. Part 19 validiert drei geschlossene
+werden; Edition-/Chapter-Targets und Content müssen zusammenpassen.
+NULL-Chapter bezeichnet ausschließlich Vollinhalt und ist kein Wildcard.
+Ungeöffneter Progress darf ohne Content/Locator bestehen. Part 19 validiert drei geschlossene
 Locator-Shapes gegen den genauen Index; PageIndex ist ausschließlich erzeugt,
 kein zweiter Schreibparameter. Der [Reader-Vertrag](DATABASE_CUTOVER_PHASE_B_READER_CONTRACT.md)
 schließt Varianten, Veröffentlichung und Annotationen physisch ab.

@@ -31,6 +31,7 @@ LEFT JOIN
 WHERE
     account."Id" = @ActorAccountId
     AND edition."PublicId" = @EditionPublicId
+    AND chapter."PublicId" IS NOT DISTINCT FROM @ChapterPublicId
     AND content."VariantKey" = @VariantKey
     AND content."ContentRevision" = @ContentRevision
     AND content."PublishedAt" IS NOT NULL;
@@ -47,9 +48,12 @@ WITH "Scope" AS MATERIALIZED (
         "AccountProfiles" AS membership ON membership."ProfileId" = @ActiveProfileId
     INNER JOIN
         "Accounts" AS account ON account."Id" = membership."AccountId" AND account."IsEnabled" = TRUE
+    LEFT JOIN
+        "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
     WHERE
         account."Id" = @ActorAccountId
         AND edition."PublicId" = @EditionPublicId
+        AND chapter."PublicId" IS NOT DISTINCT FROM @ChapterPublicId
         AND content."VariantKey" = @VariantKey
         AND content."ContentRevision" = @ContentRevision
         AND content."PublishedAt" IS NOT NULL
@@ -130,9 +134,12 @@ INNER JOIN
     "AccountProfiles" AS membership ON membership."ProfileId" = @ActiveProfileId
 INNER JOIN
     "Accounts" AS account ON account."Id" = membership."AccountId" AND account."IsEnabled" = TRUE
+LEFT JOIN
+    "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
 WHERE
     account."Id" = @ActorAccountId
     AND edition."PublicId" = @EditionPublicId
+    AND chapter."PublicId" IS NOT DISTINCT FROM @ChapterPublicId
     AND content."VariantKey" = @VariantKey
     AND content."ContentRevision" = @ContentRevision
     AND content."PublishedAt" IS NOT NULL;

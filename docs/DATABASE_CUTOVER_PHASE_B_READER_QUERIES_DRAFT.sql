@@ -5,6 +5,7 @@ SELECT
     bookmark."PublicId" AS "ReaderBookmarkId",
     work."PublicId" AS "WorkId",
     edition."PublicId" AS "WorkEditionId",
+    chapter."PublicId" AS "WorkChapterId",
     content."ContentRevision",
     content."VariantKey",
     bookmark."Locator",
@@ -31,6 +32,8 @@ INNER JOIN
 INNER JOIN
     "Works" AS work
         ON work."Id" = edition."WorkId"
+LEFT JOIN
+    "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
 WHERE
     account."Id" = @ActorAccountId
     AND account."IsEnabled" = TRUE
@@ -49,6 +52,7 @@ SELECT
     highlight."PublicId" AS "ReaderHighlightId",
     work."PublicId" AS "WorkId",
     edition."PublicId" AS "WorkEditionId",
+    chapter."PublicId" AS "WorkChapterId",
     content."ContentRevision",
     content."VariantKey",
     highlight."Revision",
@@ -77,6 +81,8 @@ INNER JOIN
 INNER JOIN
     "Works" AS work
         ON work."Id" = edition."WorkId"
+LEFT JOIN
+    "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
 WHERE
     account."Id" = @ActorAccountId
     AND account."IsEnabled" = TRUE
@@ -96,6 +102,7 @@ WITH "Scope" AS MATERIALIZED (
         content."Id",
         work."PublicId" AS "WorkId",
         edition."PublicId" AS "WorkEditionId",
+        chapter."PublicId" AS "WorkChapterId",
         content."ContentRevision",
         content."VariantKey"
     FROM
@@ -108,10 +115,13 @@ WITH "Scope" AS MATERIALIZED (
         "Works" AS work ON work."Id" = edition."WorkId"
     INNER JOIN
         "ReaderContent" AS content ON content."WorkEditionId" = edition."Id" AND content."WorkId" = edition."WorkId"
+    LEFT JOIN
+        "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
     WHERE
         account."Id" = @ActorAccountId
         AND account."IsEnabled" = TRUE
         AND content."ContentRevision" = @ContentRevision
+        AND chapter."PublicId" IS NOT DISTINCT FROM @ChapterPublicId
         AND content."VariantKey" = @VariantKey
         AND content."PublishedAt" IS NOT NULL
         AND @StartPageIndex >= 0
@@ -120,6 +130,7 @@ WITH "Scope" AS MATERIALIZED (
 SELECT
     scope."WorkId",
     scope."WorkEditionId",
+    scope."WorkChapterId",
     scope."ContentRevision",
     scope."VariantKey",
     page."PageIndex",
@@ -150,6 +161,7 @@ SELECT
     bookmark."Revision",
     edition."PublicId" AS "EditionPublicId",
     content."VariantKey",
+    chapter."PublicId" AS "WorkChapterId",
     content."ContentRevision",
     bookmark."Locator",
     bookmark."Label",
@@ -165,6 +177,8 @@ INNER JOIN
     "AccountProfiles" AS membership ON membership."ProfileId" = bookmark."ProfileId"
 INNER JOIN
     "Accounts" AS account ON account."Id" = membership."AccountId"
+LEFT JOIN
+    "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
 WHERE
     account."Id" = @ActorAccountId
     AND account."IsEnabled" = TRUE
@@ -178,6 +192,7 @@ SELECT
     highlight."Revision",
     edition."PublicId" AS "EditionPublicId",
     content."VariantKey",
+    chapter."PublicId" AS "WorkChapterId",
     content."ContentRevision",
     highlight."StartLocator",
     highlight."EndLocator",
@@ -195,6 +210,8 @@ INNER JOIN
     "AccountProfiles" AS membership ON membership."ProfileId" = highlight."ProfileId"
 INNER JOIN
     "Accounts" AS account ON account."Id" = membership."AccountId"
+LEFT JOIN
+    "WorkChapters" AS chapter ON chapter."Id" = content."WorkChapterId"
 WHERE
     account."Id" = @ActorAccountId
     AND account."IsEnabled" = TRUE
