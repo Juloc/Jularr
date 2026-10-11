@@ -32,6 +32,11 @@ test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
         assert.equal(icons.symbols[key], "icon-" + key);
     }
     assert.ok(!readdirSync(join(build, "assets")).includes("icons.svg"));
+    assert.ok(!existsSync(join(build, ".vite")), "build metadata must be private");
+    const sprite = readFileSync(join(build, icons.file), "utf8");
+    for (const id of Object.values(icons.symbols)) {
+        assert.ok(sprite.includes('id="' + id + '"'), "missing sprite symbol " + id);
+    }
 });
 
 test("manifest URLs are relative and cannot escape the asset root", () => {
