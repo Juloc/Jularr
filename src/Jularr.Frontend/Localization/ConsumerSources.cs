@@ -1,0 +1,48 @@
+namespace Jularr.Frontend.Localization;
+
+// English fallback text for unconnected page skeletons. Semantic descriptions belong in PostgreSQL.
+internal static class ConsumerSources
+{
+    internal static IReadOnlyDictionary<string, string> English { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["common.all"] = "All",
+        ["media.all"] = "All",
+        ["media.anime"] = "Anime",
+        ["media.series"] = "Series",
+        ["media.movies"] = "Movies",
+        ["media.lightNovels"] = "Light novels",
+        ["media.books"] = "Books",
+        ["media.manga"] = "Manga",
+        ["discover.title"] = "Discover",
+        ["discover.hero"] = "Featured",
+        ["discover.heroDescription"] = "Featured media appears here when discovery data is available.",
+        ["discover.continue"] = "Continue",
+        ["discover.trending"] = "Trending",
+        ["details.title"] = "Media details",
+        ["details.heroDescription"] = "Title, artwork and availability will come from the canonical Work.",
+        ["player.title"] = "Player",
+        ["player.unavailable"] = "Playback is not connected yet.",
+        ["watchlist.title"] = "Watchlist",
+        ["settings.title"] = "Settings",
+        ["settings.profileNotice"] = "This will be the Settings tab of your profile.",
+        ["settings.general"] = "General",
+        ["settings.appearance"] = "Appearance",
+        ["settings.language"] = "Language & region",
+        ["settings.accessibility"] = "Accessibility",
+        ["settings.media"] = "Media",
+        ["settings.library"] = "Library & display",
+        ["settings.playback"] = "Playback",
+        ["settings.audioSubtitles"] = "Audio & subtitles",
+        ["settings.reader"] = "Reader",
+        ["settings.ratings"] = "Ratings",
+        ["settings.personal"] = "Personal features",
+        ["settings.modules"] = "Modules & features",
+        ["settings.notifications"] = "Notifications",
+        ["settings.connections"] = "Connections",
+        ["settings.account"] = "Account",
+        ["settings.sessions"] = "Devices & sessions",
+        ["settings.privacy"] = "Profile & privacy",
+        ["settings.security"] = "Account & security",
+        ["skeleton.unconnected"] = "This view will show live data when its backend service is available.",
+    };
+}
