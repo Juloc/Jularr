@@ -19,10 +19,12 @@ public abstract class JularrPage : PageModel
 public sealed class Page
 {
     public bool Shell { get; set; } = true;
+    public string? TitleKey { get; private set; }
     public string? NavigationKey { get; private set; }
     public string? SectionKey { get; private set; }
     public UiCollection Content { get; } = new();
 
+    public void Title(string key) => TitleKey = key;
     public void Navigation(string key) => NavigationKey = key;
     public void SectionTabs(string key) => SectionKey = key;
 }
