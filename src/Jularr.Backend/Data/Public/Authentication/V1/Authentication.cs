@@ -84,12 +84,14 @@ namespace Jularr.Backend.Data.Public.Authentication.V1
 
     public sealed class AuthenticationResultV1 : BaseResponse
     {
-        public AuthenticationResultV1(bool plexLoginEnabled, bool plexRegistrationEnabled, long? accountId, long? profileId)
+        public AuthenticationResultV1(bool plexLoginEnabled, bool plexRegistrationEnabled, long? accountId, long? profileId, long? uiLocaleId = null, IReadOnlyList<string>? permissions = null)
         {
             PlexLoginEnabled = plexLoginEnabled;
             PlexRegistrationEnabled = plexRegistrationEnabled;
             AccountId = accountId;
             ProfileId = profileId;
+            UiLocaleId = uiLocaleId;
+            Permissions = permissions ?? [];
         }
 
         public bool PlexLoginEnabled { get; }
@@ -97,5 +99,7 @@ namespace Jularr.Backend.Data.Public.Authentication.V1
         public bool IsAuthenticated => AccountId.HasValue;
         public long? AccountId { get; }
         public long? ProfileId { get; }
+        public long? UiLocaleId { get; }
+        public IReadOnlyList<string> Permissions { get; }
     }
 }

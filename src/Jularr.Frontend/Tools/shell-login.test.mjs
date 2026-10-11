@@ -55,9 +55,11 @@ test("Tabs show only selected content and provide real server navigation", () =>
     assert.match(tabs, /Exactly one tab must be selected/);
 });
 
-test("Settings use generic sections and content lists", () => {
+test("Settings use backend services and generic forms without unsupported controls", () => {
     const settings = load("Pages/Settings.cshtml.cs");
     assert.match(settings, /new UiSection\(/);
-    assert.match(settings, /new ItemList\(/);
+    assert.match(settings, /new Form<UpdateProfileDataV1>/);
+    assert.match(settings, /updateProfile\.ExecuteAsync<UpdateResult>/);
+    assert.doesNotMatch(settings, /Npgsql|SqlStatement|settings\.playback|settings\.connections/);
     assert.ok(!existsSync(resolve(root, "Framework/Components/SettingsGroup.cs")));
 });

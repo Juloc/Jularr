@@ -16,6 +16,12 @@ using Npgsql;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Fixture = Jularr.Backend.Tests.ProfileReferenceVerticalTests.ProfileFixture;
+using Jularr.Frontend.Framework;
+using Jularr.Frontend.Localization;
+using Jularr.Frontend.Pages.Shared;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Http;
+using Jularr.Backend.Service.Core.Localization;
 
 namespace Jularr.Backend.Tests
 {
@@ -23,6 +29,41 @@ namespace Jularr.Backend.Tests
     public sealed class AuthenticationTests
     {
         private const string Password = "test-password-123";
+
+        [TestMethod]
+        public async Task Logout_AccountSessionWithoutProfile_RevokesCookieAndDatabaseSession()
+        {
+            await using var host = await Host.CreateAsync();
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = 'selection-guard' WHERE \"Id\" = 101");
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
+            var result = (await login.Content.ReadFromJsonAsync<LoginResultV1>())!;
+            Assert.IsNull(result.ProfileId);
+
+            using var logout = await host.SendAsync(HttpMethod.Delete, "/api/v1/auth/session");
+            Assert.AreEqual(HttpStatusCode.OK, logout.StatusCode);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            Assert.IsFalse((await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.IsAuthenticated);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NOT NULL"));
+        }
+
+        [TestMethod]
+        public async Task RevokeSession_ForeignAndMissingSession_AreHidden()
+        {
+            await using var host = await Host.CreateAsync();
+            var foreignId = Guid.NewGuid();
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"AccountSessions\" (\"PublicId\", \"AccountId\", \"TokenHash\", \"ExpiresAt\") VALUES ('{foreignId}', 42, decode(repeat('00', 32), 'hex'), now() + interval '1 hour')");
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
+
+            foreach (var id in new[] { foreignId, Guid.NewGuid() })
+            {
+                using var revoke = await host.SendAsync(HttpMethod.Delete, "/api/v1/sessions/" + id);
+                Assert.AreEqual(HttpStatusCode.NotFound, revoke.StatusCode);
+            }
+
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"RevokedAt\" IS NOT NULL"));
+        }
 
         [TestMethod]
         public async Task Registration_PendingAndDuplicateRequests_DoNotCreateSessionsOrReplacePasswords()
@@ -220,7 +261,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\""));
         }
 
-        private sealed class Host : IAsyncDisposable
+        internal sealed class Host : IAsyncDisposable
         {
             private readonly WebApplication _app;
             private readonly HttpClient _client;
@@ -238,7 +279,7 @@ namespace Jularr.Backend.Tests
             public PlexHandler Plex { get; }
             public Dictionary<string, string> Cookies { get; } = new(StringComparer.Ordinal);
 
-            public static async Task<Host> CreateAsync(bool plexEnabled = false)
+            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false)
             {
                 var fixture = await Fixture.CreateAsync();
                 var hasher = new PasswordHasher<AccountAuthenticationData>();
@@ -251,11 +292,29 @@ namespace Jularr.Backend.Tests
                     await command.ExecuteNonQueryAsync();
                 }
 
-                var builder = WebApplication.CreateBuilder();
+                var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+                {
+                    ApplicationName = razor ? typeof(UiText).Assembly.GetName().Name : typeof(AuthenticationTests).Assembly.GetName().Name,
+                    ContentRootPath = razor ? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../src/Jularr.Frontend")) : null
+                });
                 builder.WebHost.UseTestServer();
                 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
                 builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
                 builder.Services.AddJularrServices(builder.Configuration);
+                if (razor)
+                {
+                    builder.Services.AddRazorPages(options =>
+                    {
+                        options.Conventions.AuthorizeFolder("/");
+                        options.Conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
+                        options.Conventions.AllowAnonymousToPage("/Account/Login");
+                    });
+                    builder.Services.AddAuthorization();
+                    builder.Services.AddJularrLocalization(UiResources.English);
+                    builder.Services.AddScoped<UiText>();
+                    builder.Services.AddSingleton<FrontendAssets>();
+                    builder.Services.AddSingleton<ShellNavigation>();
+                }
                 builder.Services.Configure<AuthenticationOptions>(options =>
                 {
                     options.PlexLoginEnabled = plexEnabled;
@@ -271,6 +330,21 @@ namespace Jularr.Backend.Tests
                 app.UseExceptionHandler();
                 app.UseRateLimiter();
                 app.UseAuthentication();
+                if (razor)
+                {
+                    app.UseAuthorization();
+                    app.Use(async (http, next) =>
+                    {
+                        if (http.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)
+                        {
+                            http.Response.Headers.CacheControl = "private,no-store";
+                            await http.RequestServices.GetRequiredService<UiText>().InitializeAsync(http);
+                        }
+
+                        await next(http);
+                    });
+                    app.MapRazorPages();
+                }
                 app.MapJularrServices();
                 await app.StartAsync();
                 return new Host(fixture, app, plex);
@@ -281,7 +355,7 @@ namespace Jularr.Backend.Tests
                 using var request = new HttpRequestMessage(method, path);
                 if (data is not null)
                 {
-                    request.Content = JsonContent.Create(data);
+                    request.Content = data is IReadOnlyDictionary<string, string> form ? new FormUrlEncodedContent(form) : JsonContent.Create(data);
                 }
 
                 if (Cookies.Count > 0)
@@ -327,7 +401,7 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private sealed class PlexHandler : HttpMessageHandler
+        internal sealed class PlexHandler : HttpMessageHandler
         {
             private readonly Dictionary<string, byte[]> _keys = new(StringComparer.Ordinal);
             public bool Pending { get; set; }

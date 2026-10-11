@@ -21,12 +21,15 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Npgsql;
+using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
 
 namespace Jularr.Backend.Service.Core
 {
     public static class ServiceApi
     {
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
+        public const string AdminPolicyName = "jularr.admin";
 
         public static IServiceCollection AddJularrServices(this IServiceCollection services, IConfiguration configuration)
         {
@@ -72,6 +75,21 @@ namespace Jularr.Backend.Service.Core
             services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
             services.AddDataProtection();
+
+            // Razor consumes verified service grants.
+            services.AddRouting();
+            services.AddAuthorization(options => options.AddPolicy(AdminPolicyName, policy =>
+                policy.RequireAuthenticatedUser().RequireAssertion(async authorization =>
+                {
+                    if (authorization.Resource is not HttpContext http)
+                    {
+                        return false;
+                    }
+
+                    var authentication = await http.RequestServices.GetRequiredService<ReadAuthenticationV1>()
+                        .ExecuteAsync<AuthenticationResultV1>(cancellationToken: http.RequestAborted);
+                    return authentication.Permissions.Contains("admin.access", StringComparer.Ordinal);
+                })));
 
             // Validate trusted auth configuration.
             services.AddOptions<AuthenticationOptions>()
@@ -253,6 +271,15 @@ namespace Jularr.Backend.Service.Core
         public static async Task ApplyAuthenticationAsync(HttpContext http, IServiceOutput result, IAntiforgery antiforgery)
         {
             http.Response.Headers.CacheControl = "no-store";
+
+            // Clear only after committed logout.
+            if (result is ISessionEndResult { EndsCurrentSession: true })
+            {
+                await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                http.User = new ClaimsPrincipal(new ClaimsIdentity());
+                http.Response.Cookies.Delete(AuthenticationNonceCookieName, new CookieOptions { Path = "/", Secure = true, HttpOnly = true, SameSite = SameSiteMode.Strict });
+                http.Response.Headers["RequestVerificationToken"] = antiforgery.GetAndStoreTokens(http).RequestToken;
+            }
 
             // Publish the committed session.
             if (result is ISessionResult { Session: { } session })

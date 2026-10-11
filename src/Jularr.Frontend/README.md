@@ -13,9 +13,9 @@ Architecture and hard rules:
 - All English resources are declared once in `Localization/UiResources.cs`,
   synchronized into the existing PostgreSQL resource catalog at startup.
   Backend owns descriptions, non-English translations, status and cache.
-- The active UI language is negotiated from enabled DB locales (for now
-  Accept-Language, English fallback); trusted profile preference binding
-  is an open Backend/frontend integration step. No fixed German dictionary.
+- The active UI language uses the verified profile's locale ID first; anonymous
+  requests negotiate enabled locales via Accept-Language with English fallback.
+  No fixed German dictionary or client-side translation loading.
 - Frontend `Program.cs` hosts Backend API and Razor on the same process.
   It **requires** explicit `JULARR_DB` configuration and an already installed
   fresh PostgreSQL schema. Startup registration does not run migrations.
@@ -32,15 +32,19 @@ Login is assembled using one typed `Form<LoginDataV1>` in its C# PageModel.
 Labels and inputs come from the reusable form renderer and canonical
 DataField metadata, not page-local HTML builders. Existing Login backend
 data supports email/password; username login has no confirmed backend contract.
-Login controls intentionally remain disabled until the authenticated Backend
-session flow is bound; configured providers and passkeys are not guessed.
+Login, configured Plex authentication, profile selection, session revocation,
+logout and profile name/language settings invoke typed Backend services directly.
+POST forms use antiforgery, canonical field metadata and shared sanitized errors.
+Password values and session secrets are never rendered. PIN-protected profiles
+remain inaccessible until the PIN contract is implemented; passkeys are not guessed.
 The Jularr-specific application Shell belongs to `Pages/Shared/Shell.cs`,
 including its private header/sidebar/mobile helpers; the Razor bridge calls it
 once. Brand is shared across Shell and Login; only generic components remain
 in Framework. The Topbar Breadcrumb is the sole visible page title.
 The shell currently offers only unconditional Home/Settings navigation;
-authorized module/profile links are pending. Admin authorization, canonical typed media/
-request services, profile locale preference and Player PlaybackPlan integration
+authorized module links are pending. Admin routes require the Backend `jularr.admin`
+policy and remain closed pending role grants. Canonical typed media/
+request services and Player PlaybackPlan integration
 remain pending. Do not expose the prepared routes as production-ready.
 
 Development-only `/ShellPreview?view=admin-requests` previews real page

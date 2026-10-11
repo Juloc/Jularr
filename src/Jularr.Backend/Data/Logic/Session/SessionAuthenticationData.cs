@@ -6,11 +6,12 @@ namespace Jularr.Backend.Data.Logic.Session
 {
     public sealed class SessionAuthenticationData : BaseData
     {
-        public SessionAuthenticationData(long accountId, long? profileId, long? profileOwnerAccountId)
+        public SessionAuthenticationData(long accountId, long? profileId, long? profileOwnerAccountId, long? uiLocaleId = null)
         {
             AccountId = accountId;
             ProfileId = profileId;
             ProfileOwnerAccountId = profileOwnerAccountId;
+            UiLocaleId = uiLocaleId;
         }
 
         [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
@@ -21,5 +22,8 @@ namespace Jularr.Backend.Data.Logic.Session
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.OwnerAccountId), false)]
         public long? ProfileOwnerAccountId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId), false)]
+        public long? UiLocaleId { get; }
     }
 }

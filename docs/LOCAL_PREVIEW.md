@@ -13,7 +13,8 @@ No existing D: installation or database is modified.
   avoid reliance on the scheduled-task PATH. A valid user HTTPS dev certificate is required.
 - Git trusts only this dedicated checkout per command (`safe.directory`), because
   this D: filesystem does not record file ownership; no global wildcard exception.
-- Every 60 seconds: fetch, fast-forward only, publish outside the checkout, then
+- Every 60 seconds: fetch, fast-forward only, install locked Node dependencies,
+  build fingerprinted assets, publish outside the checkout, then
   replace the host after successful build. Startup health check uses the login page;
   a failed startup restores the previous release. Builds retain the running host.
 - Dirty/divergent checkouts are never reset. Fetch/build errors retain the current
@@ -27,15 +28,17 @@ the runner stops its own host and exits. To resume, remove only that marker and 
 the named Windows task. A stale status file is not proof of a live process: check
 the task and URL. Do not kill unrelated dotnet processes or remove other D: folders.
 
-## Current integration boundary
+## Host prerequisites
 
-This is the unmodified clean-start Frontend preview, not an end-to-end authentication
-server. The two old `Jularr.Data.*` imports in Frontend `Framework/BaseField.cs`
-were corrected with explicit owner approval. The existing local HTTPS certificate
-was trusted in the owner's CurrentUser store with approval; HTTPS was verified
-without a certificate bypass. Other machines/users need their own certificate trust.
-Its Program still lacks Backend service/API and PostgreSQL localization
-registration. Login and API business behavior are not wired there yet; no preview
-database is used or provisioned until that integration needs it. Any later database
-must be an explicit isolated test database, never an active installation.
+The host now registers Backend services, API and PostgreSQL localization.
+It requires explicit `JULARR_DB` configuration pointing at an isolated preview
+database with the fresh baseline already installed. No preview database has been
+provisioned; do not point the runner at an active installation. No automatic schema
+installation, migrations or first-owner creation. Missing prerequisites mean the
+previous preview can remain running and stale; check its commit in `status.json`.
+
+The existing local HTTPS certificate was trusted in the owner's CurrentUser store
+with approval. Health checks validate the certificate without a bypass.
+Other machines/users need their own certificate trust. The runner also requires
+Node/npm; `NpmPath`, `GitPath` and `DotNetPath` can be supplied explicitly.
 See [host registration](../README.md#backend-im-gemeinsamen-host).

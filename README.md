@@ -71,8 +71,13 @@ SQL steht unmittelbar in `sql.Statement`; Logic teilt Connection und Transaction
 | `POST /api/v1/auth/register` | Deaktivierte Registrierungsanfrage mit eigenem Profile |
 | `POST /api/v1/auth/plex` | Browsergebundener Plex-PIN-/JWT-Versuch und AuthorizationUrl |
 | `POST /api/v1/auth/plex/{authChallengePublicId:guid}` | Bestätigung abfragen; Session oder Freigabeanfrage |
+| `GET /api/v1/profiles` | Zugeordnete Profile seitenweise für die Auswahl lesen |
+| `PUT /api/v1/auth/profile/{profileId:long}` | Ungepinntes Profile auswählen; Session-ID und Secret rotieren |
 | `GET /api/v1/profiles/{profileId:long}` | Aktives, zugeordnetes Profile lesen |
 | `PUT /api/v1/profiles/{profileId:long}` | DisplayName/UiLocaleId über den kanonischen Writer ändern |
+| `GET /api/v1/sessions` | Eigene gültige Sessions seitenweise lesen |
+| `DELETE /api/v1/sessions/{sessionPublicId:guid}` | Eigene Session widerrufen |
+| `DELETE /api/v1/auth/session` | Aktuelle Session widerrufen und Browser abmelden |
 
 API-Mutationen brauchen Cookie und `RequestVerificationToken` aus dem GET-Header.
 Nach Login den erneuerten Header verwenden. Plex-Abfragen nicht häufiger als alle
@@ -86,6 +91,13 @@ Zustand erneut in derselben Transaktion. `profile.self.update` verlangt Eigentum
 im gemeinsamen Permission-Gate; im Profile-Service steht nur der Abgleich mit `Auth.ProfileId`.
 Profile-PINs werden nicht durch automatische Auswahl umgangen: Login kann zunächst
 eine Account-Session ohne aktives Profile erstellen.
+
+Razor bindet Login, Plex, Profile-Auswahl, Session-Verwaltung, Logout und Profile-
+Einstellungen direkt an diese Services. `ServiceError` klassifiziert erwartete
+Fehler gemeinsam für API und Razor; `JularrPage` zeigt sie ohne Catch pro Seite.
+Die verifizierte Profile-Sprache hat Vorrang vor Browser-Sprachhinweisen.
+Admin-Routen verwenden die Backend-Policy `jularr.admin`. Sie bleiben gesperrt,
+bis die Rollenrechte fachlich festgelegt sind; Anmeldung allein genügt nicht.
 
 ## Plex-Konfiguration
 
@@ -195,9 +207,12 @@ Betroffene Tests liegen unter `tests/Jularr.Backend.Tests`; PostgreSQL-Tests ver
 `JULARR_TEST_DB` auf `127.0.0.1:15433`, Benutzer `jularr_test`, Administrationsdatenbank
 `jularr_test_admin`. Sie erstellen und entfernen nur eigene zufällig benannte Datenbanken.
 
-Noch offen: Formular-Anbindung, explizite Owner-Ersteinrichtung,
-Freigabe-/E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf, Logout/Rotation,
-Profile-Auswahl mit PIN und alte Android-/TV-Verbraucher. Accounts mit bestätigter
+Noch offen: explizite Owner-Ersteinrichtung, Admin-Rollenrechte,
+Freigabe-/E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf,
+Profile-Auswahl mit PIN, vollständige Profile-Verwaltung und alte Android-/TV-Verbraucher. Accounts mit bestätigter
 2FA werden derzeit ohne Anmeldung abgelehnt, nicht am zweiten Faktor vorbeigeführt.
 Plex wurde mit kontrollierten Provider-Antworten getestet, noch nicht gegen eine echte Installation.
-Weitere Profile-Funktionen und Phase B sind nicht Teil dieses Schnitts.
+Home/Details/Watchlist/Player und fachliche Admin-Seiten bleiben Layouts ohne erfundene
+Medien- oder Prozessdaten. Ihre offenen Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
+Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
+und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.

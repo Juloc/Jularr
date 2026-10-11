@@ -3,7 +3,8 @@ param(
     [int]$HttpPort = 5240,
     [int]$HttpsPort = 7240,
     [string]$DotNetPath = 'dotnet',
-    [string]$GitPath = 'git'
+    [string]$GitPath = 'git',
+    [string]$NpmPath = 'npm.cmd'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,9 +52,27 @@ try
             {
                 # Build before replacing
                 $release = Join-Path $releases $commit
-                & $DotNetPath publish (Join-Path $checkout 'src/Jularr.Frontend/Jularr.Frontend.csproj') --configuration Release --output $release *> (Join-Path $logs "build-$commit.log")
+                $buildLog = Join-Path $logs "build-$commit.log"
+                Push-Location (Join-Path $checkout 'src/Jularr.Frontend')
+                try
+                {
+                    # Compile fingerprinted assets.
+                    & $NpmPath ci --no-audit --no-fund *> $buildLog
+                    if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed; no running host was replaced.' }
+                    & $NpmPath run build *>> $buildLog
+                    if ($LASTEXITCODE -ne 0) { throw 'Frontend asset build failed; no running host was replaced.' }
+                }
+                finally { Pop-Location }
+
+                & $DotNetPath publish (Join-Path $checkout 'src/Jularr.Frontend/Jularr.Frontend.csproj') --configuration Release --output $release *>> $buildLog
                 if ($LASTEXITCODE -ne 0) { throw 'Publish failed; no running host was replaced.' }
                 if (Test-Path -LiteralPath $stopRequest) { break }
+
+                # Preserve the host without configuration.
+                if ([string]::IsNullOrWhiteSpace($env:JULARR_DB))
+                {
+                    throw 'An isolated preview database must be configured in JULARR_DB; no running host was replaced.'
+                }
 
                 if ($null -ne $app -and -not $app.HasExited)
                 {
@@ -79,7 +98,7 @@ try
                 {
                     try
                     {
-                        $response = Invoke-WebRequest "https://localhost:$HttpsPort/Account/Login" -SkipCertificateCheck -TimeoutSec 2
+                        $response = Invoke-WebRequest "https://localhost:$HttpsPort/Account/Login" -TimeoutSec 2
                         $ready = $response.StatusCode -eq 200
                         if ($ready) { break }
                     }

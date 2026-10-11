@@ -13,10 +13,13 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [ServiceApi.cs](../src/Jularr.Backend/Service/Core/ServiceApi.cs): configuration-based host registration, Backend-owned data source, service DI, endpoint discovery, parameter/body binding and antiforgery.
 - [ServiceEndpointAttribute.cs](../src/Jularr.Backend/Service/Core/ServiceEndpointAttribute.cs): class-level API opt-in; unmarked services stay internal, System services cannot be exposed.
 - [ServiceExceptionHandler.cs](../src/Jularr.Backend/Service/Core/ServiceExceptionHandler.cs): central sanitized ProblemDetails, including binding and data validation failures.
+- [ServiceError.cs](../src/Jularr.Backend/Service/Core/ServiceError.cs): shared API/Razor error codes and resource keys; Frontend `JularrPage` owns form feedback.
 - [ReadUiTextsV1.cs](../src/Jularr.Backend/Service/Public/Localization/V1/ReadUiTextsV1.cs), [ReadUiLocalesV1.cs](../src/Jularr.Backend/Service/Public/Localization/V1/ReadUiLocalesV1.cs): canonical Public reads for Razor/API; SQL resolves fallback and aggregates the complete language pack. [UiLocalizationCache.cs](../src/Jularr.Backend/Service/Public/Localization/V1/UiLocalizationCache.cs) is passive caching; [registration](../src/Jularr.Backend/Service/Core/Localization/UiLocalizationRegistration.cs) synchronizes English declarations at startup.
 - [UiLocalizationLogic.cs](../src/Jularr.Backend/Logic/Localization/UiLocalizationLogic.cs): source sync and canonical description/translation mutations; [host contract and gaps](../README.md#gemeinsamer-postgresql-textkatalog).
 - [ProfileServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileServices.cs): the one read and one update; permissions and orchestration.
-- [ServiceGate.cs](../src/Jularr.Backend/Service/Core/ServiceGate.cs): public boundary and verified session access; current protected grants are the two self-profile permissions.
+- [ServiceGate.cs](../src/Jularr.Backend/Service/Core/ServiceGate.cs): verified account-session/profile permissions, exported capabilities and mutable write authorization; Admin grants remain closed.
+- [ProfileSelectionServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileSelectionServices.cs): membership-scoped paged list and session profile selection.
+- [SessionServices.cs](../src/Jularr.Backend/Service/User/Session/V1/SessionServices.cs): live owned session list, revocation and logout.
 - [ProfileLogic.cs](../src/Jularr.Backend/Logic/Profile/ProfileLogic.cs): entity locking, business validation and the canonical writer.
 - [SessionLogic.cs](../src/Jularr.Backend/Logic/Session/SessionLogic.cs): mutable session authorization locks in the write transaction.
 - [AuthenticationServices.cs](../src/Jularr.Backend/Service/Public/Authentication/V1/AuthenticationServices.cs), [PlexAuthenticationServices.cs](../src/Jularr.Backend/Service/Public/Authentication/V1/PlexAuthenticationServices.cs): Public auth state, login, registration requests and Plex orchestration.
@@ -28,6 +31,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 ## Contracts and persistence
 
 - [Profile.cs](../src/Jularr.Backend/Data/User/Profile/V1/Profile.cs): public Profile parameters, inputs and result.
+- [ProfileSelection.cs](../src/Jularr.Backend/Data/User/Profile/V1/ProfileSelection.cs), [Session.cs](../src/Jularr.Backend/Data/User/Session/V1/Session.cs): versioned selection/session contracts with hidden credential transport.
 - [Data/Public/Authentication/V1](../src/Jularr.Backend/Data/Public/Authentication/V1): versioned Public auth contracts; [BaseParameters.cs](../src/Jularr.Backend/Data/Common/BaseParameters.cs), [BaseResponse.cs](../src/Jularr.Backend/Data/Common/BaseResponse.cs): service contract roles over BaseData.
 - [Data/Public/Localization/V1](../src/Jularr.Backend/Data/Public/Localization/V1): versioned locale list and language-pack parameters/results; there is no parallel consumer catalog interface.
 - [Data/Logic](../src/Jularr.Backend/Data/Logic): neutral Profile lookup/mutation and session authentication data.
@@ -56,12 +60,13 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 - Account/auth schema and catalog/field consistency: `AccountSchemaTests.cs`.
 - Shared localization, startup idempotence, manual protection, fallback, cache invalidation and rollback: `UiLocalizationTests.cs`.
 - Login/cookies, pending registration, Plex grants, browser proof, expiry and replay: `AuthenticationTests.cs` (isolated PostgreSQL and controlled provider responses).
+- Real Razor forms, antiforgery, language settings, selection rotation, session revocation and logout: `FrontendAuthenticationTests.cs`; requires built Frontend assets.
 - `Infrastructure/TestPostgres.cs`: explicit isolated PostgreSQL fixture; never use the application database.
 
 ## Not integrated
 
-Frontend forms, owner bootstrap, email/approval workflows, 2FA/WebAuthn completion,
-session logout/rotation, old Android/TV consumers, full Profile management and settings.
+Owner bootstrap, Admin grants, email/approval workflows, 2FA/WebAuthn completion,
+PIN selection, old Android/TV consumers, full Profile management and instance settings.
 This reference backend does not complete Phase B or replace an active installation.
 
 ## Next slices (not implemented)

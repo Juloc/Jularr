@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Security;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Session;
@@ -9,6 +10,90 @@ namespace Jularr.Backend.Logic.Session
 {
     internal static class SessionLogic
     {
+        public static async Task<SessionCredentialsData> SelectSessionProfileAsync(this LogicContext context, SessionParameters proof, ProfileMembershipParameters target, CancellationToken cancellationToken)
+        {
+            // Lock the target membership.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id" AS "ProfileId",
+                    profile."PinHash",
+                    session."ExpiresAt",
+                    session."CredentialRevision"
+                FROM
+                    "AccountProfiles" AS membership
+                INNER JOIN
+                    "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                INNER JOIN
+                    "AccountSessions" AS session ON session."AccountId" = membership."AccountId"
+                WHERE
+                    session."PublicId" = @SessionPublicId
+                    AND membership."AccountId" = @AccountId
+                    AND membership."ProfileId" = @ProfileId
+                FOR UPDATE OF
+                    membership, profile;
+                """;
+            sql.Parameters.Add(proof);
+            sql.Parameters.Add(target);
+            var profile = await context.ReadRequiredAsync<SessionProfileData>(sql, cancellationToken);
+            if (profile.PinHash is not null)
+            {
+                // PIN access remains fail-closed.
+                throw new SecurityException("The profile requires PIN verification.");
+            }
+
+            // Replace both identifier and secret.
+            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var credentials = new SessionCredentialsData(Guid.NewGuid(), target.AccountId, profile.ProfileId, SHA256.HashData(Encoding.UTF8.GetBytes(token)),
+                token, profile.CredentialRevision, profile.ExpiresAt, checked(proof.SessionRevision + 1));
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountSessions" AS session
+                SET
+                    "PublicId" = @PublicId,
+                    "ActiveProfileId" = @ProfileId,
+                    "TokenHash" = @TokenHash,
+                    "RotationRevision" = @RotationRevision,
+                    "RotatedAt" = statement_timestamp()
+                WHERE
+                    session."PublicId" = @SessionPublicId
+                    AND session."RotationRevision" = @SessionRevision;
+                """;
+            sql.Parameters.Add(proof);
+            sql.Parameters.Add(credentials);
+            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            {
+                throw new UnauthorizedAccessException("The account session changed.");
+            }
+
+            return credentials;
+        }
+
+        public static async Task RevokeSessionAsync(this LogicContext context, SessionRevocationData data, CancellationToken cancellationToken)
+        {
+            // Scope the canonical mutation.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountSessions" AS session
+                SET
+                    "RevokedAt" = COALESCE(session."RevokedAt", statement_timestamp())
+                WHERE
+                    session."PublicId" = @SessionPublicId
+                    AND session."AccountId" = @AccountId;
+                """;
+            sql.Parameters.Add(data);
+            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            {
+                throw new KeyNotFoundException("The account session was not found.");
+            }
+        }
+
         public static async Task<SessionCredentialsData> CreateSessionAsync(this LogicContext context, AccountAuthenticationData account, TimeSpan lifetime, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
@@ -25,6 +110,7 @@ namespace Jularr.Backend.Logic.Session
                 WHERE
                     membership."AccountId" = @AccountId
                     AND profile."PinHash" IS NULL
+                    AND (SELECT count(*) FROM "AccountProfiles" WHERE "AccountId" = @AccountId) = 1
                 ORDER BY
                     (profile."OwnerAccountId" = @AccountId) DESC,
                     profile."Id"
@@ -69,16 +155,27 @@ namespace Jularr.Backend.Logic.Session
                 SELECT
                     account."Id" AS "AccountId",
                     profile."Id" AS "ProfileId",
-                    profile."OwnerAccountId" AS "ProfileOwnerAccountId"
+                    profile."OwnerAccountId" AS "ProfileOwnerAccountId",
+                    profile."UiLocaleId"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
                     "Accounts" AS account ON account."Id" = session."AccountId"
-                INNER JOIN
-                    "AccountProfiles" AS membership ON membership."AccountId" = account."Id"
+                LEFT JOIN LATERAL (
+                    SELECT
+                        profile."Id",
+                        profile."OwnerAccountId",
+                        profile."UiLocaleId"
+                    FROM
+                        "AccountProfiles" AS membership
+                    INNER JOIN
+                        "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                    WHERE
+                        membership."AccountId" = account."Id"
                         AND membership."ProfileId" = session."ActiveProfileId"
-                INNER JOIN
-                    "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                    FOR UPDATE OF
+                        membership, profile
+                ) AS profile ON TRUE
                 WHERE
                     session."PublicId" = @SessionPublicId
                     AND session."RotationRevision" = @SessionRevision
@@ -87,8 +184,9 @@ namespace Jularr.Backend.Logic.Session
                     AND session."ExpiresAt" > statement_timestamp()
                     AND session."CredentialRevision" = account."CredentialRevision"
                     AND account."IsEnabled" = TRUE
+                    AND (session."ActiveProfileId" IS NULL OR profile."Id" IS NOT NULL)
                 FOR UPDATE OF
-                    account, membership, profile, session;
+                    account, session;
                 """;
             sql.Parameters.Add(parameters);
 

@@ -1,56 +1,82 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Jularr.Backend.Service.Core;
 
-namespace Jularr.Frontend.Framework;
-
-public abstract class JularrPage : PageModel
+namespace Jularr.Frontend.Framework
 {
-    public Page Definition { get; private set; } = new();
-
-    protected abstract void Define(Page page);
-
-    protected void PreparePage() => Definition = BuildDefinition();
-
-    internal Page BuildDefinition()
+    public abstract class JularrPage : PageModel
     {
-        var page = new Page();
-        Define(page);
-        return page;
+        public Page Definition { get; private set; } = new();
+        public ServiceError? Error { get; private set; }
+
+        // Shared service failure feedback.
+        public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
+        {
+            var executed = await next();
+            if (executed.Exception is null || executed.ExceptionHandled || executed.Exception is OperationCanceledException)
+            {
+                return;
+            }
+
+            var error = ServiceError.FromException(executed.Exception);
+            if (error.StatusCode == StatusCodes.Status500InternalServerError)
+            {
+                return;
+            }
+
+            Error = error;
+            Response.StatusCode = error.StatusCode;
+            PreparePage();
+            executed.ExceptionHandled = true;
+            executed.Result = Page();
+        }
+
+        protected abstract void Define(Page page);
+
+        protected void PreparePage() => Definition = BuildDefinition();
+
+        internal Page BuildDefinition()
+        {
+            var page = new Page();
+            Define(page);
+            return page;
+        }
     }
-}
 
-public abstract class PreparedPage : JularrPage
-{
-    public IActionResult OnGet()
+    public abstract class PreparedPage : JularrPage
     {
-        PreparePage();
-        return Page();
+        public IActionResult OnGet()
+        {
+            PreparePage();
+            return Page();
+        }
     }
-}
 
-public sealed class Page
-{
-    public bool Shell { get; set; } = true;
-    public bool IsPlayer { get; set; }
-    public string? TitleKey { get; private set; }
-    public string? NavigationKey { get; private set; }
-    public List<IUiComponent> Content { get; } = [];
-    public List<string> AssetEntries { get; } = [];
-
-    public void Title(string key) => TitleKey = key;
-    public void Asset(string entry)
+    public sealed class Page
     {
-        if (!AssetEntries.Contains(entry, StringComparer.Ordinal)) AssetEntries.Add(entry);
-    }
-    public void Navigation(string key) => NavigationKey = key;
+        public bool Shell { get; set; } = true;
+        public bool IsPlayer { get; set; }
+        public string? TitleKey { get; private set; }
+        public string? NavigationKey { get; private set; }
+        public List<IUiComponent> Content { get; } = [];
+        public List<string> AssetEntries { get; } = [];
 
-    public void Use(Page definition)
-    {
-        Shell = definition.Shell;
-        IsPlayer = definition.IsPlayer;
-        TitleKey = definition.TitleKey;
-        NavigationKey = definition.NavigationKey;
-        Content.AddRange(definition.Content);
-        foreach (var asset in definition.AssetEntries) Asset(asset);
+        public void Title(string key) => TitleKey = key;
+        public void Asset(string entry)
+        {
+            if (!AssetEntries.Contains(entry, StringComparer.Ordinal)) AssetEntries.Add(entry);
+        }
+        public void Navigation(string key) => NavigationKey = key;
+
+        public void Use(Page definition)
+        {
+            Shell = definition.Shell;
+            IsPlayer = definition.IsPlayer;
+            TitleKey = definition.TitleKey;
+            NavigationKey = definition.NavigationKey;
+            Content.AddRange(definition.Content);
+            foreach (var asset in definition.AssetEntries) Asset(asset);
+        }
     }
 }

@@ -1,8 +1,8 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Account;
+using Jularr.Backend.Data.Logic.Localization;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Infrastructure.Sql;
-using Npgsql;
 
 namespace Jularr.Backend.Logic.Profile
 {
@@ -86,7 +86,28 @@ namespace Jularr.Backend.Logic.Profile
             // Validate the merged entity.
             updateData.Validate();
 
+            // Lock the enabled language.
             var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    locale."Id"
+                FROM
+                    "UiLocales" AS locale
+                WHERE
+                    locale."Id" = @UiLocaleId
+                    AND locale."IsEnabled" = TRUE
+                FOR SHARE OF
+                    locale;
+                """;
+            sql.Parameters.Add(updateData);
+            if (await context.ReadOptionalAsync<UiLocaleData>(sql, cancellationToken) is null)
+            {
+                throw new DataValidationException(nameof(updateData.UiLocaleId), "unknown_reference");
+            }
+
+            // Write the merged profile.
+            sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
@@ -100,18 +121,7 @@ namespace Jularr.Backend.Logic.Profile
                 """;
             sql.Parameters.Add(updateData);
 
-            // Translate reference failures.
-            int affected;
-            try
-            {
-                affected = await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
-            }
-            catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.ForeignKeyViolation
-                && exception.ConstraintName == "FK_Profiles_UiLocales")
-            {
-                throw new DataValidationException(nameof(updateData.UiLocaleId), "unknown_reference");
-            }
-
+            var affected = await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
             if (affected != 1)
             {
                 throw new KeyNotFoundException("The authorized profile was not found.");

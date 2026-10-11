@@ -14,7 +14,7 @@ Shared conventions and Backend ownership:
 - [UiResources.cs](Localization/UiResources.cs): every English UI source
   declaration. Not a runtime translation store.
 - [UiText.cs](Framework/UiText.cs): per-request, backend-cached language
-  snapshot via `ReadUiLocalesV1` and `ReadUiTextsV1`.
+  snapshot via Public services; verified profile preference before browser hints.
 - [Backend locale services](../Jularr.Backend/Service/Public/Localization/V1),
   [Backend resource sync](../Jularr.Backend/Service/Core/Localization/UiLocalizationRegistration.cs):
   only canonical locale/query/DB owners.
@@ -22,7 +22,7 @@ Shared conventions and Backend ownership:
 ## Rendering and reusable components
 
 - [Page.cs](Framework/Page.cs): `JularrPage`, `PreparedPage`,
-  `Page` and page definition collection.
+  `Page`, page definitions and shared service-error feedback.
 - [UiComponent.cs](Framework/UiComponent.cs): component-to-Razor HTML boundary,
   interface and encoder wiring, **no type switch**.
 - [Elements.cs](Framework/Elements.cs): minimal encoded C# HTML DSL;
@@ -47,8 +47,8 @@ Shared conventions and Backend ownership:
   type-grouped shelves); awaits the authorized instance/profile discovery read.
 - [BaseField.cs](Framework/BaseField.cs) and
   [Form.cs](Framework/Components/Form.cs): `Form<TData>` owns label/input
-  markup using canonical backend `DataField` metadata. No invented save
-  action; controls remain disabled until an authorized handler is bound.
+  markup, field errors and local antiforgery POSTs using canonical backend
+  `DataField` metadata. Unbound forms remain disabled.
 - [Shell.cs](Pages/Shared/Shell.cs) and
   [Shell.scss](Pages/Shared/Shell.scss): Jularr-specific Header, Sidebar,
   Mobile navigation and their private helpers in **one** shell owner.
@@ -67,8 +67,11 @@ Shared conventions and Backend ownership:
 - [Login Page](Pages/Account/Login.cshtml.cs) and
   [Login SCSS](Pages/Account/Login.entry.scss): short declarative Login
   composition using `Form<LoginDataV1>` and shared Brand. Backend
-  currently exposes email/password fields only; live Login, provider
-  capabilities and profile selection are not wired.
+  exposes email/password and configured Plex flows through Public services.
+- [Profiles](Pages/Account/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions.cshtml.cs),
+  [Logout](Pages/Account/Logout.cshtml.cs): typed service-driven account session flows.
+- [Settings](Pages/Settings.cshtml.cs): active profile name/language editing,
+  read-only non-owner view and account navigation; no page-local SQL or permissions.
 - [Vite build](vite.config.ts), [package.json](package.json),
   [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
   compile/fingerprint Sass and TypeScript from colocated `*.entry.scss`
@@ -112,7 +115,6 @@ Shared conventions and Backend ownership:
 
 - Frontend UI-key coverage tool: [verify-ui-resources.mjs](Tools/verify-ui-resources.mjs).
 - [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
-- Backend service contracts for list data, forms, request/moderation,
-  media, playback and genuine admin authorization remain pending.
-- Frontend compile/browser validation must be performed separately from
-  the current Backend-only test workflow.
+- Media/request/moderation contracts, PIN verification and Admin role grants remain pending.
+- Backend CI builds Frontend assets and runs real Razor/PostgreSQL integration tests;
+  browser verification remains a separate gate.

@@ -7,7 +7,7 @@ namespace Jularr.Backend.Data.Logic.Session
     public sealed class SessionCredentialsData : BaseData
     {
         public SessionCredentialsData(Guid publicId, long accountId, long? profileId, byte[] tokenHash,
-            string token, long credentialRevision, DateTime expiresAt)
+            string token, long credentialRevision, DateTime expiresAt, long rotationRevision = 1)
         {
             PublicId = publicId;
             AccountId = accountId;
@@ -16,6 +16,7 @@ namespace Jularr.Backend.Data.Logic.Session
             Token = token;
             CredentialRevision = credentialRevision;
             ExpiresAt = expiresAt;
+            RotationRevision = rotationRevision;
         }
 
         [DataField(typeof(SessionFields), nameof(SessionFields.PublicId))]
@@ -40,6 +41,7 @@ namespace Jularr.Backend.Data.Logic.Session
         [DataField(typeof(SessionFields), nameof(SessionFields.ExpiresAt))]
         public DateTime ExpiresAt { get; }
 
-        public long RotationRevision => 1;
+        [DataField(typeof(SessionFields), nameof(SessionFields.RotationRevision))]
+        public long RotationRevision { get; }
     }
 }

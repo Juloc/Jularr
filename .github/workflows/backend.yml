@@ -35,4 +35,12 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile assets for Razor integration tests
+        working-directory: src/Jularr.Frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
       - run: dotnet test Jularr.sln --configuration Release

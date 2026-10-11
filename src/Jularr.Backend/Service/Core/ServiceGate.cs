@@ -49,11 +49,6 @@ namespace Jularr.Backend.Service.Core
             }
 
             var session = await _sessions.ReadRequestAsync(_accessor.HttpContext, cancellationToken);
-            if (session.ProfileId is null)
-            {
-                throw new UnauthorizedAccessException("An active profile is required for user services.");
-            }
-
             var parameters = _sessions.Parameters!;
             _caller = new ServiceCaller(session.AccountId, session.ProfileId, area,
                 parameters.SessionPublicId.ToString("D"), parameters.SessionPublicId, parameters.SessionRevision,
@@ -102,17 +97,41 @@ namespace Jularr.Backend.Service.Core
             }
 
             // Grant implemented permissions only.
-            if (caller.Area == ServiceArea.User && permission.Key is "profile.self.read" or "profile.self.update")
+            if (caller.Area == ServiceArea.User)
             {
-                if (permission.Key == "profile.self.update" && caller.ProfileOwnerAccountId != caller.AccountId)
+                if (permission.Key.StartsWith("profile.", StringComparison.Ordinal) && caller.ProfileId is null)
                 {
-                    throw new SecurityException("The requested permission is unavailable.");
+                    throw new UnauthorizedAccessException("An active profile is required.");
                 }
 
-                return;
+                if (GetPermissions(caller.AccountId, caller.ProfileId, caller.ProfileOwnerAccountId).Contains(permission.Key, StringComparer.Ordinal))
+                {
+                    return;
+                }
             }
 
             throw new SecurityException("The requested permission is unavailable.");
+        }
+
+        // Share effective grants with consumers.
+        internal static IReadOnlyList<string> GetPermissions(long? accountId, long? profileId, long? ownerAccountId)
+        {
+            if (accountId is null)
+            {
+                return [];
+            }
+
+            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select" };
+            if (profileId is not null)
+            {
+                permissions.Add("profile.self.read");
+                if (ownerAccountId == accountId)
+                {
+                    permissions.Add("profile.self.update");
+                }
+            }
+
+            return permissions.AsReadOnly();
         }
 
     }

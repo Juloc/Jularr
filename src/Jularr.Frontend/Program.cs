@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
+    options.Conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/ShellPreview");
 });
@@ -26,9 +27,9 @@ builder.Services.AddSingleton<ShellNavigation>();
 builder.Services.AddSingleton<FrontendAssets>();
 
 var app = builder.Build();
+app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler();
     app.UseHsts();
 }
 

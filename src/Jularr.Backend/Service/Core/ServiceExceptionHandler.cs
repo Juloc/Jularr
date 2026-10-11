@@ -1,8 +1,3 @@
-using System.Security;
-using Jularr.Integrations.Data.Common;
-using Jularr.Backend.Data.Common;
-using Jularr.Backend.Service.Core.Localization;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 
@@ -18,34 +13,24 @@ namespace Jularr.Backend.Service.Core
                 return true;
             }
 
-            var (status, title) = exception switch
-            {
-                DataValidationException => (StatusCodes.Status400BadRequest, "invalid_data"),
-                UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "authentication_required"),
-                SecurityException => (StatusCodes.Status403Forbidden, "permission_denied"),
-                KeyNotFoundException => (StatusCodes.Status404NotFound, "not_found"),
-                AntiforgeryValidationException => (StatusCodes.Status400BadRequest, "invalid_antiforgery_token"),
-                BadHttpRequestException badRequest => (badRequest.StatusCode, "invalid_request"),
-                ProviderUnavailableException => (StatusCodes.Status503ServiceUnavailable, "provider_unavailable"),
-                ArgumentException => (StatusCodes.Status400BadRequest, "invalid_request"),
-                _ => (StatusCodes.Status500InternalServerError, "internal_error")
-            };
+            // Share sanitized error contracts.
+            var error = ServiceError.FromException(exception);
             var extensions = new Dictionary<string, object?>
             {
-                ["code"] = title,
-                ["resourceKey"] = ServiceErrorResources.GetKey(title),
+                ["code"] = error.Code,
+                ["resourceKey"] = error.ResourceKey,
                 ["traceId"] = context.TraceIdentifier
             };
-            if (exception is DataValidationException validation)
+            if (error.Field is { } field && error.ValidationCode is { } code)
             {
-                extensions["errors"] = new Dictionary<string, string[]> { [validation.Field] = [validation.Code] };
+                extensions["errors"] = new Dictionary<string, string[]> { [field] = [code] };
                 extensions["errorResourceKeys"] = new Dictionary<string, string[]>
                 {
-                    [validation.Field] = [ServiceErrorResources.GetKey("validation." + validation.Code)]
+                    [field] = [error.FieldResourceKey!]
                 };
             }
 
-            await Results.Problem(statusCode: status, title: title, extensions: extensions).ExecuteAsync(context);
+            await Results.Problem(statusCode: error.StatusCode, title: error.Code, extensions: extensions).ExecuteAsync(context);
             return true;
         }
     }

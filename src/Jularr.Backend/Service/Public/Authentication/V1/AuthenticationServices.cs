@@ -7,6 +7,7 @@ using Jularr.Backend.Logic.Session;
 using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Http;
+using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Service.Public.Authentication.V1
 {
@@ -33,6 +34,8 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
             // Resolve optional signed-in state.
             long? accountId = null;
             long? profileId = null;
+            long? uiLocaleId = null;
+            IReadOnlyList<string> permissions = [];
             var principal = _http.HttpContext?.User;
 
             if (principal?.Identity?.IsAuthenticated == true)
@@ -40,11 +43,29 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 var session = await _sessions.ReadRequestAsync(_http.HttpContext, CancellationToken);
                 accountId = session.AccountId;
                 profileId = session.ProfileId;
+                uiLocaleId = session.UiLocaleId;
+                permissions = ServiceGate.GetPermissions(session.AccountId, session.ProfileId, session.ProfileOwnerAccountId);
             }
 
             // Expose available login methods.
-            return new AuthenticationResultV1(_options.PlexLoginEnabled,
-                _options.PlexLoginEnabled && _options.PlexRegistrationEnabled, accountId, profileId);
+            var plexEnabled = false;
+            if (_options.PlexLoginEnabled)
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM "Providers" AS provider
+                        WHERE provider."Key" = 'plex'
+                            AND provider."IsEnabled" = TRUE
+                    );
+                    """;
+                plexEnabled = (bool)(await Context.ReadSql.ExecuteScalarAsync(sql, CancellationToken))!;
+            }
+
+            return new AuthenticationResultV1(plexEnabled,
+                plexEnabled && _options.PlexRegistrationEnabled, accountId, profileId, uiLocaleId, permissions);
         }
     }
 

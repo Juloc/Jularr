@@ -70,7 +70,8 @@ namespace Jularr.Backend.Service.Core
                 SELECT
                     account."Id" AS "AccountId",
                     profile."Id" AS "ProfileId",
-                    profile."OwnerAccountId" AS "ProfileOwnerAccountId"
+                    profile."OwnerAccountId" AS "ProfileOwnerAccountId",
+                    profile."UiLocaleId"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN

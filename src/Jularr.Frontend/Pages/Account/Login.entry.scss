@@ -13,10 +13,14 @@
     background: var(--surface);
     box-shadow: var(--shadow);
 }
-.auth-unavailable { margin: 18px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
 
 @media (max-width: 400px) { .auth-card { padding: 24px 20px; } }
 .auth-main > .page-screen { width: min(100%, 400px); }
 .auth-card { width: 100%; }
 
 .ui-form > .button { width: 100%; margin-top: 6px; }
+.profile-picker { display: grid; gap: 18px; }
+.profile-picker h1 { margin: 0; font-size: 22px; }
+.profile-locked { padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.profile-locked p { margin: 0; }
+.profile-locked p + p { margin-top: 6px; color: var(--muted); font-size: 13px; }

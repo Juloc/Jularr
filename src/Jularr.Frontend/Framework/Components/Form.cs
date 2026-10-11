@@ -1,81 +1,167 @@
+using System.Globalization;
 using System.Linq.Expressions;
 using System.Text.Encodings.Web;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Service.Core;
 
-namespace Jularr.Frontend.Framework;
-
-// Typed, presentation-only form. Until a real handler is bound, every control is
-// disabled and no submit URL/action is synthesized.
-public sealed class Form<TData> : IUiComponent where TData : BaseData
+namespace Jularr.Frontend.Framework
 {
-    private readonly List<IUiComponent> _content = [];
-    private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
-    private readonly string _id = "form-" + typeof(TData).Name;
-
-    public Form(Action<Form<TData>> define) => define(this);
-
-    public Form<TData> Text<TValue>(
-        Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") =>
-        Add(field, FieldControl.Text, labelKey, autocomplete);
-
-    public Form<TData> Password<TValue>(
-        Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") =>
-        Add(field, FieldControl.Password, labelKey, autocomplete);
-
-    public Form<TData> Number<TValue>(
-        Expression<Func<TData, TValue>> field, string labelKey) =>
-        Add(field, FieldControl.Number, labelKey, "off");
-
-    public Form<TData> Checkbox(string labelKey)
+    public sealed class Form<TData> : IUiComponent where TData : BaseData
     {
-        _content.Add(new HtmlLabel(
-            new Input().Attribute("type", "checkbox").Attribute("disabled", "disabled"),
-            new Span(new Text(labelKey))
-        ).Class("ui-checkbox"));
-        return this;
+        private readonly List<IUiComponent> _content = [];
+        private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
+        private readonly string _id = "form-" + typeof(TData).Name;
+        private readonly string? _action;
+        private readonly TData? _data;
+        private readonly ServiceError? _error;
+
+        public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null)
+        {
+            // Bind only local POST actions.
+            if (action is not null && (!action.StartsWith('/') || action.StartsWith("//") || action.Any(character => char.IsControl(character) || character == '\\')
+                || string.IsNullOrWhiteSpace(antiforgeryToken)))
+            {
+                throw new ArgumentException("Forms require a local action and an antiforgery token.", nameof(action));
+            }
+
+            _action = action;
+            _data = data;
+            _error = error;
+            if (action is not null)
+            {
+                _content.Add(new Input().Attribute("type", "hidden").Attribute("name", "__RequestVerificationToken").Attribute("value", antiforgeryToken!));
+            }
+
+            define(this);
+        }
+
+        public Form<TData> Text<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Text, labelKey, autocomplete);
+        public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Password, labelKey, autocomplete);
+        public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey) => Add(field, FieldControl.Number, labelKey, "off");
+
+        public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options)
+        {
+            var field = Declare(selector, FieldControl.Select, labelKey);
+            var value = Value(selector);
+            var items = options.Select(option =>
+            {
+                var element = new HtmlOption(new ValueText(option.Label)).Attribute("value", option.Value);
+                if (option.Value == value)
+                {
+                    element.Attribute("selected", "selected");
+                }
+
+                return element;
+            }).ToArray();
+            var select = new HtmlSelect(items).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
+            Configure(field, select);
+            AddField(field, select);
+            return this;
+        }
+
+        public Form<TData> Checkbox(string labelKey)
+        {
+            _content.Add(new HtmlLabel(new Input().Attribute("type", "checkbox").Attribute("disabled", "disabled"), new Span(new Text(labelKey))).Class("ui-checkbox"));
+            return this;
+        }
+
+        public Form<TData> Hidden<TValue>(Expression<Func<TData, TValue>> selector)
+        {
+            var field = Declare(selector, FieldControl.Text, "");
+            _content.Add(new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", Value(selector) ?? ""));
+            return this;
+        }
+
+        public Form<TData> Submit(string key, string? value = null)
+        {
+            var label = value is null ? (IUiComponent)new Text(key) : new Span(new Text(key), new Span(new ValueText(value)));
+            var button = new Button(label).Class("button button-primary").Attribute("type", _action is null ? "button" : "submit");
+            if (_action is null)
+            {
+                button.Attribute("disabled", "disabled");
+            }
+
+            _content.Add(button);
+            return this;
+        }
+
+        public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
+        {
+            var content = new List<IUiComponent>(_content);
+            if (_error is not null && (_error.Field is null || !_fields.Contains(_error.Field)))
+            {
+                content.Insert(0, new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+            }
+
+            var form = new HtmlForm([.. content]).Class("ui-form");
+            if (_action is not null)
+            {
+                form.Attribute("action", _action).Attribute("method", "post");
+            }
+
+            form.WriteTo(writer, encoder, texts);
+        }
+
+        private Form<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete)
+        {
+            var field = Declare(selector, control, labelKey);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name)
+                .Attribute("type", control == FieldControl.Password ? "password" : control == FieldControl.Number ? "number" : "text").Attribute("autocomplete", autocomplete);
+
+            // Never render submitted passwords.
+            if (control != FieldControl.Password && Value(selector) is { } value)
+            {
+                input.Attribute("value", value);
+            }
+
+            Configure(field, input);
+            AddField(field, input);
+            return this;
+        }
+
+        private BaseField Declare<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey)
+        {
+            var field = BaseField.From(selector, control, labelKey);
+            if (!_fields.Add(field.Name))
+            {
+                throw new InvalidOperationException("A form field cannot be declared twice.");
+            }
+
+            return field;
+        }
+
+        private string? Value<TValue>(Expression<Func<TData, TValue>> selector) => _data is null ? null : Convert.ToString(selector.Compile()(_data), CultureInfo.InvariantCulture);
+
+        private void Configure(BaseField field, HtmlElement input)
+        {
+            // Use canonical field metadata.
+            if (_action is null) input.Attribute("disabled", "disabled");
+            if (field.Required) input.Attribute("required", "required");
+            if (field.MaximumLength is { } length) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
+            if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));
+            if (field.Maximum is { } maximum) input.Attribute("max", maximum.ToString(CultureInfo.InvariantCulture));
+            if (_error?.Field == field.Name)
+            {
+                input.Attribute("aria-invalid", "true").Attribute("aria-describedby", _id + "-" + field.Name + "-error");
+            }
+        }
+
+        private void AddField(BaseField field, HtmlElement input)
+        {
+            var content = new List<IUiComponent> { new HtmlLabel(new Text(field.LabelKey)).Attribute("for", _id + "-" + field.Name), input };
+            if (_error?.Field == field.Name)
+            {
+                content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("id", _id + "-" + field.Name + "-error").Attribute("role", "alert"));
+            }
+
+            _content.Add(new Div([.. content]).Class("ui-field"));
+        }
+
+        private sealed class HtmlLabel(params IUiComponent[] children) : HtmlElement("label", children);
+        private sealed class HtmlForm(params IUiComponent[] children) : HtmlElement("form", children);
+        private sealed class HtmlSelect(params IUiComponent[] children) : HtmlElement("select", children);
+        private sealed class HtmlOption(params IUiComponent[] children) : HtmlElement("option", children);
     }
 
-    public Form<TData> Submit(string key)
-    {
-        _content.Add(new Button(new Text(key)).Class("button button-primary")
-            .Attribute("type", "button").Attribute("disabled", "disabled"));
-        return this;
-    }
-
-    public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts) =>
-        new HtmlForm([.. _content]).Class("ui-form")
-            .WriteTo(writer, encoder, texts);
-
-    private Form<TData> Add<TValue>(
-        Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete)
-    {
-        var field = BaseField.From(selector, control, labelKey);
-        if (!_fields.Add(field.Name))
-            throw new InvalidOperationException("A form field cannot be declared twice.");
-
-        var id = _id + "-" + field.Name;
-        var input = new Input()
-            .Attribute("id", id)
-            .Attribute("name", field.Name)
-            .Attribute("type", control == FieldControl.Password ? "password"
-                : control == FieldControl.Number ? "number" : "text")
-            .Attribute("autocomplete", autocomplete)
-            .Attribute("disabled", "disabled");
-        if (field.Required) input.Attribute("required", "required");
-        if (field.MaximumLength is { } length)
-            input.Attribute("maxlength", length.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        if (field.Minimum is { } minimum)
-            input.Attribute("min", minimum.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        if (field.Maximum is { } maximum)
-            input.Attribute("max", maximum.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-        _content.Add(new Div(
-            new HtmlLabel(new Text(field.LabelKey)).Attribute("for", id),
-            input
-        ).Class("ui-field"));
-        return this;
-    }
-
-    private sealed class HtmlLabel(params IUiComponent[] children) : HtmlElement("label", children);
-    private sealed class HtmlForm(params IUiComponent[] children) : HtmlElement("form", children);
+    public sealed record SelectOption(string Value, string Label);
 }
