@@ -15,11 +15,11 @@ public sealed class MediaShelf(
         var heading = new List<IUiComponent> { new H2(new Text(titleKey)) };
         if (browseHref is not null)
         {
-            heading.Add(new A(new Text("discover.seeAll")).Attribute("href", browseHref));
+            heading.Add(new A(new Text("common.seeAll")).Attribute("href", browseHref));
         }
 
         new Section(
-            new Div([.. heading]).Class("discover-shelf-heading"),
+            new Div([.. heading]).Class("media-shelf-heading"),
             new Div([.. cards]).Class("media-rail-items")
         ).Class("media-rail").WriteTo(writer, encoder, texts);
     }

@@ -438,11 +438,11 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
     color: var(--accent);
     border-color: var(--accent);
 }
-.discover-shelf-heading {
+.media-shelf-heading {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 16px;
 }
-.discover-shelf-heading a { color: var(--accent); white-space: nowrap; }
+.media-shelf-heading a { color: var(--accent); white-space: nowrap; }
 .discover-media-heading { font-size: 19px; margin: 16px 0 0; }

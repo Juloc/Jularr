@@ -35,6 +35,7 @@ public static class UiResources
         new("admin.works.title", "Works"),
         new("app.name", "Jularr"),
         new("common.all", "All"),
+        new("common.seeAll", "See all"),
         new("details.heroDescription", "Title, artwork and availability will come from the canonical Work."),
         new("details.recommendations", "More like this"),
         new("details.related", "Related works"),
