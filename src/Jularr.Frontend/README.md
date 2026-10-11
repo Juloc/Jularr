@@ -1,77 +1,46 @@
 # Jularr.Frontend
 
-Minimal ASP.NET Core Razor Pages frontend, separate from the obsolete Jularr.Web.
-**One server process** hosts Razor and backend API endpoints once the shared backend
-registration and authentication contracts have been integrated.
+Minimal server-side Razor web host for Jularr Backend services.
+Architecture and hard rules:
+[Frontend conventions](../../docs/FRONTEND_CONVENTIONS.md);
+[CODEMAP](CODEMAP.md).
 
-## Source layout
+- Pages own their small C# definitions; routes still use ordinary Razor Pages.
+- HTML layout is composed with `new Div(new H1(new Text("...")))` and
+  component-owned C# rendering under `Framework/Components/`.
+- Shared Razor body delegates to the component HTML encoder. No centralized
+  type `switch`, no SPA framework and no inline display translations.
+- All English resources are declared once in `Localization/UiResources.cs`,
+  synchronized into the existing PostgreSQL resource catalog at startup.
+  Backend owns descriptions, non-English translations, status and cache.
+- The active UI language is negotiated from enabled DB locales (for now
+  Accept-Language, English fallback); trusted profile preference binding
+  is an open Backend/frontend integration step. No fixed German dictionary.
+- Frontend `Program.cs` hosts Backend API and Razor on the same process.
+  It **requires** explicit `JULARR_DB` configuration and an already installed
+  fresh PostgreSQL schema. Startup registration does not run migrations.
 
-- `Pages/{Feature}.cshtml.cs`: the actual, independent declarative page definition.
-  No centralized AdminScreens, UserScreens, screen registry or shared fake PageModel.
-- `Pages/{Feature}.cshtml`: short Razor route/view, rendering `_PageBody`.
-- `Framework/Page.cs`: `JularrPage`, `PreparedPage`, `Page`, reusable
-  `Panel`, `MasterDetail` and `Tabs` composition.
-- `Framework/PageComponents.cs`: shared display-only components that never
-  fabricate rows, counts, metadata, files, media sources or request states.
-- `Framework/BaseField.cs`: typed form field definitions inferred from backend
-  `[DataField]` metadata. Do not reimplement domain validation in the UI.
-- `Pages/Shared/_UiComponent.cshtml`: one server-side Razor component renderer.
-- `Pages/Shared/_Layout.cshtml`: responsive Clean/Original, light/dark/system shell.
+Consumer routes: `/`, `/Details/{id:long}`, `/Player/{id:long}`,
+`/Watchlist`, `/Settings`. `/Discover` redirects to `/`.
 
-## Prepared screens
+Admin routes: `/Admin/Requests`, `/Admin/Rules`,
+`/Admin/Requests/Users`, `/Admin/Wanted`, `/Admin/Works`,
+`/Admin/Works/{id:long}`, `/Admin/Library`.
 
-Consumer: Discover/Home `/` (with `/Discover` redirect), `/Details/{id:long}`,
-`/Player/{id:long}`, `/Watchlist`, `/Settings`.
+The routes prepare actual layouts but do not invent service data. Unbound
+toolbar controls are disabled; rows only render from real service outputs.
+Login remains presentation-only. Admin authorization, canonical typed media/
+request services, profile locale preference and Player PlaybackPlan integration
+remain pending. Do not expose the prepared routes as production-ready.
 
-Admin: `/Admin/Requests`, `/Admin/Rules`, `/Admin/Requests/Users`,
-`/Admin/Wanted`, `/Admin/Works`, `/Admin/Works/{id:long}`, `/Admin/Library`.
-
-Page classes define their own sections, navigation, tabs, controls and columns.
-The media Player route deliberately renders **only a native video surface**, with
-no fabricated playback URL/session/progress and no Learning components. The real
-Player/PlaybackPlan integration and its controls require separate design.
-
-No fake data, no provider calls, no direct SQL and no second HTTP loop.
-Table bodies are left empty until an actual authorized backend read completes;
-unknown create/update/delete services or forms are **not** invented. Unconnected
-search/filter/sort controls are visibly disabled, not presented as working.
-The eventual backend services determine paging, statuses, record identity, action
-authorization and typed editable fields. Admin routes currently have no special
-Admin gate; enforce authorized backend caller contracts before production use.
-
-The Settings page structure is prepared for eventual integration into the shared
-Profile/Account Settings tab. Do not implement a separate settings persistence domain.
-
-## Localization
-
-Fixed UI labels reference stable semantic keys and temporarily use English-only
-feature fallback resources; shell/login retains the original provisional bilingual
-`UiText` implementation. These are not the canonical translation store.
-
-**PostgreSQL must own the resource catalog, English source text, translated values,
-version/status and human-editable semantic/AI descriptions** for both frontend and
-backend. Descriptions must not be embedded in frontend PageModels. Replace
-`UiText` with a thin adapter to the backend's per-request memory-cached locale
-resolver when available. No per-string SQL lookup, no runtime AI, no dynamic JS
-translation requests, and no manually managed translation insert scripts.
-Full offline locale packs for every local profile are a future-only requirement.
-
-## Authentication / preview / verification
-
-Login is presentation-only; its submit/credentials remain disabled until the
-backend login and session contracts exist. All normal Razor pages require an
-authenticated cookie by default, but this **does not** replace future Admin
-permission gating.
-
-Development-only `/ShellPreview?view=admin-requests` (and `discover`,
-`details`, `player`, `watchlist`, `settings`, `admin-rules`,
-`admin-users`, `admin-wanted`, `admin-works`, `admin-work`,
-`admin-library`) instantiates the *real page definitions* without executing
-their read handlers. Outside Development it returns 404.
+Development-only `/ShellPreview?view=admin-requests` previews real page
+definitions; production returns 404.
 
 ```sh
-dotnet run --project src/Jularr.Frontend/Jularr.Frontend.csproj
+node src/Jularr.Frontend/Tools/verify-ui-resources.mjs
+dotnet build src/Jularr.Frontend/Jularr.Frontend.csproj
 ```
 
-A real .NET build and browser checks are required before merging or enabling
-production routes; CI currently only validates the backend solution.
+Backend-only CI does not build Razor frontend. Always run targeted component
+and browser checks before merge; if the SDK/browser is unavailable, report
+the validation as not performed.

@@ -1,106 +1,108 @@
 # Frontend conventions
 
-Scope: `src/Jularr.Frontend/`. General C# and backend architecture conventions
-remain in [CONVENTIONS.md](CONVENTIONS.md). Use the
-[frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md) for entry points and ownership.
-Specifications define feature behavior; this document defines how frontend code is built.
+Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
+[CONVENTIONS](CONVENTIONS.md). Code ownership:
+[Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md).
+**These are mandatory rules for every Frontend implementation, review and agent.**
 
-## Runtime and responsibility
+## Architecture
 
-- One ASP.NET Core host: Frontend renders Razor and hosts the shared Backend APIs.
-  The Backend is a class library. No second web server, self-HTTP calls or
-  duplicated business logic.
-- Default to server-rendered HTML. Razor Pages are **not** a JavaScript SPA;
-  a navigation request produces server-rendered HTML.
-- Use small, deliberately justified JavaScript for genuinely client-side behavior
-  (e.g. player, keyboard input and interactive controls). No client hydration
-  framework, implicit JavaScript language-package loading or a parallel state machine.
-- Frontend owns presentation, interaction and accessibility. Backend services
-  own canonical data, validation, permissions, decisions, transactions and SQL.
-  Resolve typed backend services through DI; do not call the local HTTP API from Razor.
+- One ASP.NET Core host: Razor frontend plus shared Backend APIs; Backend is
+  the same-process class library. Razor invokes typed services through DI,
+  never by HTTP requests to its own server.
+- Server-side rendering (SSR), **not** a JavaScript SPA. The response is complete,
+  encoded HTML. JavaScript is reserved for unavoidable client interactions
+  such as playback; no client hydration or translation-bundle fetching.
+- Frontend owns UI appearance, accessible interaction, presentation-only state.
+  Backend owns permissions, identities, validation, business decisions,
+  transaction boundaries, persistence, paging data and API contracts.
+- No second database, duplicate permission logic, fake row/provider data,
+  invented service procedures, dummy playback state or inactive buttons
+  presented as functional. If a backend contract is missing, prepare the
+  UI structure honestly and list the integration gap.
 
-## Pages and components
+## C# HTML DSL and component ownership (DECIDED)
 
-- Each independently routed feature/page owns a small `.cshtml.cs` PageModel
-  with its own declarative page definition; keep the `.cshtml` entry minimal.
-  Do not rebuild `AdminScreens`, `UserScreens`, a central screen registry or
-  presentation-only fake pages.
-- Reuse meaningful components rather than duplicating markup, layout rules,
-  form logic or UI state in every page.
-- **Target component design:** Each substantial component has one clear C# owner
-  (normally its own `Components/<Component>.cs` file) defining its inputs,
-  supported behavior and render contract. Small strictly related helper types
-  may share that file. Prefer a component-owned renderer or tightly paired view
-  over extending a single growing `switch` across unrelated components.
-- Rendering must be HTML-encoded and safe by default, preserve semantic
-  elements, labels, ARIA/focus rules, unobtrusive validation and antiforgery.
-  Do not construct HTML by concatenating unchecked strings.
-- Shared presentation primitives (`Panel`, `Tabs`, `MasterDetail`, headings)
-  and typed controls (`Table<T>`, `Form<T>`, filters, selects, dialogs,
-  media cards) have one canonical implementation and a consistent API.
-- A `Table` requires real typed rows/columns and an authorized read/list
-  contract before claiming filtering, sorting, selection, counts or paging.
-  Form fields reuse the backend's `BaseData`/`DataField` required/type/length
-  metadata. Do not duplicate domain validation or synthesize backend types.
-- A `MasterDetail` layout is not a second, independent domain/state store.
-  Keep selections, forms and actions bound to their actual page/service context.
-- Do not add placeholder rows, invented titles, procedure names, fake sessions,
-  mock permission results or controls that appear to work but cannot execute.
-  Keep missing service integration explicit and inactive until available.
+- **Author HTML hierarchies declaratively in C#**, for example:
+  `new Div(new H1(new Text("profile.title")), new Button(new Text("common.save")))`.
+  Razor remains the ASP.NET entry and shell, but the shared components render
+  server-side HTML without requiring page-specific HTML templates.
+- Use small encoded HTML primitives (`Div`, `H1`, `P`, `Span`, `Button`,
+  etc.) backed by one safe HTML-writing foundation; **do not** reinvent a
+  complete browser DOM, virtual DOM or JavaScript framework.
+- **Every substantial UI component has its own C# file** under
+  `Framework/Components/<Component>.cs`. It owns the public API, supported
+  behavior, layout markup and rendering. Small private helper types used
+  **only by that component** may remain in the same C# file. Small,
+  closely related HTML primitives may share `Framework/Elements.cs`.
+- No central growing component-type `switch` or duplicate Razor partial
+  per component. Render output directly from the component through the
+  shared HTML writer, encoding dynamic values and attribute values.
+- Never concatenate unchecked raw HTML. Validate HTML attribute names and
+  URL schemes, use semantic tags, accessible names, keyboard/focus states,
+  reduced motion, responsive layout and antiforgery for real POST forms.
+- A page owns its independent `.cshtml.cs` definition and thin `.cshtml`
+  entry. Reuse `Table<T>`, `Form<T>`, `MasterDetail`, menus, media cards
+  and other domain-neutral components rather than copying UI code.
+- Real form fields derive required/type/length/range metadata from Backend
+  `BaseData`/`DataField`; missing select options or save procedures
+  are not guessed. Tables need real typed data and authorized reads for
+  sorting/paging/filtering. Unbound structures never imply successful loads.
 
-## C# HTML-element DSL: proposed, not decided
+## UI localization (MANDATORY, no exceptions)
 
-An optional server-side API such as `new Div(new H1(...), new Button(...))`
-is technically possible and fits declarative C# pages. It is **not yet the
-approved rendering contract**. Before implementing it, compare:
+- **English is the canonical source/fallback language**. Do **not** choose
+  German (`de`) or any other specific locale by hard-coded checks, default
+  translations, compiled dictionaries or fixed locale lists.
+- **Every single visible UI string** (headings, buttons, labels, filters,
+  errors, status labels, hints, tooltips, ARIA text and new component copy)
+  **MUST have a stable semantic UI resource key** and be rendered through
+  the shared `UiText` resolver or declarative `Text(key)`. Never embed
+  English, German or any other language as directly displayed page text.
+  Non-display identifiers, CSS classes, HTML attributes, route names,
+  canonical names/logo symbols and provider data are not UI translations.
+- **In the same change that adds or renames a UI key**, register its English
+  source declaration in `Localization/UiResources.cs`, verify there are
+  no duplicate/conflicting declarations, and use the same key everywhere.
+  Do not defer this work to another agent or release. The resource
+  coverage check and/or component runtime must fail on missing keys,
+  never silently print the raw key.
+- English source declarations in C# are **registration inputs**, not a second
+  runtime dictionary or a UI fallback. During host startup, invoke the
+  canonical Backend `AddJularrLocalization(UiResources.English)` registration.
+  Its hosted synchronization idempotently INSERTs/UPDATEs source keys and
+  English text in **PostgreSQL** using the existing Logic transaction.
+  It is **not** an EF migration, not a manual per-feature SQL file and
+  not a second locale store. Schema creation/migration remains the
+  separately controlled Backend/database baseline.
+- Human-editable AI context/semantic descriptions, translations, locale
+  enablement, versions and statuses are stored **only in PostgreSQL**.
+  Do not hard-code descriptions or non-English translations in Frontend.
+  Description/translation editing and AI generation belong to authorized
+  Backend/Admin workflows; new DB descriptions remain awaiting admin review
+  until that contract exists. Never fabricate translations.
+- Every normal Razor request resolves an enabled locale from Backend
+  locale metadata and a complete translated pack through the existing
+  `ReadUiLocalesV1`/`ReadUiTextsV1` services and bounded Backend cache.
+  Exact locale -> parent -> English fallback is handled centrally.
+  There is **no SQL per label**, no per-page browser translation download,
+  and no AI generation during rendering.
+- Later, trusted active-profile `UiLocaleId` must take precedence over
+  Accept-Language once the session/profile preference contract exists.
+  Offline language bundles for all local profiles are future-only.
 
-- minimal HTML primitives versus a second general-purpose DOM/HTML framework;
-- generated/encoded attributes, text and form elements, Tag Helpers and antiforgery;
-- allocation/rendering costs, readability and component-local maintenance.
+## Performance and checks
 
-Whether markup is authored in C# or a component-local Razor view, the output
-must remain ordinary SSR HTML. Do not start a wholesale renderer replacement
-or create a class for every HTML tag without an explicit decision.
-
-## Localization
-
-- Both Frontend and Backend use one canonical PostgreSQL resource catalog.
-  Stable semantic keys identify strings; English source text, translations,
-  version/status and human-editable **AI semantic descriptions** belong to
-  the backend catalog/database, not to frontend PageModels.
-- Resolve translations server-side through the backend's locale service
-  and bounded cache, then send ready HTML. No AI at render time, SQL per label,
-  manual translation insert scripts or routine browser JS translation fetch.
-- The current `UiText` bilingual/English fallback definitions are temporary.
-  Do not expand them into a second permanent catalog.
-- Offline clients may later download full needed locale packages for all
-  locally available profiles, deduplicated by locale. This is not an
-  implementation task now.
-
-## UX, performance and verification
-
-- Support Clean/Original plus light/dark/system, keyboard/screen reader,
-  reduced motion, touch/mobile, tablet and desktop. Do not hide essential
-  actions on narrow screens.
-- Prefer bounded server queries and efficient HTML. Avoid N+1 service calls,
-  unbounded result sets, rebuilding reflection metadata per row/request,
-  heavy client bundles and redundant caches. Optimize on measured hotspots,
-  not invented complexity.
-- The normal Player is its own full-screen media surface. Do not add Learning
-  to the initial Player or invent `PlaybackPlan`/`ActiveSession` sources.
-- Validate changed frontend code with a targeted frontend project build and
-  focused tests; browser-check affected responsive and keyboard flows.
-  A successful backend-only solution build does **not** verify Razor frontend.
-- Keep the [CODEMAP](../src/Jularr.Frontend/CODEMAP.md) current for changed
-  ownership/entry paths, and report pending backend contracts and unverified tests.
-
-## Current implementation debt (not approved target)
-
-The still-draft [frontend PR #960](https://github.com/Juloc/Jularr/pull/960)
-currently groups thin records in `Framework/PageComponents.cs` and renders
-them through a large `Pages/Shared/_UiComponent.cshtml` type switch.
-`UiTable` exposes only headings and the toolbar has disabled controls;
-`Form<T>` metadata exists without a complete renderer. This is **not**
-proof that component-local rendering or the typed Table/Form contracts
-are implemented. Refactor those parts deliberately once the rendering
-choice and backend contracts are settled.
+- Avoid N+1 calls, unbounded lists, repeated field metadata reflection,
+  unnecessary allocations/extra requests, speculative caching and heavy JS.
+  Keep the view HTML server-rendered and the language cache bounded.
+- Preserve Clean/Original, light/dark/system, and desktop/mobile/tablet
+  accessibility. Player is a separate fullscreen page without Learning
+  until its own design/PlaybackPlan contract exists.
+- Before completing a change, check the
+  [CODEMAP](../src/Jularr.Frontend/CODEMAP.md),
+  verify every displayed key is in the canonical English declaration,
+  run the targeted frontend project build plus changed component tests,
+  and check relevant browser layouts/interactions.
+  A Backend-only CI build does **not** validate Razor frontend.
+  Report limitations explicitly; do not claim unrun checks passed.
