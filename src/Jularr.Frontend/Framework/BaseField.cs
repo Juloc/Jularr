@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
-using Jularr.Data.Common;
-using Jularr.Data.Fields;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Fields;
 
 namespace Jularr.Frontend.Framework;
 
@@ -56,41 +56,4 @@ public sealed record BaseField(
             maximum,
             labelKey ?? $"field.{typeof(TData).Name}.{property.Name}");
     }
-}
-
-public sealed class FormFields<TData> where TData : BaseData
-{
-    public List<BaseField> Items { get; } = [];
-
-    public void Text<TValue>(Expression<Func<TData, TValue>> field) => Add(field, FieldControl.Text);
-    public void Password<TValue>(Expression<Func<TData, TValue>> field) => Add(field, FieldControl.Password);
-    public void TextArea<TValue>(Expression<Func<TData, TValue>> field) => Add(field, FieldControl.TextArea);
-    public void Number<TValue>(Expression<Func<TData, TValue>> field) => Add(field, FieldControl.Number);
-    public void Checkbox<TValue>(Expression<Func<TData, TValue>> field) => Add(field, FieldControl.Checkbox);
-    public void Select<TValue>(Expression<Func<TData, TValue>> field) => Add(field, FieldControl.Select);
-    public void MultiSelect<TValue>(Expression<Func<TData, TValue>> field) => Add(field, FieldControl.MultiSelect);
-
-    private void Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control)
-    {
-        var field = BaseField.From(selector, control);
-        if (Items.Any(item => item.Name == field.Name))
-        {
-            throw new InvalidOperationException("A field may only be declared once.");
-        }
-
-        Items.Add(field);
-    }
-}
-
-public sealed class Form<TData> : IUiComponent where TData : BaseData
-{
-    public FormFields<TData> Fields { get; } = new();
-    public bool CanSave { get; private set; }
-
-    public Form(Action<Form<TData>> define)
-    {
-        define(this);
-    }
-
-    public void Save() => CanSave = true;
 }
