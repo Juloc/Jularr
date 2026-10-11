@@ -1,0 +1,30 @@
+@page "/Account/Login"
+@model Jularr.Frontend.Pages.Account.LoginModel
+@inject UiText T
+@{
+    ViewData["ShowShell"] = false;
+    ViewData["Title"] = T["account.login.title"];
+}
+<section class="auth-card" aria-labelledby="login-title">
+    <div class="auth-brand" aria-label="@T["app.name"]">
+        <span class="brand-symbol auth-symbol" aria-hidden="true">J</span>
+        <span class="auth-brand-name">@T["app.name"]</span>
+    </div>
+    <h1 id="login-title">@T["account.login.title"]</h1>
+    <form class="ui-form" aria-describedby="login-unavailable">
+        <div class="ui-field">
+            <label for="login-username">@T["account.field.userName"]</label>
+            <input id="login-username" name="username" type="text" autocomplete="username" disabled />
+        </div>
+        <div class="ui-field">
+            <label for="login-password">@T["account.field.password"]</label>
+            <input id="login-password" name="password" type="password" autocomplete="current-password" disabled />
+        </div>
+        <label class="ui-checkbox">
+            <input type="checkbox" disabled />
+            <span>@T["account.login.remember"]</span>
+        </label>
+        <button class="button button-primary" type="submit" disabled>@T["account.login.submit"]</button>
+    </form>
+    <p class="auth-unavailable" id="login-unavailable" role="status">@T["account.login.unavailable"]</p>
+</section>
