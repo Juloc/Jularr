@@ -1,5 +1,5 @@
 using System.Security;
-using Jularr.Integrations;
+using Jularr.Integrations.Data.Common;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Core.Localization;
 using Microsoft.AspNetCore.Antiforgery;

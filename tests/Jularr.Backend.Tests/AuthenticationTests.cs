@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Public.Authentication.V1;
-using Jularr.Integrations.Plex;
+using Jularr.Integrations.Logic.Plex;
 using Jularr.Backend.Service.Core;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;

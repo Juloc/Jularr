@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
-using Jularr.Integrations.Plex;
+using Jularr.Integrations.Logic.Plex;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;

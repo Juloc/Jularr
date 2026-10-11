@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Jularr.Integrations.Plex
+namespace Jularr.Integrations.Data.Plex
 {
     public sealed class PlexIdentity
     {

@@ -5,7 +5,8 @@ Ein ASP.NET-Host: `Jularr.Frontend` startet Razor Pages und API.
 Data und PostgreSQL-Zugriff. Kein alter Web-Bereich, kein EF.
 
 `Jularr.Integrations` bündelt externe Kommunikation als Klassenbibliothek.
-Der Plex-Client und seine Protokollantworten liegen dort; Backend-Services
+`Logic/Plex` enthält den Plex-Client, `Data/Plex` seine Protokollantworten
+und `Data/Common` gemeinsame Integrationsfehler. Backend-Services
 entscheiden weiterhin über Anmeldung, Bibliotheksfreigabe und Registrierung.
 Die bestehenden Host-Registrierungen bleiben unverändert. NAS ist noch nicht
 implementiert; Dateizugriff und Hersteller-Verwaltung sind noch abzugrenzen.

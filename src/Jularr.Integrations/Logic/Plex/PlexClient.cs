@@ -3,12 +3,14 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Jularr.Integrations.Data.Common;
+using Jularr.Integrations.Data.Plex;
 using System.Buffers.Text;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Security;
 
-namespace Jularr.Integrations.Plex
+namespace Jularr.Integrations.Logic.Plex
 {
     public sealed class PlexClient
     {
