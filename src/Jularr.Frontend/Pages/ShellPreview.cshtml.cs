@@ -6,15 +6,27 @@ namespace Jularr.Frontend.Pages;
 
 // Development-only. Uses the actual PageModel definitions; no separate demo screen registry.
 [AllowAnonymous]
+public sealed record PreviewView(string Slug, string LabelKey);
+
 public sealed class ShellPreviewModel(IHostEnvironment environment) : JularrPage
 {
     public string SelectedView { get; private set; } = "shell";
 
-    public static IReadOnlyList<string> Views { get; } =
+    public static IReadOnlyList<PreviewView> Views { get; } =
     [
-        "shell", "discover", "details", "player", "watchlist", "settings",
-        "admin-requests", "admin-rules", "admin-users", "admin-wanted",
-        "admin-works", "admin-work", "admin-library"
+        new("shell", "preview.shell"),
+        new("discover", "preview.discover"),
+        new("details", "preview.details"),
+        new("player", "preview.player"),
+        new("watchlist", "preview.watchlist"),
+        new("settings", "preview.settings"),
+        new("admin-requests", "preview.admin-requests"),
+        new("admin-rules", "preview.admin-rules"),
+        new("admin-users", "preview.admin-users"),
+        new("admin-wanted", "preview.admin-wanted"),
+        new("admin-works", "preview.admin-works"),
+        new("admin-work", "preview.admin-work"),
+        new("admin-library", "preview.admin-library")
     ];
 
     protected override void Define(Page page)
@@ -51,7 +63,7 @@ public sealed class ShellPreviewModel(IHostEnvironment environment) : JularrPage
     public IActionResult OnGet(string? view)
     {
         if (!environment.IsDevelopment()) return NotFound();
-        if (view is not null && !Views.Contains(view, StringComparer.Ordinal)) return NotFound();
+        if (view is not null && !!Views.Any(item => item.Slug == view)) return NotFound();
 
         SelectedView = view ?? "shell";
         PreparePage();

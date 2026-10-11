@@ -8,7 +8,7 @@
 <nav class="preview-screen-links" aria-label="@T["shell.preview"]">
     @foreach (var view in Jularr.Frontend.Pages.ShellPreviewModel.Views)
     {
-        <a href="/ShellPreview?view=@view" aria-current="@(Model.SelectedView == view ? "page" : null)">@T["preview." + view]</a>
+        <a href="/ShellPreview?view=@view.Slug" aria-current="@(Model.SelectedView == view.Slug ? "page" : null)">@T[view.LabelKey]</a>
     }
 </nav>
 <partial name="_PageBody" model="Model.Definition" />
