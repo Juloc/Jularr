@@ -27,9 +27,13 @@ public sealed class Page
     public void SectionTabs(string key) => SectionKey = key;
 }
 
-public interface IUiComponent;
+public interface IUiComponent
+{
+}
 
-public sealed class UiCollection : List<IUiComponent>;
+public sealed class UiCollection : List<IUiComponent>
+{
+}
 
 public sealed class Panel(Action<UiCollection> define) : IUiComponent
 {
