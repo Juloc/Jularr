@@ -1,6 +1,13 @@
-# Backend CODEMAP
+# Jularr CODEMAP
 
-Navigation only. Rules: [CONVENTIONS.md](CONVENTIONS.md). Startup and gaps: [README](../README.md).
+Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend rules: [FRONTEND_CONVENTIONS.md](FRONTEND_CONVENTIONS.md). Startup and gaps: [README](../README.md).
+
+## Frontend entry points
+
+- [Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md): Razor pages, shared UI components, renderer, navigation, themes, locale resolution and verification gaps. New page definitions are being prepared in [draft PR #960](https://github.com/Juloc/Jularr/pull/960).
+- [Frontend project](../src/Jularr.Frontend/Jularr.Frontend.csproj) and [host](../src/Jularr.Frontend/Program.cs): server-rendered Razor Pages and the single host for Backend APIs.
+
+## Backend entry points
 
 ## Host and Profile entry points
 
