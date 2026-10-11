@@ -8,6 +8,7 @@
 }
 
 @section Head {
+    <link rel="stylesheet" href="~/css/ui-data-list.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/watchlist.css" asp-append-version="true" />
 }
 
@@ -18,6 +19,15 @@
         @if (Model.IsTargetView)
         {
             <a class="button" href="/Watchlist">@ui["watchlist.title"]</a>
+        }
+        @if (!Model.IsTargetView)
+        {
+            <nav class="inline-actions" aria-label="@ui["library.anime.viewAria"]">
+                <a class="button" href="/Watchlist?view=cards"
+                   aria-current="@(Model.ViewMode != "table" ? "page" : null)">@ui["library.anime.view.grid"]</a>
+                <a class="button" href="/Watchlist?view=table"
+                   aria-current="@(Model.ViewMode == "table" ? "page" : null)">@ui["library.anime.view.list"]</a>
+            </nav>
         }
     </header>
 
@@ -30,91 +40,24 @@
     }
     else
     {
-        <section class="watchlist-grid" aria-label="@ui["watchlist.title"]">
-            @foreach (var item in Model.Items)
-            {
-                var category = WatchlistMediaTypeNames.ToCategory(item.Identity.MediaType);
-                var format = WatchlistLabels.FormatKey(item.Format) is { } formatKey ? ui[formatKey] : null;
-                <article class="watchlist-card" id="target-@item.StableId">
-                    <div class="watchlist-cover" aria-hidden="true">
-                        @if (!string.IsNullOrWhiteSpace(item.CoverImageUrl))
-                        {
-                            <img src="@item.CoverImageUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
-                        }
-                        else
-                        {
-                            <span>@WatchlistLabels.Initial(item.Title)</span>
-                        }
-                    </div>
-                    <div class="watchlist-copy">
-                        <div class="watchlist-meta">
-                            <span>@ui[$"watchlist.type.{category}"]</span>
-                            @if (item.Year is { } year)
-                            {
-                                <span>@year</span>
-                            }
-                            @if (format is not null)
-                            {
-                                <span>@format</span>
-                            }
-                            @if (item.LocalMediaId is not null)
-                            {
-                                <span class="watchlist-in-library">@ui["discover.card.inLibrary"]</span>
-                            }
-                        </div>
-                        <h2>@item.Title</h2>
-                        @if (!string.IsNullOrWhiteSpace(item.NativeTitle) && item.NativeTitle != item.Title)
-                        {
-                            <p class="watchlist-native">@item.NativeTitle</p>
-                        }
-                        @if (item.IsFromFranchise)
-                        {
-                            <a class="watchlist-source" href="/Franchises/@item.FranchiseId">
-                                @ui.Format("watchlist.fromFranchise", ("name", FranchiseLabels.Title(ui, item.FranchiseTitle)))
-                            </a>
-                        }
-                        <div class="watchlist-actions">
-                            @if (!string.IsNullOrWhiteSpace(item.DetailsUrl))
-                            {
-                                var external = item.LocalMediaId is null;
-                                <a class="button" href="@item.DetailsUrl" target="@(external ? "_blank" : null)" rel="@(external ? "noopener noreferrer" : null)">
-                                    @(external ? "AniList" : ui["watchlist.open"])
-                                </a>
-                            }
-                            <form method="post" asp-page-handler="Remove">
-                                <input type="hidden" name="mediaType" value="@item.Identity.MediaType" />
-                                <input type="hidden" name="provider" value="@item.Identity.ProviderKey" />
-                                <input type="hidden" name="externalId" value="@item.Identity.ExternalKey" />
-                                <button class="button" type="submit">@ui["watchlist.remove"]</button>
-                            </form>
-                            @if (!item.IsFromFranchise && FranchiseService.CanSeed(item.Identity))
-                            {
-                                <form method="post" asp-page-handler="FollowFranchise">
-                                    <input type="hidden" name="mediaType" value="@item.Identity.MediaType" />
-                                    <input type="hidden" name="provider" value="@item.Identity.ProviderKey" />
-                                    <input type="hidden" name="externalId" value="@item.Identity.ExternalKey" />
-                                    <button class="button" type="submit">@ui["watchlist.followFranchise"]</button>
-                                </form>
-                            }
-                        </div>
-                    </div>
-                </article>
-            }
-        </section>
+        @foreach (var component in Model.PageDefinition.Content)
+        {
+            <partial name="@component.PartialName" model="@component.ViewModel" />
+        }
         @if (Model.PageCount > 1)
         {
             <nav class="inline-actions" aria-label="@ui["admin.history.pagerAria"]">
                 @if (Model.CurrentPage > 1)
                 {
                     <a class="button"
-                       href="/Watchlist?page=@(Model.CurrentPage - 1)"
+                       href="/Watchlist?page=@(Model.CurrentPage - 1)@(Model.ViewMode == "table" ? "&view=table" : "")"
                        rel="prev">@ui["admin.history.page.previous"]</a>
                 }
                 <span aria-current="page">@Model.CurrentPage / @Model.PageCount</span>
                 @if (Model.CurrentPage < Model.PageCount)
                 {
                     <a class="button"
-                       href="/Watchlist?page=@(Model.CurrentPage + 1)"
+                       href="/Watchlist?page=@(Model.CurrentPage + 1)@(Model.ViewMode == "table" ? "&view=table" : "")"
                        rel="next">@ui["admin.history.page.next"]</a>
                 }
             </nav>
@@ -152,14 +95,14 @@
                     @if (Model.CurrentFranchisePage > 1)
                     {
                         <a class="button"
-                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage - 1)"
+                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage - 1)@(Model.ViewMode == "table" ? "&view=table" : "")"
                            rel="prev">@ui["admin.history.page.previous"]</a>
                     }
                     <span aria-current="page">@Model.CurrentFranchisePage / @Model.FranchisePageCount</span>
                     @if (Model.CurrentFranchisePage < Model.FranchisePageCount)
                     {
                         <a class="button"
-                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage + 1)"
+                           href="/Watchlist?page=@Model.CurrentPage&amp;franchisePage=@(Model.CurrentFranchisePage + 1)@(Model.ViewMode == "table" ? "&view=table" : "")"
                            rel="next">@ui["admin.history.page.next"]</a>
                     }
                 </nav>
