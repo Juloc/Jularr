@@ -4,12 +4,10 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend rules:
 
 ## Frontend entry points
 
-- [Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md): Razor pages, shared UI components, renderer, navigation, themes, locale resolution and verification gaps. New page definitions are being prepared in [draft PR #960](https://github.com/Juloc/Jularr/pull/960).
+- [Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md): Razor pages, shared UI components, renderer, navigation, themes, locale resolution and verification gaps. For current Frontend changes and verification, follow the linked CODEMAP.
 - [Frontend project](../src/Jularr.Frontend/Jularr.Frontend.csproj) and [host](../src/Jularr.Frontend/Program.cs): server-rendered Razor Pages and the single host for Backend APIs.
 
-## Backend entry points
-
-## Host and Profile entry points
+## Backend host and Profile entry points
 
 - [Backend project](../src/Jularr.Backend/Jularr.Backend.csproj): class library; [Frontend Program](../src/Jularr.Frontend/Program.cs): the only web host. Backend host registration: [README](../README.md#backend-im-gemeinsamen-host).
 - [ServiceApi.cs](../src/Jularr.Backend/Service/Core/ServiceApi.cs): shared registration, explicit endpoint discovery, parameter/body binding and antiforgery.
