@@ -70,6 +70,7 @@ Shared conventions and Backend ownership:
   exposes email/password and configured Plex flows through Public services.
 - [Profiles](Pages/Account/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions.cshtml.cs),
   [Logout](Pages/Account/Logout.cshtml.cs): typed service-driven account session flows.
+- [AccessDenied](Pages/Account/AccessDenied.cshtml.cs): sanitized catalog-backed 403 page for denied Razor routes.
 - [Settings](Pages/Settings.cshtml.cs): active profile name/language editing,
   read-only non-owner view and account navigation; no page-local SQL or permissions.
 - [Vite build](vite.config.ts), [package.json](package.json),

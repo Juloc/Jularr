@@ -38,8 +38,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, settings.StatusCode);
             StringAssert.Contains(html, "lang=\"de-DE\"");
             StringAssert.Contains(html, "value=\"Profile A\"");
-            using var admin = await host.SendAsync(HttpMethod.Get, "/Admin/Users");
-            Assert.AreNotEqual(HttpStatusCode.OK, admin.StatusCode);
+            using var admin = await host.SendAsync(HttpMethod.Get, "/Admin/Requests/Users");
+            Assert.AreEqual(HttpStatusCode.Redirect, admin.StatusCode);
+            using var denied = await host.SendAsync(HttpMethod.Get, admin.Headers.Location!.PathAndQuery);
+            Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
+            StringAssert.Contains(await denied.Content.ReadAsStringAsync(), "role=\"alert\"");
             using var invalidLocale = await host.SendAsync(HttpMethod.Post, "/Settings", Form(html, ("DisplayName", "Must roll back"), ("UiLocaleId", "999")));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalidLocale.StatusCode);
             Assert.AreEqual("Profile A", await host.Fixture.NameAsync(host.Fixture.ProfileAId));
