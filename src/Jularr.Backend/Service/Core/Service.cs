@@ -1,4 +1,5 @@
 using System.Data;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Enums.Sql;
@@ -39,6 +40,7 @@ namespace Jularr.Backend.Service.Core
         protected ServiceCaller Auth => Current.Caller;
         protected Type ResultType => Current.ResultType;
         protected CancellationToken CancellationToken => Current.CancellationToken;
+        protected PageRequest Page => Current.Page ?? throw new InvalidOperationException("This invocation has no PageRequest.");
 
         protected Service()
         {
@@ -55,6 +57,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         protected virtual IsolationLevel? GetTransaction(TParameters parameters) => null;
+        protected virtual PageRequest? GetPageRequest(TParameters parameters) => null;
         protected virtual Task ValidatePermissions(TParameters parameters) => Task.CompletedTask;
         protected virtual Task<IServiceOutput> OnRead() => throw new InvalidOperationException("The Read hook is not implemented.");
         protected virtual Task<IServiceOutput> OnCreate() => throw new InvalidOperationException("The Create hook is not implemented.");
@@ -104,6 +107,7 @@ namespace Jularr.Backend.Service.Core
                 inputData.Validate();
             }
 
+            var page = GetPageRequest(parameters);
             ValidateParameters(parameters);
 
             if (!definition.ResultTypes.Contains(resultType))
@@ -155,7 +159,7 @@ namespace Jularr.Backend.Service.Core
 
             // Bind this invocation only.
             var previous = _invocation.Value;
-            _invocation.Value = new Invocation(parameters, data, resultType, caller, context, cancellationToken);
+            _invocation.Value = new Invocation(parameters, data, resultType, caller, context, cancellationToken, page);
             try
             {
                 await ValidatePermissions(parameters);
@@ -221,7 +225,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         private sealed record ServiceDefinition(ServiceOperationType OperationType, HashSet<Type> ResultTypes, Type DefaultResultType);
-        private sealed record Invocation(TParameters Parameters, TData Data, Type ResultType, ServiceCaller Caller, LogicContext Context, CancellationToken CancellationToken);
+        private sealed record Invocation(TParameters Parameters, TData Data, Type ResultType, ServiceCaller Caller, LogicContext Context, CancellationToken CancellationToken, PageRequest? Page);
     }
 
     public abstract class UserService<TParameters, TData> : Service<TParameters, TData>

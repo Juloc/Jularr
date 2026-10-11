@@ -26,6 +26,7 @@ implementation is one backend class library hosted by `Jularr.Frontend`, not sep
 webservers or projects for every layer. Razor uses DI service calls; external clients
 use the same services through the shared API adapter.
 
+- Frontend consumers use versioned services and their Data contracts. Host registration and authentication use the designated `Service/Core` adapters. The Backend owns database configuration, connections and transactions; Logic and SQL infrastructure are internal implementation details.
 - `src/Jularr.Backend/Data/<Area>/<Feature>/V1`: related public typed parameters, input data and results together, including Public authentication. `V1` is the agreed contract version, not a legacy fallback.
 - `Data/Logic/<Entity>`: neutral lookup and mutation data for Logic. `Data/Fields/<Entity>`: canonical database field definitions. `Data/Enums/<Entity>`: enums grouped by their entity or framework owner. `Data/Common`: genuinely shared contracts only.
 - Canonical field definitions declare CLR/PostgreSQL types, nullability and value limits once; parameter/data properties reuse the same definition. Fields do not carry table/column metadata. Required/optional variants use the existing overloads.
@@ -53,6 +54,8 @@ use the same services through the shared API adapter.
 - A session UUID is an identifier, not a bearer secret. Keep token secrets separate, persist their hashes and never expose them in results or logs.
 - Put each SQL raw-string literal directly in the executing method on `sql.Statement`; pass that SQL object to the context. No SQL constants, external query catalogs or string-built value substitution.
 - Bind typed parameter/data objects through `sql.Parameters.Add(...)`. Trusted actor/profile IDs come from the verified invocation context, never request data.
+- Parameter binding uses readable data properties, cached field metadata and compiled getters. Npgsql handles named placeholders; PostgreSQL evaluates explicit SQL casts. Unused mapped properties are allowed; duplicate names across supplied objects are rejected. Each property type must have an explicit mapping in the data contract.
+- Paged reads explicitly set `sql.Page = Page` (or a validated `PageRequest` in Backend code outside a service). The list-service hook is evaluated once per invocation; SQL binding and the result use that same request. `PageResult<T>` is a BaseResponse and validates nested BaseData items.
 - SQL infrastructure has no Account/Profile/auth state and injects no entity IDs. Bind needed trusted values explicitly from the verified caller. Session Logic reads and locks the session by its proof; the gate compares its current Account/Profile with the verified caller.
 - Uppercase SQL keywords; double-quote PascalCase table/column names; use clear aliases and explicit columns, never `SELECT *`.
 - Format multi-line queries by clause (`SELECT`, `FROM`, `JOIN`, `WHERE`, `SET`); one selected/assigned column per line and aligned conditions.
