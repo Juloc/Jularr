@@ -6,17 +6,6 @@ using Jularr.Backend.Data.Common;
 
 namespace Jularr.Frontend.Framework;
 
-// Prepared headings until a typed authorized list read has been connected.
-public sealed class UiTable(IReadOnlyList<string> headers) : IUiComponent
-{
-    public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
-    {
-        var columns = headers.Select(key => (IUiComponent)new Th(new Text(key)).Attribute("scope", "col")).ToArray();
-        new Div(new TableElement(new Thead(new Tr(columns)), new Tbody()).Class("page-table"))
-            .Class("page-table-wrap").WriteTo(writer, encoder, texts);
-    }
-}
-
 // Real typed rows are supplied by the owning Razor PageModel after a Backend Service read.
 // Sorting/filtering/paging remain Backend-owned, not simulated by this renderer.
 public sealed class Table<TData>(IReadOnlyList<TData> rows) : IUiComponent where TData : BaseData

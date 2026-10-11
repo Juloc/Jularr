@@ -56,7 +56,6 @@ public sealed class ShellPreviewModel(IHostEnvironment environment) : JularrPage
         {
             page.Title("shell.preview");
             page.Navigation("nav.home");
-            page.Content.Add(new UiHeading("shell.preview", "shell.previewInfo"));
         }
     }
 

@@ -9,13 +9,9 @@ public sealed class DetailsModel : JularrPage
     {
         page.Title("details.title");
         page.Navigation("nav.home");
-        page.Content.Add(new UiDetailHero());
-        // Structure adapts to Work/media kind after a canonical details service is available.
-        page.Content.Add(new UiMediaColumns());
-        page.Content.Add(new UiSection("details.versions", [new UiTable([
-            "table.version", "table.language", "table.availability"
-        ])]));
-        page.Content.Add(new UiMediaRail("details.recommendations"));
+
+        // The Work type and authorized details read decide structure, editions
+        // and actions. A static empty hero/episode grid would misrepresent the work.
     }
 
     public IActionResult OnGet(long id)

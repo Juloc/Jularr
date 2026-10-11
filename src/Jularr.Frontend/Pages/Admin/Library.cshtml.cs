@@ -8,15 +8,7 @@ public sealed class LibraryModel : PreparedPage
     {
         page.Title("admin.library.title");
         page.Navigation("nav.admin");
-        page.Content.Add(new UiHeading("admin.library.title", "admin.library.description"));
-        page.Content.Add(new UiScope([
-            "media.all", "media.anime", "media.series", "media.movies",
-            "media.lightNovels", "media.books", "media.manga"
-        ]));
-        page.Content.Add(new UiToolbar());
-        page.Content.Add(new UiTable([
-            "table.work", "table.type", "table.availability",
-            "table.size", "table.status", "table.actions"
-        ]));
+
+        // File and availability rows must come from the canonical Library read.
     }
 }

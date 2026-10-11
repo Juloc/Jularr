@@ -8,16 +8,8 @@ public sealed class RequestsModel : PreparedPage
     {
         page.Title("admin.requests.title");
         page.Navigation("nav.admin");
-        page.Content.Add(new UiHeading("admin.requests.title"));
         page.Content.Add(AdminNavigation.Requests);
-        page.Content.Add(new UiScope([
-            "common.all", "requests.open", "requests.approved", "requests.inProgress",
-            "requests.done", "requests.rejected"
-        ]));
-        page.Content.Add(new UiToolbar());
-        page.Content.Add(new UiTable([
-            "table.work", "table.requester", "table.language", "table.requestedAt",
-            "table.status", "table.actions"
-        ]));
+
+        // Status tabs, filters and typed table require the canonical request read.
     }
 }

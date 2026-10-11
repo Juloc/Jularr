@@ -9,15 +9,8 @@ public sealed class WorkModel : JularrPage
     {
         page.Title("admin.work.title");
         page.Navigation("nav.admin");
-        page.Content.Add(new UiDetailHero());
-        page.Content.Add(new UiSection("admin.work.structure", [
-            new UiTable([
-                "table.work", "table.monitored", "table.availability", "table.actions"
-            ])
-        ]));
-        page.Content.Add(new UiSection("admin.work.files", [
-            new UiTable(["table.version", "table.language", "table.size", "table.status", "table.actions"])
-        ]));
+
+        // Structure, files, versions and actions depend on the authorized Work read.
     }
 
     public IActionResult OnGet(long id)

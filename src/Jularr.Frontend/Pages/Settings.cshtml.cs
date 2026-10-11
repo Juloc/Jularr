@@ -8,8 +8,6 @@ public sealed class SettingsModel : PreparedPage
     {
         page.Title("settings.title");
         page.Navigation("nav.settings");
-        page.Content.Add(new UiHeading("settings.title"));
-        page.Content.Add(new UiToolbar(Filters: false, Sort: false));
         page.Content.Add(new UiSettingsGroup("settings.general", [
             new("settings.appearance"), new("settings.language"), new("settings.accessibility")
         ]));
@@ -23,6 +21,5 @@ public sealed class SettingsModel : PreparedPage
         page.Content.Add(new UiSettingsGroup("settings.account", [
             new("settings.sessions"), new("settings.privacy"), new("settings.security")
         ]));
-        // Settings ultimately live in the common Profile/Account tab shell.
     }
 }
