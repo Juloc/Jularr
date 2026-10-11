@@ -7,8 +7,8 @@ Branch baseline: `dev`
 ## Canonical sources
 
 - Global Admin navigation/ownership: `docs/UX.md` §17
-- Cross-spec result: `docs/CROSS-SPEC-CONSISTENCY-AUDIT.md` §§21–29
-- Planning coverage: `docs/PLANNING-AUDIT.md`
+- Historical Admin cross-spec/coverage audit: [pre-cleanup snapshot](https://github.com/Juloc/Jularr/tree/backup/docs-specs-pre-audit-20261011/docs) (reference only, not current target authority)
+- Current architecture/ownership: `docs/ARCHITECTURE.md`, `docs/UX.md`, and the screen-specific specs below
 - System consolidation: `docs/mockups/admin-system-diagnostics/SPEC.md`
 - Devices & Sessions: `docs/mockups/admin-devices-sessions/SPEC.md`
 - Storage: `docs/mockups/admin-storage/SPEC.md`

@@ -32,7 +32,7 @@ Jularr-specific non-negotiable defaults:
 3. With **more than one table** in the query, **qualify every column** with its real table name (or a clear explicitly declared alias if unavoidable): in `SELECT`, `ON`, `WHERE`, `SET` expressions, `GROUP BY`, `ORDER BY` and `RETURNING`. Prefer the actual table name for unambiguous review; a multi-table query must never have naked `Id`, `Status` or `WorkId` columns.
 4. PostgreSQL owns the dialect: use `"Accounts"`, `"Id"`, not SQL Server three-part names such as `Main.dbo.Accounts`. PascalCase identifiers require PostgreSQL double-quoting. Parameters use `@Name`, **never** quoted SQL literals derived from input.
 5. Static SQL query variants may be separate named constants for genuinely different shapes. Do not build table names, column names, schema names, `ORDER BY` fragments, joins, or `WHERE` clauses by arbitrary string concatenation/interpolation; choose a reviewed static variant instead. Pagination sizes/filters/sort values are bound parameters; choosing from a fixed set of static SQL variants is acceptable.
-6. SQL may live **directly in its owning feature service** when that service owns the data access; do not add a Store/Repository merely to pass calls through. The Razor Page calls the same backend method as HTTP endpoints through DI, without an HTTP round trip. Public user/admin operations own different READ projections and authorizations; shared internal mutation code handles common invariants and SQL UPDATE. A generic unrestricted `UpdateUser(Data)` exposed to API callers is forbidden.
+6. **Service/Data/Logic target boundary:** static, authorized READ-SELECT projections live in their owning Service; all INSERT/UPDATE/DELETE/UPSERT, locking reads such as `SELECT FOR UPDATE`, and business mutations belong to shared internal Logic. Service orchestrates multiple Logic operations through one common SQL context/transaction; UI/API call Service through DI without self-HTTP. Do not add a forwarding Store/Repository. See the [pending target contract in PR #941](https://github.com/Juloc/Jularr/blob/docs/service-data-logic-contract-20261010/docs/SERVICE_DATA_LOGIC_ARCHITECTURE.md); this is a target rule, **not** a claim that the current runtime is already migrated. A generic unrestricted `UpdateUser(Data)` exposed to callers remains forbidden.
 7. Include focused tests for parameter values containing quotes/metacharacters, SQL correctness, authorization, query cardinality and all affected write invariants. The real database constraint remains the last line of defense against concurrent writes.
 
 **Example: one-table READ** (`UserAccountService.ReadUserV1`):
@@ -82,7 +82,7 @@ ORDER BY
     "Profiles"."Id"
 ```
 
-**Example: shared internal UPDATE** (validated/authorized callers only):
+**Target example: Logic-owned UPDATE** (called via an authorized Service, never from Service READ code):
 
 ```csharp
 private const string UpdateDisplayNameSql = """
@@ -114,7 +114,7 @@ await db.Database.ExecuteSqlRawAsync(
     cancellationToken);
 ```
 
-This example presumes the owner-approved `Accounts` target schema; do not copy it against current `OwnerAccounts` runtime without the separately authorized clean cut. Higher-level services must still enforce effective actor/target permission, DTO field allowlists, domain invariants, and transactional session effects. Static parameterized SQL is a **necessary**, not sufficient, protection.
+The WRITE example belongs in Logic and presumes the owner-approved `Accounts` target schema; do not copy it into Service or against current `OwnerAccounts` runtime without the separately authorized clean cut. Higher-level services must still enforce effective actor/target permission, DTO field allowlists, domain invariants, and transactional session effects. Static parameterized SQL is a **necessary**, not sufficient, protection.
 
 ### Compact SQL parameter builder (implemented)
 

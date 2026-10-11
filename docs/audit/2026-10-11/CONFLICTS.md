@@ -1,5 +1,7 @@
 # Konflikte und Entscheidungsrisiken – 11.10.2026
 
+**Status der ersten Bereinigung auf diesem Review-Branch:** Service/Logic-Textregel, historische Architektur-Backfill-Passage, alte Audit-Autoritätsliste (durch Archivierung), Roadmap-Abgrenzung und Home-Selbstverweis korrigiert. Die Tabelle hält die ursprünglichen Fundstellen am *dev-Snapshot* für Nachvollziehbarkeit fest. **Ungeklärt:** Phase-B-Draft-Scope/AccountGroups und inhaltlicher IST/SOLL-Abgleich der übrigen Fach-MDs. Keine Gate-B-Freigabe durch dieses Dokument.
+
 Basis: `dev@07e4c88a6a0368f627e0026ec8f7663dda5212ba`. Zusätzlich wurden offene Planungs-PRs #941/#945/#946 geprüft. Dies ist eine **Fundstellenliste**, keine eigenständige neue Architektur.
 
 | Priorität | Beleg / Befund | Konsequenz / nötige Entscheidung |

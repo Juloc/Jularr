@@ -4,7 +4,7 @@ Status: approved UX direction for the Jularr Home page.
 
 ## One Home/Discover surface (binding product decision, 2026-10-07)
 
-This decision supersedes every conflicting rule in this specification and in `docs/mockups/home/SPEC.md`. It was extended on 2026-10-07 (Discover completion): provider ownership, browse views, filters, paging, live search, Hero pool and the card action.
+This decision supersedes conflicting earlier Home rules here and in `docs/mockups/discover/SPEC.md`. It was extended on 2026-10-07 (Discover completion): provider ownership, browse views, filters, paging, live search, Hero pool and the card action.
 
 ### One surface, three concepts
 - Home and Discover are one consumer experience at `/`. An empty global Search is the normal Home/Discover surface. `/Discover` is only a permanent redirect to `/` that keeps the query string; there is one render implementation.
