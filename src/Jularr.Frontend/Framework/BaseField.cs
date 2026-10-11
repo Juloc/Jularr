@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
-using Jularr.Data.Common;
-using Jularr.Data.Fields;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Fields;
 
 namespace Jularr.Frontend.Framework;
 

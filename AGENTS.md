@@ -14,7 +14,7 @@
 - Preserve unrelated and uncommitted changes. Do not reset, delete or overwrite user work without explicit authorization.
 - Never expose or commit secrets. Do not change an active database; use isolated databases for tests.
 - Ask only when a missing decision or permission materially changes scope or safety.
-- Current scope includes backend/auth/Profile/localization and Integrations, a dedicated local clean-start preview on D: and consolidation of the instance wizard. The Frontend owns the single web host and stays untouched. Wizard/Admin/Library/Home/Player/Arr+ implementation and NAS scope still need their decisions. Phase B remains stopped; no clean-cut migrations.
+- Current scope includes backend/auth/Profile/localization and Integrations, a dedicated local clean-start preview on D: and consolidation of the instance wizard. The Frontend owns the single web host; only its two Data namespace imports were changed with explicit approval. Other Frontend changes remain out of scope. Wizard/Admin/Library/Home/Player/Arr+ implementation and NAS scope still need their decisions. Phase B remains stopped; no clean-cut migrations.
 
 ## Validation and Git
 
