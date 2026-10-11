@@ -1,6 +1,0 @@
-.git
-.github
-**/bin
-**/obj
-tests
-TestResults

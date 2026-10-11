@@ -1,9 +1,0 @@
-@model MetricCardModel
-<div class="metric-card">
-    <div class="metric-value">@Model.Value</div>
-    <div class="metric-label">@Model.Label</div>
-    @if (!string.IsNullOrWhiteSpace(Model.Hint))
-    {
-        <div class="metric-hint">@Model.Hint</div>
-    }
-</div>

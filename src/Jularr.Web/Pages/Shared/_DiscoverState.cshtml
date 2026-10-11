@@ -1,8 +1,0 @@
-@using Jularr.Web.Features.Discovery
-@model DiscoverStateView
-@* The one language and request indicator of a title (docs/mockups/discover): an icon and a short text, so the
-   state never rests on colour alone. Styles: wwwroot/css/discover-browse.css. *@
-<span class="dc-state dc-state-@Model.Css" title="@Model.Hint">
-    <partial name="_DiscoverIcon" model="Model.Css" />
-    <span>@Model.Label</span>
-</span>

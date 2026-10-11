@@ -1,4 +1,0 @@
-{
-  "_documentation": "Owner-configurable offline-neural TTS model manifest (docs/TTS.md, Phase 3). Add one entry per verified sherpa-onnx model pack (Piper/VITS/Kokoro etc). Every field is required except voices and minimumCompatibleVersion. sha256 must be the lowercase hex digest of the exact file served at url. Never list a language or voice a pinned model does not actually cover. To override without rebuilding, copy this file to {dataRoot}/speech/tts-model-manifest.json (for example /data/speech/tts-model-manifest.json in the container).",
-  "models": []
-}

@@ -1,74 +1,41 @@
-# Jularr
+# Jularr Backend
 
-![Docker](https://img.shields.io/badge/Docker-first-2496ED?logo=docker&logoColor=white)
-![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)
-![Platforms](https://img.shields.io/badge/Platforms-Web%20%7C%20PWA%20%7C%20Android%20%7C%20Android%20TV-2E7D32)
+Minimaler Backend-Neustart: gemeinsames Framework, genau ein Profile-Read und
+ein Profile-Update. Kein Frontend, kein EF, keine alten Feature-Bereiche.
 
-![Jularr](src/Jularr.Web/wwwroot/brand/hero-fuji.webp)
+- `Data.User.Profile.V1`: öffentliche Parameter, Eingaben und Ergebnisse.
+- `Service.User.Profile.V1`: Permission, zusätzliche Zugriffsprüfung, `OnRead`/`OnUpdate`.
+- `Logic.Profile`: Laden mit Sperre, Geschäftsvalidierung und transaktionaler Writer.
+- `Infrastructure.Sql`: parametrisierte SQL-Objekte und gemeinsame Connection/Transaction.
+- `database/Profile.sql`: frische Profile-/Account-Baseline aus den Phase-B-Verträgen.
 
-Jularr is a self-hosted Japanese learning companion and personal media library. It combines local media, reading, playback, vocabulary, progress and acquisition in one application while keeping the library on storage you control.
+SQL steht unmittelbar in der ausführenden Methode in `sql.Statement`.
+Parameter/Daten werden mit `sql.Parameters.Add(...)` gebunden. Die Logic-Aufrufe
+stehen direkt auf `Context`: `ReadProfileForUpdateAsync` → `SetData` → `UpdateProfileAsync`.
+Interne Ressourcen-IDs bleiben bigint/long; öffentliche Ressourcen-IDs sind UUIDs.
 
-Jularr is currently prerelease software. The canonical application version lives in `src/Jularr.Web/Jularr.Web.csproj`; published builds are listed under [GitHub Releases](https://github.com/Juloc/Jularr/releases).
+Die Read-Funktion liefert `ProfileDetails`; der Update ändert nur `DisplayName`
+und liefert `UpdateResult`. Lesen verlangt die aktive Account/Profile-Zuordnung,
+Ändern zusätzlich Profile-Eigentum. Keine Admin-Abkürzung und kein unbekannter Grant.
+Nicht konfigurierte Module werden abgelehnt; die beiden Profile-Services benötigen keine.
 
-## Current scope
+## Start und Tests
 
-- Anime playback with Japanese subtitle learning, vocabulary lookup and per-profile progress.
-- Manga, light-novel and book reading with persisted reader state and profile preferences.
-- Local/NAS library scanning, metadata, artwork, media analysis and storage-aware playback behavior.
-- FSRS-based learning/review state and local Japanese language tooling.
-- Usenet acquisition through the canonical indexer/download-client pipeline.
-- Optional AniList and AI integrations; neither is required for the core local library.
-- Web/PWA plus Android and Android TV clients using the same server-side state and contracts.
+`JULARR_DB` muss explizit gesetzt werden. Der Host erstellt oder migriert keine
+Datenbank. Schema-Installation erfolgt nur bewusst in einer frischen Ziel-Datenbank.
+Die beiden Routen sind `GET /api/v1/profiles/{publicId}` und
+`PUT /api/v1/profiles/{publicId}/name`; Update benötigt den Antiforgery-Token aus GET.
 
-Detailed operational behavior belongs in the focused documentation below rather than in this README.
+`dotnet build Jularr.sln` baut das Backend. `dotnet test Jularr.sln` benötigt
+`JULARR_TEST_DB` mit einem isolierten PostgreSQL auf `127.0.0.1:15433`, Benutzer
+`jularr_test`, Administrationsdatenbank `jularr_test_admin`. Tests erstellen nur
+eigene zufällig benannte Datenbanken; App-Verbindungen werden abgelehnt.
 
-## Deployment
+## Bewusste Integrationsgrenze
 
-The current runtime uses **PostgreSQL** as its canonical database.
-
-Use the repository-root [compose.yaml](compose.yaml) with an immutable release tag and PostgreSQL.
-
-Start here:
-
-- [Deployment](docs/DEPLOYMENT.md)
-- [Persistence and one-time migration](docs/PERSISTENCE.md)
-- [Admin operations](docs/ADMIN_OPERATIONS.md)
-
-## Documentation
-
-| Area | Canonical document |
-| --- | --- |
-| Deployment | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| Persistence / PostgreSQL | [docs/PERSISTENCE.md](docs/PERSISTENCE.md) |
-| Administration and operations | [docs/ADMIN_OPERATIONS.md](docs/ADMIN_OPERATIONS.md) |
-| Playback and media inventory | [docs/PLAYBACK.md](docs/PLAYBACK.md) |
-| Android and Android TV clients | [docs/ANDROID_CLIENTS.md](docs/ANDROID_CLIENTS.md) |
-| Anime acquisition | [docs/ANIME_ACQUISITION.md](docs/ANIME_ACQUISITION.md) |
-| Release selection | [docs/AUTOMATIC_RELEASE_SELECTION.md](docs/AUTOMATIC_RELEASE_SELECTION.md) |
-| Anime naming | [docs/ANIME_NAMING.md](docs/ANIME_NAMING.md) |
-| Offline library | [docs/OFFLINE_LIBRARY.md](docs/OFFLINE_LIBRARY.md) |
-| Media segments | [docs/MEDIA_SEGMENTS.md](docs/MEDIA_SEGMENTS.md) |
-| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| UI/UX specifications and mockups | [docs/mockups/README.md](docs/mockups/README.md) |
-| Engineering conventions | [docs/MAINTAINABILITY_CONVENTIONS.md](docs/MAINTAINABILITY_CONVENTIONS.md) |
-
-## Development
-
-Before repository work, read [AGENTS.md](AGENTS.md), `.agent/project.yaml` and the linked engineering conventions.
-
-Repository validation:
-
-```bash
-npm ci
-dotnet restore Jularr.sln
-dotnet build Jularr.sln --no-restore
-dotnet test Jularr.sln --no-build
-```
-
-The test and persistence paths use PostgreSQL-compatible behavior; see [docs/PERSISTENCE.md](docs/PERSISTENCE.md).
-
-## Documentation rule
-
-The README intentionally stays short. Detailed behavior belongs in the canonical document for that area and is linked from here.
-
-Current documentation uses the **Jularr** product name. Documentation and runtime identifiers use the Jularr name.
+Die Session-Prüfung erwartet geschützte Cookie-Claims `jularr.session_id` und
+`jularr.session_revision`, prüft den tatsächlichen AccountSessions-Zustand und
+sperrt ihn erneut in der Schreibtransaktion. Die Session-UUID ist kein Bearer-Secret.
+Login/Session-Ausstellung, sämtliche bisherigen Razor-/Android-/TV-Verbraucher,
+weitere Profile-Funktionen und Profil-Einstellungen sind noch nicht umgestellt.
+Der isolierte Backend-Neustart ersetzt keine aktive Installation und schließt Phase B nicht ab.

@@ -1,11 +1,7 @@
-bin/
-obj/
-.vs/
-.idea/
-*.user
-*.suo
-.env
-node_modules/
+**/bin/
+**/obj/
 TestResults/
-coverage/
-src/Jularr.Web/wwwroot/build/
+.scratch/
+.vs/
+.env
+*.user

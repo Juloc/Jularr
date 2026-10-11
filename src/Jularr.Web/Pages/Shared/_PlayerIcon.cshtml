@@ -1,7 +1,0 @@
-@model string
-@using Jularr.Web.Features.Playback
-@* Player icons come only from design/player/player-icons.json (embedded); labels stay on the surrounding control. *@
-@{
-    var icon = PlayerDesign.Icon(Model);
-}
-<svg class="player-icon" viewBox="@icon.ViewBox" width="20" height="20" aria-hidden="true" focusable="false" fill="currentColor"><path d="@icon.Path" /></svg>
