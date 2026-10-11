@@ -9,11 +9,7 @@ namespace Jularr.Backend.Logic.Session
 {
     public static class SessionLogic
     {
-        public static async Task<SessionCredentialsData> CreateSessionAsync(
-            this LogicContext context,
-            AccountAuthenticationData account,
-            TimeSpan lifetime,
-            CancellationToken cancellationToken)
+        public static async Task<SessionCredentialsData> CreateSessionAsync(this LogicContext context, AccountAuthenticationData account, TimeSpan lifetime, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -65,10 +61,7 @@ namespace Jularr.Backend.Logic.Session
             return credentials;
         }
 
-        public static async Task<SessionAuthenticationData> ReadSessionAsync(
-            this LogicContext context,
-            SessionParameters parameters,
-            CancellationToken cancellationToken)
+        public static async Task<SessionAuthenticationData> ReadSessionAsync(this LogicContext context, SessionParameters parameters, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
             sql.Statement =

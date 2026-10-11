@@ -14,7 +14,7 @@ documents need not be reread for every task.
 - Prefer `string`, `long`, `bool` and other C# aliases; use `var` when the initializer makes the type clear.
 - Use nullable types accurately; do not hide missing values with defaults or unjustified null-forgiving operators.
 - Keep coherent control flow together. No forwarding wrappers, artificial mini-methods, speculative interfaces or dependencies.
-- Wrap long signatures, calls and expressions at logical boundaries; do not reformat unrelated code.
+- Keep straightforward method/constructor signatures, class declarations and calls on one line up to a 200-character guideline (including indentation). Do not wrap a short parameter list merely because it has several arguments. Wrap genuinely long signatures/inheritance or complex expressions at logical boundaries; keep Allman body braces and meaningful section spacing. The backend/integration EditorConfig uses the same limit.
 - Propagate cancellation and finite I/O timeouts. Dispose owned resources; preserve exception meaning and do not swallow failures.
 - Group meaningful steps with blank lines and short section comments, normally 1-5 words. Apply this throughout handwritten backend/integration code, not just new services. Avoid dense call chains, continuous registration blocks and comments repeating simple properties. XML docs only for reusable contracts needing non-obvious caller guidance.
 - No issue numbers, history or specification prose in source comments. Use documentation for that material.

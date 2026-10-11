@@ -8,10 +8,7 @@ namespace Jularr.Backend.Logic.Profile
 {
     public static class ProfileLogic
     {
-        public static async Task CreateProfileAsync(
-            this LogicContext context,
-            ProfileCreationData data,
-            CancellationToken cancellationToken)
+        public static async Task CreateProfileAsync(this LogicContext context, ProfileCreationData data, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -60,10 +57,7 @@ namespace Jularr.Backend.Logic.Profile
             }
         }
 
-        public static Task<ProfileUpdateData> ReadProfileAsync(
-            this LogicContext context,
-            long profileId,
-            CancellationToken cancellationToken)
+        public static Task<ProfileUpdateData> ReadProfileAsync(this LogicContext context, long profileId, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -84,10 +78,7 @@ namespace Jularr.Backend.Logic.Profile
             return context.ReadRequiredAsync<ProfileUpdateData>(sql, cancellationToken);
         }
 
-        public static async Task UpdateProfileAsync(
-            this LogicContext context,
-            ProfileUpdateData updateData,
-            CancellationToken cancellationToken)
+        public static async Task UpdateProfileAsync(this LogicContext context, ProfileUpdateData updateData, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(context);
             ArgumentNullException.ThrowIfNull(updateData);

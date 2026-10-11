@@ -50,11 +50,7 @@ namespace Jularr.Integrations.Logic.Plex
             return new PlexPin(id, code, key.GetEncoded());
         }
 
-        public async Task<PlexIdentity?> ReadIdentityAsync(
-            long externalPinId,
-            string clientIdentifier,
-            byte[] privateKey,
-            CancellationToken cancellationToken)
+        public async Task<PlexIdentity?> ReadIdentityAsync(long externalPinId, string clientIdentifier, byte[] privateKey, CancellationToken cancellationToken)
         {
             // Poll the device grant.
             var deviceJwt = CreateDeviceJwt(privateKey, clientIdentifier);

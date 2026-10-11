@@ -13,12 +13,7 @@ namespace Jularr.Backend.Logic.Authentication
 {
     public static class PlexAuthenticationLogic
     {
-        public static async Task CreatePlexFlowAsync(
-            this LogicContext context,
-            PlexChallengeCreationData challenge,
-            long externalPinId,
-            string clientIdentifier,
-            CancellationToken cancellationToken)
+        public static async Task CreatePlexFlowAsync(this LogicContext context, PlexChallengeCreationData challenge, long externalPinId, string clientIdentifier, CancellationToken cancellationToken)
         {
             // Lock the configured provider.
             var provider = await context.ReadEnabledProviderAsync(new ProviderParameters("plex"), cancellationToken);
@@ -53,10 +48,7 @@ namespace Jularr.Backend.Logic.Authentication
             }
         }
 
-        public static async Task<PlexFlowData> ReadPlexFlowAsync(
-            this LogicContext context,
-            PlexChallengeParameters parameters,
-            CancellationToken cancellationToken)
+        public static async Task<PlexFlowData> ReadPlexFlowAsync(this LogicContext context, PlexChallengeParameters parameters, CancellationToken cancellationToken)
         {
             parameters.Validate();
             var sql = new SqlStatement();

@@ -62,8 +62,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 CryptographicOperations.ZeroMemory(pin.PrivateKey);
             }
 
-            var challenge = new PlexChallengeCreationData(publicId, SHA256.HashData(Encoding.UTF8.GetBytes(nonce)),
-                protectedKey, expiresAt);
+            var challenge = new PlexChallengeCreationData(publicId, SHA256.HashData(Encoding.UTF8.GetBytes(nonce)), protectedKey, expiresAt);
 
             // Persist after external I/O.
             await Context.ExecuteBatchAsync(async (context, token) =>
@@ -165,8 +164,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
             var registration = new PlexRegistrationData(hasAccess, _options.PlexRequireApproval, _options.PlexUiLocaleId);
 
             // Validate the database identity.
-            var identityData = new PlexIdentityData(identity.ExternalAccountId, identity.Email,
-                identity.DisplayName, identity.EmailVerified);
+            var identityData = new PlexIdentityData(identity.ExternalAccountId, identity.Email, identity.DisplayName, identity.EmailVerified);
             identityData.Validate();
 
             // Complete atomically.

@@ -6,10 +6,7 @@ namespace Jularr.Backend.Logic.Provider
 {
     public static class ProviderLogic
     {
-        public static async Task<ProviderData> ReadEnabledProviderAsync(
-            this LogicContext context,
-            ProviderParameters parameters,
-            CancellationToken cancellationToken)
+        public static async Task<ProviderData> ReadEnabledProviderAsync(this LogicContext context, ProviderParameters parameters, CancellationToken cancellationToken)
         {
             // Hold configuration through completion.
             var sql = new SqlStatement();

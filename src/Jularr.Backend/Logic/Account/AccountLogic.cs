@@ -69,11 +69,7 @@ namespace Jularr.Backend.Logic.Account
             return account;
         }
 
-        public static async Task<long?> CreateAccountAsync(
-            this LogicContext context,
-            AccountCreationData data,
-            long uiLocaleId,
-            CancellationToken cancellationToken)
+        public static async Task<long?> CreateAccountAsync(this LogicContext context, AccountCreationData data, long uiLocaleId, CancellationToken cancellationToken)
         {
             // Require an existing Owner.
             var sql = new SqlStatement();
@@ -126,12 +122,7 @@ namespace Jularr.Backend.Logic.Account
             return account.Id;
         }
 
-        public static async Task CreateRegistrationRequestAsync(
-            this LogicContext context,
-            AccountCreationData data,
-            string password,
-            long uiLocaleId,
-            CancellationToken cancellationToken)
+        public static async Task CreateRegistrationRequestAsync(this LogicContext context, AccountCreationData data, string password, long uiLocaleId, CancellationToken cancellationToken)
         {
             // Hash before account creation.
             var hash = PasswordHasher.HashPassword(MissingAccount, password);
@@ -143,10 +134,7 @@ namespace Jularr.Backend.Logic.Account
             }
         }
 
-        private static async Task WritePasswordAsync(
-            this LogicContext context,
-            AccountPasswordData data,
-            CancellationToken cancellationToken)
+        private static async Task WritePasswordAsync(this LogicContext context, AccountPasswordData data, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
             sql.Statement =

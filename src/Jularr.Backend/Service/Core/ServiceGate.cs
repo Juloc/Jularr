@@ -61,10 +61,7 @@ namespace Jularr.Backend.Service.Core
             return _caller;
         }
 
-        public Task RequireAccessAsync(
-            ServiceCaller caller,
-            ServicePermission permission,
-            CancellationToken cancellationToken)
+        public Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             RequirePermission(caller, permission);
@@ -72,11 +69,7 @@ namespace Jularr.Backend.Service.Core
             return Task.CompletedTask;
         }
 
-        public async Task RequireTransactionalAccessAsync(
-            ServiceCaller caller,
-            ServicePermission permission,
-            LogicContext context,
-            CancellationToken cancellationToken)
+        public async Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken)
         {
             RequirePermission(caller, permission);
 
