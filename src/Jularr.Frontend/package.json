@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && node Tools/build-icons.mjs",
     "check": "tsc --noEmit && npm run build",
     "watch": "vite build --watch",
     "test": "node --test Tools/*.test.mjs",
