@@ -88,7 +88,7 @@ UPDATE "AccountTotpFactors" SET "RevokedAt" = :'test_now' WHERE "Id" = :factor_i
 EXECUTE phase_b_auth_totp(:actor_id, :factor_id, 101);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 
-INSERT INTO "Providers" ("Key") VALUES ('phase-b-auth-plex') RETURNING "Id" AS provider_id \gset
+INSERT INTO "Providers" ("Key", "IsMediaConnectionEnabled") VALUES ('phase-b-auth-plex', true) RETURNING "Id" AS provider_id \gset
 INSERT INTO "AccountAuthChallenges" ("AccountId", "CredentialRevision", "AuthChallengePurposeTypeId", "TokenHash", "ExpiresAt")
 VALUES (:actor_id, 1, 9, decode(repeat('61', 32), 'hex'), :'test_expiry') RETURNING "Id" AS challenge_id, "PublicId" AS media_id \gset
 INSERT INTO "AccountExternalAuthFlows" ("AccountAuthChallengeId", "AuthChallengePurposeTypeId", "ProviderId", "StartedProfileId", "ExternalPinId", "ClientIdentifier")
@@ -100,10 +100,24 @@ EXECUTE phase_b_auth_challenge(:'media_id', decode(repeat('61', 32), 'hex'), 7, 
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 EXECUTE phase_b_auth_challenge(:'media_id', decode(repeat('61', 32), 'hex'), 9, :actor_id, :'test_now', :provider_id, NULL);
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
+UPDATE "Providers" SET "IsMediaConnectionEnabled" = FALSE WHERE "Id" = :provider_id;
+EXECUTE phase_b_auth_challenge(:'media_id', decode(repeat('61', 32), 'hex'), 9, :actor_id, :'test_now', :provider_id, :profile_id);
+SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
+UPDATE "Providers" SET "IsMediaConnectionEnabled" = TRUE WHERE "Id" = :provider_id;
 EXECUTE phase_b_auth_challenge(:'media_id', decode(repeat('61', 32), 'hex'), 9, :actor_id, :'test_now', :provider_id, :profile_id);
 SELECT 1 / CASE WHEN :ROW_COUNT = 1 THEN 1 ELSE 0 END;
 SELECT 1 / CASE WHEN NOT EXISTS (SELECT 1 FROM "AccountExternalLogins" WHERE "AccountId" = :actor_id) THEN 1 ELSE 0 END;
 SELECT 1 / CASE WHEN NOT EXISTS (SELECT 1 FROM "ProviderMediaConnections" WHERE "ProfileId" = :profile_id) THEN 1 ELSE 0 END;
+
+INSERT INTO "AccountAuthChallenges" ("AuthChallengePurposeTypeId", "TokenHash", "ExpiresAt")
+VALUES (7, decode(repeat('63', 32), 'hex'), :'test_expiry') RETURNING "Id" AS challenge_id, "PublicId" AS login_id \gset
+INSERT INTO "AccountExternalAuthFlows" ("AccountAuthChallengeId", "AuthChallengePurposeTypeId", "ProviderId", "ExternalPinId", "ClientIdentifier", "VerifiedExternalAccountId")
+VALUES (:challenge_id, 7, :provider_id, 125, 'phase-b-fixture', 'verified-fixture');
+EXECUTE phase_b_auth_challenge(:'login_id', decode(repeat('63', 32), 'hex'), 7, NULL, :'test_now', :provider_id, NULL);
+SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
+UPDATE "Providers" SET "IsAccountLoginEnabled" = TRUE WHERE "Id" = :provider_id;
+EXECUTE phase_b_auth_challenge(:'login_id', decode(repeat('63', 32), 'hex'), 7, NULL, :'test_now', :provider_id, NULL);
+SELECT 1 / CASE WHEN :ROW_COUNT = 1 THEN 1 ELSE 0 END;
 
 ANALYZE "AccountSessions";
 \o

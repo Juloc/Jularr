@@ -93,6 +93,29 @@ const authQueries = [
 for (const query of [
     ...authQueries,
     {
+        name: 'provider_grants',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql',
+        start: '-- Service GRANTS:',
+        end: '-- Service CANDIDATES:',
+        declaration: 'PREPARE phase_b_provider_grants(bigint,integer,bigint) AS\n',
+        parameters: ['ActorAccountId', 'PageSize', 'Offset']
+    },
+    {
+        name: 'provider_candidates',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql',
+        start: '-- Service CANDIDATES:',
+        end: '-- Logic ADVANCE:',
+        declaration: 'PREPARE phase_b_provider_candidates(bigint,bigint,uuid,integer,bigint) AS\n',
+        parameters: ['ActorAccountId', 'ActiveProfileId', 'WorkPublicId', 'PageSize', 'Offset']
+    },
+    {
+        name: 'provider_advance',
+        file: 'DATABASE_CUTOVER_PHASE_B_PROVIDER_QUERIES_DRAFT.sql',
+        start: '-- Logic ADVANCE:',
+        declaration: 'PREPARE phase_b_provider_advance(bigint,text,bigint,bigint,integer,integer,bigint,timestamptz,text) AS\n',
+        parameters: ['ProviderServerGrantId', 'ExternalSectionId', 'ExpectedGeneration', 'ExpectedGrantRevision', 'ExpectedStart', 'NextStart', 'TotalSize', 'Now', 'TrustedWorkerKey']
+    },
+    {
         name: 'groups',
         file: 'DATABASE_CUTOVER_PHASE_B_ADMIN_QUERIES_DRAFT.sql',
         declaration: 'PREPARE phase_b_groups(bigint,integer,bigint) AS\n',
@@ -228,7 +251,7 @@ const providerQueries = [
     {
         name: 'provider_profile_media',
         start: '-- Service PROFILE_MEDIA:',
-        end: null,
+        end: '-- Service GRANTS:',
         types: 'bigint,bigint,text',
         parameters: ['ActorAccountId', 'ActiveProfileId', 'ProviderKey']
     }

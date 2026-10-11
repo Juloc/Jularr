@@ -32,7 +32,7 @@ SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 
 INSERT INTO "ProviderMediaConnections"
     ("ProfileId", "ProviderId", "ExternalAccountId", "ConsentedAt", "CredentialsStorageKey")
-VALUES (:profile_id, :provider_id, 'external-provider-profile-1', now(), 'opaque-protected-fixture');
+VALUES (:profile_id, :provider_id, 'external-provider-profile-1', now(), 'opaque_protected_fixture');
 EXECUTE phase_b_provider_profile_media(:owner_id, :profile_id, 'phase-b-provider-policy');
 SELECT 1 / CASE WHEN :ROW_COUNT = 0 THEN 1 ELSE 0 END;
 

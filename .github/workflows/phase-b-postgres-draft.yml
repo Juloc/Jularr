@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          for id in 01 02 03 04 06 07 11 12 14 15 16; do
+          for id in 01 02 03 04 06 07 11 12 14 15 16 17; do
             files=(docs/DATABASE_CUTOVER_PHASE_B_${id}_*_DRAFT.sql)
             if [ "${#files[@]}" -ne 1 ]; then
               printf 'Expected one DDL draft for phase %s; found %s\n' "$id" "${#files[@]}" >&2
@@ -113,6 +113,10 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_AUTH_LIFECYCLE_TESTS.sql
           bash docs/DATABASE_CUTOVER_PHASE_B_PG_AUTH_CONCURRENCY_TEST.sh
 
+      - name: Verify provider consent, grants and restart-safe scan checkpoints
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_PROVIDER_LIFECYCLE_TESTS.sql
+
       - name: Verify notification recurrence, replay, dismissal and scoped pagination
         run: |
           psql -X -v ON_ERROR_STOP=1 -f docs/DATABASE_CUTOVER_PHASE_B_PG_NOTIFICATION_LIFECYCLE_TESTS.sql
@@ -154,7 +158,7 @@ jobs:
           count="$(psql -X -A -t -v ON_ERROR_STOP=1 -c \
             "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public' AND c.relname NOT LIKE 'pg_%'")"
           echo "Target draft tables: $count"
-          if [ "$count" -ne 139 ]; then
-            echo "Expected 139 proposed Phase B tables; unexpected DDL drift" >&2
+          if [ "$count" -ne 141 ]; then
+            echo "Expected 141 proposed Phase B tables; unexpected DDL drift" >&2
             exit 1
           fi

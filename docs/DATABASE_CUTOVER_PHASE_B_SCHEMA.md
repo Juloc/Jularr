@@ -11,7 +11,7 @@ später eine eigene Freigabe.
 
 ## Aktueller Umfang
 
-Elf DDL-Dateien, in dieser Reihenfolge:
+Zwölf DDL-Dateien, in dieser Reihenfolge:
 
 1. [01 Core](DATABASE_CUTOVER_PHASE_B_01_CORE_DRAFT.sql)
 2. [02 Progress/Media](DATABASE_CUTOVER_PHASE_B_02_PROGRESS_MEDIA_DRAFT.sql)
@@ -24,17 +24,18 @@ Elf DDL-Dateien, in dieser Reihenfolge:
 9. [14 Public IDs](DATABASE_CUTOVER_PHASE_B_14_PUBLIC_RESOURCE_IDS_DRAFT.sql)
 10. [15 Notification Lifecycle](DATABASE_CUTOVER_PHASE_B_15_NOTIFICATION_LIFECYCLE_DRAFT.sql)
 11. [16 Auth Lifecycle](DATABASE_CUTOVER_PHASE_B_16_AUTH_LIFECYCLE_DRAFT.sql)
+12. [17 Provider Lifecycle](DATABASE_CUTOVER_PHASE_B_17_PROVIDER_LIFECYCLE_DRAFT.sql)
 
 Die Nummernlücken sind absichtlich: die fünf Learning-Teile wurden entfernt,
 nicht als leere oder optionale Baseline-Dateien behalten.
 
-Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 139
+Das [Tabellenmanifest](DATABASE_CUTOVER_PHASE_B_TABLE_MANIFEST.csv) führt 141
 Target-Tabellen. Die 29 bestehenden Type-Kataloge haben 154 feste Codes in
 [C#-Byte-Verträgen](DATABASE_CUTOVER_PHASE_B_TYPE_CONTRACTS.cs), identischem
 [Seed-Manifest](DATABASE_CUTOVER_PHASE_B_ENUM_SEED_MANIFEST.csv) und statischem SQL.
 Der Verifier lehnt undefinierte Kataloge ab. Keine Übernahme alter int-Enumcodes.
 
-22 adressierbare Ressourcen besitzen separate öffentliche UUIDs. Interne
+24 adressierbare Ressourcen besitzen separate öffentliche UUIDs. Interne
 Ressourcen-PKs, FKs und Joins bleiben bigint/C# long. Öffentliche Identität ist
 keine Berechtigung; Session-/Reset-/Refresh-/Capability-Secrets bleiben unabhängig
 davon kryptografisch zufällig und gehasht bzw. geschützt.
@@ -68,7 +69,7 @@ offen. Keine vollständige Anwendungssuite oder aktive DB-Änderung.
 
 Der [Notification-Vertrag](DATABASE_CUTOVER_PHASE_B_NOTIFICATION_CONTRACT.md) enthält
 Ruhezeiten/DST, Digest, geschützte Endpoints und aktuelle Route-Revalidierung.
-Elf DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
+Zwölf DDL-Dateien und die betroffenen PG-Suites wurden frisch geprüft. Das beweist
 Zielpersistenz, keinen existierenden externen Transport oder Runtime-Cutover.
 
 Die [Reader-READs](DATABASE_CUTOVER_PHASE_B_READER_QUERIES_DRAFT.sql) führen
@@ -87,7 +88,12 @@ Purpose-Codes. Vier Provider-Freigaben sind unabhängig und standardmäßig FALS
 Media-Connections werden nur für aktivierte Provider und gegen die aktuelle
 Account/Profile-Mitgliedschaft gelesen; CredentialsStorageKey wird nicht in
 Client-DTOs oder diesen SELECTs projiziert. [PG-Testset](DATABASE_CUTOVER_PHASE_B_PG_PROVIDER_POLICY_TESTS.sql).
-Server-Grants, reale externe Credentials und Reconciliation sind noch offen.
+Der [Provider-Lifecycle](DATABASE_CUTOVER_PHASE_B_PROVIDER_CONTRACT.md) ergänzt
+revisionierte Grants, Owner/Sections, aktuelle Operation-Leases und gemeinsame
+Page-/Checkpoint-Transaktionen. Unbestätigte Seiten können nicht committen;
+Restart verwirft alte Cache-Generationen. 1000 Grants sowie 1000 Kandidaten und
+999 fremde Work-Items prüfen Paging/Isolation und EXPLAIN. Reale externe
+Credentials/Server-/Client-Abnahme bleiben ausdrücklich nachgelagert.
 
 [Profilautorisierte AcquisitionRequest-READs](DATABASE_CUTOVER_PHASE_B_ACQUISITION_QUERIES_DRAFT.sql)
 geben Request-/Work-/Operation-PublicIds als begrenzte, deterministische

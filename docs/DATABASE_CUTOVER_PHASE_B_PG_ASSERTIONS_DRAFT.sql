@@ -26,6 +26,10 @@ BEGIN
     WITH required_constraint(name, kind) AS (
         VALUES
         ('FK_AccountAuthChallenges_Purpose','f'),
+        ('FK_PlexSettings_ProviderKey','f'),
+        ('CK_ProviderServerGrants_OpaqueCredential','c'),
+        ('FK_ProviderCatalogItems_Checkpoint','f'),
+        ('CK_ProviderCatalogCheckpoints_LastPage','c'),
         ('CK_AccountAuthChallenges_Account','c'),
         ('CK_AccountSessions_Hash','c'),
         ('FK_AccountExternalAuthFlows_ChallengePurpose','f'),

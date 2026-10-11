@@ -7,12 +7,13 @@ Aktueller Umfang und offene Gates: [Schema](DATABASE_CUTOVER_PHASE_B_SCHEMA.md),
 
 | Prüfung | Garantie / Abgrenzung |
 | --- | --- |
-| Frischer Bootstrap aller elf DDL-Dateien | Vollständiger aktueller Target-Satz, nicht alte Migrationen |
+| Frischer Bootstrap aller zwölf DDL-Dateien | Vollständiger aktueller Target-Satz, nicht alte Migrationen |
 | Katalogassertions | FKs/CHECKs/DEFERRABLE/NULLS NOT DISTINCT; ausdrücklich keine Learning-Tabellen oder Profil-Learning-Spalte |
 | Defined Seeds / Type Catalogs | 29 Byte-/smallint-Kataloge, 154 exakt definierte Codes, unbekannte FK-Werte und Bereichs-/Blank-Key-Ablehnung |
 | Auth Lifecycle | Hash-/Purpose-/Account-Grenzen, Expiry, Rollback/Replay, Credential-Epoch, TOTP/Recovery, Transfer und zwei parallele Rotation-/Recovery-Sessions |
 | Account/Profile/Groups | Owner-Membership, fremde AccountSession-Profile, neutrale Gruppen, eindeutige Namen, RESTRICT und Owner-Paging |
 | Provider login/media opt-ins | Vier unabhängige default-off Capability-Felder; statische Login/Link/Media-Zweck-READs, Profilmembership/Disable und Policy-Entzug mit echter PostgreSQL-Testausführung |
+| Provider lifecycle | Revisionierte Consent-/Grant-Referenzen, Owner/Sections, Token-freie READs, Operation-Lease-/Generation-/Cursor-CAS, Commit-Accepted-Page, Restart/Rollback und 1000er Paging/Work-Isolation |
 | Assets/Files/Game/Playback | Identische Work-/Version-/Asset-/File-Zuordnung; Game-only und Multidisc-FKs |
 | Progress/Reader | Genau ein Positionstyp, Reader-/Edition-/Work-Zuordnung, nullable Dimensionspaare, Revision/CAS und Offline-Replay |
 | Images/Segments/Detection | Genau ein typisiertes Bildziel, valide Zeitspannen, legitime Überlappung, No-Match und wiederholte Detection-Runs |

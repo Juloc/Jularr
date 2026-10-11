@@ -13,6 +13,8 @@ BEGIN
             ('AccountPasskeys'),
             ('AccountSessions'),
             ('AccountAuthChallenges'),
+            ('ProviderMediaConnections'),
+            ('ProviderServerGrants'),
             ('AccountGroups'),
             ('Profiles'),
             ('Works'),

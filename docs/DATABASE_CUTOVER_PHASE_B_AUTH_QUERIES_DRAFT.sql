@@ -121,6 +121,9 @@ WHERE
             flow."AccountAuthChallengeId" = challenge."Id"
             AND flow."VerifiedExternalAccountId" IS NOT NULL
             AND flow."ProviderId" = @ProviderId
+            AND (challenge."AuthChallengePurposeTypeId" <> 9 OR provider."IsMediaConnectionEnabled" = TRUE)
+            AND (challenge."AuthChallengePurposeTypeId" <> 7 OR provider."IsAccountLoginEnabled" = TRUE)
+            AND (challenge."AuthChallengePurposeTypeId" <> 8 OR provider."IsAccountLinkEnabled" = TRUE)
             AND flow."StartedProfileId" IS NOT DISTINCT FROM @ActiveProfileId
             AND (flow."StartedProfileId" IS NULL OR EXISTS (
                 SELECT
