@@ -1,0 +1,36 @@
+@using System.Globalization
+@inject UiText T
+@{
+    var isPreview = ViewData["ShellPreview"] is true;
+    var showShell = (User.Identity?.IsAuthenticated == true || isPreview)
+        && ViewData["ShowShell"] is not false;
+    var title = ViewData["Title"] as string ?? T["app.name"];
+}
+<!DOCTYPE html>
+<html lang="@CultureInfo.CurrentUICulture.Name" dir="ltr" data-skin="clean" data-mode="system">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#17161e" />
+    <title>@title · @T["app.name"]</title>
+    <link rel="stylesheet" href="~/css/frontend.css" asp-append-version="true" />
+    <script src="~/js/theme.js" asp-append-version="true" defer></script>
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body class="@(showShell ? "app-page" : "auth-page")">
+    <a class="skip-link" href="#main-content">@T["shell.skip"]</a>
+    @if (showShell)
+    {
+        <div class="app-layout">
+            <partial name="_AppShell" />
+            <main class="app-main" id="main-content" tabindex="-1">@RenderBody()</main>
+        </div>
+    }
+    else
+    {
+        <main class="auth-main" id="main-content" tabindex="-1">@RenderBody()</main>
+    }
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
