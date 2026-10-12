@@ -67,7 +67,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, restored.StatusCode);
 
             // Missing profile reduces user capabilities.
-            await host.Fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"ProfileId\" = NULL");
+            await host.Fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"ActiveProfileId\" = NULL");
             using var noProfile = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
             capabilities = (await noProfile.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!;
             Assert.IsFalse(capabilities.CanReadMedia);
