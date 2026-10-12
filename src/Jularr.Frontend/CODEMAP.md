@@ -76,6 +76,9 @@ Shared conventions and Backend ownership:
 - [Setup start](Pages/Setup/Start/Start.cshtml.cs): first Owner through Public services, field-driven form and shared authentication effects. Remaining wizard steps are not connected.
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): Owner directory/editor, profile assignments and session revocation; separate from request-limit Users.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): real provider registry enablement via Owner services.
+- [Works](Pages/Admin/Works/Works.cshtml.cs), [Work editor](Pages/Admin/Work/Work.cshtml.cs): real paged catalog, manual creation and version-checked title editing through Admin media services; inventory and acquisition controls remain pending.
+- [Details](Pages/User/Details/Details.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): persisted Work identity and active-profile personal list actions, with shared forms/errors. No provider/NAS request, playback or acquisition claim.
+- [Request users](Pages/Admin/Users/Users.cshtml.cs): read-only canonical account directory; account administration links to its existing owner. Quotas/rule assignments are not implemented.
 - [Languages](Pages/Admin/Languages/Languages.cshtml.cs): supported locale creation, names/direction/enablement and versioned edits via Owner services.
 - [Button.cs](Framework/Components/Button.cs), [Button.scss](Framework/Components/Button.scss): shared button variants/style imported by the shell; Form owns submission/disabled behavior.
 - [Localization](Pages/Admin/Localization/Localization.cshtml.cs): Owner catalog list, source descriptions and manual translation forms; versions and field errors come from Backend services.
@@ -129,7 +132,7 @@ in `Modules/<Module>/`.
 
 - Frontend UI-key coverage tool: [verify-ui-resources.mjs](Tools/verify-ui-resources.mjs).
 - [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
-- Media/request/moderation contracts, Storage/NAS and PIN verification remain pending.
+- Media inventory, module/profile visibility, localized metadata policy, Requests/Wanted/moderation, quota/rules, Storage/NAS and PIN verification remain pending.
 - Admin routing consumes Backend policies: MediaManager reaches manual media/Requests/Wanted; Rules, user limits and Storage remain Owner-only.
 - Backend CI builds Frontend assets and runs real Razor/PostgreSQL integration tests;
   browser verification remains a separate gate.

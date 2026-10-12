@@ -37,6 +37,11 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 ## Contracts and persistence
 
+- [WorkServices.cs](../src/Jularr.Backend/Service/Admin/Media/V1/WorkServices.cs), [Works.cs](../src/Jularr.Backend/Data/Admin/Media/V1/Works.cs): manual Work creation, paged catalog, detail and version-checked title edits for Owner/MediaManager.
+- [WorkLogic.cs](../src/Jularr.Backend/Logic/Media/WorkLogic.cs): shared canonical Work/title writer; preserves independent localized/provider title sources.
+- [MediaServices.cs](../src/Jularr.Backend/Service/User/Media/V1/MediaServices.cs), [Media.cs](../src/Jularr.Backend/Data/User/Media/V1/Media.cs): persisted Work detail and session-profile-scoped watchlist reads/updates. [WatchlistLogic.cs](../src/Jularr.Backend/Logic/Media/WatchlistLogic.cs) changes personal state only.
+- [Media.sql](../database/Media.sql): fresh catalog/title/watchlist baseline after Account.sql; no active installation or migration. Module/profile media visibility, effective metadata locale and inventory/playback remain unintegrated.
+
 - [Profile.cs](../src/Jularr.Backend/Data/User/Profile/V1/Profile.cs): public Profile parameters, inputs and result.
 - [ProfileSelection.cs](../src/Jularr.Backend/Data/User/Profile/V1/ProfileSelection.cs), [Session.cs](../src/Jularr.Backend/Data/User/Session/V1/Session.cs): versioned selection/session contracts with hidden credential transport.
 - [Data/Public/Authentication/V1](../src/Jularr.Backend/Data/Public/Authentication/V1): versioned Public auth contracts; [BaseParameters.cs](../src/Jularr.Backend/Data/Common/BaseParameters.cs), [BaseResponse.cs](../src/Jularr.Backend/Data/Common/BaseResponse.cs): service contract roles over BaseData.
@@ -71,12 +76,13 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 - Account assignments and Owner session revocation: `AdminAccountTests.cs`; language creation/editing/fallback and Razor: `AdminLocaleTests.cs`; provider enablement/auth availability and forms: `AdminProviderTests.cs`.
 - Login/cookies, pending registration, Plex grants, browser proof, expiry and replay: `AuthenticationTests.cs` (isolated PostgreSQL and controlled provider responses).
 - First-Owner form, rollback, concurrency, session issuance and permanent bootstrap closure: `SetupTests.cs`.
+- Manual catalog/title edits, role restriction, stale updates, personal list isolation and real Razor forms: `MediaTests.cs`.
 - Real Razor forms, antiforgery, language settings, selection rotation, session revocation and logout: `FrontendAuthenticationTests.cs`; requires built Frontend assets.
 - `Infrastructure/TestPostgres.cs`: explicit isolated PostgreSQL fixture; never use the application database.
 
 ## Not integrated
 
-Remaining Setup steps, media/Requests/Wanted administration, Storage/NAS, email verification, 2FA/WebAuthn completion,
+Remaining Setup steps, media inventory/monitoring/Requests/Wanted administration, Storage/NAS, email verification, 2FA/WebAuthn completion,
 PIN selection, old Android/TV consumers, full Profile management and instance settings.
 This reference backend does not complete Phase B or replace an active installation.
 

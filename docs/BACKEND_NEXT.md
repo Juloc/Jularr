@@ -95,7 +95,15 @@ for native and external downloaders and the same Storage locations for imports/p
 Owner account/profile associations, account session revocation, provider registry
 enablement and language registry administration are now connected to real Razor
 pages. These reuse existing baseline entities. Provider connections/capabilities,
-NAS access/mount management and the incomplete media model are not implemented.
+NAS access/mount management and the complete media model are not implemented.
+
+The first media slice now provides canonical Works/WorkTitles and profile-keyed
+WatchlistEntries. Admin Works/Work and User Details/Watchlist consume typed
+services; manual title edits protect revisions and retain other title sources.
+The Request Users page reads the existing account directory without duplicating
+account management. Media module/profile visibility, localized metadata policy,
+inventory, monitoring, Requests/Wanted, quotas, storage and playback remain open;
+these pages are not the completed media/Arr feature set.
 
 Dev reference owners: [Acquisition core](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Acquisition/Core/CODEMAP.md),
 [Playback plan](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Playback/Decision/PlaybackPlan.cs),

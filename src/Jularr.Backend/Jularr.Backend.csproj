@@ -10,5 +10,6 @@
     <PackageReference Include="Npgsql" Version="10.0.3" />
     <ProjectReference Include="../Jularr.Integrations/Jularr.Integrations.csproj" />
     <EmbeddedResource Include="../../database/Account.sql" LogicalName="Jularr.Database.Account.sql" />
+    <EmbeddedResource Include="../../database/Media.sql" LogicalName="Jularr.Database.Media.sql" />
   </ItemGroup>
 </Project>

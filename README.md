@@ -103,7 +103,17 @@ Instanz-, Account-, Storage-, Provider- und Regelverwaltung bleiben Owner-only.
 Rollenänderungen wirken auch mit bestehenden Cookies; Writes prüfen die Rolle erneut
 unter derselben Session-Transaktion. Owner verwalten Accounts unter `/Admin/Accounts`
 und UI-Beschreibungen/Übersetzungen unter `/Admin/Localization`; Settings verlinkt
-die jeweils freigegebenen Bereiche. Requests/Wanted/Medienverwaltung bleiben offen.
+die jeweils freigegebenen Bereiche. Requests/Wanted und Medieninventar bleiben offen.
+
+`/Admin/Works` legt kanonische Works manuell an; `/Admin/Works/{id}` bearbeitet
+den Titel mit Versionsprüfung und erhält weitere Titelquellen. `/Details/{id}`
+und `/Watchlist` lesen persistierte Medien und bearbeiten ausschließlich die
+Merkliste des aktiven Profils. `/Admin/Requests/Users` liest das vorhandene
+Kontenverzeichnis; Quoten/Regelzuweisungen sind noch nicht implementiert.
+Diese Grundlage benötigt zusätzlich die frische [Media-Baseline](database/Media.sql).
+Medienmodule/Profilsichtbarkeit, Metadatensprachregeln, Dateien/Cover, Monitoring,
+Arr und Player sind damit noch nicht fertig. Bestehende Datenbanken werden nicht
+automatisch erweitert; die lokale Vorschau bleibt separat.
 
 `Service.Admin.Account.V1` bietet `ReadAccountsV1`, `ReadAccountV1` und
 `UpdateAccountV1`: Name, Rolle und Aktivierung, mit Versionsprüfung und Schutz des

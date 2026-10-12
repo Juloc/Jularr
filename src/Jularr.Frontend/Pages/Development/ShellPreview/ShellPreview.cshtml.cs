@@ -46,16 +46,16 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
             JularrPage? source = SelectedView switch
             {
                 "discover" => new IndexModel(),
-                "details" => new DetailsModel(),
+                "details" => ActivatorUtilities.CreateInstance<DetailsModel>(HttpContext.RequestServices),
                 "player" => new PlayerModel(),
-                "watchlist" => new WatchlistModel(),
+                "watchlist" => ActivatorUtilities.CreateInstance<WatchlistModel>(HttpContext.RequestServices),
                 "settings" => ActivatorUtilities.CreateInstance<SettingsModel>(HttpContext.RequestServices),
                 "admin-requests" => ActivatorUtilities.CreateInstance<RequestsModel>(HttpContext.RequestServices),
                 "admin-rules" => new RulesModel(),
-                "admin-users" => new UsersModel(),
+                "admin-users" => ActivatorUtilities.CreateInstance<UsersModel>(HttpContext.RequestServices),
                 "admin-wanted" => new WantedModel(),
-                "admin-works" => new WorksModel(),
-                "admin-work" => new WorkModel(),
+                "admin-works" => ActivatorUtilities.CreateInstance<WorksModel>(HttpContext.RequestServices),
+                "admin-work" => ActivatorUtilities.CreateInstance<WorkModel>(HttpContext.RequestServices),
                 "admin-library" => new LibraryModel(),
                 _ => null
             };

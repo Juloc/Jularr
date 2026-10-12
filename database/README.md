@@ -1,7 +1,22 @@
-# Account/auth/session baseline
+# Fresh PostgreSQL baselines
 
 `Account.sql` installs one fresh PostgreSQL baseline in one transaction. It is
 embedded as `Jularr.Database.Account.sql` for isolated tests. The host never applies it.
+
+`Media.sql` follows `Account.sql` in a new installation. It is embedded as
+`Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles and
+WatchlistEntries. It is not a migration for an existing database. Media integration
+tests explicitly install it in their disposable Account fixture.
+
+The seven seeded media types follow the original table snapshot. Anime remains a
+Movie/Series classification, not another media type. A manually created Work has
+one neutral manual title source and a managed CanonicalTitle projection. Updates
+check Version atomically and preserve other localized/provider title sources.
+Watchlist identity is the composite ProfileId/WorkId key; it never changes
+monitoring, acquisition, files or another profile's list.
+
+This catalog foundation does not yet install structure units, editions/versions,
+assets/files/tracks, metadata policy, image cache, monitoring or Requests/Wanted.
 
 Included tables:
 
