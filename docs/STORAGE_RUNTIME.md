@@ -82,10 +82,12 @@ Persistent helper state records applied revision and non-secret configuration id
 The [Compose overlay](../deploy/mount-helper/compose.yaml) extends an existing
 `jularr` web service. Build context and helper [Dockerfile](../deploy/mount-helper/Dockerfile)
 are included. The web service runs as UID/GID 1000 and receives the mount tree
-with `rslave` propagation. Only the helper receives SYS_ADMIN and AppArmor mount
+with `rslave` propagation. Only the helper receives SYS_ADMIN, DAC_OVERRIDE and
+DAC_READ_SEARCH (exactly the set `mount.cifs` keeps through libcap-ng; with SYS_ADMIN
+alone it fails with "Unable to apply new capability set") and AppArmor mount
 permission; it has a read-only image, explicit writable directories, no Docker
-socket, no host PID namespace and no published ports. The helper's SYS_ADMIN
-capability is substantial: install this component only on a trusted Linux host.
+socket, no host PID namespace and no published ports. These capabilities are
+substantial: install this component only on a trusted Linux host.
 AppArmor is unconfined for this container, not disabled for the host or web service.
 
 Create a dedicated, root-owned shared bind mount on the Linux Docker host before
@@ -122,9 +124,14 @@ real Razor settings and Setup forms, antiforgery, bounded paging, private socket
 communication, concurrent edits and native command arguments. Runtime smoke tests
 must distinguish control-socket checks from successful SMB/NFS mounts.
 
-Read/write/capacity probes, automatic reconnection, Synology management, the
-on-demand wake consumer, import placement and multi-type library paths (the older
-storage spec allows several content types per path) are later packages.
+Playback wakes sleeping storage on demand (per the connection's policy) and Arr+
+imports completed downloads into the first writable library of the media type.
+Connection paths of SMB/NFS mounts must be actual mount points (`Storage:RequireMountPoint`,
+default on), so a stale empty mount point is never read as an empty library or
+written to; a scan that skipped unreadable folders fails as `scan_incomplete`
+without marking files missing. Read/write/capacity probes, automatic reconnection
+and Synology management are later packages. One media type per library path is
+the owner decision.
 
 References: [Docker bind propagation](https://docs.docker.com/engine/storage/bind-mounts/#configure-bind-propagation),
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).

@@ -9,9 +9,11 @@ its initial language. It is embedded as `Jularr.Database.Instance.sql` for focus
 isolated tests; it is never installed automatically on an existing database.
 Owner services provide version-checked settings/module edits. Library gates manual
 media/watchlist Services; Requests gates request creation/moderation and manual
-Wanted management. Disabling either retains data. Public presentation exposes only name/default language, User
+Wanted management; Acquisition (Arr+) gates indexers, download clients, search,
+grabs, monitoring and import, so Requests also work without automatic acquisition;
+Playback gates playback. Disabling a module retains data. Public presentation exposes only name/default language, User
 capabilities expose implemented grants, and Razor consumes both. Setup module
-progress, per-media/profile visibility and Arr+/Playback/Tracking remain pending.
+progress, per-media/profile visibility and Tracking remain pending.
 
 `Media.sql` follows `Account.sql` in a new installation. It is embedded as
 `Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles,

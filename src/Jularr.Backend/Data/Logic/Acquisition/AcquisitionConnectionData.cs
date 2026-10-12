@@ -121,9 +121,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionConnectionCheckData : BaseData
     {
-        public AcquisitionConnectionCheckData(long id, string? capabilities, string? errorKey)
+        public AcquisitionConnectionCheckData(long id, long version, string? capabilities, string? errorKey)
         {
             Id = id;
+            Version = version;
             Capabilities = capabilities;
             ErrorKey = errorKey;
         }
@@ -136,6 +137,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ErrorKey))]
         public string? ErrorKey { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Version))]
+        public long Version { get; }
     }
 
     internal sealed class AcquisitionConnectionParameters : BaseData

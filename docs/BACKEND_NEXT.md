@@ -125,15 +125,17 @@ Arr+/Playback/Tracking module implementations and full branding remain open.
 The agreed functional module catalog is Library, Requests, Arr+, Playback,
 Readers and Tracking. Requests has a whole-Work slice: active-profile language
 intent, moderation, atomic Wanted targets and pause/resume. The Arr+ core runs on
-those targets under the Requests switch: Owner-managed Newznab indexers and SABnzbd
+those targets under its own Acquisition (Arr+) switch: Owner-managed Newznab indexers and SABnzbd
 clients, manual search and grab, automatic search for missing movies with backoff,
-download monitoring, failed-release exclusion, path mapping and hardlink/copy import
-into the first writable library of the media type. TMDB (key in the Providers
+download monitoring (tracked job ids, reserved grabs recovered after interruptions),
+failed-release exclusion, mapped and link-free import paths and hardlink/copy import
+into the first writable library of the media type without taking over existing files.
+Requested languages order releases of equal quality. TMDB (key in the Providers
 registry) creates movies and series with tmdb/tvdb/imdb mappings and the episode
 catalog. Wanted series are searched per season: a fully aired, empty season as a
 pack, otherwise episode by episode, several downloads in parallel; requests complete
 once every aired regular episode exists. The other media types, profile editing,
-Prowlarr/Sonarr/Radarr one-time import and a separate Arr+ switch follow. The
+Prowlarr/Sonarr/Radarr one-time import follow. The
 remaining modules are not advertised as available. Tracking must be rebuilt from
 the desired progress/resume/history behavior, not copied from the buggy legacy
 implementation. Library's physical scanning/import integration still needs its

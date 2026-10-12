@@ -117,7 +117,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task SaveAcquisitionConnectionCheckAsync(this LogicContext ctx, AcquisitionConnectionCheckData data, CancellationToken ct)
         {
-            // A failed check keeps the last known capabilities.
+            // A failed check keeps the last known capabilities; an edited connection ignores the old result.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -128,7 +128,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     "CheckedAt" = statement_timestamp(),
                     "LastErrorKey" = @ErrorKey
                 WHERE
-                    connection."Id" = @Id;
+                    connection."Id" = @Id
+                    AND connection."Version" = @Version;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

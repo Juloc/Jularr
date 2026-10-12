@@ -1,3 +1,4 @@
+using System.Security;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Core;
@@ -37,6 +38,10 @@ namespace Jularr.Backend.Service.System.Acquisition
             {
                 await using var scope = scopes.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, ct);
+            }
+            catch (SecurityException)
+            {
+                // Arr+ is switched off.
             }
             catch (Exception exception) when (!ct.IsCancellationRequested)
             {

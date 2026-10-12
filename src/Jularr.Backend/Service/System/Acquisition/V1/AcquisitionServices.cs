@@ -21,6 +21,8 @@ using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
@@ -44,7 +46,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(AcquisitionCycleParametersV1 parameters, Type resultType) => new("system.acquisition");
 
         protected override async Task<IServiceOutput> OnExecute()
@@ -180,7 +182,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(AcquisitionCycleParametersV1 parameters, Type resultType) => new("system.acquisition");
 
         protected override async Task<IServiceOutput> OnExecute()
@@ -233,6 +235,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     public sealed class MonitorDownloadsV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private static readonly TimeSpan LostAfter = TimeSpan.FromMinutes(15);
+        private static readonly TimeSpan ReservationGrace = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan InterruptedRetry = TimeSpan.FromMinutes(30);
         private readonly SabnzbdClient _sabnzbd;
         private readonly IDataProtector _protector;
@@ -249,7 +252,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(AcquisitionCycleParametersV1 parameters, Type resultType) => new("system.acquisition");
 
         protected override async Task<IServiceOutput> OnExecute()
@@ -264,8 +267,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 SabnzbdHistorySnapshot history;
                 try
                 {
-                    queue = await _sabnzbd.GetQueueAsync(client, CancellationToken);
-                    history = await _sabnzbd.GetHistoryAsync(client, group.Select(download => download.ExternalId).ToArray(), CancellationToken);
+                    var ids = group.Select(download => download.ExternalId).OfType<string>().ToArray();
+                    queue = await _sabnzbd.GetQueueAsync(client, ids, CancellationToken);
+                    history = await _sabnzbd.GetHistoryAsync(client, ids, CancellationToken);
                 }
                 catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or JsonException
                     || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
@@ -275,11 +279,52 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
                 foreach (var download in group)
                 {
-                    await TrackAsync(download, connection, queue, history);
+                    if (download.ExternalId is null)
+                    {
+                        await RecoverAsync(download, client);
+                    }
+                    else
+                    {
+                        await TrackAsync(download, connection, queue, history);
+                    }
                 }
             }
 
             return new UpdateResult(true);
+        }
+
+        private async Task RecoverAsync(DownloadData download, SabnzbdConnection client)
+        {
+            // A grab interrupted between client and database is adopted or retried.
+            var age = _time.GetUtcNow().UtcDateTime - download.StartedAt;
+            if (age < ReservationGrace)
+            {
+                return;
+            }
+
+            string? nzoId;
+            try
+            {
+                nzoId = await _sabnzbd.FindJobAsync(client, download.Title, CancellationToken);
+            }
+            catch (Exception exception) when (exception is HttpRequestException or SabnzbdException or JsonException
+                || exception is TaskCanceledException && !CancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (nzoId is not null)
+            {
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.StartDownloadAsync(new DownloadStartData(download.OperationId, nzoId), ct);
+                    return true;
+                }, CancellationToken);
+            }
+            else if (age > LostAfter)
+            {
+                await FailAsync(download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry);
+            }
         }
 
         private async Task TrackAsync(DownloadData download, AcquisitionConnectionData connection, SabnzbdQueueSnapshot queue, SabnzbdHistorySnapshot history)
@@ -316,49 +361,95 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Post-processing continues until the client reports completion.
-            if (finished.IsCompleted && MapPath(finished.StoragePath, connection) is { } source)
+            if (finished.IsCompleted)
             {
-                await ImportAsync(download, source);
+                await ImportAsync(download, connection, finished.StoragePath);
             }
         }
 
-        private async Task ImportAsync(DownloadData download, string source)
+        private async Task ImportAsync(DownloadData download, AcquisitionConnectionData connection, string? storagePath)
         {
-            // Without a writable library or readable files the download waits for the Owner.
-            var root = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadImportRootAsync(download.WorkId, ct), CancellationToken);
-            if (root is null || !(File.Exists(source) || Directory.Exists(source)))
+            // Only mapped client folders are read; otherwise the download waits for the Owner.
+            if (storagePath is null || connection.RemotePath is null || connection.LocalPath is null
+                || ImportPlacementLogic.MapRemotePath(storagePath, connection.RemotePath) is not { } relative)
             {
                 return;
             }
 
-            var placements = Place(download, source);
+            var root = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadImportRootAsync(download.WorkId, ct), CancellationToken);
+            if (root is null)
+            {
+                return;
+            }
+
+            // Read the job below the mapped folder without following links.
+            IReadOnlyList<StorageFile> files;
+            string source;
+            var state = new StorageScanState();
+            try
+            {
+                var mapped = StorageFileSystem.ResolveDirectory(connection.LocalPath, "");
+                var full = Path.GetFullPath(Path.Combine(mapped, relative));
+                if (File.Exists(full))
+                {
+                    source = StorageFileSystem.ResolveDirectory(mapped, Path.GetDirectoryName(relative) ?? "");
+                    var file = new FileInfo(StorageFileSystem.ResolveFile(source, Path.GetFileName(full)));
+                    files = [new StorageFile(file.Name, file.Length, file.LastWriteTimeUtc)];
+                }
+                else
+                {
+                    source = StorageFileSystem.ResolveDirectory(mapped, relative);
+                    files = StorageFileSystem.EnumerateFiles(source, LibraryFileTypes.GetScanExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
+                }
+            }
+            catch (NasMountException)
+            {
+                return;
+            }
+
+            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files);
             if (placements.Count == 0)
             {
-                await FailAsync(download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime);
+                if (state.IsComplete)
+                {
+                    await FailAsync(download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime);
+                }
+
                 return;
             }
 
-            // Link or copy outside transactions; existing library files are kept.
+            // Link or copy outside transactions; an existing library file is never taken over.
             var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
-            var files = new List<ImportedFile>();
-            foreach (var placement in placements)
+            var imported = new List<ImportedFile>();
+            var media = new List<(string RelativePath, ImportPlacementData Placement)>();
+            foreach (var group in placements.GroupBy(placement => placement.Group))
             {
-                var destination = Path.Combine(directory, placement.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-                if (!File.Exists(destination))
+                var stem = Enumerable.Range(1, 99).Select(attempt => ImportPlacementLogic.Alternative(group.First().TargetStem, attempt))
+                    .First(candidate => group.All(placement => !File.Exists(Path.Combine(directory, (candidate + placement.Extension).Replace('/', Path.DirectorySeparatorChar)))));
+                foreach (var placement in group)
                 {
-                    await Task.Run(() => StorageFileTransfer.HardlinkOrCopy(placement.SourcePath, destination), CancellationToken);
-                }
+                    var relativePath = stem + placement.Extension;
+                    var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
+                    Directory.CreateDirectory(Path.Combine(directory, folder));
+                    var destination = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
+                    var sourceFile = StorageFileSystem.ResolveFile(source, placement.SourcePath);
+                    await Task.Run(() => StorageFileTransfer.HardlinkOrCopy(sourceFile, destination), CancellationToken);
 
-                var info = new FileInfo(destination);
-                files.Add(new ImportedFile(placement.RelativePath, info.Length, Truncate(info.LastWriteTimeUtc)));
+                    var info = new FileInfo(destination);
+                    imported.Add(new ImportedFile(relativePath, info.Length, Truncate(info.LastWriteTimeUtc)));
+                    if (placement.IsMedia)
+                    {
+                        media.Add((relativePath, placement));
+                    }
+                }
             }
 
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, Truncate(DateTime.UtcNow), JsonSerializer.Serialize(files)), ct);
-                foreach (var placement in placements.Where(placement => placement.IsMedia))
+                await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, Truncate(DateTime.UtcNow), JsonSerializer.Serialize(imported)), ct);
+                foreach (var (relativePath, placement) in media)
                 {
-                    if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, placement.RelativePath), ct) is { } file)
+                    if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), ct) is { } file)
                     {
                         await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber, placement.ParentUnitNumber), ct);
                     }
@@ -372,88 +463,6 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }, CancellationToken);
         }
 
-        private static List<Placement> Place(DownloadData download, string source)
-        {
-            var videos = (File.Exists(source) ? [source] : Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
-                .Where(path => LibraryFileTypes.GetAssetType(path) == MediaAssetType.Video && !MediaPathParser.IsSample(path))
-                .Select(path => new FileInfo(path))
-                .ToArray();
-            var title = SafeName(download.CanonicalTitle);
-            var placements = new List<Placement>();
-            if (download.MediaTypeId == MediaType.Movie)
-            {
-                // The largest video is the feature.
-                if (videos.MaxBy(video => video.Length) is { } feature)
-                {
-                    var name = download.ReleaseYear is { } year ? $"{title} ({year.ToString(CultureInfo.InvariantCulture)})" : title;
-                    AddWithSubtitles(placements, feature, $"{name}/{name}", null, null, null);
-                }
-
-                return placements;
-            }
-
-            // Episodes keep their numbering.
-            foreach (var video in videos)
-            {
-                if (!ReleaseParser.TryParse(Path.GetFileNameWithoutExtension(video.Name), out var parsed) || parsed.SeasonNumber is not { } season || parsed.EpisodeStart is not { } episode)
-                {
-                    continue;
-                }
-
-                var seasonText = season.ToString("00", CultureInfo.InvariantCulture);
-                AddWithSubtitles(placements, video, $"{title}/Season {seasonText}/{title} - S{seasonText}E{episode.ToString("00", CultureInfo.InvariantCulture)}", WorkUnitType.Episode, episode,
-                    season);
-            }
-
-            return placements;
-        }
-
-        private static void AddWithSubtitles(List<Placement> placements, FileInfo video, string stem, WorkUnitType? unitType, decimal? unitNumber, decimal? parentUnitNumber)
-        {
-            var relativePath = stem + video.Extension.ToLowerInvariant();
-            if (!IsStorable(relativePath))
-            {
-                return;
-            }
-
-            placements.Add(new Placement(video.FullName, relativePath, true, unitType, unitNumber, parentUnitNumber));
-
-            // Subtitles named like the video follow it.
-            var videoStem = Path.GetFileNameWithoutExtension(video.Name);
-            foreach (var subtitle in video.Directory!.EnumerateFiles(videoStem + ".*").Where(file => LibraryFileTypes.IsSubtitle(file.Name)))
-            {
-                var subtitlePath = stem + subtitle.Name[videoStem.Length..].ToLowerInvariant();
-                if (IsStorable(subtitlePath))
-                {
-                    placements.Add(new Placement(subtitle.FullName, subtitlePath, false, null, null, null));
-                }
-            }
-        }
-
-        private static string? MapPath(string? storagePath, AcquisitionConnectionData connection)
-        {
-            // Client paths are translated through the connection's mapping.
-            if (string.IsNullOrWhiteSpace(storagePath))
-            {
-                return null;
-            }
-
-            if (connection.RemotePath is not { } remote || connection.LocalPath is not { } local)
-            {
-                return storagePath;
-            }
-
-            var normalized = storagePath.Replace('\\', '/');
-            var prefix = remote.Replace('\\', '/').TrimEnd('/');
-            if (!normalized.Equals(prefix, StringComparison.Ordinal) && !normalized.StartsWith(prefix + "/", StringComparison.Ordinal))
-            {
-                return storagePath;
-            }
-
-            var rest = normalized[prefix.Length..].TrimStart('/');
-            return rest.Length == 0 ? local : Path.Combine(local, rest.Replace('/', Path.DirectorySeparatorChar));
-        }
-
         private Task FailAsync(long operationId, string reasonKey, DateTime nextSearchAt) =>
             Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
@@ -461,29 +470,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return true;
             }, CancellationToken);
 
-        private static string SafeName(string value)
-        {
-            var invalid = Path.GetInvalidFileNameChars().Concat(['<', '>', ':', '"', '/', '\\', '|', '?', '*']).ToHashSet();
-            var cleaned = new string(value.Select(character => invalid.Contains(character) || char.IsControl(character) ? ' ' : character).ToArray());
-            return string.Join(' ', cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Trim('.', ' ') is { Length: > 0 } name ? name : "Untitled";
-        }
-
-        private static bool IsStorable(string relativePath)
-        {
-            try
-            {
-                StoredFileFields.RelativePath.Validate(relativePath, nameof(ImportedFile.RelativePath));
-                return true;
-            }
-            catch (DataValidationException)
-            {
-                return false;
-            }
-        }
-
         private static DateTime Truncate(DateTime value) => DateTime.UnixEpoch.AddTicks((value.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
-
-        private sealed record Placement(string SourcePath, string RelativePath, bool IsMedia, WorkUnitType? WorkUnitTypeId, decimal? UnitNumber, decimal? ParentUnitNumber);
 
         private sealed record ImportedFile(string RelativePath, long SizeBytes, DateTime ModifiedAt);
     }

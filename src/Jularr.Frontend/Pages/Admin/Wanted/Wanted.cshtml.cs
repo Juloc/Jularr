@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Wanted
 {
     public sealed class WantedModel(ReadWantedV1 read, ReadWantedItemV1 readItem, UpdateWantedV1 update, SearchWantedV1 search, GrabWantedReleaseV1 grab,
-        ReadWantedReleasesV1 releases, IAntiforgery antiforgery) : JularrPage
+        ReadWantedReleasesV1 releases, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string SearchTab = "search";
         private const string CurrentTab = "current";
@@ -67,7 +67,12 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                     split.Secondary.Add(new P(new ValueText(selected.CanonicalTitle)));
                     split.Secondary.Add(new Tabs(tabs =>
                     {
-                        tabs.Add("wanted.tab.search", Address(PageNumber, selected.Id, SearchTab), SelectedTab == SearchTab, content => DefineSearch(content, selected, csrf));
+                        // Searching needs Arr+; Requests alone stay manual.
+                        if (CanAcquire)
+                        {
+                            tabs.Add("wanted.tab.search", Address(PageNumber, selected.Id, SearchTab), SelectedTab == SearchTab, content => DefineSearch(content, selected, csrf));
+                        }
+
                         tabs.Add("wanted.tab.current", Address(PageNumber, selected.Id, CurrentTab), SelectedTab == CurrentTab, content => DefineCurrent(content, selected));
                         tabs.Add("wanted.tab.history", Address(PageNumber, selected.Id, HistoryTab), SelectedTab == HistoryTab, DefineHistory);
                     }));
@@ -221,7 +226,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         private static string Size(long? bytes) =>
             bytes is { } size ? (size / 1024d / 1024 / 1024).ToString("0.0", CultureInfo.InvariantCulture) : "";
 
-        private string SelectedTab => Tab is CurrentTab or HistoryTab ? Tab : SearchTab;
+        private bool CanAcquire => texts.Capabilities?.CanAcquire is true;
+
+        private string SelectedTab => Tab is HistoryTab ? Tab : Tab is CurrentTab || !CanAcquire ? CurrentTab : SearchTab;
 
         private long SelectedId() => WantedItemId ?? throw new KeyNotFoundException("No wanted item was selected.");
 

@@ -40,7 +40,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 ## Contracts and persistence
 
 - [Storage services](../src/Jularr.Backend/Service/Admin/Storage/V1): bounded Owner configuration/catalog reads, protected connection saves and explicit external mount actions. [Storage data](../src/Jularr.Backend/Data/Admin/Storage/V1) contains versioned inputs/results.
-- [StorageMountLogic.cs](../src/Jularr.Backend/Logic/Storage/StorageMountLogic.cs) owns canonical configuration writes; [Storage.sql](../database/Storage.sql) is the fresh physical-connection baseline, separate from pending LibraryRoots.
+- [StorageMountLogic.cs](../src/Jularr.Backend/Logic/Storage/StorageMountLogic.cs) owns canonical configuration writes; [Storage.sql](../database/Storage.sql) is the fresh physical-connection baseline, LibraryRoots are in [Library.sql](../database/Library.sql).
 - [NasMountClient.cs](../src/Jularr.Integrations/Logic/Nas/NasMountClient.cs), [MountManager.cs](../src/Jularr.MountHelper/MountManager.cs): private socket integration and Linux mount execution; [WakeOnLanClient.cs](../src/Jularr.Integrations/Logic/Nas/WakeOnLanClient.cs) sends magic packets.
 - [Library root services](../src/Jularr.Backend/Service/Admin/Library/V1/LibraryRootServices.cs), [LibraryRootLogic.cs](../src/Jularr.Backend/Logic/Library/LibraryRootLogic.cs): Owner library paths per connection without overlaps; [Library.sql](../database/Library.sql) holds roots, inventory, tracks and Operations.
 - [Library file services](../src/Jularr.Backend/Service/Admin/Library/V1/LibraryFileServices.cs): inventory reads with path suggestions, manual identification, scan queue and operation list. [MediaAssetLogic.cs](../src/Jularr.Backend/Logic/Media/MediaAssetLogic.cs) owns Work/unit/edition/version/asset creation; [WorkUnitType.cs](../src/Jularr.Backend/Data/Enums/Media/WorkUnitType.cs) is the canonical unit rule per media type.
@@ -105,7 +105,7 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 
 ## Not integrated
 
-Remaining Setup steps, metadata beyond TMDB movies/series, Anime absolute numbering and the remaining media types in Arr+, profile editing, NAS probes/reconnect/Synology, on-demand wake, email verification, 2FA/WebAuthn completion,
+Remaining Setup steps, metadata beyond TMDB movies/series, Anime absolute numbering and the remaining media types in Arr+, profile editing, NAS probes/reconnect/Synology, email verification, 2FA/WebAuthn completion,
 PIN selection, old Android/TV consumers, full Profile management, per-media/profile visibility, further module capabilities and full custom branding.
 This reference backend does not complete Phase B or replace an active installation.
 

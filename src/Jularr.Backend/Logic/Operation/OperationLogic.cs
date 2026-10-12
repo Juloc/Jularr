@@ -7,45 +7,27 @@ namespace Jularr.Backend.Logic.Operation
     {
         public static async Task<long> QueueLibraryScanAsync(this LogicContext ctx, OperationCreationData data, CancellationToken ct)
         {
-            // One active scan per root.
+            // One active scan per root; the upsert always returns it.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH inserted AS (
-                    INSERT INTO
-                        "Operations" ("OperationTypeId", "LibraryRootId", "RequestedByAccountId")
-                    SELECT
-                        @OperationTypeId,
-                        root."Id",
-                        @RequestedByAccountId
-                    FROM
-                        "LibraryRoots" AS root
-                    WHERE
-                        root."Id" = @LibraryRootId
-                    ON CONFLICT DO NOTHING
-                    RETURNING
-                        "Id",
-                        "OperationTypeId",
-                        "LibraryRootId"
-                )
+                INSERT INTO
+                    "Operations" ("OperationTypeId", "LibraryRootId", "RequestedByAccountId")
                 SELECT
-                    inserted."Id",
-                    inserted."OperationTypeId",
-                    inserted."LibraryRootId"
+                    @OperationTypeId,
+                    root."Id",
+                    @RequestedByAccountId
                 FROM
-                    inserted
-                UNION ALL
-                SELECT
-                    operation."Id",
-                    operation."OperationTypeId",
-                    operation."LibraryRootId"
-                FROM
-                    "Operations" AS operation
+                    "LibraryRoots" AS root
                 WHERE
-                    operation."LibraryRootId" = @LibraryRootId
-                    AND operation."OperationTypeId" = @OperationTypeId
-                    AND operation."OperationStatusTypeId" IN (1, 2)
-                LIMIT 1;
+                    root."Id" = @LibraryRootId
+                ON CONFLICT ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2) DO UPDATE
+                SET
+                    "LibraryRootId" = EXCLUDED."LibraryRootId"
+                RETURNING
+                    "Id",
+                    "OperationTypeId",
+                    "LibraryRootId";
                 """;
             sql.Parameters.Add(data);
             return (await ctx.ReadOptionalAsync<OperationData>(sql, ct) ?? throw new KeyNotFoundException("The library root was not found.")).Id;

@@ -24,6 +24,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.playback_conversion_failed", "The media conversion failed. Please try again."),
             new("errors.playback_capacity_exhausted", "The server is converting as many streams as it allows. Please try again shortly."),
             new("errors.storage_wake_failed", "The Wake-on-LAN packet could not be sent."),
+            new("errors.scan_incomplete", "Some folders could not be read. Nothing was marked as missing."),
             new("errors.metadata_unavailable", "TMDB is not configured or cannot be reached."),
             new("errors.metadata_authentication_failed", "TMDB rejected the stored key."),
             new("errors.metadata_rate_limited", "TMDB limits requests right now. Please try again shortly."),

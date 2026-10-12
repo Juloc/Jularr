@@ -54,7 +54,12 @@ namespace Jularr.Backend.Service.Admin.Wanted
                 throw new DataValidationException(nameof(WantedItemParameters.WantedItemId), "invalid_transition");
             }
 
+            // Requested languages order releases of equal quality.
             var profile = ReadProfile(target);
+            if (profile.LanguageOrder.Length == 0 && target.RequestedLocales.Length > 0)
+            {
+                profile = profile with { LanguageOrder = target.RequestedLocales };
+            }
             var intent = new SearchIntent(kind, target.CanonicalTitle)
             {
                 Aliases = target.Titles,
@@ -94,7 +99,8 @@ namespace Jularr.Backend.Service.Admin.Wanted
             }
 
             // Manual grabs pick from what was shown.
-            _offers.Set(CacheKey(target.WantedItemId), offers.ToDictionary(StringComparer.Ordinal), OfferLifetime);
+            var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
+            _offers.Set(CacheKey(target.WantedItemId), offers.Where(pair => grabbable.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal), OfferLifetime);
             return new WantedSearchResult(selection, offers, indexers.Count > 0 && failures >= indexers.Count && offers.IsEmpty);
         }
 
@@ -113,28 +119,6 @@ namespace Jularr.Backend.Service.Admin.Wanted
                 throw new DataValidationException("CandidateId", "invalid_transition");
             }
 
-            // The best client by priority receives the release.
-            var client = clients[0];
-            SabnzbdGrabResult result;
-            try
-            {
-                result = await _sabnzbd.GrabAsync(new SabnzbdConnection(client.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey)),
-                    new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, client.DownloadCategory), ct);
-            }
-            catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
-            {
-                throw new ServiceUnavailableException("acquisition_unavailable");
-            }
-            catch (SabnzbdException)
-            {
-                throw new ServiceUnavailableException("acquisition_grab_failed");
-            }
-
-            if (!result.Success || result.NzoIds.Count == 0)
-            {
-                throw new ServiceUnavailableException("acquisition_grab_failed");
-            }
-
             // Series releases record which episodes they claim.
             int? season = null, start = null, end = null;
             if (target.MediaTypeId == MediaType.Series && ReleaseParser.TryParse(offer.Title, out var parsed) && parsed.SeasonNumber is { } number)
@@ -147,9 +131,49 @@ namespace Jularr.Backend.Service.Admin.Wanted
                 }
             }
 
-            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, Limit(result.NzoIds[0], 128),
-                season, start, end);
-            await context.ExecuteBatchAsync((ctx, token) => ctx.RecordGrabAsync(grab, token), ct);
+            // Reserve first so concurrent grabs cannot start a second download.
+            var client = clients[0];
+            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, season, start, end);
+            var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
+
+            // The best client by priority receives the release.
+            string? failure = null;
+            SabnzbdGrabResult? result = null;
+            try
+            {
+                result = await _sabnzbd.GrabAsync(new SabnzbdConnection(client.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey)),
+                    new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, client.DownloadCategory), ct);
+            }
+            catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                failure = "acquisition_unavailable";
+            }
+            catch (SabnzbdException)
+            {
+                failure = "acquisition_grab_failed";
+            }
+
+            if (failure is null && (result is not { Success: true } || result.NzoIds.Count == 0))
+            {
+                failure = "acquisition_grab_failed";
+            }
+
+            // A refused grab releases the reservation; the target is searched again later.
+            if (failure is not null)
+            {
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow.AddMinutes(30)), token);
+                    return true;
+                }, ct);
+                throw new ServiceUnavailableException(failure);
+            }
+
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.StartDownloadAsync(new DownloadStartData(operationId, Limit(result!.NzoIds[0], 128)), token);
+                return true;
+            }, ct);
         }
 
         private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, IEnumerable<PlannedQuery> queries, SearchBudget budget,

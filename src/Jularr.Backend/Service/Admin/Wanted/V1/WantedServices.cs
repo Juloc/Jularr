@@ -101,6 +101,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         1
                     FROM
                         "MediaAssets" AS asset
+                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                     WHERE
                         asset."WorkId" = wanted_page."WorkId"
                 ) AND NOT {DownloadLogic.MissingEpisode("wanted_page.\"WorkId\"")} AS "HasMedia",

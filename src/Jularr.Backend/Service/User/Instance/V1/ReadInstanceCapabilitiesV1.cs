@@ -25,11 +25,12 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 FROM
                     "InstanceModules" AS module
                 WHERE
-                    module."Key" IN ('Library', 'Requests', 'Playback');
+                    module."Key" IN ('Library', 'Requests', 'Acquisition', 'Playback');
                 """;
             var modules = await Context.ReadSql.ReadListAsync<InstanceModuleData>(sql, CancellationToken);
             var library = modules.Any(module => module.Key == "Library" && module.IsEnabled);
             var requests = modules.Any(module => module.Key == "Requests" && module.IsEnabled);
+            var acquisition = modules.Any(module => module.Key == "Acquisition" && module.IsEnabled);
             var playback = modules.Any(module => module.Key == "Playback" && module.IsEnabled);
 
             // Reuse verified central grants.
@@ -41,6 +42,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 requests && permissions.Contains("profile.requests.update", StringComparer.Ordinal),
                 requests && permissions.Contains("requests.update", StringComparer.Ordinal),
                 requests && permissions.Contains("wanted.update", StringComparer.Ordinal),
+                requests && acquisition && permissions.Contains("wanted.update", StringComparer.Ordinal),
                 library && playback && permissions.Contains("profile.playback", StringComparer.Ordinal));
         }
     }

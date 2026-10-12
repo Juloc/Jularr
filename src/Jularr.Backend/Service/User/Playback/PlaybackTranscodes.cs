@@ -30,6 +30,7 @@ namespace Jularr.Backend.Service.User.Playback
         private readonly MediaTranscoder _transcoder;
         private readonly MediaOptions _options;
         private readonly Timer _sweep;
+        private readonly Lock _capacity = new();
 
         public PlaybackTranscodes(MediaTranscoder transcoder, IOptions<MediaOptions> options)
         {
@@ -136,18 +137,22 @@ namespace Jularr.Backend.Service.User.Playback
         {
             Kill(job);
 
-            // Concurrent conversions stay within the configured budget.
-            var running = _jobs.Values.Count(other => other != job && other.IsRunning);
-            if (running >= _options.MaxTranscodes)
-            {
-                throw new ServiceUnavailableException("playback_capacity_exhausted");
-            }
-
             var software = job.SoftwareFallback || _options.VideoEncoderArguments.Length == 0;
             var request = new TranscodeRequest(job.Source.InputPath, job.Directory, index, SegmentSeconds, job.Source.VideoStreamIndex, job.Source.AudioStreamIndex,
                 job.Source.CopyVideo, job.Source.CopyAudio, software ? MediaOptions.SoftwareEncoderArguments : _options.VideoEncoderArguments,
                 software ? [] : _options.HardwareAccelerationArguments);
-            job.Process = _transcoder.Start(request);
+
+            // Counting and starting share one reservation, so parallel starts respect the budget.
+            lock (_capacity)
+            {
+                if (_jobs.Values.Count(other => other != job && other.IsRunning) >= _options.MaxTranscodes)
+                {
+                    throw new ServiceUnavailableException("playback_capacity_exhausted");
+                }
+
+                job.Process = _transcoder.Start(request);
+            }
+
             job.StartSegment = index;
         }
 

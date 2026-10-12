@@ -21,7 +21,8 @@ services:
       dockerfile: deploy/mount-helper/Dockerfile
     restart: unless-stopped
     cap_drop: [ALL]
-    cap_add: [SYS_ADMIN]
+    # mount.cifs keeps exactly these in its libcap-ng set; nothing else is granted.
+    cap_add: [SYS_ADMIN, DAC_OVERRIDE, DAC_READ_SEARCH]
     security_opt: [apparmor=unconfined, no-new-privileges:true]
     read_only: true
     tmpfs: [/tmp]

@@ -32,6 +32,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             1
                         FROM
                             "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkUnitId" = episode."Id"
                     ){(uncovered ? CoveredFilter : "")}
@@ -99,6 +100,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             1
                         FROM
                             "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkId" = work."Id"
                     ) AND NOT {MissingEpisode("work.\"Id\"")} AS "HasMedia",
@@ -120,7 +122,18 @@ namespace Jularr.Backend.Logic.Acquisition
                             "WorkExternalIdentities" AS identity
                         WHERE
                             identity."WorkId" = work."Id"
-                    ) AS "ExternalIdentities"
+                    ) AS "ExternalIdentities",
+                    ARRAY(
+                        SELECT DISTINCT
+                            locale."Locale"
+                        FROM
+                            "RequestTargets" AS target
+                            JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
+                            JOIN "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
+                        WHERE
+                            target."WantedItemId" = wanted."Id"
+                            AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
+                    ) AS "RequestedLocales"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -164,6 +177,7 @@ namespace Jularr.Backend.Logic.Acquisition
                                 1
                             FROM
                                 "MediaAssets" AS asset
+                                JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                             WHERE
                                 asset."WorkId" = work."Id"
                         )
@@ -210,10 +224,54 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.AdvanceRequestsAsync(new RequestProgressData(data.WantedItemId, AcquisitionRequestStatusType.Searching), ct);
         }
 
-        public static async Task<long> RecordGrabAsync(this LogicContext ctx, AcquisitionGrabData data, CancellationToken ct)
+        public static async Task<long> ReserveDownloadAsync(this LogicContext ctx, AcquisitionGrabData data, CancellationToken ct)
         {
-            // A retried release reuses its history row and download operation.
+            // The target row serializes concurrent grabs.
             var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    wanted."Id" AS "WantedItemId"
+                FROM
+                    "WantedItems" AS wanted
+                WHERE
+                    wanted."Id" = @WantedItemId
+                FOR UPDATE;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ReadRequiredAsync<WantedItemParameters>(sql, ct);
+
+            // A movie downloads once; series downloads must not overlap.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    wanted."Id" AS "WantedItemId"
+                FROM
+                    "WantedItems" AS wanted
+                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    JOIN "AcquisitionReleases" AS release ON release."WantedItemId" = wanted."Id"
+                    JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
+                WHERE
+                    wanted."Id" = @WantedItemId
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND (
+                        work."MediaTypeId" <> 2
+                        OR release."SeasonNumber" IS NULL
+                        OR @SeasonNumber::integer IS NULL
+                        OR release."SeasonNumber" = @SeasonNumber
+                        AND (release."EpisodeStart" IS NULL OR @EpisodeStart::integer IS NULL OR release."EpisodeStart" <= @EpisodeEnd AND @EpisodeStart <= release."EpisodeEnd")
+                    )
+                LIMIT 1;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is not null)
+            {
+                throw new DataValidationException("CandidateId", "in_use");
+            }
+
+            // A retried release reuses its history row and finished download operation.
+            sql = new SqlStatement();
             sql.Statement =
                 """
                 WITH release AS (
@@ -237,21 +295,20 @@ namespace Jularr.Backend.Logic.Acquisition
                         "Id"
                 )
                 INSERT INTO
-                    "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "ExternalId", "StartedAt")
+                    "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "StartedAt")
                 SELECT
                     2,
-                    2,
+                    1,
                     release."Id",
                     @DownloadConnectionId,
-                    @ExternalId,
                     now()
                 FROM
                     release
                 ON CONFLICT ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2 DO UPDATE
                 SET
-                    "OperationStatusTypeId" = 2,
+                    "OperationStatusTypeId" = 1,
                     "AcquisitionConnectionId" = EXCLUDED."AcquisitionConnectionId",
-                    "ExternalId" = EXCLUDED."ExternalId",
+                    "ExternalId" = NULL,
                     "ProgressPercent" = NULL,
                     "ProcessedCount" = 0,
                     "ErrorKey" = NULL,
@@ -263,24 +320,47 @@ namespace Jularr.Backend.Logic.Acquisition
                     "Id" AS "OperationId";
                 """;
             sql.Parameters.Add(data);
-            var operation = await ctx.ReadOptionalAsync<DownloadOperationParameters>(sql, ct)
-                ?? throw new DataValidationException("CandidateId", "in_use");
+            var operation = await ctx.ReadOptionalAsync<DownloadOperationParameters>(sql, ct) ?? throw new DataValidationException("CandidateId", "in_use");
+            return operation.OperationId;
+        }
 
-            sql = new SqlStatement();
+        public static async Task StartDownloadAsync(this LogicContext ctx, DownloadStartData data, CancellationToken ct)
+        {
+            // The client accepted the reserved download.
+            var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH started AS (
+                    UPDATE
+                        "Operations" AS operation
+                    SET
+                        "OperationStatusTypeId" = 2,
+                        "ExternalId" = @ExternalId
+                    WHERE
+                        operation."Id" = @OperationId
+                        AND operation."OperationTypeId" = 2
+                        AND operation."OperationStatusTypeId" = 1
+                    RETURNING
+                        operation."AcquisitionReleaseId"
+                )
                 UPDATE
                     "WantedItems" AS wanted
                 SET
                     "NextSearchAt" = NULL,
                     "LastOutcomeKey" = 'grabbed'
+                FROM
+                    started
+                    JOIN "AcquisitionReleases" AS release ON release."Id" = started."AcquisitionReleaseId"
                 WHERE
-                    wanted."Id" = @WantedItemId;
+                    wanted."Id" = release."WantedItemId"
+                RETURNING
+                    wanted."Id" AS "WantedItemId";
                 """;
-            sql.Parameters.Add(new WantedItemParameters(data.WantedItemId));
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-            await ctx.AdvanceRequestsAsync(new RequestProgressData(data.WantedItemId, AcquisitionRequestStatusType.Downloading), ct);
-            return operation.OperationId;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is { } wanted)
+            {
+                await ctx.AdvanceRequestsAsync(new RequestProgressData(wanted.WantedItemId, AcquisitionRequestStatusType.Downloading), ct);
+            }
         }
 
         public static Task<IReadOnlyList<EpisodeStateData>> ReadEpisodeStatesAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
@@ -299,6 +379,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             1
                         FROM
                             "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkUnitId" = episode."Id"
                     ) AS "HasMedia",
@@ -346,7 +427,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."AcquisitionConnectionId",
                     operation."ExternalId",
                     release."Title",
-                    operation."StartedAt"
+                    operation."StartedAt",
+                    release."QualityKey"
                 FROM
                     "Operations" AS operation
                     JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
@@ -354,7 +436,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 WHERE
                     operation."OperationTypeId" = 2
-                    AND operation."OperationStatusTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
                     AND operation."AcquisitionConnectionId" IS NOT NULL
                 ORDER BY
                     operation."AcquisitionConnectionId",
@@ -397,7 +479,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2
-                        AND operation."OperationStatusTypeId" = 2
+                        AND operation."OperationStatusTypeId" IN (1, 2)
                     RETURNING
                         operation."AcquisitionReleaseId"
                 ), released AS (

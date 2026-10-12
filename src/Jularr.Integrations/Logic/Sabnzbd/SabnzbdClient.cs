@@ -8,6 +8,7 @@ namespace Jularr.Integrations.Logic.Sabnzbd
     internal sealed class SabnzbdClient(HttpClient httpClient)
     {
         private const string PageSize = "200";
+        private const int IdsPerRequest = 50;
 
         public async Task<SabnzbdConnectionTestResult> TestAsync(SabnzbdConnection connection, CancellationToken ct)
         {
@@ -63,23 +64,43 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
         }
 
-        public async Task<SabnzbdQueueSnapshot> GetQueueAsync(SabnzbdConnection connection, CancellationToken ct)
+        public async Task<SabnzbdQueueSnapshot> GetQueueAsync(SabnzbdConnection connection, IReadOnlyCollection<string> nzoIds, CancellationToken ct)
         {
-            using var response = await SendAsync(connection, [new("mode", "queue"), new("start", "0"), new("limit", PageSize)], ct);
-            return ParseQueueResponse(await RequireBodyAsync(response, ct));
+            // Tracked jobs are asked for directly, so long queues never hide them.
+            var jobs = new List<SabnzbdQueueJob>();
+            foreach (var batch in nzoIds.Select(ValidateNzoId).Chunk(IdsPerRequest))
+            {
+                using var response = await SendAsync(connection, [new("mode", "queue"), new("start", "0"), new("limit", PageSize), new("nzo_ids", string.Join(',', batch))], ct);
+                jobs.AddRange(ParseQueueResponse(await RequireBodyAsync(response, ct)).Jobs);
+            }
+
+            return new SabnzbdQueueSnapshot(jobs);
         }
 
         public async Task<SabnzbdHistorySnapshot> GetHistoryAsync(SabnzbdConnection connection, IReadOnlyCollection<string> nzoIds, CancellationToken ct)
         {
-            // Only the tracked jobs are asked for.
-            var parameters = new List<KeyValuePair<string, string?>> { new("mode", "history"), new("start", "0"), new("limit", PageSize) };
-            if (nzoIds.Count > 0)
+            var jobs = new List<SabnzbdHistoryJob>();
+            foreach (var batch in nzoIds.Select(ValidateNzoId).Chunk(IdsPerRequest))
             {
-                parameters.Add(new("nzo_ids", string.Join(',', nzoIds.Select(ValidateNzoId))));
+                using var response = await SendAsync(connection, [new("mode", "history"), new("start", "0"), new("limit", PageSize), new("nzo_ids", string.Join(',', batch))], ct);
+                jobs.AddRange(ParseHistoryResponse(await RequireBodyAsync(response, ct)).Jobs);
             }
 
-            using var response = await SendAsync(connection, parameters, ct);
-            return ParseHistoryResponse(await RequireBodyAsync(response, ct));
+            return new SabnzbdHistorySnapshot(jobs);
+        }
+
+        public async Task<string?> FindJobAsync(SabnzbdConnection connection, string name, CancellationToken ct)
+        {
+            // Recovers a job whose id was never stored.
+            using var queueResponse = await SendAsync(connection, [new("mode", "queue"), new("start", "0"), new("limit", "20"), new("search", name)], ct);
+            var queued = ParseQueueResponse(await RequireBodyAsync(queueResponse, ct)).Jobs.FirstOrDefault(job => string.Equals(job.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (queued is not null)
+            {
+                return queued.NzoId;
+            }
+
+            using var historyResponse = await SendAsync(connection, [new("mode", "history"), new("start", "0"), new("limit", "20"), new("search", name)], ct);
+            return ParseHistoryResponse(await RequireBodyAsync(historyResponse, ct)).Jobs.FirstOrDefault(job => string.Equals(job.Name, name, StringComparison.OrdinalIgnoreCase))?.NzoId;
         }
 
         internal static SabnzbdQueueSnapshot ParseQueueResponse(string json)

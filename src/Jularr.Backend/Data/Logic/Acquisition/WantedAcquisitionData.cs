@@ -22,7 +22,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class WantedTargetData : BaseData
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
-            string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities)
+            string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
+            string[] requestedLocales)
         {
             WantedItemId = wantedItemId;
             WorkId = workId;
@@ -39,6 +40,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             IsDownloading = isDownloading;
             SearchCount = searchCount;
             ExternalIdentities = externalIdentities;
+            RequestedLocales = requestedLocales;
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
@@ -86,6 +88,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Provider mappings as namespace:value pairs.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentityList))]
         public string[] ExternalIdentities { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.RequestedLanguages))]
+        public string[] RequestedLocales { get; }
     }
 
     internal sealed class EpisodeStateData : BaseData
@@ -157,8 +162,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionGrabData : BaseData
     {
-        public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, string externalId,
-            int? seasonNumber = null, int? episodeStart = null, int? episodeEnd = null)
+        public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? seasonNumber,
+            int? episodeStart, int? episodeEnd)
         {
             SeasonNumber = seasonNumber;
             EpisodeStart = episodeStart;
@@ -169,7 +174,6 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             Title = title;
             QualityKey = qualityKey;
             DownloadConnectionId = downloadConnectionId;
-            ExternalId = externalId;
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
@@ -190,9 +194,6 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
         public long DownloadConnectionId { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ExternalId), true)]
-        public string ExternalId { get; }
-
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SeasonNumber))]
         public int? SeasonNumber { get; }
 
@@ -203,11 +204,27 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int? EpisodeEnd { get; }
     }
 
+    internal sealed class DownloadStartData : BaseData
+    {
+        public DownloadStartData(long operationId, string externalId)
+        {
+            OperationId = operationId;
+            ExternalId = externalId;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ExternalId), true)]
+        public string ExternalId { get; }
+    }
+
     internal sealed class DownloadData : BaseData
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
-            string externalId, string title, DateTime startedAt)
+            string? externalId, string title, DateTime startedAt, string? qualityKey)
         {
+            QualityKey = qualityKey;
             OperationId = operationId;
             WantedItemId = wantedItemId;
             WorkId = workId;
@@ -241,14 +258,17 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
         public long AcquisitionConnectionId { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ExternalId), true)]
-        public string ExternalId { get; }
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ExternalId))]
+        public string? ExternalId { get; }
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title))]
         public string Title { get; }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.StartedAt), true)]
         public DateTime StartedAt { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.QualityKey))]
+        public string? QualityKey { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData

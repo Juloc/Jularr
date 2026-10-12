@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class ReadAcquisitionConnectionsV1 : AdminService<ReadAcquisitionConnectionsParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<AcquisitionConnectionDetailsV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadAcquisitionConnectionsParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(ReadAcquisitionConnectionsParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(ReadAcquisitionConnectionsParametersV1 parameters, Type resultType) => new("acquisition.manage");
         protected override PageRequest GetPageRequest(ReadAcquisitionConnectionsParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
 
@@ -52,7 +52,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     public sealed class ReadAcquisitionConnectionV1 : AdminService<AcquisitionConnectionParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AcquisitionConnectionDetailsV1>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(AcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnRead()
@@ -84,7 +84,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CreateAcquisitionConnectionResultV1>()];
-        protected override ModuleRequirement GetInstanceModules(CreateAcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(CreateAcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(CreateAcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnCreate()
@@ -112,7 +112,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(AcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnUpdate()
@@ -127,7 +127,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(DeleteAcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(DeleteAcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(DeleteAcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnDelete()
@@ -154,7 +154,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AcquisitionConnectionTestV1>()];
-        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
         protected override ServicePermission GetPermission(AcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnExecute()
@@ -187,7 +187,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.SaveAcquisitionConnectionCheckAsync(new AcquisitionConnectionCheckData(connection.Id, capabilities, result.ErrorKey), ct);
+                await ctx.SaveAcquisitionConnectionCheckAsync(new AcquisitionConnectionCheckData(connection.Id, connection.Version, capabilities, result.ErrorKey), ct);
                 return true;
             }, CancellationToken);
             return result;

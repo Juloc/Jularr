@@ -134,6 +134,7 @@ public static class UiResources
         new("app.byJularr", "by Jularr"),
         new("instance.module.Library", "Library"),
         new("instance.module.Requests", "Requests"),
+        new("instance.module.Acquisition", "Arr+"),
         new("requests.title", "My requests"),
         new("request.language", "Requested language"),
         new("request.create", "Request this work"),

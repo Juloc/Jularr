@@ -30,8 +30,7 @@ namespace Jularr.Frontend.Framework
                 throw new ArgumentException("Unsafe HTML attribute.", nameof(name));
             }
 
-            if ((name is "href" or "src") && (value.StartsWith("javascript:", StringComparison.OrdinalIgnoreCase)
-                || value.StartsWith("data:", StringComparison.OrdinalIgnoreCase)))
+            if (name is "href" or "src" or "action" or "formaction" or "poster" && !IsSafeUrl(value))
             {
                 throw new ArgumentException("Unsafe URL.", nameof(value));
             }
@@ -43,6 +42,20 @@ namespace Jularr.Frontend.Framework
         }
 
         public HtmlElement Class(string value) => Attribute("class", value);
+
+        // Browsers ignore control characters and spaces in schemes; only web and mail schemes or relative URLs pass.
+        private static bool IsSafeUrl(string value)
+        {
+            var cleaned = new string(value.Where(character => character > ' ').ToArray());
+            var colon = cleaned.IndexOf(':');
+            var end = cleaned.IndexOfAny(['/', '?', '#']);
+            if (colon < 0 || end >= 0 && end < colon)
+            {
+                return true;
+            }
+
+            return cleaned[..colon].ToLowerInvariant() is "http" or "https" or "mailto";
+        }
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {

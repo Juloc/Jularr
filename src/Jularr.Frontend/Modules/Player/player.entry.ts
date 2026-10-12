@@ -71,8 +71,8 @@ async function start(player: HTMLElement): Promise<void> {
     }, { once: true });
     video.addEventListener("error", () => show("failed"));
 
-    // Progress is reported, never inferred as completion.
-    const report = (ended: boolean) => {
+    // Progress is reported, never inferred as completion; leaving ends the session.
+    const report = (ended: boolean, completed = ended) => {
         if (!plan || (!ended && Math.abs(video.currentTime * 1000 - reported) < 1000)) return;
         reported = Math.floor(video.currentTime * 1000);
         void fetch(player.dataset.sessionUrl + plan.playbackSessionId, {
@@ -84,7 +84,7 @@ async function start(player: HTMLElement): Promise<void> {
                 positionMs: reported,
                 durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
                 isEnded: ended,
-                isCompleted: ended
+                isCompleted: completed
             })
         }).catch(() => undefined);
         if (ended) plan = null;
@@ -93,7 +93,7 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("pause", () => report(false));
     video.addEventListener("ended", () => report(true));
     document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
-    window.addEventListener("pagehide", () => report(false));
+    window.addEventListener("pagehide", () => report(true, false));
 
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));
@@ -120,7 +120,7 @@ async function start(player: HTMLElement): Promise<void> {
         pip: () => void (document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture()),
         speed: () => panel("speed"),
         more: () => panel("more"),
-        close: () => report(false)
+        close: () => report(true, false)
     };
     player.addEventListener("click", event => {
         const target = event.target as Element;

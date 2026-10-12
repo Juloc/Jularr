@@ -40,12 +40,39 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var viaId = offer.Stages.Contains("id");
             var (titleMatch, titleEvidence) = kind == AcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, viaId) : JudgeSeriesTitle(title, parsed, viaId);
+            var languages = Languages(parsed);
             if (titleEvidence.Confidence == IdentityConfidence.Conflict || unit is null)
             {
-                return new ReleaseJudgement<VideoIdentityMatch>(titleMatch, parsed, titleEvidence, SelectionCoverage.Single, null);
+                return new ReleaseJudgement<VideoIdentityMatch>(titleMatch, parsed, titleEvidence, SelectionCoverage.Single, null) { Languages = languages };
             }
 
-            return JudgeUnit(titleMatch, titleEvidence, parsed, unit, scope, viaId);
+            return JudgeUnit(titleMatch, titleEvidence, parsed, unit, scope, viaId) with { Languages = languages };
+        }
+
+        // Scene names state non-English audio as words; untagged releases are English.
+        private static IReadOnlyList<string> Languages(ReleaseInfo parsed)
+        {
+            if (parsed.AudioLanguages.Count > 0)
+            {
+                return parsed.AudioLanguages;
+            }
+
+            var words = parsed.RawTitle.Split(['.', ' ', '_', '-', '[', ']', '(', ')'], StringSplitOptions.RemoveEmptyEntries);
+            var languages = words.Select(word => word.ToUpperInvariant() switch
+            {
+                "GERMAN" => "DE",
+                "FRENCH" or "TRUEFRENCH" or "VFF" => "FR",
+                "ITALIAN" => "IT",
+                "SPANISH" => "ES",
+                "JAPANESE" => "JA",
+                _ => null
+            }).OfType<string>().Distinct().ToList();
+            if (languages.Count == 0 || words.Any(word => word.Equals("DL", StringComparison.OrdinalIgnoreCase) || word.Equals("MULTI", StringComparison.OrdinalIgnoreCase)))
+            {
+                languages.Add("EN");
+            }
+
+            return languages;
         }
 
         private static ReleaseJudgement<VideoIdentityMatch> Unusable(VideoIdentityMatch match, string code) =>

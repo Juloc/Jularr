@@ -17,7 +17,9 @@ using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Frontend.Framework;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
@@ -60,6 +62,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("WrongTitle", wrong.ReasonCode);
             Assert.AreEqual("WrongYear", candidates.Single(candidate => candidate.Title.Contains("1999", StringComparison.Ordinal)).ReasonCode);
 
+            // Rejected candidates are not grabbable, not even by a direct call.
+            using var rejected = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(wrong.CandidateId));
+            Assert.AreEqual(HttpStatusCode.BadRequest, rejected.StatusCode);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+
             using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidates[0].CandidateId));
             Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
             Assert.AreEqual("https://indexer.example.test/getnzb/feature", usenet.Grabbed.Single());
@@ -82,12 +89,22 @@ namespace Jularr.Backend.Tests
             File.WriteAllText(Path.Combine(completed, Feature + ".en.srt"), "subtitle");
             File.WriteAllText(Path.Combine(completed, "sample.mkv"), new string('x', 8192));
             usenet.Queue = FakeUsenet.EmptyQueue;
+
+            // A path outside the client mapping is never read.
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/elsewhere/../downloads/x"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // An existing library file is kept; the import takes a free name.
+            var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
+            Directory.CreateDirectory(library);
+            File.WriteAllText(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv"), "existing");
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
-            var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
-            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020).mkv")));
-            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020).en.srt")));
+            Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p] (2).mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p] (2).en.srt")));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
@@ -215,7 +232,7 @@ namespace Jularr.Backend.Tests
 
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Pack","status":"Completed","storage":"/downloads/Example.Show.S01.1080p.WEB-DL.H264-GRP"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
-            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Movies", "Example Show", "Season 01", "Example Show - S01E03.mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Movies", "Example Show", "Season 01", "Example Show - S01E03 [WEB-1080p].mkv")));
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkUnitId\" IS NOT NULL"));
             Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
             Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
@@ -234,6 +251,66 @@ namespace Jularr.Backend.Tests
             var candidates = (await manual.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
             Assert.AreEqual("Example.Show.S02E01.1080p.WEB-DL.H264-GRP", candidates.First(candidate => candidate.ReleaseDecisionTypeId == ReleaseDecisionType.Eligible).Title);
             Assert.AreEqual("WrongSeason", candidates.Single(candidate => candidate.Title == "Example.Show.S01E01.1080p.WEB-DL.H264-GRP").ReasonCode);
+        }
+
+        [TestMethod]
+        public async Task Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var eligible = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Where(candidate => candidate.ReleaseDecisionTypeId == ReleaseDecisionType.Eligible).ToArray();
+            Assert.AreEqual(2, eligible.Length);
+
+            // The reservation lets exactly one grab reach the client.
+            var responses = await Task.WhenAll(eligible.Select(candidate => host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId))));
+            CollectionAssert.AreEquivalent(new[] { HttpStatusCode.OK, HttpStatusCode.BadRequest }, responses.Select(response => response.StatusCode).ToArray());
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+
+            // Requests keep working without Arr+.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Acquisition'");
+            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.Forbidden, blocked.StatusCode);
+            using var list = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted");
+            Assert.AreEqual(HttpStatusCode.OK, list.StatusCode);
+        }
+
+        [TestMethod]
+        public void Selection_RequestedLanguageWinsAmongEqualQuality()
+        {
+            var profile = new QualityProfile("1", "Test", ["WEB-1080p"], ["WEB-1080p"], true, "WEB-1080p", null, null, [], [], [], [], []) { LanguageOrder = ["de"] };
+            var offers = new[] { Offer("Example.Movie.2020.1080p.WEB-DL.H264-AAA", "english"), Offer("Example.Movie.2020.German.DL.1080p.WEB-DL.H264-ZZZ", "german") };
+            var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
+            {
+                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, VideoUnitScope.Empty, offer);
+                return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
+                    judgement.Coverage) { Languages = judgement.Languages ?? [] };
+            }).ToArray());
+
+            Assert.AreEqual("1:german", result.Winner!.Candidate.Id);
+        }
+
+        [TestMethod]
+        public void Import_PathsStayBelowTheMappingAndUrlsStaySafe()
+        {
+            Assert.AreEqual("Movie/file.mkv", ImportPlacementLogic.MapRemotePath("/downloads/Movie/file.mkv", "/downloads/"));
+            Assert.IsNull(ImportPlacementLogic.MapRemotePath("/downloads/../etc/passwd", "/downloads"));
+            Assert.IsNull(ImportPlacementLogic.MapRemotePath("/downloadsX/file", "/downloads"));
+            Assert.IsNull(ImportPlacementLogic.MapRemotePath("/elsewhere/file", "/downloads"));
+            if (OperatingSystem.IsLinux())
+            {
+                Assert.IsTrue(StorageFileSystem.IsMountPoint("/"));
+                Assert.IsFalse(StorageFileSystem.IsMountPoint(Path.GetTempPath()));
+            }
+
+            Assert.Throws<ArgumentException>(() => new A().Attribute("href", "\u0001javascript:alert(1)"));
+            Assert.Throws<ArgumentException>(() => new A().Attribute("href", "java\tscript:alert(1)"));
+            new A().Attribute("href", "/Admin/Wanted?Tab=search");
+            new A().Attribute("href", "https://www.themoviedb.org/");
         }
 
         [TestMethod]

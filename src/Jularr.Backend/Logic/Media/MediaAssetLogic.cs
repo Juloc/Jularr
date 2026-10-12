@@ -22,49 +22,22 @@ namespace Jularr.Backend.Logic.Media
             ValidateUnit(file.MediaTypeId, data);
             var workId = await ctx.ResolveWorkAsync(file.MediaTypeId, data, ct);
 
-            // The default edition serializes assignments per Work.
+            // The default edition serializes assignments per Work; the upsert always returns it.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH inserted AS (
-                    INSERT INTO
-                        "WorkEditions" ("WorkId")
-                    VALUES
-                        (@Id)
-                    ON CONFLICT DO NOTHING
-                    RETURNING
-                        "Id"
-                )
-                SELECT
-                    inserted."Id"
-                FROM
-                    inserted
-                UNION ALL
-                SELECT
-                    edition."Id"
-                FROM
-                    "WorkEditions" AS edition
-                WHERE
-                    edition."WorkId" = @Id
-                    AND edition."Name" IS NULL
-                LIMIT 1;
+                INSERT INTO
+                    "WorkEditions" ("WorkId")
+                VALUES
+                    (@Id)
+                ON CONFLICT ("WorkId", "Name") DO UPDATE
+                SET
+                    "WorkId" = EXCLUDED."WorkId"
+                RETURNING
+                    "Id";
                 """;
             sql.Parameters.Add(new WorkIdData(workId));
             var editionId = (await ctx.ReadRequiredAsync<WorkIdData>(sql, ct)).Id;
-
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    edition."Id"
-                FROM
-                    "WorkEditions" AS edition
-                WHERE
-                    edition."Id" = @Id
-                FOR UPDATE;
-                """;
-            sql.Parameters.Add(new WorkIdData(editionId));
-            await ctx.ReadRequiredAsync<WorkIdData>(sql, ct);
 
             // Structure units are shared by all versions.
             long? unitId = null;
@@ -254,30 +227,15 @@ namespace Jularr.Backend.Logic.Media
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH inserted AS (
-                    INSERT INTO
-                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
-                    VALUES
-                        (@WorkId, @ParentWorkUnitId, @WorkUnitTypeId, @Number)
-                    ON CONFLICT DO NOTHING
-                    RETURNING
-                        "Id"
-                )
-                SELECT
-                    inserted."Id"
-                FROM
-                    inserted
-                UNION ALL
-                SELECT
-                    unit."Id"
-                FROM
-                    "WorkUnits" AS unit
-                WHERE
-                    unit."WorkId" = @WorkId
-                    AND unit."ParentWorkUnitId" IS NOT DISTINCT FROM @ParentWorkUnitId
-                    AND unit."WorkUnitTypeId" = @WorkUnitTypeId
-                    AND unit."Number" = @Number
-                LIMIT 1;
+                INSERT INTO
+                    "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
+                VALUES
+                    (@WorkId, @ParentWorkUnitId, @WorkUnitTypeId, @Number)
+                ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
+                SET
+                    "Number" = EXCLUDED."Number"
+                RETURNING
+                    "Id";
                 """;
             sql.Parameters.Add(data);
             return (await ctx.ReadRequiredAsync<WorkIdData>(sql, ct)).Id;

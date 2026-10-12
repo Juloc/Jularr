@@ -259,7 +259,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
 
         // Segments of an authorized session wait without database work.
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlaybackStreamV1>()];
-        protected override ModuleRequirement GetInstanceModules(PlaybackSegmentParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(PlaybackSegmentParametersV1 parameters) => ModuleRequirement.All("Library", "Playback");
         protected override ServicePermission GetPermission(PlaybackSegmentParametersV1 parameters, Type resultType) => new("profile.playback");
 
         protected override async Task<IServiceOutput> OnRead()

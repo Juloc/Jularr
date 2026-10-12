@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
 
@@ -67,6 +68,27 @@ namespace Jularr.Integrations.Logic.Storage
             return path;
         }
 
+        public static bool IsMountPoint(string path)
+        {
+            // Only Linux hosts mount connections; elsewhere the directory is the connection.
+            if (!OperatingSystem.IsLinux())
+            {
+                return Directory.Exists(path);
+            }
+
+            var target = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            foreach (var line in File.ReadLines("/proc/self/mountinfo"))
+            {
+                var fields = line.Split(' ');
+                if (fields.Length > 4 && Regex.Replace(fields[4], @"\\([0-7]{3})", match => ((char)Convert.ToInt32(match.Groups[1].Value, 8)).ToString()) == target)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static IReadOnlyList<string> ListDirectories(string directory, int limit)
         {
             try
@@ -83,7 +105,7 @@ namespace Jularr.Integrations.Logic.Storage
             }
         }
 
-        public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string> extensions, CancellationToken ct)
+        public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string> extensions, StorageScanState state, CancellationToken ct)
         {
             var pending = new Stack<string>();
             pending.Push("");
@@ -98,12 +120,13 @@ namespace Jularr.Integrations.Logic.Storage
                 }
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
-                    // An unreadable root means no complete scan.
+                    // An unreadable root means no scan; a skipped folder means an incomplete one.
                     if (relative.Length == 0)
                     {
                         throw new NasMountException("storage_unavailable");
                     }
 
+                    state.IsComplete = false;
                     continue;
                 }
 

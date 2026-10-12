@@ -339,6 +339,7 @@ namespace Jularr.Backend.Tests
                 builder.WebHost.UseTestServer();
                 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
                 builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
+                builder.Configuration["Storage:RequireMountPoint"] = "false";
                 foreach (var (key, value) in settings ?? new Dictionary<string, string>())
                 {
                     builder.Configuration[key] = value;

@@ -13,6 +13,7 @@ using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
@@ -107,7 +108,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
             var processed = 0L;
             var batch = new List<ScannedFile>(BatchSize);
-            foreach (var file in StorageFileSystem.EnumerateFiles(directory, LibraryFileTypes.GetScanExtensions(root.MediaTypeId), CancellationToken))
+            var state = new StorageScanState();
+            foreach (var file in StorageFileSystem.EnumerateFiles(directory, LibraryFileTypes.GetScanExtensions(root.MediaTypeId), state, CancellationToken))
             {
                 if (MediaPathParser.IsSample(file.RelativePath) || !IsStorablePath(file.RelativePath))
                 {
@@ -122,6 +124,15 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
 
             processed += await SaveBatchAsync(root.Id, seenAt, batch, processed);
+
+            // Only a complete scan may mark files missing.
+            if (!state.IsComplete)
+            {
+                await Context.ExecuteBatchAsync((ctx, ct) => ctx.UpdateOperationAsync(new OperationProgressData(Parameters.OperationId, processed, OperationStatusType.Failed, "scan_incomplete"), ct),
+                    CancellationToken);
+                return new UpdateResult(false);
+            }
+
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.CompleteStoredFileScanAsync(new StoredFileBatchData(root.Id, seenAt, "[]"), ct);
