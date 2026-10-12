@@ -320,6 +320,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     "ProgressPercent" = NULL,
                     "ProcessedCount" = 0,
                     "ErrorKey" = NULL,
+                    "AttentionKey" = NULL,
+                    "DismissedAt" = NULL,
                     "StartedAt" = now(),
                     "FinishedAt" = NULL
                 WHERE

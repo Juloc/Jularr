@@ -165,6 +165,29 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Retry_AfterAClientFault_TakesTheSameReleaseAgain()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+
+            // A client fault keeps the release; Retry searches now and reuses its operation.
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Failed","fail_message":"Post-processing script failed"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            var failed = (await ReadActivityAsync(host, ActivityTabType.ToDo)).Single();
+            Assert.AreEqual("download_interrupted", failed.ReasonKey);
+            using var retried = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failed.Id + "/retry");
+            Assert.AreEqual(HttpStatusCode.OK, retried.StatusCode, await retried.Content.ReadAsStringAsync());
+            usenet.History = """{"history":{"slots":[]}}""";
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/feature", "https://indexer.example.test/getnzb/feature" }, usenet.Grabbed);
+            Assert.AreEqual(failed.Id, (await ReadActivityAsync(host, ActivityTabType.Activity)).Single().Id);
+        }
+
+        [TestMethod]
         public async Task Razor_WantedSearchAndConnections_RenderRealResults()
         {
             using var storage = new TemporaryDirectory();
