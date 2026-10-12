@@ -158,8 +158,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   Exact locale -> parent -> English fallback is handled centrally.
   There is **no SQL per label**, no per-page browser translation download,
   and no AI generation during rendering.
-- Later, trusted active-profile `UiLocaleId` must take precedence over
-  Accept-Language once the session/profile preference contract exists.
+- Verified active-profile `UiLocaleId` takes precedence over the stored instance
+  default. The shared Backend language-pack service resolves enabled exact/parent
+  locale and English fallback; browser hints do not override configured defaults.
   Offline language bundles for all local profiles are future-only.
 
 ## Asset ownership, build and caching (MANDATORY)

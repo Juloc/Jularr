@@ -6,7 +6,7 @@ namespace Jularr.Backend.Service.Core
 {
     internal interface IServiceGate
     {
-        Task RequireModulesAsync(ModuleRequirement modules, CancellationToken cancellationToken);
+        Task RequireModulesAsync(ModuleRequirement modules, LogicContext context, bool canMutate, CancellationToken cancellationToken);
         Task<ServiceCaller> RequireCallerAsync(ServiceArea area, CancellationToken cancellationToken);
         Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken);
         Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken);

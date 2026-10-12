@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Data.Logic.Instance;
+using Jularr.Backend.Logic.Instance;
 using Jularr.Backend.Logic.Session;
 
 namespace Jularr.Backend.Service.Core
@@ -23,15 +25,43 @@ namespace Jularr.Backend.Service.Core
             _accessor = accessor;
         }
 
-        public Task RequireModulesAsync(ModuleRequirement requirement, CancellationToken cancellationToken)
+        public async Task RequireModulesAsync(ModuleRequirement requirement, LogicContext context, bool canMutate, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (requirement.Mode != ModuleRequirementMode.None)
+            if (requirement.Mode == ModuleRequirementMode.None)
             {
-                throw new UnauthorizedAccessException("No instance modules are configured.");
+                return;
             }
 
-            return Task.CompletedTask;
+            var parameters = new InstanceModuleParameters(requirement.ModuleKeys.ToArray());
+            IReadOnlyList<InstanceModuleData> modules;
+            if (canMutate)
+            {
+                modules = await context.ReadInstanceModulesAsync(parameters, cancellationToken);
+            }
+            else
+            {
+                // Read without mutation locks.
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        module."Key",
+                        module."IsEnabled"
+                    FROM
+                        "InstanceModules" AS module
+                    WHERE
+                        module."Key" = ANY(@ModuleKeys);
+                    """;
+                sql.Parameters.Add(parameters);
+                modules = await context.ReadSql.ReadListAsync<InstanceModuleData>(sql, cancellationToken);
+            }
+
+            var enabledCount = modules.Count(module => module.IsEnabled);
+            if (requirement.Mode == ModuleRequirementMode.All ? enabledCount != requirement.ModuleKeys.Count : enabledCount == 0)
+            {
+                throw new SecurityException("The requested instance module is unavailable.");
+            }
         }
 
         public async Task<ServiceCaller> RequireCallerAsync(ServiceArea area, CancellationToken cancellationToken)
@@ -127,7 +157,7 @@ namespace Jularr.Backend.Service.Core
                 return [];
             }
 
-            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select" };
+            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select", "instance.capabilities.read" };
 
             // Manual media management only.
             if (accountRoleTypeId is AccountRoleType.Owner or AccountRoleType.MediaManager)

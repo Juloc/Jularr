@@ -106,12 +106,14 @@ Phase B still apply; legacy parity does not authorize active-database migrations
 
 ## Remaining decisions and prerequisites
 
-Each next area is first presented to the owner with Services, tables, Logic and
-rough Frontend, then implemented after agreement. Approved work is committed and
-pushed in small topic bundles. Instance settings now provide Owner name/language
-read/update and `/Admin/Instance`; User capabilities, module identities/defaults,
-runtime gates and public default-language/branding consumption are the next
-separate agreement, not implicitly enabled by stored settings.
+The owner authorizes continued implementation of agreed topics in coherent
+packages: one bundled commit, own feature branch/PR, then clean-start integration
+after green checks. Collect unresolved questions while progressing independent
+work; framework limitations and new dependencies require discussion, not workarounds.
+Instance settings, Library configuration, User capabilities and public name/language
+consumption are connected. Library gates actual Services through their existing
+context/transaction. MediaTypes is separate; per-media/profile preferences,
+Arr+/Playback/Tracking module implementations and full branding remain open.
 
 1. Profile PIN recovery and profile creation limits when those operations are built.
 2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.

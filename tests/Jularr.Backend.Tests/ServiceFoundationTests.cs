@@ -21,7 +21,7 @@ namespace Jularr.Backend.Tests
         private sealed record PrivateAccountResult(long AccountId, string Name, string Email) : IServiceOutput;
 
         [TestMethod]
-        public async Task ReadService_RequiresModuleFirstAndUsesReadOnlyDatabase()
+        public async Task ReadService_RequiresAccessAndModulesInReadOnlyTransaction()
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
@@ -33,11 +33,11 @@ namespace Jularr.Backend.Tests
 
             Assert.AreEqual(5L, result.AccountId);
             Assert.AreEqual("on", result.Name);
-            CollectionAssert.AreEqual(new[] { "modules", "caller", "access" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "modules" }, gate.Events.ToArray());
         }
 
         [TestMethod]
-        public async Task ModulesBlocked_NeverOpensDatabaseOrResolvesCaller()
+        public async Task ModulesBlocked_NeverRunsReadOperation()
         {
             await using var database = CreateDataSource();
             var gate = new TestGate { BlockModule = true };
@@ -46,7 +46,7 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(5)));
 
-            CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "modules" }, gate.Events.ToArray());
         }
 
         [TestMethod]
@@ -59,7 +59,7 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => service.ExecuteAsync<PrivateAccountResult>(new AccountParameters(5)));
 
-            CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+            Assert.AreEqual(0, gate.Events.Count);
         }
 
         [TestMethod]
@@ -71,12 +71,12 @@ namespace Jularr.Backend.Tests
 
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
                 () => service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(1, 25, (ListSort)255)));
-            CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+            Assert.AreEqual(0, gate.Events.Count);
 
             gate.Events.Clear();
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
                 () => service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(1, 101, ListSort.AccountId)));
-            CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+            Assert.AreEqual(0, gate.Events.Count);
         }
 
         [TestMethod]
@@ -113,7 +113,7 @@ namespace Jularr.Backend.Tests
             await using var verify = new SqlContext(database);
             await verify.BeginAsync(SqlAccessMode.ReadOnly);
             Assert.AreEqual(0L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"ServiceFoundationProbe\"" }));
-            CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "transaction", "modules" }, gate.Events.ToArray());
         }
 
         [TestMethod]
@@ -140,7 +140,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\"" }));
             Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT \"Id\" FROM \"ServiceExecuteBatchProbe\"" }));
 
-            CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction", "transaction" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "modules", "transaction", "transaction" }, gate.Events.ToArray());
         }
 
         [TestMethod]
@@ -164,7 +164,7 @@ namespace Jularr.Backend.Tests
             await using var verify = new SqlContext(database);
             await verify.BeginAsync(SqlAccessMode.ReadOnly);
             Assert.AreEqual(1L, await verify.ReadSql.ExecuteScalarAsync(new SqlStatement { Statement = "SELECT COUNT(*) FROM \"ServiceExecuteBatchProbe\"" }));
-            CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction", "transaction" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "modules", "transaction", "transaction" }, gate.Events.ToArray());
         }
 
         [TestMethod]
@@ -195,7 +195,7 @@ namespace Jularr.Backend.Tests
 
             Assert.AreEqual(0, service.HookCalls);
             Assert.ThrowsExactly<InvalidOperationException>(() => service.ReadBoundParameters());
-            CollectionAssert.AreEqual(new[] { "modules", "caller", "access" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "modules" }, gate.Events.ToArray());
         }
 
         [TestMethod]
@@ -325,15 +325,29 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private sealed class SystemBatchService : SystemService<AccountParameters, AccountData>
+        [TestMethod]
+        public async Task Execute_DisabledModule_NeverRunsOperationHook()
         {
+            await using var database = CreateDataSource();
+            var gate = new TestGate { Area = ServiceArea.System, BlockModule = true };
+            var service = new ServiceRuntime(database, gate).Create(new SystemBatchService(requireModule: true));
+
+            await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("blocked")));
+            Assert.AreEqual(0, service.HookCalls);
+            CollectionAssert.AreEqual(new[] { "caller", "access", "transaction", "modules" }, gate.Events.ToArray());
+        }
+
+        private sealed class SystemBatchService(bool requireModule = false) : SystemService<AccountParameters, AccountData>
+        {
+            public int HookCalls { get; private set; }
             protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
             protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
-            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
+            protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => requireModule ? ModuleRequirement.All("Library") : ModuleRequirement.None;
             protected override ServicePermission GetPermission(AccountParameters parameters, Type resultType) => new("account.system.execute");
 
             protected override async Task<IServiceOutput> OnExecute()
             {
+                HookCalls++;
                 // A long Execute operation must never inherit a database transaction.
                 Assert.ThrowsExactly<InvalidOperationException>(() => _ = Context.Sql);
 
@@ -414,7 +428,7 @@ namespace Jularr.Backend.Tests
             private int _transactionChecks;
             public ServiceArea Area { get; init; } = ServiceArea.User;
 
-            public Task RequireModulesAsync(ModuleRequirement modules, CancellationToken cancellationToken)
+            public Task RequireModulesAsync(ModuleRequirement modules, LogicContext context, bool canMutate, CancellationToken cancellationToken)
             {
                 Events.Add("modules");
                 if (BlockModule)

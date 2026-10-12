@@ -31,7 +31,7 @@ namespace Jularr.Backend.Tests
 
             Assert.IsFalse(gate.Events.Contains("transaction"));
             CollectionAssert.AreEqual(
-                new[] { "modules", "caller", "access", "modules", "caller", "access" },
+                new[] { "caller", "access", "modules", "caller", "access", "modules" },
                 gate.Events.ToArray());
         }
 
@@ -54,7 +54,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("Display Name Updated", reloaded.DisplayName);
             Assert.AreEqual("Display Name Updated", await fixture.NameAsync(fixture.ProfileAId));
             Assert.AreEqual("Profile B", await fixture.NameAsync(fixture.ProfileBId));
-            CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction", "modules", "caller", "access" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "transaction", "modules", "caller", "access", "modules" }, gate.Events.ToArray());
         }
 
         [TestMethod]
@@ -122,7 +122,7 @@ namespace Jularr.Backend.Tests
                     new UpdateProfileDataV1("Denied")));
 
             Assert.AreEqual("Profile A", await fixture.NameAsync(fixture.ProfileAId));
-            CollectionAssert.AreEqual(new[] { "modules", "caller", "access", "transaction" }, gate.Events.ToArray());
+            CollectionAssert.AreEqual(new[] { "caller", "access", "transaction" }, gate.Events.ToArray());
         }
 
         [TestMethod]
@@ -157,7 +157,7 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<DataValidationException>(
                 () => read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(0)));
 
-            CollectionAssert.AreEqual(new[] { "modules" }, gate.Events.ToArray());
+            Assert.AreEqual(0, gate.Events.Count);
         }
 
         [TestMethod]
@@ -314,7 +314,7 @@ namespace Jularr.Backend.Tests
             public List<string> Events { get; } = [];
             public bool DenyTransactionalWrite { get; set; }
 
-            public Task RequireModulesAsync(ModuleRequirement modules, CancellationToken cancellationToken)
+            public Task RequireModulesAsync(ModuleRequirement modules, LogicContext context, bool canMutate, CancellationToken cancellationToken)
             {
                 Events.Add("modules");
                 if (modules.Mode != ModuleRequirementMode.None)

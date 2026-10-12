@@ -11,6 +11,24 @@ public sealed class Shell(
 {
     public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
     {
+        // Add available destinations.
+        var primary = navigation.Primary.ToList();
+        var secondary = navigation.Secondary.ToList();
+        var mobile = navigation.Mobile.ToList();
+
+        if (texts.Capabilities?.CanReadMedia is true)
+        {
+            var watchlist = new ShellLink("watchlist.title", "/Watchlist", "home");
+            primary.Add(watchlist);
+            mobile.Add(watchlist);
+        }
+
+        if (texts.Capabilities?.CanManageMedia is true)
+        {
+            secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
+        }
+
+        // Render shared navigation.
         new Header(
             new Brand(compact: true),
             new Nav(new Span(new Text(pageTitleKey)).Attribute("aria-current", "page"))
@@ -19,12 +37,11 @@ public sealed class Shell(
 
         new Aside(
             new Brand(),
-            Links(navigation.Primary, "nav.primary", "sidebar-navigation", false, texts),
-            Links(navigation.Secondary, "nav.secondary",
-                "sidebar-navigation sidebar-secondary", false, texts)
+            Links(primary, "nav.primary", "sidebar-navigation", false, texts),
+            Links(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary", false, texts)
         ).Class("app-sidebar").WriteTo(writer, encoder, texts);
 
-        Links(navigation.Mobile, "nav.mobile", "mobile-navigation", true, texts)
+        Links(mobile, "nav.mobile", "mobile-navigation", true, texts)
             .WriteTo(writer, encoder, texts);
     }
 
@@ -56,8 +73,7 @@ public sealed class Shell(
 
 public sealed record ShellLink(string Key, string Href, string Icon);
 
-// No hard-coded optional modules: only unconditional routes pending effective
-// profile/instance module visibility from the canonical Backend service.
+// Required destinations; Services determine optional links.
 public sealed class ShellNavigation
 {
     public IReadOnlyList<ShellLink> Primary { get; } =

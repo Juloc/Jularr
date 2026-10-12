@@ -11,12 +11,18 @@ public sealed class Brand(bool compact = false, bool login = false) : IUiCompone
     {
         var glyph = new Span(new Mark()).Class(login ? "brand-symbol auth-symbol" : "brand-symbol")
             .Attribute("aria-hidden", "true");
-        var name = new Span(new Text("app.name"));
-        if (login) name.Class("auth-brand-name");
+        var name = new Span(new ValueText(texts.InstanceName));
+        name.Class(login ? "shell-brand__name auth-brand-name" : "shell-brand__name");
 
-        var brand = new Div(glyph, name).Class(login ? "auth-brand" : "shell-brand");
+        var content = new List<IUiComponent> { glyph, name };
+        if (!string.Equals(texts.InstanceName, "Jularr", StringComparison.Ordinal))
+        {
+            content.Add(new Span(new Text("app.byJularr")).Class("shell-brand__attribution"));
+        }
+
+        var brand = new Div(content.ToArray()).Class(login ? "auth-brand" : "shell-brand");
         if (compact) brand.Class("shell-brand shell-brand--compact");
-        brand.Attribute("aria-label", texts["app.name"]);
+        brand.Attribute("aria-label", texts.InstanceName);
 
         if (login)
         {

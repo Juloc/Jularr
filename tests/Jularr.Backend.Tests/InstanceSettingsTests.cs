@@ -113,10 +113,6 @@ namespace Jularr.Backend.Tests
             var host = await Host.CreateAsync(razor: razor);
             try
             {
-                // Install only the isolated baseline.
-                using var schema = typeof(ReadInstanceSettingsV1).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!;
-                using var reader = new StreamReader(schema);
-                await host.Fixture.RunSqlAsync(await reader.ReadToEndAsync());
                 using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
                 if (login)
                 {

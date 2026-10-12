@@ -96,7 +96,6 @@ namespace Jularr.Backend.Service.Core
             ArgumentNullException.ThrowIfNull(data);
 
             var modules = GetInstanceModules(parameters) ?? throw new InvalidOperationException("The module requirement cannot be null.");
-            await Runtime.Gate.RequireModulesAsync(modules, cancellationToken);
             if (parameters is BaseData parameterData)
             {
                 parameterData.Validate();
@@ -153,8 +152,25 @@ namespace Jularr.Backend.Service.Core
             else if (definition.OperationType == ServiceOperationType.Execute)
             {
                 // Recheck access per batch.
-                context.SetTransactionalAccessCheck(
-                    (logic, token) => Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token));
+                context.SetTransactionalAccessCheck(async (logic, token) =>
+                {
+                    await Runtime.Gate.RequireTransactionalAccessAsync(caller, permission, logic, token);
+                    if (modules.Mode != ModuleRequirementMode.None)
+                    {
+                        await Runtime.Gate.RequireModulesAsync(modules, logic, true, token);
+                    }
+                });
+            }
+
+            // Keep authorization lock ordering.
+            if (needsTransaction || modules.Mode == ModuleRequirementMode.None)
+            {
+                await Runtime.Gate.RequireModulesAsync(modules, context, canMutate, cancellationToken);
+            }
+            else
+            {
+                // Authorize before external work.
+                await context.ExecuteBatchAsync((_, _) => Task.FromResult(true), cancellationToken);
             }
 
             // Bind this invocation only.

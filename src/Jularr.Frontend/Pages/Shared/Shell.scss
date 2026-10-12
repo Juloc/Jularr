@@ -19,7 +19,7 @@
     .app-header { min-height: 62px; position: sticky; top: 0; padding: 0 16px; }
     .app-header-brand { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 800; }
     .app-header-brand .brand-symbol { width: 30px; height: 30px; font-size: 20px; }
-    .app-header-location { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+    .app-header-location { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 }
 @media (max-width: 400px) {
     .app-header-brand { display: none; }

@@ -12,8 +12,18 @@
     letter-spacing: -.08em;
 }
 
-.auth-brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 22px; }
+.auth-brand { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-bottom: 22px; }
 .auth-symbol { width: 48px; height: 48px; font-size: 30px; border-radius: 13px; }
 .auth-brand-name { font-size: 26px; font-weight: 800; letter-spacing: -.05em; }
-.shell-brand { display: flex; align-items: center; gap: 12px; }
+.shell-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex-wrap: wrap;
+    overflow-wrap: anywhere;
+
+    &__attribution { font-size: 12px; font-weight: 400; color: var(--muted); }
+    &__name { min-width: 0; overflow-wrap: anywhere; }
+}
 .shell-brand--compact { gap: 8px; }

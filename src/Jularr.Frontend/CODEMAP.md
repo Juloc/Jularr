@@ -13,8 +13,9 @@ Shared conventions and Backend ownership:
   middleware; API and Razor routing.
 - [UiResources.cs](Localization/UiResources.cs): every English UI source
   declaration. Not a runtime translation store.
-- [UiText.cs](Framework/UiText.cs): per-request, backend-cached language
-  snapshot via Public services; verified profile preference before browser hints.
+- [UiText.cs](Framework/UiText.cs): per-request render values via Services: cached
+  language pack, Public instance name/default locale, User capabilities. Profile
+  locale overrides instance default; Backend owns exact/parent/English fallback.
 - [Backend locale services](../Jularr.Backend/Service/Public/Localization/V1),
   [Backend resource sync](../Jularr.Backend/Service/Core/Localization/UiLocalizationRegistration.cs):
   only canonical locale/query/DB owners.
@@ -54,7 +55,7 @@ Shared conventions and Backend ownership:
 - [Shell.cs](Pages/Shared/Shell.cs) and
   [Shell.scss](Pages/Shared/Shell.scss): Jularr-specific Header, Sidebar,
   Mobile navigation and their private helpers in **one** shell owner.
-  Navigation exposes only unconditional routes pending backend capabilities.
+  Watchlist/manual Works navigation follows the verified User capability result.
 - [Brand.cs](Pages/Shared/Brand.cs): shared Jularr brand for Shell and Login;
   [Icon.cs](Framework/Components/Icon.cs): generic fingerprinted SVG primitive.
 - [AdminNavigation.cs](Framework/AdminNavigation.cs):
@@ -76,7 +77,7 @@ Shared conventions and Backend ownership:
 - [Setup start](Pages/Setup/Start/Start.cshtml.cs): first Owner through Public services, field-driven form and shared authentication effects. Remaining wizard steps are not connected.
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): Owner directory/editor, profile assignments and session revocation; separate from request-limit Users.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): real provider registry enablement via Owner services.
-- [Instance](Pages/Admin/Instance/Instance.cshtml.cs): Owner name/language editor using the shared field-aware form and versioned services. No module switches or duplicate settings tabs; public branding/default-language consumption is pending.
+- [Instance](Pages/Admin/Instance/Instance.cshtml.cs): Owner name/language and Library module editor using shared field-aware forms and versioned services. Only fully gated implemented modules appear; disable retains data.
 - [Works](Pages/Admin/Works/Works.cshtml.cs), [Work editor](Pages/Admin/Work/Work.cshtml.cs): real paged catalog, manual creation and version-checked title editing through Admin media services; inventory and acquisition controls remain pending.
 - [Details](Pages/User/Details/Details.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): persisted Work identity and active-profile personal list actions, with shared forms/errors. No provider/NAS request, playback or acquisition claim.
 - [Request users](Pages/Admin/Users/Users.cshtml.cs): read-only canonical account directory; account administration links to its existing owner. Quotas/rule assignments are not implemented.

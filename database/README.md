@@ -4,12 +4,14 @@
 embedded as `Jularr.Database.Account.sql` for isolated tests. The host never applies it.
 
 `Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
-InstanceSettings (Name, UiLocaleId, Version), using the shared English locale as
+InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
 its initial language. It is embedded as `Jularr.Database.Instance.sql` for focused
 isolated tests; it is never installed automatically on an existing database.
-Owner services provide version-checked name/language edits. Module gates,
-public branding/default-language consumption and Setup integration follow in
-separate approved slices; this baseline does not claim those features.
+Owner services provide version-checked settings/module edits. Library is the only
+implemented module switch; disabling it retains data and blocks manual media and
+watchlist Services. Public presentation exposes only name/default language, User
+capabilities expose implemented grants, and Razor consumes both. Setup module
+progress, per-media/profile visibility and Arr+/Playback/Tracking remain pending.
 
 `Media.sql` follows `Account.sql` in a new installation. It is embedded as
 `Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles and

@@ -23,6 +23,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [UiLocaleServices.cs](../src/Jularr.Backend/Service/Admin/Localization/V1/UiLocaleServices.cs), [UiLocales.cs](../src/Jularr.Backend/Data/Admin/Localization/V1/UiLocales.cs): Owner language registry editing; canonical field format and localization writer.
 - [ProviderServices.cs](../src/Jularr.Backend/Service/Admin/Provider/V1/ProviderServices.cs), [Providers.cs](../src/Jularr.Backend/Data/Admin/Provider/V1/Providers.cs): existing provider registry enablement, not connection/capability management.
 - [InstanceSettingsServices.cs](../src/Jularr.Backend/Service/Admin/Instance/V1/InstanceSettingsServices.cs), [InstanceSettings.cs](../src/Jularr.Backend/Data/Admin/Instance/V1/InstanceSettings.cs): Owner name/language reads and version-checked edits; [InstanceLogic.cs](../src/Jularr.Backend/Logic/Instance/InstanceLogic.cs) owns mutations and enabled-locale locking. [Instance.sql](../database/Instance.sql) is a fresh singleton baseline, not a migration.
+- [InstanceModuleServices.cs](../src/Jularr.Backend/Service/Admin/Instance/V1/InstanceModuleServices.cs), [InstanceModuleLogic.cs](../src/Jularr.Backend/Logic/Instance/InstanceModuleLogic.cs): Owner module editing and configuration locks. [ReadInstanceCapabilitiesV1.cs](../src/Jularr.Backend/Service/User/Instance/V1/ReadInstanceCapabilitiesV1.cs) combines Library with verified grants; [ReadInstancePresentationV1.cs](../src/Jularr.Backend/Service/Public/Instance/V1/ReadInstancePresentationV1.cs) exposes only name/default language.
 - [ProfileServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileServices.cs): the one read and one update; permissions and orchestration.
 - [ServiceGate.cs](../src/Jularr.Backend/Service/Core/ServiceGate.cs): DB-role-based account/Profile and Admin grants; MediaManager is limited to manual media/Requests/Wanted. Role changes are revalidated in the write transaction.
 - [ProfileSelectionServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileSelectionServices.cs): membership-scoped paged list and session profile selection.
@@ -79,13 +80,14 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 - First-Owner form, rollback, concurrency, session issuance and permanent bootstrap closure: `SetupTests.cs`.
 - Manual catalog/title edits, role restriction, stale updates, personal list isolation and real Razor forms: `MediaTests.cs`.
 - Instance settings, Owner-only access, enabled locales, stale edits and real Razor forms: `InstanceSettingsTests.cs`.
+- Real module gating, data retention, All/Any/write locks, public branding/default locale and capability-driven Razor navigation: `InstanceCapabilitiesTests.cs`.
 - Real Razor forms, antiforgery, language settings, selection rotation, session revocation and logout: `FrontendAuthenticationTests.cs`; requires built Frontend assets.
 - `Infrastructure/TestPostgres.cs`: explicit isolated PostgreSQL fixture; never use the application database.
 
 ## Not integrated
 
 Remaining Setup steps, media inventory/monitoring/Requests/Wanted administration, Storage/NAS, email verification, 2FA/WebAuthn completion,
-PIN selection, old Android/TV consumers, full Profile management, instance modules/capabilities and public instance defaults/branding consumption.
+PIN selection, old Android/TV consumers, full Profile management, per-media/profile visibility, further module capabilities and full custom branding.
 This reference backend does not complete Phase B or replace an active installation.
 
 ## Next slices (not implemented)

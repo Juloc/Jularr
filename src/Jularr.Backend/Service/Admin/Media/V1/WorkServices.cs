@@ -13,7 +13,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     public sealed class ReadWorksV1 : AdminService<ReadWorksParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkDetailsV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadWorksParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(ReadWorksParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(ReadWorksParametersV1 parameters, Type resultType) => new("media.read");
         protected override PageRequest GetPageRequest(ReadWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
 
@@ -45,7 +45,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     public sealed class ReadWorkV1 : AdminService<WorkParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<WorkDetailsV1>()];
-        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("media.read");
 
         protected override async Task<IServiceOutput> OnRead()
@@ -73,7 +73,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<WorkDetailsV1>()];
-        protected override ModuleRequirement GetInstanceModules(CreateWorkParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(CreateWorkParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(CreateWorkParametersV1 parameters, Type resultType) => new("media.manual.update");
 
         protected override async Task<IServiceOutput> OnCreate()
@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("media.manual.update");
 
         protected override async Task<IServiceOutput> OnUpdate()

@@ -283,6 +283,12 @@ namespace Jularr.Backend.Tests
             public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false)
             {
                 var fixture = await Fixture.CreateAsync();
+                using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!)
+                using (var reader = new StreamReader(schema))
+                {
+                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                }
+
                 if (media)
                 {
                     // Install the requested baseline.

@@ -104,9 +104,15 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new ServicePermission("profile.anything"), default));
             await Assert.ThrowsExactlyAsync<KeyNotFoundException>(() => scope.ServiceProvider.GetRequiredService<ReadProfileV1>().ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileBId)));
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireCallerAsync(ServiceArea.Admin, default));
-            await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireModulesAsync(ModuleRequirement.All("Movie"), default));
-            await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireModulesAsync(ModuleRequirement.Any("Novel", "Unknown"), default));
-            await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireModulesAsync(ModuleRequirement.Any("Movie", "Novel"), default));
+            using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!;
+            using var reader = new StreamReader(schema);
+            await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+            await using var sql = new SqlContext(fixture.Database);
+            sql.PrepareReadTransaction(System.Data.IsolationLevel.ReadCommitted);
+            var context = new LogicContext(sql);
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireModulesAsync(ModuleRequirement.All("Movie"), context, false, default));
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireModulesAsync(ModuleRequirement.Any("Novel", "Unknown"), context, false, default));
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireModulesAsync(ModuleRequirement.Any("Movie", "Novel"), context, false, default));
         }
 
         [TestMethod]
@@ -255,8 +261,8 @@ namespace Jularr.Backend.Tests
 
         private sealed class AuthorizationChangingGate(IServiceGate gate, Fixture fixture, string mutation) : IServiceGate
         {
-            public Task RequireModulesAsync(ModuleRequirement modules, CancellationToken cancellationToken) =>
-                gate.RequireModulesAsync(modules, cancellationToken);
+            public Task RequireModulesAsync(ModuleRequirement modules, LogicContext context, bool canMutate, CancellationToken cancellationToken) =>
+                gate.RequireModulesAsync(modules, context, canMutate, cancellationToken);
 
             public Task<ServiceCaller> RequireCallerAsync(ServiceArea area, CancellationToken cancellationToken) =>
                 gate.RequireCallerAsync(area, cancellationToken);

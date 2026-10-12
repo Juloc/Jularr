@@ -110,8 +110,14 @@ die jeweils freigegebenen Bereiche. Requests/Wanted und Medieninventar bleiben o
 Die API liegt unter `GET|PUT /api/v1/admin/instance/settings`; SQL und
 Sprachvalidierung bleiben im Backend. Eine neue Installation benötigt hierfür
 die frische [Instance-Baseline](database/Instance.sql) nach der Account-Baseline.
-Module, User-Capabilities, öffentliche Branding-/Sprachdefaults und die Anbindung
-an den weiteren Setup Wizard sind noch nicht implementiert.
+Das einzige schaltbare Modul ist derzeit Library: Abschalten sperrt die realen
+Medien-/Watchlist-Services und entfernt ihre Links, ohne Daten zu löschen.
+User `ReadInstanceCapabilitiesV1` liefert die verfügbaren Funktionen; Public
+`ReadInstancePresentationV1` liefert ausschließlich Name und Sprachdefault.
+Shell/Login verwenden den Namen, bei eigener Benennung mit „by Jularr“.
+Die aktive Profilsprache hat Vorrang vor dem Instanzdefault; exakte Sprache,
+Elternsprache und Englisch werden vom gemeinsamen Backend-Katalog aufgelöst.
+Weitere Module, Profilsichtbarkeit und der weitere Setup Wizard bleiben offen.
 
 `/Admin/Works` legt kanonische Works manuell an; `/Admin/Works/{id}` bearbeitet
 den Titel mit Versionsprüfung und erhält weitere Titelquellen. `/Details/{id}`

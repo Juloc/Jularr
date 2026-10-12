@@ -7,14 +7,19 @@ using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Instance
 {
-    public sealed class InstanceModel(ReadInstanceSettingsV1 read, UpdateInstanceSettingsV1 update, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery) : JularrPage
+    public sealed class InstanceModel(ReadInstanceSettingsV1 read, UpdateInstanceSettingsV1 update, ReadUiLocalesV1 readLocales,
+        ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private InstanceSettingsDetailsV1? _settings;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
         private UpdateInstanceSettingsDataV1? _input;
+        private IReadOnlyList<InstanceModuleDetailsV1> _modules = [];
+        private UpdateInstanceModuleDataV1? _moduleInput;
+        private long? _moduleId;
 
         protected override void Define(Page page)
         {
@@ -32,7 +37,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                     form.Submit("common.save");
                 }, Url.Page("/Admin/Instance/Instance"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version), Error));
+                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version), _moduleId is null ? Error : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
@@ -43,6 +48,23 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             {
                 page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
             }
+
+            // Only implemented module controls.
+            var stateOptions = new[] { new SelectOption("True", texts["admin.providers.enabled"]), new SelectOption("False", texts["admin.providers.disabled"]) };
+            var moduleForms = new List<IUiComponent> { new P(new Text("admin.instance.module.retained")) };
+            foreach (var module in _modules)
+            {
+                moduleForms.Add(new P(new Text("instance.module." + module.Key)));
+                moduleForms.Add(new Form<UpdateInstanceModuleDataV1>(form =>
+                {
+                    form.Hidden(item => item.Version);
+                    form.Select(item => item.IsEnabled, "admin.instance.module.state", stateOptions);
+                    form.Submit("common.save");
+                }, Url.Page("/Admin/Instance/Instance", "Module", new { instanceModuleId = module.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                    _moduleId == module.Id ? _moduleInput : new UpdateInstanceModuleDataV1(module.IsEnabled, module.Version), _moduleId == module.Id ? Error : null));
+            }
+
+            if (_modules.Count > 0) page.Content.Add(new UiSection("admin.instance.modules", moduleForms));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -66,6 +88,15 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             var token = HttpContext.RequestAborted;
             _settings = await read.ExecuteAsync<InstanceSettingsDetailsV1>(new ReadInstanceSettingsParametersV1(), token);
             _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
+            _modules = await readModules.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), token);
+        }
+
+        public async Task<IActionResult> OnPostModuleAsync(long instanceModuleId, [BindRequired] bool isEnabled, long version)
+        {
+            _moduleId = instanceModuleId;
+            _moduleInput = new UpdateInstanceModuleDataV1(isEnabled, version);
+            await updateModule.ExecuteAsync<UpdateResult>(new UpdateInstanceModuleParametersV1(instanceModuleId), _moduleInput, HttpContext.RequestAborted);
+            return RedirectToPage("/Admin/Instance/Instance");
         }
     }
 }
