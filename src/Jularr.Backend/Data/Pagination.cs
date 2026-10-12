@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 
 namespace Jularr.Backend.Data
@@ -34,6 +35,11 @@ namespace Jularr.Backend.Data
 
     public sealed class PageResult<T> : BaseResponse
     {
+        [JsonConstructor]
+        public PageResult(IReadOnlyList<T> items, int page, int pageSize) : this(items, new PageRequest(page, pageSize))
+        {
+        }
+
         public PageResult(IReadOnlyList<T> items, PageRequest request)
         {
             ArgumentNullException.ThrowIfNull(items);

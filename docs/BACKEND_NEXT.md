@@ -77,6 +77,33 @@ and commit together. No migration, active-database installation or extra server.
 - Permission overrides are conditional in the supplied model, not permission to
   create a second authorization system.
 
+## Capability coverage
+
+The owner requires the following coverage beyond the first connected pages:
+
+- Delivery and identity: Setup, Docker, PostgreSQL, modules, Accounts, Profiles,
+  Sessions and permissions.
+- Media and storage: Discover/search, Library, Watchlist, Requests, configurable
+  NAS/SMB/NFS/WOL, scanning/import, metadata and duplicate resolution on the shared
+  Work/structure/edition/version/asset/file/track identities.
+- Acquisition: unified Arr+, Wanted, monitoring, Search Planner, native Newznab,
+  release parsing/scoring, SABnzbd or native downloader, queue/retry/recovery,
+  automatic imports, hardlinks and path mapping. Prowlarr remains an optional
+  one-time takeover source under the existing owner decision, not a runtime dependency.
+- Playback: self-hosted direct play/remux/FFmpeg/HLS, demand pacing, HLS/transcode
+  caches, hardware acceleration, resource limits, cleanup and prioritized background
+  media optimization; subtitles, dual subtitles and explicitly requested AI translation.
+- Clients and formats: casting/Chromecast/AirPlay/PWA; video, Manga, Book and
+  Light Novel readers; Music, Audiobooks and conditional Games; progress/resume,
+  history and Collections.
+- Operations: complete Admin UI, monitoring/logs, backup, explicit migration,
+  security, automatic recovery and E2E coverage against Alpha-90 functionality.
+
+`ALPHA90_RECOVERY_PLAN.md` is the owner's recovery/parity reference, not a complete
+specification of extensions. These targets are not implemented capability claims.
+Latest decisions, fresh schema contracts, dependency approvals and the stopped
+Phase B still apply; legacy parity does not authorize active-database migrations.
+
 ## Remaining decisions and prerequisites
 
 1. Profile PIN recovery and profile creation limits when those operations are built.

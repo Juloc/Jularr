@@ -237,6 +237,12 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
+- Truncated visible text (`text-overflow: ellipsis`, line clamping or text clipped by
+  `overflow: hidden`) must expose its complete value through the owning shared
+  component, at minimum a localized tooltip usable by pointer, keyboard and touch.
+  Do not rely on the native `title` attribute alone. Prefer wrapping when practical;
+  essential information must remain accessible without hover. Clipped decoration
+  and layout containers without hidden text do not need tooltips.
 - Preserve Clean/Original, light/dark/system, and desktop/mobile/tablet
   accessibility. Player is a separate fullscreen page without Learning
   until its own design/PlaybackPlan contract exists.

@@ -144,6 +144,41 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(0)]
+        [DataRow(1)]
+        [DataRow(2)]
+        public void PageResponse_JsonRoundTrip_PreservesWireContract(int itemCount)
+        {
+            var items = Enumerable.Range(1, itemCount).Select(id => new ReadProfileResultV1(id, "Profile " + id, 1)).ToArray();
+            var original = new PageResult<ReadProfileResultV1>(items, new PageRequest(2, 2));
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            var json = JsonSerializer.Serialize(original, options);
+
+            // Read the public contract.
+            var restored = JsonSerializer.Deserialize<PageResult<ReadProfileResultV1>>(json, options)!;
+            restored.Validate();
+            Assert.AreEqual(2, restored.Page);
+            Assert.AreEqual(2, restored.PageSize);
+            CollectionAssert.AreEqual(items.Select(item => item.Id).ToArray(), restored.Items.Select(item => item.Id).ToArray());
+            Assert.AreEqual(json, JsonSerializer.Serialize(restored, options));
+
+            using var document = JsonDocument.Parse(json);
+            CollectionAssert.AreEquivalent(new[] { "items", "page", "pageSize" }, document.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
+        }
+
+        [TestMethod]
+        [DataRow("{\"items\":null,\"page\":1,\"pageSize\":1}")]
+        [DataRow("{\"items\":[],\"page\":0,\"pageSize\":1}")]
+        [DataRow("{\"items\":[],\"page\":1,\"pageSize\":101}")]
+        [DataRow("{\"items\":[],\"page\":100002,\"pageSize\":1}")]
+        [DataRow("{\"items\":[1,2],\"page\":1,\"pageSize\":1}")]
+        public void PageResponse_InvalidJsonBounds_UseExistingValidation(string json)
+        {
+            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            Assert.Throws<ArgumentException>(() => JsonSerializer.Deserialize<PageResult<long>>(json, options));
+        }
+
+        [TestMethod]
         public async Task Field_PostgresBindingAndProjection_EnforceNullability()
         {
             await using var database = new NpgsqlDataSourceBuilder(TestPostgres.ResolveConnectionString("Data Source=profile-data-fields")).Build();

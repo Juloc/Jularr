@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Text.RegularExpressions;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
@@ -9,6 +9,7 @@ using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using AdminWork = Jularr.Backend.Data.Admin.Media.V1.WorkDetailsV1;
+using UserWork = Jularr.Backend.Data.User.Media.V1.WorkDetailsV1;
 
 namespace Jularr.Backend.Tests
 {
@@ -60,12 +61,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, repeated.StatusCode);
 
             using var first = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?pageSize=1");
-            using var page = await first.Content.ReadFromJsonAsync<JsonDocument>();
-            Assert.AreEqual(1, page!.RootElement.GetProperty("items").GetArrayLength());
-            Assert.AreEqual(10L, page.RootElement.GetProperty("items")[0].GetProperty("id").GetInt64());
+            var page = (await first.Content.ReadFromJsonAsync<PageResult<UserWork>>())!;
+            Assert.AreEqual(1, page.Items.Count);
+            Assert.AreEqual(10L, page.Items[0].Id);
             using var next = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?page=2&pageSize=1");
-            using var nextPage = await next.Content.ReadFromJsonAsync<JsonDocument>();
-            Assert.AreEqual(0, nextPage!.RootElement.GetProperty("items").GetArrayLength());
+            var nextPage = (await next.Content.ReadFromJsonAsync<PageResult<UserWork>>())!;
+            Assert.AreEqual(0, nextPage.Items.Count);
 
             using var removed = await host.SendAsync(HttpMethod.Put, "/api/v1/watchlist/10", new UpdateWatchlistDataV1(false));
             Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode);
