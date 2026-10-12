@@ -115,6 +115,15 @@ consumption are connected. Library gates actual Services through their existing
 context/transaction. MediaTypes is separate; per-media/profile preferences,
 Arr+/Playback/Tracking module implementations and full branding remain open.
 
+The agreed functional module catalog is Library, Requests, Arr+, Playback,
+Readers and Tracking. Requests now has a manual whole-Work slice: active-profile
+language intent, moderation, atomic Wanted targets and pause/resume. Library and
+Requests are the implemented switches; no automatic Arr work is started. The
+remaining modules are not advertised as available. Tracking must be rebuilt from
+the desired progress/resume/history behavior, not copied from the buggy legacy
+implementation. Library's physical scanning/import integration still needs its
+focused technical contract before adapter or mount dependencies are added.
+
 1. Profile PIN recovery and profile creation limits when those operations are built.
 2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.
 3. NAS runtime/access support and complete mount/container configuration;
@@ -124,7 +133,8 @@ Arr+/Playback/Tracking module implementations and full branding remain open.
 Role authorization, session revocation/rotation, Owner account directory/edit/approval
 and Owner catalog description/manual translation editing are implemented. Account
 updates protect the last enabled Owner and invalidate sessions after role/status
-changes; stale catalog/account edits cannot overwrite newer data. These use existing
+changes. Account replacement uses last-write-wins without a pre-read or timestamp
+input; catalog edits retain their version protection. These use existing
 baseline tables. Storage/NAS, media pages, standalone Arr, takeover and Player remain
 unfinished. Implement the shared owners in that order, with the same pipeline
 for native and external downloaders and the same Storage locations for imports/playback.

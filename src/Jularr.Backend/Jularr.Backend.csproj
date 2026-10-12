@@ -11,6 +11,7 @@
     <ProjectReference Include="../Jularr.Integrations/Jularr.Integrations.csproj" />
     <EmbeddedResource Include="../../database/Account.sql" LogicalName="Jularr.Database.Account.sql" />
     <EmbeddedResource Include="../../database/Media.sql" LogicalName="Jularr.Database.Media.sql" />
+    <EmbeddedResource Include="../../database/Acquisition.sql" LogicalName="Jularr.Database.Acquisition.sql" />
     <EmbeddedResource Include="../../database/Instance.sql" LogicalName="Jularr.Database.Instance.sql" />
   </ItemGroup>
 </Project>

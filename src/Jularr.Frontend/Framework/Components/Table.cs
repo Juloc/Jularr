@@ -12,6 +12,12 @@ public sealed class Table<TData>(IReadOnlyList<TData> rows) : IUiComponent where
 {
     private readonly List<Column> _columns = [];
 
+    public Table<TData> Content(string labelKey, Func<TData, IUiComponent> render)
+    {
+        _columns.Add(new Column(labelKey, render));
+        return this;
+    }
+
     public Table<TData> Text<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
         => Add(selector, labelKey, value => new DataValue(value));
 

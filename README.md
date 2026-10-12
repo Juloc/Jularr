@@ -103,15 +103,15 @@ Instanz-, Account-, Storage-, Provider- und Regelverwaltung bleiben Owner-only.
 Rollenänderungen wirken auch mit bestehenden Cookies; Writes prüfen die Rolle erneut
 unter derselben Session-Transaktion. Owner verwalten Accounts unter `/Admin/Accounts`
 und UI-Beschreibungen/Übersetzungen unter `/Admin/Localization`; Settings verlinkt
-die jeweils freigegebenen Bereiche. Requests/Wanted und Medieninventar bleiben offen.
+die jeweils freigegebenen Bereiche. Medieninventar bleibt offen.
 
 `/Admin/Instance` bietet Ownern Instanzname und Sprache über
 `ReadInstanceSettingsV1` / `UpdateInstanceSettingsV1` mit Versionsprüfung.
 Die API liegt unter `GET|PUT /api/v1/admin/instance/settings`; SQL und
 Sprachvalidierung bleiben im Backend. Eine neue Installation benötigt hierfür
 die frische [Instance-Baseline](database/Instance.sql) nach der Account-Baseline.
-Das einzige schaltbare Modul ist derzeit Library: Abschalten sperrt die realen
-Medien-/Watchlist-Services und entfernt ihre Links, ohne Daten zu löschen.
+Library und Requests sind schaltbar: Abschalten sperrt die jeweiligen Services
+und entfernt ihre Links, ohne Daten zu löschen.
 User `ReadInstanceCapabilitiesV1` liefert die verfügbaren Funktionen; Public
 `ReadInstancePresentationV1` liefert ausschließlich Name und Sprachdefault.
 Shell/Login verwenden den Namen, bei eigener Benennung mit „by Jularr“.
@@ -125,12 +125,23 @@ und `/Watchlist` lesen persistierte Medien und bearbeiten ausschließlich die
 Merkliste des aktiven Profils. `/Admin/Requests/Users` liest das vorhandene
 Kontenverzeichnis; Quoten/Regelzuweisungen sind noch nicht implementiert.
 Diese Grundlage benötigt zusätzlich die frische [Media-Baseline](database/Media.sql).
+
+`/Details/{id}` legt sprachbezogene Anfragen an; `/Requests` zeigt ausschließlich
+Anfragen des aktiven Profils. `/Admin/Requests` bietet die Status-Tabs und
+Freigabe/Ablehnung durch Owner/MediaManager. Freigabe verknüpft atomar einen
+gemeinsamen Work-Target; `/Admin/Wanted` zeigt die gewünschten Sprachen und
+pausiert/aktiviert diesen Bedarf. Wiederholte aktive Anfragen erzeugen keine
+Dubletten. Paging bleibt eine begrenzte SELECT-Abfrage ohne Counts/HasMore.
+Eine frische Installation benötigt dafür [Acquisition.sql](database/Acquisition.sql)
+nach Account und Media. Regeln/Quoten, einzelne Episoden/Editionen, Stornierung,
+automatische Suche, Downloads und Import sind noch nicht verbunden.
+
 Medienmodule/Profilsichtbarkeit, Metadatensprachregeln, Dateien/Cover, Monitoring,
 Arr und Player sind damit noch nicht fertig. Bestehende Datenbanken werden nicht
 automatisch erweitert; die lokale Vorschau bleibt separat.
 
 `Service.Admin.Account.V1` bietet `ReadAccountsV1`, `ReadAccountV1` und
-`UpdateAccountV1`: Name, Rolle und Aktivierung, mit Versionsprüfung und Schutz des
+`UpdateAccountV1`: Name, Rolle und Aktivierung, mit Last-write-wins und Schutz des
 letzten aktiven Owners. Rollen-/Statusänderungen widerrufen alte Sessions; Freigabe
 verifiziert keine E-Mail. Parallele Account-Mutationen laufen serialisierbar und
 melden einen bereinigten `concurrent_change`-Konflikt statt Daten zu überschreiben.

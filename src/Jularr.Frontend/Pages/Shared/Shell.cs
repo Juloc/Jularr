@@ -28,6 +28,21 @@ public sealed class Shell(
             secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
         }
 
+        if (texts.Capabilities?.CanRequest is true)
+        {
+            primary.Add(new ShellLink("requests.title", "/Requests", "home"));
+        }
+
+        if (texts.Capabilities?.CanManageRequests is true)
+        {
+            secondary.Add(new ShellLink("admin.requests.title", "/Admin/Requests", "settings"));
+        }
+
+        if (texts.Capabilities?.CanManageWanted is true)
+        {
+            secondary.Add(new ShellLink("admin.wanted.title", "/Admin/Wanted", "settings"));
+        }
+
         // Render shared navigation.
         new Header(
             new Brand(compact: true),

@@ -295,6 +295,9 @@ namespace Jularr.Backend.Tests
                     using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Media.sql")!;
                     using var reader = new StreamReader(schema);
                     await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                    using var acquisitionSchema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Acquisition.sql")!;
+                    using var acquisitionReader = new StreamReader(acquisitionSchema);
+                    await fixture.RunSqlAsync(await acquisitionReader.ReadToEndAsync());
                 }
 
                 var hasher = new PasswordHasher<AccountAuthenticationData>();

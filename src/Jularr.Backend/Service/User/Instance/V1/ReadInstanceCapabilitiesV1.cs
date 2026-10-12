@@ -25,16 +25,21 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 FROM
                     "InstanceModules" AS module
                 WHERE
-                    module."Key" = 'Library';
+                    module."Key" IN ('Library', 'Requests');
                 """;
-            var module = await Context.ReadSql.ReadRequiredAsync<InstanceModuleData>(sql, CancellationToken);
+            var modules = await Context.ReadSql.ReadListAsync<InstanceModuleData>(sql, CancellationToken);
+            var library = modules.Any(module => module.Key == "Library" && module.IsEnabled);
+            var requests = modules.Any(module => module.Key == "Requests" && module.IsEnabled);
 
             // Reuse verified central grants.
             var permissions = ServiceGate.GetPermissions(Auth.AccountId, Auth.ProfileId, Auth.ProfileOwnerAccountId, Auth.AccountRoleTypeId);
             return new InstanceCapabilitiesDetailsV1(
-                module.IsEnabled && permissions.Contains("profile.media.read", StringComparer.Ordinal),
-                module.IsEnabled && permissions.Contains("media.manual.update", StringComparer.Ordinal),
-                module.IsEnabled && permissions.Contains("profile.watchlist.update", StringComparer.Ordinal));
+                library && permissions.Contains("profile.media.read", StringComparer.Ordinal),
+                library && permissions.Contains("media.manual.update", StringComparer.Ordinal),
+                library && permissions.Contains("profile.watchlist.update", StringComparer.Ordinal),
+                requests && permissions.Contains("profile.requests.update", StringComparer.Ordinal),
+                requests && permissions.Contains("requests.update", StringComparer.Ordinal),
+                requests && permissions.Contains("wanted.update", StringComparer.Ordinal));
         }
     }
 }

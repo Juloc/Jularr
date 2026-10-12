@@ -7,9 +7,9 @@ embedded as `Jularr.Database.Account.sql` for isolated tests. The host never app
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
 its initial language. It is embedded as `Jularr.Database.Instance.sql` for focused
 isolated tests; it is never installed automatically on an existing database.
-Owner services provide version-checked settings/module edits. Library is the only
-implemented module switch; disabling it retains data and blocks manual media and
-watchlist Services. Public presentation exposes only name/default language, User
+Owner services provide version-checked settings/module edits. Library gates manual
+media/watchlist Services; Requests gates request creation/moderation and manual
+Wanted management. Disabling either retains data. Public presentation exposes only name/default language, User
 capabilities expose implemented grants, and Razor consumes both. Setup module
 progress, per-media/profile visibility and Arr+/Playback/Tracking remain pending.
 
@@ -17,6 +17,16 @@ progress, per-media/profile visibility and Arr+/Playback/Tracking remain pending
 `Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles and
 WatchlistEntries. It is not a migration for an existing database. Media integration
 tests explicitly install it in their disposable Account fixture.
+
+`Acquisition.sql` follows Account and Media in a fresh installation. It adds
+AcquisitionRequests, their status catalog, shared whole-Work WantedItems and
+RequestTargets. A profile's active Work/language intent is unique; only approval
+creates its Wanted link, atomically in the same transaction. Owner/MediaManager
+moderate Open requests and pause/resume Wanted. Language intent uses UiLocaleId.
+This is manual administration, not an automatic downloader or import pipeline.
+Unit/edition targets, rules/quotas, cancellation, search/queue/history and automatic
+fulfilment remain pending. Tests explicitly install this embedded baseline only
+in their disposable Media fixture; the host never installs it.
 
 The seven seeded media types follow the original table snapshot. Anime remains a
 Movie/Series classification, not another media type. A manually created Work has

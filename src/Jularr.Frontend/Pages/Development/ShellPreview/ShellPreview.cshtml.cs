@@ -53,7 +53,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
                 "admin-requests" => ActivatorUtilities.CreateInstance<RequestsModel>(HttpContext.RequestServices),
                 "admin-rules" => new RulesModel(),
                 "admin-users" => ActivatorUtilities.CreateInstance<UsersModel>(HttpContext.RequestServices),
-                "admin-wanted" => new WantedModel(),
+                "admin-wanted" => ActivatorUtilities.CreateInstance<WantedModel>(HttpContext.RequestServices),
                 "admin-works" => ActivatorUtilities.CreateInstance<WorksModel>(HttpContext.RequestServices),
                 "admin-work" => ActivatorUtilities.CreateInstance<WorkModel>(HttpContext.RequestServices),
                 "admin-library" => new LibraryModel(),
