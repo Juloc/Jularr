@@ -6,13 +6,12 @@ namespace Jularr.Backend.Data.Logic.Account
 {
     internal sealed class AccountUpdateData : BaseData
     {
-        public AccountUpdateData(long id, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, DateTime updatedAt)
+        public AccountUpdateData(long id, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled)
         {
             Id = id;
             DisplayName = displayName;
             AccountRoleTypeId = accountRoleTypeId;
             IsEnabled = isEnabled;
-            UpdatedAt = updatedAt;
         }
 
         [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
@@ -26,8 +25,5 @@ namespace Jularr.Backend.Data.Logic.Account
 
         [DataField(typeof(AccountFields), nameof(AccountFields.IsEnabled))]
         public bool IsEnabled { get; set; }
-
-        [DataField(typeof(AccountFields), nameof(AccountFields.UpdatedAt))]
-        public DateTime UpdatedAt { get; set; }
     }
 }

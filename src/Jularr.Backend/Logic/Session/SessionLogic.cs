@@ -10,6 +10,28 @@ namespace Jularr.Backend.Logic.Session
 {
     internal static class SessionLogic
     {
+        public static async Task RevokeOutdatedAccountSessionsAsync(this LogicContext ctx, AccountParameters parameters, CancellationToken ct)
+        {
+            // Revoke obsolete credential proofs.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountSessions" AS session
+                SET
+                    "RevokedAt" = statement_timestamp()
+                FROM
+                    "Accounts" AS account
+                WHERE
+                    account."Id" = @AccountId
+                    AND session."AccountId" = account."Id"
+                    AND session."CredentialRevision" <> account."CredentialRevision"
+                    AND session."RevokedAt" IS NULL;
+                """;
+            sql.Parameters.Add(parameters);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task<SessionCredentialsData> SelectSessionProfileAsync(this LogicContext ctx, SessionParameters proof, AccountProfileData target, CancellationToken ct)
         {
             // Lock the account/profile link.
@@ -191,14 +213,8 @@ namespace Jularr.Backend.Logic.Session
                 """;
             sql.Parameters.Add(parameters);
 
-            try
-            {
-                return await ctx.ReadRequiredAsync<SessionAuthenticationData>(sql, ct);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new UnauthorizedAccessException("The profile session is unavailable.");
-            }
+            return await ctx.ReadOptionalAsync<SessionAuthenticationData>(sql, ct)
+                ?? throw new UnauthorizedAccessException("The profile session is unavailable.");
         }
     }
 }

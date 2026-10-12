@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Admin.Account.V1;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Enums.Sql;
+using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Account;
 using Jularr.Backend.Service.Core;
@@ -46,23 +47,24 @@ namespace Jularr.Backend.Tests
             await second.BeginAsync(SqlAccessMode.ReadWrite, IsolationLevel.Serializable);
             var firstContext = new LogicContext(first);
             var secondContext = new LogicContext(second);
-            var firstAccount = await firstContext.ReadAccountAsync(41, default);
-            var secondAccount = await secondContext.ReadAccountAsync(42, default);
-            var firstVersion = firstAccount.UpdatedAt;
-            var secondVersion = secondAccount.UpdatedAt;
-            firstAccount.AccountRoleTypeId = AccountRoleType.User;
-            secondAccount.AccountRoleTypeId = AccountRoleType.User;
+            // Establish competing transaction snapshots.
+            var sql = new SqlStatement();
+            sql.Statement = """SELECT count(*) FROM "Accounts" WHERE "AccountRoleTypeId" = 1;""";
+            await firstContext.ReadSql.ExecuteScalarAsync(sql);
+            await secondContext.ReadSql.ExecuteScalarAsync(sql);
+            var firstAccount = new AccountUpdateData(41, "First", AccountRoleType.User, true);
+            var secondAccount = new AccountUpdateData(42, "Second", AccountRoleType.User, true);
 
-            var results = await Task.WhenAll(DemoteAsync(firstContext, first, firstAccount, firstVersion), DemoteAsync(secondContext, second, secondAccount, secondVersion));
+            var results = await Task.WhenAll(DemoteAsync(firstContext, first, firstAccount), DemoteAsync(secondContext, second, secondAccount));
             Assert.AreEqual(1, results.Count(committed => committed));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"AccountRoleTypeId\" = 1 AND \"IsEnabled\""));
         }
 
-        private static async Task<bool> DemoteAsync(LogicContext context, SqlContext sql, Backend.Data.Logic.Account.AccountUpdateData account, DateTime version)
+        private static async Task<bool> DemoteAsync(LogicContext context, SqlContext sql, AccountUpdateData account)
         {
             try
             {
-                await context.UpdateAccountAsync(account, version, default);
+                await context.UpdateAccountAsync(account, default);
                 await sql.CommitAsync();
                 return true;
             }
@@ -128,25 +130,23 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Account_OwnerEdits_RejectStaleVersionsAndLastOwnerRemoval()
+        public async Task Account_OwnerEdits_LastWriteWinsAndLastOwnerIsRetained()
         {
             await using var host = await Host.CreateAsync();
             await SignInAsync(host);
-            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/42");
-            var account = (await read.Content.ReadFromJsonAsync<AccountDetailsV1>())!;
             using var update = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/42",
-                new UpdateAccountDataV1("Managed account", AccountRoleType.MediaManager, true, account.UpdatedAt));
+                new UpdateAccountDataV1("Managed account", AccountRoleType.MediaManager, true));
             Assert.AreEqual(HttpStatusCode.OK, update.StatusCode, await update.Content.ReadAsStringAsync());
             Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"AccountRoleTypeId\" FROM \"Accounts\" WHERE \"Id\" = 42"));
-            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/42",
-                new UpdateAccountDataV1("Stale", AccountRoleType.User, true, account.UpdatedAt));
-            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
-            StringAssert.Contains(await stale.Content.ReadAsStringAsync(), "outdated_version");
+            using var latest = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/42",
+                new UpdateAccountDataV1("Latest", AccountRoleType.User, true));
+            Assert.AreEqual(HttpStatusCode.OK, latest.StatusCode, await latest.Content.ReadAsStringAsync());
+            Assert.AreEqual("Latest", await host.ScalarAsync("SELECT \"DisplayName\" FROM \"Accounts\" WHERE \"Id\" = 42"));
 
             using var ownerRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/41");
             var owner = (await ownerRead.Content.ReadFromJsonAsync<AccountDetailsV1>())!;
-            foreach (var data in new[] { new UpdateAccountDataV1(owner.DisplayName, AccountRoleType.User, true, owner.UpdatedAt),
-                new UpdateAccountDataV1(owner.DisplayName, AccountRoleType.Owner, false, owner.UpdatedAt) })
+            foreach (var data in new[] { new UpdateAccountDataV1(owner.DisplayName, AccountRoleType.User, true),
+                new UpdateAccountDataV1(owner.DisplayName, AccountRoleType.Owner, false) })
             {
                 using var denied = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/41", data);
                 Assert.AreEqual(HttpStatusCode.BadRequest, denied.StatusCode, await denied.Content.ReadAsStringAsync());
@@ -165,7 +165,7 @@ namespace Jularr.Backend.Tests
             using var initial = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/42");
             var account = (await initial.Content.ReadFromJsonAsync<AccountDetailsV1>())!;
             using var approval = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/42",
-                new UpdateAccountDataV1(account.DisplayName, AccountRoleType.User, true, account.UpdatedAt));
+                new UpdateAccountDataV1(account.DisplayName, AccountRoleType.User, true));
             Assert.AreEqual(HttpStatusCode.OK, approval.StatusCode, await approval.Content.ReadAsStringAsync());
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"EmailVerifiedAt\" FROM \"Accounts\" WHERE \"Id\" = 42"));
             await host.Fixture.RunSqlAsync(
@@ -179,7 +179,7 @@ namespace Jularr.Backend.Tests
                 using var current = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/42");
                 account = (await current.Content.ReadFromJsonAsync<AccountDetailsV1>())!;
                 using var mutation = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/42",
-                    new UpdateAccountDataV1(account.DisplayName, AccountRoleType.User, enabled, account.UpdatedAt));
+                    new UpdateAccountDataV1(account.DisplayName, AccountRoleType.User, enabled));
                 Assert.AreEqual(HttpStatusCode.OK, mutation.StatusCode, await mutation.Content.ReadAsStringAsync());
             }
 
@@ -196,10 +196,10 @@ namespace Jularr.Backend.Tests
             var html = await page.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "value=\"2\" selected=\"selected\"");
             var csrf = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
-            var version = Regex.Match(html, "name=\"UpdatedAt\" value=\"([^\"]+)\"").Groups[1].Value;
+            Assert.IsFalse(html.Contains("name=\"UpdatedAt\"", StringComparison.Ordinal));
             using var update = await host.SendAsync(HttpMethod.Post, "/Admin/Accounts?AccountId=42", new Dictionary<string, string>
             {
-                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf), ["UpdatedAt"] = WebUtility.HtmlDecode(version),
+                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf),
                 ["DisplayName"] = "Edited in Razor", ["AccountRoleTypeId"] = "3", ["IsEnabled"] = "True"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, update.StatusCode, await update.Content.ReadAsStringAsync());
@@ -208,7 +208,7 @@ namespace Jularr.Backend.Tests
             // Failed binding must not become false.
             using var invalid = await host.SendAsync(HttpMethod.Post, "/Admin/Accounts?AccountId=42", new Dictionary<string, string>
             {
-                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf), ["UpdatedAt"] = WebUtility.HtmlDecode(version),
+                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf),
                 ["DisplayName"] = "Unexpected mutation", ["AccountRoleTypeId"] = "3", ["IsEnabled"] = "not-a-boolean"
             });
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);

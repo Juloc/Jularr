@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Logic.Session;
 using Jularr.Backend.Data.Logic.Setup;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Profile;
+using Jularr.Backend.Logic.Session;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
@@ -18,88 +19,48 @@ namespace Jularr.Backend.Logic.Account
         private static readonly AccountAuthenticationData MissingAccount = new(1, 1, null, false, false);
         private static readonly string MissingPasswordHash = PasswordHasher.HashPassword(MissingAccount, Guid.NewGuid().ToString());
 
-        public static Task<AccountUpdateData> ReadAccountAsync(this LogicContext ctx, long accountId, CancellationToken ct)
+        public static async Task UpdateAccountAsync(this LogicContext ctx, AccountUpdateData data, CancellationToken ct)
         {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    account."Id",
-                    account."DisplayName",
-                    account."AccountRoleTypeId",
-                    account."IsEnabled",
-                    account."UpdatedAt"
-                FROM
-                    "Accounts" AS account
-                WHERE
-                    account."Id" = @AccountId
-                FOR UPDATE OF account;
-                """;
-            sql.Parameters.Add(new AccountParameters(accountId));
-            return ctx.ReadRequiredAsync<AccountUpdateData>(sql, ct);
-        }
-
-        public static async Task UpdateAccountAsync(this LogicContext ctx, AccountUpdateData data, DateTime expectedVersion, CancellationToken ct)
-        {
-            data.Validate();
-            if (data.UpdatedAt != expectedVersion)
-            {
-                throw new DataValidationException(nameof(data.UpdatedAt), "outdated_version");
-            }
-
             // Retain an enabled Owner.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH changed AS (
-                    UPDATE
-                        "Accounts" AS account
-                    SET
-                        "DisplayName" = @DisplayName,
-                        "AccountRoleTypeId" = @AccountRoleTypeId,
-                        "IsEnabled" = @IsEnabled,
-                        "CredentialRevision" = account."CredentialRevision" + CASE
-                            WHEN account."AccountRoleTypeId" <> @AccountRoleTypeId OR account."IsEnabled" <> @IsEnabled THEN 1
-                            ELSE 0
-                        END,
-                        "UpdatedAt" = clock_timestamp()
-                    WHERE
-                        account."Id" = @Id
-                        AND (account."AccountRoleTypeId" <> 1 OR (@AccountRoleTypeId = 1 AND @IsEnabled)
-                            OR EXISTS (
-                                SELECT 1
-                                FROM "Accounts" AS owner
-                                WHERE owner."Id" <> @Id
-                                    AND owner."AccountRoleTypeId" = 1
-                                    AND owner."IsEnabled" = TRUE
-                            ))
-                    RETURNING
-                        account."Id",
-                        account."CredentialRevision"
-                ), revoked AS (
-                    UPDATE
-                        "AccountSessions" AS session
-                    SET
-                        "RevokedAt" = statement_timestamp()
-                    FROM
-                        changed
-                    WHERE
-                        session."AccountId" = changed."Id"
-                        AND session."CredentialRevision" <> changed."CredentialRevision"
-                        AND session."RevokedAt" IS NULL
-                    RETURNING
-                        session."Id"
-                )
-                SELECT
-                    changed."Id"
-                FROM
-                    changed;
+                UPDATE
+                    "Accounts" AS account
+                SET
+                    "DisplayName" = @DisplayName,
+                    "AccountRoleTypeId" = @AccountRoleTypeId,
+                    "IsEnabled" = @IsEnabled,
+                    "CredentialRevision" = account."CredentialRevision" + CASE
+                        WHEN account."AccountRoleTypeId" <> @AccountRoleTypeId OR account."IsEnabled" <> @IsEnabled THEN 1
+                        ELSE 0
+                    END,
+                    "UpdatedAt" = clock_timestamp()
+                WHERE
+                    account."Id" = @Id
+                    AND (
+                        account."AccountRoleTypeId" <> 1
+                        OR (@AccountRoleTypeId = 1 AND @IsEnabled)
+                        OR EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "Accounts" AS owner
+                            WHERE
+                                owner."Id" <> @Id
+                                AND owner."AccountRoleTypeId" = 1
+                                AND owner."IsEnabled"
+                        )
+                    );
                 """;
             sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<AccountIdData>(sql, ct) is null)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.AccountRoleTypeId), "invalid_transition");
             }
+
+            // Same transaction, canonical Session writer.
+            await ctx.RevokeOutdatedAccountSessionsAsync(new AccountParameters(data.Id), ct);
         }
 
         public static async Task<AccountAuthenticationData> AuthenticatePasswordAsync(this LogicContext ctx, AccountEmailParameters parameters, string password, CancellationToken ct)
@@ -152,33 +113,53 @@ namespace Jularr.Backend.Logic.Account
 
         public static async Task<long?> CreateAccountAsync(this LogicContext ctx, AccountCreationData data, long uiLocaleId, CancellationToken ct)
         {
-            // Require an existing Owner.
+            // Registration follows Owner setup.
+            if (data.AccountRoleTypeId != AccountRoleType.Owner)
+            {
+                var ownerSql = new SqlStatement();
+                ownerSql.Statement =
+                    """
+                    SELECT
+                        account."Id"
+                    FROM
+                        "Accounts" AS account
+                    WHERE
+                        account."AccountRoleTypeId" = 1
+                        AND account."IsEnabled"
+                    ORDER BY
+                        account."Id"
+                    LIMIT 1
+                    FOR SHARE OF
+                        account;
+                    """;
+                if (await ctx.ReadOptionalAsync<AccountIdData>(ownerSql, ct) is null)
+                {
+                    throw new SecurityException("Owner setup is required before registration.");
+                }
+            }
+
+            // Create the account once.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                SELECT
-                    account."Id"
-                FROM
-                    "Accounts" AS account
-                WHERE
-                    account."AccountRoleTypeId" = 1
-                    AND account."IsEnabled" = TRUE
-                ORDER BY
-                    account."Id"
-                LIMIT 1
-                FOR SHARE OF
-                    account;
+                INSERT INTO
+                    "Accounts" ("Email", "DisplayName", "AccountRoleTypeId", "IsEnabled", "EmailVerifiedAt")
+                VALUES
+                    (@Email, @DisplayName, @AccountRoleTypeId, @IsEnabled, @EmailVerifiedAt)
+                ON CONFLICT ("Email") DO NOTHING
+                RETURNING
+                    "Id";
                 """;
-            try
+            sql.Parameters.Add(data);
+            var account = await ctx.ReadOptionalAsync<AccountIdData>(sql, ct);
+            if (account is null)
             {
-                await ctx.ReadRequiredAsync<AccountIdData>(sql, ct);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new SecurityException("Owner setup is required before registration.");
+                return null;
             }
 
-            return await ctx.InsertAccountAsync(data, uiLocaleId, ct);
+            // Create ownership atomically.
+            await ctx.CreateProfileAsync(new ProfileCreationData(account.Id, data.DisplayName, uiLocaleId), ct);
+            return account.Id;
         }
 
         public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext ctx, string email, string displayName, string password, long uiLocaleId, CancellationToken ct)
@@ -214,7 +195,7 @@ namespace Jularr.Backend.Logic.Account
 
             // Reuse canonical account/profile writes.
             var data = new AccountCreationData(email, displayName, true, null, AccountRoleType.Owner);
-            var id = await ctx.InsertAccountAsync(data, uiLocaleId, ct)
+            var id = await ctx.CreateAccountAsync(data, uiLocaleId, ct)
                 ?? throw new SecurityException("Initial Owner creation is unavailable.");
             var account = new AccountAuthenticationData(id, 1, null, true, false);
             await ctx.WritePasswordAsync(new AccountPasswordData(id, PasswordHasher.HashPassword(account, password)), ct);
@@ -237,33 +218,6 @@ namespace Jularr.Backend.Logic.Account
             }
 
             return account;
-        }
-
-        private static async Task<long?> InsertAccountAsync(this LogicContext ctx, AccountCreationData data, long uiLocaleId, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                INSERT INTO
-                    "Accounts" ("Email", "DisplayName", "AccountRoleTypeId", "IsEnabled", "EmailVerifiedAt")
-                VALUES
-                    (@Email, @DisplayName, @AccountRoleTypeId, @IsEnabled, @EmailVerifiedAt)
-                ON CONFLICT ("Email") DO NOTHING
-                RETURNING
-                    "Id";
-                """;
-            sql.Parameters.Add(data);
-
-            var account = await ctx.ReadOptionalAsync<AccountIdData>(sql, ct);
-            if (account is null)
-            {
-                // Never replace duplicate credentials.
-                return null;
-            }
-
-            // Create ownership atomically.
-            await ctx.CreateProfileAsync(new ProfileCreationData(account.Id, data.DisplayName, uiLocaleId), ct);
-            return account.Id;
         }
 
         public static async Task CreateRegistrationRequestAsync(this LogicContext ctx, AccountCreationData data, string password, long uiLocaleId, CancellationToken ct)

@@ -66,13 +66,12 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                     var states = new[] { new SelectOption("True", texts["admin.accounts.enabled"]), new SelectOption("False", texts["admin.accounts.disabled"]) };
                     split.Secondary.Add(new Form<UpdateAccountDataV1>(form =>
                     {
-                        form.Hidden(item => item.UpdatedAt);
                         form.Text(item => item.DisplayName, "admin.accounts.name");
                         form.Select(item => item.AccountRoleTypeId, "admin.accounts.role", roles);
                         form.Select(item => item.IsEnabled, "admin.accounts.status", states);
                         form.Submit("common.save");
                     }, Address(_selected.Id), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.UpdatedAt), _input is null ? null : Error));
+                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled), _input is null ? null : Error));
                     split.Secondary.Add(new P(new Text("admin.accounts.sessionWarning")));
 
                     // Assign existing profile access.
@@ -138,9 +137,9 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? displayName, AccountRoleType accountRoleTypeId, [BindRequired] bool isEnabled, DateTime updatedAt)
+        public async Task<IActionResult> OnPostAsync(string? displayName, AccountRoleType accountRoleTypeId, [BindRequired] bool isEnabled)
         {
-            _input = new UpdateAccountDataV1(displayName ?? "", accountRoleTypeId, isEnabled, updatedAt);
+            _input = new UpdateAccountDataV1(displayName ?? "", accountRoleTypeId, isEnabled);
             await update.ExecuteAsync<UpdateResult>(SelectedParameters(), _input, HttpContext.RequestAborted);
             TempData["AccountSaved"] = true;
             return LocalRedirect(Address(AccountId));

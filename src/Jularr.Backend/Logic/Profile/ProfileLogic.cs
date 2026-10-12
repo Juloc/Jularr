@@ -32,15 +32,8 @@ namespace Jularr.Backend.Logic.Profile
                 """;
             sql.Parameters.Add(data);
 
-            ProfileUpdateData profile;
-            try
-            {
-                profile = await ctx.ReadRequiredAsync<ProfileUpdateData>(sql, ct);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
-            }
+            var profile = await ctx.ReadOptionalAsync<ProfileUpdateData>(sql, ct)
+                ?? throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
 
             // Establish ownership before commit.
             await ctx.AddAccountProfileAsync(new AccountProfileData(data.OwnerAccountId, profile.Id), ct);
@@ -69,12 +62,6 @@ namespace Jularr.Backend.Logic.Profile
 
         public static async Task UpdateProfileAsync(this LogicContext ctx, ProfileUpdateData updateData, CancellationToken ct)
         {
-            ArgumentNullException.ThrowIfNull(ctx);
-            ArgumentNullException.ThrowIfNull(updateData);
-
-            // Validate the merged entity.
-            updateData.Validate();
-
             // Lock the enabled language.
             var sql = new SqlStatement();
             sql.Statement =

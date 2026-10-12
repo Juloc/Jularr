@@ -64,12 +64,11 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
     public sealed class UpdateAccountDataV1 : BaseData
     {
-        public UpdateAccountDataV1(string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, DateTime updatedAt)
+        public UpdateAccountDataV1(string displayName, AccountRoleType accountRoleTypeId, bool isEnabled)
         {
             DisplayName = displayName;
             AccountRoleTypeId = accountRoleTypeId;
             IsEnabled = isEnabled;
-            UpdatedAt = updatedAt;
         }
 
         [DataField(typeof(AccountFields), nameof(AccountFields.DisplayName))]
@@ -80,8 +79,5 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
         [DataField(typeof(AccountFields), nameof(AccountFields.IsEnabled))]
         public bool IsEnabled { get; }
-
-        [DataField(typeof(AccountFields), nameof(AccountFields.UpdatedAt))]
-        public DateTime UpdatedAt { get; }
     }
 }

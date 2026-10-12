@@ -3,6 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Account.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Account;
 using Jularr.Backend.Service.Core;
@@ -86,12 +87,9 @@ namespace Jularr.Backend.Service.Admin.Account.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            // Lock, merge, canonical write.
-            var data = await Context.ReadAccountAsync(Parameters.AccountId, CancellationToken);
-            data.Id = Parameters.AccountId;
-            var expectedVersion = data.UpdatedAt;
-            data.SetData(Data);
-            await Context.UpdateAccountAsync(data, expectedVersion, CancellationToken);
+            // Complete account replacement.
+            var data = new AccountUpdateData(Parameters.AccountId, Data.DisplayName, Data.AccountRoleTypeId, Data.IsEnabled);
+            await Context.UpdateAccountAsync(data, CancellationToken);
             return new UpdateResult(true);
         }
     }

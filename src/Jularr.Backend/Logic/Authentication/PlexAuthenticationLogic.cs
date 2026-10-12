@@ -50,7 +50,6 @@ namespace Jularr.Backend.Logic.Authentication
 
         public static async Task<PlexFlowData> ReadPlexFlowAsync(this LogicContext ctx, PlexChallengeParameters parameters, CancellationToken ct)
         {
-            parameters.Validate();
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -83,15 +82,8 @@ namespace Jularr.Backend.Logic.Authentication
                 """;
             sql.Parameters.Add(parameters);
 
-            PlexFlowData flow;
-            try
-            {
-                flow = await ctx.ReadRequiredAsync<PlexFlowData>(sql, ct);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
-            }
+            var flow = await ctx.ReadOptionalAsync<PlexFlowData>(sql, ct)
+                ?? throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
 
             // Verify the browser nonce.
             var proof = SHA256.HashData(Encoding.UTF8.GetBytes(parameters.BrowserNonce));

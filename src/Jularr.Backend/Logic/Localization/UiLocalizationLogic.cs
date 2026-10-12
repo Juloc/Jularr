@@ -120,7 +120,6 @@ namespace Jularr.Backend.Logic.Localization
 
         public static async Task UpdateUiDescriptionAsync(this LogicContext ctx, UiDescriptionUpdateData data, CancellationToken ct)
         {
-            data.Validate();
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -167,7 +166,6 @@ namespace Jularr.Backend.Logic.Localization
 
         public static async Task SaveUiTranslationAsync(this LogicContext ctx, UiTranslationSaveData data, CancellationToken ct)
         {
-            data.Validate();
             if (data.UiTranslationStatusTypeId is not (UiTranslationStatusType.Generated
                 or UiTranslationStatusType.Reviewed or UiTranslationStatusType.Manual))
             {
