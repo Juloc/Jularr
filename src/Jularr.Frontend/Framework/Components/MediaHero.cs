@@ -26,7 +26,7 @@ namespace Jularr.Frontend.Framework
             var parts = new List<IUiComponent>();
             if (backdropUrl is not null) parts.Add(new MediaImage(backdropUrl, "", 1280, 720, priority: true));
             parts.Add(new Div([.. body]).Class("media-hero__body"));
-            new Section([.. parts]).Class("media-hero").WriteTo(writer, encoder, texts);
+            new Section([.. parts]).Class(backdropUrl is null ? "media-hero media-hero--placeholder" : "media-hero").WriteTo(writer, encoder, texts);
         }
     }
 }

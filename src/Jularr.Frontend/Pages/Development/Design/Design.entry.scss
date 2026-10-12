@@ -1,0 +1,50 @@
+@use "../../../Framework/Components/Form";
+@use "../../../Framework/Components/Table";
+@use "../../../Framework/Components/Split";
+@use "../../../Framework/Components/Section";
+@use "../../../Framework/Components/ItemList";
+@use "../../../Framework/Components/Tabs";
+@use "../../../Framework/Components/NavigationTabs";
+@use "../../../Framework/Components/MediaHero";
+@use "../../../Framework/Components/MediaShelf";
+@use "../../../Framework/Components/MediaCard";
+@use "../../../Modules/Player/player";
+
+.design-lab {
+    &__buttons,
+    &__icons { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    &__icons { margin-top: 20px; color: var(--accent-text); }
+
+    &__artwork { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+    &__art {
+        height: 280px;
+        border-radius: var(--radius-panel);
+        background: center / cover no-repeat;
+        filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+
+        &--landscape { background-image: url("../../../Modules/Appearance/Original/hero-fuji.webp"); }
+        &--mascot { background-image: url("../../../Modules/Appearance/Original/heroine.webp"); background-size: contain; }
+    }
+
+    &__player {
+        fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+        .player { min-height: 360px; border-radius: var(--radius-panel); color: #fff; }
+        .player__video { height: 360px; }
+    }
+
+    &__references {
+        display: grid;
+        gap: 24px;
+        // Emit private-source image entries.
+        --appearance-reference: url("./References/appearance-approved.png");
+        --library-reference: url("./References/library-approved.png");
+
+        .media-image { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-panel); }
+    }
+}
+
+html[data-skin="clean"] .design-lab__artwork { display: none; }
+@media (max-width: 600px) {
+    .design-lab__artwork { grid-template-columns: 1fr; }
+    .design-lab__art { height: 220px; }
+}

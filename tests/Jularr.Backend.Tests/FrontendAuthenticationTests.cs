@@ -8,6 +8,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -16,6 +17,28 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class FrontendAuthenticationTests
     {
+        [TestMethod]
+        [DataRow("Development", HttpStatusCode.OK)]
+        [DataRow("Production", HttpStatusCode.NotFound)]
+        public async Task Design_EnvironmentGate_OnlyRendersDevelopmentExamples(string environment, HttpStatusCode expected)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            host.Services.GetRequiredService<IHostEnvironment>().EnvironmentName = environment;
+            using var response = await host.SendAsync(HttpMethod.Get, "/Design");
+            Assert.AreEqual(expected, response.StatusCode);
+            if (expected != HttpStatusCode.OK) return;
+
+            // Real components, no playback client.
+            var html = await response.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "data-accent-input=\"true\"");
+            StringAssert.Contains(html, "aria-invalid=\"true\"");
+            StringAssert.Contains(html, "media-hero--placeholder");
+            StringAssert.Contains(html, "appearance-approved-");
+            StringAssert.Contains(html, "data-start-url=\"\"");
+            Assert.IsFalse(Regex.IsMatch(html, "<script[^>]*player-[^>]*\\.js"));
+            Assert.IsTrue(response.Headers.CacheControl!.NoStore);
+        }
+
         [TestMethod]
         public async Task Razor_PageFolders_PreservePublicRoutes()
         {

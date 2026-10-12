@@ -13,6 +13,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Server-side rendering (SSR), **not** a JavaScript SPA. The response is complete,
   encoded HTML. JavaScript is reserved for unavoidable client interactions
   such as playback; no client hydration or translation-bundle fetching.
+- Server-rendered fragment navigation is approved to keep the application shell
+  and active Player alive. Keep normal full-page routes usable without JavaScript;
+  authorization, form validation and rendering stay server-owned.
 - Frontend owns UI appearance, accessible interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
@@ -245,11 +248,21 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   essential information must remain accessible without hover. Clipped decoration
   and layout containers without hidden text do not need tooltips.
 - Preserve Clean/Original, light/dark/system, and desktop/mobile/tablet
-  accessibility. Player is a separate fullscreen page without Learning
-  until its own design/PlaybackPlan contract exists.
+  accessibility. Full Player and minimized Now Playing are presentations of the
+  same playback session; keep the media element outside exchanged page content.
+  Learning remains out of the current implementation scope.
 - Display the skin names as **Original** and **Clean**. Clean is neutral with a purple
   accent and no ornamental artwork; Original uses the restored ink/paper/blossom
   treatment. Both consume the same central tokens and components, never separate pages.
+- Original's default seed is Jularr red (`#c8102e`); Clean's is Jularr purple
+  (`#7c3aed`). Derive light/dark surfaces, readable accent labels and artwork hue
+  from one selected seed through the shared Appearance palette. Theme artwork,
+  the mascot and Jularr marks follow the accent; media artwork, provider logos
+  and semantic status colors do not. Current choices are device-local; do not
+  imply implemented instance/profile policy or persistence.
+- Development-only design workshops may show explicitly labeled sample data and
+  disabled component states. They must not start playback or pretend to perform
+  business actions. Reuse real components and approved references, not copies.
 - Before completing a change, check the
   [CODEMAP](../src/Jularr.Frontend/CODEMAP.md),
   verify every displayed key is in the canonical English declaration,

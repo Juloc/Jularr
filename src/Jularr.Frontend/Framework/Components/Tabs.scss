@@ -7,7 +7,7 @@
         color: var(--muted);
 
         &:hover { color: var(--text); }
-        &--active { color: var(--accent); border-color: var(--accent); }
+        &--active { color: var(--accent-text); border-color: var(--accent); }
     }
     &__panel { min-width: 0; padding-block: 12px; }
 }

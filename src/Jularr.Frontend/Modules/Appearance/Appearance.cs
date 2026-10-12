@@ -10,7 +10,16 @@ namespace Jularr.Frontend.Modules.Appearance
             // Independent style and brightness.
             var content = new Div(
                 Group("appearance.style", "skin", texts, ("original", "appearance.original"), ("clean", "appearance.clean")),
-                Group("appearance.brightness", "mode", texts, ("system", "appearance.system"), ("light", "appearance.light"), ("dark", "appearance.dark")))
+                Group("appearance.brightness", "mode", texts, ("system", "appearance.system"), ("light", "appearance.light"), ("dark", "appearance.dark")),
+                new Div(
+                    new Label(new Text("appearance.accent"), new Input().Attribute("type", "color").Attribute("value", "#7c3aed")
+                        .Attribute("data-accent-input", "true").Attribute("aria-label", texts["appearance.accent"]),
+                        new Span().Attribute("data-accent-value", "true")).Class("appearance__color"),
+                    new Div(
+                        new Button(new Text("appearance.jularrRed")).Attribute("data-set-accent", "#c8102e").Attribute("aria-pressed", "false"),
+                        new Button(new Text("appearance.jularrPurple")).Attribute("data-set-accent", "#7c3aed").Attribute("aria-pressed", "false"),
+                        new Button(new Text("appearance.accentDefault")).Attribute("data-reset-accent", "true")).Class("appearance__choices"),
+                    new P(new Text("appearance.devicePreference")).Class("appearance__hint")))
                 .Class("appearance__options");
 
             if (collapsible)
@@ -33,5 +42,6 @@ namespace Jularr.Frontend.Modules.Appearance
 
         private sealed class Details(params IUiComponent[] content) : HtmlElement("details", content);
         private sealed class Summary(params IUiComponent[] content) : HtmlElement("summary", content);
+        private sealed class Label(params IUiComponent[] content) : HtmlElement("label", content);
     }
 }

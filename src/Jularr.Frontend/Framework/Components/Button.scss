@@ -16,13 +16,13 @@
 
     &:hover:not(:disabled) { background: var(--surface-hover); }
     &:disabled { opacity: .65; cursor: not-allowed; }
-    &[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+    &[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
 
     &--primary {
         border-color: var(--accent);
         background: var(--accent);
         color: var(--accent-contrast);
 
-        &:hover:not(:disabled) { filter: brightness(1.06); background: var(--accent); }
+        &:hover:not(:disabled) { background: var(--accent-hover); }
     }
 }

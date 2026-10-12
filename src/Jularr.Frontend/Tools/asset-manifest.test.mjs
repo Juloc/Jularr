@@ -24,9 +24,17 @@ test("shared asset and page/module entries have separate manifests", () => {
         "Pages/User/Discover/Index.entry.scss",
         "Pages/User/Settings/Settings.entry.scss",
         "Pages/Account/Login/Login.entry.scss",
+        "Pages/Development/Design/Design.entry.scss",
         "Modules/Player/player.entry.ts"
     ]) assert.ok(manifest[key], "missing entry " + key);
     assert.notEqual(manifest["Pages/User/Discover/Index.entry.scss"].file, manifest["Assets/Shared/shell.entry.scss"].file);
+});
+
+test("design references and Original artwork have fingerprinted image entries", () => {
+    for (const image of ["Modules/Appearance/Original/hero-torii.webp", "Modules/Appearance/Original/heroine.webp",
+        "Pages/Development/Design/References/appearance-approved.png", "Pages/Development/Design/References/library-approved.png"]) {
+        assert.ok(manifest[image]?.file, image);
+    }
 });
 
 test("SVG sprite contains every compiled icon and no unhashed sprite", () => {

@@ -64,6 +64,7 @@ html[data-skin="original"] .app-sidebar {
         pointer-events: none;
         background: url("../../Modules/Appearance/Original/blossom-branch.webp") left bottom / auto 100% no-repeat;
         opacity: .25;
+        filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
         mask-image: linear-gradient(to top, #000, transparent);
     }
 }
@@ -79,7 +80,7 @@ html[data-skin="original"] .app-sidebar {
     font-weight: 550;
 }
 .nav-link:hover { background: var(--surface-hover); color: var(--text); }
-.nav-link.is-active { background: var(--accent-soft); color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.nav-link.is-active { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 3px 0 var(--accent); }
 @media (max-width: 780px) { .app-sidebar { display: none; } }
 
 .mobile-navigation { display: none; }
@@ -106,7 +107,7 @@ html[data-skin="original"] .app-sidebar {
         font-size: 10px;
         color: var(--muted);
     }
-    .mobile-link.is-active { color: var(--accent); }
+    .mobile-link.is-active { color: var(--accent-text); }
 }
 
 .app-layout {

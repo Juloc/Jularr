@@ -72,11 +72,11 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 .page-subnav { display: flex; gap: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .page-subnav a { color: var(--muted); padding: 9px 13px; border-bottom: 2px solid transparent; text-decoration: none; }
 .page-subnav a:hover { color: var(--text); }
-.page-subnav a.is-active { color: var(--accent); border-bottom-color: var(--accent); }
+.page-subnav a.is-active { color: var(--accent-text); border-bottom-color: var(--accent); }
 .page-section h2 { font-size: 18px; margin: 0 0 12px; }
 .preview-screen-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .preview-screen-links a { text-decoration: none; border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; }
-.preview-screen-links a[aria-current="page"] { border-color: var(--accent); color: var(--accent); }
+.preview-screen-links a[aria-current="page"] { border-color: var(--accent); color: var(--accent-text); }
 @media (max-width: 650px) {
     .page-screen { gap: 16px; }
 }

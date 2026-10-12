@@ -13,7 +13,7 @@ const ReportInterval = 15_000;
 const IdleDelay = 3_000;
 const WakeRetries = 6;
 
-const element = document.querySelector<HTMLElement>(".player[data-start-url]");
+const element = document.querySelector<HTMLElement>('.player[data-start-url]:not([data-start-url=""])');
 if (element) {
     void start(element);
 }

@@ -50,6 +50,17 @@ namespace Jularr.Frontend.Framework
             return AssetUrl(_icons.Value.File) + "#" + symbol;
         }
 
+        public string ImageUrl(string entry)
+        {
+            var file = Resolve(entry).File;
+            if (file is null || Path.GetExtension(file) is not (".webp" or ".png" or ".jpg" or ".jpeg" or ".avif" or ".svg"))
+            {
+                throw new InvalidOperationException("The frontend asset is not an image.");
+            }
+
+            return AssetUrl(file);
+        }
+
         public IHtmlContent Styles(params string[] entries)
         {
             var builder = new HtmlContentBuilder();

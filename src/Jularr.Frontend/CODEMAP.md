@@ -106,7 +106,7 @@ Shared conventions and Backend ownership:
 - [Generated private manifests](Assets/Generated): build-only, published alongside
   server content but never in `wwwroot`; regenerated from Vite and icon build.
 - [FrontendAssets.cs](Framework/FrontendAssets.cs): cached hashed manifest
-  resolver for Razor styles, scripts and icon URLs, without request-time builds.
+  resolver for Razor styles, scripts, icons and source image entries, without request-time builds.
 - [Shared shell SCSS](Assets/Shared/shell.entry.scss),
   [appearance module](Modules/Appearance/theme.entry.ts),
   [Discover CSS entry](Pages/User/Discover/Index.entry.scss),
@@ -115,9 +115,11 @@ Shared conventions and Backend ownership:
   page/module assets; component Sass imported only by their owners.
 - [Theme tokens](Modules/Appearance/Theme.scss): Clean purple and Original ink/paper
   skins over the same components; Original reuses artwork from the former Web project.
+- [Palette.ts](Modules/Appearance/Palette.ts): one accent-seed calculation for both
+  brightness palettes, readable labels, monochrome handling and Original artwork hue.
 - [Appearance](Modules/Appearance/Appearance.cs) and [styles](Modules/Appearance/appearance.entry.scss):
-  shared Original/Clean and System/Light/Dark controls in Login, Settings and preview.
-  The existing appearance script stores device-local choices and updates pressed states.
+  shared Original/Clean, System/Light/Dark and free-accent controls in Login, Settings and preview.
+  The appearance script stores device-local choices and updates shared tokens and pressed states.
   Instance defaults/profile override policy are not implemented here.
 - [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
   deduplicated hashed sprite, with icons also allowed beside modules/pages.
@@ -150,13 +152,21 @@ in `Modules/<Module>/`.
   [Activity](Pages/Admin/Activity/Activity.cshtml.cs).
 - [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs):
   Development-only, shares real page definitions without service data.
+- [Design lab](Pages/Development/Design/Design.cshtml.cs): `/Design`, Development-only
+  component workshop with labeled examples, disabled playback chrome and the earlier
+  approved Appearance/Library references. [Styles](Pages/Development/Design/Design.entry.scss)
+  import the actual component owners; no playback JS or business mutations.
 
 ## Verification and integration gaps
 
 - Frontend UI-key coverage tool: [verify-ui-resources.mjs](Tools/verify-ui-resources.mjs).
 - [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
 - [Appearance tests](Tools/appearance.test.mjs) cover preferences, selected state,
-  unavailable storage and light/dark text contrast.
+  unavailable storage, free accents, artwork hue and light/dark text contrast.
+- `FrontendAuthenticationTests.Design_EnvironmentGate_OnlyRendersDevelopmentExamples`
+  checks public Development rendering and Production exclusion on isolated PostgreSQL.
+- Persistent shell navigation and same-element minimized playback are approved but
+  not integrated yet; the current full Player still belongs to its Razor page.
 - Module/profile visibility, localized metadata policy, complete Requests/Wanted lifecycle, quota/rules, NAS health/reconnect/Synology and PIN verification remain pending.
 - Admin routing consumes Backend policies: MediaManager reaches manual media, Library identification and Requests/Wanted; Rules, user limits and Storage remain Owner-only.
 - Backend CI builds Frontend assets and runs real Razor/PostgreSQL integration tests;

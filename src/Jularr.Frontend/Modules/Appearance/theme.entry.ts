@@ -1,3 +1,5 @@
+import { buildPalette, CleanAccent, OriginalAccent } from "./Palette";
+
 // Restore device preferences.
 const root = document.documentElement;
 const skins = new Set(["clean", "original"]);
@@ -14,6 +16,30 @@ function preference(name: string, allowed: Set<string>, fallback: string): strin
 
 root.dataset.skin = preference("jularr-ui-skin", skins, "clean");
 root.dataset.mode = preference("jularr-ui-mode", modes, "system");
+let accent = "";
+try { accent = localStorage.getItem("jularr-ui-accent") ?? ""; } catch { /* Storage is optional. */ }
+if (!/^#[a-f\d]{6}$/i.test(accent)) accent = "";
+accent = accent.toLowerCase();
+let palette: ReturnType<typeof buildPalette>;
+
+function applyPalette(): void {
+    const seed = accent || (root.dataset.skin === "original" ? OriginalAccent : CleanAccent);
+    palette = buildPalette(seed);
+    root.dataset.accent = seed;
+    for (const [name, light] of Object.entries(palette.light)) {
+        root.style.setProperty("--" + name, `light-dark(${light}, ${palette.dark[name]})`);
+    }
+    root.style.setProperty("--art-hue-rotate", palette.rotation);
+    root.style.setProperty("--art-saturate", palette.saturation);
+    updateBrowserColor();
+}
+
+const systemMode = window.matchMedia("(prefers-color-scheme: dark)");
+function updateBrowserColor(): void {
+    const dark = root.dataset.mode === "dark" || root.dataset.mode === "system" && systemMode.matches;
+    document.querySelector("meta[name=theme-color]")?.setAttribute("content", (dark ? palette.dark : palette.light).background);
+}
+systemMode.addEventListener("change", updateBrowserColor);
 
 function refreshControls(): void {
     document.querySelectorAll<HTMLButtonElement>("[data-set-skin], [data-set-mode]").forEach(button => {
@@ -22,15 +48,27 @@ function refreshControls(): void {
             : button.dataset.setMode === root.dataset.mode;
         button.setAttribute("aria-pressed", String(selected));
     });
+
+    document.querySelectorAll<HTMLInputElement>("[data-accent-input]").forEach(input => { input.value = root.dataset.accent!; });
+    document.querySelectorAll<HTMLElement>("[data-accent-value]").forEach(label => { label.textContent = root.dataset.accent!; });
+    document.querySelectorAll<HTMLButtonElement>("[data-set-accent]").forEach(button => {
+        button.setAttribute("aria-pressed", String(button.dataset.setAccent === root.dataset.accent));
+    });
 }
 
+applyPalette();
 refreshControls();
 
 // Update shared controls.
 document.addEventListener("click", event => {
     if (!(event.target instanceof Element)) return;
-    const button = event.target.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode]");
+    const button = event.target.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode], [data-set-accent], [data-reset-accent]");
     if (!button) return;
+
+    if (button.dataset.setAccent || button.dataset.resetAccent) {
+        setAccent(button.dataset.resetAccent ? "" : button.dataset.setAccent!);
+        return;
+    }
 
     const kind = button.dataset.setSkin ? "skin" : "mode";
     const value = button.dataset.setSkin || button.dataset.setMode;
@@ -43,5 +81,26 @@ document.addEventListener("click", event => {
     } catch {
         // Storage is optional.
     }
+    if (kind === "skin") applyPalette();
+    else updateBrowserColor();
     refreshControls();
 });
+
+// Native picker, shared palette.
+document.addEventListener("input", event => {
+    if (!(event.target instanceof HTMLInputElement) || event.target.dataset.accentInput === undefined) return;
+    setAccent(event.target.value);
+});
+
+function setAccent(value: string): void {
+    if (value !== "" && !/^#[a-f\d]{6}$/i.test(value)) return;
+    accent = value.toLowerCase();
+    try {
+        if (accent) localStorage.setItem("jularr-ui-accent", accent);
+        else localStorage.removeItem("jularr-ui-accent");
+    } catch {
+        // Storage is optional.
+    }
+    applyPalette();
+    refreshControls();
+}

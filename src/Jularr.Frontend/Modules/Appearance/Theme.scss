@@ -9,16 +9,20 @@
     --border: light-dark(#dedbe7, #393441);
     --text: light-dark(#25202f, #f4f0f8);
     --muted: light-dark(#696174, #b2aaba);
-    --accent: light-dark(#7041c9, #bea2ff);
-    --accent-contrast: light-dark(#fff, #24133f);
+    --accent: #7c3aed;
+    --accent-contrast: #fff;
+    --accent-text: light-dark(#7041c9, #bea2ff);
+    --accent-hover: #692aca;
     --danger: light-dark(#b12b3c, #ff9aa7);
     --shadow: 0 2px 8px light-dark(rgb(32 19 58 / 4%), rgb(0 0 0 / 14%));
     --radius-control: 8px;
     --radius-panel: 12px;
-    --focus: var(--accent);
+    --focus: var(--accent-text);
     --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
     --jularr-ring: var(--accent);
     --jularr-ink: var(--text);
+    --art-hue-rotate: 0deg;
+    --art-saturate: 1;
 }
 
 // Brightness stays independent.
@@ -36,8 +40,10 @@ html[data-skin="original"] {
     --border: light-dark(#e1d6cc, #45373d);
     --text: light-dark(#302426, #f5ece6);
     --muted: light-dark(#766365, #beabb1);
-    --accent: light-dark(#b52d50, #f49aae);
-    --accent-contrast: light-dark(#fff, #351623);
+    --accent: #c8102e;
+    --accent-contrast: #fff;
+    --accent-text: light-dark(#b30e29, #ff9d9d);
+    --accent-hover: #a90d26;
     --shadow: 0 3px 14px light-dark(rgb(70 35 30 / 6%), rgb(0 0 0 / 20%));
 }
 
@@ -51,14 +57,36 @@ html[data-skin="original"] body::before {
     opacity: .18;
 }
 
-html[data-skin="original"] .auth-page::after {
+// Blossom trees frame Original.
+html[data-skin="original"] body:not(.player-page)::after {
     content: "";
     position: fixed;
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background: linear-gradient(90deg, var(--background), transparent 55%),
-        linear-gradient(0deg, var(--background), transparent 70%),
-        url("./Original/hero-fuji.webp") center / cover no-repeat;
-    opacity: .55;
+    background: url("./Original/hero-torii.webp") center / cover no-repeat;
+    opacity: .34;
+    filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
 }
+
+// Mascot remains theme artwork.
+html[data-skin="original"] .auth-main::before {
+    content: "";
+    position: fixed;
+    inset: auto 2vw 0 auto;
+    width: min(30vw, 420px);
+    height: min(75vh, 680px);
+    z-index: -1;
+    pointer-events: none;
+    background: url("./Original/heroine.webp") right bottom / contain no-repeat;
+    filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+}
+
+@media (max-width: 780px) {
+    html[data-skin="original"] .auth-main::before { display: none; }
+}
+
+@media (prefers-color-scheme: dark) {
+    html[data-skin="original"][data-mode="system"] body::after { opacity: .16; }
+}
+html[data-skin="original"][data-mode="dark"] body::after { opacity: .16; }
