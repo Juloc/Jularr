@@ -190,6 +190,16 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
                 throw new DataValidationException(nameof(ProtocolVersion), "unknown_catalog_value");
             }
 
+            // Exports use POSIX paths; local paths follow the host platform.
+            if (StorageProtocolTypeId != StorageProtocolType.Local)
+            {
+                StorageMountFields.ExportPath.Validate(SharePath, nameof(SharePath));
+            }
+            else if (!Path.IsPathRooted(SharePath) || SharePath.Split('/', '\\').Any(segment => segment is "." or ".."))
+            {
+                throw new DataValidationException(nameof(SharePath), "invalid_path");
+            }
+
             if ((StorageProtocolTypeId == StorageProtocolType.Local) != (Host is null))
             {
                 throw new DataValidationException(nameof(Host), StorageProtocolTypeId == StorageProtocolType.Local ? "invalid_transition" : "required");

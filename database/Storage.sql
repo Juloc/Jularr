@@ -15,13 +15,13 @@ CREATE TABLE "StorageProtocolVersions" (
 
 INSERT INTO "StorageProtocolVersions" ("StorageProtocolTypeId", "ProtocolVersion") VALUES (1, '3.1.1'), (1, '3.0'), (2, '4.1'), (2, '4.2');
 
--- Local connections are permitted container paths.
+-- Local connections are permitted host or container paths.
 CREATE TABLE "StorageMounts" (
     "Id" bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     "Name" varchar(128) NOT NULL CHECK (length(btrim("Name")) > 0),
     "StorageProtocolTypeId" smallint NOT NULL REFERENCES "StorageProtocolTypes" ("Id"),
     "Host" varchar(253) NULL CHECK (length("Host") > 0),
-    "SharePath" varchar(1024) NOT NULL CHECK ("SharePath" LIKE '/%'),
+    "SharePath" varchar(1024) NOT NULL CHECK (length("SharePath") > 0),
     "ProtocolVersion" varchar(8) NULL,
     "Username" varchar(256) NULL,
     "Domain" varchar(256) NULL,
@@ -35,8 +35,8 @@ CREATE TABLE "StorageMounts" (
     "UpdatedAt" timestamptz NOT NULL DEFAULT statement_timestamp(),
     FOREIGN KEY ("StorageProtocolTypeId", "ProtocolVersion") REFERENCES "StorageProtocolVersions" ("StorageProtocolTypeId", "ProtocolVersion"),
     CHECK (
-        ("StorageProtocolTypeId" = 1 AND "Host" IS NOT NULL AND "ProtocolVersion" IS NOT NULL AND length("Username") > 0 AND "Username" IS NOT NULL)
-        OR ("StorageProtocolTypeId" = 2 AND "Host" IS NOT NULL AND "ProtocolVersion" IS NOT NULL AND "Username" IS NULL AND "Domain" IS NULL AND "ProtectedPassword" IS NULL)
+        ("StorageProtocolTypeId" = 1 AND "SharePath" LIKE '/%' AND "Host" IS NOT NULL AND "ProtocolVersion" IS NOT NULL AND length("Username") > 0 AND "Username" IS NOT NULL)
+        OR ("StorageProtocolTypeId" = 2 AND "SharePath" LIKE '/%' AND "Host" IS NOT NULL AND "ProtocolVersion" IS NOT NULL AND "Username" IS NULL AND "Domain" IS NULL AND "ProtectedPassword" IS NULL)
         OR ("StorageProtocolTypeId" = 3 AND "Host" IS NULL AND "ProtocolVersion" IS NULL AND "Username" IS NULL AND "Domain" IS NULL AND "ProtectedPassword" IS NULL)
     ),
     CHECK ("WakeMacAddress" IS NOT NULL OR ("WakeBroadcastAddress" IS NULL AND NOT "WakeOnDemand"))

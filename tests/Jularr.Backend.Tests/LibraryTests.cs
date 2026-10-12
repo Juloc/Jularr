@@ -171,6 +171,20 @@ namespace Jularr.Backend.Tests
                 new SaveStorageMountDataV1("Local", StorageProtocolType.Local, null, "/media/library", null, null, null, true, null));
             Assert.AreEqual(HttpStatusCode.OK, local.StatusCode, await local.Content.ReadAsStringAsync());
 
+            // Host-native paths come only from the allowlist; exports stay POSIX.
+            using var traversal = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
+                new SaveStorageMountDataV1("Local", StorageProtocolType.Local, null, "/media/library/../other", null, null, null, true, null));
+            Assert.AreEqual(HttpStatusCode.BadRequest, traversal.StatusCode);
+            using var windowsExport = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
+                new SaveStorageMountDataV1("NAS", StorageProtocolType.Nfs, "nas.test", "D:\volume1", "4.1", null, null, true, null));
+            Assert.AreEqual(HttpStatusCode.BadRequest, windowsExport.StatusCode);
+            if (OperatingSystem.IsWindows())
+            {
+                using var drive = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
+                    new SaveStorageMountDataV1("Drive", StorageProtocolType.Local, null, storage.Path, null, null, null, true, null));
+                Assert.AreEqual(HttpStatusCode.OK, drive.StatusCode, await drive.Content.ReadAsStringAsync());
+            }
+
             // Wake settings require a device address.
             using var invalidWake = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
                 new SaveStorageMountDataV1("NAS", StorageProtocolType.Nfs, "nas.test", "/volume1", "4.1", null, null, true, null, null, null, true));
@@ -302,7 +316,8 @@ namespace Jularr.Backend.Tests
             var host = await Host.CreateAsync(razor: razor, library: true, settings: new Dictionary<string, string>
             {
                 ["Storage:MountRoot"] = mountRoot,
-                ["Storage:LocalPaths:0"] = "/media/library"
+                ["Storage:LocalPaths:0"] = "/media/library",
+                ["Storage:LocalPaths:1"] = mountRoot
             });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
