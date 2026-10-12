@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
 using System.Text.Json;
 using Jularr.Integrations.Data.Nas;
@@ -7,6 +8,7 @@ namespace Jularr.Integrations.Logic.Nas
     internal sealed class NasMountClient
     {
         public string? SocketPath { get; set; }
+        [MemberNotNullWhen(true, nameof(SocketPath))]
         public bool IsConfigured => !string.IsNullOrWhiteSpace(SocketPath);
 
         public async Task<NasMountResponse> ExecuteAsync(NasMountRequest request, CancellationToken ct)

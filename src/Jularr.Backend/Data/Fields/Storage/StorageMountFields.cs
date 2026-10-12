@@ -10,7 +10,8 @@ namespace Jularr.Backend.Data.Fields.Storage
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly EnumField StorageProtocolTypeId = new(typeof(StorageProtocolType));
         public static readonly StringField Host = new(NpgsqlDbType.Varchar) { MaximumLength = 253, AllowBlank = false, Required = false, Format = StringFormat.HostName };
-        public static readonly StringField SharePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, AllowBlank = false, Format = StringFormat.AbsolutePath };
+        public static readonly StringField SharePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, AllowBlank = false, Format = StringFormat.SingleLine };
+        public static readonly StringField ExportPath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, AllowBlank = false, Format = StringFormat.AbsolutePath };
         public static readonly StringField ProtocolVersion = new(NpgsqlDbType.Varchar) { MaximumLength = 8, AllowBlank = false, Required = false };
         public static readonly StringField Username = new(NpgsqlDbType.Varchar) { MaximumLength = 256, Required = false, Format = StringFormat.SingleLine };
         public static readonly StringField Domain = new(NpgsqlDbType.Varchar) { MaximumLength = 256, Required = false, Format = StringFormat.SingleLine };
@@ -24,7 +25,7 @@ namespace Jularr.Backend.Data.Fields.Storage
         public static readonly StringField WakeBroadcastAddress = new(NpgsqlDbType.Varchar) { MaximumLength = 15, Required = false, Trim = true, Format = StringFormat.IPv4Address };
         public static readonly BoolField WakeOnDemand = new();
         public static readonly BoolField CanMount = new();
-        public static readonly StringField LocalPath = new() { MaximumLength = 1024, AllowBlank = false, Format = StringFormat.AbsolutePath };
+        public static readonly StringField LocalPath = new() { MaximumLength = 1024, AllowBlank = false, Format = StringFormat.SingleLine };
         public static readonly StringField DirectoryName = new() { MaximumLength = 255, AllowBlank = false };
         public static readonly LongField Version = new() { Minimum = 1 };
         public static readonly DateTimeField CreatedAt = new();

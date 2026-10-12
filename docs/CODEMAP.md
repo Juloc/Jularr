@@ -112,4 +112,4 @@ This reference backend does not complete Phase B or replace an active installati
 Player → Arr+; proposed table owners and decisions needed before those slices.
 
 - [INSTANCE_SETUP.md](INSTANCE_SETUP.md): consolidated nine-page setup flow; first-Owner form implemented, remaining readiness/configuration/progress pending.
-- [LOCAL_PREVIEW.md](LOCAL_PREVIEW.md): isolated D: checkout, scheduled preview and current host integration gap; [runner](../scripts/run-clean-start-preview.ps1).
+- [LOCAL_PREVIEW.md](LOCAL_PREVIEW.md): isolated D: checkout, scheduled preview on https://localhost:7241 with its own database and `D:\testlibrary`; [runner](../scripts/run-clean-start-preview.ps1).

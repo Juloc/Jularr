@@ -16,7 +16,9 @@ Disconnect or ReadStatus operation outside database transactions, using short
 authorized batches before and after external work.
 
 `ReadStorageLocalPathsV1` lists the `Storage:LocalPaths` deployment configuration;
-Local connections may only use one of those container paths and need no helper.
+Local connections may only use one of those paths and need no helper. They are host or
+container paths of the running platform (for example `D:	estlibrary` on a Windows host);
+SMB/NFS exports remain absolute POSIX paths.
 `WakeStorageMountV1` sends an Owner Wake-on-LAN packet to the configured MAC and
 optional IPv4 broadcast address. `WakeOnDemand` records the Owner's policy: false
 means only the Owner wakes the device, true allows automatic wake when a profile
