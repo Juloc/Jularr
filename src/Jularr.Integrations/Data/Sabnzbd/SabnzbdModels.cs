@@ -76,16 +76,26 @@ namespace Jularr.Integrations.Data.Sabnzbd
 
     internal sealed class SabnzbdQueueJob
     {
-        public SabnzbdQueueJob(string nzoId, string name, double? percentage)
+        public SabnzbdQueueJob(string nzoId, string name, double? percentage, long? sizeBytes = null, long? remainingBytes = null, int? timeLeftSeconds = null, string? status = null)
         {
             NzoId = nzoId;
             Name = name;
             Percentage = percentage;
+            SizeBytes = sizeBytes;
+            RemainingBytes = remainingBytes;
+            TimeLeftSeconds = timeLeftSeconds;
+            Status = status;
         }
 
         public string NzoId { get; }
         public string Name { get; }
         public double? Percentage { get; }
+        public long? SizeBytes { get; }
+        public long? RemainingBytes { get; }
+        public int? TimeLeftSeconds { get; }
+
+        // Downloading, Queued, Paused or Fetching; a paused queue pauses every job.
+        public string? Status { get; }
     }
 
     internal sealed class SabnzbdHistoryJob

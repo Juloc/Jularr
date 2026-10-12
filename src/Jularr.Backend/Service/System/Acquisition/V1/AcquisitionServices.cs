@@ -3,6 +3,7 @@ using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -264,7 +265,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 // Queue progress is written in one batch.
                 var jobs = queue.Jobs.GroupBy(job => job.NzoId, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
                 var progress = group.Where(download => download.ExternalId is not null && jobs.ContainsKey(download.ExternalId))
-                    .Select(download => new { download.OperationId, ProgressPercent = jobs[download.ExternalId!].Percentage is { } value ? (int?)Math.Clamp((int)Math.Round(value), 0, 99) : null })
+                    .Select(download =>
+                    {
+                        var job = jobs[download.ExternalId!];
+                        return new
+                        {
+                            download.OperationId,
+                            ProgressPercent = job.Percentage is { } value ? (int?)Math.Clamp((int)Math.Round(value), 0, 99) : null,
+                            job.SizeBytes,
+                            job.RemainingBytes,
+                            EtaSeconds = job.TimeLeftSeconds,
+                            DownloadStateTypeId = (byte)DownloadLogic.ReadDownloadState(job.Status)
+                        };
+                    })
                     .ToArray();
                 if (progress.Length > 0)
                 {
@@ -351,7 +364,15 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             if (finished.IsCompleted)
             {
                 await ImportAsync(download, connection, finished.StoragePath);
+                return;
             }
+
+            var state = new[] { new { download.OperationId, ProgressPercent = (int?)99, SizeBytes = (long?)null, RemainingBytes = (long?)0, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.PostProcessing } };
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(state)), ct);
+                return true;
+            }, CancellationToken);
         }
 
         private async Task ImportAsync(DownloadData download, AcquisitionConnectionData connection, string? storagePath)

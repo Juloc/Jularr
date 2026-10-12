@@ -77,6 +77,10 @@ CREATE TABLE "Operations" (
     "AcquisitionConnectionId" bigint NULL REFERENCES "AcquisitionConnections" ("Id") ON DELETE SET NULL,
     "ExternalId" varchar(128) NULL,
     "ProgressPercent" smallint NULL CHECK ("ProgressPercent" BETWEEN 0 AND 100),
+    "SizeBytes" bigint NULL CHECK ("SizeBytes" >= 0),
+    "RemainingBytes" bigint NULL CHECK ("RemainingBytes" >= 0),
+    "EtaSeconds" integer NULL CHECK ("EtaSeconds" >= 0),
+    "DownloadStateTypeId" smallint NULL CHECK ("DownloadStateTypeId" BETWEEN 1 AND 4),
     "RequestedByAccountId" bigint NULL REFERENCES "Accounts" ("Id") ON DELETE SET NULL,
     "ProcessedCount" bigint NOT NULL DEFAULT 0 CHECK ("ProcessedCount" >= 0),
     "ErrorKey" varchar(64) NULL,
@@ -90,7 +94,8 @@ CREATE TABLE "Operations" (
     CHECK (("OperationStatusTypeId" IN (3, 4)) = ("FinishedAt" IS NOT NULL)),
     CHECK ("OperationStatusTypeId" = 4 OR "ErrorKey" IS NULL),
     CHECK ("OperationStatusTypeId" IN (1, 2) OR "AttentionKey" IS NULL),
-    CHECK ("DismissedAt" IS NULL OR "OperationStatusTypeId" = 4)
+    CHECK ("DismissedAt" IS NULL OR "OperationStatusTypeId" = 4),
+    CHECK ("OperationTypeId" = 2 OR ("SizeBytes" IS NULL AND "DownloadStateTypeId" IS NULL))
 );
 CREATE UNIQUE INDEX "UX_Operations_ActiveScan" ON "Operations" ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2;

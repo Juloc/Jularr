@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Operation;
+using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Operation;
 
@@ -35,7 +36,7 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId)
         {
             Id = id;
             OperationTypeId = operationTypeId;
@@ -47,6 +48,11 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
             ReasonKey = reasonKey;
             CreatedAt = createdAt;
             FinishedAt = finishedAt;
+            ConnectionName = connectionName;
+            SizeBytes = sizeBytes;
+            RemainingBytes = remainingBytes;
+            EtaSeconds = etaSeconds;
+            DownloadStateTypeId = downloadStateTypeId;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
@@ -78,5 +84,20 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.FinishedAt))]
         public DateTime? FinishedAt { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name), false)]
+        public string? ConnectionName { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.SizeBytes))]
+        public long? SizeBytes { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.RemainingBytes))]
+        public long? RemainingBytes { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.EtaSeconds))]
+        public int? EtaSeconds { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.DownloadStateTypeId), false)]
+        public DownloadStateType? DownloadStateTypeId { get; }
     }
 }

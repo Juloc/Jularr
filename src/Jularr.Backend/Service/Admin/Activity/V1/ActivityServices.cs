@@ -33,11 +33,17 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."ProgressPercent"::integer AS "ProgressPercent",
                     coalesce(operation."AttentionKey", operation."ErrorKey") AS "ReasonKey",
                     operation."CreatedAt",
-                    operation."FinishedAt"
+                    operation."FinishedAt",
+                    connection."Name" AS "ConnectionName",
+                    operation."SizeBytes",
+                    operation."RemainingBytes",
+                    operation."EtaSeconds",
+                    operation."DownloadStateTypeId"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
                     LEFT JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
+                    LEFT JOIN "AcquisitionConnections" AS connection ON connection."Id" = operation."AcquisitionConnectionId"
                     LEFT JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
                     LEFT JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                 WHERE

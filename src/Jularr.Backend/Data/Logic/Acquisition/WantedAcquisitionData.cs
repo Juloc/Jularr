@@ -278,7 +278,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             Progress = progress;
         }
 
-        // JSON rows of OperationId and ProgressPercent.
+        // JSON rows of OperationId, ProgressPercent, SizeBytes, RemainingBytes, EtaSeconds and DownloadStateTypeId.
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Progress))]
         public string Progress { get; }
     }

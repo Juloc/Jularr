@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Media;
@@ -318,6 +319,10 @@ namespace Jularr.Backend.Logic.Acquisition
                     "AcquisitionConnectionId" = EXCLUDED."AcquisitionConnectionId",
                     "ExternalId" = NULL,
                     "ProgressPercent" = NULL,
+                    "SizeBytes" = NULL,
+                    "RemainingBytes" = NULL,
+                    "EtaSeconds" = NULL,
+                    "DownloadStateTypeId" = NULL,
                     "ProcessedCount" = 0,
                     "ErrorKey" = NULL,
                     "AttentionKey" = NULL,
@@ -455,23 +460,38 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<DownloadData>(sql, ct);
         }
 
+        // Client job states in Jularr terms.
+        public static DownloadStateType ReadDownloadState(string? status) => status switch
+        {
+            "Paused" => DownloadStateType.Paused,
+            "Queued" => DownloadStateType.Queued,
+            _ => DownloadStateType.Downloading
+        };
+
         public static async Task UpdateDownloadProgressAsync(this LogicContext ctx, DownloadProgressData data, CancellationToken ct)
         {
-            // One write per client pass; unchanged progress is not rewritten.
+            // One write per client pass; unchanged state is not rewritten.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
                     "Operations" AS operation
                 SET
-                    "ProgressPercent" = item."ProgressPercent"
+                    "ProgressPercent" = coalesce(item."ProgressPercent", operation."ProgressPercent"),
+                    "SizeBytes" = coalesce(item."SizeBytes", operation."SizeBytes"),
+                    "RemainingBytes" = item."RemainingBytes",
+                    "EtaSeconds" = item."EtaSeconds",
+                    "DownloadStateTypeId" = item."DownloadStateTypeId"
                 FROM
-                    jsonb_to_recordset(@Progress::jsonb) AS item ("OperationId" bigint, "ProgressPercent" smallint)
+                    jsonb_to_recordset(@Progress::jsonb) AS item ("OperationId" bigint, "ProgressPercent" smallint, "SizeBytes" bigint, "RemainingBytes" bigint, "EtaSeconds" integer,
+                        "DownloadStateTypeId" smallint)
                 WHERE
                     operation."Id" = item."OperationId"
                     AND operation."OperationTypeId" = 2
                     AND operation."OperationStatusTypeId" = 2
-                    AND operation."ProgressPercent" IS DISTINCT FROM item."ProgressPercent";
+                    AND (operation."ProgressPercent", operation."SizeBytes", operation."RemainingBytes", operation."EtaSeconds", operation."DownloadStateTypeId")
+                        IS DISTINCT FROM (coalesce(item."ProgressPercent", operation."ProgressPercent"), coalesce(item."SizeBytes", operation."SizeBytes"), item."RemainingBytes",
+                        item."EtaSeconds", item."DownloadStateTypeId");
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

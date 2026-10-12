@@ -78,8 +78,19 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, repeated.StatusCode);
 
             // Progress comes from the client queue.
-            usenet.Queue = """{"queue":{"paused":false,"slots":[{"nzo_id":"SABnzbd_nzo_1","filename":"Example","percentage":"40"}]}}""";
+            usenet.Queue = """{"queue":{"paused":false,"slots":[{"nzo_id":"SABnzbd_nzo_1","filename":"Example","percentage":"40","mb":"1024.0","mbleft":"614.4","timeleft":"0:12:30","status":"Downloading"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
+            var running = (await ReadActivityAsync(host, ActivityTabType.Activity)).Single();
+            Assert.AreEqual("SAB", running.ConnectionName);
+            Assert.AreEqual(DownloadStateType.Downloading, running.DownloadStateTypeId);
+            Assert.AreEqual(1024L * 1024 * 1024, running.SizeBytes);
+            Assert.AreEqual(750, running.EtaSeconds);
+            usenet.Queue = """{"queue":{"paused":true,"slots":[{"nzo_id":"SABnzbd_nzo_1","filename":"Example","percentage":"40","timeleft":"0:00:00","status":"Downloading"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            running = (await ReadActivityAsync(host, ActivityTabType.Activity)).Single();
+            Assert.AreEqual(DownloadStateType.Paused, running.DownloadStateTypeId);
+            Assert.IsNull(running.EtaSeconds);
+            Assert.AreEqual(1024L * 1024 * 1024, running.SizeBytes);
             using var wantedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId);
             var wanted = (await wantedRead.Content.ReadFromJsonAsync<WantedDetailsV1>())!;
             Assert.IsTrue(wanted.IsDownloading);
@@ -92,6 +103,11 @@ namespace Jularr.Backend.Tests
             File.WriteAllText(Path.Combine(completed, Feature + ".en.srt"), "subtitle");
             File.WriteAllText(Path.Combine(completed, "sample.mkv"), new string('x', 8192));
             usenet.Queue = FakeUsenet.EmptyQueue;
+
+            // Unpacking is shown until the client reports completion.
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Extracting"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(DownloadStateType.PostProcessing, (await ReadActivityAsync(host, ActivityTabType.Activity)).Single().DownloadStateTypeId);
 
             // A path outside the client mapping is never read.
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/elsewhere/../downloads/x"}]}}""";

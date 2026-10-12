@@ -112,12 +112,14 @@ namespace Jularr.Integrations.Logic.Sabnzbd
             }
 
             var jobs = new List<SabnzbdQueueJob>();
+            var paused = ReadBool(queue, "paused") is true;
             foreach (var slot in Slots(queue))
             {
                 if (ReadString(slot, "nzo_id") is { } id)
                 {
                     var percentage = ReadDouble(slot, "percentage");
-                    jobs.Add(new SabnzbdQueueJob(id, ReadString(slot, "filename") ?? ReadString(slot, "name") ?? id, percentage is null ? null : Math.Clamp(percentage.Value, 0, 100)));
+                    jobs.Add(new SabnzbdQueueJob(id, ReadString(slot, "filename") ?? ReadString(slot, "name") ?? id, percentage is null ? null : Math.Clamp(percentage.Value, 0, 100),
+                        Megabytes(ReadDouble(slot, "mb")), Megabytes(ReadDouble(slot, "mbleft")), Duration(ReadString(slot, "timeleft")), paused ? "Paused" : ReadString(slot, "status")));
                 }
             }
 
@@ -254,6 +256,22 @@ namespace Jularr.Integrations.Logic.Sabnzbd
                 JsonValueKind.String when value.GetString() is "1" or "0" => value.GetString() == "1",
                 _ => null
             };
+        }
+
+        private static long? Megabytes(double? value) => value is >= 0 and < 1e9 ? (long)Math.Round(value.Value * 1024 * 1024) : null;
+
+        // "h:mm:ss" or "d:hh:mm:ss"; zero means unknown.
+        private static int? Duration(string? value)
+        {
+            var parts = value?.Split(':');
+            if (parts is not { Length: 3 or 4 } || parts.Any(part => !int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
+            {
+                return null;
+            }
+
+            var numbers = parts.Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToArray();
+            var seconds = numbers.Length == 4 ? (((long)numbers[0] * 24 + numbers[1]) * 60 + numbers[2]) * 60 + numbers[3] : ((long)numbers[0] * 60 + numbers[1]) * 60 + numbers[2];
+            return seconds is > 0 and <= int.MaxValue ? (int)seconds : null;
         }
 
         private static double? ReadDouble(JsonElement element, string name) =>

@@ -39,8 +39,13 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                         : new ValueText(item.Title))
                     .Resource(item => item.OperationStatusTypeId, "table.status", status => "operation.status." + status);
                 table = Tab == ActivityTabType.Activity
-                    ? table.Content("activity.progress", item => new ValueText(item.ProgressPercent is { } percent ? percent.ToString(CultureInfo.InvariantCulture) + " %" : ""))
-                    : table.Content("activity.reason", item => item.ReasonKey is { } key ? new Text(Reason(item.OperationTypeId, key)) : new Span());
+                    ? table.Content("activity.client", item => item.DownloadStateTypeId is { } state
+                            ? new Span(new Text("activity.state." + state), new ValueText(item.ConnectionName is { } name ? " · " + name : ""))
+                            : new ValueText(item.ConnectionName ?? ""))
+                        .Content("activity.progress", item => new ValueText(Progress(item)))
+                        .Content("activity.eta", item => new ValueText(Eta(item.EtaSeconds)))
+                    : table.Content("activity.reason", item => item.ReasonKey is { } key ? new Text(Reason(item.OperationTypeId, key)) : new Span())
+                        .Content("activity.size", item => new ValueText(Size(item.SizeBytes)));
                 table = table.Text(item => item.CreatedAt, "operation.created");
                 if (Tab == ActivityTabType.ToDo)
                 {
@@ -64,6 +69,35 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         // Scans report service errors; downloads report acquisition outcomes.
         private static string Reason(OperationType type, string key) => type == OperationType.LibraryScan ? "errors." + key : "acquisition.outcome." + key;
+
+        // "42 % · 3.1 of 7.4 GB"; sizes only where the client reports them.
+        private static string Progress(ActivityItemV1 item)
+        {
+            var percent = item.ProgressPercent is { } value ? value.ToString(CultureInfo.InvariantCulture) + " %" : "";
+            if (item.SizeBytes is not { } size)
+            {
+                return percent;
+            }
+
+            var done = item.RemainingBytes is { } remaining ? Math.Max(0, size - remaining) : (long?)null;
+            var amount = done is { } bytes ? Size(bytes) + " / " + Size(size) : Size(size);
+            return percent.Length == 0 ? amount : percent + " · " + amount;
+        }
+
+        private static string Size(long? bytes) => bytes switch
+        {
+            null => "",
+            >= 1L << 30 => (bytes.Value / (double)(1L << 30)).ToString("0.0 'GB'", CultureInfo.InvariantCulture),
+            _ => (bytes.Value / (double)(1L << 20)).ToString("0 'MB'", CultureInfo.InvariantCulture)
+        };
+
+        private static string Eta(int? seconds) => seconds switch
+        {
+            null => "",
+            >= 3600 => (seconds.Value / 3600).ToString(CultureInfo.InvariantCulture) + " h " + (seconds.Value % 3600 / 60).ToString(CultureInfo.InvariantCulture) + " min",
+            >= 60 => (seconds.Value / 60).ToString(CultureInfo.InvariantCulture) + " min",
+            _ => "< 1 min"
+        };
 
         public async Task<IActionResult> OnGetAsync()
         {
