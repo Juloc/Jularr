@@ -179,6 +179,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         // The canonical next step: use what exists, request what is missing.
         private (string? Key, string? Href) Action(DiscoverItemV1 item) => item.MediaStateTypeId switch
         {
+            MediaStateType.Available when item.PlexUrl is { } plex && texts.Capabilities?.CanPlay is not true => ("media.openInPlex", plex),
             MediaStateType.Available => ("media.watch", DetailsHref(item)),
             MediaStateType.NotRequested when texts.Capabilities?.CanRequest is true => ("request.create", DetailsHref(item)),
             _ => (null, null)

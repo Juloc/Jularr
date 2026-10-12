@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Provider;
 using Jularr.Backend.Data.Fields.Playback;
 
 namespace Jularr.Backend.Data.User.Media.V1
@@ -31,8 +32,10 @@ namespace Jularr.Backend.Data.User.Media.V1
 
     public sealed class WorkDetailsV1 : BaseResponse
     {
-        public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl)
+        public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
+            string? plexUrl)
         {
+            PlexUrl = plexUrl;
             Id = id;
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
@@ -66,6 +69,10 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? BackdropUrl { get; }
+
+        // Opens the title on the connected Plex server.
+        [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
+        public string? PlexUrl { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData

@@ -36,8 +36,10 @@ namespace Jularr.Frontend.Pages.User.Details
             if (_work is { } work)
             {
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+                // Plex plays what Jularr cannot play here.
+                var plex = work.PlexUrl is not null && (texts.Capabilities?.CanPlay is not true || _availability?.Items.Any(item => item.IsAvailable) is not true) ? work.PlexUrl : null;
                 page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts["media.type." + work.MediaTypeId], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }
-                    .Where(part => part is not null)), work.Overview));
+                    .Where(part => part is not null)), work.Overview, plex is null ? null : "media.openInPlex", plex));
                 page.Content.Add(new Form<UpdateWatchlistDataV1>(form =>
                 {
                     form.Hidden(item => item.IsWatchlisted);

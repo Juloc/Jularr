@@ -20,7 +20,7 @@ namespace Jularr.Backend.Service.User.Library.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Works with media or an acquisition target; search stays local.
+            // Works with media, a Plex item or an acquisition target; search stays local.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                             fact."IsManual" DESC
                         LIMIT 1
                     ) AS "PosterUrl",
-                    CASE WHEN available."AddedAt" IS NOT NULL THEN 3 ELSE 2 END AS "MediaStateTypeId",
+                    CASE WHEN available."AddedAt" IS NOT NULL OR plex."Value" IS NOT NULL THEN 3 ELSE 2 END AS "MediaStateTypeId",
                     EXISTS (
                         SELECT
                             1
@@ -62,8 +62,9 @@ namespace Jularr.Backend.Service.User.Library.V1
                         WHERE
                             asset."WorkId" = work."Id"
                     ) AS available ON TRUE
+                    LEFT JOIN "WorkExternalIdentities" AS plex ON plex."WorkId" = work."Id" AND plex."Namespace" = 'plex'
                 WHERE
-                    (available."AddedAt" IS NOT NULL OR EXISTS (
+                    (available."AddedAt" IS NOT NULL OR plex."Value" IS NOT NULL OR EXISTS (
                         SELECT
                             1
                         FROM

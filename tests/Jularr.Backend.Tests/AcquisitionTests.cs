@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -328,6 +329,77 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Plex_ConnectSyncsAvailabilityAndRefreshesAfterImport()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"WorkExternalIdentities\" (\"WorkId\", \"Namespace\", \"Value\") SELECT \"WorkId\", 'tmdb_movie', '603' FROM \"WantedItems\"");
+            const string Plex = "/api/v1/admin/providers/plex";
+
+            // A wrong token is not stored.
+            using var rejected = await host.SendAsync(HttpMethod.Post, Plex, new SavePlexServerDataV1("http://plex.example.test:32400", "wrong"));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, rejected.StatusCode);
+            StringAssert.Contains(await rejected.Content.ReadAsStringAsync(), "plex_authentication_failed");
+            using var connected = await host.SendAsync(HttpMethod.Post, Plex, new SavePlexServerDataV1("http://plex.example.test:32400", FakeUsenet.PlexToken));
+            Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "Movies", "Shows" }, (await connected.Content.ReadFromJsonAsync<PlexServerTestV1>())!.Sections);
+            using var read = await host.SendAsync(HttpMethod.Get, Plex);
+            var json = await read.Content.ReadAsStringAsync();
+            Assert.IsFalse(json.Contains(FakeUsenet.PlexToken, StringComparison.Ordinal));
+            var server = (await read.Content.ReadFromJsonAsync<PlexServerDetailsV1>())!;
+            Assert.AreEqual("plexmachine1", server.ExternalId);
+            Assert.AreEqual("http://plex.example.test:32400/", server.BaseUrl);
+
+            // Known titles are linked, unknown ones become Works; items without ids are skipped.
+            using var synced = await host.SendAsync(HttpMethod.Post, Plex + "/sync");
+            Assert.AreEqual(HttpStatusCode.OK, synced.StatusCode, await synced.Content.ReadAsStringAsync());
+            var result = (await synced.Content.ReadFromJsonAsync<PlexSyncResultV1>())!;
+            Assert.AreEqual(3, result.LinkedCount);
+            Assert.AreEqual(2, result.CreatedCount);
+            using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library");
+            var items = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items;
+            Assert.AreEqual(3, items.Count);
+            Assert.IsTrue(items.All(item => item.MediaStateTypeId == MediaStateType.Available));
+            var movieId = items.Single(item => item.Title == "Example Movie").Id;
+            using var details = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + movieId);
+            Assert.AreEqual("https://app.plex.tv/desktop/#!/server/plexmachine1/details?key=%2Flibrary%2Fmetadata%2F11",
+                (await details.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!.PlexUrl);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Details/" + movieId);
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Open in Plex");
+            using var providers = await host.SendAsync(HttpMethod.Get, "/Admin/Providers");
+            var providersHtml = await providers.Content.ReadAsStringAsync();
+            StringAssert.Contains(providersHtml, "3 titles linked");
+            Assert.IsFalse(providersHtml.Contains(FakeUsenet.PlexToken, StringComparison.Ordinal));
+
+            // A complete pass unlinks what Plex no longer has; the Work stays.
+            usenet.PlexMovies = """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"11","title":"Example Movie","year":2020,"Guid":[{"id":"tmdb://603"}]}]}}""";
+            using var again = await host.SendAsync(HttpMethod.Post, Plex + "/sync");
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'plex'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CanonicalTitle\" = 'Plex Only'"));
+
+            // An import asks Plex to scan its movie libraries.
+            await RunAsync<SearchDueWantedV1>(host);
+            var completed = Path.Combine(downloads.Path, Feature);
+            Directory.CreateDirectory(completed);
+            File.WriteAllText(Path.Combine(completed, Feature + ".mkv"), new string('x', 4096));
+            usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
+            usenet.PlexRequests.Clear();
+            await RunAsync<MonitorDownloadsV1>(host);
+            CollectionAssert.Contains(usenet.PlexRequests, "/library/sections/1/refresh");
+            CollectionAssert.DoesNotContain(usenet.PlexRequests, "/library/sections/2/refresh");
+
+            // Disconnecting removes the links, not the Works.
+            using var disconnected = await host.SendAsync(HttpMethod.Delete, Plex);
+            Assert.AreEqual(HttpStatusCode.OK, disconnected.StatusCode, await disconnected.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'plex'"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"ProtectedSecret\" FROM \"Providers\" WHERE \"Key\" = 'plex'"));
+        }
+
+        [TestMethod]
         public async Task Razor_WantedSearchAndConnections_RenderRealResults()
         {
             using var storage = new TemporaryDirectory();
@@ -589,6 +661,7 @@ namespace Jularr.Backend.Tests
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
+                services.AddHttpClient<Jularr.Integrations.Logic.Plex.PlexServerClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
             });
 
             // A writable movie library and one indexer plus one client.
@@ -672,8 +745,26 @@ namespace Jularr.Backend.Tests
             public string Queue { get; set; } = EmptyQueue;
             public string History { get; set; } = """{"history":{"slots":[]}}""";
 
+            public const string PlexToken = "plex-server-token";
+            public List<string> PlexRequests { get; } = [];
+            public string PlexMovies { get; set; } = """{"MediaContainer":{"totalSize":3,"Metadata":[{"ratingKey":"11","title":"Example Movie","year":2020,"Guid":[{"id":"tmdb://603"}]},{"ratingKey":"12","title":"Plex Only","year":2021,"Guid":[{"id":"imdb://tt0000012"}]},{"ratingKey":"13","title":"Home Video"}]}}""";
+
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                if (request.RequestUri!.Host == "plex.example.test")
+                {
+                    PlexRequests.Add(request.RequestUri.PathAndQuery);
+                    if (!request.Headers.TryGetValues("X-Plex-Token", out var tokens) || tokens.Single() != PlexToken) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                    return request.RequestUri.AbsolutePath switch
+                    {
+                        "/identity" => Json("""{"MediaContainer":{"machineIdentifier":"plexmachine1","version":"1.41.0"}}"""),
+                        "/library/sections" => Json("""{"MediaContainer":{"Directory":[{"key":"1","type":"movie","title":"Movies"},{"key":"2","type":"show","title":"Shows"},{"key":"3","type":"artist","title":"Music"}]}}"""),
+                        "/library/sections/1/all" => Json(PlexMovies),
+                        "/library/sections/2/all" => Json("""{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"21","title":"Example Show","year":2020,"Guid":[{"id":"tvdb://81189"},{"id":"tmdb://1399"}]}]}}"""),
+                        _ => Json("{}")
+                    };
+                }
+
                 if (request.RequestUri!.Host == "api.themoviedb.org")
                 {
                     return Tmdb(request);

@@ -41,7 +41,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Razor_ProviderForms_HaveUniqueLabelsAndRequireBooleanInput()
         {
-            await using var host = await Host.CreateAsync(razor: true);
+            await using var host = await Host.CreateAsync(razor: true, media: true);
             await host.Fixture.RunSqlAsync("INSERT INTO \"Providers\" (\"Key\") VALUES ('test-registry')");
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));

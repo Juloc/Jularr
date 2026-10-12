@@ -64,7 +64,17 @@ namespace Jularr.Backend.Service.User.Media.V1
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
-                    ) AS "BackdropUrl"
+                    ) AS "BackdropUrl",
+                    (
+                        SELECT
+                            'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
+                        FROM
+                            "WorkExternalIdentities" AS plex
+                            JOIN "Providers" AS provider ON provider."Key" = 'plex' AND provider."IsEnabled" AND provider."ExternalId" IS NOT NULL
+                        WHERE
+                            plex."WorkId" = work."Id"
+                            AND plex."Namespace" = 'plex'
+                    ) AS "PlexUrl"
                 FROM
                     "Works" AS work
                 LEFT JOIN
@@ -188,7 +198,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             fact."IsManual" DESC
                         LIMIT 1
                     ) AS "PosterUrl",
-                    NULL::text AS "BackdropUrl"
+                    NULL::text AS "BackdropUrl",
+                    NULL::text AS "PlexUrl"
                 FROM
                     "WatchlistEntries" AS entry
                 INNER JOIN

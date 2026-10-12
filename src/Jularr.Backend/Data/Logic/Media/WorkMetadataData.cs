@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Localization;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.Logic.Media
 {
@@ -98,11 +99,12 @@ namespace Jularr.Backend.Data.Logic.Media
     // Viewer state of a provider title that already is a Work.
     internal sealed class DiscoverOverlayData : BaseData
     {
-        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId)
+        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId, string? plexUrl)
         {
             Value = value;
             WorkId = workId;
             MediaStateTypeId = mediaStateTypeId;
+            PlexUrl = plexUrl;
         }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
@@ -113,6 +115,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
         public MediaStateType MediaStateTypeId { get; }
+
+        [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
+        public string? PlexUrl { get; }
     }
 
     internal sealed class LibraryFilterData : BaseData

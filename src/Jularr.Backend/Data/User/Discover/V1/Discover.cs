@@ -1,6 +1,7 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.User.Discover.V1
 {
@@ -60,10 +61,11 @@ namespace Jularr.Backend.Data.User.Discover.V1
     public sealed class DiscoverItemV1 : BaseResponse
     {
         public DiscoverItemV1(MediaType mediaTypeId, int? tmdbId, long? workId, string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            MediaStateType mediaStateTypeId)
+            MediaStateType mediaStateTypeId, string? plexUrl)
         {
             MediaTypeId = mediaTypeId;
             TmdbId = tmdbId;
+            PlexUrl = plexUrl;
             WorkId = workId;
             Title = title;
             ReleaseYear = releaseYear;
@@ -99,6 +101,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
         public MediaStateType MediaStateTypeId { get; }
+
+        // Opens the title on the connected Plex server.
+        [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
+        public string? PlexUrl { get; }
     }
 
     public sealed class ReadContinueParametersV1 : BaseParameters

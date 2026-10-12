@@ -90,6 +90,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
                                     JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                                 WHERE
                                     asset."WorkId" = work."Id"
+                            ) OR EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkExternalIdentities" AS plex
+                                WHERE
+                                    plex."WorkId" = work."Id"
+                                    AND plex."Namespace" = 'plex'
                             ) THEN 3
                             WHEN EXISTS (
                                 SELECT
@@ -109,7 +117,17 @@ namespace Jularr.Backend.Service.User.Discover.V1
                                     AND request."AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5)
                             ) THEN 2
                             ELSE 1
-                        END AS "MediaStateTypeId"
+                        END AS "MediaStateTypeId",
+                        (
+                            SELECT
+                                'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
+                            FROM
+                                "WorkExternalIdentities" AS plex
+                                JOIN "Providers" AS provider ON provider."Key" = 'plex' AND provider."IsEnabled" AND provider."ExternalId" IS NOT NULL
+                            WHERE
+                                plex."WorkId" = work."Id"
+                                AND plex."Namespace" = 'plex'
+                        ) AS "PlexUrl"
                     FROM
                         "Works" AS work
                         LEFT JOIN "WorkExternalIdentities" AS tmdb ON tmdb."WorkId" = work."Id" AND tmdb."Namespace" IN ('tmdb_movie', 'tmdb_tv')
@@ -271,6 +289,14 @@ namespace Jularr.Backend.Service.User.Discover.V1
                                     JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                                 WHERE
                                     asset."WorkId" = identity."WorkId"
+                            ) OR EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkExternalIdentities" AS plex
+                                WHERE
+                                    plex."WorkId" = identity."WorkId"
+                                    AND plex."Namespace" = 'plex'
                             ) THEN 3
                             WHEN EXISTS (
                                 SELECT
@@ -290,7 +316,17 @@ namespace Jularr.Backend.Service.User.Discover.V1
                                     AND request."AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5)
                             ) THEN 2
                             ELSE 1
-                        END AS "MediaStateTypeId"
+                        END AS "MediaStateTypeId",
+                        (
+                            SELECT
+                                'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
+                            FROM
+                                "WorkExternalIdentities" AS plex
+                                JOIN "Providers" AS provider ON provider."Key" = 'plex' AND provider."IsEnabled" AND provider."ExternalId" IS NOT NULL
+                            WHERE
+                                plex."WorkId" = identity."WorkId"
+                                AND plex."Namespace" = 'plex'
+                        ) AS "PlexUrl"
                     FROM
                         "WorkExternalIdentities" AS identity
                     WHERE
@@ -308,7 +344,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             var known = overlay.GetValueOrDefault(result.Id);
             return new DiscoverItemV1(mediaType, result.Id, known?.WorkId, Limit(result.Title, 500)!, result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Overview, 4000),
-                TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested);
+                TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
         }
 
         private static string? Limit(string? value, int length) => value is null ? null : value.Length <= length ? value : value[..length];

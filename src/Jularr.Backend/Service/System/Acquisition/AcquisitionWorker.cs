@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Backend.Service.System.Provider.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,10 +14,12 @@ namespace Jularr.Backend.Service.System.Acquisition
     {
         private static readonly TimeSpan MonitorInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan SearchInterval = TimeSpan.FromMinutes(2);
+        private static readonly TimeSpan PlexInterval = TimeSpan.FromMinutes(30);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var nextSearch = DateTimeOffset.MinValue;
+            var nextPlexSync = DateTimeOffset.MinValue;
             using var timer = new PeriodicTimer(MonitorInterval, time);
             do
             {
@@ -27,6 +30,13 @@ namespace Jularr.Backend.Service.System.Acquisition
                     await RunAsync<RefreshWantedMetadataV1>(stoppingToken);
                     await RunAsync<SearchDueWantedV1>(stoppingToken);
                     nextSearch = time.GetUtcNow() + SearchInterval;
+                }
+
+                // Plex availability follows the server every half hour.
+                if (time.GetUtcNow() >= nextPlexSync)
+                {
+                    await RunAsync<SyncPlexLibraryV1>(stoppingToken);
+                    nextPlexSync = time.GetUtcNow() + PlexInterval;
                 }
             }
             while (await WaitAsync(timer, stoppingToken));

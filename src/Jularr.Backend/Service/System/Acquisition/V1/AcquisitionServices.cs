@@ -18,6 +18,7 @@ using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Media;
+using Jularr.Backend.Service.Admin.Provider;
 using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
@@ -226,10 +227,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private readonly IDataProtector _protector;
         private readonly StorageOptions _options;
         private readonly TimeProvider _time;
+        private readonly PlexServer _plex;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, PlexServer plex, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
         {
             _sabnzbd = sabnzbd;
+            _plex = plex;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _options = options.Value;
             _time = time;
@@ -483,6 +486,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), ct);
                 return true;
             }, CancellationToken);
+
+            // A connected Plex shows the title right away.
+            await _plex.RefreshAsync(Context, download.MediaTypeId, CancellationToken);
         }
 
         private Task AttentionAsync(long operationId, string attentionKey) =>

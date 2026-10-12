@@ -22,6 +22,7 @@ using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.System.Acquisition;
 using Jularr.Backend.Service.System.Operation;
 using Jularr.Backend.Service.Admin.Media;
+using Jularr.Backend.Service.Admin.Provider;
 using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.User.Playback;
 using Jularr.Backend.Service.Public.Localization.V1;
@@ -96,6 +97,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<WorkMetadata>();
+            services.TryAddTransient<PlexServer>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
@@ -159,6 +161,12 @@ namespace Jularr.Backend.Service.Core
             {
                 http.Timeout = TimeSpan.FromSeconds(10);
                 http.MaxResponseContentBufferSize = 1024 * 1024;
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+                .RemoveAllLoggers();
+            services.AddHttpClient<PlexServerClient>(http =>
+            {
+                http.Timeout = TimeSpan.FromSeconds(20);
+                http.MaxResponseContentBufferSize = 16 * 1024 * 1024;
             }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
                 .RemoveAllLoggers();
             services.AddHttpClient<NewznabClient>(http =>
