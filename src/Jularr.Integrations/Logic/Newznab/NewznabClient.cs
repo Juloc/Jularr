@@ -230,7 +230,8 @@ namespace Jularr.Integrations.Logic.Newznab
 
         private static Uri? ResolveUri(string baseUrl, string value)
         {
-            if (Uri.TryCreate(value, UriKind.Absolute, out var absolute))
+            // A leading slash is relative to the indexer, never a local file path.
+            if (!value.StartsWith('/') && Uri.TryCreate(value, UriKind.Absolute, out var absolute))
             {
                 return absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps ? absolute : null;
             }
