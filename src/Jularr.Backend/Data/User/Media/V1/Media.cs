@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Playback;
 
 namespace Jularr.Backend.Data.User.Media.V1
 {
@@ -81,7 +82,7 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkAvailabilityV1 : BaseResponse
     {
         public WorkAvailabilityV1(long id, long workVersionId, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
-            long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages)
+            long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages, long? resumePositionMs, bool isCompleted)
         {
             Id = id;
             WorkVersionId = workVersionId;
@@ -96,6 +97,8 @@ namespace Jularr.Backend.Data.User.Media.V1
             Height = height;
             AudioLanguages = audioLanguages;
             SubtitleLanguages = subtitleLanguages;
+            ResumePositionMs = resumePositionMs;
+            IsCompleted = isCompleted;
         }
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
@@ -136,5 +139,11 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Languages))]
         public string[] SubtitleLanguages { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PositionMs), false)]
+        public long? ResumePositionMs { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
+        public bool IsCompleted { get; }
     }
 }

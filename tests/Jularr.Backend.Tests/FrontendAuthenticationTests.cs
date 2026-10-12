@@ -25,11 +25,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
 
             // Folder moves preserve URLs.
-            foreach (var path in new[] { "/", "/Details/101", "/Player/101", "/Watchlist", "/Settings", "/Account/Profiles", "/Account/Sessions", "/Account/Logout" })
+            foreach (var path in new[] { "/", "/Details/101", "/Watchlist", "/Settings", "/Account/Profiles", "/Account/Sessions", "/Account/Logout" })
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path);
             }
+
+            // Player routes take canonical asset identities.
+            using var player = await host.SendAsync(HttpMethod.Get, "/Player/101");
+            Assert.AreEqual(HttpStatusCode.NotFound, player.StatusCode);
 
             using var discover = await host.SendAsync(HttpMethod.Get, "/Discover?media=movie");
             Assert.AreEqual(HttpStatusCode.MovedPermanently, discover.StatusCode);

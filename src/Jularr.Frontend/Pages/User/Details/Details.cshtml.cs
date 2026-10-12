@@ -62,36 +62,31 @@ namespace Jularr.Frontend.Pages.User.Details
                 if (_availability is { Items.Count: > 0 } availability)
                 {
                     page.Content.Add(new UiSection("details.availability", [new Table<WorkAvailabilityV1>(availability.Items)
-                        .Content("details.unit", Unit)
+                        .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber) ?? texts["details.wholeWork"]))
                         .Resource(item => item.MediaAssetTypeId, "table.type", type => "media.asset." + type)
                         .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
                         .Content("details.audio", item => new ValueText(string.Join(", ", item.AudioLanguages)))
                         .Content("details.subtitles", item => new ValueText(string.Join(", ", item.SubtitleLanguages)))
                         .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? TimeSpan.FromMilliseconds(duration).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : ""))
-                        .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))]));
+                        .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))
+                        .Content("common.actions", Play)]));
                     if (availability.Items.Count == availability.PageSize) page.Content.Add(new P(new Text("details.availabilityMore")));
                 }
             }
             else if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
 
-        private static IUiComponent Unit(WorkAvailabilityV1 item)
+        private IUiComponent Play(WorkAvailabilityV1 item)
         {
-            if (item.WorkUnitTypeId is not { } unit)
+            // Continue where this profile stopped.
+            if (!item.IsAvailable || texts.Capabilities?.CanPlay is not true)
             {
-                return new Text("details.wholeWork");
+                return new Span();
             }
 
-            var parts = new List<IUiComponent>();
-            if (item.ParentUnitNumber is { } parent)
-            {
-                parts.Add(new Text(unit == WorkUnitType.Episode ? "library.unit.Season" : "library.unit.Volume"));
-                parts.Add(new ValueText(" " + parent.ToString("0.###", CultureInfo.InvariantCulture) + " · "));
-            }
-
-            parts.Add(new Text("library.unit." + unit));
-            parts.Add(new ValueText(" " + item.UnitNumber?.ToString("0.###", CultureInfo.InvariantCulture)));
-            return new Span([.. parts]);
+            var resume = item.ResumePositionMs is > 0 ? TimeSpan.FromMilliseconds(item.ResumePositionMs.Value).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : null;
+            var label = resume is null ? new Text(item.IsCompleted ? "details.playAgain" : "details.play") : (IUiComponent)new Span(new Text("details.resume"), new ValueText(" " + resume));
+            return new A(label).Attribute("href", "/Player/" + item.Id.ToString(CultureInfo.InvariantCulture));
         }
 
         public async Task<IActionResult> OnGetAsync()

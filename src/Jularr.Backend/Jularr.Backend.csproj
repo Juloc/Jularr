@@ -15,5 +15,6 @@
     <EmbeddedResource Include="../../database/Instance.sql" LogicalName="Jularr.Database.Instance.sql" />
     <EmbeddedResource Include="../../database/Storage.sql" LogicalName="Jularr.Database.Storage.sql" />
     <EmbeddedResource Include="../../database/Library.sql" LogicalName="Jularr.Database.Library.sql" />
+    <EmbeddedResource Include="../../database/Playback.sql" LogicalName="Jularr.Database.Playback.sql" />
   </ItemGroup>
 </Project>

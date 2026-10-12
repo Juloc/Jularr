@@ -8,7 +8,7 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
-        public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted)
+        public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canPlay)
         {
             CanReadMedia = canReadMedia;
             CanManageMedia = canManageMedia;
@@ -16,6 +16,7 @@ namespace Jularr.Backend.Data.User.Instance.V1
             CanRequest = canRequest;
             CanManageRequests = canManageRequests;
             CanManageWanted = canManageWanted;
+            CanPlay = canPlay;
         }
 
         public bool CanReadMedia { get; }
@@ -24,5 +25,6 @@ namespace Jularr.Backend.Data.User.Instance.V1
         public bool CanRequest { get; }
         public bool CanManageRequests { get; }
         public bool CanManageWanted { get; }
+        public bool CanPlay { get; }
     }
 }

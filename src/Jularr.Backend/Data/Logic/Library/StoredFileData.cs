@@ -277,4 +277,15 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
     }
+
+    internal sealed class StoredFileIdData : BaseData
+    {
+        public StoredFileIdData(long id)
+        {
+            Id = id;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
+    }
 }

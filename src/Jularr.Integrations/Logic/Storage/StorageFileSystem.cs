@@ -43,6 +43,30 @@ namespace Jularr.Integrations.Logic.Storage
             return directory;
         }
 
+        public static string ResolveFile(string directory, string relativePath)
+        {
+            // Files below a resolved directory, never links.
+            var root = Path.TrimEndingDirectorySeparator(directory);
+            var path = Path.GetFullPath(Path.Combine(root, relativePath));
+            if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                throw new NasMountException("storage_unavailable");
+            }
+
+            FileSystemInfo current = new FileInfo(path);
+            while (current.FullName != root)
+            {
+                if (!current.Exists || current.LinkTarget is not null)
+                {
+                    throw new NasMountException("storage_unavailable");
+                }
+
+                current = current is FileInfo file ? file.Directory! : ((DirectoryInfo)current).Parent!;
+            }
+
+            return path;
+        }
+
         public static IReadOnlyList<string> ListDirectories(string directory, int limit)
         {
             try

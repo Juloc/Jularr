@@ -68,11 +68,16 @@ namespace Jularr.Backend.Service.User.Media.V1
                     files."IsAvailable",
                     tracks."Height",
                     tracks."AudioLanguages",
-                    tracks."SubtitleLanguages"
+                    tracks."SubtitleLanguages",
+                    progress."PositionMs" AS "ResumePositionMs",
+                    coalesce(progress."IsCompleted", FALSE) AS "IsCompleted"
                 FROM
                     "MediaAssets" AS asset
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                    LEFT JOIN "MediaProgress" AS progress ON progress."ProfileId" = @ProfileId
+                        AND progress."WorkId" = asset."WorkId"
+                        AND progress."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                     CROSS JOIN LATERAL (
                         SELECT
                             count(*) AS "FileCount",
@@ -107,6 +112,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new WorkParametersV1(Parameters.WorkId));
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkAvailabilityV1>(sql, CancellationToken);
         }

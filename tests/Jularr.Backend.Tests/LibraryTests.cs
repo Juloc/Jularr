@@ -274,7 +274,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(probe.Streams[2].IsForced);
         }
 
-        private static async Task ScanAsync(Host host, long rootId)
+        internal static async Task ScanAsync(Host host, long rootId)
         {
             using var queued = await host.SendAsync(HttpMethod.Post, Roots + "/" + rootId + "/scans");
             Assert.AreEqual(HttpStatusCode.OK, queued.StatusCode, await queued.Content.ReadAsStringAsync());
@@ -282,7 +282,7 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, CancellationToken.None));
         }
 
-        private static async Task<long> CreateMountAsync(Host host)
+        internal static async Task<long> CreateMountAsync(Host host)
         {
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/storage/mounts",
                 new SaveStorageMountDataV1("NAS", StorageProtocolType.Smb, "nas.test", "/media", "3.1.1", "jularr", null, true, "secret", "00:11:22:AA:BB:CC", "127.0.0.1", true));
@@ -290,14 +290,14 @@ namespace Jularr.Backend.Tests
             return (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
         }
 
-        private static async Task<long> CreateRootAsync(Host host, long mountId, string path, MediaType mediaType)
+        internal static async Task<long> CreateRootAsync(Host host, long mountId, string path, MediaType mediaType)
         {
             using var created = await host.SendAsync(HttpMethod.Post, Roots, new CreateLibraryRootDataV1(path, mediaType, mountId, path));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             return (await created.Content.ReadFromJsonAsync<CreateLibraryRootResultV1>())!.Id;
         }
 
-        private static async Task<Host> CreateHostAsync(string mountRoot, bool razor = false)
+        internal static async Task<Host> CreateHostAsync(string mountRoot, bool razor = false)
         {
             var host = await Host.CreateAsync(razor: razor, library: true, settings: new Dictionary<string, string>
             {
@@ -310,10 +310,10 @@ namespace Jularr.Backend.Tests
             return host;
         }
 
-        private static string Token(string html) =>
+        internal static string Token(string html) =>
             WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
 
-        private sealed class TemporaryDirectory : IDisposable
+        internal sealed class TemporaryDirectory : IDisposable
         {
             public string Path { get; } = Directory.CreateTempSubdirectory("jularr-library-").FullName;
 

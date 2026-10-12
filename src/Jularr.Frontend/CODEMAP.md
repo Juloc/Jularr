@@ -78,6 +78,7 @@ Shared conventions and Backend ownership:
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): Owner directory/editor, profile assignments and session revocation; separate from request-limit Users.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): real provider registry enablement via Owner services.
 - [Storage](Pages/Admin/Storage/Storage.cshtml.cs), [Setup Storage](Pages/Setup/Storage/Storage.cshtml.cs): shared Owner-only SMB/NFS/Local editor with Wake-on-LAN, explicit mount/wake/remove actions and the paths-on-this-connection table with safe folder browser, scan and removal. Colocated Storage assets import shared Form/Split/Table styles.
+- [Player](Pages/User/Player/Player.cshtml.cs), [UiPlayer](Framework/Components/Player.cs), [player.entry.ts](Modules/Player/player.entry.ts): canonical asset route, server-rendered chrome (-10/+30 transport, timeline, volume, speed, PiP, fullscreen, delivery info) and the client that probes capabilities, requests the PlaybackPlan, resumes and reports progress. [MediaUnitLabel.cs](Framework/MediaUnitLabel.cs) formats structure units for Details and Player.
 - [Library](Pages/Admin/Library/Library.cshtml.cs): Owner/MediaManager inventory tabs, manual identification from Backend suggestions and unit rules, and background scan status.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): Owner name/language and implemented module editor using shared field-aware forms and versioned services; disable retains data. Requests is a manual slice, not automatic acquisition.
 - [Works](Pages/Admin/Works/Works.cshtml.cs), [Work editor](Pages/Admin/Work/Work.cshtml.cs): real paged catalog, manual creation and version-checked title editing through Admin media services; inventory and acquisition controls remain pending.
@@ -101,7 +102,7 @@ Shared conventions and Backend ownership:
   [appearance module](Modules/Appearance/theme.entry.ts),
   [Discover CSS entry](Pages/User/Discover/Index.entry.scss),
   [Settings CSS entry](Pages/User/Settings/Settings.entry.scss),
-  [Player CSS entry](Modules/Player/player.entry.scss): currently declared
+  [Player entry](Modules/Player/player.entry.ts): currently declared
   page/module assets; component Sass imported only by their owners.
 - [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
   deduplicated hashed sprite, with icons also allowed beside modules/pages.

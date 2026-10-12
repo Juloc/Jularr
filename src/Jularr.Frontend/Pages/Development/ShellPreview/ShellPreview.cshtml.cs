@@ -47,7 +47,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
             {
                 "discover" => new IndexModel(),
                 "details" => ActivatorUtilities.CreateInstance<DetailsModel>(HttpContext.RequestServices),
-                "player" => new PlayerModel(),
+                "player" => ActivatorUtilities.CreateInstance<PlayerModel>(HttpContext.RequestServices),
                 "watchlist" => ActivatorUtilities.CreateInstance<WatchlistModel>(HttpContext.RequestServices),
                 "settings" => ActivatorUtilities.CreateInstance<SettingsModel>(HttpContext.RequestServices),
                 "admin-requests" => ActivatorUtilities.CreateInstance<RequestsModel>(HttpContext.RequestServices),

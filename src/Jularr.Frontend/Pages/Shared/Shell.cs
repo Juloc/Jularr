@@ -26,6 +26,7 @@ public sealed class Shell(
         if (texts.Capabilities?.CanManageMedia is true)
         {
             secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
+            secondary.Add(new ShellLink("admin.library.title", "/Admin/Library", "library"));
         }
 
         if (texts.Capabilities?.CanRequest is true)

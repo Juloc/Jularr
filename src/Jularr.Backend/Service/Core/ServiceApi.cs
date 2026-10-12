@@ -282,13 +282,21 @@ namespace Jularr.Backend.Service.Core
                 }
 
                 var result = await service.ExecuteAsync(parameters, default!, cancellationToken);
+
+                // Authorized files stream after the service committed.
+                if (result is IFileOutput file)
+                {
+                    http.Response.Headers.CacheControl = "private,no-store";
+                    return (IResult)Results.File(file.FilePath, file.ContentType, enableRangeProcessing: true);
+                }
+
                 if (service.OperationType == ServiceOperationType.Read)
                 {
                     http.Response.Headers["RequestVerificationToken"] = antiforgery.GetAndStoreTokens(http).RequestToken;
                 }
 
                 await ApplyAuthenticationAsync(http, result, antiforgery);
-                return Results.Ok<object>(result);
+                return (IResult)Results.Ok<object>(result);
             };
 
         private static Delegate CreateBodyHandler<TService, TParameters, TData>() where TService : Service<TParameters, TData> =>

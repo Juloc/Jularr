@@ -110,7 +110,7 @@ die jeweils freigegebenen Bereiche. Medieninventar bleibt offen.
 Die API liegt unter `GET|PUT /api/v1/admin/instance/settings`; SQL und
 Sprachvalidierung bleiben im Backend. Eine neue Installation benötigt hierfür
 die frische [Instance-Baseline](database/Instance.sql) nach der Account-Baseline.
-Library und Requests sind schaltbar: Abschalten sperrt die jeweiligen Services
+Library, Requests und Playback sind schaltbar: Abschalten sperrt die jeweiligen Services
 und entfernt ihre Links, ohne Daten zu löschen.
 User `ReadInstanceCapabilitiesV1` liefert die verfügbaren Funktionen; Public
 `ReadInstancePresentationV1` liefert ausschließlich Name und Sprachdefault.
@@ -317,7 +317,9 @@ Profile-Auswahl mit PIN, vollständige Profile-Verwaltung und alte Android-/TV-V
 2FA werden derzeit ohne Anmeldung abgelehnt, nicht am zweiten Faktor vorbeigeführt.
 Plex wurde mit kontrollierten Provider-Antworten getestet, noch nicht gegen eine echte Installation.
 Details/Watchlist, manuelle Medienverwaltung und Requests/Wanted verwenden echte
-Services. Home/Player und automatische Arr-Abläufe bleiben offen.
+Services. Der Player spielt kompatible Dateien direkt (Direct Play mit HTTP-Range),
+setzt pro Profil exakt fort und markiert nur ein echtes Ende als gesehen; Remux und
+Transcoding (FFmpeg/HLS), Home und automatische Arr-Abläufe bleiben offen.
 Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.

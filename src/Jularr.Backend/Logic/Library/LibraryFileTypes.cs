@@ -24,6 +24,19 @@ namespace Jularr.Backend.Logic.Library
             [MediaType.Game] = Game
         }.ToFrozenDictionary();
 
+        private static readonly FrozenDictionary<string, (string Container, string ContentType)> Streams = new Dictionary<string, (string, string)>
+        {
+            [".mp4"] = ("mp4", "video/mp4"), [".m4v"] = ("mp4", "video/mp4"), [".mov"] = ("mp4", "video/quicktime"), [".webm"] = ("webm", "video/webm"),
+            [".mkv"] = ("mkv", "video/x-matroska"), [".avi"] = ("avi", "video/x-msvideo"), [".wmv"] = ("wmv", "video/x-ms-wmv"), [".ts"] = ("ts", "video/mp2t"),
+            [".m2ts"] = ("ts", "video/mp2t"), [".mpg"] = ("mpeg", "video/mpeg"), [".mpeg"] = ("mpeg", "video/mpeg"), [".mp3"] = ("mp3", "audio/mpeg"),
+            [".m4a"] = ("mp4", "audio/mp4"), [".m4b"] = ("mp4", "audio/mp4"), [".flac"] = ("flac", "audio/flac"), [".ogg"] = ("ogg", "audio/ogg"),
+            [".opus"] = ("ogg", "audio/ogg"), [".aac"] = ("aac", "audio/aac"), [".wav"] = ("wav", "audio/wav"), [".wv"] = ("wv", "audio/x-wavpack")
+        }.ToFrozenDictionary();
+
+        // Container family and HTTP content type of playable files.
+        public static (string Container, string ContentType) GetStream(string relativePath) =>
+            Streams.TryGetValue(Path.GetExtension(relativePath).ToLowerInvariant(), out var stream) ? stream : ("unknown", "application/octet-stream");
+
         public static IReadOnlySet<string> GetScanExtensions(MediaType mediaType) => ScanExtensions[mediaType];
 
         public static bool IsSubtitle(string relativePath) => Subtitle.Contains(Path.GetExtension(relativePath).ToLowerInvariant());

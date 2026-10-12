@@ -48,6 +48,11 @@ WorkVersions and MediaAssets. Composite foreign keys keep every level on one Wor
 A duplicate copy of the same unit becomes another version, never a second asset in
 the same version. Metadata policy, image cache and monitoring are not installed.
 
+`Playback.sql` follows Library. MediaProgress keeps one current position per profile
+and exact Work/unit target; completion is explicit and sticky, and a completed item
+restarts at zero. PlaybackSessions record active and ended playback with a public
+UUID; ended sessions are the playback history. Instance.sql seeds the Playback module.
+
 `Library.sql` follows Media and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative
 inventory with probe facts (former MediaTechnicalAnalyses columns), MediaTracks hold

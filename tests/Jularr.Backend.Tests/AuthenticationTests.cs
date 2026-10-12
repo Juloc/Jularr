@@ -312,9 +312,12 @@ namespace Jularr.Backend.Tests
 
                 if (library)
                 {
-                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Library.sql")!;
-                    using var reader = new StreamReader(schema);
-                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                    foreach (var name in new[] { "Library", "Playback" })
+                    {
+                        using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database." + name + ".sql")!;
+                        using var reader = new StreamReader(schema);
+                        await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                    }
                 }
 
                 var hasher = new PasswordHasher<AccountAuthenticationData>();
