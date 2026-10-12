@@ -13,6 +13,16 @@ namespace Jularr.Frontend.Framework
         // Shared service failure feedback.
         public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
         {
+            // Reject failed HTTP binding.
+            if (!context.ModelState.IsValid)
+            {
+                Error = ServiceError.FromException(new BadHttpRequestException("Request values could not be bound."));
+                Response.StatusCode = Error.StatusCode;
+                PreparePage();
+                context.Result = Page();
+                return;
+            }
+
             var executed = await next();
             if (executed.Exception is null || executed.ExceptionHandled || executed.Exception is OperationCanceledException)
             {

@@ -15,6 +15,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.invalid_antiforgery_token", "Please reload the page and try again."),
             new("errors.invalid_request", "The request could not be processed."),
             new("errors.provider_unavailable", "The external provider is currently unavailable."),
+            new("errors.concurrent_change", "Another change was made at the same time. Please reload and try again."),
             new("errors.internal_error", "An unexpected error occurred."),
             new("errors.rate_limit_exceeded", "Too many requests. Please try again later."),
             new("errors.validation.required", "A value is required."),

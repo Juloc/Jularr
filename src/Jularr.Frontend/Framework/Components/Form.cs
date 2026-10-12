@@ -39,6 +39,15 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Password, labelKey, autocomplete);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey) => Add(field, FieldControl.Number, labelKey, "off");
 
+        public Form<TData> Multiline<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
+        {
+            var field = Declare(selector, FieldControl.Text, labelKey);
+            var input = new HtmlTextarea(new ValueText(Value(selector) ?? "")).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("rows", "5");
+            Configure(field, input);
+            AddField(field, input);
+            return this;
+        }
+
         public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options)
         {
             var field = Declare(selector, FieldControl.Select, labelKey);
@@ -130,7 +139,19 @@ namespace Jularr.Frontend.Framework
             return field;
         }
 
-        private string? Value<TValue>(Expression<Func<TData, TValue>> selector) => _data is null ? null : Convert.ToString(selector.Compile()(_data), CultureInfo.InvariantCulture);
+        private string? Value<TValue>(Expression<Func<TData, TValue>> selector)
+        {
+            if (_data is null) return null;
+
+            // Preserve IDs and concurrency values.
+            return selector.Compile()(_data) switch
+            {
+                DateTime timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
+                DateTimeOffset timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
+                Enum catalogValue => Convert.ToByte(catalogValue).ToString(CultureInfo.InvariantCulture),
+                var value => Convert.ToString(value, CultureInfo.InvariantCulture)
+            };
+        }
 
         private void Configure(BaseField field, HtmlElement input)
         {
@@ -162,6 +183,7 @@ namespace Jularr.Frontend.Framework
         private sealed class HtmlForm(params IUiComponent[] children) : HtmlElement("form", children);
         private sealed class HtmlSelect(params IUiComponent[] children) : HtmlElement("select", children);
         private sealed class HtmlOption(params IUiComponent[] children) : HtmlElement("option", children);
+        private sealed class HtmlTextarea(params IUiComponent[] children) : HtmlElement("textarea", children);
     }
 
     public sealed record SelectOption(string Value, string Label);

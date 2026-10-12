@@ -25,14 +25,14 @@ namespace Jularr.Backend.Data.Logic.Localization
 
     public sealed class UiTranslationSaveData : BaseData
     {
-        public UiTranslationSaveData(long uiLocaleId, long uiTranslationMessageId,
-            long messageVersion, string text, UiTranslationStatusType uiTranslationStatusTypeId)
+        public UiTranslationSaveData(long uiLocaleId, long uiTranslationMessageId, long messageVersion, string text, UiTranslationStatusType uiTranslationStatusTypeId, long? translationVersion = null)
         {
             UiLocaleId = uiLocaleId;
             UiTranslationMessageId = uiTranslationMessageId;
             MessageVersion = messageVersion;
             Text = text;
             UiTranslationStatusTypeId = uiTranslationStatusTypeId;
+            TranslationVersion = translationVersion;
         }
 
         [DataField(typeof(UiTranslationFields), nameof(UiTranslationFields.UiLocaleId))]
@@ -49,5 +49,8 @@ namespace Jularr.Backend.Data.Logic.Localization
 
         [DataField(typeof(UiTranslationFields), nameof(UiTranslationFields.UiTranslationStatusTypeId))]
         public UiTranslationStatusType UiTranslationStatusTypeId { get; }
+
+        [DataField(typeof(UiTranslationFields), nameof(UiTranslationFields.Version), false)]
+        public long? TranslationVersion { get; }
     }
 }

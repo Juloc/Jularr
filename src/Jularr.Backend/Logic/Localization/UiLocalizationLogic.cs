@@ -123,9 +123,7 @@ namespace Jularr.Backend.Logic.Localization
             }
         }
 
-        // Future administrator services own authorization. This writer never calls an AI provider.
-        public static async Task SaveUiTranslationAsync(this LogicContext context,
-            UiTranslationSaveData data, CancellationToken cancellationToken)
+        public static async Task SaveUiTranslationAsync(this LogicContext context, UiTranslationSaveData data, CancellationToken cancellationToken)
         {
             data.Validate();
             if (data.UiTranslationStatusTypeId is not (UiTranslationStatusType.Generated
@@ -134,8 +132,26 @@ namespace Jularr.Backend.Logic.Localization
                 throw new DataValidationException(nameof(data.UiTranslationStatusTypeId), "invalid_transition");
             }
 
-            // Serialize edits with source/context changes, including startup synchronization.
+            // Validate the target locale.
             var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    locale."Id"
+                FROM
+                    "UiLocales" AS locale
+                WHERE
+                    locale."Id" = @UiLocaleId
+                    AND locale."IsEnabled" = TRUE;
+                """;
+            sql.Parameters.Add(data);
+            if (await context.ReadOptionalAsync<UiLocaleData>(sql, cancellationToken) is null)
+            {
+                throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
+            }
+
+            // Serialize source changes.
+            sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
@@ -149,7 +165,8 @@ namespace Jularr.Backend.Logic.Localization
                 FOR UPDATE OF message;
                 """;
             sql.Parameters.Add(data);
-            var source = await context.ReadRequiredAsync<UiCatalogTextData>(sql, cancellationToken);
+            var source = await context.ReadOptionalAsync<UiCatalogTextData>(sql, cancellationToken)
+                ?? throw new DataValidationException(nameof(data.MessageVersion), "outdated_version");
             UiTextPlaceholders.RequireMatching(source.Text, data.Text);
 
             sql = new SqlStatement();
@@ -159,8 +176,21 @@ namespace Jularr.Backend.Logic.Localization
                     INSERT INTO
                         "UiTranslations" AS translation
                         ("UiLocaleId", "UiTranslationMessageId", "Text", "UiTranslationStatusTypeId", "MessageVersion")
-                    VALUES
-                        (@UiLocaleId, @UiTranslationMessageId, @Text, @UiTranslationStatusTypeId, @MessageVersion)
+                    SELECT
+                        @UiLocaleId,
+                        @UiTranslationMessageId,
+                        @Text,
+                        @UiTranslationStatusTypeId,
+                        @MessageVersion
+                    WHERE
+                        @TranslationVersion IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM "UiTranslations" AS existing
+                            WHERE existing."UiLocaleId" = @UiLocaleId
+                                AND existing."UiTranslationMessageId" = @UiTranslationMessageId
+                                AND existing."Version" = @TranslationVersion
+                        )
                     ON CONFLICT ("UiLocaleId", "UiTranslationMessageId") DO UPDATE
                     SET
                         "Text" = EXCLUDED."Text",
@@ -169,8 +199,8 @@ namespace Jularr.Backend.Logic.Localization
                         "Version" = translation."Version" + 1,
                         "UpdatedAt" = now()
                     WHERE
-                        translation."UiTranslationStatusTypeId" <> 4
-                        OR EXCLUDED."UiTranslationStatusTypeId" = 4
+                        (translation."UiTranslationStatusTypeId" <> 4 OR EXCLUDED."UiTranslationStatusTypeId" = 4)
+                        AND (EXCLUDED."UiTranslationStatusTypeId" <> 4 OR translation."Version" = @TranslationVersion)
                     RETURNING
                         "UiLocaleId"
                 )
@@ -184,7 +214,11 @@ namespace Jularr.Backend.Logic.Localization
                     locale."Id" = changed."UiLocaleId";
                 """;
             sql.Parameters.Add(data);
-            await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            var affected = await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            if (affected == 0 && data.UiTranslationStatusTypeId == UiTranslationStatusType.Manual)
+            {
+                throw new DataValidationException(nameof(data.TranslationVersion), "outdated_version");
+            }
         }
     }
 }

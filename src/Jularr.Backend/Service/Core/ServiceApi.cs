@@ -35,6 +35,8 @@ namespace Jularr.Backend.Service.Core
         public const string MediaReadPolicyName = "media.read";
         public const string RequestsReadPolicyName = "requests.read";
         public const string WantedReadPolicyName = "wanted.read";
+        public const string LocalizationReadPolicyName = "localization.read";
+        public const string AccountsReadPolicyName = "accounts.read";
 
         public static IServiceCollection AddJularrServices(this IServiceCollection services, IConfiguration configuration)
         {
@@ -86,7 +88,8 @@ namespace Jularr.Backend.Service.Core
             services.AddAuthorization(options =>
             {
                 foreach (var (policyName, permission) in new[] { (AdminPolicyName, "admin.access"), (StorageReadPolicyName, "storage.read"), (RulesReadPolicyName, "rules.read"),
-                    (MediaReadPolicyName, "media.read"), (RequestsReadPolicyName, "requests.read"), (WantedReadPolicyName, "wanted.read") })
+                    (MediaReadPolicyName, "media.read"), (RequestsReadPolicyName, "requests.read"), (WantedReadPolicyName, "wanted.read"),
+                    (LocalizationReadPolicyName, "localization.read"), (AccountsReadPolicyName, "accounts.read") })
                 {
                     options.AddPolicy(policyName, policy => policy.RequireAuthenticatedUser().RequireAssertion(async authorization =>
                     {

@@ -19,6 +19,8 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizePage("/Admin/Library", ServiceApi.StorageReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Rules", ServiceApi.RulesReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Users", ServiceApi.RulesReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Localization", ServiceApi.LocalizationReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Accounts", ServiceApi.AccountsReadPolicyName);
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/ShellPreview");
 });

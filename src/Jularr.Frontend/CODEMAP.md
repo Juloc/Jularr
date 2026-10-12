@@ -71,8 +71,10 @@ Shared conventions and Backend ownership:
 - [Profiles](Pages/Account/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions.cshtml.cs),
   [Logout](Pages/Account/Logout.cshtml.cs): typed service-driven account session flows.
 - [AccessDenied](Pages/Account/AccessDenied.cshtml.cs): sanitized catalog-backed 403 page for denied Razor routes.
+- [Accounts](Pages/Admin/Accounts.cshtml.cs): Owner directory/editor for account name, role and approval; separate from request-limit Users.
+- [Localization](Pages/Admin/Localization.cshtml.cs): Owner catalog list, source descriptions and manual translation forms; versions and field errors come from Backend services.
 - [Settings](Pages/Settings.cshtml.cs): active profile name/language editing,
-  read-only non-owner view and account navigation; no page-local SQL or permissions.
+  read-only non-owner view and grant-based account/admin navigation; no page-local SQL or permissions.
 - [Vite build](vite.config.ts), [package.json](package.json),
   [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
   compile/fingerprint Sass and TypeScript from colocated `*.entry.scss`

@@ -12,6 +12,90 @@ namespace Jularr.Backend.Logic.Account
 {
     internal static class AccountLogic
     {
+        public static Task<AccountUpdateData> ReadAccountAsync(this LogicContext context, long accountId, CancellationToken cancellationToken)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    account."Id",
+                    account."DisplayName",
+                    account."AccountRoleTypeId",
+                    account."IsEnabled",
+                    account."UpdatedAt"
+                FROM
+                    "Accounts" AS account
+                WHERE
+                    account."Id" = @AccountId
+                FOR UPDATE OF account;
+                """;
+            sql.Parameters.Add(new AccountParameters(accountId));
+            return context.ReadRequiredAsync<AccountUpdateData>(sql, cancellationToken);
+        }
+
+        public static async Task UpdateAccountAsync(this LogicContext context, AccountUpdateData data, DateTime expectedVersion, CancellationToken cancellationToken)
+        {
+            data.Validate();
+            if (data.UpdatedAt != expectedVersion)
+            {
+                throw new DataValidationException(nameof(data.UpdatedAt), "outdated_version");
+            }
+
+            // Retain an enabled Owner.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH changed AS (
+                    UPDATE
+                        "Accounts" AS account
+                    SET
+                        "DisplayName" = @DisplayName,
+                        "AccountRoleTypeId" = @AccountRoleTypeId,
+                        "IsEnabled" = @IsEnabled,
+                        "CredentialRevision" = account."CredentialRevision" + CASE
+                            WHEN account."AccountRoleTypeId" <> @AccountRoleTypeId OR account."IsEnabled" <> @IsEnabled THEN 1
+                            ELSE 0
+                        END,
+                        "UpdatedAt" = clock_timestamp()
+                    WHERE
+                        account."Id" = @Id
+                        AND (account."AccountRoleTypeId" <> 1 OR (@AccountRoleTypeId = 1 AND @IsEnabled)
+                            OR EXISTS (
+                                SELECT 1
+                                FROM "Accounts" AS owner
+                                WHERE owner."Id" <> @Id
+                                    AND owner."AccountRoleTypeId" = 1
+                                    AND owner."IsEnabled" = TRUE
+                            ))
+                    RETURNING
+                        account."Id",
+                        account."CredentialRevision"
+                ), revoked AS (
+                    UPDATE
+                        "AccountSessions" AS session
+                    SET
+                        "RevokedAt" = statement_timestamp()
+                    FROM
+                        changed
+                    WHERE
+                        session."AccountId" = changed."Id"
+                        AND session."CredentialRevision" <> changed."CredentialRevision"
+                        AND session."RevokedAt" IS NULL
+                    RETURNING
+                        session."Id"
+                )
+                SELECT
+                    changed."Id"
+                FROM
+                    changed;
+                """;
+            sql.Parameters.Add(data);
+            if (await context.ReadOptionalAsync<AccountIdData>(sql, cancellationToken) is null)
+            {
+                throw new DataValidationException(nameof(data.AccountRoleTypeId), "invalid_transition");
+            }
+        }
+
         private static readonly PasswordHasher<AccountAuthenticationData> PasswordHasher = new(
             Options.Create(new PasswordHasherOptions { IterationCount = 600_000 }));
         private static readonly AccountAuthenticationData MissingAccount = new(1, 1, null, false, false);

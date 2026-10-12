@@ -70,9 +70,12 @@ and commit together. No migration, active-database installation or extra server.
    read/write/seek access first; introduce managed mounts only where the consumer
    actually requires one. Do not impose mounting as a product prerequisite.
 
-Role authorization and session revocation/rotation are implemented; administrative
-domain operations, Storage/NAS, media pages, standalone Arr, takeover and Player
-remain unfinished. Implement the shared owners in that order, with the same pipeline
+Role authorization, session revocation/rotation, Owner account directory/edit/approval
+and Owner catalog description/manual translation editing are implemented. Account
+updates protect the last enabled Owner and invalidate sessions after role/status
+changes; stale catalog/account edits cannot overwrite newer data. These use existing
+baseline tables. Storage/NAS, media pages, standalone Arr, takeover and Player remain
+unfinished. Implement the shared owners in that order, with the same pipeline
 for native and external downloaders and the same Storage locations for imports/playback.
 
 Dev reference owners: [Acquisition core](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Acquisition/Core/CODEMAP.md),

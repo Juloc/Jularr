@@ -4,6 +4,7 @@ using Jularr.Backend.Service.Core.Localization;
 using Jularr.Integrations.Data.Common;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
+using Npgsql;
 
 namespace Jularr.Backend.Service.Core
 {
@@ -34,6 +35,7 @@ namespace Jularr.Backend.Service.Core
             AntiforgeryValidationException => new(StatusCodes.Status400BadRequest, "invalid_antiforgery_token"),
             BadHttpRequestException request => new(request.StatusCode, "invalid_request"),
             ProviderUnavailableException => new(StatusCodes.Status503ServiceUnavailable, "provider_unavailable"),
+            PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new(StatusCodes.Status409Conflict, "concurrent_change"),
             ArgumentException => new(StatusCodes.Status400BadRequest, "invalid_request"),
             _ => new(StatusCodes.Status500InternalServerError, "internal_error")
         };

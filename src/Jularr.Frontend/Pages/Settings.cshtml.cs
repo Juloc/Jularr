@@ -67,6 +67,17 @@ namespace Jularr.Frontend.Pages
                 new A(new Text("account.profile.title")).Class("button").Attribute("href", "/Account/Profiles?returnUrl=%2FSettings"),
                 new A(new Text("account.logout.title")).Class("button").Attribute("href", "/Account/Logout")
             ]));
+
+            // Expose granted administration routes.
+            if (_authentication?.Permissions.Contains("accounts.read", StringComparer.Ordinal) is true)
+            {
+                page.Content.Add(new A(new Text("admin.accounts.title")).Attribute("href", "/Admin/Accounts"));
+            }
+
+            if (_authentication?.Permissions.Contains("localization.read", StringComparer.Ordinal) is true)
+            {
+                page.Content.Add(new A(new Text("admin.localization.title")).Attribute("href", "/Admin/Localization"));
+            }
         }
 
         public async Task<IActionResult> OnGetAsync()

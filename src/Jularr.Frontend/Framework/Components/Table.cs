@@ -13,6 +13,15 @@ public sealed class Table<TData>(IReadOnlyList<TData> rows) : IUiComponent where
     private readonly List<Column> _columns = [];
 
     public Table<TData> Text<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
+        => Add(selector, labelKey, value => new DataValue(value));
+
+    public Table<TData> Link<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, Func<TValue, string> href, string actionKey)
+        => Add(selector, labelKey, value => new A(new Text(actionKey)).Attribute("href", href(value)));
+
+    public Table<TData> Resource<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, Func<TValue, string> resourceKey)
+        => Add(selector, labelKey, value => new Text(resourceKey(value)));
+
+    private Table<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, Func<TValue, IUiComponent> render)
     {
         var body = selector.Body is UnaryExpression { NodeType: ExpressionType.Convert } cast
             ? cast.Operand
@@ -26,7 +35,7 @@ public sealed class Table<TData>(IReadOnlyList<TData> rows) : IUiComponent where
         }
 
         var getter = selector.Compile();
-        _columns.Add(new Column(labelKey, item => getter(item)));
+        _columns.Add(new Column(labelKey, item => render(getter(item))));
         return this;
     }
 
@@ -40,14 +49,14 @@ public sealed class Table<TData>(IReadOnlyList<TData> rows) : IUiComponent where
 
         var body = rows.Select(row => (IUiComponent)new Tr(
             _columns.Select(column => (IUiComponent)new Cell(
-                new DataValue(column.Value(row)))).ToArray()
+                column.Value(row))).ToArray()
         )).ToArray();
 
         new Div(new TableElement(new Thead(new Tr(headings)), new Tbody(body))
             .Class("page-table")).Class("page-table-wrap").WriteTo(writer, encoder, texts);
     }
 
-    private sealed record Column(string LabelKey, Func<TData, object?> Value);
+    private sealed record Column(string LabelKey, Func<TData, IUiComponent> Value);
 
     private sealed class Cell(params IUiComponent[] children) : HtmlElement("td", children);
 

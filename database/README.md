@@ -19,7 +19,7 @@ public identifiers remain UUIDs; their secrets are represented only by hashes.
 WebAuthn Aaguid is protocol metadata, not an entity or session identifier.
 
 Every column has a canonical field in Data/Fields, grouped by Account, Profile,
-Session, Provider or Localization. Enums live separately in Data/Enums by owner.
+Provider or Localization. Enums live separately in Data/Enums by owner.
 Role, challenge-purpose and translation-status enum values match
 the smallint seeds. Fields describe value types and limits, not tables or SQL.
 Cross-field rules and relationships are enforced by schema constraints and, when
@@ -33,14 +33,18 @@ and start as null until explicitly supplied. Source synchronization never writes
 descriptions or translated text. Source/context changes increment message versions,
 mark generated/reviewed translations outdated and increment locale catalog revisions;
 manual translations are preserved. Translation saves increment the affected locale's
-revision. Future administrator services must use the canonical Logic writers.
+revision. Owner localization services and Razor editors use these canonical writers;
+manual edits require the current source and translation revisions.
 No translation generation, migration or active database installation happens implicitly.
 Public login verifies password hashes and issues hashed-secret sessions. Public
 registration creates disabled requests; Plex attempts use expiring, browser-bound,
 single-use challenges with protected device keys. Cookie middleware validates the
 database session; mutations lock its current state through the shared gate.
-Rotation/revocation endpoints, WebAuthn/TOTP completion and email/approval workflows
-are not implemented yet. Confirmed TOTP factors fail closed during login.
+Rotation/revocation endpoints and Owner account approval/name/role/status editing
+are implemented. Last-enabled-Owner protection uses serializable account updates;
+role/status changes increment CredentialRevision and revoke prior sessions.
+Enabling an account does not verify its email address. WebAuthn/TOTP completion and
+email verification workflows remain pending. Confirmed TOTP factors fail closed during login.
 PlaybackSessions are a separate domain. Conditional AccountPermissions overrides
 are not introduced as a parallel authorization engine. Broader Profile settings,
 groups and transfers are outside this base-table slice.

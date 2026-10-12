@@ -101,7 +101,16 @@ Admin-Routen verwenden Backend-Policies mit aktuellen DB-Rollenrechten.
 MediaManager darf vorerst Medien manuell verwalten sowie Requests/Wanted bearbeiten.
 Instanz-, Account-, Storage-, Provider- und Regelverwaltung bleiben Owner-only.
 Rollenänderungen wirken auch mit bestehenden Cookies; Writes prüfen die Rolle erneut
-unter derselben Session-Transaktion. Fachliche Admin-Mutationen sind noch nicht umgesetzt.
+unter derselben Session-Transaktion. Owner verwalten Accounts unter `/Admin/Accounts`
+und UI-Beschreibungen/Übersetzungen unter `/Admin/Localization`; Settings verlinkt
+die jeweils freigegebenen Bereiche. Requests/Wanted/Medienverwaltung bleiben offen.
+
+`Service.Admin.Account.V1` bietet `ReadAccountsV1`, `ReadAccountV1` und
+`UpdateAccountV1`: Name, Rolle und Aktivierung, mit Versionsprüfung und Schutz des
+letzten aktiven Owners. Rollen-/Statusänderungen widerrufen alte Sessions; Freigabe
+verifiziert keine E-Mail. Parallele Account-Mutationen laufen serialisierbar und
+melden einen bereinigten `concurrent_change`-Konflikt statt Daten zu überschreiben.
+API: `GET /api/v1/admin/accounts`, `GET|PUT /api/v1/admin/accounts/{accountId:long}`.
 
 ## Plex-Konfiguration
 
@@ -184,10 +193,14 @@ und `GET /api/v1/localization/texts/{uiLocaleId:long}`. Razor macht dafür keine
 
 KI-Kontext liegt nur in `UiTranslationMessages.Description`. Neue Schlüssel starten
 ohne Beschreibung; die Synchronisierung erfindet und überschreibt sie nicht.
-`Logic/Localization` bereitet spätere Admin-Bearbeitung mit Versionsschutz und dem
-kanonischen Translation-Writer vor. Benannte Platzhalter wie `{name}` werden geprüft.
-Diese Writer sind keine API-Endpunkte und ersetzen keine Admin-Berechtigungsprüfung.
-KI-Anforderung, Kontextpflege-Oberfläche und Admin-Services sind noch nicht implementiert.
+`Service.Admin.Localization.V1` bietet `ReadUiMessagesV1`, `ReadUiMessageV1`,
+`UpdateUiDescriptionV1` und `SaveUiTranslationV1` über den kanonischen Logic-Writer.
+`/Admin/Localization` zeigt paginierte Originaltexte, gespeicherte Übersetzungen,
+Status und Quellversion. Beschreibungen und manuelle Übersetzungen sind editierbar;
+Quell- und Übersetzungsversionen verhindern veraltetes Überschreiben. Benannte
+Platzhalter wie `{name}` werden geprüft. `TranslationVersion = null` bedeutet eine
+neue Übersetzung, nicht bedingungsloses Überschreiben. Nur aktivierte Sprachen sind
+beschreibbar. KI-Anforderung und Sprachverwaltung sind noch nicht implementiert.
 Normale Seitenaufrufe und Hoststart führen keine KI-Übersetzung aus.
 
 ProblemDetails enthält `code`, `resourceKey`, `traceId` und bei Feldfehlern `errors`
