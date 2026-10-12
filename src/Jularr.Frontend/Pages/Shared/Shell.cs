@@ -3,11 +3,8 @@ using Jularr.Frontend.Framework;
 
 namespace Jularr.Frontend.Pages.Shared
 {
-    // One application shell, not a collection of application-specific public
-    // Framework components. All shell-only helpers are local to this owner.
-    public sealed class Shell(
-        string pageTitleKey, string currentPath, ShellNavigation navigation,
-        FrontendAssets assets) : IUiComponent
+    // Shared application shell.
+    public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -46,13 +43,13 @@ namespace Jularr.Frontend.Pages.Shared
 
             // Render shared navigation.
             new Header(
-                new Brand(compact: true),
+                new Brand(assets, compact: true),
                 new Nav(new Span(new Text(pageTitleKey)).Attribute("aria-current", "page"))
                     .Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"])
             ).Class("app-header").WriteTo(writer, encoder, texts);
 
             new Aside(
-                new Brand(),
+                new Brand(assets),
                 Links(primary, "nav.primary", "sidebar-navigation", false, texts),
                 Links(secondary, "nav.secondary", "sidebar-navigation sidebar-secondary", false, texts)
             ).Class("app-sidebar").WriteTo(writer, encoder, texts);
@@ -61,9 +58,7 @@ namespace Jularr.Frontend.Pages.Shared
                 .WriteTo(writer, encoder, texts);
         }
 
-        private IUiComponent Links(
-            IReadOnlyList<ShellLink> links, string titleKey, string cssClass,
-            bool mobile, UiText texts)
+        private IUiComponent Links(IReadOnlyList<ShellLink> links, string titleKey, string cssClass, bool mobile, UiText texts)
         {
             var children = links.Select(link =>
             {

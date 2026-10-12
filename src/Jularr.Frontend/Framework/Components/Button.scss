@@ -5,14 +5,18 @@
     min-height: 42px;
     padding: 9px 15px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-control);
     background: var(--surface);
     color: var(--text);
     cursor: pointer;
     font-weight: 650;
+    text-decoration: none;
+    gap: 8px;
+    transition: background-color .12s, border-color .12s;
 
     &:hover:not(:disabled) { background: var(--surface-hover); }
     &:disabled { opacity: .65; cursor: not-allowed; }
+    &[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 
     &--primary {
         border-color: var(--accent);

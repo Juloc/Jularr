@@ -4,16 +4,18 @@
     width: 38px;
     height: 38px;
     flex: none;
-    border-radius: 10px;
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-size: 24px;
-    font-weight: 800;
-    letter-spacing: -.08em;
+
+    & > svg { width: 100%; height: 100%; }
+    &__original { display: none; }
+}
+
+html[data-skin="original"] .brand-symbol {
+    &__clean { display: none; }
+    &__original { display: block; }
 }
 
 .auth-brand { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-bottom: 22px; }
-.auth-symbol { width: 48px; height: 48px; font-size: 30px; border-radius: 13px; }
+.auth-symbol { width: 56px; height: 56px; }
 .auth-brand-name { font-size: 26px; font-weight: 800; letter-spacing: -.05em; }
 .shell-brand {
     display: flex;

@@ -247,6 +247,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Preserve Clean/Original, light/dark/system, and desktop/mobile/tablet
   accessibility. Player is a separate fullscreen page without Learning
   until its own design/PlaybackPlan contract exists.
+- Display the skin names as **Original** and **Clean**. Clean is neutral with a purple
+  accent and no ornamental artwork; Original uses the restored ink/paper/blossom
+  treatment. Both consume the same central tokens and components, never separate pages.
 - Before completing a change, check the
   [CODEMAP](../src/Jularr.Frontend/CODEMAP.md),
   verify every displayed key is in the canonical English declaration,

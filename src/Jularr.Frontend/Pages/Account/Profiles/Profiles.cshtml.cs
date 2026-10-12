@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Account.Profiles
 {
-    public sealed class ProfilesModel(ReadProfilesV1 readProfiles, SelectProfileV1 selectProfile, IAntiforgery antiforgery) : JularrPage
+    public sealed class ProfilesModel(ReadProfilesV1 readProfiles, SelectProfileV1 selectProfile, IAntiforgery antiforgery, FrontendAssets assets) : JularrPage
     {
         private PageResult<ProfileSelectionDetailsV1>? _profiles;
         private string _returnUrl = "/";
@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Pages.Account.Profiles
             page.Shell = false;
             page.Title("account.profile.title");
             page.Asset("Pages/Account/Login/Login.entry.scss");
-            var content = new List<IUiComponent> { new Brand(login: true), new H1(new Text("account.profile.title")) };
+            var content = new List<IUiComponent> { new Brand(assets, login: true), new H1(new Text("account.profile.title")) };
             if (Error is not null) content.Add(new P(new Text(Error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
 
             // Render authorized profile choices.

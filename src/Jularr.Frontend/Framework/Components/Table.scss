@@ -1,8 +1,9 @@
 .page-table-wrap {
     overflow-x: auto;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-panel);
     background: var(--surface);
+    box-shadow: var(--shadow);
 }
 
 .page-table {
@@ -25,6 +26,8 @@
         padding: 12px 15px;
         border-top: 1px solid var(--border);
     }
+
+    tbody tr:hover { background: var(--surface-hover); }
 }
 
 @media (max-width: 650px) {

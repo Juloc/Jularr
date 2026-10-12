@@ -1,6 +1,7 @@
 @page "/ShellPreview"
 @model Jularr.Frontend.Pages.Development.ShellPreview.ShellPreviewModel
 @inject UiText T
+@using Jularr.Frontend.Modules.Appearance
 @{
     ViewData["ShellPreview"] = true;
     ViewData["Title"] = Model.Definition.TitleKey is { } titleKey ? T[titleKey] : T["shell.preview"];
@@ -12,10 +13,6 @@
     }
 </nav>
 <partial name="_PageBody" model="Model.Definition" />
-<div class="preview-controls" role="group" aria-label="@T["preview.appearance"]">
-    <button class="button" type="button" data-set-skin="clean">@T["preview.skin.clean"]</button>
-    <button class="button" type="button" data-set-skin="original">@T["preview.skin.original"]</button>
-    <button class="button" type="button" data-set-mode="light">@T["preview.mode.light"]</button>
-    <button class="button" type="button" data-set-mode="dark">@T["preview.mode.dark"]</button>
-    <button class="button" type="button" data-set-mode="system">@T["preview.mode.system"]</button>
+<div class="preview-controls">
+    <partial name="_UiComponent" model="new Appearance()" />
 </div>

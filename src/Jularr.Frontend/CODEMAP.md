@@ -57,6 +57,7 @@ Shared conventions and Backend ownership:
   Mobile navigation and their private helpers in **one** shell owner.
   Watchlist/manual Works navigation follows the verified User capability result.
 - [Brand.cs](Pages/Shared/Brand.cs): shared Jularr brand for Shell and Login;
+  original and Clean marks use the fingerprinted SVG sprite and inherit skin colors.
   [Icon.cs](Framework/Components/Icon.cs): generic fingerprinted SVG primitive.
 - [AdminNavigation.cs](Framework/AdminNavigation.cs):
   Requests/Rules/Users section links; Requests hides configuration links using verified service grants.
@@ -105,6 +106,12 @@ Shared conventions and Backend ownership:
   [Settings CSS entry](Pages/User/Settings/Settings.entry.scss),
   [Player entry](Modules/Player/player.entry.ts): currently declared
   page/module assets; component Sass imported only by their owners.
+- [Theme tokens](Modules/Appearance/Theme.scss): Clean purple and Original ink/paper
+  skins over the same components; Original reuses artwork from the former Web project.
+- [Appearance](Modules/Appearance/Appearance.cs) and [styles](Modules/Appearance/appearance.entry.scss):
+  shared Original/Clean and System/Light/Dark controls in Login, Settings and preview.
+  The existing appearance script stores device-local choices and updates pressed states.
+  Instance defaults/profile override policy are not implemented here.
 - [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
   deduplicated hashed sprite, with icons also allowed beside modules/pages.
 - [MediaImage.cs](Framework/Components/MediaImage.cs): accessible lazy or
@@ -140,6 +147,8 @@ in `Modules/<Module>/`.
 
 - Frontend UI-key coverage tool: [verify-ui-resources.mjs](Tools/verify-ui-resources.mjs).
 - [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
+- [Appearance tests](Tools/appearance.test.mjs) cover preferences, selected state,
+  unavailable storage and light/dark text contrast.
 - Module/profile visibility, localized metadata policy, complete Requests/Wanted lifecycle, quota/rules, NAS health/reconnect/Synology and PIN verification remain pending.
 - Admin routing consumes Backend policies: MediaManager reaches manual media, Library identification and Requests/Wanted; Rules, user limits and Storage remain Owner-only.
 - Backend CI builds Frontend assets and runs real Razor/PostgreSQL integration tests;

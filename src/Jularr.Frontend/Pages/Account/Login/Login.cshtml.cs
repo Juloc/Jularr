@@ -4,6 +4,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Setup.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Modules.Appearance;
 using Jularr.Frontend.Pages.Shared;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +16,7 @@ namespace Jularr.Frontend.Pages.Account.Login
     [AllowAnonymous]
     [EnableRateLimiting("public")]
     public sealed class LoginModel(LoginV1 login, ReadAuthenticationV1 authentication, StartPlexV1 startPlex, CompletePlexV1 completePlex,
-        ReadSetupV1 setup, IAntiforgery antiforgery) : JularrPage
+        ReadSetupV1 setup, IAntiforgery antiforgery, FrontendAssets assets) : JularrPage
     {
         private string _email = "";
         private AuthenticationResultV1? _authentication;
@@ -28,11 +29,12 @@ namespace Jularr.Frontend.Pages.Account.Login
             page.Shell = false;
             page.Title("account.login.title");
             page.Asset("Pages/Account/Login/Login.entry.scss");
+            page.Asset("Modules/Appearance/appearance.entry.scss");
             var action = Url.Page("/Account/Login/Login", new { returnUrl = SafeReturnUrl(Request.Query["ReturnUrl"]) })!;
             var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             page.Content.Add(new Section(
-                new Brand(login: true),
+                new Brand(assets, login: true),
                 new H1(new Text("account.login.title")).Class("visually-hidden"),
                 new Form<LoginDataV1>(form =>
                 {
@@ -41,6 +43,7 @@ namespace Jularr.Frontend.Pages.Account.Login
                     form.Submit("account.login.submit");
                 }, action, token, new LoginDataV1(_email, ""), Error)
             ).Class("auth-card"));
+            page.Content.Add(new Appearance(collapsible: true));
 
             // Advertise configured methods only.
             if (_authentication?.PlexLoginEnabled == true)

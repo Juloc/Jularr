@@ -1,0 +1,16 @@
+.appearance {
+    display: grid;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+
+    & > summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+    &[open] > summary { margin-bottom: 16px; }
+
+    &__options { display: grid; gap: 18px; }
+    &__group { display: grid; gap: 8px; }
+    &__label { font-size: 13px; font-weight: 600; }
+    &__choices { display: flex; flex-wrap: wrap; gap: 8px; }
+    &__choices > .button { flex: 1; min-width: 84px; }
+}

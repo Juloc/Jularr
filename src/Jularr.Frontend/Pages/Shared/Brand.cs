@@ -4,12 +4,16 @@ using Jularr.Frontend.Framework;
 
 namespace Jularr.Frontend.Pages.Shared
 {
-    // Shared visual mark. Full pages decide where this small component belongs.
-    public sealed class Brand(bool compact = false, bool login = false) : IUiComponent
+    // Shared instance branding.
+    public sealed class Brand(FrontendAssets assets, bool compact = false, bool login = false) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var glyph = new Span(new Mark()).Class(login ? "brand-symbol auth-symbol" : "brand-symbol")
+            // Share both brand marks.
+            var glyph = new Span(
+                Mark("brand-clean", "290 255 730 765", "brand-symbol__clean"),
+                Mark("brand-original", "48 16 864 864", "brand-symbol__original"))
+                .Class(login ? "brand-symbol auth-symbol" : "brand-symbol")
                 .Attribute("aria-hidden", "true");
             var name = new Span(new ValueText(texts.InstanceName));
             name.Class(login ? "shell-brand__name auth-brand-name" : "shell-brand__name");
@@ -35,10 +39,11 @@ namespace Jularr.Frontend.Pages.Shared
             }
         }
 
-        private sealed class Mark : IUiComponent
-        {
-            public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts) =>
-                encoder.Encode(writer, "J"); // Brand mark, not translatable UI copy.
-        }
+        private IUiComponent Mark(string name, string viewBox, string cssClass) =>
+            new Svg(new Use().Attribute("href", assets.IconHref(name))).Class(cssClass).Attribute("viewBox", viewBox)
+                .Attribute("width", "48").Attribute("height", "48").Attribute("focusable", "false");
+
+        private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);
+        private sealed class Use() : HtmlElement("use");
     }
 }

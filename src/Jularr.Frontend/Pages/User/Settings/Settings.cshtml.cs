@@ -7,6 +7,7 @@ using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Modules.Appearance;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,6 +25,8 @@ namespace Jularr.Frontend.Pages.User.Settings
             page.Title("settings.title");
             page.Navigation("nav.settings");
             page.Asset("Pages/User/Settings/Settings.entry.scss");
+            page.Asset("Modules/Appearance/appearance.entry.scss");
+            page.Content.Add(new UiSection("appearance.title", [new Appearance()]));
 
             // Show only supported profile settings.
             if (_profile is not null)

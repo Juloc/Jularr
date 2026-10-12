@@ -20,6 +20,7 @@ test("shared asset and page/module entries have separate manifests", () => {
     for (const key of [
         "Assets/Shared/shell.entry.scss",
         "Modules/Appearance/theme.entry.ts",
+        "Modules/Appearance/appearance.entry.scss",
         "Pages/User/Discover/Index.entry.scss",
         "Pages/User/Settings/Settings.entry.scss",
         "Pages/Account/Login/Login.entry.scss",
@@ -29,7 +30,7 @@ test("shared asset and page/module entries have separate manifests", () => {
 });
 
 test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
-    for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell"]) {
+    for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-clean", "brand-original"]) {
         assert.equal(icons.symbols[key], "icon-" + key);
     }
     assert.ok(!readdirSync(join(build, "assets")).includes("icons.svg"));

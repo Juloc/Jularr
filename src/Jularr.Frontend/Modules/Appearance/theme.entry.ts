@@ -1,4 +1,4 @@
-// Shared appearance behavior; not a page or a client-side application framework.
+// Restore device preferences.
 const root = document.documentElement;
 const skins = new Set(["clean", "original"]);
 const modes = new Set(["system", "light", "dark"]);
@@ -15,8 +15,21 @@ function preference(name: string, allowed: Set<string>, fallback: string): strin
 root.dataset.skin = preference("jularr-ui-skin", skins, "clean");
 root.dataset.mode = preference("jularr-ui-mode", modes, "system");
 
+function refreshControls(): void {
+    document.querySelectorAll<HTMLButtonElement>("[data-set-skin], [data-set-mode]").forEach(button => {
+        const selected = button.dataset.setSkin
+            ? button.dataset.setSkin === root.dataset.skin
+            : button.dataset.setMode === root.dataset.mode;
+        button.setAttribute("aria-pressed", String(selected));
+    });
+}
+
+refreshControls();
+
+// Update shared controls.
 document.addEventListener("click", event => {
-    const button = (event.target as Element | null)?.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode]");
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>("[data-set-skin], [data-set-mode]");
     if (!button) return;
 
     const kind = button.dataset.setSkin ? "skin" : "mode";
@@ -28,6 +41,7 @@ document.addEventListener("click", event => {
     try {
         localStorage.setItem("jularr-ui-" + kind, value);
     } catch {
-        // Still apply the preference on this page when storage is unavailable.
+        // Storage is optional.
     }
+    refreshControls();
 });

@@ -1,0 +1,64 @@
+// Shared skin tokens.
+:root {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color-scheme: light;
+    --background: light-dark(#f6f5f9, #141319);
+    --surface: light-dark(#fff, #1d1b24);
+    --surface-hover: light-dark(#eeebf5, #2b2736);
+    --field: light-dark(#faf9fc, #19171f);
+    --border: light-dark(#dedbe7, #393441);
+    --text: light-dark(#25202f, #f4f0f8);
+    --muted: light-dark(#696174, #b2aaba);
+    --accent: light-dark(#7041c9, #bea2ff);
+    --accent-contrast: light-dark(#fff, #24133f);
+    --danger: light-dark(#b12b3c, #ff9aa7);
+    --shadow: 0 2px 8px light-dark(rgb(32 19 58 / 4%), rgb(0 0 0 / 14%));
+    --radius-control: 8px;
+    --radius-panel: 12px;
+    --focus: var(--accent);
+    --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    --jularr-ring: var(--accent);
+    --jularr-ink: var(--text);
+}
+
+// Brightness stays independent.
+html[data-mode="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+    html[data-mode="system"] { color-scheme: dark; }
+}
+
+// Original ink and paper.
+html[data-skin="original"] {
+    --background: light-dark(#f6f1e9, #191619);
+    --surface: light-dark(#fffdf9, #242024);
+    --surface-hover: light-dark(#f7e8e7, #36272f);
+    --field: light-dark(#fcf8f2, #201b20);
+    --border: light-dark(#e1d6cc, #45373d);
+    --text: light-dark(#302426, #f5ece6);
+    --muted: light-dark(#766365, #beabb1);
+    --accent: light-dark(#b52d50, #f49aae);
+    --accent-contrast: light-dark(#fff, #351623);
+    --shadow: 0 3px 14px light-dark(rgb(70 35 30 / 6%), rgb(0 0 0 / 20%));
+}
+
+html[data-skin="original"] body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: url("./Original/washi.webp") center / cover;
+    opacity: .18;
+}
+
+html[data-skin="original"] .auth-page::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(90deg, var(--background), transparent 55%),
+        linear-gradient(0deg, var(--background), transparent 70%),
+        url("./Original/hero-fuji.webp") center / cover no-repeat;
+    opacity: .55;
+}

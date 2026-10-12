@@ -10,11 +10,13 @@
         min-height: 44px;
         padding: 10px 13px;
         border: 1px solid var(--border);
-        border-radius: 10px;
-        background: var(--surface);
+        border-radius: var(--radius-control);
+        background: var(--field);
         color: var(--text);
 
         &:disabled { opacity: .75; }
+        &:hover:not(:disabled) { border-color: var(--muted); }
+        &:focus-visible { border-color: var(--accent); }
         &[aria-invalid="true"] { border-color: var(--danger); }
     }
 

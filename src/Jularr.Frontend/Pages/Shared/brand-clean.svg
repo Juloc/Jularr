@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="290 255 730 765" fill="none" role="img" aria-hidden="true">
+  <title>Jularr</title>
+  <g fill="var(--accent,#7041c9)" stroke="var(--accent,#7041c9)" stroke-width="10" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Left piece: a thick "C" (spine plus upper and lower arm) around the hollow play triangle. -->
+    <path d="M310 350 L420 272 L645 395 L543 471 L455 422 L432 440 L432 840 L455 857 L547 806 L643 878 L415 1007 L325 955 L305 925 Z" />
+    <!-- Right piece: the chevron that forms the play tip, separated from the C by two diagonal gaps. -->
+    <path d="M683 413 L975 580 L1002 638 L975 695 L680 862 L580 790 L812 655 L818 635 L810 625 L580 489 Z" />
+  </g>
+</svg>

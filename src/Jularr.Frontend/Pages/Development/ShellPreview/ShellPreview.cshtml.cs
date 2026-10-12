@@ -43,6 +43,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
 
         protected override void Define(Page page)
         {
+            page.Asset("Modules/Appearance/appearance.entry.scss");
             JularrPage? source = SelectedView switch
             {
                 "discover" => new IndexModel(),

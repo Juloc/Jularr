@@ -21,7 +21,12 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync(razor: true, media: true);
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Route test')");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
-            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            var loginHtml = await login.Content.ReadAsStringAsync();
+            StringAssert.Contains(loginHtml, "brand-symbol__original");
+            StringAssert.Contains(loginHtml, "brand-symbol__clean");
+            StringAssert.Contains(loginHtml, "data-set-skin=\"original\"");
+            StringAssert.Contains(loginHtml, "data-set-skin=\"clean\"");
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(loginHtml, ("Email", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
 
             // Folder moves preserve URLs.
@@ -29,6 +34,12 @@ namespace Jularr.Backend.Tests
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path);
+                if (path == "/Settings")
+                {
+                    var html = await page.Content.ReadAsStringAsync();
+                    StringAssert.Contains(html, "data-set-skin=\"original\"");
+                    StringAssert.Contains(html, "data-set-mode=\"system\"");
+                }
             }
 
             // Player routes take canonical asset identities.
