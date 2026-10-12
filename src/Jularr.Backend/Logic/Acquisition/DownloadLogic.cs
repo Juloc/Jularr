@@ -545,6 +545,33 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        public static async Task MarkAcquisitionReleaseAsync(this LogicContext ctx, AcquisitionReleaseMarkData data, CancellationToken ct)
+        {
+            // Blocked releases are never taken; allowed ones may be taken again.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionReleases" AS release
+                SET
+                    "AcquisitionReleaseStatusTypeId" = @AcquisitionReleaseStatusTypeId,
+                    "UpdatedAt" = now()
+                WHERE
+                    release."Id" = @AcquisitionReleaseId
+                    AND release."WantedItemId" = @WantedItemId
+                    AND CASE @AcquisitionReleaseStatusTypeId
+                        WHEN 4 THEN release."AcquisitionReleaseStatusTypeId" IN (2, 3, 5)
+                        WHEN 5 THEN release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND release."ReasonKey" = 'download_failed'
+                        ELSE FALSE
+                    END;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.AcquisitionReleaseStatusTypeId), "invalid_transition");
+            }
+        }
+
         public static async Task CompleteDownloadAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
         {
             var sql = new SqlStatement();

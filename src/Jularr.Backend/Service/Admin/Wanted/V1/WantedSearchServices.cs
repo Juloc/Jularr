@@ -102,7 +102,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Grabbed, imported, failed and blocked releases of one target.
+            // Grabbed, imported, failed and blocked releases of one target; release faults block like a manual block.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -114,7 +114,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     release."AcquisitionReleaseStatusTypeId",
                     release."ReasonKey",
                     operation."ProgressPercent"::integer AS "ProgressPercent",
-                    release."CreatedAt"
+                    release."CreatedAt",
+                    release."AcquisitionReleaseStatusTypeId" = 4 OR release."AcquisitionReleaseStatusTypeId" = 3 AND release."ReasonKey" = 'download_failed' AS "IsBlocked"
                 FROM
                     "AcquisitionReleases" AS release
                     LEFT JOIN "AcquisitionConnections" AS connection ON connection."Id" = release."AcquisitionConnectionId"
@@ -128,6 +129,21 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 """;
             sql.Parameters.Add(Parameters);
             return new BaseDataList<WantedReleaseV1>(await Context.ReadSql.ReadListAsync<WantedReleaseV1>(sql, CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/wanted/{wantedItemId:long}/releases/{acquisitionReleaseId:long}")]
+    public sealed class MarkWantedReleaseV1 : AdminService<WantedReleaseParametersV1, MarkWantedReleaseDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(WantedReleaseParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(WantedReleaseParametersV1 parameters, Type resultType) => new("wanted.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.MarkAcquisitionReleaseAsync(new AcquisitionReleaseMarkData(Parameters.WantedItemId, Parameters.AcquisitionReleaseId, Data.AcquisitionReleaseStatusTypeId), CancellationToken);
+            return new UpdateResult(true);
         }
     }
 }

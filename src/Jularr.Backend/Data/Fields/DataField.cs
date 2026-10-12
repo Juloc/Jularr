@@ -357,7 +357,13 @@ namespace Jularr.Backend.Data.Fields
 
         protected override void ValidateValue(object value, string name, int? maximumLength)
         {
-            foreach (var item in (string[])value)
+            var values = (string[])value;
+            if (maximumLength is { } limit && values.Length > limit)
+            {
+                throw new DataValidationException(name, "out_of_range");
+            }
+
+            foreach (var item in values)
             {
                 Element.Validate(item, name);
             }

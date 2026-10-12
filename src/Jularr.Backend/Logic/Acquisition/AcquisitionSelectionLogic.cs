@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Acquisition
     // Rules of one acquisition decision: what is searched, how releases rank and what a grab claims.
     internal static class AcquisitionSelectionLogic
     {
-        private static readonly JsonSerializerOptions DefinitionOptions = new() { Converters = { new JsonStringEnumConverter() } };
+        internal static readonly JsonSerializerOptions DefinitionOptions = new() { Converters = { new JsonStringEnumConverter() } };
 
         public static AcquisitionKind? GetKind(MediaType mediaType) => mediaType switch
         {

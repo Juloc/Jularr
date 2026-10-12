@@ -1,9 +1,11 @@
 using System.Globalization;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -13,7 +15,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Wanted
 {
     public sealed class WantedModel(ReadWantedV1 read, ReadWantedItemV1 readItem, UpdateWantedV1 update, SearchWantedV1 search, GrabWantedReleaseV1 grab,
-        ReadWantedReleasesV1 releases, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadWantedReleasesV1 releases, MarkWantedReleaseV1 mark, ReadAcquisitionProfilesV1 profiles, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string SearchTab = "search";
         private const string CurrentTab = "current";
@@ -23,6 +25,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         private BaseDataList<WantedReleaseCandidateV1>? _candidates;
         private SearchWantedDataV1? _search;
         private BaseDataList<WantedReleaseV1>? _history;
+        private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -54,8 +57,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                         {
                             form.Hidden(data => data.IsPaused);
                             form.Hidden(data => data.Version);
+                            form.Hidden(data => data.AcquisitionProfileId);
                             form.Submit(item.IsPaused ? "wanted.resume" : "wanted.pause");
-                        }, Address(PageNumber, item.Id, SelectedTab), csrf, new UpdateWantedDataV1(!item.IsPaused, item.Version))));
+                        }, Address(PageNumber, item.Id, SelectedTab), csrf, new UpdateWantedDataV1(!item.IsPaused, item.Version, item.AcquisitionProfileId))));
 
                     if (wanted.Items.Count == 0) split.Primary.Add(new P(new Text("wanted.empty")));
                     if (wanted.Page > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(wanted.Page - 1)));
@@ -73,8 +77,8 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                             tabs.Add("wanted.tab.search", Address(PageNumber, selected.Id, SearchTab), SelectedTab == SearchTab, content => DefineSearch(content, selected, csrf));
                         }
 
-                        tabs.Add("wanted.tab.current", Address(PageNumber, selected.Id, CurrentTab), SelectedTab == CurrentTab, content => DefineCurrent(content, selected));
-                        tabs.Add("wanted.tab.history", Address(PageNumber, selected.Id, HistoryTab), SelectedTab == HistoryTab, DefineHistory);
+                        tabs.Add("wanted.tab.current", Address(PageNumber, selected.Id, CurrentTab), SelectedTab == CurrentTab, content => DefineCurrent(content, selected, csrf));
+                        tabs.Add("wanted.tab.history", Address(PageNumber, selected.Id, HistoryTab), SelectedTab == HistoryTab, content => DefineHistory(content, selected, csrf));
                     }));
                 }
             }).MasterDetail(_selected is not null, Address(PageNumber)));
@@ -89,10 +93,16 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] bool isPaused, [BindRequired] long version)
+        public async Task<IActionResult> OnPostAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId)
         {
-            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(SelectedId()), new UpdateWantedDataV1(isPaused, version), HttpContext.RequestAborted);
+            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(SelectedId()), new UpdateWantedDataV1(isPaused, version, acquisitionProfileId), HttpContext.RequestAborted);
             return LocalRedirect(Address(PageNumber, WantedItemId, SelectedTab));
+        }
+
+        public async Task<IActionResult> OnPostMarkAsync([BindRequired] long acquisitionReleaseId, [BindRequired] AcquisitionReleaseStatusType acquisitionReleaseStatusTypeId)
+        {
+            await mark.ExecuteAsync<UpdateResult>(new WantedReleaseParametersV1(SelectedId(), acquisitionReleaseId), new MarkWantedReleaseDataV1(acquisitionReleaseStatusTypeId), HttpContext.RequestAborted);
+            return LocalRedirect(Address(PageNumber, WantedItemId, HistoryTab));
         }
 
         public async Task<IActionResult> OnPostSearchAsync(int? seasonNumber, int? episodeNumber)
@@ -122,6 +132,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 if (SelectedTab == HistoryTab)
                 {
                     _history = await releases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(id), HttpContext.RequestAborted);
+                }
+                else if (SelectedTab == CurrentTab && CanAcquire)
+                {
+                    _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), HttpContext.RequestAborted);
                 }
             }
         }
@@ -169,7 +183,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                     }, Address(PageNumber, selected.Id, SearchTab, "Grab"), csrf, new GrabWantedReleaseDataV1(item.CandidateId))));
         }
 
-        private static void DefineCurrent(List<IUiComponent> content, WantedDetailsV1 selected)
+        private void DefineCurrent(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
         {
             content.Add(new P(new Text("table.status"), new ValueText(": "), Status(selected)));
             content.Add(new P(new Text("request.language"), new ValueText(": " + string.Join(", ", selected.RequestedLanguages))));
@@ -177,9 +191,23 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             {
                 content.Add(new P(new Text("wanted.lastSearch"), new ValueText(": " + searchedAt.ToString("u", CultureInfo.InvariantCulture))));
             }
+
+            // Without a choice the media type default applies.
+            var options = _profiles.Where(profile => profile.MediaTypeId == selected.MediaTypeId).ToArray();
+            if (options.Length > 0)
+            {
+                content.Add(new Form<UpdateWantedDataV1>(form =>
+                {
+                    form.Hidden(data => data.IsPaused);
+                    form.Hidden(data => data.Version);
+                    form.Select(data => data.AcquisitionProfileId, "wanted.profile", [new SelectOption("", texts["wanted.profile.default"]),
+                        .. options.Select(profile => new SelectOption(profile.Id.ToString(CultureInfo.InvariantCulture), profile.Name))]);
+                    form.Submit("common.save");
+                }, Address(PageNumber, selected.Id, CurrentTab), csrf, new UpdateWantedDataV1(selected.IsPaused, selected.Version, selected.AcquisitionProfileId)));
+            }
         }
 
-        private void DefineHistory(List<IUiComponent> content)
+        private void DefineHistory(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
         {
             if (TempData["WantedGrabbed"] is true) content.Add(new P(new Text("wanted.grabQueued")).Attribute("role", "status"));
             if (_history is not { } history)
@@ -200,7 +228,15 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 .Resource(item => item.AcquisitionReleaseStatusTypeId, "table.status", status => "acquisition.release." + status)
                 .Content("wanted.search.reason", item => item.ReasonKey is { } reason ? new Text("acquisition.outcome." + reason) : new Span())
                 .Content("wanted.progress", item => new ValueText(item.ProgressPercent?.ToString(CultureInfo.InvariantCulture) ?? ""))
-                .Content("wanted.history.date", item => new ValueText(item.CreatedAt.ToString("u", CultureInfo.InvariantCulture))));
+                .Content("wanted.history.date", item => new ValueText(item.CreatedAt.ToString("u", CultureInfo.InvariantCulture)))
+                .Content("common.actions", item => item.AcquisitionReleaseStatusTypeId == AcquisitionReleaseStatusType.Grabbed
+                    ? new Span()
+                    : new Form<MarkWantedReleaseDataV1>(form =>
+                    {
+                        form.Hidden(data => data.AcquisitionReleaseStatusTypeId);
+                        form.Submit(item.IsBlocked ? "wanted.release.unblock" : "wanted.release.block");
+                    }, Address(PageNumber, selected.Id, HistoryTab, "Mark") + "&acquisitionReleaseId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf,
+                        new MarkWantedReleaseDataV1(item.IsBlocked ? AcquisitionReleaseStatusType.Allowed : AcquisitionReleaseStatusType.Blocked))));
         }
 
         private static IUiComponent Status(WantedDetailsV1 item)

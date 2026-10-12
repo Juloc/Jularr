@@ -31,14 +31,18 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class UpdateWantedDataV1 : BaseData
     {
-        public UpdateWantedDataV1(bool isPaused, long version)
+        public UpdateWantedDataV1(bool isPaused, long version, long? acquisitionProfileId = null)
         {
             IsPaused = isPaused;
             Version = version;
+            AcquisitionProfileId = acquisitionProfileId;
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
         public bool IsPaused { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
+        public long? AcquisitionProfileId { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
@@ -47,7 +51,7 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedDetailsV1 : BaseResponse
     {
         public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, string canonicalTitle, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey)
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId)
         {
             MediaTypeId = mediaTypeId;
             Id = id;
@@ -61,6 +65,7 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
             ProgressPercent = progressPercent;
             LastSearchedAt = lastSearchedAt;
             OutcomeKey = outcomeKey;
+            AcquisitionProfileId = acquisitionProfileId;
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
@@ -98,6 +103,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.OutcomeKey))]
         public string? OutcomeKey { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
+        public long? AcquisitionProfileId { get; }
     }
 
     public sealed class WantedItemParametersV1 : BaseParameters
@@ -199,7 +207,7 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedReleaseV1 : BaseResponse
     {
         public WantedReleaseV1(long id, string title, string? connectionName, string? qualityKey, AcquisitionReleaseStatusType acquisitionReleaseStatusTypeId, string? reasonKey,
-            int? progressPercent, DateTime createdAt)
+            int? progressPercent, DateTime createdAt, bool isBlocked)
         {
             Id = id;
             Title = title;
@@ -209,6 +217,7 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
             ReasonKey = reasonKey;
             ProgressPercent = progressPercent;
             CreatedAt = createdAt;
+            IsBlocked = isBlocked;
         }
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Id))]
@@ -234,5 +243,34 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.CreatedAt))]
         public DateTime CreatedAt { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.IsBlocked))]
+        public bool IsBlocked { get; }
+    }
+
+    public sealed class WantedReleaseParametersV1 : BaseParameters
+    {
+        public WantedReleaseParametersV1(long wantedItemId, long acquisitionReleaseId)
+        {
+            WantedItemId = wantedItemId;
+            AcquisitionReleaseId = acquisitionReleaseId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Id))]
+        public long AcquisitionReleaseId { get; }
+    }
+
+    public sealed class MarkWantedReleaseDataV1 : BaseData
+    {
+        public MarkWantedReleaseDataV1(AcquisitionReleaseStatusType acquisitionReleaseStatusTypeId)
+        {
+            AcquisitionReleaseStatusTypeId = acquisitionReleaseStatusTypeId;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.AcquisitionReleaseStatusTypeId))]
+        public AcquisitionReleaseStatusType AcquisitionReleaseStatusTypeId { get; }
     }
 }

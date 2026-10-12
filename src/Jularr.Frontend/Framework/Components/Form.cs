@@ -69,6 +69,28 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        public Form<TData> Choices<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options)
+        {
+            // Several values under one name.
+            var field = Declare(selector, FieldControl.MultiSelect, labelKey);
+            var selected = (_data is null ? null : field.ReadValue(_data) as IEnumerable<string>)?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+            var choices = options.Select(option =>
+            {
+                var input = new Input().Attribute("type", "checkbox").Attribute("name", field.Name).Attribute("value", option.Value);
+                if (selected.Contains(option.Value)) input.Attribute("checked", "checked");
+                if (_action is null) input.Attribute("disabled", "disabled");
+                return new HtmlLabel(input, new Span(new ValueText(option.Label))).Class("ui-checkbox");
+            }).ToArray<IUiComponent>();
+            var content = new List<IUiComponent> { new HtmlLegend(new Text(field.LabelKey)), new Div(choices).Class("ui-choices") };
+            if (_error?.Field == field.Name)
+            {
+                content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+            }
+
+            _content.Add(new HtmlFieldset([.. content]).Class("ui-field"));
+            return this;
+        }
+
         public Form<TData> Checkbox(string labelKey)
         {
             _content.Add(new HtmlLabel(new Input().Attribute("type", "checkbox").Attribute("disabled", "disabled"), new Span(new Text(labelKey))).Class("ui-checkbox"));
@@ -147,6 +169,8 @@ namespace Jularr.Frontend.Framework
             {
                 DateTime timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
                 DateTimeOffset timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
+                string[] list => string.Join(", ", list),
+                int[] list => string.Join(", ", list.Select(item => item.ToString(CultureInfo.InvariantCulture))),
                 Enum catalogValue => Convert.ToByte(catalogValue).ToString(CultureInfo.InvariantCulture),
                 var value => Convert.ToString(value, CultureInfo.InvariantCulture)
             };
@@ -158,7 +182,7 @@ namespace Jularr.Frontend.Framework
             if (_action is null) input.Attribute("disabled", "disabled");
             if (field.Required) input.Attribute("required", "required");
             if (field.MinimumLength is { } minimumLength) input.Attribute("minlength", minimumLength.ToString(CultureInfo.InvariantCulture));
-            if (field.MaximumLength is { } length) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
+            if (field.MaximumLength is { } length && !field.ValueType.IsArray) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
             if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));
             if (field.Maximum is { } maximum) input.Attribute("max", maximum.ToString(CultureInfo.InvariantCulture));
             if (field.Scale is { } scale) input.Attribute("step", (1m / (decimal)Math.Pow(10, scale)).ToString(CultureInfo.InvariantCulture));
@@ -184,6 +208,8 @@ namespace Jularr.Frontend.Framework
         private sealed class HtmlSelect(params IUiComponent[] children) : HtmlElement("select", children);
         private sealed class HtmlOption(params IUiComponent[] children) : HtmlElement("option", children);
         private sealed class HtmlTextarea(params IUiComponent[] children) : HtmlElement("textarea", children);
+        private sealed class HtmlFieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);
+        private sealed class HtmlLegend(params IUiComponent[] children) : HtmlElement("legend", children);
     }
 
     public sealed record SelectOption(string Value, string Label);

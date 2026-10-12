@@ -1,6 +1,7 @@
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Pages.Admin.Activity;
 using Jularr.Frontend.Pages.Admin.Library;
+using Jularr.Frontend.Pages.Admin.Profiles;
 using Jularr.Frontend.Pages.Admin.Requests;
 using Jularr.Frontend.Pages.Admin.Rules;
 using Jularr.Frontend.Pages.Admin.Users;
@@ -60,6 +61,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
                 "admin-work" => ActivatorUtilities.CreateInstance<WorkModel>(HttpContext.RequestServices),
                 "admin-library" => ActivatorUtilities.CreateInstance<LibraryModel>(HttpContext.RequestServices),
                 "admin-activity" => ActivatorUtilities.CreateInstance<ActivityModel>(HttpContext.RequestServices),
+                "admin-profiles" => ActivatorUtilities.CreateInstance<ProfilesModel>(HttpContext.RequestServices),
                 _ => null
             };
 

@@ -188,6 +188,130 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Profiles_EditKeepsRulesSwitchesDefaultsAndApplyPerTarget()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            var wantedId = await CreateWantedMovieAsync(host);
+            const string Profiles = "/api/v1/admin/acquisition/profiles";
+            var seeded = await ReadProfilesAsync(host);
+            var movies = seeded.Single(profile => profile.MediaTypeId == MediaType.Movie);
+            var series = seeded.Single(profile => profile.MediaTypeId == MediaType.Series);
+            Assert.IsTrue(movies.IsDefault);
+            CollectionAssert.Contains(movies.AllowedQualities, "WEB-1080p");
+
+            // A cutoff outside the allowed qualities is rejected.
+            using var invalid = await host.SendAsync(HttpMethod.Post, Profiles,
+                new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, false, ["WEB-2160p"], true, "WEB-1080p", null, null, [], []));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+            // A new default replaces the old one; the old default keeps its score rules.
+            using var created = await host.SendAsync(HttpMethod.Post, Profiles,
+                new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, true, ["WEB-2160p", "BLURAY-2160p"], true, "BLURAY-2160p", 1000, 80000, ["HDR"], ["CAM"]));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var uhdId = (await created.Content.ReadFromJsonAsync<CreateAcquisitionProfileResultV1>())!.Id;
+            var current = await ReadProfilesAsync(host);
+            var uhd = current.Single(profile => profile.Id == uhdId);
+            Assert.IsTrue(uhd.IsDefault);
+            CollectionAssert.AreEqual(new[] { "BLURAY-2160p", "WEB-2160p" }, uhd.AllowedQualities);
+            Assert.AreEqual(1000, uhd.MinimumSizeMb);
+            CollectionAssert.AreEqual(new[] { "CAM" }, uhd.MustNotContain);
+            movies = current.Single(profile => profile.Id == movies.Id);
+            Assert.IsFalse(movies.IsDefault);
+            using var renamed = await host.SendAsync(HttpMethod.Put, Profiles + "/" + movies.Id, new SaveAcquisitionProfileDataV1("HD", MediaType.Movie, false, ["WEB-1080p"], false, null,
+                null, null, [], [], movies.Version));
+            Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
+            StringAssert.Contains((string)(await host.ScalarAsync("SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"Id\" = " + movies.Id))!, "Prefer Proper");
+
+            // A default is replaced, never removed or deleted.
+            using var undefault = await host.SendAsync(HttpMethod.Put, Profiles + "/" + uhdId, new SaveAcquisitionProfileDataV1("4K", MediaType.Movie, false, ["WEB-2160p"], false, null,
+                null, null, [], [], uhd.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, undefault.StatusCode);
+            using var deleteDefault = await host.SendAsync(HttpMethod.Delete, Profiles + "/" + uhdId + "?version=" + uhd.Version);
+            Assert.AreEqual(HttpStatusCode.BadRequest, deleteDefault.StatusCode);
+
+            // A target takes only a profile of its media type.
+            using var wantedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId);
+            var wanted = (await wantedRead.Content.ReadFromJsonAsync<WantedDetailsV1>())!;
+            using var mismatch = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, wanted.Version, series.Id));
+            Assert.AreEqual(HttpStatusCode.BadRequest, mismatch.StatusCode);
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, wanted.Version, movies.Id));
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).WantedCount);
+            using var currentTab = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?WantedItemId=" + wantedId + "&Tab=current");
+            var currentHtml = await currentTab.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, currentTab.StatusCode, currentHtml);
+            StringAssert.Contains(currentHtml, "value=\"" + movies.Id + "\" selected=\"selected\"");
+
+            // The chosen profile drives the search: only WEB-1080p is eligible.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
+            Assert.AreEqual(ReleaseDecisionType.Rejected, candidates.Single(candidate => candidate.Title == Lower).ReleaseDecisionTypeId);
+
+            // Deleting a used profile returns its targets to the default.
+            movies = (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id);
+            using var deleted = await host.SendAsync(HttpMethod.Delete, Profiles + "/" + movies.Id + "?version=" + movies.Version);
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AcquisitionProfileId\" FROM \"WantedItems\""));
+
+            // The editor renders the stored values and saves through the same service.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + uhdId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "value=\"BLURAY-2160p\" checked=\"checked\"");
+            StringAssert.Contains(html, "value=\"CAM\"");
+            using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + uhdId, new FormUrlEncodedContent(
+            [
+                new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", uhd.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new("Name", "UHD"), new("IsDefault", "True"), new("AllowedQualities", "WEB-2160p"), new("AllowedQualities", "WEB-1080p"), new("UpgradeAllowed", "True"),
+                new("UpgradeCutoffQuality", "WEB-2160p"), new("MustContain", "HDR, DV"), new("MustNotContain", "")
+            ]));
+            Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            uhd = (await ReadProfilesAsync(host)).Single(profile => profile.Id == uhdId);
+            Assert.AreEqual("UHD", uhd.Name);
+            CollectionAssert.AreEqual(new[] { "WEB-2160p", "WEB-1080p" }, uhd.AllowedQualities);
+            CollectionAssert.AreEqual(new[] { "HDR", "DV" }, uhd.MustContain);
+        }
+
+        [TestMethod]
+        public async Task Blocklist_BlocksAndAllowsReleasesOfTheTarget()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await RunAsync<SearchDueWantedV1>(host);
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Failed","fail_message":"Not enough articles"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // A release fault blocks; allowing it lets the search take it again.
+            var release = (await ReadReleasesAsync(host, wantedId)).Single();
+            Assert.IsTrue(release.IsBlocked);
+            var address = "/api/v1/admin/wanted/" + wantedId + "/releases/" + release.Id;
+            using var allowed = await host.SendAsync(HttpMethod.Put, address, new MarkWantedReleaseDataV1(AcquisitionReleaseStatusType.Allowed));
+            Assert.AreEqual(HttpStatusCode.OK, allowed.StatusCode, await allowed.Content.ReadAsStringAsync());
+            release = (await ReadReleasesAsync(host, wantedId)).Single();
+            Assert.AreEqual(AcquisitionReleaseStatusType.Allowed, release.AcquisitionReleaseStatusTypeId);
+            Assert.IsFalse(release.IsBlocked);
+            using var again = await host.SendAsync(HttpMethod.Put, address, new MarkWantedReleaseDataV1(AcquisitionReleaseStatusType.Allowed));
+            Assert.AreEqual(HttpStatusCode.BadRequest, again.StatusCode);
+
+            // A manual block wins over the ranking; other targets cannot touch it.
+            using var blocked = await host.SendAsync(HttpMethod.Put, address, new MarkWantedReleaseDataV1(AcquisitionReleaseStatusType.Blocked));
+            Assert.AreEqual(HttpStatusCode.OK, blocked.StatusCode, await blocked.Content.ReadAsStringAsync());
+            using var foreign = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/1/releases/" + release.Id, new MarkWantedReleaseDataV1(AcquisitionReleaseStatusType.Allowed));
+            Assert.AreEqual(HttpStatusCode.BadRequest, foreign.StatusCode);
+            usenet.History = """{"history":{"slots":[]}}""";
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = now()");
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/feature", "https://indexer.example.test/getnzb/lower" }, usenet.Grabbed);
+        }
+
+        [TestMethod]
         public async Task Razor_WantedSearchAndConnections_RenderRealResults()
         {
             using var storage = new TemporaryDirectory();
@@ -467,6 +591,20 @@ namespace Jularr.Backend.Tests
             }
 
             return host;
+        }
+
+        private static async Task<IReadOnlyList<AcquisitionProfileDetailsV1>> ReadProfilesAsync(Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!;
+        }
+
+        private static async Task<IReadOnlyList<WantedReleaseV1>> ReadReleasesAsync(Host host, long wantedId)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId + "/releases");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseV1>>())!;
         }
 
         private static async Task<IReadOnlyList<ActivityItemV1>> ReadActivityAsync(Host host, ActivityTabType tab)

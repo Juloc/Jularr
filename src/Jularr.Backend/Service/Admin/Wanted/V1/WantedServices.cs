@@ -32,6 +32,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted."IsPaused",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
+                        wanted."AcquisitionProfileId",
                         wanted."Version"
                     FROM
                         "WantedItems" AS wanted
@@ -82,6 +83,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     download."ProgressPercent"::integer AS "ProgressPercent",
                     wanted_page."LastSearchedAt",
                     wanted_page."LastOutcomeKey" AS "OutcomeKey",
+                    wanted_page."AcquisitionProfileId",
                     ARRAY(
                         SELECT DISTINCT
                             locale."Name"
@@ -139,6 +141,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted."IsPaused",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
+                        wanted."AcquisitionProfileId",
                         wanted."Version"
                     FROM
                         "WantedItems" AS wanted
@@ -187,6 +190,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     download."ProgressPercent"::integer AS "ProgressPercent",
                     wanted_page."LastSearchedAt",
                     wanted_page."LastOutcomeKey" AS "OutcomeKey",
+                    wanted_page."AcquisitionProfileId",
                     ARRAY(
                         SELECT DISTINCT
                             locale."Name"
@@ -233,7 +237,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.Version), CancellationToken);
+            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.Version), CancellationToken);
             return new UpdateResult(true);
         }
     }

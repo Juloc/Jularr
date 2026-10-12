@@ -87,6 +87,7 @@ Shared conventions and Backend ownership:
 - [Storage](Pages/Admin/Storage/Storage.cshtml.cs), [Setup Storage](Pages/Setup/Storage/Storage.cshtml.cs): shared Owner-only SMB/NFS/Local editor with Wake-on-LAN, explicit mount/wake/remove actions and the paths-on-this-connection table with safe folder browser, scan and removal. Colocated Storage assets import shared Form/Split/Table styles.
 - [Player](Pages/User/Player/Player.cshtml.cs), [UiPlayer](Framework/Components/Player.cs), [player.entry.ts](Modules/Player/player.entry.ts): canonical asset route, server-rendered chrome (-10/+30 transport, timeline, volume, speed, PiP, fullscreen, delivery info) and the client that probes capabilities, requests the PlaybackPlan, resumes and reports progress. Conversions play through native HLS or the on-demand `hls.js/light` chunk ([type declaration](Modules/Player/hls-light.d.ts)). [MediaUnitLabel.cs](Framework/MediaUnitLabel.cs) formats structure units for Details and Player.
 - [Library](Pages/Admin/Library/Library.cshtml.cs): Owner/MediaManager inventory tabs, manual identification from Backend suggestions and unit rules.
+- [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs): Movie/Series profiles with allowed qualities, upgrade cutoff, size limits and terms; shares the Arr+ subnav with [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs). Wanted offers the per-target profile (Current) and block/allow per release (History). `Form.Choices` renders checkbox groups.
 - [Activity](Pages/Admin/Activity/Activity.cshtml.cs): Activity, To-Do and History tabs for scans and downloads with reasons, retry and dismiss.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): Owner name/language and implemented module editor using shared field-aware forms and versioned services; disable retains data. Requests is a manual slice, not automatic acquisition.
 - [Works](Pages/Admin/Works/Works.cshtml.cs), [Work editor](Pages/Admin/Work/Work.cshtml.cs): real paged catalog, TMDB search/add, manual creation, version-checked title/year editing and TMDB refresh through Admin media services. [Providers](Pages/Admin/Providers/Providers.cshtml.cs) stores the write-only TMDB key.
@@ -149,7 +150,8 @@ in `Modules/<Module>/`.
   [Works](Pages/Admin/Works/Works.cshtml.cs),
   [Work detail](Pages/Admin/Work/Work.cshtml.cs),
   [Library](Pages/Admin/Library/Library.cshtml.cs),
-  [Activity](Pages/Admin/Activity/Activity.cshtml.cs).
+  [Activity](Pages/Admin/Activity/Activity.cshtml.cs),
+  [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs).
 - [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs):
   Development-only, shares real page definitions without service data.
 - [Design lab](Pages/Development/Design/Design.cshtml.cs): `/Design`, Development-only
