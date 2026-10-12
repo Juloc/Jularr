@@ -106,7 +106,7 @@ The owner requires the following coverage beyond the first connected pages:
 - Operations: complete Admin UI, monitoring/logs, backup, explicit migration,
   security, automatic recovery and E2E coverage against Alpha-90 functionality.
 
-`ALPHA90_RECOVERY_PLAN.md` is the owner's recovery/parity reference, not a complete
+[ALPHA90_RECOVERY_PLAN.md](ALPHA90_RECOVERY_PLAN.md) is the owner's recovery/parity reference, not a complete
 specification of extensions. These targets are not implemented capability claims.
 Latest decisions, fresh schema contracts, dependency approvals and the stopped
 Phase B still apply; legacy parity does not authorize active-database migrations.
