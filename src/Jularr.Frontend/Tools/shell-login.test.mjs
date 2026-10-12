@@ -1,19 +1,36 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 
 const root = resolve(import.meta.dirname, "..");
-const load = file => readFileSync(resolve(root, file), "utf8");
+const load = file => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
+
+test("Pages own folders, explicit routes and colocated definitions", () => {
+    for (const file of readdirSync(resolve(root, "Pages"), { recursive: true })) {
+        if (!file.endsWith(".cshtml") || file.startsWith("Shared") || file.startsWith("_")) continue;
+
+        const path = "Pages/" + file.replaceAll("\\", "/");
+        const directory = dirname(path);
+        const view = load(path);
+        const model = load(path + ".cs");
+        const expectedNamespace = "Jularr.Frontend." + directory.replaceAll("/", ".");
+
+        assert.match(directory, /^Pages\/(?:Account|Admin|User|Development)\/[^/]+$/);
+        assert.match(view, /^@page "\/[^"\n]*"/);
+        assert.ok(model.includes("namespace " + expectedNamespace + "\n"), path);
+        assert.ok(view.includes("@model " + expectedNamespace + "."), path);
+    }
+});
 
 test("Login is a short page composition, Form owns field HTML", () => {
-    const view = load("Pages/Account/Login.cshtml");
-    const page = load("Pages/Account/Login.cshtml.cs");
+    const view = load("Pages/Account/Login/Login.cshtml");
+    const page = load("Pages/Account/Login/Login.cshtml.cs");
     const form = load("Framework/Components/Form.cs");
     assert.match(view, /<partial name="_PageBody"/);
     assert.doesNotMatch(view, /<(?:form|h1|section|button|input)(?:\s|>)/i);
     assert.match(page, /page\.Title\("account\.login\.title"\)/);
-    assert.match(page, /page\.Asset\("Pages\/Account\/Login\.entry\.scss"\)/);
+    assert.match(page, /page\.Asset\("Pages\/Account\/Login\/Login\.entry\.scss"\)/);
     assert.match(page, /new Form<LoginDataV1>/);
     assert.match(page, /form\.Password\(x => x\.Password/);
     assert.doesNotMatch(page, /private sealed class (?:Label|FormElement)/);
@@ -56,7 +73,7 @@ test("Tabs show only selected content and provide real server navigation", () =>
 });
 
 test("Settings use backend services and generic forms without unsupported controls", () => {
-    const settings = load("Pages/Settings.cshtml.cs");
+    const settings = load("Pages/User/Settings/Settings.cshtml.cs");
     assert.match(settings, /new UiSection\(/);
     assert.match(settings, /new Form<UpdateProfileDataV1>/);
     assert.match(settings, /updateProfile\.ExecuteAsync<UpdateResult>/);

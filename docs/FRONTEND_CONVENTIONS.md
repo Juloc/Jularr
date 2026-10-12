@@ -164,6 +164,14 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 
 ## Asset ownership, build and caching (MANDATORY)
 
+- Pages are grouped by area and page: `Pages/<Area>/<Page>/`. Keep the
+  `.cshtml` entry, `.cshtml.cs` PageModel and any owned assets together.
+  Current areas are `Account`, `Admin`, `User` and `Development`; shared
+  Razor bridges stay in `Pages/Shared`. Namespaces follow the folder path.
+  Declare public URLs explicitly in `@page`; Razor page identities used by
+  `Url.Page`, redirects and authorization conventions follow the physical path.
+  Optional module code/assets stay in `Modules/<Module>/`, reusable components
+  in `Framework/Components/`. Do not add empty files or custom Razor discovery.
 - **Colocation is mandatory:** assets owned by a Page live next to that
   `Pages/**/<Page>.cshtml.cs`; assets belonging to an optional feature module
   live under `Modules/<Module>/`; assets for a reusable component live beside
@@ -182,7 +190,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   The [Vite configuration](../src/Jularr.Frontend/vite.config.ts) discovers
   entries automatically; no central list of all Pages/Modules and no
   per-component runtime injection by default. A Page opts in to owned
-  entries with `page.Asset("Pages/Index.entry.scss")` (or the module path).
+  entries with `page.Asset("Pages/User/Discover/Index.entry.scss")` (or the module path).
   Imported component Sass/TS is bundled only with the entry that needs it.
   Don't import all optional Pages/Modules into the shared shell.
 - `npm ci` (locked package versions), `npm run check` (TypeScript, Vite,

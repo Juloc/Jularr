@@ -16,6 +16,26 @@ namespace Jularr.Backend.Tests
     public sealed class FrontendAuthenticationTests
     {
         [TestMethod]
+        public async Task Razor_PageFolders_PreservePublicRoutes()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
+
+            // Folder moves preserve URLs.
+            foreach (var path in new[] { "/", "/Details/101", "/Player/101", "/Watchlist", "/Settings", "/Account/Profiles", "/Account/Sessions", "/Account/Logout" })
+            {
+                using var page = await host.SendAsync(HttpMethod.Get, path);
+                Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path);
+            }
+
+            using var discover = await host.SendAsync(HttpMethod.Get, "/Discover?media=movie");
+            Assert.AreEqual(HttpStatusCode.MovedPermanently, discover.StatusCode);
+            Assert.AreEqual("/?media=movie", discover.Headers.Location!.OriginalString);
+        }
+
+        [TestMethod]
         public async Task Form_PasswordMetadataAndBackendError_RenderAutomaticallyWithoutSecrets()
         {
             await using var host = await Host.CreateAsync(razor: true);

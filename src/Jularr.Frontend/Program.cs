@@ -12,19 +12,19 @@ builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
     options.Conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Requests", ServiceApi.RequestsReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Wanted", ServiceApi.WantedReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Works", ServiceApi.MediaReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Work", ServiceApi.MediaReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Library", ServiceApi.StorageReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Rules", ServiceApi.RulesReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Users", ServiceApi.RulesReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Localization", ServiceApi.LocalizationReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Languages", ServiceApi.LocalizationReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Accounts", ServiceApi.AccountsReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Providers", ServiceApi.ProvidersReadPolicyName);
-    options.Conventions.AllowAnonymousToPage("/Account/Login");
-    options.Conventions.AllowAnonymousToPage("/ShellPreview");
+    options.Conventions.AuthorizePage("/Admin/Requests/Requests", ServiceApi.RequestsReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Wanted/Wanted", ServiceApi.WantedReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Work/Work", ServiceApi.MediaReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.StorageReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Rules/Rules", ServiceApi.RulesReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Users/Users", ServiceApi.RulesReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Localization/Localization", ServiceApi.LocalizationReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Languages/Languages", ServiceApi.LocalizationReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Accounts/Accounts", ServiceApi.AccountsReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Providers/Providers", ServiceApi.ProvidersReadPolicyName);
+    options.Conventions.AllowAnonymousToPage("/Account/Login/Login");
+    options.Conventions.AllowAnonymousToPage("/Development/ShellPreview/ShellPreview");
 });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

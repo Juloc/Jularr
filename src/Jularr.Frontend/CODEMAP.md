@@ -43,7 +43,7 @@ Shared conventions and Backend ownership:
   reusable, localized accessible navigation tabs driven by supplied links.
 - [MediaShelf.cs](Framework/Components/MediaShelf.cs):
   reusable media shelf with truthful title, optional browse link and real cards.
-- [Discover/Index.cshtml.cs](Pages/Index.cshtml.cs): **owns the page composition**
+- [Discover/Index.cshtml.cs](Pages/User/Discover/Index.cshtml.cs): **owns the page composition**
   (enabled media-type navigation, browse navigation, Hero, Continue and
   type-grouped shelves); awaits the authorized instance/profile discovery read.
 - [BaseField.cs](Framework/BaseField.cs) and
@@ -66,19 +66,19 @@ Shared conventions and Backend ownership:
   [Page body](Pages/Shared/_PageBody.cshtml),
   [Ui component boundary](Pages/Shared/_UiComponent.cshtml):
   thin Razor-to-C# bridges.
-- [Login Page](Pages/Account/Login.cshtml.cs) and
-  [Login SCSS](Pages/Account/Login.entry.scss): short declarative Login
+- [Login Page](Pages/Account/Login/Login.cshtml.cs) and
+  [Login SCSS](Pages/Account/Login/Login.entry.scss): short declarative Login
   composition using `Form<LoginDataV1>` and shared Brand. Backend
   exposes email/password and configured Plex flows through Public services.
-- [Profiles](Pages/Account/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions.cshtml.cs),
-  [Logout](Pages/Account/Logout.cshtml.cs): typed service-driven account session flows.
-- [AccessDenied](Pages/Account/AccessDenied.cshtml.cs): sanitized catalog-backed 403 page for denied Razor routes.
-- [Accounts](Pages/Admin/Accounts.cshtml.cs): Owner directory/editor, profile assignments and session revocation; separate from request-limit Users.
-- [Providers](Pages/Admin/Providers.cshtml.cs): real provider registry enablement via Owner services.
-- [Languages](Pages/Admin/Languages.cshtml.cs): supported locale creation, names/direction/enablement and versioned edits via Owner services.
+- [Profiles](Pages/Account/Profiles/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions/Sessions.cshtml.cs),
+  [Logout](Pages/Account/Logout/Logout.cshtml.cs): typed service-driven account session flows.
+- [AccessDenied](Pages/Account/AccessDenied/AccessDenied.cshtml.cs): sanitized catalog-backed 403 page for denied Razor routes.
+- [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): Owner directory/editor, profile assignments and session revocation; separate from request-limit Users.
+- [Providers](Pages/Admin/Providers/Providers.cshtml.cs): real provider registry enablement via Owner services.
+- [Languages](Pages/Admin/Languages/Languages.cshtml.cs): supported locale creation, names/direction/enablement and versioned edits via Owner services.
 - [Button.cs](Framework/Components/Button.cs), [Button.scss](Framework/Components/Button.scss): shared button variants/style imported by the shell; Form owns submission/disabled behavior.
-- [Localization](Pages/Admin/Localization.cshtml.cs): Owner catalog list, source descriptions and manual translation forms; versions and field errors come from Backend services.
-- [Settings](Pages/Settings.cshtml.cs): active profile name/language editing,
+- [Localization](Pages/Admin/Localization/Localization.cshtml.cs): Owner catalog list, source descriptions and manual translation forms; versions and field errors come from Backend services.
+- [Settings](Pages/User/Settings/Settings.cshtml.cs): active profile name/language editing,
   read-only non-owner view and grant-based account/admin navigation; no page-local SQL or permissions.
 - [Vite build](vite.config.ts), [package.json](package.json),
   [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
@@ -90,8 +90,8 @@ Shared conventions and Backend ownership:
   resolver for Razor styles, scripts and icon URLs, without request-time builds.
 - [Shared shell SCSS](Assets/Shared/shell.entry.scss),
   [appearance module](Modules/Appearance/theme.entry.ts),
-  [Discover CSS entry](Pages/Index.entry.scss),
-  [Settings CSS entry](Pages/Settings.entry.scss),
+  [Discover CSS entry](Pages/User/Discover/Index.entry.scss),
+  [Settings CSS entry](Pages/User/Settings/Settings.entry.scss),
   [Player CSS entry](Modules/Player/player.entry.scss): currently declared
   page/module assets; component Sass imported only by their owners.
 - [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
@@ -102,21 +102,26 @@ Shared conventions and Backend ownership:
 
 ## Pages
 
-- [Discover](Pages/Index.cshtml.cs) and
-  [Discover redirect](Pages/DiscoverRedirect.cshtml.cs).
-- [Details](Pages/Details.cshtml.cs),
-  [Player](Pages/Player.cshtml.cs),
-  [Watchlist](Pages/Watchlist.cshtml.cs),
-  [Settings](Pages/Settings.cshtml.cs),
-  [Login](Pages/Account/Login.cshtml.cs).
-- [Requests](Pages/Admin/Requests.cshtml.cs),
-  [Rules](Pages/Admin/Rules.cshtml.cs),
-  [Users](Pages/Admin/Users.cshtml.cs),
-  [Wanted](Pages/Admin/Wanted.cshtml.cs),
-  [Works](Pages/Admin/Works.cshtml.cs),
-  [Work detail](Pages/Admin/Work.cshtml.cs),
-  [Library](Pages/Admin/Library.cshtml.cs).
-- [ShellPreview](Pages/ShellPreview.cshtml.cs):
+Areas contain one folder per page, with its Razor entry, C# definition and
+owned assets together. Public URLs remain explicit and independent of folders.
+Shared Razor bridges remain in `Pages/Shared`; optional module assets remain
+in `Modules/<Module>/`.
+
+- [Discover](Pages/User/Discover/Index.cshtml.cs) and
+  [Discover redirect](Pages/User/DiscoverRedirect/DiscoverRedirect.cshtml.cs).
+- [Details](Pages/User/Details/Details.cshtml.cs),
+  [Player](Pages/User/Player/Player.cshtml.cs),
+  [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs),
+  [Settings](Pages/User/Settings/Settings.cshtml.cs),
+  [Login](Pages/Account/Login/Login.cshtml.cs).
+- [Requests](Pages/Admin/Requests/Requests.cshtml.cs),
+  [Rules](Pages/Admin/Rules/Rules.cshtml.cs),
+  [Users](Pages/Admin/Users/Users.cshtml.cs),
+  [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs),
+  [Works](Pages/Admin/Works/Works.cshtml.cs),
+  [Work detail](Pages/Admin/Work/Work.cshtml.cs),
+  [Library](Pages/Admin/Library/Library.cshtml.cs).
+- [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs):
   Development-only, shares real page definitions without service data.
 
 ## Verification and integration gaps

@@ -20,12 +20,12 @@ test("shared asset and page/module entries have separate manifests", () => {
     for (const key of [
         "Assets/Shared/shell.entry.scss",
         "Modules/Appearance/theme.entry.ts",
-        "Pages/Index.entry.scss",
-        "Pages/Settings.entry.scss",
-        "Pages/Account/Login.entry.scss",
+        "Pages/User/Discover/Index.entry.scss",
+        "Pages/User/Settings/Settings.entry.scss",
+        "Pages/Account/Login/Login.entry.scss",
         "Modules/Player/player.entry.scss"
     ]) assert.ok(manifest[key], "missing entry " + key);
-    assert.notEqual(manifest["Pages/Index.entry.scss"].file, manifest["Assets/Shared/shell.entry.scss"].file);
+    assert.notEqual(manifest["Pages/User/Discover/Index.entry.scss"].file, manifest["Assets/Shared/shell.entry.scss"].file);
 });
 
 test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
