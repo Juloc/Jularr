@@ -81,6 +81,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             if (_authentication?.Permissions.Contains("acquisition.manage", StringComparer.Ordinal) is true)
             {
                 page.Content.Add(new A(new Text("admin.acquisition.title")).Attribute("href", "/Admin/Acquisition"));
+                page.Content.Add(new A(new Text("admin.profiles.title")).Attribute("href", "/Admin/Acquisition/Profiles"));
             }
 
             if (_authentication?.Permissions.Contains("instance.settings.read", StringComparer.Ordinal) is true)

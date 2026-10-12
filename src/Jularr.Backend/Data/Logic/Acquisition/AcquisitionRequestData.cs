@@ -67,10 +67,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedItemUpdateData : BaseData
     {
-        public WantedItemUpdateData(long id, bool isPaused, long version)
+        public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long version)
         {
             Id = id;
             IsPaused = isPaused;
+            AcquisitionProfileId = acquisitionProfileId;
             Version = version;
         }
 
@@ -79,6 +80,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
         public bool IsPaused { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
+        public long? AcquisitionProfileId { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }

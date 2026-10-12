@@ -5,6 +5,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Grabbed = 1,
         Imported = 2,
         Failed = 3,
-        Blocked = 4
+        Blocked = 4,
+        Allowed = 5
     }
 }

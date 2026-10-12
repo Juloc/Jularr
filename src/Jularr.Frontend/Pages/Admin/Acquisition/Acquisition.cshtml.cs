@@ -31,6 +31,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             page.Title("admin.acquisition.title");
             page.Navigation("nav.admin");
+            page.Content.Add(AdminNavigation.Acquisition);
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var type = _selected?.AcquisitionConnectionTypeId ?? Type;
 
@@ -84,13 +85,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
-            [BindRequired] bool isEnabled, [BindRequired] int priority, string? downloadCategory, string? remotePath, string? localPath)
+            [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath)
         {
-            // Categories are kept; the editor does not change them.
-            var categories = AcquisitionConnectionId is { } id
-                ? (await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(id), HttpContext.RequestAborted)).Categories
-                : [];
-            _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", Blank(apiKey), isEnabled, priority, categories,
+            _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", Blank(apiKey), isEnabled, priority, Categories(categories),
                 Blank(downloadCategory), Blank(remotePath), Blank(localPath));
             if (AcquisitionConnectionId is { } existing)
             {
@@ -142,6 +139,12 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 form.Number(item => item.Priority, "acquisition.connection.priority");
                 form.Select(item => item.IsEnabled, "acquisition.connection.enabled", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
 
+                // Indexer categories; empty uses the media type defaults.
+                if (type == AcquisitionConnectionType.Newznab)
+                {
+                    form.Text(item => item.Categories, "acquisition.connection.categories");
+                }
+
                 // Only download clients place files and report their own paths.
                 if (type == AcquisitionConnectionType.Sabnzbd)
                 {
@@ -160,6 +163,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private long SelectedId() => AcquisitionConnectionId ?? throw new KeyNotFoundException("No connection was selected.");
 
         private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+        // Numbers only; anything else is rejected with the field.
+        private static int[] Categories(string? value) => value is null ? [] : [.. value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(item => int.TryParse(item, NumberStyles.None, CultureInfo.InvariantCulture, out var category) ? category : throw new DataValidationException("Categories", "invalid_type"))];
 
         private string Address(long? id = null, AcquisitionConnectionType? type = null, string? handler = null, int? pageNumber = null)
         {

@@ -51,6 +51,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField SizeBytes = new() { Minimum = 0, Required = false };
         public static readonly DateTimeField PublishedAt = new() { Required = false };
         public static readonly DateTimeField CreatedAt = new();
+        public static readonly BoolField IsBlocked = new();
     }
 
     public static class AcquisitionProfileFields
@@ -58,5 +59,15 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly StringField Definition = new() { MaximumLength = 65536, AllowBlank = false };
+        public static readonly BoolField IsDefault = new();
+        public static readonly StringArrayField AllowedQualities = new() { MaximumLength = 32 };
+        public static readonly BoolField UpgradeAllowed = new();
+        public static readonly StringField UpgradeCutoffQuality = new() { MaximumLength = 64, Required = false };
+        public static readonly IntField MinimumSizeMb = new() { Minimum = 0, Maximum = 1_000_000, Required = false };
+        public static readonly IntField MaximumSizeMb = new() { Minimum = 1, Maximum = 1_000_000, Required = false };
+        public static readonly StringArrayField MustContain = new() { MaximumLength = 50 };
+        public static readonly StringArrayField MustNotContain = new() { MaximumLength = 50 };
+        public static readonly IntField WantedCount = new() { Minimum = 0 };
+        public static readonly LongField Version = new() { Minimum = 1 };
     }
 }

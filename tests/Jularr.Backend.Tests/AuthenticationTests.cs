@@ -415,7 +415,7 @@ namespace Jularr.Backend.Tests
                 using var request = new HttpRequestMessage(method, path);
                 if (data is not null)
                 {
-                    request.Content = data is IReadOnlyDictionary<string, string> form ? new FormUrlEncodedContent(form) : JsonContent.Create(data);
+                    request.Content = data switch { HttpContent content => content, IReadOnlyDictionary<string, string> form => new FormUrlEncodedContent(form), _ => JsonContent.Create(data) };
                 }
 
                 if (Cookies.Count > 0)

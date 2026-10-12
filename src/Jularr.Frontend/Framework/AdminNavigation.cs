@@ -8,6 +8,11 @@ namespace Jularr.Frontend.Framework
             new("admin.users.title", "/Admin/Requests/Users")
         ]);
 
+        public static UiSubnav Acquisition { get; } = new([
+            new("admin.acquisition.title", "/Admin/Acquisition"),
+            new("admin.profiles.title", "/Admin/Acquisition/Profiles")
+        ]);
+
         // Hide unavailable configuration links.
         public static UiSubnav RequestsFor(bool canReadRules) => canReadRules ? Requests : new([new("admin.requests.title", "/Admin/Requests")]);
     }
