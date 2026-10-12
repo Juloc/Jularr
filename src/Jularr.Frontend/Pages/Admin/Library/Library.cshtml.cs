@@ -14,15 +14,12 @@ namespace Jularr.Frontend.Pages.Admin.Library
     public enum LibraryTab : byte
     {
         Unmatched = 1,
-        Files = 2,
-        Operations = 3
+        Files = 2
     }
 
-    public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadOperationsV1 readOperations,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<LibraryFileDetailsV1>? _files;
-        private PageResult<OperationDetailsV1>? _operations;
         private long? _failedFileId;
 
         [BindProperty(SupportsGet = true)]
@@ -56,20 +53,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 page.Content.Add(table);
                 if (files.Items.Count == 0) page.Content.Add(new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty")));
                 Paging(page, files.Page, files.Items.Count == files.PageSize);
-            }
-
-            // Background scan state.
-            if (_operations is { } operations)
-            {
-                page.Content.Add(new Table<OperationDetailsV1>(operations.Items)
-                    .Resource(item => item.OperationTypeId, "table.type", type => "operation.type." + type)
-                    .Content("library.root", item => new ValueText(item.LibraryRootName ?? ""))
-                    .Resource(item => item.OperationStatusTypeId, "table.status", status => "operation.status." + status)
-                    .Text(item => item.ProcessedCount, "operation.processed")
-                    .Text(item => item.CreatedAt, "operation.created")
-                    .Content("operation.error", item => item.ErrorKey is { } key ? new Text("errors." + key) : new Span()));
-                if (operations.Items.Count == 0) page.Content.Add(new P(new Text("operation.empty")));
-                Paging(page, operations.Page, operations.Items.Count == operations.PageSize);
             }
 
             if (Error is not null && _failedFileId is null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
@@ -131,12 +114,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            if (Tab == LibraryTab.Operations)
-            {
-                _operations = await readOperations.ExecuteAsync<PageResult<OperationDetailsV1>>(new ReadOperationsParametersV1(PageNumber), ct);
-                return;
-            }
-
             _files = await readFiles.ExecuteAsync<PageResult<LibraryFileDetailsV1>>(new ReadLibraryFilesParametersV1(null, Tab == LibraryTab.Unmatched, PageNumber), ct);
         }
 

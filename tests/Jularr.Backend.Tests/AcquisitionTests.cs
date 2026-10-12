@@ -4,12 +4,14 @@ using System.Text;
 using System.Xml.Linq;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Logic.Acquisition;
@@ -95,6 +97,10 @@ namespace Jularr.Backend.Tests
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/elsewhere/../downloads/x"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var waiting = (await ReadActivityAsync(host, ActivityTabType.ToDo)).Single();
+            Assert.AreEqual("import_path_unmapped", waiting.ReasonKey);
+            Assert.AreEqual("Example Movie", waiting.WorkTitle);
+            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.Activity)).Count);
 
             // An existing library file is kept; the import takes a free name.
             var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
@@ -114,6 +120,8 @@ namespace Jularr.Backend.Tests
             var release = (await history.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseV1>>())!.Single();
             Assert.AreEqual(AcquisitionReleaseStatusType.Imported, release.AcquisitionReleaseStatusTypeId);
             Assert.AreEqual(100, release.ProgressPercent);
+            Assert.AreEqual(OperationType.Download, (await ReadActivityAsync(host, ActivityTabType.History)).Single().OperationTypeId);
+            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.ToDo)).Count);
         }
 
         [TestMethod]
@@ -122,7 +130,7 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             var usenet = new FakeUsenet();
-            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             await CreateWantedMovieAsync(host);
 
             await RunAsync<SearchDueWantedV1>(host);
@@ -133,6 +141,20 @@ namespace Jularr.Backend.Tests
             usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Failed","fail_message":"Not enough articles"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual("download_failed", await host.ScalarAsync("SELECT \"ReasonKey\" FROM \"AcquisitionReleases\""));
+
+            // The failure waits in To-Do until it is retried.
+            using var todo = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Tab=ToDo");
+            var html = await todo.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, todo.StatusCode, html);
+            StringAssert.Contains(html, "Download failed");
+            var failedId = (await ReadActivityAsync(host, ActivityTabType.ToDo)).Single().Id;
+            using var retried = await host.SendAsync(HttpMethod.Post, "/Admin/Activity?Tab=ToDo&PageNumber=1&handler=Retry&operationId=" + failedId,
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
+            Assert.AreEqual(HttpStatusCode.Redirect, retried.StatusCode, await retried.Content.ReadAsStringAsync());
+            Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.ToDo)).Count);
+            Assert.AreEqual(failedId, (await ReadActivityAsync(host, ActivityTabType.History)).Single().Id);
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failedId + "/dismiss");
+            Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/feature", "https://indexer.example.test/getnzb/lower" }, usenet.Grabbed);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\""));
@@ -422,6 +444,13 @@ namespace Jularr.Backend.Tests
             }
 
             return host;
+        }
+
+        private static async Task<IReadOnlyList<ActivityItemV1>> ReadActivityAsync(Host host, ActivityTabType tab)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=" + tab);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items;
         }
 
         private static async Task<long> CreateWantedMovieAsync(Host host)

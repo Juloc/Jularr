@@ -89,6 +89,86 @@ namespace Jularr.Backend.Logic.Operation
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        public static async Task DismissOperationAsync(this LogicContext ctx, OperationActionData data, CancellationToken ct)
+        {
+            // Only failures leave the To-Do list.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "DismissedAt" = now()
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationStatusTypeId" = 4
+                    AND operation."DismissedAt" IS NULL;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
+            {
+                throw new KeyNotFoundException("The failed operation was not found.");
+            }
+        }
+
+        public static async Task RetryOperationAsync(this LogicContext ctx, OperationActionData data, CancellationToken ct)
+        {
+            // Scans run again; downloads search their target now.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH failed AS (
+                    SELECT
+                        operation."Id",
+                        operation."OperationTypeId",
+                        operation."LibraryRootId",
+                        operation."AcquisitionReleaseId"
+                    FROM
+                        "Operations" AS operation
+                    WHERE
+                        operation."Id" = @OperationId
+                        AND operation."OperationStatusTypeId" = 4
+                        AND operation."DismissedAt" IS NULL
+                    FOR UPDATE
+                ), scanned AS (
+                    INSERT INTO
+                        "Operations" ("OperationTypeId", "LibraryRootId", "RequestedByAccountId")
+                    SELECT
+                        1,
+                        failed."LibraryRootId",
+                        @AccountId
+                    FROM
+                        failed
+                    WHERE
+                        failed."OperationTypeId" = 1
+                    ON CONFLICT ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING
+                ), searched AS (
+                    UPDATE
+                        "WantedItems" AS wanted
+                    SET
+                        "NextSearchAt" = now()
+                    FROM
+                        failed
+                        JOIN "AcquisitionReleases" AS release ON release."Id" = failed."AcquisitionReleaseId"
+                    WHERE
+                        wanted."Id" = release."WantedItemId"
+                )
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "DismissedAt" = now()
+                FROM
+                    failed
+                WHERE
+                    operation."Id" = failed."Id";
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
+            {
+                throw new KeyNotFoundException("The failed operation was not found.");
+            }
+        }
+
         public static Task<int> RequeueInterruptedOperationsAsync(this LogicContext ctx, CancellationToken ct)
         {
             // A restarted host resumes interrupted work.

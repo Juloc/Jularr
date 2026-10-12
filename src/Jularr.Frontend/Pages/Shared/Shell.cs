@@ -27,6 +27,7 @@ namespace Jularr.Frontend.Pages.Shared
             {
                 secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
                 secondary.Add(new ShellLink("admin.library.title", "/Admin/Library", "library"));
+                secondary.Add(new ShellLink("admin.activity.title", "/Admin/Activity", "settings"));
             }
 
             if (texts.Capabilities?.CanRequest is true)

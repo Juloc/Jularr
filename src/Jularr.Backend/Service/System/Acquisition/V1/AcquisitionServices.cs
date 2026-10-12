@@ -360,12 +360,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             if (storagePath is null || connection.RemotePath is null || connection.LocalPath is null
                 || ImportPlacementLogic.MapRemotePath(storagePath, connection.RemotePath) is not { } relative)
             {
+                await AttentionAsync(download.OperationId, "import_path_unmapped");
                 return;
             }
 
             var root = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadImportRootAsync(download.WorkId, ct), CancellationToken);
             if (root is null)
             {
+                await AttentionAsync(download.OperationId, "import_no_library");
                 return;
             }
 
@@ -391,6 +393,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
             catch (NasMountException)
             {
+                await AttentionAsync(download.OperationId, "import_source_unavailable");
                 return;
             }
 
@@ -406,7 +409,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Link or copy outside transactions; an existing library file is never taken over.
-            var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
+            // An offline library keeps the download waiting instead of writing elsewhere.
+            string directory;
+            try
+            {
+                directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
+            }
+            catch (NasMountException)
+            {
+                await AttentionAsync(download.OperationId, "import_library_unavailable");
+                return;
+            }
+
             var imported = new List<ImportedFile>();
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
             foreach (var group in placements.GroupBy(placement => placement.Group))
@@ -449,6 +463,13 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return true;
             }, CancellationToken);
         }
+
+        private Task AttentionAsync(long operationId, string attentionKey) =>
+            Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SetDownloadAttentionAsync(new DownloadAttentionData(operationId, attentionKey), ct);
+                return true;
+            }, CancellationToken);
 
         private Task FailAsync(long operationId, string reasonKey, DateTime nextSearchAt) =>
             Context.ExecuteBatchAsync(async (ctx, ct) =>

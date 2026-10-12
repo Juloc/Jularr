@@ -141,66 +141,6 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         public long Id { get; }
     }
 
-    public sealed class ReadOperationsParametersV1 : BaseParameters
-    {
-        public ReadOperationsParametersV1(int page = 1, int pageSize = 25)
-        {
-            Page = page;
-            PageSize = pageSize;
-        }
-
-        public int Page { get; }
-        public int PageSize { get; }
-    }
-
-    public sealed class OperationDetailsV1 : BaseResponse
-    {
-        public OperationDetailsV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, long? libraryRootId, string? libraryRootName, long processedCount,
-            string? errorKey, DateTime createdAt, DateTime? startedAt, DateTime? finishedAt)
-        {
-            Id = id;
-            OperationTypeId = operationTypeId;
-            OperationStatusTypeId = operationStatusTypeId;
-            LibraryRootId = libraryRootId;
-            LibraryRootName = libraryRootName;
-            ProcessedCount = processedCount;
-            ErrorKey = errorKey;
-            CreatedAt = createdAt;
-            StartedAt = startedAt;
-            FinishedAt = finishedAt;
-        }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
-        public long Id { get; }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.OperationTypeId))]
-        public OperationType OperationTypeId { get; }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.OperationStatusTypeId))]
-        public OperationStatusType OperationStatusTypeId { get; }
-
-        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
-        public long? LibraryRootId { get; }
-
-        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Name), false)]
-        public string? LibraryRootName { get; }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.ProcessedCount))]
-        public long ProcessedCount { get; }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.ErrorKey))]
-        public string? ErrorKey { get; }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.CreatedAt))]
-        public DateTime CreatedAt { get; }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.StartedAt))]
-        public DateTime? StartedAt { get; }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.FinishedAt))]
-        public DateTime? FinishedAt { get; }
-    }
-
     public sealed class QueueLibraryScanResultV1 : BaseResponse
     {
         public QueueLibraryScanResultV1(long id)

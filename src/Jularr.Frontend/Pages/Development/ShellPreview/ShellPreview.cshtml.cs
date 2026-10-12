@@ -1,4 +1,5 @@
 using Jularr.Frontend.Framework;
+using Jularr.Frontend.Pages.Admin.Activity;
 using Jularr.Frontend.Pages.Admin.Library;
 using Jularr.Frontend.Pages.Admin.Requests;
 using Jularr.Frontend.Pages.Admin.Rules;
@@ -58,6 +59,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
                 "admin-works" => ActivatorUtilities.CreateInstance<WorksModel>(HttpContext.RequestServices),
                 "admin-work" => ActivatorUtilities.CreateInstance<WorkModel>(HttpContext.RequestServices),
                 "admin-library" => ActivatorUtilities.CreateInstance<LibraryModel>(HttpContext.RequestServices),
+                "admin-activity" => ActivatorUtilities.CreateInstance<ActivityModel>(HttpContext.RequestServices),
                 _ => null
             };
 

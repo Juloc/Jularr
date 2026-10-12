@@ -2,10 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Operation.V1;
@@ -153,8 +155,8 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<RequeueOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default);
             Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"OperationStatusTypeId\" FROM \"Operations\""));
 
-            using var operations = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/operations");
-            Assert.AreEqual(1, (await operations.Content.ReadFromJsonAsync<PageResult<OperationDetailsV1>>())!.Items.Count);
+            using var operations = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=Activity");
+            Assert.AreEqual(OperationType.LibraryScan, (await operations.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single().OperationTypeId);
         }
 
         [TestMethod]

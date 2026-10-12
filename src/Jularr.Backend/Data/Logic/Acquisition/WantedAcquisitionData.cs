@@ -357,4 +357,19 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId))]
         public AcquisitionRequestStatusType AcquisitionRequestStatusTypeId { get; }
     }
+
+    internal sealed class DownloadAttentionData : BaseData
+    {
+        public DownloadAttentionData(long operationId, string? attentionKey)
+        {
+            OperationId = operationId;
+            AttentionKey = attentionKey;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionKey))]
+        public string? AttentionKey { get; }
+    }
 }

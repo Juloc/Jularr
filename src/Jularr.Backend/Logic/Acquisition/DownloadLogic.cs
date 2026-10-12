@@ -487,7 +487,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     SET
                         "OperationStatusTypeId" = 4,
                         "ErrorKey" = @ReasonKey,
-                        "FinishedAt" = now()
+                        "FinishedAt" = now(),
+                        "AttentionKey" = NULL
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2
@@ -522,6 +523,26 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        public static async Task SetDownloadAttentionAsync(this LogicContext ctx, DownloadAttentionData data, CancellationToken ct)
+        {
+            // A waiting import tells the Owner why; unchanged reasons are not rewritten.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Operations" AS operation
+                SET
+                    "AttentionKey" = @AttentionKey
+                WHERE
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionKey" IS DISTINCT FROM @AttentionKey;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task CompleteDownloadAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -533,7 +554,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     SET
                         "OperationStatusTypeId" = 3,
                         "ProgressPercent" = 100,
-                        "FinishedAt" = now()
+                        "FinishedAt" = now(),
+                        "AttentionKey" = NULL
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2

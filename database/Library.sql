@@ -80,13 +80,17 @@ CREATE TABLE "Operations" (
     "RequestedByAccountId" bigint NULL REFERENCES "Accounts" ("Id") ON DELETE SET NULL,
     "ProcessedCount" bigint NOT NULL DEFAULT 0 CHECK ("ProcessedCount" >= 0),
     "ErrorKey" varchar(64) NULL,
+    "AttentionKey" varchar(64) NULL,
+    "DismissedAt" timestamptz NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "StartedAt" timestamptz NULL,
     "FinishedAt" timestamptz NULL,
     CHECK ("OperationTypeId" <> 1 OR "LibraryRootId" IS NOT NULL),
     CHECK ("OperationTypeId" <> 2 OR "AcquisitionReleaseId" IS NOT NULL),
     CHECK (("OperationStatusTypeId" IN (3, 4)) = ("FinishedAt" IS NOT NULL)),
-    CHECK ("OperationStatusTypeId" = 4 OR "ErrorKey" IS NULL)
+    CHECK ("OperationStatusTypeId" = 4 OR "ErrorKey" IS NULL),
+    CHECK ("OperationStatusTypeId" IN (1, 2) OR "AttentionKey" IS NULL),
+    CHECK ("DismissedAt" IS NULL OR "OperationStatusTypeId" = 4)
 );
 CREATE UNIQUE INDEX "UX_Operations_ActiveScan" ON "Operations" ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2;

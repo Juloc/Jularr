@@ -140,44 +140,4 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             return new QueueLibraryScanResultV1(await Context.QueueLibraryScanAsync(data, CancellationToken));
         }
     }
-
-    [ServiceEndpoint("GET", "/api/v1/admin/operations")]
-    public sealed class ReadOperationsV1 : AdminService<ReadOperationsParametersV1>
-    {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<OperationDetailsV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadOperationsParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(ReadOperationsParametersV1 parameters, Type resultType) => new("media.read");
-        protected override PageRequest GetPageRequest(ReadOperationsParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
-
-        protected override async Task<IServiceOutput> OnRead()
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    operation."Id",
-                    operation."OperationTypeId",
-                    operation."OperationStatusTypeId",
-                    operation."LibraryRootId",
-                    root."Name" AS "LibraryRootName",
-                    operation."ProcessedCount",
-                    operation."ErrorKey",
-                    operation."CreatedAt",
-                    operation."StartedAt",
-                    operation."FinishedAt"
-                FROM
-                    "Operations" AS operation
-                    LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
-                WHERE
-                    operation."OperationTypeId" = 1
-                ORDER BY
-                    operation."CreatedAt" DESC,
-                    operation."Id" DESC
-                LIMIT @PageSize
-                OFFSET @Offset;
-                """;
-            sql.Page = Page;
-            return await Context.ReadSql.ReadPageAsync<OperationDetailsV1>(sql, CancellationToken);
-        }
-    }
 }
