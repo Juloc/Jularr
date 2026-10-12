@@ -63,7 +63,7 @@ Shared conventions and Backend ownership:
   Mobile navigation and their private helpers in **one** shell owner.
   Watchlist/manual Works navigation follows the verified User capability result.
 - [Brand.cs](Pages/Shared/Brand.cs): shared Jularr brand for Shell and Login;
-  original and Clean marks use the fingerprinted SVG sprite and inherit skin colors.
+  Original and Clean marks fit a shared square viewport, use the fingerprinted SVG sprite and inherit skin colors.
   [Icon.cs](Framework/Components/Icon.cs): generic fingerprinted SVG primitive.
 - [AdminNavigation.cs](Framework/AdminNavigation.cs):
   Requests/Rules/Users section links; Requests hides configuration links using verified service grants.

@@ -11,8 +11,8 @@ namespace Jularr.Frontend.Pages.Shared
         {
             // Share both brand marks.
             var glyph = new Span(
-                Mark("brand-clean", "290 255 730 765", "brand-symbol__clean"),
-                Mark("brand-original", "48 16 864 864", "brand-symbol__original"))
+                Mark("brand-clean", "brand-symbol__clean"),
+                Mark("brand-original", "brand-symbol__original"))
                 .Class(login ? "brand-symbol auth-symbol" : "brand-symbol")
                 .Attribute("aria-hidden", "true");
             var name = new Span(new ValueText(texts.InstanceName));
@@ -39,9 +39,13 @@ namespace Jularr.Frontend.Pages.Shared
             }
         }
 
-        private IUiComponent Mark(string name, string viewBox, string cssClass) =>
-            new Svg(new Use().Attribute("href", assets.IconHref(name))).Class(cssClass).Attribute("viewBox", viewBox)
+        private IUiComponent Mark(string name, string cssClass)
+        {
+            // Symbol owns logo scaling.
+            return new Svg(new Use().Attribute("href", assets.IconHref(name)).Attribute("width", "48").Attribute("height", "48"))
+                .Class(cssClass).Attribute("viewBox", "0 0 48 48")
                 .Attribute("width", "48").Attribute("height", "48").Attribute("focusable", "false");
+        }
 
         private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);
         private sealed class Use() : HtmlElement("use");

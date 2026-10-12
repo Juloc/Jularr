@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Text.Encodings.Web;
+using System.Xml.Linq;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Core;
@@ -26,6 +27,18 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(loginHtml, "brand-symbol__clean");
             StringAssert.Contains(loginHtml, "data-set-skin=\"original\"");
             StringAssert.Contains(loginHtml, "data-set-skin=\"clean\"");
+
+            // Logos share an unshifted viewport.
+            foreach (var skin in new[] { "clean", "original" })
+            {
+                var markup = Regex.Match(loginHtml, "<svg[^>]*class=\"brand-symbol__" + skin + "\"[^>]*>.*?</svg>", RegexOptions.Singleline);
+                Assert.IsTrue(markup.Success, skin);
+                var svg = XElement.Parse(markup.Value);
+                Assert.AreEqual("0 0 48 48", svg.Attribute("viewBox")?.Value, skin);
+                Assert.AreEqual("48", svg.Element("use")?.Attribute("width")?.Value, skin);
+                Assert.AreEqual("48", svg.Element("use")?.Attribute("height")?.Value, skin);
+            }
+
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(loginHtml, ("Email", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
 
