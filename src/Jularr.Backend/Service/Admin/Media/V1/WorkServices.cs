@@ -27,6 +27,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     work."Id",
                     work."MediaTypeId",
                     work."CanonicalTitle",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Version"
                 FROM
                     "Works" AS work
@@ -57,6 +58,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     work."Id",
                     work."MediaTypeId",
                     work."CanonicalTitle",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Version"
                 FROM
                     "Works" AS work
@@ -78,8 +80,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var work = await Context.CreateWorkAsync(new WorkCreationData(Data.MediaTypeId, Data.CanonicalTitle), CancellationToken);
-            return new WorkDetailsV1(work.Id, work.MediaTypeId, work.CanonicalTitle, work.Version);
+            var work = await Context.CreateWorkAsync(new WorkCreationData(Data.MediaTypeId, Data.CanonicalTitle, Data.ReleaseYear), CancellationToken);
+            return new WorkDetailsV1(work.Id, work.MediaTypeId, work.CanonicalTitle, work.ReleaseYear, work.Version);
         }
     }
 
@@ -94,7 +96,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Canonical writer checks version.
-            await Context.UpdateWorkAsync(new WorkUpdateData(Parameters.WorkId, Data.CanonicalTitle, Data.Version), CancellationToken);
+            await Context.UpdateWorkAsync(new WorkUpdateData(Parameters.WorkId, Data.CanonicalTitle, Data.Version, Data.ReleaseYear), CancellationToken);
             return new UpdateResult(true);
         }
     }

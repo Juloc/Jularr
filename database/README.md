@@ -23,10 +23,15 @@ AcquisitionRequests, their status catalog, shared whole-Work WantedItems and
 RequestTargets. A profile's active Work/language intent is unique; only approval
 creates its Wanted link, atomically in the same transaction. Owner/MediaManager
 moderate Open requests and pause/resume Wanted. Language intent uses UiLocaleId.
-This is manual administration, not an automatic downloader or import pipeline.
-Unit/edition targets, rules/quotas, cancellation, search/queue/history and automatic
-fulfilment remain pending. Tests explicitly install this embedded baseline only
-in their disposable Media fixture; the host never installs it.
+The Arr+ core adds AcquisitionConnections (Newznab indexers and SABnzbd clients in
+one table, protected API keys, cached capabilities, client path mapping),
+AcquisitionProfiles (one default per media type, JSON definition for the shared
+selection engine), search state on WantedItems and AcquisitionReleases (grabbed,
+imported, failed and blocked releases of a target: history and blocklist in one
+table). Downloads are `Operations` of type 2 linked to their release.
+Unit/edition targets, rules/quotas, cancellation and profile editing remain pending.
+Tests explicitly install this embedded baseline only in their disposable Media
+fixture; the host never installs it.
 
 `Storage.sql` is an explicit fresh baseline for StorageMounts, its SMB/NFS/Local
 protocol/version catalogs and per-connection Wake-on-LAN settings. Owner Services protect credentials before persistence.

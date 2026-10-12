@@ -29,6 +29,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             {
                 form.Select(item => item.MediaTypeId, "media.type", mediaTypes);
                 form.Text(item => item.CanonicalTitle, "media.title");
+                form.Number(item => item.ReleaseYear, "media.year");
                 form.Submit("media.create");
             }, "/Admin/Works", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, Error));
 
@@ -53,9 +54,9 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, string? canonicalTitle)
+        public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, string? canonicalTitle, int? releaseYear)
         {
-            _input = new CreateWorkDataV1(mediaTypeId, canonicalTitle ?? "");
+            _input = new CreateWorkDataV1(mediaTypeId, canonicalTitle ?? "", releaseYear);
             var work = await create.ExecuteAsync<WorkDetailsV1>(_input, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = work.Id });
         }

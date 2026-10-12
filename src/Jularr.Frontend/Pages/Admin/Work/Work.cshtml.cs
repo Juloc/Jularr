@@ -31,9 +31,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 {
                     form.Hidden(item => item.Version);
                     form.Text(item => item.CanonicalTitle, "media.title");
+                    form.Number(item => item.ReleaseYear, "media.year");
                     form.Submit("common.save");
                 }, "/Admin/Works/" + work.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _input ?? new UpdateWorkDataV1(work.CanonicalTitle, work.Version), Error));
+                    _input ?? new UpdateWorkDataV1(work.CanonicalTitle, work.Version, work.ReleaseYear), Error));
             }
             else if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
@@ -45,9 +46,9 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? canonicalTitle, long version)
+        public async Task<IActionResult> OnPostAsync(string? canonicalTitle, long version, int? releaseYear)
         {
-            _input = new UpdateWorkDataV1(canonicalTitle ?? "", version);
+            _input = new UpdateWorkDataV1(canonicalTitle ?? "", version, releaseYear);
             await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), _input, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = Id });
         }

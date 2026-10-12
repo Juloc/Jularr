@@ -10,6 +10,7 @@ namespace Jularr.Backend.Data.Enums.Field
         SingleLine = 5,
         MacAddress = 6,
         IPv4Address = 7,
-        RelativePath = 8
+        RelativePath = 8,
+        HttpUrl = 9
     }
 }

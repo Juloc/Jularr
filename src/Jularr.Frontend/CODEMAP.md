@@ -83,7 +83,8 @@ Shared conventions and Backend ownership:
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): Owner name/language and implemented module editor using shared field-aware forms and versioned services; disable retains data. Requests is a manual slice, not automatic acquisition.
 - [Works](Pages/Admin/Works/Works.cshtml.cs), [Work editor](Pages/Admin/Work/Work.cshtml.cs): real paged catalog, manual creation and version-checked title editing through Admin media services; inventory and acquisition controls remain pending.
 - [Details](Pages/User/Details/Details.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): persisted Work identity, stored availability, personal list actions and explicit language requests through Services/shared forms. No provider/NAS/playback call.
-- [My requests](Pages/User/Requests/Requests.cshtml.cs), [Admin requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs): actual profile queues, six status tabs, approval/rejection and shared-target pause/resume. [Table.cs](Framework/Components/Table.cs) supports composed row cells using the same shared Form/Button renderer. Automatic search/download/import and unit targets are not connected.
+- [My requests](Pages/User/Requests/Requests.cshtml.cs), [Admin requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs): actual profile queues, six status tabs, approval/rejection and shared-target pause/resume. Wanted shows acquisition state and opens one target in Search (candidates with decision, score and reason; grab), Current and History tabs. [Table.cs](Framework/Components/Table.cs) supports composed row cells using the same shared Form/Button renderer. Unit targets, filters and the candidate detail drawer are not connected.
+- [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs): Owner list and editor for Newznab indexers and SABnzbd clients, write-only keys, connection test and client path mapping; linked from Settings.
 - [Request users](Pages/Admin/Users/Users.cshtml.cs): read-only canonical account directory; account administration links to its existing owner. Quotas/rule assignments are not implemented.
 - [Languages](Pages/Admin/Languages/Languages.cshtml.cs): supported locale creation, names/direction/enablement and versioned edits via Owner services.
 - [Button.cs](Framework/Components/Button.cs), [Button.scss](Framework/Components/Button.scss): shared button variants/style imported by the shell; Form owns submission/disabled behavior.
@@ -128,6 +129,7 @@ in `Modules/<Module>/`.
   [Rules](Pages/Admin/Rules/Rules.cshtml.cs),
   [Users](Pages/Admin/Users/Users.cshtml.cs),
   [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs),
+  [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs),
   [Works](Pages/Admin/Works/Works.cshtml.cs),
   [Work detail](Pages/Admin/Work/Work.cshtml.cs),
   [Library](Pages/Admin/Library/Library.cshtml.cs).

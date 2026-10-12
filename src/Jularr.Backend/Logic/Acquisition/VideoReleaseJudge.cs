@@ -1,0 +1,127 @@
+using System.Text.RegularExpressions;
+
+namespace Jularr.Backend.Logic.Acquisition
+{
+    /// <summary>The units of a Series a search is for: every unit of the Series and the subset that is still wanted (missing, included in the request, aired).</summary>
+    internal sealed record VideoUnitScope(IReadOnlyList<VideoUnit> All, IReadOnlyList<VideoUnit> Wanted)
+    {
+        public static VideoUnitScope Empty { get; } = new([], []);
+    }
+
+    /// <summary>
+    /// The Movie/TV side of release identity: is this release the requested title (and year), season and episode, and which wanted units
+    /// does it cover. It only produces identity evidence and coverage; the shared selection engine decides what that means for the profile.
+    /// A release found through a trustworthy provider id counts as exact when its numbering fits, and a title that differs from the
+    /// requested one then needs a person rather than being rejected, because releases carry localized or alternate titles.
+    /// </summary>
+    internal static partial class VideoReleaseJudge
+    {
+        // Words of an edition or release tag that are not part of a movie's title; they never make a title ambiguous.
+        private static readonly HashSet<string> TitleNoise = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "a", "an", "of", "and", "der", "die", "das", "und", "extended", "unrated", "remastered", "directors", "cut", "imax", "proper", "repack", "internal",
+            "multi", "german", "dl", "dubbed", "uhd", "limited", "theatrical", "final", "special", "edition", "version", "complete", "hdr", "4k", "remux", "dc", "ws"
+        };
+
+        [GeneratedRegex(@"^(?:19|20)\d{2}$")]
+        private static partial Regex YearToken();
+
+        public static ReleaseJudgement<VideoIdentityMatch> Judge(AcquisitionKind kind, string title, int? year, VideoUnit? unit, VideoUnitScope scope, ReleaseOffer offer)
+        {
+            if (offer.DownloadUri is null)
+            {
+                return Unusable(VideoIdentityMatch.NoDownload, "NoDownload");
+            }
+
+            if (!ReleaseParser.TryParse(offer.Title, out var parsed))
+            {
+                return Unusable(VideoIdentityMatch.Unparseable, "Unparseable");
+            }
+
+            var viaId = offer.Stages.Contains("id");
+            var (titleMatch, titleEvidence) = kind == AcquisitionKind.Movie ? JudgeMovieTitle(title, year, parsed, viaId) : JudgeSeriesTitle(title, parsed, viaId);
+            if (titleEvidence.Confidence == IdentityConfidence.Conflict || unit is null)
+            {
+                return new ReleaseJudgement<VideoIdentityMatch>(titleMatch, parsed, titleEvidence, SelectionCoverage.Single, null);
+            }
+
+            return JudgeUnit(titleMatch, titleEvidence, parsed, unit, scope, viaId);
+        }
+
+        private static ReleaseJudgement<VideoIdentityMatch> Unusable(VideoIdentityMatch match, string code) =>
+            new(match, null, ReleaseIdentityEvidence.Strong(code), SelectionCoverage.Single, code);
+
+        private static (VideoIdentityMatch Match, ReleaseIdentityEvidence Evidence) JudgeSeriesTitle(string requested, ReleaseInfo parsed, bool viaId)
+        {
+            if (TitleMatcher.Matches(requested, parsed.SeriesTitle))
+            {
+                return (VideoIdentityMatch.Matches, viaId ? ReleaseIdentityEvidence.Exact("Matches") : ReleaseIdentityEvidence.Strong("Matches"));
+            }
+
+            return viaId
+                ? (VideoIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("AmbiguousTitle", parsed.SeriesTitle))
+                : (VideoIdentityMatch.WrongTitle, ReleaseIdentityEvidence.Conflict("WrongTitle", parsed.SeriesTitle));
+        }
+
+        private static (VideoIdentityMatch Match, ReleaseIdentityEvidence Evidence) JudgeMovieTitle(string requested, int? year, ReleaseInfo parsed, bool viaId)
+        {
+            var wanted = Words(requested);
+            var actual = Words(parsed.SeriesTitle);
+            if (wanted.Count == 0 || !wanted.All(actual.Contains))
+            {
+                return viaId
+                    ? (VideoIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("AmbiguousTitle", parsed.SeriesTitle))
+                    : (VideoIdentityMatch.WrongTitle, ReleaseIdentityEvidence.Conflict("WrongTitle", parsed.SeriesTitle));
+            }
+
+            var years = actual.Where(word => YearToken().IsMatch(word) && !wanted.Contains(word)).Select(int.Parse).ToArray();
+            var hasYear = year is not null && years.Length > 0 && years.Any(candidate => Math.Abs(candidate - year.Value) <= 1);
+            if (year is not null && years.Length > 0 && !hasYear)
+            {
+                return (VideoIdentityMatch.WrongYear, ReleaseIdentityEvidence.Conflict("WrongYear", string.Join('/', years)));
+            }
+
+            // A sequel or spin-off shares the words of the requested title: anything beyond the title, the year and release tags is ambiguous.
+            var extra = actual.Where(word => !wanted.Contains(word) && !YearToken().IsMatch(word)).ToArray();
+            if (extra.Length > 0 && !viaId)
+            {
+                return (VideoIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("ExtraTitleWords", string.Join(' ', extra)));
+            }
+
+            return (VideoIdentityMatch.Matches, viaId || hasYear ? ReleaseIdentityEvidence.Exact(viaId ? "MatchesById" : "MatchesTitleAndYear") : ReleaseIdentityEvidence.Strong("Matches"));
+        }
+
+        private static ReleaseJudgement<VideoIdentityMatch> JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, VideoUnit unit, VideoUnitScope scope, bool viaId)
+        {
+            if (parsed.SeasonNumber != unit.SeasonNumber)
+            {
+                return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.WrongSeason, parsed, ReleaseIdentityEvidence.Conflict("WrongSeason", parsed.SeasonNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture)), SelectionCoverage.Single, null);
+            }
+
+            // An ambiguous title (found by id, named differently) stays ambiguous whatever the numbering says; otherwise exact numbering after an exact title is exact.
+            ReleaseIdentityEvidence Fit(string code) =>
+                title.Confidence == IdentityConfidence.Ambiguous ? title : viaId ? ReleaseIdentityEvidence.Exact(code) : ReleaseIdentityEvidence.Strong(code);
+
+            var seasonUnits = scope.All.Where(candidate => candidate.SeasonNumber == unit.SeasonNumber).ToArray();
+            if (parsed.IsSeasonPack)
+            {
+                var covered = scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber);
+                return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.ContainsTarget, parsed, Fit("ContainsTarget"), new SelectionCoverage(covered, scope.Wanted.Count, Math.Max(0, seasonUnits.Length - covered)), null);
+            }
+
+            if (parsed.EpisodeStart is int start && parsed.EpisodeEnd is int end && unit.EpisodeNumber >= start && unit.EpisodeNumber <= end)
+            {
+                var covered = scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber && candidate.EpisodeNumber >= start && candidate.EpisodeNumber <= end);
+                return new ReleaseJudgement<VideoIdentityMatch>(titleMatch == VideoIdentityMatch.AmbiguousTitle ? VideoIdentityMatch.AmbiguousTitle : VideoIdentityMatch.Matches, parsed, Fit("Matches"), new SelectionCoverage(Math.Max(1, covered), scope.Wanted.Count, Math.Max(0, end - start + 1 - covered)), null);
+            }
+
+            return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.WrongEpisode, parsed, ReleaseIdentityEvidence.Conflict("WrongEpisode"), SelectionCoverage.Single, null);
+        }
+
+        private static HashSet<string> Words(string value) =>
+            value.Split([' ', '.', '_', '-', ':', ',', '(', ')', '[', ']', '\'', '"', '!', '?', '&', '/'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(word => word.ToLowerInvariant())
+                .Where(word => !TitleNoise.Contains(word))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+}

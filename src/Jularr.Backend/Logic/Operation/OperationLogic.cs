@@ -53,7 +53,7 @@ namespace Jularr.Backend.Logic.Operation
 
         public static Task<OperationData?> ClaimOperationAsync(this LogicContext ctx, CancellationToken ct)
         {
-            // Oldest queued work first.
+            // Oldest queued scan first; downloads are tracked by their client.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -69,7 +69,8 @@ namespace Jularr.Backend.Logic.Operation
                         FROM
                             "Operations" AS queued
                         WHERE
-                            queued."OperationStatusTypeId" = 1
+                            queued."OperationTypeId" = 1
+                            AND queued."OperationStatusTypeId" = 1
                         ORDER BY
                             queued."CreatedAt",
                             queued."Id"
@@ -99,6 +100,7 @@ namespace Jularr.Backend.Logic.Operation
                     "FinishedAt" = CASE WHEN @OperationStatusTypeId IN (3, 4) THEN now() END
                 WHERE
                     operation."Id" = @Id
+                    AND operation."OperationTypeId" = 1
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             sql.Parameters.Add(data);
@@ -117,7 +119,8 @@ namespace Jularr.Backend.Logic.Operation
                     "OperationStatusTypeId" = 1,
                     "StartedAt" = NULL
                 WHERE
-                    operation."OperationStatusTypeId" = 2;
+                    operation."OperationTypeId" = 1
+                    AND operation."OperationStatusTypeId" = 2;
                 """;
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }

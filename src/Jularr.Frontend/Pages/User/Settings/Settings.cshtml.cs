@@ -75,6 +75,11 @@ namespace Jularr.Frontend.Pages.User.Settings
                 page.Content.Add(new A(new Text("setup.storage.title")).Attribute("href", "/Setup/Storage"));
             }
 
+            if (_authentication?.Permissions.Contains("acquisition.manage", StringComparer.Ordinal) is true)
+            {
+                page.Content.Add(new A(new Text("admin.acquisition.title")).Attribute("href", "/Admin/Acquisition"));
+            }
+
             if (_authentication?.Permissions.Contains("instance.settings.read", StringComparer.Ordinal) is true)
             {
                 page.Content.Add(new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance"));

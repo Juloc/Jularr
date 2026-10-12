@@ -1,6 +1,8 @@
+using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -9,38 +11,66 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Wanted
 {
-    public sealed class WantedModel(ReadWantedV1 read, UpdateWantedV1 update, IAntiforgery antiforgery) : JularrPage
+    public sealed class WantedModel(ReadWantedV1 read, ReadWantedItemV1 readItem, UpdateWantedV1 update, SearchWantedV1 search, GrabWantedReleaseV1 grab,
+        ReadWantedReleasesV1 releases, IAntiforgery antiforgery) : JularrPage
     {
+        private const string SearchTab = "search";
+        private const string CurrentTab = "current";
+        private const string HistoryTab = "history";
         private PageResult<WantedDetailsV1>? _wanted;
+        private WantedDetailsV1? _selected;
+        private BaseDataList<WantedReleaseCandidateV1>? _candidates;
+        private BaseDataList<WantedReleaseV1>? _history;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
+
+        [BindProperty(SupportsGet = true)]
+        public long? WantedItemId { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public string? Tab { get; set; }
 
         protected override void Define(Page page)
         {
             page.Title("admin.wanted.title");
             page.Navigation("nav.admin");
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            // Shared Work targets, not requests.
-            if (_wanted is { } wanted)
+            // Shared Work targets, not requests; one target opens its acquisition tabs.
+            page.Content.Add(new Split(split =>
             {
-                var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-                page.Content.Add(new Table<WantedDetailsV1>(wanted.Items)
-                    .Text(item => item.CanonicalTitle, "table.work")
-                    .Content("request.language", item => new ValueText(string.Join(", ", item.RequestedLanguages)))
-                    .Resource(item => item.IsPaused, "table.status", paused => paused ? "wanted.paused" : "wanted.requested")
-                    .Content("common.actions", item => new Form<UpdateWantedDataV1>(form =>
-                    {
-                        form.Hidden(data => data.IsPaused);
-                        form.Hidden(data => data.Version);
-                        form.Submit(item.IsPaused ? "wanted.resume" : "wanted.pause");
-                    }, Address(PageNumber) + "&WantedItemId=" + item.Id, csrf,
-                        new UpdateWantedDataV1(!item.IsPaused, item.Version))));
+                if (_wanted is { } wanted)
+                {
+                    split.Primary.Add(new Table<WantedDetailsV1>(wanted.Items)
+                        .Text(item => item.CanonicalTitle, "table.work")
+                        .Content("request.language", item => new ValueText(string.Join(", ", item.RequestedLanguages)))
+                        .Content("table.status", Status)
+                        .Content("wanted.lastSearch", item => new ValueText(item.LastSearchedAt?.ToString("u", CultureInfo.InvariantCulture) ?? ""))
+                        .Link(item => item.Id, "common.actions", id => Address(PageNumber, id, SearchTab), "wanted.open")
+                        .Content("wanted.monitoring", item => new Form<UpdateWantedDataV1>(form =>
+                        {
+                            form.Hidden(data => data.IsPaused);
+                            form.Hidden(data => data.Version);
+                            form.Submit(item.IsPaused ? "wanted.resume" : "wanted.pause");
+                        }, Address(PageNumber, item.Id, SelectedTab), csrf, new UpdateWantedDataV1(!item.IsPaused, item.Version))));
 
-                if (wanted.Items.Count == 0) page.Content.Add(new P(new Text("wanted.empty")));
-                if (wanted.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(wanted.Page - 1)));
-                if (wanted.Items.Count == wanted.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(wanted.Page + 1)));
-            }
+                    if (wanted.Items.Count == 0) split.Primary.Add(new P(new Text("wanted.empty")));
+                    if (wanted.Page > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(wanted.Page - 1)));
+                    if (wanted.Items.Count == wanted.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(wanted.Page + 1)));
+                }
+
+                if (_selected is { } selected)
+                {
+                    split.Secondary.Add(new P(new ValueText(selected.CanonicalTitle)));
+                    split.Secondary.Add(new Tabs(tabs =>
+                    {
+                        tabs.Add("wanted.tab.search", Address(PageNumber, selected.Id, SearchTab), SelectedTab == SearchTab, content => DefineSearch(content, selected, csrf));
+                        tabs.Add("wanted.tab.current", Address(PageNumber, selected.Id, CurrentTab), SelectedTab == CurrentTab, content => DefineCurrent(content, selected));
+                        tabs.Add("wanted.tab.history", Address(PageNumber, selected.Id, HistoryTab), SelectedTab == HistoryTab, DefineHistory);
+                    }));
+                }
+            }).MasterDetail(_selected is not null, Address(PageNumber)));
 
             if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
@@ -52,17 +82,142 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] long wantedItemId, [BindRequired] bool isPaused, [BindRequired] long version)
+        public async Task<IActionResult> OnPostAsync([BindRequired] bool isPaused, [BindRequired] long version)
         {
-            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(wantedItemId), new UpdateWantedDataV1(isPaused, version), HttpContext.RequestAborted);
-            return LocalRedirect(Address(PageNumber));
+            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(SelectedId()), new UpdateWantedDataV1(isPaused, version), HttpContext.RequestAborted);
+            return LocalRedirect(Address(PageNumber, WantedItemId, SelectedTab));
+        }
+
+        public async Task<IActionResult> OnPostSearchAsync()
+        {
+            // Results belong to this response; grabs pick from the server-side search.
+            await LoadDataAsync();
+            _candidates = await search.ExecuteAsync<BaseDataList<WantedReleaseCandidateV1>>(new WantedItemParametersV1(SelectedId()), default, HttpContext.RequestAborted);
+            PreparePage();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostGrabAsync(string? candidateId)
+        {
+            await grab.ExecuteAsync<UpdateResult>(new WantedItemParametersV1(SelectedId()), new GrabWantedReleaseDataV1(candidateId ?? ""), HttpContext.RequestAborted);
+            TempData["WantedGrabbed"] = true;
+            return LocalRedirect(Address(PageNumber, WantedItemId, HistoryTab));
         }
 
         protected override async Task LoadDataAsync()
         {
             _wanted = await read.ExecuteAsync<PageResult<WantedDetailsV1>>(new ReadWantedParametersV1(PageNumber), HttpContext.RequestAborted);
+            if (WantedItemId is { } id)
+            {
+                _selected = _wanted.Items.FirstOrDefault(item => item.Id == id)
+                    ?? await readItem.ExecuteAsync<WantedDetailsV1>(new WantedItemParametersV1(id), HttpContext.RequestAborted);
+                if (SelectedTab == HistoryTab)
+                {
+                    _history = await releases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(id), HttpContext.RequestAborted);
+                }
+            }
         }
 
-        private static string Address(int pageNumber) => "/Admin/Wanted?PageNumber=" + pageNumber;
+        private void DefineSearch(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
+        {
+            content.Add(new Form<WantedItemParametersV1>(form => form.Submit("wanted.search.start"), Address(PageNumber, selected.Id, SearchTab, "Search"), csrf,
+                new WantedItemParametersV1(selected.Id)));
+            if (_candidates is not { } candidates)
+            {
+                return;
+            }
+
+            // Every candidate stays visible with its decision; rejected ones cannot be taken.
+            if (candidates.Count == 0)
+            {
+                content.Add(new P(new Text("wanted.search.empty")).Attribute("role", "status"));
+                return;
+            }
+
+            content.Add(new Table<WantedReleaseCandidateV1>(candidates)
+                .Resource(item => item.ReleaseDecisionTypeId, "wanted.search.decision", decision => "acquisition.decision." + decision)
+                .Text(item => item.Score, "wanted.search.score")
+                .Text(item => item.Title, "wanted.search.release")
+                .Text(item => item.ConnectionName, "wanted.search.indexer")
+                .Content("wanted.search.age", item => new ValueText(Age(item.PublishedAt)))
+                .Content("wanted.search.size", item => new ValueText(Size(item.SizeBytes)))
+                .Text(item => item.QualityKey, "wanted.search.quality")
+                .Content("wanted.search.reason", item => Reason("acquisition.reason." + item.ReasonCode, item.ReasonValue))
+                .Content("common.actions", item => item.ReleaseDecisionTypeId == ReleaseDecisionType.Rejected
+                    ? new Span()
+                    : new Form<GrabWantedReleaseDataV1>(form =>
+                    {
+                        form.Hidden(data => data.CandidateId);
+                        form.Submit("wanted.search.grab");
+                    }, Address(PageNumber, selected.Id, SearchTab, "Grab"), csrf, new GrabWantedReleaseDataV1(item.CandidateId))));
+        }
+
+        private static void DefineCurrent(List<IUiComponent> content, WantedDetailsV1 selected)
+        {
+            content.Add(new P(new Text("table.status"), new ValueText(": "), Status(selected)));
+            content.Add(new P(new Text("request.language"), new ValueText(": " + string.Join(", ", selected.RequestedLanguages))));
+            if (selected.LastSearchedAt is { } searchedAt)
+            {
+                content.Add(new P(new Text("wanted.lastSearch"), new ValueText(": " + searchedAt.ToString("u", CultureInfo.InvariantCulture))));
+            }
+        }
+
+        private void DefineHistory(List<IUiComponent> content)
+        {
+            if (TempData["WantedGrabbed"] is true) content.Add(new P(new Text("wanted.grabQueued")).Attribute("role", "status"));
+            if (_history is not { } history)
+            {
+                return;
+            }
+
+            if (history.Count == 0)
+            {
+                content.Add(new P(new Text("wanted.history.empty")));
+                return;
+            }
+
+            content.Add(new Table<WantedReleaseV1>(history)
+                .Text(item => item.Title, "wanted.search.release")
+                .Text(item => item.ConnectionName, "wanted.search.indexer")
+                .Text(item => item.QualityKey, "wanted.search.quality")
+                .Resource(item => item.AcquisitionReleaseStatusTypeId, "table.status", status => "acquisition.release." + status)
+                .Content("wanted.search.reason", item => item.ReasonKey is { } reason ? new Text("acquisition.outcome." + reason) : new Span())
+                .Content("wanted.progress", item => new ValueText(item.ProgressPercent?.ToString(CultureInfo.InvariantCulture) ?? ""))
+                .Content("wanted.history.date", item => new ValueText(item.CreatedAt.ToString("u", CultureInfo.InvariantCulture))));
+        }
+
+        private static IUiComponent Status(WantedDetailsV1 item)
+        {
+            // Paused and available targets need no further acquisition.
+            if (item.IsPaused) return new Text("wanted.paused");
+            if (item.HasMedia) return new Text("wanted.available");
+            if (item.IsDownloading)
+            {
+                return item.ProgressPercent is { } percent
+                    ? new Span(new Text("wanted.downloading"), new ValueText(" " + percent.ToString(CultureInfo.InvariantCulture) + "%"))
+                    : new Text("wanted.downloading");
+            }
+
+            return new Text(item.OutcomeKey is { } outcome ? "acquisition.outcome." + outcome : "wanted.requested");
+        }
+
+        private static IUiComponent Reason(string key, string? value) => value is null ? new Text(key) : new Span(new Text(key), new ValueText(" · " + value));
+
+        private static string Age(DateTime? publishedAt) =>
+            publishedAt is { } date ? Math.Max(0, (int)(DateTime.UtcNow - date).TotalDays).ToString(CultureInfo.InvariantCulture) : "";
+
+        private static string Size(long? bytes) =>
+            bytes is { } size ? (size / 1024d / 1024 / 1024).ToString("0.0", CultureInfo.InvariantCulture) : "";
+
+        private string SelectedTab => Tab is CurrentTab or HistoryTab ? Tab : SearchTab;
+
+        private long SelectedId() => WantedItemId ?? throw new KeyNotFoundException("No wanted item was selected.");
+
+        private static string Address(int pageNumber, long? wantedItemId = null, string? tab = null, string? handler = null)
+        {
+            var address = "/Admin/Wanted?PageNumber=" + pageNumber.ToString(CultureInfo.InvariantCulture);
+            if (wantedItemId is { } id) address += "&WantedItemId=" + id.ToString(CultureInfo.InvariantCulture) + "&Tab=" + tab;
+            return handler is null ? address : address + "&handler=" + handler;
+        }
     }
 }

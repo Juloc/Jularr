@@ -280,7 +280,8 @@ namespace Jularr.Backend.Tests
             public IServiceProvider Services => _app.Services;
             public Dictionary<string, string> Cookies { get; } = new(StringComparer.Ordinal);
 
-            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false, bool storage = false, bool library = false, IReadOnlyDictionary<string, string>? settings = null)
+            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false, bool storage = false, bool library = false, IReadOnlyDictionary<string, string>? settings = null,
+                Action<IServiceCollection>? services = null)
             {
                 // Catalog baselines are installed together, as in a fresh installation.
                 library |= media || storage;
@@ -382,6 +383,7 @@ namespace Jularr.Backend.Tests
                 });
                 var plex = new PlexHandler();
                 builder.Services.AddHttpClient<PlexClient>().ConfigurePrimaryHttpMessageHandler(() => plex);
+                services?.Invoke(builder.Services);
 
                 var app = builder.Build();
                 app.UseExceptionHandler();

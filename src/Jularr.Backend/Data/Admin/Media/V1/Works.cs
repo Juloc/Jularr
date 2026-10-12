@@ -33,11 +33,12 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class WorkDetailsV1 : BaseResponse
     {
-        public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, long version)
+        public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long version)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
+            ReleaseYear = releaseYear;
             Version = version;
         }
 
@@ -50,16 +51,20 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
 
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
         [DataField(typeof(WorkFields), nameof(WorkFields.Version))]
         public long Version { get; }
     }
 
     public sealed class CreateWorkDataV1 : BaseData
     {
-        public CreateWorkDataV1(MediaType mediaTypeId, string canonicalTitle)
+        public CreateWorkDataV1(MediaType mediaTypeId, string canonicalTitle, int? releaseYear = null)
         {
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
+            ReleaseYear = releaseYear;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
@@ -67,18 +72,25 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
     }
 
     public sealed class UpdateWorkDataV1 : BaseData
     {
-        public UpdateWorkDataV1(string canonicalTitle, long version)
+        public UpdateWorkDataV1(string canonicalTitle, long version, int? releaseYear = null)
         {
             CanonicalTitle = canonicalTitle;
             Version = version;
+            ReleaseYear = releaseYear;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Version))]
         public long Version { get; }

@@ -311,7 +311,8 @@ namespace Jularr.Backend.Tests
             return (await created.Content.ReadFromJsonAsync<CreateLibraryRootResultV1>())!.Id;
         }
 
-        internal static async Task<Host> CreateHostAsync(string mountRoot, bool razor = false, IReadOnlyDictionary<string, string>? settings = null)
+        internal static async Task<Host> CreateHostAsync(string mountRoot, bool razor = false, IReadOnlyDictionary<string, string>? settings = null,
+            Action<IServiceCollection>? services = null)
         {
             var configuration = new Dictionary<string, string>(settings ?? new Dictionary<string, string>())
             {
@@ -319,7 +320,7 @@ namespace Jularr.Backend.Tests
                 ["Storage:LocalPaths:0"] = "/media/library",
                 ["Storage:LocalPaths:1"] = mountRoot
             };
-            var host = await Host.CreateAsync(razor: razor, library: true, settings: configuration);
+            var host = await Host.CreateAsync(razor: razor, library: true, settings: configuration, services: services);
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());

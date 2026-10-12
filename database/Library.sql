@@ -60,7 +60,7 @@ CREATE TABLE "OperationTypes" (
     "Id" smallint PRIMARY KEY,
     "Key" varchar(32) NOT NULL UNIQUE
 );
-INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan');
+INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan'), (2, 'Download');
 
 CREATE TABLE "OperationStatusTypes" (
     "Id" smallint PRIMARY KEY,
@@ -73,6 +73,10 @@ CREATE TABLE "Operations" (
     "OperationTypeId" smallint NOT NULL REFERENCES "OperationTypes" ("Id"),
     "OperationStatusTypeId" smallint NOT NULL DEFAULT 1 REFERENCES "OperationStatusTypes" ("Id"),
     "LibraryRootId" bigint NULL REFERENCES "LibraryRoots" ("Id") ON DELETE CASCADE,
+    "AcquisitionReleaseId" bigint NULL REFERENCES "AcquisitionReleases" ("Id") ON DELETE CASCADE,
+    "AcquisitionConnectionId" bigint NULL REFERENCES "AcquisitionConnections" ("Id") ON DELETE SET NULL,
+    "ExternalId" varchar(128) NULL,
+    "ProgressPercent" smallint NULL CHECK ("ProgressPercent" BETWEEN 0 AND 100),
     "RequestedByAccountId" bigint NULL REFERENCES "Accounts" ("Id") ON DELETE SET NULL,
     "ProcessedCount" bigint NOT NULL DEFAULT 0 CHECK ("ProcessedCount" >= 0),
     "ErrorKey" varchar(64) NULL,
@@ -80,11 +84,13 @@ CREATE TABLE "Operations" (
     "StartedAt" timestamptz NULL,
     "FinishedAt" timestamptz NULL,
     CHECK ("OperationTypeId" <> 1 OR "LibraryRootId" IS NOT NULL),
+    CHECK ("OperationTypeId" <> 2 OR "AcquisitionReleaseId" IS NOT NULL),
     CHECK (("OperationStatusTypeId" IN (3, 4)) = ("FinishedAt" IS NOT NULL)),
     CHECK ("OperationStatusTypeId" = 4 OR "ErrorKey" IS NULL)
 );
 CREATE UNIQUE INDEX "UX_Operations_ActiveScan" ON "Operations" ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2);
-CREATE INDEX "IX_Operations_Queue" ON "Operations" ("OperationStatusTypeId", "CreatedAt", "Id");
+CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2;
+CREATE INDEX "IX_Operations_Queue" ON "Operations" ("OperationTypeId", "OperationStatusTypeId", "CreatedAt", "Id");
 CREATE INDEX "IX_Operations_Recent" ON "Operations" ("CreatedAt" DESC, "Id" DESC);
 
 COMMIT;

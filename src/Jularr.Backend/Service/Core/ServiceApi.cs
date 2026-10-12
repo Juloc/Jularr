@@ -15,8 +15,12 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.Plex;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
+using Jularr.Integrations.Logic.Newznab;
+using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Backend.Service.Core.Localization;
+using Jularr.Backend.Service.System.Acquisition;
 using Jularr.Backend.Service.System.Operation;
+using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.User.Playback;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
@@ -39,6 +43,7 @@ namespace Jularr.Backend.Service.Core
         public const string MediaReadPolicyName = "media.read";
         public const string RequestsReadPolicyName = "requests.read";
         public const string WantedReadPolicyName = "wanted.read";
+        public const string AcquisitionManagePolicyName = "acquisition.manage";
         public const string LocalizationReadPolicyName = "localization.read";
         public const string AccountsReadPolicyName = "accounts.read";
         public const string ProvidersReadPolicyName = "providers.read";
@@ -87,6 +92,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<WakeOnLanClient>();
             services.TryAddSingleton<MediaTranscoder>();
             services.TryAddSingleton<PlaybackTranscodes>();
+            services.TryAddTransient<WantedAcquisition>();
+            services.AddMemoryCache();
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
             services.AddHttpContextAccessor();
@@ -105,7 +112,7 @@ namespace Jularr.Backend.Service.Core
             services.AddAuthorization(options =>
             {
                 foreach (var (policyName, permission) in new[] { (AdminPolicyName, "admin.access"), (StorageReadPolicyName, "storage.read"), (RulesReadPolicyName, "rules.read"),
-                    (MediaReadPolicyName, "media.read"), (RequestsReadPolicyName, "requests.read"), (WantedReadPolicyName, "wanted.read"),
+                    (MediaReadPolicyName, "media.read"), (RequestsReadPolicyName, "requests.read"), (WantedReadPolicyName, "wanted.read"), (AcquisitionManagePolicyName, "acquisition.manage"),
                     (LocalizationReadPolicyName, "localization.read"), (AccountsReadPolicyName, "accounts.read"), (ProvidersReadPolicyName, "providers.read"),
                     (InstanceSettingsReadPolicyName, "instance.settings.read") })
                 {
@@ -149,6 +156,18 @@ namespace Jularr.Backend.Service.Core
             {
                 http.Timeout = TimeSpan.FromSeconds(10);
                 http.MaxResponseContentBufferSize = 1024 * 1024;
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+                .RemoveAllLoggers();
+            services.AddHttpClient<NewznabClient>(http =>
+            {
+                http.Timeout = TimeSpan.FromSeconds(30);
+                http.MaxResponseContentBufferSize = 16 * 1024 * 1024;
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+                .RemoveAllLoggers();
+            services.AddHttpClient<SabnzbdClient>(http =>
+            {
+                http.Timeout = TimeSpan.FromSeconds(15);
+                http.MaxResponseContentBufferSize = 16 * 1024 * 1024;
             }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
                 .RemoveAllLoggers();
 
@@ -203,6 +222,7 @@ namespace Jularr.Backend.Service.Core
         public static IServiceCollection AddJularrBackgroundWork(this IServiceCollection services)
         {
             services.AddHostedService<OperationWorker>();
+            services.AddHostedService<AcquisitionWorker>();
             return services;
         }
 

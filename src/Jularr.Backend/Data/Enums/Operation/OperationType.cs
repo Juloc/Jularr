@@ -2,6 +2,7 @@ namespace Jularr.Backend.Data.Enums.Operation
 {
     public enum OperationType : byte
     {
-        LibraryScan = 1
+        LibraryScan = 1,
+        Download = 2
     }
 }

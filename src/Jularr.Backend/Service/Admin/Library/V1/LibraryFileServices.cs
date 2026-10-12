@@ -168,6 +168,8 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
+                WHERE
+                    operation."OperationTypeId" = 1
                 ORDER BY
                     operation."CreatedAt" DESC,
                     operation."Id" DESC

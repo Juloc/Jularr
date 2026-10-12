@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Media;
 
@@ -44,7 +45,8 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class WantedDetailsV1 : BaseResponse
     {
-        public WantedDetailsV1(long id, long workId, string canonicalTitle, bool isPaused, long version, string[] requestedLanguages)
+        public WantedDetailsV1(long id, long workId, string canonicalTitle, bool isPaused, long version, string[] requestedLanguages, bool hasMedia, bool isDownloading,
+            int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey)
         {
             Id = id;
             WorkId = workId;
@@ -52,6 +54,11 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
             IsPaused = isPaused;
             Version = version;
             RequestedLanguages = requestedLanguages;
+            HasMedia = hasMedia;
+            IsDownloading = isDownloading;
+            ProgressPercent = progressPercent;
+            LastSearchedAt = lastSearchedAt;
+            OutcomeKey = outcomeKey;
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
@@ -71,5 +78,130 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.RequestedLanguages))]
         public string[] RequestedLanguages { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]
+        public bool HasMedia { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsDownloading))]
+        public bool IsDownloading { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ProgressPercent))]
+        public int? ProgressPercent { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.LastSearchedAt))]
+        public DateTime? LastSearchedAt { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.OutcomeKey))]
+        public string? OutcomeKey { get; }
+    }
+
+    public sealed class WantedItemParametersV1 : BaseParameters
+    {
+        public WantedItemParametersV1(long wantedItemId)
+        {
+            WantedItemId = wantedItemId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+    }
+
+    public sealed class WantedReleaseCandidateV1 : BaseResponse
+    {
+        public WantedReleaseCandidateV1(string candidateId, string title, string connectionName, long? sizeBytes, DateTime? publishedAt, string? qualityKey,
+            ReleaseDecisionType releaseDecisionTypeId, int score, string reasonCode, string? reasonValue)
+        {
+            CandidateId = candidateId;
+            Title = title;
+            ConnectionName = connectionName;
+            SizeBytes = sizeBytes;
+            PublishedAt = publishedAt;
+            QualityKey = qualityKey;
+            ReleaseDecisionTypeId = releaseDecisionTypeId;
+            Score = score;
+            ReasonCode = reasonCode;
+            ReasonValue = reasonValue;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.CandidateId))]
+        public string CandidateId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title))]
+        public string Title { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
+        public string ConnectionName { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SizeBytes))]
+        public long? SizeBytes { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.PublishedAt))]
+        public DateTime? PublishedAt { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.QualityKey))]
+        public string? QualityKey { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReleaseDecisionTypeId))]
+        public ReleaseDecisionType ReleaseDecisionTypeId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Score))]
+        public int Score { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonCode))]
+        public string ReasonCode { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonValue))]
+        public string? ReasonValue { get; }
+    }
+
+    public sealed class GrabWantedReleaseDataV1 : BaseData
+    {
+        public GrabWantedReleaseDataV1(string candidateId)
+        {
+            CandidateId = candidateId;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.CandidateId))]
+        public string CandidateId { get; }
+    }
+
+    public sealed class WantedReleaseV1 : BaseResponse
+    {
+        public WantedReleaseV1(long id, string title, string? connectionName, string? qualityKey, AcquisitionReleaseStatusType acquisitionReleaseStatusTypeId, string? reasonKey,
+            int? progressPercent, DateTime createdAt)
+        {
+            Id = id;
+            Title = title;
+            ConnectionName = connectionName;
+            QualityKey = qualityKey;
+            AcquisitionReleaseStatusTypeId = acquisitionReleaseStatusTypeId;
+            ReasonKey = reasonKey;
+            ProgressPercent = progressPercent;
+            CreatedAt = createdAt;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title))]
+        public string Title { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name), false)]
+        public string? ConnectionName { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.QualityKey))]
+        public string? QualityKey { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.AcquisitionReleaseStatusTypeId))]
+        public AcquisitionReleaseStatusType AcquisitionReleaseStatusTypeId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonKey))]
+        public string? ReasonKey { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ProgressPercent))]
+        public int? ProgressPercent { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.CreatedAt))]
+        public DateTime CreatedAt { get; }
     }
 }

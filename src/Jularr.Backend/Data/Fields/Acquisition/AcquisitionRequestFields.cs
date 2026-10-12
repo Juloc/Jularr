@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Enums.Acquisition;
+using NpgsqlTypes;
 
 namespace Jularr.Backend.Data.Fields.Acquisition
 {
@@ -17,5 +18,11 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsPaused = new();
         public static readonly LongField Version = new() { Minimum = 1 };
         public static readonly StringArrayField RequestedLanguages = new();
+        public static readonly IntField SearchCount = new() { Minimum = 0 };
+        public static readonly DateTimeField LastSearchedAt = new() { Required = false };
+        public static readonly DateTimeField NextSearchAt = new() { Required = false };
+        public static readonly StringField OutcomeKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
+        public static readonly BoolField HasMedia = new();
+        public static readonly BoolField IsDownloading = new();
     }
 }

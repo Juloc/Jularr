@@ -123,9 +123,14 @@ context/transaction. MediaTypes is separate; per-media/profile preferences,
 Arr+/Playback/Tracking module implementations and full branding remain open.
 
 The agreed functional module catalog is Library, Requests, Arr+, Playback,
-Readers and Tracking. Requests now has a manual whole-Work slice: active-profile
-language intent, moderation, atomic Wanted targets and pause/resume. Library,
-Requests and Playback are the implemented switches; no automatic Arr work is started. The
+Readers and Tracking. Requests has a whole-Work slice: active-profile language
+intent, moderation, atomic Wanted targets and pause/resume. The Arr+ core runs on
+those targets under the Requests switch: Owner-managed Newznab indexers and SABnzbd
+clients, manual search and grab, automatic search for missing movies with backoff,
+download monitoring, failed-release exclusion, path mapping and hardlink/copy import
+into the first writable library of the media type. Series Works can be searched and
+grabbed manually; episode targets, season packs, the other media types, profile
+editing, Prowlarr/Sonarr/Radarr one-time import and a separate Arr+ switch follow. The
 remaining modules are not advertised as available. Tracking must be rebuilt from
 the desired progress/resume/history behavior, not copied from the buggy legacy
 implementation. Library's physical scanning/import integration still needs its

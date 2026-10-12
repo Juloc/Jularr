@@ -14,15 +14,18 @@ namespace Jularr.Backend.Logic.Media
                 """
                 INSERT INTO "Works" (
                     "MediaTypeId",
-                    "CanonicalTitle"
+                    "CanonicalTitle",
+                    "ReleaseYear"
                 ) VALUES (
                     @MediaTypeId,
-                    @CanonicalTitle
+                    @CanonicalTitle,
+                    @ReleaseYear
                 )
                 RETURNING
                     "Id",
                     "MediaTypeId",
                     "CanonicalTitle",
+                    "ReleaseYear"::integer AS "ReleaseYear",
                     "Version";
                 """;
             sql.Parameters.Add(data);
@@ -42,6 +45,7 @@ namespace Jularr.Backend.Logic.Media
                 UPDATE "Works"
                 SET
                     "CanonicalTitle" = @CanonicalTitle,
+                    "ReleaseYear" = @ReleaseYear,
                     "Version" = "Version" + 1,
                     "UpdatedAt" = now()
                 WHERE

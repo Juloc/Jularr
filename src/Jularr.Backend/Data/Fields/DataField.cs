@@ -222,6 +222,11 @@ namespace Jularr.Backend.Data.Fields
                 throw new DataValidationException(name, "invalid_text");
             }
 
+            if (Format == StringFormat.HttpUrl && (!Uri.TryCreate(text, UriKind.Absolute, out var url) || url.Scheme is not ("http" or "https") || url.UserInfo.Length > 0 || url.Fragment.Length > 0))
+            {
+                throw new DataValidationException(name, "invalid_url");
+            }
+
             if (Format == StringFormat.MacAddress && !MacAddressPattern.IsMatch(text))
             {
                 throw new DataValidationException(name, "invalid_mac_address");
@@ -319,6 +324,25 @@ namespace Jularr.Backend.Data.Fields
             if (!Enum.IsDefined(ClrType, value))
             {
                 throw new DataValidationException(name, "unknown_catalog_value");
+            }
+        }
+    }
+
+    public sealed class IntArrayField : DataField
+    {
+        public IntArrayField() : base(typeof(int[]), NpgsqlDbType.Array | NpgsqlDbType.Integer)
+        {
+        }
+
+        public int Minimum { get; init; } = int.MinValue;
+        public int Maximum { get; init; } = int.MaxValue;
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+            var values = (int[])value;
+            if (maximumLength is { } limit && values.Length > limit || values.Any(item => item < Minimum || item > Maximum))
+            {
+                throw new DataValidationException(name, "out_of_range");
             }
         }
     }
