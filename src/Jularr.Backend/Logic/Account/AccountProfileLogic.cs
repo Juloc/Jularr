@@ -6,7 +6,7 @@ namespace Jularr.Backend.Logic.Account
 {
     internal static class AccountProfileLogic
     {
-        public static async Task AddAccountProfileAsync(this LogicContext context, AccountProfileData data, CancellationToken cancellationToken)
+        public static async Task AddAccountProfileAsync(this LogicContext ctx, AccountProfileData data, CancellationToken ct)
         {
             // Link existing canonical entities.
             var sql = new SqlStatement();
@@ -27,13 +27,13 @@ namespace Jularr.Backend.Logic.Account
                 ON CONFLICT ("AccountId", "ProfileId") DO NOTHING;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.ProfileId), "unknown_or_duplicate_id");
             }
         }
 
-        public static async Task RemoveAccountProfileAsync(this LogicContext context, AccountProfileData data, CancellationToken cancellationToken)
+        public static async Task RemoveAccountProfileAsync(this LogicContext ctx, AccountProfileData data, CancellationToken ct)
         {
             // Preserve the ownership link.
             var sql = new SqlStatement();
@@ -54,7 +54,7 @@ namespace Jularr.Backend.Logic.Account
                     accountProfile, profile;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ReadOptionalAsync<AccountProfileData>(sql, cancellationToken) is null)
+            if (await ctx.ReadOptionalAsync<AccountProfileData>(sql, ct) is null)
             {
                 throw new DataValidationException(nameof(data.ProfileId), "invalid_transition");
             }
@@ -73,7 +73,7 @@ namespace Jularr.Backend.Logic.Account
                     AND session."ActiveProfileId" = @ProfileId;
                 """;
             sql.Parameters.Add(data);
-            await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
             // Remove access without deleting state.
             sql = new SqlStatement();
@@ -86,7 +86,7 @@ namespace Jularr.Backend.Logic.Account
                     AND accountProfile."ProfileId" = @ProfileId;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new KeyNotFoundException("The profile assignment changed.");
             }

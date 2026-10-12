@@ -7,7 +7,7 @@ namespace Jularr.Backend.Logic.Localization
 {
     internal static class UiLocalizationLogic
     {
-        public static async Task<UiLocaleData> CreateUiLocaleAsync(this LogicContext context, UiLocaleCreationData data, CancellationToken cancellationToken)
+        public static async Task<UiLocaleData> CreateUiLocaleAsync(this LogicContext ctx, UiLocaleCreationData data, CancellationToken ct)
         {
             // Create supported language metadata.
             var sql = new SqlStatement();
@@ -22,11 +22,11 @@ namespace Jularr.Backend.Logic.Localization
                     "Id";
                 """;
             sql.Parameters.Add(data);
-            return await context.ReadOptionalAsync<UiLocaleData>(sql, cancellationToken)
+            return await ctx.ReadOptionalAsync<UiLocaleData>(sql, ct)
                 ?? throw new DataValidationException(nameof(data.Locale), "duplicate_value");
         }
 
-        public static async Task UpdateUiLocaleAsync(this LogicContext context, UiLocaleUpdateData data, CancellationToken cancellationToken)
+        public static async Task UpdateUiLocaleAsync(this LogicContext ctx, UiLocaleUpdateData data, CancellationToken ct)
         {
             // Retain the English fallback.
             var sql = new SqlStatement();
@@ -45,14 +45,13 @@ namespace Jularr.Backend.Logic.Localization
                     AND (lower(locale."Locale") <> 'en' OR @IsEnabled = TRUE);
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.CatalogVersion), "invalid_transition");
             }
         }
 
-        internal static async Task SynchronizeUiResourcesAsync(this LogicContext context,
-            IReadOnlyList<UiTextResource> resources, CancellationToken cancellationToken)
+        internal static async Task SynchronizeUiResourcesAsync(this LogicContext ctx, IReadOnlyList<UiTextResource> resources, CancellationToken ct)
         {
             foreach (var resource in resources)
             {
@@ -68,7 +67,7 @@ namespace Jularr.Backend.Logic.Localization
                     ('en', 'English')
                 ON CONFLICT ("Locale") DO NOTHING;
                 """;
-            await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
             // Only source English is synchronized; administrator descriptions remain untouched.
             sql = new SqlStatement();
@@ -116,11 +115,10 @@ namespace Jularr.Backend.Logic.Localization
                     EXISTS (SELECT 1 FROM changed);
                 """;
             sql.Parameters.Add(new UiResourceBatchData(resources));
-            await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        public static async Task UpdateUiDescriptionAsync(this LogicContext context,
-            UiDescriptionUpdateData data, CancellationToken cancellationToken)
+        public static async Task UpdateUiDescriptionAsync(this LogicContext ctx, UiDescriptionUpdateData data, CancellationToken ct)
         {
             data.Validate();
             var sql = new SqlStatement();
@@ -161,13 +159,13 @@ namespace Jularr.Backend.Logic.Localization
                     EXISTS (SELECT 1 FROM changed);
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) == 0)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
             {
                 throw new DataValidationException(nameof(data.MessageVersion), "outdated_version");
             }
         }
 
-        public static async Task SaveUiTranslationAsync(this LogicContext context, UiTranslationSaveData data, CancellationToken cancellationToken)
+        public static async Task SaveUiTranslationAsync(this LogicContext ctx, UiTranslationSaveData data, CancellationToken ct)
         {
             data.Validate();
             if (data.UiTranslationStatusTypeId is not (UiTranslationStatusType.Generated
@@ -189,7 +187,7 @@ namespace Jularr.Backend.Logic.Localization
                     AND locale."IsEnabled" = TRUE;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ReadOptionalAsync<UiLocaleData>(sql, cancellationToken) is null)
+            if (await ctx.ReadOptionalAsync<UiLocaleData>(sql, ct) is null)
             {
                 throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
             }
@@ -209,7 +207,7 @@ namespace Jularr.Backend.Logic.Localization
                 FOR UPDATE OF message;
                 """;
             sql.Parameters.Add(data);
-            var source = await context.ReadOptionalAsync<UiCatalogTextData>(sql, cancellationToken)
+            var source = await ctx.ReadOptionalAsync<UiCatalogTextData>(sql, ct)
                 ?? throw new DataValidationException(nameof(data.MessageVersion), "outdated_version");
             UiTextPlaceholders.RequireMatching(source.Text, data.Text);
 
@@ -258,7 +256,7 @@ namespace Jularr.Backend.Logic.Localization
                     locale."Id" = changed."UiLocaleId";
                 """;
             sql.Parameters.Add(data);
-            var affected = await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            var affected = await ctx.ExecuteAsyncForAffectedRows(sql, ct);
             if (affected == 0 && data.UiTranslationStatusTypeId == UiTranslationStatusType.Manual)
             {
                 throw new DataValidationException(nameof(data.TranslationVersion), "outdated_version");

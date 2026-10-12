@@ -5,7 +5,7 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class WatchlistLogic
     {
-        public static async Task UpdateWatchlistAsync(this LogicContext context, WatchlistData data, bool isWatchlisted, CancellationToken cancellationToken)
+        public static async Task UpdateWatchlistAsync(this LogicContext ctx, WatchlistData data, bool isWatchlisted, CancellationToken ct)
         {
             // Verify canonical target.
             var sql = new SqlStatement();
@@ -23,7 +23,7 @@ namespace Jularr.Backend.Logic.Media
                 FOR SHARE OF work;
                 """;
             sql.Parameters.Add(data);
-            await context.ReadRequiredAsync<WorkData>(sql, cancellationToken);
+            await ctx.ReadRequiredAsync<WorkData>(sql, ct);
 
             // Change personal state only.
             sql = new SqlStatement();
@@ -53,7 +53,7 @@ namespace Jularr.Backend.Logic.Media
             }
 
             sql.Parameters.Add(data);
-            var affected = await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            var affected = await ctx.ExecuteAsyncForAffectedRows(sql, ct);
             if (affected is < 0 or > 1)
             {
                 throw new InvalidOperationException("The personal list mutation affected unexpected rows.");

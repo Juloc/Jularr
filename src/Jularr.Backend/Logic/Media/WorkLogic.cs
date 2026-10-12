@@ -6,7 +6,7 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class WorkLogic
     {
-        public static async Task<WorkData> CreateWorkAsync(this LogicContext context, WorkCreationData data, CancellationToken cancellationToken)
+        public static async Task<WorkData> CreateWorkAsync(this LogicContext ctx, WorkCreationData data, CancellationToken ct)
         {
             // Create canonical identity.
             var sql = new SqlStatement();
@@ -26,14 +26,14 @@ namespace Jularr.Backend.Logic.Media
                     "Version";
                 """;
             sql.Parameters.Add(data);
-            var work = await context.ReadRequiredAsync<WorkData>(sql, cancellationToken);
+            var work = await ctx.ReadRequiredAsync<WorkData>(sql, ct);
 
             // Retain title provenance.
-            await context.WriteManualTitleAsync(new WorkUpdateData(work.Id, work.CanonicalTitle, work.Version), cancellationToken);
+            await ctx.WriteManualTitleAsync(new WorkUpdateData(work.Id, work.CanonicalTitle, work.Version), ct);
             return work;
         }
 
-        public static async Task UpdateWorkAsync(this LogicContext context, WorkUpdateData data, CancellationToken cancellationToken)
+        public static async Task UpdateWorkAsync(this LogicContext ctx, WorkUpdateData data, CancellationToken ct)
         {
             // Reject stale edits atomically.
             var sql = new SqlStatement();
@@ -49,16 +49,16 @@ namespace Jularr.Backend.Logic.Media
                     AND "Version" = @Version;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
 
             // Update manual source only.
-            await context.WriteManualTitleAsync(data, cancellationToken);
+            await ctx.WriteManualTitleAsync(data, ct);
         }
 
-        private static async Task WriteManualTitleAsync(this LogicContext context, WorkUpdateData data, CancellationToken cancellationToken)
+        private static async Task WriteManualTitleAsync(this LogicContext ctx, WorkUpdateData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -78,7 +78,7 @@ namespace Jularr.Backend.Logic.Media
                     "UpdatedAt" = now();
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new InvalidOperationException("The manual title was not saved.");
             }

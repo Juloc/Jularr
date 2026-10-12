@@ -1,3 +1,3 @@
 # Keep straightforward C# signatures and calls readable on one line.
 [src/{Jularr.Backend,Jularr.Integrations}/**/*.cs]
-max_line_length = 200
+max_line_length = 240

@@ -13,10 +13,10 @@ namespace Jularr.Backend.Logic.Authentication
 {
     internal static class PlexAuthenticationLogic
     {
-        public static async Task CreatePlexFlowAsync(this LogicContext context, PlexChallengeCreationData challenge, long externalPinId, string clientIdentifier, CancellationToken cancellationToken)
+        public static async Task CreatePlexFlowAsync(this LogicContext ctx, PlexChallengeCreationData challenge, long externalPinId, string clientIdentifier, CancellationToken ct)
         {
             // Lock the configured provider.
-            var provider = await context.ReadEnabledProviderAsync(new ProviderParameters("plex"), cancellationToken);
+            var provider = await ctx.ReadEnabledProviderAsync(new ProviderParameters("plex"), ct);
 
             // Store the one-time challenge.
             var sql = new SqlStatement();
@@ -30,7 +30,7 @@ namespace Jularr.Backend.Logic.Authentication
                     "Id";
                 """;
             sql.Parameters.Add(challenge);
-            var created = await context.ReadRequiredAsync<AuthChallengeIdData>(sql, cancellationToken);
+            var created = await ctx.ReadRequiredAsync<AuthChallengeIdData>(sql, ct);
 
             // Link the external attempt.
             sql = new SqlStatement();
@@ -42,13 +42,13 @@ namespace Jularr.Backend.Logic.Authentication
                     (@AccountAuthChallengeId, @AuthChallengePurposeTypeId, @ProviderId, @ExternalPinId, @ClientIdentifier);
                 """;
             sql.Parameters.Add(new PlexFlowCreationData(created.Id, provider.Id, externalPinId, clientIdentifier));
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new InvalidOperationException("The external authentication attempt could not be created.");
             }
         }
 
-        public static async Task<PlexFlowData> ReadPlexFlowAsync(this LogicContext context, PlexChallengeParameters parameters, CancellationToken cancellationToken)
+        public static async Task<PlexFlowData> ReadPlexFlowAsync(this LogicContext ctx, PlexChallengeParameters parameters, CancellationToken ct)
         {
             parameters.Validate();
             var sql = new SqlStatement();
@@ -86,7 +86,7 @@ namespace Jularr.Backend.Logic.Authentication
             PlexFlowData flow;
             try
             {
-                flow = await context.ReadRequiredAsync<PlexFlowData>(sql, cancellationToken);
+                flow = await ctx.ReadRequiredAsync<PlexFlowData>(sql, ct);
             }
             catch (KeyNotFoundException)
             {
@@ -103,16 +103,10 @@ namespace Jularr.Backend.Logic.Authentication
             return flow;
         }
 
-        public static async Task<PlexCompletionData> CompletePlexAsync(
-            this LogicContext context,
-            PlexChallengeParameters parameters,
-            PlexIdentityData identity,
-            PlexRegistrationData registration,
-            TimeSpan sessionLifetime,
-            CancellationToken cancellationToken)
+        public static async Task<PlexCompletionData> CompletePlexAsync(this LogicContext ctx, PlexChallengeParameters parameters, PlexIdentityData identity, PlexRegistrationData registration, TimeSpan sessionLifetime, CancellationToken ct)
         {
             // Lock and revalidate completion.
-            var flow = await context.ReadPlexFlowAsync(parameters, cancellationToken);
+            var flow = await ctx.ReadPlexFlowAsync(parameters, ct);
             var external = new ExternalLoginParameters(flow.ProviderId, identity.ExternalAccountId);
             var sql = new SqlStatement();
             sql.Statement =
@@ -142,7 +136,7 @@ namespace Jularr.Backend.Logic.Authentication
             sql.Parameters.Add(external);
 
             // Never link by email.
-            var account = await context.ReadOptionalAsync<AccountAuthenticationData>(sql, cancellationToken);
+            var account = await ctx.ReadOptionalAsync<AccountAuthenticationData>(sql, ct);
 
             // Qualify a new identity.
             if (account is null)
@@ -153,7 +147,7 @@ namespace Jularr.Backend.Logic.Authentication
                 }
 
                 var creation = new AccountCreationData(identity.Email, identity.DisplayName, !registration.RequiresApproval, DateTime.UtcNow);
-                var id = await context.CreateAccountAsync(creation, registration.UiLocaleId, cancellationToken)
+                var id = await ctx.CreateAccountAsync(creation, registration.UiLocaleId, ct)
                     ?? throw new SecurityException("An existing account must be linked explicitly.");
 
                 sql = new SqlStatement();
@@ -166,7 +160,7 @@ namespace Jularr.Backend.Logic.Authentication
                     ON CONFLICT ("ProviderId", "ExternalAccountId") DO NOTHING;
                     """;
                 sql.Parameters.Add(new ExternalLoginData(flow.ProviderId, identity.ExternalAccountId, id));
-                if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+                if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
                 {
                     throw new UnauthorizedAccessException("The external identity changed.");
                 }
@@ -193,7 +187,7 @@ namespace Jularr.Backend.Logic.Authentication
                     AND "ConsumedAt" IS NULL;
                 """;
             sql.Parameters.Add(parameters);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
             }
@@ -204,7 +198,7 @@ namespace Jularr.Backend.Logic.Authentication
                 return new PlexCompletionData(null, requiresApproval: true);
             }
 
-            var session = await context.CreateSessionAsync(account, sessionLifetime, cancellationToken);
+            var session = await ctx.CreateSessionAsync(account, sessionLifetime, ct);
             return new PlexCompletionData(session, requiresApproval: false);
         }
     }

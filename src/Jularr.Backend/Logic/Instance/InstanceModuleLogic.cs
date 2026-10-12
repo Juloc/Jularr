@@ -6,7 +6,7 @@ namespace Jularr.Backend.Logic.Instance
 {
     internal static class InstanceModuleLogic
     {
-        public static async Task<IReadOnlyList<InstanceModuleData>> ReadInstanceModulesAsync(this LogicContext context, InstanceModuleParameters parameters, CancellationToken cancellationToken)
+        public static async Task<IReadOnlyList<InstanceModuleData>> ReadInstanceModulesAsync(this LogicContext ctx, InstanceModuleParameters parameters, CancellationToken ct)
         {
             // Hold configuration through mutations.
             var sql = new SqlStatement();
@@ -25,10 +25,10 @@ namespace Jularr.Backend.Logic.Instance
                     module;
                 """;
             sql.Parameters.Add(parameters);
-            return await context.Sql.ReadListAsync<InstanceModuleData>(sql, cancellationToken);
+            return await ctx.Sql.ReadListAsync<InstanceModuleData>(sql, ct);
         }
 
-        public static async Task UpdateInstanceModuleAsync(this LogicContext context, InstanceModuleUpdateData data, CancellationToken cancellationToken)
+        public static async Task UpdateInstanceModuleAsync(this LogicContext ctx, InstanceModuleUpdateData data, CancellationToken ct)
         {
             // Retain data when disabling.
             var sql = new SqlStatement();
@@ -44,7 +44,7 @@ namespace Jularr.Backend.Logic.Instance
                     AND module."Version" = @Version;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }

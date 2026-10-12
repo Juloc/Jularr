@@ -18,7 +18,7 @@ namespace Jularr.Backend.Logic.Account
         private static readonly AccountAuthenticationData MissingAccount = new(1, 1, null, false, false);
         private static readonly string MissingPasswordHash = PasswordHasher.HashPassword(MissingAccount, Guid.NewGuid().ToString());
 
-        public static Task<AccountUpdateData> ReadAccountAsync(this LogicContext context, long accountId, CancellationToken cancellationToken)
+        public static Task<AccountUpdateData> ReadAccountAsync(this LogicContext ctx, long accountId, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -36,10 +36,10 @@ namespace Jularr.Backend.Logic.Account
                 FOR UPDATE OF account;
                 """;
             sql.Parameters.Add(new AccountParameters(accountId));
-            return context.ReadRequiredAsync<AccountUpdateData>(sql, cancellationToken);
+            return ctx.ReadRequiredAsync<AccountUpdateData>(sql, ct);
         }
 
-        public static async Task UpdateAccountAsync(this LogicContext context, AccountUpdateData data, DateTime expectedVersion, CancellationToken cancellationToken)
+        public static async Task UpdateAccountAsync(this LogicContext ctx, AccountUpdateData data, DateTime expectedVersion, CancellationToken ct)
         {
             data.Validate();
             if (data.UpdatedAt != expectedVersion)
@@ -96,17 +96,13 @@ namespace Jularr.Backend.Logic.Account
                     changed;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ReadOptionalAsync<AccountIdData>(sql, cancellationToken) is null)
+            if (await ctx.ReadOptionalAsync<AccountIdData>(sql, ct) is null)
             {
                 throw new DataValidationException(nameof(data.AccountRoleTypeId), "invalid_transition");
             }
         }
 
-        public static async Task<AccountAuthenticationData> AuthenticatePasswordAsync(
-            this LogicContext context,
-            AccountEmailParameters parameters,
-            string password,
-            CancellationToken cancellationToken)
+        public static async Task<AccountAuthenticationData> AuthenticatePasswordAsync(this LogicContext ctx, AccountEmailParameters parameters, string password, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -134,7 +130,7 @@ namespace Jularr.Backend.Logic.Account
                 """;
             sql.Parameters.Add(parameters);
 
-            var account = await context.ReadOptionalAsync<AccountAuthenticationData>(sql, cancellationToken);
+            var account = await ctx.ReadOptionalAsync<AccountAuthenticationData>(sql, ct);
 
             // Equal work for unknown accounts.
             var verification = PasswordHasher.VerifyHashedPassword(
@@ -147,14 +143,14 @@ namespace Jularr.Backend.Logic.Account
 
             if (verification == PasswordVerificationResult.SuccessRehashNeeded)
             {
-                await context.WritePasswordAsync(
-                    new AccountPasswordData(account.Id, PasswordHasher.HashPassword(account, password)), cancellationToken);
+                await ctx.WritePasswordAsync(
+                    new AccountPasswordData(account.Id, PasswordHasher.HashPassword(account, password)), ct);
             }
 
             return account;
         }
 
-        public static async Task<long?> CreateAccountAsync(this LogicContext context, AccountCreationData data, long uiLocaleId, CancellationToken cancellationToken)
+        public static async Task<long?> CreateAccountAsync(this LogicContext ctx, AccountCreationData data, long uiLocaleId, CancellationToken ct)
         {
             // Require an existing Owner.
             var sql = new SqlStatement();
@@ -175,18 +171,17 @@ namespace Jularr.Backend.Logic.Account
                 """;
             try
             {
-                await context.ReadRequiredAsync<AccountIdData>(sql, cancellationToken);
+                await ctx.ReadRequiredAsync<AccountIdData>(sql, ct);
             }
             catch (KeyNotFoundException)
             {
                 throw new SecurityException("Owner setup is required before registration.");
             }
 
-            return await context.InsertAccountAsync(data, uiLocaleId, cancellationToken);
+            return await ctx.InsertAccountAsync(data, uiLocaleId, ct);
         }
 
-        public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext context, string email, string displayName,
-            string password, long uiLocaleId, CancellationToken cancellationToken)
+        public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext ctx, string email, string displayName, string password, long uiLocaleId, CancellationToken ct)
         {
             // Serialize first-run account creation.
             var sql = new SqlStatement();
@@ -202,7 +197,7 @@ namespace Jularr.Backend.Logic.Account
                 FOR UPDATE OF
                     setup;
                 """;
-            var setup = await context.ReadRequiredAsync<InstanceSetupStateData>(sql, cancellationToken);
+            var setup = await ctx.ReadRequiredAsync<InstanceSetupStateData>(sql, ct);
 
             sql = new SqlStatement();
             sql.Statement =
@@ -212,17 +207,17 @@ namespace Jularr.Backend.Logic.Account
                     FROM "Accounts"
                 );
                 """;
-            if (setup.OwnerCreatedAt is not null || (bool)(await context.ReadSql.ExecuteScalarAsync(sql, cancellationToken))!)
+            if (setup.OwnerCreatedAt is not null || (bool)(await ctx.ReadSql.ExecuteScalarAsync(sql, ct))!)
             {
                 throw new SecurityException("Initial Owner creation is closed.");
             }
 
             // Reuse canonical account/profile writes.
             var data = new AccountCreationData(email, displayName, true, null, AccountRoleType.Owner);
-            var id = await context.InsertAccountAsync(data, uiLocaleId, cancellationToken)
+            var id = await ctx.InsertAccountAsync(data, uiLocaleId, ct)
                 ?? throw new SecurityException("Initial Owner creation is unavailable.");
             var account = new AccountAuthenticationData(id, 1, null, true, false);
-            await context.WritePasswordAsync(new AccountPasswordData(id, PasswordHasher.HashPassword(account, password)), cancellationToken);
+            await ctx.WritePasswordAsync(new AccountPasswordData(id, PasswordHasher.HashPassword(account, password)), ct);
 
             // Close bootstrap permanently on commit.
             sql = new SqlStatement();
@@ -236,7 +231,7 @@ namespace Jularr.Backend.Logic.Account
                     "Id" = 1
                     AND "OwnerCreatedAt" IS NULL;
                 """;
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new SecurityException("Initial Owner creation is closed.");
             }
@@ -244,7 +239,7 @@ namespace Jularr.Backend.Logic.Account
             return account;
         }
 
-        private static async Task<long?> InsertAccountAsync(this LogicContext context, AccountCreationData data, long uiLocaleId, CancellationToken cancellationToken)
+        private static async Task<long?> InsertAccountAsync(this LogicContext ctx, AccountCreationData data, long uiLocaleId, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -259,7 +254,7 @@ namespace Jularr.Backend.Logic.Account
                 """;
             sql.Parameters.Add(data);
 
-            var account = await context.ReadOptionalAsync<AccountIdData>(sql, cancellationToken);
+            var account = await ctx.ReadOptionalAsync<AccountIdData>(sql, ct);
             if (account is null)
             {
                 // Never replace duplicate credentials.
@@ -267,23 +262,23 @@ namespace Jularr.Backend.Logic.Account
             }
 
             // Create ownership atomically.
-            await context.CreateProfileAsync(new ProfileCreationData(account.Id, data.DisplayName, uiLocaleId), cancellationToken);
+            await ctx.CreateProfileAsync(new ProfileCreationData(account.Id, data.DisplayName, uiLocaleId), ct);
             return account.Id;
         }
 
-        public static async Task CreateRegistrationRequestAsync(this LogicContext context, AccountCreationData data, string password, long uiLocaleId, CancellationToken cancellationToken)
+        public static async Task CreateRegistrationRequestAsync(this LogicContext ctx, AccountCreationData data, string password, long uiLocaleId, CancellationToken ct)
         {
             // Hash before account creation.
             var hash = PasswordHasher.HashPassword(MissingAccount, password);
-            var accountId = await context.CreateAccountAsync(data, uiLocaleId, cancellationToken);
+            var accountId = await ctx.CreateAccountAsync(data, uiLocaleId, ct);
 
             if (accountId is { } id)
             {
-                await context.WritePasswordAsync(new AccountPasswordData(id, hash), cancellationToken);
+                await ctx.WritePasswordAsync(new AccountPasswordData(id, hash), ct);
             }
         }
 
-        private static async Task WritePasswordAsync(this LogicContext context, AccountPasswordData data, CancellationToken cancellationToken)
+        private static async Task WritePasswordAsync(this LogicContext ctx, AccountPasswordData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -298,7 +293,7 @@ namespace Jularr.Backend.Logic.Account
                     "ChangedAt" = now();
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new InvalidOperationException("The password could not be written.");
             }

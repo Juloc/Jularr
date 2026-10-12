@@ -10,7 +10,7 @@ namespace Jularr.Backend.Logic.Session
 {
     internal static class SessionLogic
     {
-        public static async Task<SessionCredentialsData> SelectSessionProfileAsync(this LogicContext context, SessionParameters proof, AccountProfileData target, CancellationToken cancellationToken)
+        public static async Task<SessionCredentialsData> SelectSessionProfileAsync(this LogicContext ctx, SessionParameters proof, AccountProfileData target, CancellationToken ct)
         {
             // Lock the account/profile link.
             var sql = new SqlStatement();
@@ -36,7 +36,7 @@ namespace Jularr.Backend.Logic.Session
                 """;
             sql.Parameters.Add(proof);
             sql.Parameters.Add(target);
-            var profile = await context.ReadRequiredAsync<SessionProfileData>(sql, cancellationToken);
+            var profile = await ctx.ReadRequiredAsync<SessionProfileData>(sql, ct);
             if (profile.PinHash is not null)
             {
                 // PIN access remains fail-closed.
@@ -65,7 +65,7 @@ namespace Jularr.Backend.Logic.Session
                 """;
             sql.Parameters.Add(proof);
             sql.Parameters.Add(credentials);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new UnauthorizedAccessException("The account session changed.");
             }
@@ -73,7 +73,7 @@ namespace Jularr.Backend.Logic.Session
             return credentials;
         }
 
-        public static async Task RevokeSessionAsync(this LogicContext context, SessionRevocationData data, CancellationToken cancellationToken)
+        public static async Task RevokeSessionAsync(this LogicContext ctx, SessionRevocationData data, CancellationToken ct)
         {
             // Scope the canonical mutation.
             var sql = new SqlStatement();
@@ -88,13 +88,13 @@ namespace Jularr.Backend.Logic.Session
                     AND session."AccountId" = @AccountId;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new KeyNotFoundException("The account session was not found.");
             }
         }
 
-        public static async Task<SessionCredentialsData> CreateSessionAsync(this LogicContext context, AccountAuthenticationData account, TimeSpan lifetime, CancellationToken cancellationToken)
+        public static async Task<SessionCredentialsData> CreateSessionAsync(this LogicContext ctx, AccountAuthenticationData account, TimeSpan lifetime, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -121,7 +121,7 @@ namespace Jularr.Backend.Logic.Session
             sql.Parameters.Add(new AccountParameters(account.Id));
 
             // A profile remains optional.
-            var profile = await context.ReadOptionalAsync<ProfileUpdateData>(sql, cancellationToken);
+            var profile = await ctx.ReadOptionalAsync<ProfileUpdateData>(sql, ct);
             var profileId = profile?.Id;
 
             // Issue a separate secret.
@@ -139,7 +139,7 @@ namespace Jularr.Backend.Logic.Session
                     (@PublicId, @AccountId, @ProfileId, @TokenHash, @CredentialRevision, @ExpiresAt);
                 """;
             sql.Parameters.Add(credentials);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new InvalidOperationException("The session could not be created.");
             }
@@ -147,7 +147,7 @@ namespace Jularr.Backend.Logic.Session
             return credentials;
         }
 
-        public static async Task<SessionAuthenticationData> ReadSessionAsync(this LogicContext context, SessionParameters parameters, CancellationToken cancellationToken)
+        public static async Task<SessionAuthenticationData> ReadSessionAsync(this LogicContext ctx, SessionParameters parameters, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -193,7 +193,7 @@ namespace Jularr.Backend.Logic.Session
 
             try
             {
-                return await context.ReadRequiredAsync<SessionAuthenticationData>(sql, cancellationToken);
+                return await ctx.ReadRequiredAsync<SessionAuthenticationData>(sql, ct);
             }
             catch (KeyNotFoundException)
             {

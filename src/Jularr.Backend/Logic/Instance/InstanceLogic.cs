@@ -7,7 +7,7 @@ namespace Jularr.Backend.Logic.Instance
 {
     internal static class InstanceLogic
     {
-        public static async Task UpdateInstanceSettingsAsync(this LogicContext context, InstanceSettingsUpdateData data, CancellationToken cancellationToken)
+        public static async Task UpdateInstanceSettingsAsync(this LogicContext ctx, InstanceSettingsUpdateData data, CancellationToken ct)
         {
             // Hold the enabled locale.
             var sql = new SqlStatement();
@@ -24,7 +24,7 @@ namespace Jularr.Backend.Logic.Instance
                     locale;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ReadOptionalAsync<UiLocaleData>(sql, cancellationToken) is null)
+            if (await ctx.ReadOptionalAsync<UiLocaleData>(sql, ct) is null)
             {
                 throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
             }
@@ -44,7 +44,7 @@ namespace Jularr.Backend.Logic.Instance
                     AND settings."Version" = @Version;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }

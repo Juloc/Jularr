@@ -7,7 +7,7 @@ namespace Jularr.Backend.Logic.Provider
 {
     internal static class ProviderLogic
     {
-        public static async Task UpdateProviderAsync(this LogicContext context, ProviderUpdateData data, CancellationToken cancellationToken)
+        public static async Task UpdateProviderAsync(this LogicContext ctx, ProviderUpdateData data, CancellationToken ct)
         {
             // Change the registry flag only.
             var sql = new SqlStatement();
@@ -22,13 +22,13 @@ namespace Jularr.Backend.Logic.Provider
                     AND provider."IsEnabled" = @ExpectedIsEnabled;
                 """;
             sql.Parameters.Add(data);
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.IsEnabled), "invalid_transition");
             }
         }
 
-        public static async Task<ProviderData> ReadEnabledProviderAsync(this LogicContext context, ProviderParameters parameters, CancellationToken cancellationToken)
+        public static async Task<ProviderData> ReadEnabledProviderAsync(this LogicContext ctx, ProviderParameters parameters, CancellationToken ct)
         {
             // Hold configuration through completion.
             var sql = new SqlStatement();
@@ -46,7 +46,7 @@ namespace Jularr.Backend.Logic.Provider
                 """;
             sql.Parameters.Add(parameters);
 
-            var provider = await context.ReadOptionalAsync<ProviderData>(sql, cancellationToken);
+            var provider = await ctx.ReadOptionalAsync<ProviderData>(sql, ct);
             return provider ?? throw new SecurityException("The provider is unavailable.");
         }
     }

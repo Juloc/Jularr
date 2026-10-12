@@ -9,7 +9,7 @@ namespace Jularr.Backend.Logic.Profile
 {
     internal static class ProfileLogic
     {
-        public static async Task CreateProfileAsync(this LogicContext context, ProfileCreationData data, CancellationToken cancellationToken)
+        public static async Task CreateProfileAsync(this LogicContext ctx, ProfileCreationData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -35,7 +35,7 @@ namespace Jularr.Backend.Logic.Profile
             ProfileUpdateData profile;
             try
             {
-                profile = await context.ReadRequiredAsync<ProfileUpdateData>(sql, cancellationToken);
+                profile = await ctx.ReadRequiredAsync<ProfileUpdateData>(sql, ct);
             }
             catch (KeyNotFoundException)
             {
@@ -43,10 +43,10 @@ namespace Jularr.Backend.Logic.Profile
             }
 
             // Establish ownership before commit.
-            await context.AddAccountProfileAsync(new AccountProfileData(data.OwnerAccountId, profile.Id), cancellationToken);
+            await ctx.AddAccountProfileAsync(new AccountProfileData(data.OwnerAccountId, profile.Id), ct);
         }
 
-        public static Task<ProfileUpdateData> ReadProfileAsync(this LogicContext context, long profileId, CancellationToken cancellationToken)
+        public static Task<ProfileUpdateData> ReadProfileAsync(this LogicContext ctx, long profileId, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -64,12 +64,12 @@ namespace Jularr.Backend.Logic.Profile
                 """;
             sql.Parameters.Add(new ProfileParameters(profileId));
 
-            return context.ReadRequiredAsync<ProfileUpdateData>(sql, cancellationToken);
+            return ctx.ReadRequiredAsync<ProfileUpdateData>(sql, ct);
         }
 
-        public static async Task UpdateProfileAsync(this LogicContext context, ProfileUpdateData updateData, CancellationToken cancellationToken)
+        public static async Task UpdateProfileAsync(this LogicContext ctx, ProfileUpdateData updateData, CancellationToken ct)
         {
-            ArgumentNullException.ThrowIfNull(context);
+            ArgumentNullException.ThrowIfNull(ctx);
             ArgumentNullException.ThrowIfNull(updateData);
 
             // Validate the merged entity.
@@ -90,7 +90,7 @@ namespace Jularr.Backend.Logic.Profile
                     locale;
                 """;
             sql.Parameters.Add(updateData);
-            if (await context.ReadOptionalAsync<UiLocaleData>(sql, cancellationToken) is null)
+            if (await ctx.ReadOptionalAsync<UiLocaleData>(sql, ct) is null)
             {
                 throw new DataValidationException(nameof(updateData.UiLocaleId), "unknown_reference");
             }
@@ -110,7 +110,7 @@ namespace Jularr.Backend.Logic.Profile
                 """;
             sql.Parameters.Add(updateData);
 
-            var affected = await context.ExecuteAsyncForAffectedRows(sql, cancellationToken);
+            var affected = await ctx.ExecuteAsyncForAffectedRows(sql, ct);
             if (affected != 1)
             {
                 throw new KeyNotFoundException("The authorized profile was not found.");
