@@ -30,6 +30,11 @@ namespace Jularr.Backend.Service.Core
     {
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
         public const string AdminPolicyName = "jularr.admin";
+        public const string StorageReadPolicyName = "storage.read";
+        public const string RulesReadPolicyName = "rules.read";
+        public const string MediaReadPolicyName = "media.read";
+        public const string RequestsReadPolicyName = "requests.read";
+        public const string WantedReadPolicyName = "wanted.read";
 
         public static IServiceCollection AddJularrServices(this IServiceCollection services, IConfiguration configuration)
         {
@@ -78,18 +83,24 @@ namespace Jularr.Backend.Service.Core
 
             // Razor consumes verified service grants.
             services.AddRouting();
-            services.AddAuthorization(options => options.AddPolicy(AdminPolicyName, policy =>
-                policy.RequireAuthenticatedUser().RequireAssertion(async authorization =>
+            services.AddAuthorization(options =>
+            {
+                foreach (var (policyName, permission) in new[] { (AdminPolicyName, "admin.access"), (StorageReadPolicyName, "storage.read"), (RulesReadPolicyName, "rules.read"),
+                    (MediaReadPolicyName, "media.read"), (RequestsReadPolicyName, "requests.read"), (WantedReadPolicyName, "wanted.read") })
                 {
-                    if (authorization.Resource is not HttpContext http)
+                    options.AddPolicy(policyName, policy => policy.RequireAuthenticatedUser().RequireAssertion(async authorization =>
                     {
-                        return false;
-                    }
+                        if (authorization.Resource is not HttpContext http)
+                        {
+                            return false;
+                        }
 
-                    var authentication = await http.RequestServices.GetRequiredService<ReadAuthenticationV1>()
-                        .ExecuteAsync<AuthenticationResultV1>(cancellationToken: http.RequestAborted);
-                    return authentication.Permissions.Contains("admin.access", StringComparer.Ordinal);
-                })));
+                        var authentication = await http.RequestServices.GetRequiredService<ReadAuthenticationV1>()
+                            .ExecuteAsync<AuthenticationResultV1>(cancellationToken: http.RequestAborted);
+                        return authentication.Permissions.Contains(permission, StringComparer.Ordinal);
+                    }));
+                }
+            });
 
             // Validate trusted auth configuration.
             services.AddOptions<AuthenticationOptions>()

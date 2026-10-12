@@ -1,15 +1,32 @@
+using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Mvc;
 
-namespace Jularr.Frontend.Pages.Admin;
-
-public sealed class RequestsModel : PreparedPage
+namespace Jularr.Frontend.Pages.Admin
 {
-    protected override void Define(Page page)
+    public sealed class RequestsModel(ReadAuthenticationV1 authentication) : JularrPage
     {
-        page.Title("admin.requests.title");
-        page.Navigation("nav.admin");
-        page.Content.Add(AdminNavigation.Requests);
+        private bool _canReadRules;
 
-        // Status tabs, filters and typed table require the canonical request read.
+        protected override void Define(Page page)
+        {
+            page.Title("admin.requests.title");
+            page.Navigation("nav.admin");
+            page.Content.Add(AdminNavigation.RequestsFor(_canReadRules));
+
+            // Queue awaits canonical request data.
+        }
+
+        public async Task<IActionResult> OnGetAsync()
+        {
+            // Consume verified backend grants.
+            var result = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            _canReadRules = result.Permissions.Contains(ServiceApi.RulesReadPolicyName, StringComparer.Ordinal);
+
+            PreparePage();
+            return Page();
+        }
     }
 }

@@ -43,7 +43,8 @@ once. Brand is shared across Shell and Login; only generic components remain
 in Framework. The Topbar Breadcrumb is the sole visible page title.
 The shell currently offers only unconditional Home/Settings navigation;
 authorized module links are pending. Admin routes require the Backend `jularr.admin`
-policy and remain closed pending role grants. Canonical typed media/
+policy plus feature-specific Backend policies. MediaManager is limited to manual
+media/Requests/Wanted; configuration is Owner-only. Canonical typed media/
 request services and Player PlaybackPlan integration
 remain pending. Do not expose the prepared routes as production-ready.
 

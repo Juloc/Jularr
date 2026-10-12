@@ -9,7 +9,8 @@ Data und PostgreSQL-Zugriff. Kein alter Web-Bereich, kein EF.
 und `Data/Common` gemeinsame Integrationsfehler. Backend-Services
 entscheiden weiterhin über Anmeldung, Bibliotheksfreigabe und Registrierung.
 Die bestehenden Host-Registrierungen bleiben unverändert. NAS ist noch nicht
-implementiert; Dateizugriff und Hersteller-Verwaltung sind noch abzugrenzen.
+implementiert; entschieden sind SMB, NFS und Synology API sowie per Docker Compose
+freigegebene Pfade. Konfiguration erfolgt über Services und Frontend.
 
 Regeln: [AGENTS.md](AGENTS.md), [CONVENTIONS.md](docs/CONVENTIONS.md).
 Navigation: [CODEMAP.md](docs/CODEMAP.md).
@@ -96,8 +97,11 @@ Razor bindet Login, Plex, Profile-Auswahl, Session-Verwaltung, Logout und Profil
 Einstellungen direkt an diese Services. `ServiceError` klassifiziert erwartete
 Fehler gemeinsam für API und Razor; `JularrPage` zeigt sie ohne Catch pro Seite.
 Die verifizierte Profile-Sprache hat Vorrang vor Browser-Sprachhinweisen.
-Admin-Routen verwenden die Backend-Policy `jularr.admin`. Sie bleiben gesperrt,
-bis die Rollenrechte fachlich festgelegt sind; Anmeldung allein genügt nicht.
+Admin-Routen verwenden Backend-Policies mit aktuellen DB-Rollenrechten.
+MediaManager darf vorerst Medien manuell verwalten sowie Requests/Wanted bearbeiten.
+Instanz-, Account-, Storage-, Provider- und Regelverwaltung bleiben Owner-only.
+Rollenänderungen wirken auch mit bestehenden Cookies; Writes prüfen die Rolle erneut
+unter derselben Session-Transaktion. Fachliche Admin-Mutationen sind noch nicht umgesetzt.
 
 ## Plex-Konfiguration
 
@@ -207,7 +211,7 @@ Betroffene Tests liegen unter `tests/Jularr.Backend.Tests`; PostgreSQL-Tests ver
 `JULARR_TEST_DB` auf `127.0.0.1:15433`, Benutzer `jularr_test`, Administrationsdatenbank
 `jularr_test_admin`. Sie erstellen und entfernen nur eigene zufällig benannte Datenbanken.
 
-Noch offen: explizite Owner-Ersteinrichtung, Admin-Rollenrechte,
+Noch offen: explizite Owner-Ersteinrichtung, fachliche Admin-Operationen,
 Freigabe-/E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf,
 Profile-Auswahl mit PIN, vollständige Profile-Verwaltung und alte Android-/TV-Verbraucher. Accounts mit bestätigter
 2FA werden derzeit ohne Anmeldung abgelehnt, nicht am zweiten Faktor vorbeigeführt.
@@ -216,3 +220,8 @@ Home/Details/Watchlist/Player und fachliche Admin-Seiten bleiben Layouts ohne er
 Medien- oder Prozessdaten. Ihre offenen Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
+
+Arr+ betreibt Jularr vollständig selbst. Nativer Downloader und optionale externe
+Downloader wie SABnzbd verwenden dieselbe Pipeline. Sonarr/Radarr/Prowlarr dienen
+nur einer ausdrücklich gewählten einmaligen Übernahme, nicht dem laufenden Betrieb.
+Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.

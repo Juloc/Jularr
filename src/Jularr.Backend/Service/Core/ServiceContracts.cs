@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 
 namespace Jularr.Backend.Service.Core
 {
@@ -69,7 +70,8 @@ namespace Jularr.Backend.Service.Core
         Guid? SessionPublicId = null,
         long? SessionRevision = null,
         long? ProfileOwnerAccountId = null,
-        byte[]? SessionTokenHash = null);
+        byte[]? SessionTokenHash = null,
+        AccountRoleType AccountRoleTypeId = AccountRoleType.User);
 
     public interface IServiceDefinition
     {

@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
@@ -109,13 +110,53 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Rename_RevocationAfterInitialGate_RollsBackWithoutMutation()
+        [DataRow(AccountRoleType.User)]
+        [DataRow(AccountRoleType.MediaManager)]
+        [DataRow(AccountRoleType.Owner)]
+        public async Task Gate_AdministrativeRoles_GrantOnlyTheDeclaredScope(AccountRoleType role)
+        {
+            await using var fixture = await Fixture.CreateAsync();
+            await fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {(byte)role} WHERE \"Id\" = 41");
+            using var services = CreateServices(fixture);
+            using var scope = services.CreateScope();
+            SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
+            var gate = scope.ServiceProvider.GetRequiredService<IServiceGate>();
+            if (role == AccountRoleType.User)
+            {
+                await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => gate.RequireCallerAsync(ServiceArea.Admin, default));
+                return;
+            }
+
+            var caller = await gate.RequireCallerAsync(ServiceArea.Admin, default);
+            Assert.AreEqual(role, caller.AccountRoleTypeId);
+            foreach (var permission in new[] { "media.read", "media.manual.update", "requests.update", "wanted.update" })
+            {
+                await gate.RequireAccessAsync(caller, new ServicePermission(permission), default);
+            }
+
+            foreach (var permission in new[] { "accounts.update", "storage.update", "providers.update", "localization.update", "rules.update", "acquisition.manage" })
+            {
+                if (role == AccountRoleType.Owner) await gate.RequireAccessAsync(caller, new ServicePermission(permission), default);
+                else await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new ServicePermission(permission), default));
+            }
+
+            await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new ServicePermission("unknown.permission"), default));
+            if (role == AccountRoleType.MediaManager)
+            {
+                await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller with { AccountRoleTypeId = AccountRoleType.Owner }, new ServicePermission("accounts.update"), default));
+            }
+        }
+
+        [TestMethod]
+        [DataRow("UPDATE \"AccountSessions\" SET \"RevokedAt\" = now()")]
+        [DataRow("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41")]
+        public async Task Rename_AuthorizationChangeAfterInitialGate_RollsBackWithoutMutation(string mutation)
         {
             await using var fixture = await Fixture.CreateAsync();
             using var services = CreateServices(fixture);
             using var scope = services.CreateScope();
             SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
-            var gate = new RevokingGate(scope.ServiceProvider.GetRequiredService<IServiceGate>(), fixture);
+            var gate = new AuthorizationChangingGate(scope.ServiceProvider.GetRequiredService<IServiceGate>(), fixture, mutation);
             var rename = new ServiceRuntime(fixture.Database, gate).Create<UpdateProfileV1>();
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => rename.ExecuteAsync<UpdateResult>(
@@ -212,7 +253,7 @@ namespace Jularr.Backend.Tests
                 new Claim(ServiceGate.SessionTokenClaimType, sessionToken ?? new string('a', 43)),
                 new Claim(ServiceGate.SessionClaimType, sessionId.ToString("D"))], scheme));
 
-        private sealed class RevokingGate(IServiceGate gate, Fixture fixture) : IServiceGate
+        private sealed class AuthorizationChangingGate(IServiceGate gate, Fixture fixture, string mutation) : IServiceGate
         {
             public Task RequireModulesAsync(ModuleRequirement modules, CancellationToken cancellationToken) =>
                 gate.RequireModulesAsync(modules, cancellationToken);
@@ -223,7 +264,7 @@ namespace Jularr.Backend.Tests
             public async Task RequireAccessAsync(ServiceCaller caller, ServicePermission permission, CancellationToken cancellationToken)
             {
                 await gate.RequireAccessAsync(caller, permission, cancellationToken);
-                await fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"RevokedAt\" = now()");
+                await fixture.RunSqlAsync(mutation);
             }
 
             public Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken) =>

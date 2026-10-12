@@ -154,6 +154,7 @@ namespace Jularr.Backend.Logic.Session
                 """
                 SELECT
                     account."Id" AS "AccountId",
+                    account."AccountRoleTypeId",
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId"

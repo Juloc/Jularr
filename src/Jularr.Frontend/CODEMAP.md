@@ -56,7 +56,7 @@ Shared conventions and Backend ownership:
 - [Brand.cs](Pages/Shared/Brand.cs): shared Jularr brand for Shell and Login;
   [Icon.cs](Framework/Components/Icon.cs): generic fingerprinted SVG primitive.
 - [AdminNavigation.cs](Framework/AdminNavigation.cs):
-  Requests/Rules/Users section links.
+  Requests/Rules/Users section links; Requests hides configuration links using verified service grants.
 - [Shared layout](Pages/Shared/_Layout.cshtml):
   document shell, asset/locale setup and RenderBody only.
   [App shell](Pages/Shared/_AppShell.cshtml): delegates actual markup
@@ -116,6 +116,7 @@ Shared conventions and Backend ownership:
 
 - Frontend UI-key coverage tool: [verify-ui-resources.mjs](Tools/verify-ui-resources.mjs).
 - [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
-- Media/request/moderation contracts, PIN verification and Admin role grants remain pending.
+- Media/request/moderation contracts, Storage/NAS and PIN verification remain pending.
+- Admin routing consumes Backend policies: MediaManager reaches manual media/Requests/Wanted; Rules, user limits and Storage remain Owner-only.
 - Backend CI builds Frontend assets and runs real Razor/PostgreSQL integration tests;
   browser verification remains a separate gate.

@@ -69,6 +69,7 @@ namespace Jularr.Backend.Service.Core
                 """
                 SELECT
                     account."Id" AS "AccountId",
+                    account."AccountRoleTypeId",
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId"

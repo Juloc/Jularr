@@ -38,7 +38,7 @@ public sealed class ShellPreviewModel(IHostEnvironment environment) : JularrPage
             "player" => new PlayerModel(),
             "watchlist" => new WatchlistModel(),
             "settings" => ActivatorUtilities.CreateInstance<SettingsModel>(HttpContext.RequestServices),
-            "admin-requests" => new Admin.RequestsModel(),
+            "admin-requests" => ActivatorUtilities.CreateInstance<Admin.RequestsModel>(HttpContext.RequestServices),
             "admin-rules" => new Admin.RulesModel(),
             "admin-users" => new Admin.UsersModel(),
             "admin-wanted" => new Admin.WantedModel(),

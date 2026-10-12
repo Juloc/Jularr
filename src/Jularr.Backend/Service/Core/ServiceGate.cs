@@ -1,6 +1,7 @@
 using System.Security;
 using Microsoft.AspNetCore.Http;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Session;
 
@@ -43,16 +44,21 @@ namespace Jularr.Backend.Service.Core
                 return _caller;
             }
 
-            if (area != ServiceArea.User)
+            if (area is not (ServiceArea.User or ServiceArea.Admin))
             {
                 throw new UnauthorizedAccessException("This service area is unavailable.");
             }
 
             var session = await _sessions.ReadRequestAsync(_accessor.HttpContext, cancellationToken);
+            if (area == ServiceArea.Admin && session.AccountRoleTypeId == AccountRoleType.User)
+            {
+                throw new UnauthorizedAccessException("An administrative role is required.");
+            }
+
             var parameters = _sessions.Parameters!;
             _caller = new ServiceCaller(session.AccountId, session.ProfileId, area,
                 parameters.SessionPublicId.ToString("D"), parameters.SessionPublicId, parameters.SessionRevision,
-                session.ProfileOwnerAccountId, parameters.SessionTokenHash);
+                session.ProfileOwnerAccountId, parameters.SessionTokenHash, session.AccountRoleTypeId);
             return _caller;
         }
 
@@ -78,9 +84,9 @@ namespace Jularr.Backend.Service.Core
             var current = await context.ReadSessionAsync(parameters, cancellationToken);
 
             if (current.AccountId != caller.AccountId || current.ProfileId != caller.ProfileId
-                || current.ProfileOwnerAccountId != caller.ProfileOwnerAccountId)
+                || current.ProfileOwnerAccountId != caller.ProfileOwnerAccountId || current.AccountRoleTypeId != caller.AccountRoleTypeId)
             {
-                throw new UnauthorizedAccessException("The profile session changed.");
+                throw new UnauthorizedAccessException("The session authorization changed.");
             }
         }
 
@@ -96,15 +102,15 @@ namespace Jularr.Backend.Service.Core
                 return;
             }
 
-            // Grant implemented permissions only.
-            if (caller.Area == ServiceArea.User)
+            // Resolve declared permissions.
+            if (caller.Area is ServiceArea.User or ServiceArea.Admin)
             {
                 if (permission.Key.StartsWith("profile.", StringComparison.Ordinal) && caller.ProfileId is null)
                 {
                     throw new UnauthorizedAccessException("An active profile is required.");
                 }
 
-                if (GetPermissions(caller.AccountId, caller.ProfileId, caller.ProfileOwnerAccountId).Contains(permission.Key, StringComparer.Ordinal))
+                if (GetPermissions(caller.AccountId, caller.ProfileId, caller.ProfileOwnerAccountId, caller.AccountRoleTypeId).Contains(permission.Key, StringComparer.Ordinal))
                 {
                     return;
                 }
@@ -114,7 +120,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         // Share effective grants with consumers.
-        internal static IReadOnlyList<string> GetPermissions(long? accountId, long? profileId, long? ownerAccountId)
+        internal static IReadOnlyList<string> GetPermissions(long? accountId, long? profileId, long? ownerAccountId, AccountRoleType accountRoleTypeId = AccountRoleType.User)
         {
             if (accountId is null)
             {
@@ -122,6 +128,20 @@ namespace Jularr.Backend.Service.Core
             }
 
             var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select" };
+
+            // Manual media management only.
+            if (accountRoleTypeId is AccountRoleType.Owner or AccountRoleType.MediaManager)
+            {
+                permissions.AddRange(["admin.access", "media.read", "media.manual.update", "requests.read", "requests.update", "wanted.read", "wanted.update"]);
+            }
+
+            // Instance administration stays restricted.
+            if (accountRoleTypeId == AccountRoleType.Owner)
+            {
+                permissions.AddRange(["accounts.read", "accounts.update", "storage.read", "storage.update", "providers.read", "providers.update",
+                    "localization.read", "localization.update", "rules.read", "rules.update", "acquisition.manage"]);
+            }
+
             if (profileId is not null)
             {
                 permissions.Add("profile.self.read");

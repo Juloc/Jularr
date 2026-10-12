@@ -22,7 +22,7 @@
 - Run only the affected build and necessary focused tests. Documentation-only changes need link/path and diff checks, not backend tests.
 - Full validation commands are in [.agent/project.yaml](.agent/project.yaml); run them only for a release or an explicit full-validation request.
 - Review your own diff before committing; state what was verified and any remaining integration gaps.
-- Current branch: `codex/connected-account-pages`, connecting the Frontend account/Profile flows to canonical services. Keep changes bundled and push after focused verification. The owner authorized clean-start integration and continued Backend/Frontend implementation; preserve existing work, never force push, and never merge into `dev`/`main`.
+- Current branch: `codex/media-management-foundation`. Confirmed role/storage/standalone-Arr/player scope is in [BACKEND_NEXT](docs/BACKEND_NEXT.md). Keep changes bundled and push after focused verification. The owner authorized clean-start integration and continued Backend/Frontend implementation; preserve existing work, never force push, and never merge into `dev`/`main`.
 - Both author and committer must be exactly `Juloc <juli.hiresch@gmail.com>`; no AI attribution or additional contributor trailers.
 - Feature push checks exclude already merged `origin/clean-start` ancestors; newly contributed commits and target-branch pushes remain fully checked. Never rewrite historical authorship.
 - Before committing, run `node scripts/install-git-hooks.mjs`. Never bypass hooks with `--no-verify`.

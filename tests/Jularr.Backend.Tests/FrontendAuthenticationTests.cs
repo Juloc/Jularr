@@ -9,9 +9,44 @@ namespace Jularr.Backend.Tests
     public sealed class FrontendAuthenticationTests
     {
         [TestMethod]
+        [DataRow(3, true, false)]
+        [DataRow(1, true, true)]
+        [DataRow(2, false, false)]
+        public async Task Razor_RolePolicies_SeparateManualMediaAndConfiguration(int role, bool mediaAllowed, bool configurationAllowed)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await host.Fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {role} WHERE \"Id\" = 41");
+            using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
+            using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            foreach (var path in new[] { "/Admin/Requests", "/Admin/Wanted", "/Admin/Works", "/Admin/Works/101" })
+            {
+                using var page = await host.SendAsync(HttpMethod.Get, path);
+                Assert.AreEqual(mediaAllowed ? HttpStatusCode.OK : HttpStatusCode.Redirect, page.StatusCode, path);
+                if (path == "/Admin/Requests" && mediaAllowed)
+                {
+                    var html = await page.Content.ReadAsStringAsync();
+                    Assert.AreEqual(configurationAllowed, html.Contains("href=\"/Admin/Rules\"", StringComparison.Ordinal));
+                    Assert.AreEqual(configurationAllowed, html.Contains("href=\"/Admin/Requests/Users\"", StringComparison.Ordinal));
+                }
+            }
+
+            foreach (var path in new[] { "/Admin/Rules", "/Admin/Requests/Users", "/Admin/Library" })
+            {
+                using var page = await host.SendAsync(HttpMethod.Get, path);
+                Assert.AreEqual(configurationAllowed ? HttpStatusCode.OK : HttpStatusCode.Redirect, page.StatusCode, path);
+            }
+
+            // Existing cookies observe a demotion.
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 2 WHERE \"Id\" = 41");
+            using var demoted = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted");
+            Assert.AreEqual(HttpStatusCode.Redirect, demoted.StatusCode);
+        }
+
+        [TestMethod]
         public async Task Razor_LoginSettingsLogout_UseServicesAndAntiforgery()
         {
             await using var host = await Host.CreateAsync(razor: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 2 WHERE \"Id\" = 41");
             using var anonymous = await host.SendAsync(HttpMethod.Get, "/Settings");
             Assert.AreEqual(HttpStatusCode.Redirect, anonymous.StatusCode);
 

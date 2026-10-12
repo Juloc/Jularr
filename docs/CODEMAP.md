@@ -17,7 +17,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [ReadUiTextsV1.cs](../src/Jularr.Backend/Service/Public/Localization/V1/ReadUiTextsV1.cs), [ReadUiLocalesV1.cs](../src/Jularr.Backend/Service/Public/Localization/V1/ReadUiLocalesV1.cs): canonical Public reads for Razor/API; SQL resolves fallback and aggregates the complete language pack. [UiLocalizationCache.cs](../src/Jularr.Backend/Service/Public/Localization/V1/UiLocalizationCache.cs) is passive caching; [registration](../src/Jularr.Backend/Service/Core/Localization/UiLocalizationRegistration.cs) synchronizes English declarations at startup.
 - [UiLocalizationLogic.cs](../src/Jularr.Backend/Logic/Localization/UiLocalizationLogic.cs): source sync and canonical description/translation mutations; [host contract and gaps](../README.md#gemeinsamer-postgresql-textkatalog).
 - [ProfileServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileServices.cs): the one read and one update; permissions and orchestration.
-- [ServiceGate.cs](../src/Jularr.Backend/Service/Core/ServiceGate.cs): verified account-session/profile permissions, exported capabilities and mutable write authorization; Admin grants remain closed.
+- [ServiceGate.cs](../src/Jularr.Backend/Service/Core/ServiceGate.cs): DB-role-based account/Profile and Admin grants; MediaManager is limited to manual media/Requests/Wanted. Role changes are revalidated in the write transaction.
 - [ProfileSelectionServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileSelectionServices.cs): membership-scoped paged list and session profile selection.
 - [SessionServices.cs](../src/Jularr.Backend/Service/User/Session/V1/SessionServices.cs): live owned session list, revocation and logout.
 - [ProfileLogic.cs](../src/Jularr.Backend/Logic/Profile/ProfileLogic.cs): entity locking, business validation and the canonical writer.
@@ -65,7 +65,7 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 
 ## Not integrated
 
-Owner bootstrap, Admin grants, email/approval workflows, 2FA/WebAuthn completion,
+Owner bootstrap, Admin domain operations, Storage/NAS, email/approval workflows, 2FA/WebAuthn completion,
 PIN selection, old Android/TV consumers, full Profile management and instance settings.
 This reference backend does not complete Phase B or replace an active installation.
 

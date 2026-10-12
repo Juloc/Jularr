@@ -12,6 +12,13 @@ builder.Services.AddRazorPages(options =>
 {
     options.Conventions.AuthorizeFolder("/");
     options.Conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Requests", ServiceApi.RequestsReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Wanted", ServiceApi.WantedReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Works", ServiceApi.MediaReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Work", ServiceApi.MediaReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Library", ServiceApi.StorageReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Rules", ServiceApi.RulesReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Users", ServiceApi.RulesReadPolicyName);
     options.Conventions.AllowAnonymousToPage("/Account/Login");
     options.Conventions.AllowAnonymousToPage("/ShellPreview");
 });
