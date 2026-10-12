@@ -1,43 +1,44 @@
 using System.Text.Encodings.Web;
 
-namespace Jularr.Frontend.Framework;
-
-// Server-selected tabs. Links navigate to real GET routes; only the selected
-// pane is rendered, with no JS-only state or duplicated H2 page headings.
-public sealed record Tab(string Key, string Href, IReadOnlyList<IUiComponent> Content, bool Selected);
-
-public sealed class Tabs : IUiComponent
+namespace Jularr.Frontend.Framework
 {
-    public List<Tab> Items { get; } = [];
+    // Server-selected tabs. Links navigate to real GET routes; only the selected
+    // pane is rendered, with no JS-only state or duplicated H2 page headings.
+    public sealed record Tab(string Key, string Href, IReadOnlyList<IUiComponent> Content, bool Selected);
 
-    public Tabs(Action<Tabs> define) => define(this);
-
-    public void Add(string key, string href, bool selected, Action<List<IUiComponent>> define)
+    public sealed class Tabs : IUiComponent
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(href);
-        var content = new List<IUiComponent>();
-        define(content);
-        Items.Add(new Tab(key, href, content, selected));
-    }
+        public List<Tab> Items { get; } = [];
 
-    public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
-    {
-        if (Items.Count == 0) return;
-        if (Items.Count(x => x.Selected) != 1)
-            throw new InvalidOperationException("Exactly one tab must be selected.");
+        public Tabs(Action<Tabs> define) => define(this);
 
-        var links = Items.Select(item =>
+        public void Add(string key, string href, bool selected, Action<List<IUiComponent>> define)
         {
-            var anchor = new A(new Text(item.Key)).Attribute("href", item.Href)
-                .Class(item.Selected ? "tabs__link tabs__link--active" : "tabs__link");
-            if (item.Selected) anchor.Attribute("aria-current", "page");
-            return (IUiComponent)anchor;
-        }).ToArray();
+            ArgumentException.ThrowIfNullOrWhiteSpace(href);
+            var content = new List<IUiComponent>();
+            define(content);
+            Items.Add(new Tab(key, href, content, selected));
+        }
 
-        var selected = Items.Single(item => item.Selected);
-        new Div(
-            new Nav(links).Class("tabs__nav").Attribute("aria-label", texts["nav.tabs"]),
-            new Section([.. selected.Content]).Class("tabs__panel")
-        ).Class("tabs").WriteTo(writer, encoder, texts);
+        public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
+        {
+            if (Items.Count == 0) return;
+            if (Items.Count(x => x.Selected) != 1)
+                throw new InvalidOperationException("Exactly one tab must be selected.");
+
+            var links = Items.Select(item =>
+            {
+                var anchor = new A(new Text(item.Key)).Attribute("href", item.Href)
+                    .Class(item.Selected ? "tabs__link tabs__link--active" : "tabs__link");
+                if (item.Selected) anchor.Attribute("aria-current", "page");
+                return (IUiComponent)anchor;
+            }).ToArray();
+
+            var selected = Items.Single(item => item.Selected);
+            new Div(
+                new Nav(links).Class("tabs__nav").Attribute("aria-label", texts["nav.tabs"]),
+                new Section([.. selected.Content]).Class("tabs__panel")
+            ).Class("tabs").WriteTo(writer, encoder, texts);
+        }
     }
 }

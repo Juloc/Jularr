@@ -273,17 +273,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class DownloadProgressData : BaseData
     {
-        public DownloadProgressData(long operationId, int? progressPercent)
+        public DownloadProgressData(string progress)
         {
-            OperationId = operationId;
-            ProgressPercent = progressPercent;
+            Progress = progress;
         }
 
-        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
-        public long OperationId { get; }
-
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ProgressPercent))]
-        public int? ProgressPercent { get; }
+        // JSON rows of OperationId and ProgressPercent.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Progress))]
+        public string Progress { get; }
     }
 
     internal sealed class DownloadFailureData : BaseData

@@ -36,7 +36,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             if (target.MediaTypeId == MediaType.Series && Data.SeasonNumber is { } season)
             {
                 var episodes = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEpisodeStatesAsync(target.WantedItemId, ct), CancellationToken);
-                scope = EpisodeScope.For(episodes, season, Data.EpisodeNumber);
+                scope = AcquisitionSelectionLogic.ReadEpisodeScope(episodes, season, Data.EpisodeNumber);
             }
 
             // A manual search shows every candidate and keeps the automatic schedule.

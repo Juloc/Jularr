@@ -1,11 +1,10 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Library;
 
 namespace Jularr.Backend.Logic.Library
 {
-    internal sealed record MediaPathInfo(string Title, int? Year, WorkUnitType? WorkUnitTypeId, decimal? UnitNumber, decimal? ParentUnitNumber);
-
     internal static partial class MediaPathParser
     {
         public static MediaPathInfo Parse(string relativePath, MediaType mediaType)

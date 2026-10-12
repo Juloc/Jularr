@@ -2,14 +2,58 @@ using System.Text.Json.Serialization;
 
 namespace Jularr.Integrations.Data.Sabnzbd
 {
-    internal sealed record SabnzbdConnection(string BaseUrl, [property: JsonIgnore] string ApiKey);
+    internal sealed class SabnzbdConnection
+    {
+        public SabnzbdConnection(string baseUrl, string apiKey)
+        {
+            BaseUrl = baseUrl;
+            ApiKey = apiKey;
+        }
+
+        public string BaseUrl { get; }
+
+        [JsonIgnore]
+        public string ApiKey { get; }
+    }
 
     // Version alone proves reachability; the queue read proves the full API key.
-    internal sealed record SabnzbdConnectionTestResult(bool IsAvailable, string? Version);
+    internal sealed class SabnzbdConnectionTestResult
+    {
+        public SabnzbdConnectionTestResult(bool isAvailable, string? version)
+        {
+            IsAvailable = isAvailable;
+            Version = version;
+        }
 
-    internal sealed record SabnzbdGrabRequest(Uri NzbUrl, string? NzbName, string? Category);
+        public bool IsAvailable { get; }
+        public string? Version { get; }
+    }
 
-    internal sealed record SabnzbdGrabResult(bool Success, IReadOnlyList<string> NzoIds);
+    internal sealed class SabnzbdGrabRequest
+    {
+        public SabnzbdGrabRequest(Uri nzbUrl, string? nzbName, string? category)
+        {
+            NzbUrl = nzbUrl;
+            NzbName = nzbName;
+            Category = category;
+        }
+
+        public Uri NzbUrl { get; }
+        public string? NzbName { get; }
+        public string? Category { get; }
+    }
+
+    internal sealed class SabnzbdGrabResult
+    {
+        public SabnzbdGrabResult(bool success, IReadOnlyList<string> nzoIds)
+        {
+            Success = success;
+            NzoIds = nzoIds;
+        }
+
+        public bool Success { get; }
+        public IReadOnlyList<string> NzoIds { get; }
+    }
 
     internal enum SabnzbdFailureKind : byte
     {
@@ -30,18 +74,61 @@ namespace Jularr.Integrations.Data.Sabnzbd
             kind is SabnzbdFailureKind.Download or SabnzbdFailureKind.Unpack or SabnzbdFailureKind.Verification or SabnzbdFailureKind.Password;
     }
 
-    internal sealed record SabnzbdQueueJob(string NzoId, string Name, double? Percentage);
-
-    internal sealed record SabnzbdHistoryJob(string NzoId, string Name, string? Status, string? StoragePath, SabnzbdFailureKind FailureKind)
+    internal sealed class SabnzbdQueueJob
     {
+        public SabnzbdQueueJob(string nzoId, string name, double? percentage)
+        {
+            NzoId = nzoId;
+            Name = name;
+            Percentage = percentage;
+        }
+
+        public string NzoId { get; }
+        public string Name { get; }
+        public double? Percentage { get; }
+    }
+
+    internal sealed class SabnzbdHistoryJob
+    {
+        public SabnzbdHistoryJob(string nzoId, string name, string? status, string? storagePath, SabnzbdFailureKind failureKind)
+        {
+            NzoId = nzoId;
+            Name = name;
+            Status = status;
+            StoragePath = storagePath;
+            FailureKind = failureKind;
+        }
+
+        public string NzoId { get; }
+        public string Name { get; }
+        public string? Status { get; }
+        public string? StoragePath { get; }
+        public SabnzbdFailureKind FailureKind { get; }
+
         public bool IsCompleted => FailureKind == SabnzbdFailureKind.None && string.Equals(Status, "Completed", StringComparison.OrdinalIgnoreCase);
 
         public bool IsFailed => FailureKind != SabnzbdFailureKind.None || string.Equals(Status, "Failed", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal sealed record SabnzbdQueueSnapshot(IReadOnlyList<SabnzbdQueueJob> Jobs);
+    internal sealed class SabnzbdQueueSnapshot
+    {
+        public SabnzbdQueueSnapshot(IReadOnlyList<SabnzbdQueueJob> jobs)
+        {
+            Jobs = jobs;
+        }
 
-    internal sealed record SabnzbdHistorySnapshot(IReadOnlyList<SabnzbdHistoryJob> Jobs);
+        public IReadOnlyList<SabnzbdQueueJob> Jobs { get; }
+    }
+
+    internal sealed class SabnzbdHistorySnapshot
+    {
+        public SabnzbdHistorySnapshot(IReadOnlyList<SabnzbdHistoryJob> jobs)
+        {
+            Jobs = jobs;
+        }
+
+        public IReadOnlyList<SabnzbdHistoryJob> Jobs { get; }
+    }
 
     // Messages never contain the API key.
     internal sealed class SabnzbdException(string message, Exception? innerException = null) : Exception(message, innerException);

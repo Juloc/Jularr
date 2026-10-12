@@ -31,9 +31,22 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             // Indexers first, then download clients.
             var sql = new SqlStatement();
             sql.Statement =
-                $"""
+                """
                 SELECT
-                {AcquisitionConnectionInput.DetailColumns}
+                    connection."Id",
+                    connection."Name",
+                    connection."AcquisitionConnectionTypeId",
+                    connection."BaseUrl",
+                    TRUE AS "HasApiKey",
+                    connection."IsEnabled",
+                    connection."Priority",
+                    connection."Categories",
+                    connection."DownloadCategory",
+                    connection."RemotePath",
+                    connection."LocalPath",
+                    connection."CheckedAt",
+                    connection."LastErrorKey" AS "ErrorKey",
+                    connection."Version"
                 FROM
                     "AcquisitionConnections" AS connection
                 ORDER BY
@@ -59,9 +72,22 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             var sql = new SqlStatement();
             sql.Statement =
-                $"""
+                """
                 SELECT
-                {AcquisitionConnectionInput.DetailColumns}
+                    connection."Id",
+                    connection."Name",
+                    connection."AcquisitionConnectionTypeId",
+                    connection."BaseUrl",
+                    TRUE AS "HasApiKey",
+                    connection."IsEnabled",
+                    connection."Priority",
+                    connection."Categories",
+                    connection."DownloadCategory",
+                    connection."RemotePath",
+                    connection."LocalPath",
+                    connection."CheckedAt",
+                    connection."LastErrorKey" AS "ErrorKey",
+                    connection."Version"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
@@ -197,24 +223,6 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     internal static class AcquisitionConnectionInput
     {
         public const string ProtectorPurpose = "Jularr.Acquisition.ApiKey.V1";
-
-        public const string DetailColumns =
-            """
-                connection."Id",
-                connection."Name",
-                connection."AcquisitionConnectionTypeId",
-                connection."BaseUrl",
-                TRUE AS "HasApiKey",
-                connection."IsEnabled",
-                connection."Priority",
-                connection."Categories",
-                connection."DownloadCategory",
-                connection."RemotePath",
-                connection."LocalPath",
-                connection."CheckedAt",
-                connection."LastErrorKey" AS "ErrorKey",
-                connection."Version"
-            """;
 
         public static AcquisitionConnectionSaveData Create(long? id, SaveAcquisitionConnectionDataV1 data, IDataProtector protector)
         {

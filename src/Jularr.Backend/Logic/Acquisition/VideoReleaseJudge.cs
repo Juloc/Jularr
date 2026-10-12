@@ -1,19 +1,10 @@
 using System.Text.RegularExpressions;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Logic.Acquisition;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
-    /// <summary>The units of a Series a search is for: every unit of the Series and the subset that is still wanted (missing, included in the request, aired).</summary>
-    internal sealed record VideoUnitScope(IReadOnlyList<VideoUnit> All, IReadOnlyList<VideoUnit> Wanted)
-    {
-        public static VideoUnitScope Empty { get; } = new([], []);
-    }
-
-    /// <summary>
-    /// The Movie/TV side of release identity: is this release the requested title (and year), season and episode, and which wanted units
-    /// does it cover. It only produces identity evidence and coverage; the shared selection engine decides what that means for the profile.
-    /// A release found through a trustworthy provider id counts as exact when its numbering fits, and a title that differs from the
-    /// requested one then needs a person rather than being rejected, because releases carry localized or alternate titles.
-    /// </summary>
+    // The Movie/TV side of release identity.
     internal static partial class VideoReleaseJudge
     {
         // Words of an edition or release tag that are not part of a movie's title; they never make a title ambiguous.
@@ -46,7 +37,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseJudgement<VideoIdentityMatch>(titleMatch, parsed, titleEvidence, SelectionCoverage.Single, null) { Languages = languages };
             }
 
-            return JudgeUnit(titleMatch, titleEvidence, parsed, unit, scope, viaId) with { Languages = languages };
+            var judged = JudgeUnit(titleMatch, titleEvidence, parsed, unit, scope, viaId);
+            return new ReleaseJudgement<VideoIdentityMatch>(judged.Match, judged.Parsed, judged.Evidence, judged.Coverage, judged.SafetyRejection) { Languages = languages };
         }
 
         // Scene names state non-English audio as words; untagged releases are English.

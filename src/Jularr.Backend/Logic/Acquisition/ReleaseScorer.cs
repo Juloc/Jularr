@@ -1,28 +1,19 @@
 using System.Text.RegularExpressions;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Logic.Acquisition;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
-    // Media-type-agnostic release scorer. Operates only on the parsed ReleaseInfo and a QualityProfile,
-    // so it is shared by every media type; anime is one caller.
+    // Scores a parsed release against a profile, for every media type.
     internal static class ReleaseScorer
     {
         private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(100);
 
-        public static ReleaseScoreResult Score(
-            QualityProfile profile,
-            ReleaseCandidate candidate)
+        public static ReleaseScoreResult Score(QualityProfile profile, ReleaseCandidate candidate)
         {
             ArgumentNullException.ThrowIfNull(profile);
             ArgumentNullException.ThrowIfNull(candidate);
             ArgumentNullException.ThrowIfNull(candidate.Release);
-
-            var validation = ValidateProfile(profile);
-            if (validation.Count > 0)
-            {
-                throw new ArgumentException(
-                    $"Quality profile '{profile.Id}' is invalid: {string.Join("; ", validation)}",
-                    nameof(profile));
-            }
 
             var qualityKey = ReleaseQuality.GetKey(candidate.Release);
             var qualityRank = IndexOf(profile.QualityOrder, qualityKey);
@@ -75,11 +66,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             foreach (var pattern in profile.RequiredRegex)
             {
-                if (!Regex.IsMatch(
-                        candidate.Release.RawTitle,
-                        pattern,
-                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                        RegexTimeout))
+                if (!Regex.IsMatch(candidate.Release.RawTitle, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout))
                 {
                     rejections.Add(new ReleaseReason("MissingRequiredPattern", pattern));
                 }
@@ -87,11 +74,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             foreach (var pattern in profile.RejectedRegex)
             {
-                if (Regex.IsMatch(
-                        candidate.Release.RawTitle,
-                        pattern,
-                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                        RegexTimeout))
+                if (Regex.IsMatch(candidate.Release.RawTitle, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout))
                 {
                     rejections.Add(new ReleaseReason("MatchesRejectedPattern", pattern));
                 }
@@ -120,42 +103,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 }
             }
 
-            return new ReleaseScoreResult(
-                candidate,
-                Accepted: rejections.Count == 0,
-                score,
-                qualityKey,
-                qualityRank,
-                rejections,
-                scoreReasons)
+            return new ReleaseScoreResult(candidate, rejections.Count == 0, score, qualityKey, qualityRank, rejections, scoreReasons)
             {
                 InfoReasons = infoReasons
             };
-        }
-
-        public static IReadOnlyList<ReleaseScoreResult> Rank(
-            QualityProfile profile,
-            IEnumerable<ReleaseCandidate> candidates) =>
-            candidates
-                .Select(candidate => Score(profile, candidate))
-                .OrderByDescending(result => result.Accepted)
-                .ThenBy(result => result.QualityRank)
-                .ThenByDescending(result => result.Score)
-                .ThenBy(result => result.Candidate.Release.RawTitle, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-        /// <summary>Whether a scored release is a meaningful upgrade of the scored current file: the shared <see cref="UpgradePolicy"/>, where a file whose quality cannot be read is replaced by any release of a known quality.</summary>
-        public static bool IsUpgrade(
-            QualityProfile profile,
-            ReleaseScoreResult current,
-            ReleaseScoreResult candidate)
-        {
-            ArgumentNullException.ThrowIfNull(profile);
-            ArgumentNullException.ThrowIfNull(current);
-            ArgumentNullException.ThrowIfNull(candidate);
-
-            return candidate.Accepted
-                && UpgradePolicy.IsUpgrade(profile, current.QualityKey, candidate.QualityKey, upgradeUnknownInstalled: true);
         }
 
         public static IReadOnlyList<string> ValidateProfile(QualityProfile profile)
@@ -253,9 +204,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return errors;
         }
 
-        private static bool Matches(
-            ReleaseScoreRule rule,
-            ReleaseCandidate candidate)
+        private static bool Matches(ReleaseScoreRule rule, ReleaseCandidate candidate)
         {
             var values = GetValues(rule.Field, candidate.Release, candidate.Indexer);
             return values.Any(value => rule.Match switch
@@ -274,10 +223,7 @@ namespace Jularr.Backend.Logic.Acquisition
             });
         }
 
-        private static IEnumerable<string> GetValues(
-            ReleaseRuleField field,
-            ReleaseInfo release,
-            string? indexer) =>
+        private static IEnumerable<string> GetValues(ReleaseRuleField field, ReleaseInfo release, string? indexer) =>
             field switch
             {
                 ReleaseRuleField.RawTitle => [release.RawTitle],
@@ -332,10 +278,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             try
             {
-                _ = new Regex(
-                    pattern,
-                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                    RegexTimeout);
+                _ = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
             }
             catch (ArgumentException)
             {

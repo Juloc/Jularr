@@ -9,16 +9,98 @@ namespace Jularr.Integrations.Data.Tmdb
     }
 
     // A v4 read access token or a v3 API key; both stay out of logs.
-    internal sealed record TmdbConnection([property: JsonIgnore] string Credential, string Language);
+    internal sealed class TmdbConnection
+    {
+        public TmdbConnection(string credential, string language)
+        {
+            Credential = credential;
+            Language = language;
+        }
 
-    internal sealed record TmdbSearchResult(int Id, string Title, string? OriginalTitle, int? Year, string? Overview, string? PosterPath);
+        [JsonIgnore]
+        public string Credential { get; }
+        public string Language { get; }
+    }
 
-    internal sealed record TmdbSeason(int SeasonNumber, string? Name, DateOnly? AirDate, int EpisodeCount);
+    internal sealed class TmdbSearchResult
+    {
+        public TmdbSearchResult(int id, string title, string? originalTitle, int? year, string? overview, string? posterPath)
+        {
+            Id = id;
+            Title = title;
+            OriginalTitle = originalTitle;
+            Year = year;
+            Overview = overview;
+            PosterPath = posterPath;
+        }
 
-    internal sealed record TmdbEpisode(int SeasonNumber, int EpisodeNumber, string? Name, DateOnly? AirDate);
+        public int Id { get; }
+        public string Title { get; }
+        public string? OriginalTitle { get; }
+        public int? Year { get; }
+        public string? Overview { get; }
+        public string? PosterPath { get; }
+    }
 
-    internal sealed record TmdbWork(TmdbMediaKind Kind, int Id, string Title, string? OriginalTitle, int? Year, string? Overview, string? PosterPath, string? ImdbId, int? TvdbId,
-        IReadOnlyList<TmdbSeason> Seasons);
+    internal sealed class TmdbSeason
+    {
+        public TmdbSeason(int seasonNumber, string? name, DateOnly? airDate, int episodeCount)
+        {
+            SeasonNumber = seasonNumber;
+            Name = name;
+            AirDate = airDate;
+            EpisodeCount = episodeCount;
+        }
+
+        public int SeasonNumber { get; }
+        public string? Name { get; }
+        public DateOnly? AirDate { get; }
+        public int EpisodeCount { get; }
+    }
+
+    internal sealed class TmdbEpisode
+    {
+        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate)
+        {
+            SeasonNumber = seasonNumber;
+            EpisodeNumber = episodeNumber;
+            Name = name;
+            AirDate = airDate;
+        }
+
+        public int SeasonNumber { get; }
+        public int EpisodeNumber { get; }
+        public string? Name { get; }
+        public DateOnly? AirDate { get; }
+    }
+
+    internal sealed class TmdbWork
+    {
+        public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? imdbId, int? tvdbId, IReadOnlyList<TmdbSeason> seasons)
+        {
+            Kind = kind;
+            Id = id;
+            Title = title;
+            OriginalTitle = originalTitle;
+            Year = year;
+            Overview = overview;
+            PosterPath = posterPath;
+            ImdbId = imdbId;
+            TvdbId = tvdbId;
+            Seasons = seasons;
+        }
+
+        public TmdbMediaKind Kind { get; }
+        public int Id { get; }
+        public string Title { get; }
+        public string? OriginalTitle { get; }
+        public int? Year { get; }
+        public string? Overview { get; }
+        public string? PosterPath { get; }
+        public string? ImdbId { get; }
+        public int? TvdbId { get; }
+        public IReadOnlyList<TmdbSeason> Seasons { get; }
+    }
 
     internal enum TmdbFailure : byte
     {

@@ -96,7 +96,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<WorkMetadata>();
-            services.AddMemoryCache();
+            services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
             services.AddHttpContextAccessor();

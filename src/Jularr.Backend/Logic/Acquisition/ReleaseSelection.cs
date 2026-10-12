@@ -1,145 +1,9 @@
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Logic.Acquisition;
+
 namespace Jularr.Backend.Logic.Acquisition
 {
-    /// <summary>How sure the media type is that a release is the requested target. It is decided from identity evidence alone; a profile score never changes it.</summary>
-    internal enum IdentityConfidence
-    {
-        /// <summary>A trustworthy id or the exact unit matched.</summary>
-        Exact,
-
-        /// <summary>Title and numbering agree without an id.</summary>
-        Strong,
-
-        /// <summary>Plausible but not provable (for example absolute versus season numbering); only a profile that allows it takes it automatically.</summary>
-        Ambiguous,
-
-        /// <summary>The release is for something else: another title, season, episode, volume or album.</summary>
-        Conflict
-    }
-
-    /// <param name="Code">A stable machine code of the finding, such as <c>WrongEpisode</c>.</param>
-    /// <param name="Value">The data the code refers to, such as the title a release carries.</param>
-    internal sealed record ReleaseIdentityEvidence(IdentityConfidence Confidence, string Code, string? Value = null)
-    {
-        public static ReleaseIdentityEvidence Exact(string code, string? value = null) => new(IdentityConfidence.Exact, code, value);
-
-        public static ReleaseIdentityEvidence Strong(string code, string? value = null) => new(IdentityConfidence.Strong, code, value);
-
-        public static ReleaseIdentityEvidence Ambiguous(string code, string? value = null) => new(IdentityConfidence.Ambiguous, code, value);
-
-        public static ReleaseIdentityEvidence Conflict(string code, string? value = null) => new(IdentityConfidence.Conflict, code, value);
-    }
-
-    /// <summary>
-    /// What a candidate would satisfy among the wanted targets of the request. The utility favours covering more wanted units and charges
-    /// for units nobody asked for, so a season pack wins when most of a season is missing and a single episode wins when only that one is.
-    /// </summary>
-    internal sealed record SelectionCoverage(int WantedCovered, int WantedTotal, int Unwanted)
-    {
-        public static SelectionCoverage Single { get; } = new(1, 1, 0);
-
-        /// <summary>The storage or duplicate-download cost of taking the candidate, in utility points (an oversized release for a small target).</summary>
-        public int Cost { get; init; }
-
-        public int Utility => WantedCovered * 100 - Unwanted * 10 - Cost;
-    }
-
-    /// <summary>Observed outcomes of a release group or indexer. It only ever breaks a tie late and moves by a bounded amount.</summary>
-    internal sealed record ReleaseReliability(int Samples, int Successes)
-    {
-        public const int MinimumSamples = 5;
-        public const int MaximumPoints = 3;
-
-        /// <summary>The bounded contribution in points; a source with too few samples contributes nothing, so a new group is never punished by chance.</summary>
-        public int Points =>
-            Samples < MinimumSamples
-                ? 0
-                : Math.Clamp((int)Math.Round(((double)Successes / Samples - 0.5) * 2 * MaximumPoints), -MaximumPoints, MaximumPoints);
-    }
-
-    /// <summary>One normalized release as selection sees it: parsed facts, where it came from and what the media type concluded about its identity.</summary>
-    internal sealed record SelectionCandidate(
-        string Id,
-        ReleaseInfo? Parsed,
-        long? SizeBytes,
-        string? Indexer,
-        int IndexerPriority,
-        DateTimeOffset? PublishedAt,
-        ReleaseIdentityEvidence Identity,
-        SelectionCoverage Coverage)
-    {
-        /// <summary>A hard safety or integrity finding (no download link, not usenet, unparseable, blocklisted); it is not a negative preference.</summary>
-        public string? SafetyRejection { get; init; }
-
-        public ReleaseReliability? Reliability { get; init; }
-
-        /// <summary>
-        /// Preference points the media type resolves from the request rather than from the profile (a preferred language, an exact volume), added to
-        /// the profile's preference score. They only order eligible candidates and never repair identity or a gate.
-        /// </summary>
-        public int ContextScore { get; init; }
-
-        /// <summary>The languages the release carries (audio languages, the language of a book or chapter); empty when it states none.</summary>
-        public IReadOnlyList<string> Languages { get; init; } = [];
-    }
-
-    internal enum SelectionDecision
-    {
-        /// <summary>Acceptable now.</summary>
-        Eligible,
-
-        /// <summary>Only an owner may take it (ambiguous identity).</summary>
-        ManualReview,
-
-        Rejected
-    }
-
-    internal enum SelectionReasonKind
-    {
-        Safety,
-        Identity,
-        Profile,
-        Quality
-    }
-
-    internal sealed record SelectionReason(SelectionReasonKind Kind, string Code, string? Value = null);
-
-    internal sealed record CandidateEvaluation(
-        SelectionCandidate Candidate,
-        SelectionDecision Decision,
-        ReleaseScoreResult? Score,
-        int ReliabilityPoints,
-        IReadOnlyList<SelectionReason> Reasons)
-    {
-        public bool IsSelectable => Decision == SelectionDecision.Eligible;
-
-        public int QualityRank => Score?.QualityRank ?? int.MaxValue;
-
-        public int PreferenceScore => (Score?.Score ?? 0) + Candidate.ContextScore;
-    }
-
-    /// <summary>What a whole search came to, which drives how Wanted retries: an indexer problem is not "nothing exists", and an identity or profile rejection is not a failure of the indexers.</summary>
-    internal enum SelectionOutcome
-    {
-        NoCandidates,
-        IdentityInvalid,
-        ProfileRejected,
-        ManualReviewOnly,
-        Usable
-    }
-
-    internal sealed record SelectionResult(
-        IReadOnlyList<CandidateEvaluation> Ranked,
-        CandidateEvaluation? Winner,
-        ReleaseReason? WinnerReason,
-        SelectionOutcome Outcome);
-
-    /// <summary>
-    /// The one release-selection engine of automatic acquisition, Manual Search and profile tests. It decides in a fixed hierarchy:
-    /// hard safety, then identity, then the profile gates (Require, Reject, allowed quality, size), then orders what is left by quality tier,
-    /// preference, identity strength, coverage, bounded reliability, indexer priority and a stable final tiebreak. A preference can never repair
-    /// a wrong identity, a violated gate or an unsafe candidate, and the response order of the indexers is never a tiebreak, so the same
-    /// candidates and profile always pick the same winner.
-    /// </summary>
+    // The one release-selection engine of automatic and manual acquisition.
     internal static class ReleaseSelectionEngine
     {
         public static SelectionResult Select(QualityProfile profile, IReadOnlyList<SelectionCandidate> candidates)
@@ -244,7 +108,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 : SelectionOutcome.IdentityInvalid;
         }
 
-        /// <summary>Why the winner beat the next selectable candidate: the first step of the hierarchy that differs, in words.</summary>
+        // Why the winner beat the next selectable candidate.
         private static ReleaseReason WinnerReason(QualityProfile profile, CandidateEvaluation winner, CandidateEvaluation? runnerUp)
         {
             if (runnerUp is null)

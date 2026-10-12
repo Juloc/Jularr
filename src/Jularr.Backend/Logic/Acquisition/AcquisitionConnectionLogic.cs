@@ -7,31 +7,26 @@ namespace Jularr.Backend.Logic.Acquisition
 {
     internal static class AcquisitionConnectionLogic
     {
-        private const string ConnectionColumns =
-            """
-                connection."Id",
-                connection."Name",
-                connection."AcquisitionConnectionTypeId",
-                connection."BaseUrl",
-                connection."ProtectedApiKey",
-                connection."IsEnabled",
-                connection."Priority",
-                connection."Categories",
-                connection."DownloadCategory",
-                connection."RemotePath",
-                connection."LocalPath",
-                connection."Capabilities"::text AS "Capabilities",
-                connection."Version"
-            """;
-
         public static Task<AcquisitionConnectionData> ReadAcquisitionConnectionAsync(this LogicContext ctx, long acquisitionConnectionId, CancellationToken ct)
         {
             // Connection facts for external work.
             var sql = new SqlStatement();
             sql.Statement =
-                $"""
+                """
                 SELECT
-                {ConnectionColumns}
+                    connection."Id",
+                    connection."Name",
+                    connection."AcquisitionConnectionTypeId",
+                    connection."BaseUrl",
+                    connection."ProtectedApiKey",
+                    connection."IsEnabled",
+                    connection."Priority",
+                    connection."Categories",
+                    connection."DownloadCategory",
+                    connection."RemotePath",
+                    connection."LocalPath",
+                    connection."Capabilities"::text AS "Capabilities",
+                    connection."Version"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
@@ -46,9 +41,21 @@ namespace Jularr.Backend.Logic.Acquisition
             // Best priority first.
             var sql = new SqlStatement();
             sql.Statement =
-                $"""
+                """
                 SELECT
-                {ConnectionColumns}
+                    connection."Id",
+                    connection."Name",
+                    connection."AcquisitionConnectionTypeId",
+                    connection."BaseUrl",
+                    connection."ProtectedApiKey",
+                    connection."IsEnabled",
+                    connection."Priority",
+                    connection."Categories",
+                    connection."DownloadCategory",
+                    connection."RemotePath",
+                    connection."LocalPath",
+                    connection."Capabilities"::text AS "Capabilities",
+                    connection."Version"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE

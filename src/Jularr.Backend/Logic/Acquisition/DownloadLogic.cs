@@ -13,57 +13,12 @@ namespace Jularr.Backend.Logic.Acquisition
         public const string FailedReasonKey = "download_failed";
         public const string InterruptedReasonKey = "download_interrupted";
 
-        // An aired regular episode without media; specials are never wanted automatically.
-        public static string MissingEpisode(string workId, bool uncovered = false) =>
-            $"""
-            EXISTS (
-                SELECT
-                    1
-                FROM
-                    "WorkUnits" AS episode
-                    JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
-                WHERE
-                    episode."WorkId" = {workId}
-                    AND episode."WorkUnitTypeId" = 2
-                    AND season."Number" > 0
-                    AND episode."ReleasedOn" <= current_date
-                    AND NOT EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "MediaAssets" AS asset
-                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                        WHERE
-                            asset."WorkUnitId" = episode."Id"
-                    ){(uncovered ? CoveredFilter : "")}
-            )
-            """;
-
-        // Releases still downloading claim the episodes they contain.
-        private const string CoveredFilter =
-            """
-
-                    AND NOT EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "AcquisitionReleases" AS covering
-                            JOIN "Operations" AS download ON download."AcquisitionReleaseId" = covering."Id"
-                            JOIN "WantedItems" AS owner ON owner."Id" = covering."WantedItemId"
-                        WHERE
-                            owner."WorkId" = episode."WorkId"
-                            AND download."OperationStatusTypeId" IN (1, 2)
-                            AND covering."SeasonNumber" = season."Number"
-                            AND (covering."EpisodeStart" IS NULL OR episode."Number" BETWEEN covering."EpisodeStart" AND covering."EpisodeEnd")
-                    )
-            """;
-
         public static Task<WantedTargetData> ReadWantedTargetAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
         {
             // Search facts of one target.
             var sql = new SqlStatement();
             sql.Statement =
-                $"""
+                """
                 SELECT
                     wanted."Id" AS "WantedItemId",
                     work."Id" AS "WorkId",
@@ -103,7 +58,27 @@ namespace Jularr.Backend.Logic.Acquisition
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkId" = work."Id"
-                    ) AND NOT {MissingEpisode("work.\"Id\"")} AS "HasMedia",
+                    ) AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkUnits" AS episode
+                            JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                        WHERE
+                            episode."WorkId" = work."Id"
+                            AND episode."WorkUnitTypeId" = 2
+                            AND season."Number" > 0
+                            AND episode."ReleasedOn" <= current_date
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "MediaAssets" AS asset
+                                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                                WHERE
+                                    asset."WorkUnitId" = episode."Id"
+                            )
+                    ) AS "HasMedia",
                     EXISTS (
                         SELECT
                             1
@@ -161,7 +136,7 @@ namespace Jularr.Backend.Logic.Acquisition
             // Missing movies without a running download and series with unclaimed missing episodes, oldest schedule first.
             var sql = new SqlStatement();
             sql.Statement =
-                $"""
+                """
                 SELECT
                     wanted."Id" AS "WantedItemId"
                 FROM
@@ -192,7 +167,40 @@ namespace Jularr.Backend.Logic.Acquisition
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
                         OR work."MediaTypeId" = 2
-                        AND {MissingEpisode("work.\"Id\"", uncovered: true)}
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkUnits" AS episode
+                                JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                            WHERE
+                                episode."WorkId" = work."Id"
+                                AND episode."WorkUnitTypeId" = 2
+                                AND season."Number" > 0
+                                AND episode."ReleasedOn" <= current_date
+                                AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "MediaAssets" AS asset
+                                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                                    WHERE
+                                        asset."WorkUnitId" = episode."Id"
+                                )
+                                AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "AcquisitionReleases" AS covering
+                                        JOIN "Operations" AS download ON download."AcquisitionReleaseId" = covering."Id"
+                                        JOIN "WantedItems" AS owner ON owner."Id" = covering."WantedItemId"
+                                    WHERE
+                                        owner."WorkId" = episode."WorkId"
+                                        AND download."OperationStatusTypeId" IN (1, 2)
+                                        AND covering."SeasonNumber" = season."Number"
+                                        AND (covering."EpisodeStart" IS NULL OR episode."Number" BETWEEN covering."EpisodeStart" AND covering."EpisodeEnd")
+                                )
+                        )
                     )
                 ORDER BY
                     wanted."NextSearchAt" NULLS FIRST,
@@ -447,17 +455,21 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task UpdateDownloadProgressAsync(this LogicContext ctx, DownloadProgressData data, CancellationToken ct)
         {
+            // One write per client pass; unchanged progress is not rewritten.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
                     "Operations" AS operation
                 SET
-                    "ProgressPercent" = @ProgressPercent
+                    "ProgressPercent" = item."ProgressPercent"
+                FROM
+                    jsonb_to_recordset(@Progress::jsonb) AS item ("OperationId" bigint, "ProgressPercent" smallint)
                 WHERE
-                    operation."Id" = @OperationId
+                    operation."Id" = item."OperationId"
                     AND operation."OperationTypeId" = 2
-                    AND operation."OperationStatusTypeId" = 2;
+                    AND operation."OperationStatusTypeId" = 2
+                    AND operation."ProgressPercent" IS DISTINCT FROM item."ProgressPercent";
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -514,7 +526,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             var sql = new SqlStatement();
             sql.Statement =
-                $"""
+                """
                 WITH completed AS (
                     UPDATE
                         "Operations" AS operation
@@ -553,7 +565,27 @@ namespace Jularr.Backend.Logic.Acquisition
                     wanted."Id" = imported."WantedItemId"
                 RETURNING
                     wanted."Id" AS "WantedItemId",
-                    NOT {MissingEpisode("wanted.\"WorkId\"")} AS "IsComplete";
+                    NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkUnits" AS episode
+                            JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                        WHERE
+                            episode."WorkId" = wanted."WorkId"
+                            AND episode."WorkUnitTypeId" = 2
+                            AND season."Number" > 0
+                            AND episode."ReleasedOn" <= current_date
+                            AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "MediaAssets" AS asset
+                                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                                WHERE
+                                    asset."WorkUnitId" = episode."Id"
+                            )
+                    ) AS "IsComplete";
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ReadOptionalAsync<WantedCompletionData>(sql, ct) is { IsComplete: true } wanted)

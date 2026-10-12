@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
+using System.Text;
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Logic.Acquisition;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
@@ -524,9 +526,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return match.Success ? (ReleaseAudioCodec.Opus, match) : (ReleaseAudioCodec.Unknown, Match.Empty);
         }
 
-        private static (IReadOnlyList<string> Audio, IReadOnlyList<string> Subtitles) DetectLanguages(
-            string rawTitle,
-            Match audioCodecMatch)
+        private static (IReadOnlyList<string> Audio, IReadOnlyList<string> Subtitles) DetectLanguages(string rawTitle, Match audioCodecMatch)
         {
             var languageGroups = new List<(Match Match, IReadOnlyList<string> Languages)>();
             foreach (Match bracket in BracketRegex().Matches(rawTitle))
@@ -649,14 +649,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return Convert.ToHexString(bytes).ToLowerInvariant();
         }
 
-        private static double CalculateConfidence(
-            string seriesTitle,
-            bool hasNumbering,
-            bool hasResolution,
-            bool hasSource,
-            bool hasVideoCodec,
-            bool hasAudioCodec,
-            bool hasReleaseGroup)
+        private static double CalculateConfidence(string seriesTitle, bool hasNumbering, bool hasResolution, bool hasSource, bool hasVideoCodec, bool hasAudioCodec, bool hasReleaseGroup)
         {
             var score = string.IsNullOrWhiteSpace(seriesTitle) ? 0d : 0.2d;
             if (hasNumbering) score += 0.35d;
@@ -676,11 +669,7 @@ namespace Jularr.Backend.Logic.Acquisition
         private static int? ParseOptionalInt(string value) =>
             int.TryParse(value, out var parsed) ? parsed : null;
 
-        private static void AddMatchEvidence(
-            ICollection<ReleaseEvidence> evidence,
-            string field,
-            string value,
-            Match match)
+        private static void AddMatchEvidence(ICollection<ReleaseEvidence> evidence, string field, string value, Match match)
         {
             if (match.Success)
             {
@@ -688,11 +677,7 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        private static void AddEvidence(
-            ICollection<ReleaseEvidence> evidence,
-            string field,
-            object? value,
-            string matchedText)
+        private static void AddEvidence(ICollection<ReleaseEvidence> evidence, string field, object? value, string matchedText)
         {
             if (value is not null)
             {

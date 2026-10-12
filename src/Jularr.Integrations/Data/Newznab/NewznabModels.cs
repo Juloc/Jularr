@@ -12,17 +12,40 @@ namespace Jularr.Integrations.Data.Newznab
         Music = 5
     }
 
-    internal sealed record NewznabConnection(string BaseUrl, [property: JsonIgnore] string ApiKey);
+    internal sealed class NewznabConnection
+    {
+        public NewznabConnection(string baseUrl, string apiKey)
+        {
+            BaseUrl = baseUrl;
+            ApiKey = apiKey;
+        }
+
+        public string BaseUrl { get; }
+
+        [JsonIgnore]
+        public string ApiKey { get; }
+    }
 
     // What an indexer reported it can search with; structured parameters are only sent when advertised.
-    internal sealed record NewznabCapabilities(
-        DateTimeOffset RefreshedAt,
-        IReadOnlyDictionary<NewznabSearchMode, string[]> Modes,
-        int? MaximumLimit = null,
-        int[]? Categories = null,
-        string? ServerTitle = null,
-        string? Version = null)
+    internal sealed class NewznabCapabilities
     {
+        public NewznabCapabilities(DateTimeOffset refreshedAt, IReadOnlyDictionary<NewznabSearchMode, string[]> modes, int? maximumLimit = null, int[]? categories = null, string? serverTitle = null, string? version = null)
+        {
+            RefreshedAt = refreshedAt;
+            Modes = modes;
+            MaximumLimit = maximumLimit;
+            Categories = categories;
+            ServerTitle = serverTitle;
+            Version = version;
+        }
+
+        public DateTimeOffset RefreshedAt { get; }
+        public IReadOnlyDictionary<NewznabSearchMode, string[]> Modes { get; }
+        public int? MaximumLimit { get; }
+        public int[]? Categories { get; }
+        public string? ServerTitle { get; }
+        public string? Version { get; }
+
         public static NewznabCapabilities TextOnly(DateTimeOffset refreshedAt) => new(refreshedAt, new Dictionary<NewznabSearchMode, string[]> { [NewznabSearchMode.Search] = ["q"] });
 
         public bool Supports(NewznabSearchMode mode) => Modes.ContainsKey(mode);
@@ -36,10 +59,48 @@ namespace Jularr.Integrations.Data.Newznab
             || (category % 1000 == 0 ? Categories.Any(offered => offered / 1000 == category / 1000) : category < 100000 && Categories.Contains(category / 1000 * 1000));
     }
 
-    internal sealed record NewznabQuery(NewznabSearchMode Mode, string? Text, IReadOnlyList<KeyValuePair<string, string>> Parameters, IReadOnlyList<int> Categories, int Limit, int Offset = 0);
+    internal sealed class NewznabQuery
+    {
+        public NewznabQuery(NewznabSearchMode mode, string? text, IReadOnlyList<KeyValuePair<string, string>> parameters, IReadOnlyList<int> categories, int limit, int offset = 0)
+        {
+            Mode = mode;
+            Text = text;
+            Parameters = parameters;
+            Categories = categories;
+            Limit = limit;
+            Offset = offset;
+        }
+
+        public NewznabSearchMode Mode { get; }
+        public string? Text { get; }
+        public IReadOnlyList<KeyValuePair<string, string>> Parameters { get; }
+        public IReadOnlyList<int> Categories { get; }
+        public int Limit { get; }
+        public int Offset { get; }
+    }
 
     // One result item as the indexer delivered it; release parsing belongs to the caller.
-    internal sealed record NewznabItem(string Title, string? Guid, [property: JsonIgnore] Uri? DownloadUri, string? InfoUrl, long? SizeBytes, DateTimeOffset? PublishedAt);
+    internal sealed class NewznabItem
+    {
+        public NewznabItem(string title, string? guid, Uri? downloadUri, string? infoUrl, long? sizeBytes, DateTimeOffset? publishedAt)
+        {
+            Title = title;
+            Guid = guid;
+            DownloadUri = downloadUri;
+            InfoUrl = infoUrl;
+            SizeBytes = sizeBytes;
+            PublishedAt = publishedAt;
+        }
+
+        public string Title { get; }
+        public string? Guid { get; }
+
+        [JsonIgnore]
+        public Uri? DownloadUri { get; }
+        public string? InfoUrl { get; }
+        public long? SizeBytes { get; }
+        public DateTimeOffset? PublishedAt { get; }
+    }
 
     internal enum NewznabFailure : byte
     {

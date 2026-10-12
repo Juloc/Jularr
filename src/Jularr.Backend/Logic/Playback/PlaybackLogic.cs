@@ -6,8 +6,6 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Playback
 {
-    internal sealed record PlaybackConversion(PlaybackModeType PlaybackModeTypeId, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio);
-
     internal static class PlaybackLogic
     {
         public static bool CanPlayDirectly(string container, IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,

@@ -63,7 +63,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             foreach (var item in due)
             {
                 var target = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWantedTargetAsync(item.WantedItemId, ct), CancellationToken);
-                if (target.Definition is null || WantedAcquisition.GetKind(target.MediaTypeId) is null)
+                if (target.Definition is null || AcquisitionSelectionLogic.GetKind(target.MediaTypeId) is null)
                 {
                     await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1));
                     continue;
@@ -100,27 +100,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private async Task SearchSeriesAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, IReadOnlyList<AcquisitionConnectionData> clients, DateTime now)
         {
             var episodes = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEpisodeStatesAsync(target.WantedItemId, ct), CancellationToken);
-            var claimed = new HashSet<(int Season, int Episode)>();
-            bool IsOpen(EpisodeStateData episode) => episode.IsMissing && !claimed.Contains((episode.SeasonNumber, episode.EpisodeNumber));
-
-            // A fully aired season with nothing yet is searched as a pack, otherwise episode by episode.
             var grabbed = 0;
             var unavailable = false;
             string? outcome = null;
-            foreach (var seasonNumber in episodes.Where(IsOpen).Select(episode => episode.SeasonNumber).Distinct().Take(SeasonsPerPass).ToArray())
+            foreach (var seasonNumber in episodes.Where(episode => episode.IsMissing).Select(episode => episode.SeasonNumber).Distinct().Take(SeasonsPerPass).ToArray())
             {
                 for (var attempt = 0; attempt < GrabsPerSeason; attempt++)
                 {
-                    var season = episodes.Where(episode => episode.SeasonNumber == seasonNumber).ToArray();
-                    if (season.FirstOrDefault(IsOpen) is not { } next)
+                    if (AcquisitionSelectionLogic.ReadNextSeriesScope(episodes, seasonNumber, attempt == 0) is not { } scope)
                     {
                         break;
                     }
 
-                    var wholeSeason = attempt == 0 && season.All(IsOpen);
-                    var scope = EpisodeScope.For(episodes.Select(episode => IsOpen(episode) || !episode.IsMissing ? episode
-                        : new EpisodeStateData(episode.WorkUnitId, episode.SeasonNumber, episode.EpisodeNumber, episode.IsAired, episode.HasMedia, true)).ToArray(),
-                        seasonNumber, wholeSeason ? null : next.EpisodeNumber);
                     var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken, scope);
                     unavailable |= result.IndexersUnavailable;
                     if (result.Selection.Winner is not { } winner)
@@ -129,10 +120,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         break;
                     }
 
-                    var offer = result.Offers[winner.Candidate.Id];
                     try
                     {
-                        await _acquisition.GrabAsync(Context, target, offer, winner.Score?.QualityKey, clients, CancellationToken);
+                        await _acquisition.GrabAsync(Context, target, result.Offers[winner.Candidate.Id], winner.Score?.QualityKey, clients, CancellationToken);
                     }
                     catch (ServiceUnavailableException exception)
                     {
@@ -140,14 +130,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         return;
                     }
 
-                    // The grabbed release claims its episodes for the rest of this pass.
                     grabbed++;
-                    var parsed = winner.Candidate.Parsed;
-                    foreach (var episode in season.Where(episode => parsed is null || parsed.IsSeasonPack
-                        || episode.EpisodeNumber >= (parsed.EpisodeStart ?? next.EpisodeNumber) && episode.EpisodeNumber <= (parsed.EpisodeEnd ?? parsed.EpisodeStart ?? next.EpisodeNumber)))
-                    {
-                        claimed.Add((episode.SeasonNumber, episode.EpisodeNumber));
-                    }
+                    episodes = AcquisitionSelectionLogic.Claim(episodes, scope, winner.Candidate.Parsed);
                 }
             }
 
@@ -277,7 +261,21 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                foreach (var download in group)
+                // Queue progress is written in one batch.
+                var jobs = queue.Jobs.GroupBy(job => job.NzoId, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+                var progress = group.Where(download => download.ExternalId is not null && jobs.ContainsKey(download.ExternalId))
+                    .Select(download => new { download.OperationId, ProgressPercent = jobs[download.ExternalId!].Percentage is { } value ? (int?)Math.Clamp((int)Math.Round(value), 0, 99) : null })
+                    .ToArray();
+                if (progress.Length > 0)
+                {
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
+                        return true;
+                    }, CancellationToken);
+                }
+
+                foreach (var download in group.Where(download => download.ExternalId is null || !jobs.ContainsKey(download.ExternalId)))
                 {
                     if (download.ExternalId is null)
                     {
@@ -285,7 +283,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                     else
                     {
-                        await TrackAsync(download, connection, queue, history);
+                        await TrackAsync(download, connection, history);
                     }
                 }
             }
@@ -327,20 +325,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
         }
 
-        private async Task TrackAsync(DownloadData download, AcquisitionConnectionData connection, SabnzbdQueueSnapshot queue, SabnzbdHistorySnapshot history)
+        private async Task TrackAsync(DownloadData download, AcquisitionConnectionData connection, SabnzbdHistorySnapshot history)
         {
             var now = _time.GetUtcNow().UtcDateTime;
-            if (queue.Jobs.FirstOrDefault(job => job.NzoId == download.ExternalId) is { } queued)
-            {
-                var percent = queued.Percentage is { } value ? (int)Math.Clamp(Math.Round(value), 0, 99) : (int?)null;
-                await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                {
-                    await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(download.OperationId, percent), ct);
-                    return true;
-                }, CancellationToken);
-                return;
-            }
-
             var finished = history.Jobs.FirstOrDefault(job => job.NzoId == download.ExternalId);
             if (finished is null)
             {
@@ -472,6 +459,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         private static DateTime Truncate(DateTime value) => DateTime.UnixEpoch.AddTicks((value.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
 
-        private sealed record ImportedFile(string RelativePath, long SizeBytes, DateTime ModifiedAt);
+        private sealed class ImportedFile
+        {
+            public ImportedFile(string relativePath, long sizeBytes, DateTime modifiedAt)
+            {
+                RelativePath = relativePath;
+                SizeBytes = sizeBytes;
+                ModifiedAt = modifiedAt;
+            }
+
+            public string RelativePath { get; }
+            public long SizeBytes { get; }
+            public DateTime ModifiedAt { get; }
+        }
     }
 }

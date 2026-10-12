@@ -1,22 +1,18 @@
 using System.Globalization;
-
+using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Integrations.Data.Newznab;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
-    /// <summary>
-    /// The one query planner of Automatic and Manual Search. It turns a canonical <see cref="SearchIntent"/> into a deterministic,
-    /// staged ladder of queries for one indexer: the strongest structured evidence first, then titles and aliases with the media's own
-    /// numbering, then bounded fallbacks. A structured field is only planned when the indexer advertised it; otherwise the rung falls
-    /// back to its text form. Planning never decides whether a result is acceptable and never reads a profile rule.
-    /// </summary>
+    // The one query planner of Automatic and Manual Search.
     internal static class SearchPlanner
     {
         private static readonly (string Key, string Parameter)[] TvIds = [("tvdb", "tvdbid"), ("tmdb", "tmdbid"), ("imdb", "imdbid")];
         private static readonly (string Key, string Parameter)[] MovieIds = [("imdb", "imdbid"), ("tmdb", "tmdbid")];
         private static readonly KeyValuePair<string, string>[] NoParameters = [];
 
-        /// <summary>The queries one indexer is asked, ordered by tier then ladder position and cut to the depth's variant budget.</summary>
+        // The queries one indexer is asked, ordered by tier then ladder position and cut to the depth's variant budget.
         public static IReadOnlyList<PlannedQuery> Plan(SearchIntent intent, NewznabCapabilities? capabilities, SearchDepth depth)
         {
             ArgumentNullException.ThrowIfNull(intent);
@@ -61,7 +57,7 @@ namespace Jularr.Backend.Logic.Acquisition
             // expansion tier, so it only runs when the categorised queries found too little.
             if (rungs.FirstOrDefault(rung => rung.Mode == NewznabSearchMode.Search && rung.Text is not null) is { } first)
             {
-                rungs.Add(first with { Stage = "any-category", Tier = 1, Provenance = $"{first.Provenance} · any category", AnyCategory = true });
+                rungs.Add(new PlannedQuery("any-category", 1, first.Mode, first.Text, first.Parameters, $"{first.Provenance} · any category", true));
             }
 
             return [.. rungs
@@ -73,7 +69,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 .Take(budget.MaxQueryVariants)];
         }
 
-        /// <summary>The queries of a free-text search: each text as typed, in the order given, plus the category-less repeat of the first.</summary>
+        // The queries of a free-text search.
         public static IReadOnlyList<PlannedQuery> PlanText(IEnumerable<string> texts)
         {
             var rungs = new List<PlannedQuery>();
@@ -84,13 +80,13 @@ namespace Jularr.Backend.Logic.Acquisition
 
             if (rungs.Count > 0)
             {
-                rungs.Add(rungs[0] with { Stage = "any-category", Tier = 1, Provenance = "Search text · any category", AnyCategory = true });
+                rungs.Add(new PlannedQuery("any-category", 1, rungs[0].Mode, rungs[0].Text, rungs[0].Parameters, "Search text · any category", true));
             }
 
             return rungs.GroupBy(rung => rung.Key).Select(group => group.First()).ToArray();
         }
 
-        /// <summary>The strongest text query of a book: author and title without the subtitle, or just the title.</summary>
+        // The strongest text query of a book.
         public static string BookQuery(string title, string? author) =>
             string.IsNullOrWhiteSpace(author) ? MainTitle(title) : $"{author.Trim()} {MainTitle(title)}";
 
@@ -322,7 +318,7 @@ namespace Jularr.Backend.Logic.Acquisition
         private static List<string> Titles(SearchIntent intent) =>
             [.. new[] { intent.Title }.Concat(intent.Aliases ?? []).Select(Normalize).Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Take(10)];
 
-        /// <summary>The title before a subtitle separator (":", ";" or " - "), the form releases of books are usually named by.</summary>
+        // The title before a subtitle separator (":", ";" or " - "), the form releases of books are usually named by.
         public static string MainTitle(string title)
         {
             var cut = title.IndexOfAny([':', ';']);
