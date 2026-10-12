@@ -1,0 +1,7 @@
+.git
+.scratch
+**/bin
+**/obj
+**/node_modules
+**/.env
+src/Jularr.Frontend/Properties

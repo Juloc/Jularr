@@ -4,6 +4,12 @@ namespace Jularr.Backend.Data.Enums.Field
     {
         PlainText = 0,
         Email = 1,
-        Locale = 2
+        Locale = 2,
+        HostName = 3,
+        AbsolutePath = 4,
+        SingleLine = 5,
+        MacAddress = 6,
+        IPv4Address = 7,
+        RelativePath = 8
     }
 }

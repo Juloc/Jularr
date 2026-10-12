@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Profile;
 using Jularr.Backend.Data.Logic.Session;
@@ -62,7 +63,7 @@ namespace Jularr.Backend.Data.User.Profile.V1
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
         public long ProfileId { get; }
 
-        [System.Text.Json.Serialization.JsonIgnore]
+        [JsonIgnore]
         public SessionCredentialsData? Session { get; }
     }
 }

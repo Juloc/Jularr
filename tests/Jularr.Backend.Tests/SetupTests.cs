@@ -15,7 +15,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Razor_FirstOwner_ValidatesRollsBackAndSignsIn()
         {
-            await using var host = await Host.CreateAsync(razor: true);
+            await using var host = await Host.CreateAsync(razor: true, storage: true);
             await host.Fixture.RunSqlAsync("TRUNCATE \"Accounts\" RESTART IDENTITY CASCADE");
 
             // Fresh instances enter setup.
@@ -48,7 +48,9 @@ namespace Jularr.Backend.Tests
             // Owner, profile and session commit together.
             using var created = await host.SendAsync(HttpMethod.Post, "/Setup", Form(html, "owner-password-123", "owner-password-123"));
             Assert.AreEqual(HttpStatusCode.Redirect, created.StatusCode);
-            Assert.AreEqual("/Settings", created.Headers.Location!.OriginalString);
+            Assert.AreEqual("/Setup/Storage", created.Headers.Location!.OriginalString);
+            using var storage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
+            Assert.AreEqual(HttpStatusCode.OK, storage.StatusCode, await storage.Content.ReadAsStringAsync());
             using var settings = await host.SendAsync(HttpMethod.Get, "/Settings");
             Assert.AreEqual(HttpStatusCode.OK, settings.StatusCode);
             StringAssert.Contains(await settings.Content.ReadAsStringAsync(), "First Owner");

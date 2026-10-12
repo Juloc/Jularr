@@ -16,7 +16,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizePage("/Admin/Wanted/Wanted", ServiceApi.WantedReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Work/Work", ServiceApi.MediaReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.StorageReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.MediaReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Rules/Rules", ServiceApi.RulesReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Users/Users", ServiceApi.RulesReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Localization/Localization", ServiceApi.LocalizationReadPolicyName);
@@ -34,6 +34,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 
 builder.Services.AddJularrServices(builder.Configuration);
+builder.Services.AddJularrBackgroundWork();
 builder.Services.AddJularrLocalization(UiResources.English);
 builder.Services.AddScoped<UiText>();
 builder.Services.AddSingleton<ShellNavigation>();

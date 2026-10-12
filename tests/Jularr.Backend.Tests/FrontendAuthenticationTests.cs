@@ -80,7 +80,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {role} WHERE \"Id\" = 41");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
-            foreach (var path in new[] { "/Admin/Requests", "/Admin/Wanted", "/Admin/Works", "/Admin/Works/101" })
+            foreach (var path in new[] { "/Admin/Requests", "/Admin/Wanted", "/Admin/Works", "/Admin/Works/101", "/Admin/Library" })
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(mediaAllowed ? HttpStatusCode.OK : HttpStatusCode.Redirect, page.StatusCode, path);
@@ -92,7 +92,7 @@ namespace Jularr.Backend.Tests
                 }
             }
 
-            foreach (var path in new[] { "/Admin/Rules", "/Admin/Requests/Users", "/Admin/Library" })
+            foreach (var path in new[] { "/Admin/Rules", "/Admin/Requests/Users", "/Admin/Storage" })
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(configurationAllowed ? HttpStatusCode.OK : HttpStatusCode.Redirect, page.StatusCode, path);

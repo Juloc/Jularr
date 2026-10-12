@@ -39,12 +39,20 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 ## Contracts and persistence
 
+- [Storage services](../src/Jularr.Backend/Service/Admin/Storage/V1): bounded Owner configuration/catalog reads, protected connection saves and explicit external mount actions. [Storage data](../src/Jularr.Backend/Data/Admin/Storage/V1) contains versioned inputs/results.
+- [StorageMountLogic.cs](../src/Jularr.Backend/Logic/Storage/StorageMountLogic.cs) owns canonical configuration writes; [Storage.sql](../database/Storage.sql) is the fresh physical-connection baseline, separate from pending LibraryRoots.
+- [NasMountClient.cs](../src/Jularr.Integrations/Logic/Nas/NasMountClient.cs), [MountManager.cs](../src/Jularr.MountHelper/MountManager.cs): private socket integration and Linux mount execution; [WakeOnLanClient.cs](../src/Jularr.Integrations/Logic/Nas/WakeOnLanClient.cs) sends magic packets.
+- [Library root services](../src/Jularr.Backend/Service/Admin/Library/V1/LibraryRootServices.cs), [LibraryRootLogic.cs](../src/Jularr.Backend/Logic/Library/LibraryRootLogic.cs): Owner library paths per connection without overlaps; [Library.sql](../database/Library.sql) holds roots, inventory, tracks and Operations.
+- [Library file services](../src/Jularr.Backend/Service/Admin/Library/V1/LibraryFileServices.cs): inventory reads with path suggestions, manual identification, scan queue and operation list. [MediaAssetLogic.cs](../src/Jularr.Backend/Logic/Media/MediaAssetLogic.cs) owns Work/unit/edition/version/asset creation; [WorkUnitType.cs](../src/Jularr.Backend/Data/Enums/Media/WorkUnitType.cs) is the canonical unit rule per media type.
+- [OperationWorker.cs](../src/Jularr.Backend/Service/System/Operation/OperationWorker.cs), [System operation services](../src/Jularr.Backend/Service/System/Operation/V1/OperationServices.cs): hosted background scans through request-free System services; [StoredFileLogic.cs](../src/Jularr.Backend/Logic/Library/StoredFileLogic.cs) and [OperationLogic.cs](../src/Jularr.Backend/Logic/Operation/OperationLogic.cs) write inventory and operation state; [MediaPathParser.cs](../src/Jularr.Backend/Logic/Library/MediaPathParser.cs) suggests titles/units.
+- [StorageFileSystem.cs](../src/Jularr.Integrations/Logic/Storage/StorageFileSystem.cs), [MediaProbeClient.cs](../src/Jularr.Integrations/Logic/Media/MediaProbeClient.cs): bounded folder/file enumeration without links or traversal and `ffprobe` analysis. [Storage runtime](STORAGE_RUNTIME.md) owns deployment/limits; [schema alignment](SCHEMA_SNAPSHOT_ALIGNMENT.md) records snapshot coverage.
+
 - [User request services](../src/Jularr.Backend/Service/User/Request/V1/RequestServices.cs), [Admin request services](../src/Jularr.Backend/Service/Admin/Request/V1/RequestServices.cs), [Wanted services](../src/Jularr.Backend/Service/Admin/Wanted/V1/WantedServices.cs): profile-scoped language intent, bounded status queues, moderation and manual pause/resume.
 - [AcquisitionRequestLogic.cs](../src/Jularr.Backend/Logic/Acquisition/AcquisitionRequestLogic.cs), [WantedLogic.cs](../src/Jularr.Backend/Logic/Acquisition/WantedLogic.cs): idempotent creation, Open decisions and atomic shared whole-Work targets. [Acquisition.sql](../database/Acquisition.sql): explicit fresh baseline after Account/Media; no automatic acquisition or unit/edition target claim.
 
 - [WorkServices.cs](../src/Jularr.Backend/Service/Admin/Media/V1/WorkServices.cs), [Works.cs](../src/Jularr.Backend/Data/Admin/Media/V1/Works.cs): manual Work creation, paged catalog, detail and version-checked title edits for Owner/MediaManager.
 - [WorkLogic.cs](../src/Jularr.Backend/Logic/Media/WorkLogic.cs): shared canonical Work/title writer; preserves independent localized/provider title sources.
-- [MediaServices.cs](../src/Jularr.Backend/Service/User/Media/V1/MediaServices.cs), [Media.cs](../src/Jularr.Backend/Data/User/Media/V1/Media.cs): persisted Work detail and session-profile-scoped watchlist reads/updates. [WatchlistLogic.cs](../src/Jularr.Backend/Logic/Media/WatchlistLogic.cs) changes personal state only.
+- [MediaServices.cs](../src/Jularr.Backend/Service/User/Media/V1/MediaServices.cs), [Media.cs](../src/Jularr.Backend/Data/User/Media/V1/Media.cs): persisted Work detail, stored availability and session-profile-scoped watchlist reads/updates. [WatchlistLogic.cs](../src/Jularr.Backend/Logic/Media/WatchlistLogic.cs) changes personal state only.
 - [Media.sql](../database/Media.sql): fresh catalog/title/watchlist baseline after Account.sql; no active installation or migration. Module/profile media visibility, effective metadata locale and inventory/playback remain unintegrated.
 
 - [Profile.cs](../src/Jularr.Backend/Data/User/Profile/V1/Profile.cs): public Profile parameters, inputs and result.
@@ -85,12 +93,14 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 - Instance settings, Owner-only access, enabled locales, stale edits and real Razor forms: `InstanceSettingsTests.cs`.
 - Real module gating, data retention, All/Any/write locks, public branding/default locale and capability-driven Razor navigation: `InstanceCapabilitiesTests.cs`.
 - Request isolation/idempotence, bounded reads, moderation rollback/shared targets and real Razor forms/module gating: `RequestTests.cs`.
+- Storage configuration, protected credentials, Owner access, Setup/Admin forms, socket communication and command boundaries: `StorageTests.cs`.
+- Library paths, scans, missing/offline handling, identification, versions, restart recovery, local paths, wake, browsing, parser, probe parsing and Razor forms: `LibraryTests.cs`.
 - Real Razor forms, antiforgery, language settings, selection rotation, session revocation and logout: `FrontendAuthenticationTests.cs`; requires built Frontend assets.
 - `Infrastructure/TestPostgres.cs`: explicit isolated PostgreSQL fixture; never use the application database.
 
 ## Not integrated
 
-Remaining Setup steps, media inventory/monitoring, complete Requests/Wanted lifecycle and Arr pipeline, Storage/NAS, email verification, 2FA/WebAuthn completion,
+Remaining Setup steps, metadata providers, monitoring, complete Requests/Wanted lifecycle and Arr pipeline, import placement, NAS probes/reconnect/Synology, on-demand wake, email verification, 2FA/WebAuthn completion,
 PIN selection, old Android/TV consumers, full Profile management, per-media/profile visibility, further module capabilities and full custom branding.
 This reference backend does not complete Phase B or replace an active installation.
 

@@ -1,8 +1,9 @@
 # Instance setup: agreed flow
 
 Consolidated flow requested by the owner. The first-Owner form and its Public
-services are implemented; the remaining setup/readiness/configuration steps are
-not connected yet. Current code owners: [CODEMAP](CODEMAP.md). Keep one Frontend host,
+services, instance settings and the authenticated Storage connection page are
+implemented. Readiness, resumable navigation and final completion remain pending.
+Current code owners: [CODEMAP](CODEMAP.md). Keep one Frontend host,
 versioned Backend Data/Services, canonical Logic writers and shared transactions.
 
 ## Pages and canonical owners
@@ -17,7 +18,7 @@ later Admin settings; do not create a separate configuration system per page.
 | 1. Start & system | First-Owner form is connected. Remaining database/system/storage readiness checks are pending. | Public `ReadSetupV1`, `CreateOwnerV1`; Account Logic owns exactly-once account/profile/password creation and the shared Session writer signs in. | Existing Accounts, AccountPasswords, Profiles, AccountProfiles, UiLocales; implemented InstanceSetupState. |
 | 2. Setup type | New instance; later supported backup restore or migration. A source cannot be both restored and migrated. | Setup orchestration delegates to canonical Backup or Migration operations. | InstanceSetupState references the operation; proposed Operations/OperationLogs. No duplicated backup or migration data. |
 | 3. Instance & modules | Owner name/language and Library module editor implemented; region/timezone and further preferences remain pending. | Admin settings/module reads and updates; Instance Logic owns revision checks, locale validation and mutation locks. User `ReadInstanceCapabilitiesV1` is separate from configuration; Public presentation supplies name/language only. | Implemented InstanceSettings, InstanceModules and existing UiLocales. MediaTypes remains a separate catalog; per-media/profile preferences are pending. |
-| 4. Storage & roots | Configure SMB/NFS/Synology connections or permitted Docker Compose paths; choose mounts and logical roots, media types and storage roles; check access, space and conflicts. | Owner Storage read/update/test; Storage Logic owns allowed paths and Library Logic owns roots. Integrations owns NAS I/O. | Proposed StorageMounts and the agreed LibraryRoots; storage-role relations when their capabilities exist. |
+| 4. Storage & roots | SMB/NFS configuration and explicit mount operations are connected at /Setup/Storage and Admin. Synology, Compose path registration, logical roots, probes and roles remain pending. | The same Owner Storage read/create/update/execute Services serve Setup and Admin; Storage Logic owns configuration, Integrations and the Linux helper own mount I/O. | Implemented StorageMounts and protocol/version catalogs; LibraryRoots and storage-role relations remain pending. |
 | 5. Downloader / Usenet | Optional native Usenet settings or external client; TLS, credentials, connections, workspace/categories and path mapping; connection test. | Admin Downloader read/update/test; Downloader Logic owns configuration; Integrations performs external protocol calls. | Proposed UsenetServers / DownloadClients and their workspace/root references. No fake media module or Arr-specific copy of the library model. |
 | 6. Providers | Identity/login, metadata, search/indexers, subtitles, translation/reading as needed; required versus optional status and bounded tests. TMDB is required for Movie/TV unless a supported substitute covers the same capability. | Admin Provider read/update/test; Provider Logic owns saved configuration and capability requirements. Reuse existing Public auth/Plex services. | Existing Providers; proposed ProviderConnections with protected credentials. Extend the canonical owner, not setup-only Plex/TMDB settings. |
 | 7. AI | Optional endpoint, credentials, model discovery and Text/Vision/Image assignments. Arr-only setup needs no model download or runtime. | Admin AI read/update/test; AI Logic owns capability/model assignment; Integrations owns transport. | Proposed AiProviders, AiModels and AiModelAssignments, aligned with the agreed model registry before SQL implementation. |
@@ -30,7 +31,7 @@ later Admin settings; do not create a separate configuration system per page.
   installed fresh baseline; startup never creates or migrates a database. Login
   redirects fresh instances to `/Setup`. Owner creation commits account, profile,
   password, session and permanent bootstrap closure together. It currently opens
-  Profile settings afterward; this is not full wizard completion. Other configuration
+  the authenticated Storage connection page afterward; this is not full wizard completion. Other configuration
   steps and resumable progress remain pending.
 - `/Admin/Instance` edits the instance name and UiLocaleId through the same
   services intended for Setup. Its fresh baseline is installed explicitly after

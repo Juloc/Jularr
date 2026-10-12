@@ -13,7 +13,10 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Logic.Plex;
+using Jularr.Integrations.Logic.Media;
+using Jularr.Integrations.Logic.Nas;
 using Jularr.Backend.Service.Core.Localization;
+using Jularr.Backend.Service.System.Operation;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -54,6 +57,9 @@ namespace Jularr.Backend.Service.Core
 
             services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
             services.Configure<AuthenticationOptions>(configuration.GetSection("Authentication"));
+            services.Configure<StorageOptions>(configuration.GetSection("Storage"));
+            services.AddSingleton(new NasMountClient { SocketPath = configuration["Storage:MountHelperSocket"] });
+            services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
             return RegisterServices(services, [typeof(Service).Assembly]);
         }
 
@@ -73,6 +79,9 @@ namespace Jularr.Backend.Service.Core
 
             // Register shared infrastructure.
             services.TryAddSingleton(TimeProvider.System);
+            services.TryAddSingleton<NasMountClient>();
+            services.TryAddSingleton<MediaProbeClient>();
+            services.TryAddSingleton<WakeOnLanClient>();
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
             services.AddHttpContextAccessor();
@@ -182,6 +191,13 @@ namespace Jularr.Backend.Service.Core
                 });
             }
 
+            return services;
+        }
+
+        // Hosts opt in to background work explicitly.
+        public static IServiceCollection AddJularrBackgroundWork(this IServiceCollection services)
+        {
+            services.AddHostedService<OperationWorker>();
             return services;
         }
 

@@ -49,6 +49,11 @@ and commit together. No migration, active-database installation or extra server.
   bounded display-cache sizes and pending-write/recovery follow the image owner.
 - Synology management API and file access are distinct responsibilities in
   Integrations, not additional Backend projects or canonical media systems.
+- Owner decisions of 12 October 2026: the Owner sets per NAS connection whether
+  Wake-on-LAN is Owner-only or automatic when a profile opens media. Games use the
+  same unified Arr+ search, planner, download and import as every media type; only
+  presentation and genuine game specifics differ. Tables stay few: entities with the
+  same responsibility share one table (for example WorkUnits for all structure units).
 - Jularr is a standalone Arr system. Sonarr/Radarr/Prowlarr are optional one-time
   takeover sources only: preserve monitoring state, roots, naming and indexer
   settings where supported, preview unsupported mappings and require explicit
@@ -122,13 +127,17 @@ Requests are the implemented switches; no automatic Arr work is started. The
 remaining modules are not advertised as available. Tracking must be rebuilt from
 the desired progress/resume/history behavior, not copied from the buggy legacy
 implementation. Library's physical scanning/import integration still needs its
-focused technical contract before adapter or mount dependencies are added.
+focused import contract. Connections, library paths, background scans, inventory,
+manual identification and stored availability are implemented; see
+[Storage runtime](STORAGE_RUNTIME.md).
 
 1. Profile PIN recovery and profile creation limits when those operations are built.
 2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.
-3. NAS runtime/access support and complete mount/container configuration;
-   compare mount versus direct read/write/seek before selecting adapters.
-   New third-party/native dependencies require owner approval.
+3. NAS health/capacity probes and real-host SMB/NFS deployment verification. The
+   owner approved a separate Linux mount helper; `ffprobe` is used within the
+   requested FFmpeg scope. Further third-party/native dependencies require approval.
+4. Whether one library path may hold several media types, as the older storage spec
+   allows; the current contract fixes one media type per path.
 
 Role authorization, session revocation/rotation, Owner account directory/edit/approval
 and Owner catalog description/manual translation editing are implemented. Account
@@ -141,14 +150,14 @@ for native and external downloaders and the same Storage locations for imports/p
 Owner account/profile associations, account session revocation, provider registry
 enablement and language registry administration are now connected to real Razor
 pages. These reuse existing baseline entities. Provider connections/capabilities,
-NAS access/mount management and the complete media model are not implemented.
+Synology administration, metadata providers and import placement remain open.
 
 The first media slice now provides canonical Works/WorkTitles and profile-keyed
 WatchlistEntries. Admin Works/Work and User Details/Watchlist consume typed
 services; manual title edits protect revisions and retain other title sources.
 The Request Users page reads the existing account directory without duplicating
 account management. Media module/profile visibility, localized metadata policy,
-inventory, monitoring, Requests/Wanted, quotas, storage and playback remain open;
+inventory, monitoring, complete Requests/Wanted lifecycle, quotas, storage roles and playback remain open;
 these pages are not the completed media/Arr feature set.
 
 Dev reference owners: [Acquisition core](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Acquisition/Core/CODEMAP.md),

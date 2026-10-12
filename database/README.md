@@ -28,6 +28,13 @@ Unit/edition targets, rules/quotas, cancellation, search/queue/history and autom
 fulfilment remain pending. Tests explicitly install this embedded baseline only
 in their disposable Media fixture; the host never installs it.
 
+`Storage.sql` is an explicit fresh baseline for StorageMounts, its SMB/NFS/Local
+protocol/version catalogs and per-connection Wake-on-LAN settings. Owner Services protect credentials before persistence.
+Setup and Admin use the same configuration; mounting is an explicit Linux helper
+operation, not application-startup SQL. Tests install this baseline only in their
+disposable fixture. [Runtime](../docs/STORAGE_RUNTIME.md) and
+[original schema alignment](../docs/SCHEMA_SNAPSHOT_ALIGNMENT.md) describe its scope.
+
 The seven seeded media types follow the original table snapshot. Anime remains a
 Movie/Series classification, not another media type. A manually created Work has
 one neutral manual title source and a managed CanonicalTitle projection. Updates
@@ -35,8 +42,18 @@ check Version atomically and preserve other localized/provider title sources.
 Watchlist identity is the composite ProfileId/WorkId key; it never changes
 monitoring, acquisition, files or another profile's list.
 
-This catalog foundation does not yet install structure units, editions/versions,
-assets/files/tracks, metadata policy, image cache, monitoring or Requests/Wanted.
+Media.sql also installs the shared logical chain: WorkUnits (seasons, episodes,
+volumes, chapters and tracks in one table with a same-Work parent), WorkEditions,
+WorkVersions and MediaAssets. Composite foreign keys keep every level on one Work.
+A duplicate copy of the same unit becomes another version, never a second asset in
+the same version. Metadata policy, image cache and monitoring are not installed.
+
+`Library.sql` follows Media and Storage. LibraryRoots place logical libraries below
+one StorageMount without overlapping paths. StoredFiles are the root-relative
+inventory with probe facts (former MediaTechnicalAnalyses columns), MediaTracks hold
+probed streams, and Operations/OperationTypes/OperationStatusTypes are the shared
+background-operation owner, starting with library scans. Offline storage never
+deletes inventory; only complete scans mark assigned files missing.
 
 Included tables:
 

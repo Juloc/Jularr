@@ -280,8 +280,11 @@ namespace Jularr.Backend.Tests
             public IServiceProvider Services => _app.Services;
             public Dictionary<string, string> Cookies { get; } = new(StringComparer.Ordinal);
 
-            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false)
+            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false, bool storage = false, bool library = false, IReadOnlyDictionary<string, string>? settings = null)
             {
+                // Catalog baselines are installed together, as in a fresh installation.
+                library |= media || storage;
+                media = storage = library;
                 var fixture = await Fixture.CreateAsync();
                 using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!)
                 using (var reader = new StreamReader(schema))
@@ -298,6 +301,20 @@ namespace Jularr.Backend.Tests
                     using var acquisitionSchema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Acquisition.sql")!;
                     using var acquisitionReader = new StreamReader(acquisitionSchema);
                     await fixture.RunSqlAsync(await acquisitionReader.ReadToEndAsync());
+                }
+
+                if (storage)
+                {
+                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Storage.sql")!;
+                    using var reader = new StreamReader(schema);
+                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                }
+
+                if (library)
+                {
+                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Library.sql")!;
+                    using var reader = new StreamReader(schema);
+                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
                 }
 
                 var hasher = new PasswordHasher<AccountAuthenticationData>();
@@ -318,6 +335,11 @@ namespace Jularr.Backend.Tests
                 builder.WebHost.UseTestServer();
                 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
                 builder.Configuration["JULARR_DB"] = fixture.ConnectionString;
+                foreach (var (key, value) in settings ?? new Dictionary<string, string>())
+                {
+                    builder.Configuration[key] = value;
+                }
+
                 builder.Services.AddJularrServices(builder.Configuration);
                 if (razor)
                 {
@@ -329,7 +351,7 @@ namespace Jularr.Backend.Tests
                         options.Conventions.AuthorizePage("/Admin/Wanted/Wanted", ServiceApi.WantedReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Work/Work", ServiceApi.MediaReadPolicyName);
-                        options.Conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.StorageReadPolicyName);
+                        options.Conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.MediaReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Rules/Rules", ServiceApi.RulesReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Users/Users", ServiceApi.RulesReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Localization/Localization", ServiceApi.LocalizationReadPolicyName);

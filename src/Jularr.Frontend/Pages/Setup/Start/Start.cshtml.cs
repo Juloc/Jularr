@@ -65,7 +65,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
 
             // Continue authenticated configuration.
-            return RedirectToPage("/User/Settings/Settings");
+            return RedirectToPage("/Setup/Storage/Storage");
         }
 
         protected override async Task LoadDataAsync()

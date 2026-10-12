@@ -41,6 +41,77 @@ namespace Jularr.Backend.Service.User.Media.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/availability")]
+    public sealed class ReadWorkAvailabilityV1 : UserService<ReadWorkAvailabilityParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkAvailabilityV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadWorkAvailabilityParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadWorkAvailabilityParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override PageRequest GetPageRequest(ReadWorkAvailabilityParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Stored inventory only; storage is never contacted.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    asset."Id",
+                    asset."WorkVersionId",
+                    asset."MediaAssetTypeId",
+                    unit."WorkUnitTypeId",
+                    unit."Number" AS "UnitNumber",
+                    parent."Number" AS "ParentUnitNumber",
+                    files."FileCount",
+                    files."SizeBytes",
+                    files."DurationMs",
+                    files."IsAvailable",
+                    tracks."Height",
+                    tracks."AudioLanguages",
+                    tracks."SubtitleLanguages"
+                FROM
+                    "MediaAssets" AS asset
+                    LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+                    LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            count(*) AS "FileCount",
+                            sum(file."SizeBytes")::bigint AS "SizeBytes",
+                            max(file."DurationMs") AS "DurationMs",
+                            coalesce(bool_or(file."MissingSince" IS NULL) FILTER (WHERE file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'), FALSE) AS "IsAvailable"
+                        FROM
+                            "StoredFiles" AS file
+                        WHERE
+                            file."MediaAssetId" = asset."Id"
+                    ) AS files
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            max(track."Height") FILTER (WHERE track."MediaTrackTypeId" = 1) AS "Height",
+                            coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 2 AND track."Language" IS NOT NULL), '{}') AS "AudioLanguages",
+                            coalesce(array_agg(DISTINCT track."Language") FILTER (WHERE track."MediaTrackTypeId" = 3 AND track."Language" IS NOT NULL), '{}') AS "SubtitleLanguages"
+                        FROM
+                            "StoredFiles" AS file
+                            JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id"
+                        WHERE
+                            file."MediaAssetId" = asset."Id"
+                    ) AS tracks
+                WHERE
+                    asset."WorkId" = @WorkId
+                    AND files."FileCount" > 0
+                ORDER BY
+                    parent."Number" NULLS FIRST,
+                    unit."Number" NULLS FIRST,
+                    asset."WorkVersionId",
+                    asset."Id"
+                LIMIT @PageSize
+                OFFSET @Offset;
+                """;
+            sql.Parameters.Add(new WorkParametersV1(Parameters.WorkId));
+            sql.Page = Page;
+            return await Context.ReadSql.ReadPageAsync<WorkAvailabilityV1>(sql, CancellationToken);
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/watchlist")]
     public sealed class ReadWatchlistV1 : UserService<ReadWatchlistParametersV1>
     {

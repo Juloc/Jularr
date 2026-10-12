@@ -161,6 +161,7 @@ namespace Jularr.Frontend.Framework
             if (field.MaximumLength is { } length) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
             if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));
             if (field.Maximum is { } maximum) input.Attribute("max", maximum.ToString(CultureInfo.InvariantCulture));
+            if (field.Scale is { } scale) input.Attribute("step", (1m / (decimal)Math.Pow(10, scale)).ToString(CultureInfo.InvariantCulture));
             if (_error?.Field == field.Name)
             {
                 input.Attribute("aria-invalid", "true").Attribute("aria-describedby", _id + "-" + field.Name + "-error");

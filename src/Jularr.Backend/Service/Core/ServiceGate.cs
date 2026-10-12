@@ -74,6 +74,18 @@ namespace Jularr.Backend.Service.Core
                 return _caller;
             }
 
+            // Background work runs outside HTTP requests.
+            if (area == ServiceArea.System)
+            {
+                if (_accessor.HttpContext is not null)
+                {
+                    throw new UnauthorizedAccessException("System services are unavailable to requests.");
+                }
+
+                _caller = new ServiceCaller(null, null, area, "system");
+                return _caller;
+            }
+
             if (area is not (ServiceArea.User or ServiceArea.Admin))
             {
                 throw new UnauthorizedAccessException("This service area is unavailable.");
@@ -104,7 +116,7 @@ namespace Jularr.Backend.Service.Core
         {
             RequirePermission(caller, permission);
 
-            if (caller.Area == ServiceArea.Public)
+            if (caller.Area is ServiceArea.Public or ServiceArea.System)
             {
                 return;
             }
@@ -128,6 +140,11 @@ namespace Jularr.Backend.Service.Core
             }
 
             if (caller.Area == ServiceArea.Public && permission == ServicePermission.Public)
+            {
+                return;
+            }
+
+            if (caller.Area == ServiceArea.System && permission.Key.StartsWith("system.", StringComparison.Ordinal))
             {
                 return;
             }

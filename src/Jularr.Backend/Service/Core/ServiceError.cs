@@ -2,6 +2,7 @@ using System.Security;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Integrations.Data.Common;
+using Jularr.Integrations.Data.Nas;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using Npgsql;
@@ -35,6 +36,7 @@ namespace Jularr.Backend.Service.Core
             AntiforgeryValidationException => new(StatusCodes.Status400BadRequest, "invalid_antiforgery_token"),
             BadHttpRequestException request => new(request.StatusCode, "invalid_request"),
             ProviderUnavailableException => new(StatusCodes.Status503ServiceUnavailable, "provider_unavailable"),
+            NasMountException storage => new(storage.Code is "storage_busy" or "storage_configuration_changed" ? StatusCodes.Status409Conflict : StatusCodes.Status503ServiceUnavailable, storage.Code),
             PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } => new(StatusCodes.Status409Conflict, "concurrent_change"),
             ArgumentException => new(StatusCodes.Status400BadRequest, "invalid_request"),
             _ => new(StatusCodes.Status500InternalServerError, "internal_error")

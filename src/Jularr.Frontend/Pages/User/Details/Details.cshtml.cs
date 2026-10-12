@@ -1,5 +1,7 @@
 using System.Globalization;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Data.User.Media.V1;
@@ -13,9 +15,11 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.Details
 {
-    public sealed class DetailsModel(ReadWorkV1 read, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private WorkDetailsV1? _work;
+        private PageResult<WorkAvailabilityV1>? _availability;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
         private CreateRequestDataV1? _requestInput;
 
@@ -26,6 +30,7 @@ namespace Jularr.Frontend.Pages.User.Details
         {
             page.Title("details.title");
             page.Navigation("nav.home");
+            page.Asset("Pages/User/Details/Details.entry.scss");
 
             // Persisted media identity.
             if (_work is { } work)
@@ -52,8 +57,41 @@ namespace Jularr.Frontend.Pages.User.Details
                     }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Request", csrf,
                         _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : Error));
                 }
+
+                // Stored inventory, no storage access.
+                if (_availability is { Items.Count: > 0 } availability)
+                {
+                    page.Content.Add(new UiSection("details.availability", [new Table<WorkAvailabilityV1>(availability.Items)
+                        .Content("details.unit", Unit)
+                        .Resource(item => item.MediaAssetTypeId, "table.type", type => "media.asset." + type)
+                        .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
+                        .Content("details.audio", item => new ValueText(string.Join(", ", item.AudioLanguages)))
+                        .Content("details.subtitles", item => new ValueText(string.Join(", ", item.SubtitleLanguages)))
+                        .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? TimeSpan.FromMilliseconds(duration).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : ""))
+                        .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))]));
+                    if (availability.Items.Count == availability.PageSize) page.Content.Add(new P(new Text("details.availabilityMore")));
+                }
             }
             else if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+        }
+
+        private static IUiComponent Unit(WorkAvailabilityV1 item)
+        {
+            if (item.WorkUnitTypeId is not { } unit)
+            {
+                return new Text("details.wholeWork");
+            }
+
+            var parts = new List<IUiComponent>();
+            if (item.ParentUnitNumber is { } parent)
+            {
+                parts.Add(new Text(unit == WorkUnitType.Episode ? "library.unit.Season" : "library.unit.Volume"));
+                parts.Add(new ValueText(" " + parent.ToString("0.###", CultureInfo.InvariantCulture) + " · "));
+            }
+
+            parts.Add(new Text("library.unit." + unit));
+            parts.Add(new ValueText(" " + item.UnitNumber?.ToString("0.###", CultureInfo.InvariantCulture)));
+            return new Span([.. parts]);
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -72,6 +110,7 @@ namespace Jularr.Frontend.Pages.User.Details
         protected override async Task LoadDataAsync()
         {
             _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+            _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, pageSize: PageRequest.MaximumPageSize), HttpContext.RequestAborted);
             if (texts.Capabilities?.CanRequest is true)
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);

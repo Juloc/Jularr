@@ -56,7 +56,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
                 "admin-wanted" => ActivatorUtilities.CreateInstance<WantedModel>(HttpContext.RequestServices),
                 "admin-works" => ActivatorUtilities.CreateInstance<WorksModel>(HttpContext.RequestServices),
                 "admin-work" => ActivatorUtilities.CreateInstance<WorkModel>(HttpContext.RequestServices),
-                "admin-library" => new LibraryModel(),
+                "admin-library" => ActivatorUtilities.CreateInstance<LibraryModel>(HttpContext.RequestServices),
                 _ => null
             };
 

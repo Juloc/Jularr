@@ -30,6 +30,7 @@ namespace Jularr.Frontend.Framework
         private static readonly ConcurrentDictionary<PropertyInfo, (DataFieldAttribute Field, Func<BaseData, object?> Read)> Properties = new();
 
         public int? MinimumLength { get; init; }
+        public int? Scale { get; init; }
         internal Func<BaseData, object?> ReadValue { get; init; } = _ => throw new InvalidOperationException("Field access requires property metadata.");
 
         public static BaseField From<TData, TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string? labelKey = null)
@@ -58,8 +59,13 @@ namespace Jularr.Frontend.Framework
                 return (metadata, getter);
             });
             var field = cached.Field;
-            var minimum = field.Field is LongField number ? number.Minimum : (long?)null;
-            var maximum = field.Field is LongField limit ? limit.Maximum : (long?)null;
+            var (minimum, maximum) = field.Field switch
+            {
+                LongField number => (number.Minimum, number.Maximum),
+                IntField number => (number.Minimum, number.Maximum),
+                DecimalField number => ((long)decimal.Ceiling(number.Minimum), (long)decimal.Floor(number.Maximum)),
+                _ => ((long?)null, (long?)null)
+            };
 
             return new BaseField(
                 property.Name,
@@ -72,7 +78,8 @@ namespace Jularr.Frontend.Framework
                 labelKey ?? $"field.{typeof(TData).Name}.{property.Name}")
             {
                 ReadValue = cached.Read,
-                MinimumLength = field.Field is StringField text && text.MinimumLength > 0 ? text.MinimumLength : null
+                MinimumLength = field.Field is StringField text && text.MinimumLength > 0 ? text.MinimumLength : null,
+                Scale = field.Field is DecimalField fraction ? fraction.Scale : null
             };
         }
     }

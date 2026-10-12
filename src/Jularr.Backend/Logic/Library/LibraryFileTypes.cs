@@ -1,0 +1,43 @@
+using System.Collections.Frozen;
+using Jularr.Backend.Data.Enums.Media;
+
+namespace Jularr.Backend.Logic.Library
+{
+    internal static class LibraryFileTypes
+    {
+        private static readonly FrozenSet<string> Video = FrozenSet.Create(".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".m2ts", ".webm", ".mpg", ".mpeg");
+        private static readonly FrozenSet<string> Audio = FrozenSet.Create(".mp3", ".flac", ".m4a", ".m4b", ".ogg", ".opus", ".aac", ".wav", ".wv");
+        private static readonly FrozenSet<string> Ebook = FrozenSet.Create(".epub", ".pdf", ".mobi", ".azw3");
+        private static readonly FrozenSet<string> Comic = FrozenSet.Create(".cbz", ".cbr", ".cb7");
+        private static readonly FrozenSet<string> Subtitle = FrozenSet.Create(".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx", ".sup");
+        private static readonly FrozenSet<string> Game = FrozenSet.Create(".iso", ".chd", ".cue", ".zip", ".7z", ".rar", ".nsp", ".xci", ".nds", ".3ds", ".gba", ".gb", ".gbc",
+            ".nes", ".sfc", ".smc", ".n64", ".z64", ".gcm", ".rvz", ".wbfs");
+
+        private static readonly FrozenDictionary<MediaType, FrozenSet<string>> ScanExtensions = new Dictionary<MediaType, FrozenSet<string>>
+        {
+            [MediaType.Movie] = Video.Union(Subtitle).ToFrozenSet(),
+            [MediaType.Series] = Video.Union(Subtitle).ToFrozenSet(),
+            [MediaType.Book] = Ebook.Union(Audio).ToFrozenSet(),
+            [MediaType.Manga] = Comic.Union(Ebook).ToFrozenSet(),
+            [MediaType.LightNovel] = Ebook,
+            [MediaType.Music] = Audio,
+            [MediaType.Game] = Game
+        }.ToFrozenDictionary();
+
+        public static IReadOnlySet<string> GetScanExtensions(MediaType mediaType) => ScanExtensions[mediaType];
+
+        public static bool IsSubtitle(string relativePath) => Subtitle.Contains(Path.GetExtension(relativePath).ToLowerInvariant());
+
+        public static bool IsProbeable(string relativePath) => GetAssetType(relativePath) is MediaAssetType.Video or MediaAssetType.Audio;
+
+        public static MediaAssetType? GetAssetType(string relativePath)
+        {
+            var extension = Path.GetExtension(relativePath).ToLowerInvariant();
+            if (Video.Contains(extension)) return MediaAssetType.Video;
+            if (Audio.Contains(extension)) return MediaAssetType.Audio;
+            if (Comic.Contains(extension)) return MediaAssetType.Comic;
+            if (Ebook.Contains(extension)) return MediaAssetType.Ebook;
+            return Game.Contains(extension) ? MediaAssetType.Game : null;
+        }
+    }
+}

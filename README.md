@@ -136,6 +136,21 @@ Eine frische Installation benötigt dafür [Acquisition.sql](database/Acquisitio
 nach Account und Media. Regeln/Quoten, einzelne Episoden/Editionen, Stornierung,
 automatische Suche, Downloads und Import sind noch nicht verbunden.
 
+Owner konfigurieren SMB/NFS unter `/Admin/Storage` und `/Setup/Storage` über
+dieselben Services. Passwörter werden geschützt gespeichert; normale Seiten
+kontaktieren das NAS nicht. Verbinden, Trennen und Mountstatus sind ausdrückliche
+Aktionen über den separaten Linux-Mount-Helfer. Lokale Compose-Pfade sind nur aus
+`Storage:LocalPaths` wählbar; Wake-on-LAN ist pro Verbindung als „nur Owner“ oder
+„automatisch bei Abruf“ einstellbar. Library-Pfade liegen auf derselben Seite unter
+der Verbindung und werden über einen sicheren Ordner-Browser gewählt. Scans laufen
+im Hintergrund-Worker, `/Admin/Library` zeigt Inventar, Zuordnung und Scans, die
+Detailseite die gespeicherte Verfügbarkeit. Dafür sind die frischen
+[Storage-](database/Storage.sql) und [Library-Baselines](database/Library.sql)
+erforderlich; `Media:FfprobePath` aktiviert die Stream-Analyse. Deployment, Rechte und
+offene Integration stehen in [Storage Runtime](docs/STORAGE_RUNTIME.md).
+Den tatsächlichen Umfang gegenüber dem Originalmodell zeigt der
+[Schema-Abgleich](docs/SCHEMA_SNAPSHOT_ALIGNMENT.md).
+
 Medienmodule/Profilsichtbarkeit, Metadatensprachregeln, Dateien/Cover, Monitoring,
 Arr und Player sind damit noch nicht fertig. Bestehende Datenbanken werden nicht
 automatisch erweitert; die lokale Vorschau bleibt separat.
@@ -293,15 +308,17 @@ Setup-Markierung verhindert weitere öffentliche Owner-Erstellungen, auch bei pa
 Anfragen. Passwortregeln und Bestätigung kommen aus dem Backend-Datenvertrag.
 Voraussetzung bleiben die explizite Datenbankkonfiguration und die installierte
 frische Baseline; der Host installiert kein Schema. Nach diesem ersten Schritt öffnet
-sich vorerst Profile Settings, die weiteren Wizard-Schritte sind noch nicht verbunden.
+sich die Storage-Verbindungsseite. Weitere Wizard-Schritte und die abschließende
+Setup-Freigabe sind noch nicht verbunden.
 
 Noch offen: weitere Setup-Konfiguration und Systemprüfungen, fachliche Medien-Admin-Operationen,
 E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf,
 Profile-Auswahl mit PIN, vollständige Profile-Verwaltung und alte Android-/TV-Verbraucher. Accounts mit bestätigter
 2FA werden derzeit ohne Anmeldung abgelehnt, nicht am zweiten Faktor vorbeigeführt.
 Plex wurde mit kontrollierten Provider-Antworten getestet, noch nicht gegen eine echte Installation.
-Home/Details/Watchlist/Player und fachliche Admin-Seiten bleiben Layouts ohne erfundene
-Medien- oder Prozessdaten. Ihre offenen Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
+Details/Watchlist, manuelle Medienverwaltung und Requests/Wanted verwenden echte
+Services. Home/Player und automatische Arr-Abläufe bleiben offen.
+Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
 

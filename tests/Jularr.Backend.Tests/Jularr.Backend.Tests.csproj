@@ -13,5 +13,6 @@
     <PackageReference Include="MSTest.TestFramework" Version="4.4.1" />
     <ProjectReference Include="../../src/Jularr.Backend/Jularr.Backend.csproj" />
     <ProjectReference Include="../../src/Jularr.Frontend/Jularr.Frontend.csproj" />
+    <ProjectReference Include="../../src/Jularr.MountHelper/Jularr.MountHelper.csproj" />
   </ItemGroup>
 </Project>

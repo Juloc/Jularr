@@ -1,8 +1,11 @@
 using System.Buffers;
 using System.Collections.Frozen;
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Net.Mail;
 using System.Text;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Field;
 using NpgsqlTypes;
@@ -88,8 +91,50 @@ namespace Jularr.Backend.Data.Fields
         }
     }
 
+    public sealed class IntField : DataField
+    {
+        public IntField() : base(typeof(int), NpgsqlDbType.Integer)
+        {
+        }
+
+        public int Minimum { get; init; } = int.MinValue;
+        public int Maximum { get; init; } = int.MaxValue;
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+            var number = (int)value;
+
+            if (number < Minimum || number > Maximum)
+            {
+                throw new DataValidationException(name, "out_of_range");
+            }
+        }
+    }
+
+    public sealed class DecimalField : DataField
+    {
+        public DecimalField() : base(typeof(decimal), NpgsqlDbType.Numeric)
+        {
+        }
+
+        public decimal Minimum { get; init; } = decimal.MinValue;
+        public decimal Maximum { get; init; } = decimal.MaxValue;
+        public int Scale { get; init; } = 28;
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+            var number = (decimal)value;
+
+            if (number < Minimum || number > Maximum || decimal.Round(number, Scale) != number)
+            {
+                throw new DataValidationException(name, "out_of_range");
+            }
+        }
+    }
+
     public sealed class StringField : DataField
     {
+        private static readonly Regex MacAddressPattern = new("^([0-9A-F]{2}:){5}[0-9A-F]{2}$", RegexOptions.CultureInvariant);
         private static readonly FrozenDictionary<string, string> LocaleNames = CultureInfo.GetCultures(CultureTypes.AllCultures)
             .Where(culture => culture.Name.Length > 0).GroupBy(culture => culture.Name, StringComparer.OrdinalIgnoreCase)
             .ToFrozenDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
@@ -157,6 +202,42 @@ namespace Jularr.Backend.Data.Fields
             if (Format == StringFormat.Locale && !LocaleNames.ContainsKey(text))
             {
                 throw new DataValidationException(name, "invalid_locale");
+            }
+
+            // Restrict protocol input.
+            if (Format == StringFormat.HostName && Uri.CheckHostName(text) is not (UriHostNameType.Dns or UriHostNameType.IPv4))
+            {
+                throw new DataValidationException(name, "invalid_host");
+            }
+
+            if (Format == StringFormat.AbsolutePath && (!text.StartsWith('/') || text.StartsWith("//")
+                || text.Any(character => char.IsControl(character) || character is '\\' or ',')
+                || text.Split('/').Any(segment => segment is "." or "..")))
+            {
+                throw new DataValidationException(name, "invalid_path");
+            }
+
+            if (Format == StringFormat.SingleLine && text.Any(char.IsControl))
+            {
+                throw new DataValidationException(name, "invalid_text");
+            }
+
+            if (Format == StringFormat.MacAddress && !MacAddressPattern.IsMatch(text))
+            {
+                throw new DataValidationException(name, "invalid_mac_address");
+            }
+
+            if (Format == StringFormat.IPv4Address && (!IPAddress.TryParse(text, out var ipAddress) || ipAddress.AddressFamily != AddressFamily.InterNetwork || ipAddress.ToString() != text))
+            {
+                throw new DataValidationException(name, "invalid_host");
+            }
+
+            // Relative paths stay below their root.
+            if (Format == StringFormat.RelativePath && text.Length > 0 && (text.StartsWith('/') || text.EndsWith('/')
+                || text.Any(character => char.IsControl(character) || character == '\\')
+                || text.Split('/').Any(segment => segment is "" or "." or "..")))
+            {
+                throw new DataValidationException(name, "invalid_path");
             }
 
             if (maximumLength is { } limit && length > limit)

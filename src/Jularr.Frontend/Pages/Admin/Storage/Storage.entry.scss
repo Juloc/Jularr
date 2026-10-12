@@ -1,0 +1,23 @@
+@use "../../../Framework/Components/Form";
+@use "../../../Framework/Components/Split";
+@use "../../../Framework/Components/Table";
+
+.storage {
+    &__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-block: 12px;
+    }
+
+    &__trail {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+
+        a + a::before {
+            content: "/";
+            margin-inline-end: 4px;
+        }
+    }
+}

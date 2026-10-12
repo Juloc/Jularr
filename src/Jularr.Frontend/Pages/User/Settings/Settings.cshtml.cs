@@ -69,6 +69,12 @@ namespace Jularr.Frontend.Pages.User.Settings
             ]));
 
             // Expose granted administration routes.
+            if (_authentication?.Permissions.Contains("storage.read", StringComparer.Ordinal) is true)
+            {
+                page.Content.Add(new A(new Text("storage.title")).Attribute("href", "/Admin/Storage"));
+                page.Content.Add(new A(new Text("setup.storage.title")).Attribute("href", "/Setup/Storage"));
+            }
+
             if (_authentication?.Permissions.Contains("instance.settings.read", StringComparer.Ordinal) is true)
             {
                 page.Content.Add(new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance"));

@@ -117,12 +117,9 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(bool razor = false)
         {
-            var host = await Host.CreateAsync(razor: razor);
+            var host = await Host.CreateAsync(razor: razor, media: true);
             try
             {
-                using var schema = typeof(ReadWorksV1).Assembly.GetManifestResourceStream("Jularr.Database.Media.sql")!;
-                using var reader = new StreamReader(schema);
-                await host.Fixture.RunSqlAsync(await reader.ReadToEndAsync());
                 using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
                 using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
                 Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);

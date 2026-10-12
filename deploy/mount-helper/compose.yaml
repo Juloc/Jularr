@@ -1,0 +1,39 @@
+# Overlay the deployment's existing jularr web service.
+services:
+  jularr:
+    user: "1000:1000"
+    environment:
+      Storage__MountHelperSocket: /run/jularr-mount-helper/control.sock
+    volumes:
+      - type: bind
+        source: /mnt/jularr
+        target: /mnt/jularr
+        bind:
+          propagation: rslave
+      - type: volume
+        source: mount-helper-socket
+        target: /run/jularr-mount-helper
+        read_only: true
+
+  mount-helper:
+    build:
+      context: ../..
+      dockerfile: deploy/mount-helper/Dockerfile
+    restart: unless-stopped
+    cap_drop: [ALL]
+    cap_add: [SYS_ADMIN]
+    security_opt: [apparmor=unconfined, no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+    volumes:
+      - type: bind
+        source: /mnt/jularr
+        target: /mnt/jularr
+        bind:
+          propagation: rshared
+      - mount-helper-socket:/run/jularr-mount-helper
+      - mount-helper-state:/var/lib/jularr-mount-helper
+
+volumes:
+  mount-helper-socket:
+  mount-helper-state:
