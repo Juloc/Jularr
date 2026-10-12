@@ -10,6 +10,7 @@ Included tables:
 - AccountPasswords, AccountPasskeys, AccountTotpFactors and AccountRecoveryCodes.
 - Providers, AccountExternalLogins and AccountExternalAuthFlows.
 - AccountSessions, AccountAuthChallenges and AuthChallengePurposeTypes.
+- InstanceSetupState records first-Owner creation permanently; it is not a second account registry.
 
 The original CLEAN_CUT_DATABASE snapshot supplied by the owner defines the scope;
 the existing Phase-B core and auth-lifecycle drafts supply the exact column and
@@ -17,6 +18,13 @@ constraint definitions. Latest owner decisions take precedence: Account/Profile/
 Passkey entity IDs remain bigint, without an extra public UUID. Session/challenge
 public identifiers remain UUIDs; their secrets are represented only by hashes.
 WebAuthn Aaguid is protocol metadata, not an entity or session identifier.
+
+Public Setup creates the first enabled Owner directly, without an installation
+code, only while bootstrap is open and Accounts is empty. The shared Account
+writer creates its owned Profile and password; Session Logic signs in within the
+same transaction. InstanceSetupState is locked and closed permanently on success.
+Failed validation, profile creation or session creation rolls everything back.
+This is first-Owner creation, not completion of all setup configuration.
 
 Every column has a canonical field in Data/Fields, grouped by Account, Profile,
 Provider or Localization. Enums live separately in Data/Enums by owner.

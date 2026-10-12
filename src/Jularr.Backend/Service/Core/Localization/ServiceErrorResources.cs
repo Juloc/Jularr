@@ -24,6 +24,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.invalid_uuid", "The identifier is invalid."),
             new("errors.validation.invalid_text", "The text contains invalid characters."),
             new("errors.validation.too_short", "The value is too short."),
+            new("errors.validation.password_mismatch", "The passwords do not match."),
             new("errors.validation.too_long", "The value is too long."),
             new("errors.validation.invalid_email", "Please enter a valid email address."),
             new("errors.validation.invalid_locale", "Please enter a language code supported by this server."),

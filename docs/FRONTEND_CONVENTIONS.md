@@ -166,7 +166,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 
 - Pages are grouped by area and page: `Pages/<Area>/<Page>/`. Keep the
   `.cshtml` entry, `.cshtml.cs` PageModel and any owned assets together.
-  Current areas are `Account`, `Admin`, `User` and `Development`; shared
+  Current areas are `Account`, `Admin`, `User`, `Setup` and `Development`; shared
   Razor bridges stay in `Pages/Shared`. Namespaces follow the folder path.
   Declare public URLs explicitly in `@page`; Razor page identities used by
   `Url.Page`, redirects and authorization conventions follow the physical path.

@@ -1,0 +1,81 @@
+using System.Globalization;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.Public.Localization.V1;
+using Jularr.Backend.Data.Public.Setup.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.Public.Localization.V1;
+using Jularr.Backend.Service.Public.Setup.V1;
+using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+
+namespace Jularr.Frontend.Pages.Setup.Start
+{
+    [AllowAnonymous]
+    [EnableRateLimiting("public")]
+    public sealed class StartModel(ReadSetupV1 setup, CreateOwnerV1 createOwner, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery) : JularrPage
+    {
+        private bool _requiresOwner;
+        private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
+        private CreateOwnerDataV1? _input;
+
+        protected override void Define(Page page)
+        {
+            page.Title("setup.start.title");
+            page.Asset("Pages/Setup/Start/Start.entry.scss");
+
+            // Render only available setup.
+            if (!_requiresOwner)
+            {
+                if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+                page.Content.Add(new P(new Text("setup.owner.closed")));
+                page.Content.Add(new A(new Text("account.login.submit")).Attribute("href", "/Account/Login"));
+                return;
+            }
+
+            var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
+            page.Content.Add(new UiSection("setup.owner.title", [new Form<CreateOwnerDataV1>(form =>
+            {
+                form.Text(item => item.Email, "account.field.email", "username");
+                form.Text(item => item.DisplayName, "admin.accounts.name", "nickname");
+                form.Password(item => item.Password, "account.field.password", "new-password");
+                form.Password(item => item.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password");
+                form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
+                form.Submit("setup.owner.create");
+            }, Url.Page("/Setup/Start/Start"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, Error)]));
+        }
+
+        public async Task<IActionResult> OnGetAsync()
+        {
+            await LoadDataAsync();
+            if (!_requiresOwner) return RedirectToPage("/Account/Login/Login");
+
+            PreparePage();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostAsync(string? email, string? displayName, string? password, string? passwordConfirmation, long uiLocaleId)
+        {
+            // Invoke the canonical bootstrap service.
+            _input = new CreateOwnerDataV1(email ?? "", displayName ?? "", password ?? "", passwordConfirmation ?? "", uiLocaleId);
+            var result = await createOwner.ExecuteAsync<LoginResultV1>(_input, HttpContext.RequestAborted);
+            await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
+
+            // Continue authenticated configuration.
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
+        protected override async Task LoadDataAsync()
+        {
+            var token = HttpContext.RequestAborted;
+            _requiresOwner = (await setup.ExecuteAsync<ReadSetupResultV1>(cancellationToken: token)).RequiresOwner;
+            if (_requiresOwner)
+            {
+                _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
+            }
+        }
+    }
+}

@@ -23,7 +23,7 @@ Shared conventions and Backend ownership:
 
 - [Page.cs](Framework/Page.cs): `JularrPage`, `PreparedPage`,
   `Page`, page definitions and shared service-error feedback.
-  Connected pages reuse `LoadDataAsync` for error redisplay instead of list reads before successful mutations.
+  Connected pages reuse `LoadDataAsync` for failed POST binding/service redisplay instead of list reads before successful mutations.
 - [UiComponent.cs](Framework/UiComponent.cs): component-to-Razor HTML boundary,
   interface and encoder wiring, **no type switch**.
 - [Elements.cs](Framework/Elements.cs): minimal encoded C# HTML DSL;
@@ -73,6 +73,7 @@ Shared conventions and Backend ownership:
 - [Profiles](Pages/Account/Profiles/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions/Sessions.cshtml.cs),
   [Logout](Pages/Account/Logout/Logout.cshtml.cs): typed service-driven account session flows.
 - [AccessDenied](Pages/Account/AccessDenied/AccessDenied.cshtml.cs): sanitized catalog-backed 403 page for denied Razor routes.
+- [Setup start](Pages/Setup/Start/Start.cshtml.cs): first Owner through Public services, field-driven form and shared authentication effects. Remaining wizard steps are not connected.
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): Owner directory/editor, profile assignments and session revocation; separate from request-limit Users.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): real provider registry enablement via Owner services.
 - [Languages](Pages/Admin/Languages/Languages.cshtml.cs): supported locale creation, names/direction/enablement and versioned edits via Owner services.

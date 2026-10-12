@@ -8,6 +8,11 @@ public static class UiResources
 {
     public static IReadOnlyList<UiTextResource> English { get; } =
     [
+        new("setup.start.title", "Start and system"),
+        new("setup.owner.title", "Create the first Owner"),
+        new("setup.owner.passwordConfirmation", "Confirm password"),
+        new("setup.owner.create", "Create Owner"),
+        new("setup.owner.closed", "Initial Owner creation is no longer available."),
         new("account.field.email", "Email"),
         new("account.field.password", "Password"),
         new("account.field.userName", "Username or email"),

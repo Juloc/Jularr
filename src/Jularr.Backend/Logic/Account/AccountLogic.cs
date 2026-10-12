@@ -1,8 +1,10 @@
 using System.Security;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Session;
+using Jularr.Backend.Data.Logic.Setup;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Profile;
 using Microsoft.AspNetCore.Identity;
@@ -180,7 +182,71 @@ namespace Jularr.Backend.Logic.Account
                 throw new SecurityException("Owner setup is required before registration.");
             }
 
+            return await context.InsertAccountAsync(data, uiLocaleId, cancellationToken);
+        }
+
+        public static async Task<AccountAuthenticationData> CreateFirstOwnerAsync(this LogicContext context, string email, string displayName,
+            string password, long uiLocaleId, CancellationToken cancellationToken)
+        {
+            // Serialize first-run account creation.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    setup."Id",
+                    setup."OwnerCreatedAt"
+                FROM
+                    "InstanceSetupState" AS setup
+                WHERE
+                    setup."Id" = 1
+                FOR UPDATE OF
+                    setup;
+                """;
+            var setup = await context.ReadRequiredAsync<InstanceSetupStateData>(sql, cancellationToken);
+
             sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM "Accounts"
+                );
+                """;
+            if (setup.OwnerCreatedAt is not null || (bool)(await context.ReadSql.ExecuteScalarAsync(sql, cancellationToken))!)
+            {
+                throw new SecurityException("Initial Owner creation is closed.");
+            }
+
+            // Reuse canonical account/profile writes.
+            var data = new AccountCreationData(email, displayName, true, null, AccountRoleType.Owner);
+            var id = await context.InsertAccountAsync(data, uiLocaleId, cancellationToken)
+                ?? throw new SecurityException("Initial Owner creation is unavailable.");
+            var account = new AccountAuthenticationData(id, 1, null, true, false);
+            await context.WritePasswordAsync(new AccountPasswordData(id, PasswordHasher.HashPassword(account, password)), cancellationToken);
+
+            // Close bootstrap permanently on commit.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "InstanceSetupState"
+                SET
+                    "OwnerCreatedAt" = statement_timestamp()
+                WHERE
+                    "Id" = 1
+                    AND "OwnerCreatedAt" IS NULL;
+                """;
+            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            {
+                throw new SecurityException("Initial Owner creation is closed.");
+            }
+
+            return account;
+        }
+
+        private static async Task<long?> InsertAccountAsync(this LogicContext context, AccountCreationData data, long uiLocaleId, CancellationToken cancellationToken)
+        {
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO

@@ -16,10 +16,7 @@ namespace Jularr.Frontend.Framework
             // Reject failed HTTP binding.
             if (!context.ModelState.IsValid)
             {
-                Error = ServiceError.FromException(new BadHttpRequestException("Request values could not be bound."));
-                Response.StatusCode = Error.StatusCode;
-                PreparePage();
-                context.Result = Page();
+                context.Result = await PrepareFailureAsync(ServiceError.FromException(new BadHttpRequestException("Request values could not be bound.")));
                 return;
             }
 
@@ -35,6 +32,12 @@ namespace Jularr.Frontend.Framework
                 return;
             }
 
+            executed.Result = await PrepareFailureAsync(error);
+            executed.ExceptionHandled = true;
+        }
+
+        private async Task<IActionResult> PrepareFailureAsync(ServiceError error)
+        {
             Error = error;
             Response.StatusCode = error.StatusCode;
 
@@ -53,8 +56,7 @@ namespace Jularr.Frontend.Framework
             }
 
             PreparePage();
-            executed.ExceptionHandled = true;
-            executed.Result = Page();
+            return Page();
         }
 
         protected abstract void Define(Page page);

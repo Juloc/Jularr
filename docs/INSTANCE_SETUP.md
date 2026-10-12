@@ -1,18 +1,20 @@
 # Instance setup: agreed flow
 
-Consolidated proposal requested by the owner; not an implemented wizard or SQL
-baseline. Current code owners: [CODEMAP](CODEMAP.md). Keep one Frontend host,
+Consolidated flow requested by the owner. The first-Owner form and its Public
+services are implemented; the remaining setup/readiness/configuration steps are
+not connected yet. Current code owners: [CODEMAP](CODEMAP.md). Keep one Frontend host,
 versioned Backend Data/Services, canonical Logic writers and shared transactions.
 
 ## Pages and canonical owners
 
-Service names and new tables below are proposals, not existing contracts. Each
+Except for the first-Owner services/state, new service names and tables below
+remain proposals, not existing contracts. Each
 Admin owner provides its ordinary read/update/test operations for both Setup and
 later Admin settings; do not create a separate configuration system per page.
 
 | Page | Content | Services / Logic | Persistence |
 | --- | --- | --- | --- |
-| 1. Start & system | Database/schema readiness, app version, writable app data, mounts/free space; create the first Owner exactly once when absent. | Public `ReadSetupV1`, bootstrap `CreateOwnerV1`; Setup readiness orchestration, Account Logic owns account/profile creation. | Existing Accounts, AccountPasswords, Profiles, AccountProfiles, UiLocales; proposed InstanceSetupState. |
+| 1. Start & system | First-Owner form is connected. Remaining database/system/storage readiness checks are pending. | Public `ReadSetupV1`, `CreateOwnerV1`; Account Logic owns exactly-once account/profile/password creation and the shared Session writer signs in. | Existing Accounts, AccountPasswords, Profiles, AccountProfiles, UiLocales; implemented InstanceSetupState. |
 | 2. Setup type | New instance; later supported backup restore or migration. A source cannot be both restored and migrated. | Setup orchestration delegates to canonical Backup or Migration operations. | InstanceSetupState references the operation; proposed Operations/OperationLogs. No duplicated backup or migration data. |
 | 3. Instance & modules | Instance name, language/region/timezone; enabled modules; default media order, landing page, density, theme/accent and Continue priority; registration/invite policy. | Admin `ReadInstanceV1` / `UpdateInstanceV1`; Instance Logic validates actual module capabilities and settings. | Proposed InstanceSettings and InstanceModules; existing UiLocales. Profile overrides belong to later Profile settings, not duplicate instance settings. |
 | 4. Storage & roots | Configure SMB/NFS/Synology connections or permitted Docker Compose paths; choose mounts and logical roots, media types and storage roles; check access, space and conflicts. | Owner Storage read/update/test; Storage Logic owns allowed paths and Library Logic owns roots. Integrations owns NAS I/O. | Proposed StorageMounts and the agreed LibraryRoots; storage-role relations when their capabilities exist. |
@@ -24,15 +26,22 @@ later Admin settings; do not create a separate configuration system per page.
 
 ## Cross-page behavior
 
+- Current first-Owner slice requires the explicitly configured `JULARR_DB` and
+  installed fresh baseline; startup never creates or migrates a database. Login
+  redirects fresh instances to `/Setup`. Owner creation commits account, profile,
+  password, session and permanent bootstrap closure together. It currently opens
+  Profile settings afterward; this is not full wizard completion. Other configuration
+  steps and resumable progress remain pending.
 - Resume on the server: current page, completed configuration and pending operation
   references survive reloads. Recheck stale external health; it is not permanent truth.
 - Setup reads use static SELECTs; all mutations go through their canonical Logic.
   Completion and its final database validation share one SqlContext transaction.
   External checks run with finite timeouts outside long transactions; reject changed
   configuration when committing completion.
-- Before the first Owner exists, bootstrap mutations need a deliberately chosen
-  installation proof. Public does not mean anonymously creating an Owner whenever
-  the table is empty. Lock and enforce exactly-once creation in Account Logic.
+- The first Owner is entered directly in the startup wizard, without an
+  installation code or extra proof. Account Logic locks durable setup state and
+  creates the enabled Owner, owned Profile and password exactly once. Later public
+  requests cannot create Owners or reopen bootstrap when accounts are removed.
 - Credentials are masked/write-only and preserved on unrelated changes. Integrations
   receives only required credentials; no application logs or responses expose them.
 - Optional modules disable dependent pages/navigation without deleting stored data.
@@ -52,12 +61,15 @@ later Admin settings; do not create a separate configuration system per page.
 
 ## Decisions before implementing
 
-Choose the installation/bootstrap proof. Owner administers configuration; MediaManager
+Owner administers configuration; MediaManager
 is limited to manual media management and Requests/Wanted. Storage includes configurable
 SMB/NFS/Synology and permitted Compose paths; exact runtime capabilities must be verified
-before activating connection/mount controls. Prefer system mounts when necessary or
+before activating connection/mount controls. Support existing general mounts,
+per-library Compose paths and NAS connections configured directly in the wizard;
+the latter does not require prebinding every library path in Compose. Prefer system mounts when necessary or
 better for throughput/reliability; configure options and privileges explicitly.
 NAS downtime must leave ordinary browsing available through retained DB covers.
+Store one standard cover on NAS and locale-specific variants in Jularr.
 Instance metadata uses a fixed locale or profile locale; localized artwork is an
 independent Owner setting. Timezone/region/default-preference contracts need their exact
 field/catalog definitions before adding SQL. First Owner uses the current required

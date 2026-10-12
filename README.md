@@ -251,8 +251,17 @@ Betroffene Tests liegen unter `tests/Jularr.Backend.Tests`; PostgreSQL-Tests ver
 `JULARR_TEST_DB` auf `127.0.0.1:15433`, Benutzer `jularr_test`, Administrationsdatenbank
 `jularr_test_admin`. Sie erstellen und entfernen nur eigene zufällig benannte Datenbanken.
 
-Noch offen: explizite Owner-Ersteinrichtung, fachliche Admin-Operationen,
-Freigabe-/E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf,
+Frische Instanzen öffnen über die Anmeldung `/Setup`. Dort erstellt der Benutzer
+den ersten Owner ohne Einrichtungscode; Account, Passwort, eigenes Profile,
+AccountProfiles-Zuordnung und Anmeldung werden gemeinsam gespeichert. Eine dauerhafte
+Setup-Markierung verhindert weitere öffentliche Owner-Erstellungen, auch bei parallelen
+Anfragen. Passwortregeln und Bestätigung kommen aus dem Backend-Datenvertrag.
+Voraussetzung bleiben die explizite Datenbankkonfiguration und die installierte
+frische Baseline; der Host installiert kein Schema. Nach diesem ersten Schritt öffnet
+sich vorerst Profile Settings, die weiteren Wizard-Schritte sind noch nicht verbunden.
+
+Noch offen: weitere Setup-Konfiguration und Systemprüfungen, fachliche Medien-Admin-Operationen,
+E-Mail-Verifizierungs-Oberfläche, 2FA/WebAuthn-Anmeldeablauf,
 Profile-Auswahl mit PIN, vollständige Profile-Verwaltung und alte Android-/TV-Verbraucher. Accounts mit bestätigter
 2FA werden derzeit ohne Anmeldung abgelehnt, nicht am zweiten Faktor vorbeigeführt.
 Plex wurde mit kontrollierten Provider-Antworten getestet, noch nicht gegen eine echte Installation.

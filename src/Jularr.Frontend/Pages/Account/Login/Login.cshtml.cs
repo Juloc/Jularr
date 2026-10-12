@@ -1,6 +1,8 @@
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.Public.Setup.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Public.Authentication.V1;
+using Jularr.Backend.Service.Public.Setup.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Pages.Shared;
 using Microsoft.AspNetCore.Antiforgery;
@@ -12,7 +14,8 @@ namespace Jularr.Frontend.Pages.Account.Login
 {
     [AllowAnonymous]
     [EnableRateLimiting("public")]
-    public sealed class LoginModel(LoginV1 login, ReadAuthenticationV1 authentication, StartPlexV1 startPlex, CompletePlexV1 completePlex, IAntiforgery antiforgery) : JularrPage
+    public sealed class LoginModel(LoginV1 login, ReadAuthenticationV1 authentication, StartPlexV1 startPlex, CompletePlexV1 completePlex,
+        ReadSetupV1 setup, IAntiforgery antiforgery) : JularrPage
     {
         private string _email = "";
         private AuthenticationResultV1? _authentication;
@@ -65,6 +68,12 @@ namespace Jularr.Frontend.Pages.Account.Login
 
         public async Task<IActionResult> OnGetAsync(string? returnUrl)
         {
+            // Enter setup on fresh instances.
+            if ((await setup.ExecuteAsync<ReadSetupResultV1>(cancellationToken: HttpContext.RequestAborted)).RequiresOwner)
+            {
+                return RedirectToPage("/Setup/Start/Start");
+            }
+
             if (User.Identity?.IsAuthenticated == true)
             {
                 return LocalRedirect(SafeReturnUrl(returnUrl));

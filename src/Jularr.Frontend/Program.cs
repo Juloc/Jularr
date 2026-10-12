@@ -24,6 +24,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizePage("/Admin/Accounts/Accounts", ServiceApi.AccountsReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Providers/Providers", ServiceApi.ProvidersReadPolicyName);
     options.Conventions.AllowAnonymousToPage("/Account/Login/Login");
+    options.Conventions.AllowAnonymousToPage("/Setup/Start/Start");
     options.Conventions.AllowAnonymousToPage("/Development/ShellPreview/ShellPreview");
 });
 

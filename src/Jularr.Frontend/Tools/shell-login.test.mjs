@@ -16,7 +16,7 @@ test("Pages own folders, explicit routes and colocated definitions", () => {
         const model = load(path + ".cs");
         const expectedNamespace = "Jularr.Frontend." + directory.replaceAll("/", ".");
 
-        assert.match(directory, /^Pages\/(?:Account|Admin|User|Development)\/[^/]+$/);
+        assert.match(directory, /^Pages\/(?:Account|Admin|User|Development|Setup)\/[^/]+$/);
         assert.match(view, /^@page "\/[^"\n]*"/);
         assert.ok(model.includes("namespace " + expectedNamespace + "\n"), path);
         assert.ok(view.includes("@model " + expectedNamespace + "."), path);

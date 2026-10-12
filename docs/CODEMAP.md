@@ -29,6 +29,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [ProfileLogic.cs](../src/Jularr.Backend/Logic/Profile/ProfileLogic.cs): entity locking, business validation and the canonical writer.
 - [SessionLogic.cs](../src/Jularr.Backend/Logic/Session/SessionLogic.cs): mutable session authorization locks in the write transaction.
 - [AuthenticationServices.cs](../src/Jularr.Backend/Service/Public/Authentication/V1/AuthenticationServices.cs), [PlexAuthenticationServices.cs](../src/Jularr.Backend/Service/Public/Authentication/V1/PlexAuthenticationServices.cs): Public auth state, login, registration requests and Plex orchestration.
+- [SetupServices.cs](../src/Jularr.Backend/Service/Public/Setup/V1/SetupServices.cs), [Setup.cs](../src/Jularr.Backend/Data/Public/Setup/V1/Setup.cs): Public first-Owner availability and creation, field/password confirmation validation; Account Logic owns permanent bootstrap closure and Session Logic signs in atomically.
 - [SessionAuthentication.cs](../src/Jularr.Backend/Service/Core/SessionAuthentication.cs), [SessionCookieEvents.cs](../src/Jularr.Backend/Service/Core/SessionCookieEvents.cs): request-level database-backed cookie verification.
 - [AccountLogic.cs](../src/Jularr.Backend/Logic/Account/AccountLogic.cs), [PlexAuthenticationLogic.cs](../src/Jularr.Backend/Logic/Authentication/PlexAuthenticationLogic.cs): credentials, canonical account/profile creation, external identity and single-use completion.
 - [PlexClient.cs](../src/Jularr.Integrations/Logic/Plex/PlexClient.cs): bounded external protocol calls and user-scoped library access. [Data/Plex](../src/Jularr.Integrations/Data/Plex): explicit protocol results; [ProviderUnavailableException.cs](../src/Jularr.Integrations/Data/Common/ProviderUnavailableException.cs): shared integration error. [Integrations project](../src/Jularr.Integrations/Jularr.Integrations.csproj): Data/Logic class library without Backend dependencies or a host; [AuthenticationOptions.cs](../src/Jularr.Backend/Service/Core/AuthenticationOptions.cs): Backend-owned authentication policy/configuration.
@@ -45,6 +46,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [Data/Fields/Account](../src/Jularr.Backend/Data/Fields/Account): Account, AccountProfile, credential, challenge and external-login fields; names match the singular schema entity.
 - [Data/Enums](../src/Jularr.Backend/Data/Enums): enums grouped by Account, Service and Sql owner.
 - [UiLocaleFields.cs](../src/Jularr.Backend/Data/Fields/Localization/UiLocaleFields.cs), [ProviderFields.cs](../src/Jularr.Backend/Data/Fields/Provider/ProviderFields.cs): required locale/provider catalog fields.
+- [InstanceSetupStateFields.cs](../src/Jularr.Backend/Data/Fields/Setup/InstanceSetupStateFields.cs): canonical singleton bootstrap fields; Account Logic owns their transactional closure.
 - [BaseData.cs](../src/Jularr.Backend/Data/Common/BaseData.cs): cached field validation, same-name property merging, Id-based list merging and partial/list JSON binding.
 - [DataField.cs](../src/Jularr.Backend/Data/Fields/DataField.cs): C#-named field classes and their PostgreSQL types; [DataFieldAttribute.cs](../src/Jularr.Backend/Data/Common/DataFieldAttribute.cs): required/optional and length overrides.
 - [Service.cs](../src/Jularr.Backend/Service/Core/Service.cs): invocation lifecycle, operation hooks and shared transaction.
@@ -68,12 +70,13 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 - Owner account updates, last-Owner concurrency, session invalidation and Razor editor: `AdminAccountTests.cs`; catalog authorization, stale edits and encoded Razor forms: `AdminLocalizationTests.cs`.
 - Account assignments and Owner session revocation: `AdminAccountTests.cs`; language creation/editing/fallback and Razor: `AdminLocaleTests.cs`; provider enablement/auth availability and forms: `AdminProviderTests.cs`.
 - Login/cookies, pending registration, Plex grants, browser proof, expiry and replay: `AuthenticationTests.cs` (isolated PostgreSQL and controlled provider responses).
+- First-Owner form, rollback, concurrency, session issuance and permanent bootstrap closure: `SetupTests.cs`.
 - Real Razor forms, antiforgery, language settings, selection rotation, session revocation and logout: `FrontendAuthenticationTests.cs`; requires built Frontend assets.
 - `Infrastructure/TestPostgres.cs`: explicit isolated PostgreSQL fixture; never use the application database.
 
 ## Not integrated
 
-Owner bootstrap, media/Requests/Wanted administration, Storage/NAS, email verification, 2FA/WebAuthn completion,
+Remaining Setup steps, media/Requests/Wanted administration, Storage/NAS, email verification, 2FA/WebAuthn completion,
 PIN selection, old Android/TV consumers, full Profile management and instance settings.
 This reference backend does not complete Phase B or replace an active installation.
 
@@ -82,5 +85,5 @@ This reference backend does not complete Phase B or replace an active installati
 [BACKEND_NEXT.md](BACKEND_NEXT.md): Admin foundation → Library → User/Home →
 Player → Arr+; proposed table owners and decisions needed before those slices.
 
-- [INSTANCE_SETUP.md](INSTANCE_SETUP.md): consolidated nine-page setup flow, canonical owners, proposed tables and bootstrap decisions; not implemented.
+- [INSTANCE_SETUP.md](INSTANCE_SETUP.md): consolidated nine-page setup flow; first-Owner form implemented, remaining readiness/configuration/progress pending.
 - [LOCAL_PREVIEW.md](LOCAL_PREVIEW.md): isolated D: checkout, scheduled preview and current host integration gap; [runner](../scripts/run-clean-start-preview.ps1).

@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Fields;
 using Jularr.Backend.Data.Fields.Localization;
 using Jularr.Backend.Data.Fields.Profile;
 using Jularr.Backend.Data.Fields.Provider;
+using Jularr.Backend.Data.Fields.Setup;
 using Jularr.Backend.Infrastructure.Sql;
 using Npgsql;
 using NpgsqlTypes;
@@ -25,6 +26,7 @@ namespace Jularr.Backend.Tests
             var definitions = new Dictionary<string, Type>
             {
                 ["Accounts"] = typeof(AccountFields),
+                ["InstanceSetupState"] = typeof(InstanceSetupStateFields),
                 ["AccountRoleTypes"] = typeof(AccountRoleTypeFields),
                 ["Profiles"] = typeof(ProfileFields),
                 ["AccountProfiles"] = typeof(AccountProfileFields),
@@ -93,7 +95,8 @@ namespace Jularr.Backend.Tests
 
             foreach (var (table, type) in definitions)
             {
-                Assert.AreEqual(table[..^1] + "Fields", type.Name, table);
+                var entityName = table.EndsWith('s') ? table[..^1] : table;
+                Assert.AreEqual(entityName + "Fields", type.Name, table);
                 foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Static))
                 {
                     Assert.IsTrue(seen.Contains((table, field.Name)), table + "." + field.Name);

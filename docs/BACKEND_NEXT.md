@@ -2,8 +2,9 @@
 
 Owner decisions and implementation order. Follow [conventions](CONVENTIONS.md);
 current owners and actual implementation are in [CODEMAP](CODEMAP.md).
-The supplied clean-cut snapshot is the starting model, not the legacy code layout.
-It marks many media columns incomplete: resolve those before writing baseline SQL.
+The [original table snapshot](https://github.com/Juloc/Jularr/blob/docs/sql-cutoff-schema-json-20261011/docs/SQL_CUTOFF_ORIGINAL_TABLES.json)
+defines the agreed media structure, not the legacy code layout. Complete missing
+column definitions within those contracts; do not restart architecture planning.
 
 ## Order and ownership
 
@@ -33,14 +34,19 @@ and commit together. No migration, active-database installation or extra server.
   SMB, NFS and Synology API. Docker Compose can expose additional permitted host
   paths to the same Storage/Library owner. No arbitrary filesystem browser or
   implicit Docker socket/privileged-container access.
+- Support both general mounts and separately exposed Compose library paths. The
+  Owner may instead configure the NAS connection in Setup without prebinding each
+  library in Compose. Verify required runtime mounting capabilities explicitly;
+  connection configuration alone does not grant host privileges.
 - Choose NAS access by measured throughput, reliability and consumer needs. Prefer
   system mounts when they are necessary or better for streaming/imports; direct
   SMB/NFS remains possible. Make mount options, permissions and platform support
   explicit. Compose paths are a separate supported input.
 - NAS failure must not block account/admin/catalog browsing. Retain compressed
   display covers in PostgreSQL and interoperable artwork beside the media on NAS
-  for Plex coexistence and a later return to Sonarr. Exact artwork names/formats,
-  size budgets and pending-write/recovery behavior still need a concrete contract.
+  for Plex coexistence and a later return to Sonarr. NAS stores one standard cover;
+  Jularr keeps locale-specific variants. Research compatible artwork names/formats;
+  bounded display-cache sizes and pending-write/recovery follow the image owner.
 - Synology management API and file access are distinct responsibilities in
   Integrations, not additional Backend projects or canonical media systems.
 - Jularr is a standalone Arr system. Sonarr/Radarr/Prowlarr are optional one-time
@@ -52,6 +58,12 @@ and commit together. No migration, active-database installation or extra server.
   behavior/technical reference, not a structure to copy into the new framework.
 - Profile PIN is optional, protects selection/switching and must support numeric
   TV/remote interaction. It never replaces account authentication.
+- PIN length is 3-6 digits; confirm automatically when the configured length is
+  entered. Five failed attempts cause a one-minute lockout, then attempts become
+  available again. Failed-attempt state must survive error responses and restarts.
+- First Owner is entered directly in the startup Setup Wizard, without an
+  installation code or separate proof. Creation is allowed exactly once, with
+  database concurrency protection; subsequent public requests cannot create Owners.
 - Media metadata and artwork share canonical media identities, not one Work per
   language. The Owner chooses a fixed instance metadata locale or each profile's
   effective locale, and independently whether covers/artwork follow that locale.
@@ -67,11 +79,10 @@ and commit together. No migration, active-database installation or extra server.
 
 ## Remaining decisions and prerequisites
 
-1. First-Owner installation proof and isolated preview database configuration.
-2. Optional PIN length/retry/cooldown/recovery policy; profile creation limits.
-3. Exact instance/profile preference catalogs and incomplete media/storage columns.
-4. NAS runtime/access support, current mount configuration and incomplete media
-   fields; compare mount versus direct read/write/seek before selecting adapters.
+1. Profile PIN recovery and profile creation limits when those operations are built.
+2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.
+3. NAS runtime/access support and complete mount/container configuration;
+   compare mount versus direct read/write/seek before selecting adapters.
    New third-party/native dependencies require owner approval.
 
 Role authorization, session revocation/rotation, Owner account directory/edit/approval
