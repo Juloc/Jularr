@@ -10,6 +10,9 @@ using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Service.User.Playback;
+using Jularr.Integrations.Data.Media;
+using Jularr.Integrations.Logic.Media;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +24,7 @@ namespace Jularr.Backend.Tests
     public sealed class PlaybackTests
     {
         private static readonly StartPlaybackDataV1 Browser = new(["mp4", "webm"], ["h264", "vp9"], ["aac", "opus"]);
+        private static readonly StartPlaybackDataV1 Hls = new(["hls", "mp4", "webm"], ["h264", "vp9"], ["aac", "opus"]);
 
         [TestMethod]
         public async Task DirectPlay_StreamsRangesAndResumesPerProfile()
@@ -123,24 +127,101 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        [DataRow("mp4", "h264", "aac", PlaybackModeType.DirectPlay)]
+        [DataRow("mp4", "h264", "aac", null)]
         [DataRow("mkv", "h264", "aac", PlaybackModeType.Remux)]
         [DataRow("mp4", "hevc", "aac", PlaybackModeType.Transcode)]
         [DataRow("mp4", "h264", "dts", PlaybackModeType.Transcode)]
-        public void Decide_ClientCapabilities_ChooseLeastWork(string container, string video, string audio, PlaybackModeType expected)
+        public void Plan_ClientCapabilities_ChooseLeastWork(string container, string video, string audio, PlaybackModeType? expected)
         {
-            var tracks = new[] { new PlaybackTrackData(MediaTrackType.Video, video, true), new PlaybackTrackData(MediaTrackType.Audio, audio, true) };
-            var mode = PlaybackLogic.Decide(container, tracks, Browser.Containers.ToHashSet(), Browser.VideoCodecs.ToHashSet(), Browser.AudioCodecs.ToHashSet());
-            Assert.AreEqual(expected, mode);
+            var tracks = new[] { new PlaybackTrackData(0, MediaTrackType.Video, video, true), new PlaybackTrackData(1, MediaTrackType.Audio, audio, true) };
+            var direct = PlaybackLogic.CanPlayDirectly(container, tracks, Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(), Hls.AudioCodecs.ToHashSet());
+            var conversion = PlaybackLogic.PlanConversion(tracks, Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(), Hls.AudioCodecs.ToHashSet());
+            Assert.AreEqual(expected, direct ? null : conversion?.PlaybackModeTypeId);
+            Assert.AreEqual(video == "h264", conversion?.CopyVideo ?? true);
+
+            // Without HLS or H.264 there is nothing to convert to.
+            Assert.IsNull(PlaybackLogic.PlanConversion(tracks, Browser.Containers.ToHashSet(), Browser.VideoCodecs.ToHashSet(), Browser.AudioCodecs.ToHashSet()));
+            Assert.IsNull(PlaybackLogic.PlanConversion(tracks, Hls.Containers.ToHashSet(), new HashSet<string> { "vp9" }, Hls.AudioCodecs.ToHashSet()));
         }
 
-        private static async Task<(long AssetId, long WorkId)> CreatePlayableAsync(Host host, string storagePath, bool wakeOnDemand)
+        [TestMethod]
+        public void Transcoder_Arguments_SeekPaceSegmentAndKeepHardwareForEncodingOnly()
+        {
+            var encode = MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 5, 6, 0, 2, false, false, ["-c:v", "h264_vaapi"], ["-hwaccel", "vaapi"])).ToList();
+            CollectionAssert.IsSubsetOf(new[] { "-hwaccel", "-readrate", "-readrate_initial_burst", "-force_key_frames", "h264_vaapi", "aac" }, encode);
+            Assert.AreEqual("30", encode[encode.IndexOf("-ss") + 1]);
+            Assert.AreEqual("5", encode[encode.IndexOf("-start_number") + 1]);
+            Assert.AreEqual("0:2", encode[encode.IndexOf("-sn") - 1]);
+            Assert.IsTrue(encode.IndexOf("-hwaccel") < encode.IndexOf("-i"));
+
+            var copy = MediaTranscoder.BuildArguments(new TranscodeRequest("/media/film.mkv", "/cache/s", 0, 6, 0, 1, true, true, ["-c:v", "h264_vaapi"], ["-hwaccel", "vaapi"])).ToList();
+            CollectionAssert.DoesNotContain(copy, "-hwaccel");
+            CollectionAssert.DoesNotContain(copy, "-force_key_frames");
+            Assert.AreEqual(2, copy.Count(argument => argument == "copy"));
+        }
+
+        [TestMethod]
+        public void Playlist_FixedGrid_CoversWholeDuration()
+        {
+            var playlist = PlaybackTranscodes.BuildPlaylist(new PlaybackTranscodeSource(Guid.NewGuid(), 1, "film.mkv", 0, 1, true, true, 13_500));
+            StringAssert.Contains(playlist, "#EXT-X-PLAYLIST-TYPE:VOD");
+            StringAssert.Contains(playlist, "#EXTINF:1.500000,\nsegments/2.ts\n#EXT-X-ENDLIST");
+            Assert.AreEqual(3, playlist.Split("#EXTINF").Length - 1);
+        }
+
+        [TestMethod]
+        public async Task Hls_ConversionSessions_ServeOwnSegmentsAndReleaseCache()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var cache = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, settings: new Dictionary<string, string>
+            {
+                ["Media:FfmpegPath"] = Path.Combine(cache.Path, "missing-ffmpeg"),
+                ["Media:TranscodeCachePath"] = cache.Path
+            });
+            var (assetId, _) = await CreatePlayableAsync(host, storage.Path, wakeOnDemand: false, fileName: "Film.mkv");
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"ProbedAt\" = now(), \"DurationMs\" = 13500; "
+                + "INSERT INTO \"MediaTracks\" (\"StoredFileId\", \"StreamIndex\", \"MediaTrackTypeId\", \"Codec\", \"IsDefault\", \"IsForced\") "
+                + "SELECT \"Id\", 0, 1, 'h264', TRUE, FALSE FROM \"StoredFiles\" UNION ALL SELECT \"Id\", 1, 2, 'aac', TRUE, FALSE FROM \"StoredFiles\"");
+
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", Hls);
+            Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            var plan = (await started.Content.ReadFromJsonAsync<PlaybackPlanV1>())!;
+            Assert.AreEqual(PlaybackModeType.Remux, plan.PlaybackModeTypeId);
+            StringAssert.EndsWith(plan.StreamUrl, "/playlist.m3u8");
+            using var playlist = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl));
+            Assert.AreEqual(HttpStatusCode.OK, playlist.StatusCode);
+            StringAssert.Contains(await playlist.Content.ReadAsStringAsync(), "segments/2.ts");
+
+            // Finished segments stream; missing ones need FFmpeg.
+            var directory = Path.Combine(cache.Path, plan.PlaybackSessionId.ToString("N"));
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory, "segment0.ts"), "ts0");
+            var segments = plan.StreamUrl.Replace("playlist.m3u8", "segments/", StringComparison.Ordinal);
+            using var ready = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, segments + "0.ts"));
+            Assert.AreEqual(HttpStatusCode.OK, ready.StatusCode);
+            Assert.AreEqual("ts0", await ready.Content.ReadAsStringAsync());
+            Assert.AreEqual("video/mp2t", ready.Content.Headers.ContentType!.MediaType);
+            using var unavailable = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, segments + "1.ts"));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
+            using var outside = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, segments + "9.ts"));
+            Assert.AreEqual(HttpStatusCode.NotFound, outside.StatusCode);
+
+            // Ending playback releases the conversion cache.
+            using var ended = await host.SendAsync(HttpMethod.Put, "/api/v1/playback/sessions/" + plan.PlaybackSessionId, new UpdatePlaybackDataV1(13_000, 13_500, true, true));
+            Assert.AreEqual(HttpStatusCode.OK, ended.StatusCode, await ended.Content.ReadAsStringAsync());
+            Assert.IsFalse(Directory.Exists(directory));
+            using var gone = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, plan.StreamUrl));
+            Assert.AreEqual(HttpStatusCode.NotFound, gone.StatusCode);
+        }
+
+        private static async Task<(long AssetId, long WorkId)> CreatePlayableAsync(Host host, string storagePath, bool wakeOnDemand, string fileName = "Film.mp4")
         {
             var mountId = await LibraryTests.CreateMountAsync(host);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"WakeOnDemand\" = " + (wakeOnDemand ? "TRUE" : "FALSE"));
             var folder = Path.Combine(storagePath, mountId.ToString(), "Movies", "Film (2001)");
             Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, "Film.mp4"), "jklmnopq");
+            File.WriteAllText(Path.Combine(folder, fileName), "jklmnopq");
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
             await LibraryTests.ScanAsync(host, rootId);
 

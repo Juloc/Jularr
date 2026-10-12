@@ -11,6 +11,13 @@ namespace Jularr.Backend.Data.Common
         string ContentType { get; }
     }
 
+    // Generated text documents such as streaming playlists.
+    public interface ITextOutput
+    {
+        string Text { get; }
+        string ContentType { get; }
+    }
+
     // A required runtime resource is temporarily unavailable.
     public sealed class ServiceUnavailableException(string code) : Exception("The requested operation is temporarily unavailable.")
     {

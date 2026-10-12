@@ -13,7 +13,7 @@ column definitions within those contracts; do not restart architecture planning.
 | Admin foundation | Central role gate; manual media management, Requests and Wanted; Owner-only configuration, Accounts and localization | Reuse Accounts, AccountRoleTypes, AccountProfiles, AccountSessions and localization tables. No parallel role/permission engine. |
 | Storage / Library | Owner configures NAS connections (SMB, NFS, Synology API), permitted container paths and LibraryRoots through typed services and Frontend; Logic owns safe paths/imports | Physical StorageMounts remain distinct from logical LibraryRoots. Complete the agreed Work / edition / asset / file / inventory chain. |
 | User / Home | Profile-scoped library/detail reads, recent items, continue-playing, watchlist; Home assembles bounded reads, not its own media model | Reuse media entities; add agreed MediaProgress, format-specific positions and WatchlistEntries. No duplicate Home tables. |
-| Player | Jularr-hosted playback; preserve Dev behavior for direct play, remux, transcoding, seeking and source/track selection in the new framework | PlaybackSessions is separate from AccountSessions. Reuse assets/files/tracks; ended PlaybackSessions are the history, independent of current MediaProgress. Direct play, resume and completion are implemented; remux/transcoding are next. |
+| Player | Jularr-hosted playback; preserve Dev behavior for direct play, remux, transcoding, seeking and source/track selection in the new framework | PlaybackSessions is separate from AccountSessions. Reuse assets/files/tracks; ended PlaybackSessions are the history, independent of current MediaProgress. Direct play, HLS remux/transcoding, resume and completion are implemented; track selection and segment caching across sessions are next. |
 | Arr+ | Jularr owns search, ranking, selection, monitoring, acquisition and import. Native downloader or optional SABnzbd/other adapters use one pipeline | Reuse canonical media/provider identities, Wanted and request/operation lifecycle. No separate pipeline per downloader. |
 
 Each slice adds its versioned Data, declared Service permissions, static reads,
@@ -49,6 +49,8 @@ and commit together. No migration, active-database installation or extra server.
   bounded display-cache sizes and pending-write/recovery follow the image owner.
 - Synology management API and file access are distinct responsibilities in
   Integrations, not additional Backend projects or canonical media systems.
+- Conversions are delivered as HLS; the owner approved `hls.js` (light build, loaded
+  only for conversions) for browsers without native HLS.
 - Owner decisions of 12 October 2026: the Owner sets per NAS connection whether
   Wake-on-LAN is Owner-only or automatic when a profile opens media. Games use the
   same unified Arr+ search, planner, download and import as every media type; only
@@ -144,7 +146,7 @@ and Owner catalog description/manual translation editing are implemented. Accoun
 updates protect the last enabled Owner and invalidate sessions after role/status
 changes. Account replacement uses last-write-wins without a pre-read or timestamp
 input; catalog edits retain their version protection. These use existing
-baseline tables. Media pages, standalone Arr, takeover and Player remux/transcoding remain
+baseline tables. Media pages, standalone Arr, takeover and Player track selection remain
 unfinished. Implement the shared owners in that order, with the same pipeline
 for native and external downloaders and the same Storage locations for imports/playback.
 Owner account/profile associations, account session revocation, provider registry

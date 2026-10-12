@@ -29,6 +29,35 @@ namespace Jularr.Backend.Data.User.Playback.V1
         public Guid PlaybackSessionId { get; }
     }
 
+    public sealed class PlaybackSegmentParametersV1 : BaseParameters
+    {
+        public PlaybackSegmentParametersV1(Guid playbackSessionId, int index)
+        {
+            PlaybackSessionId = playbackSessionId;
+            Index = index;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PlaybackSessionId))]
+        public Guid PlaybackSessionId { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.SegmentIndex))]
+        public int Index { get; }
+    }
+
+    public sealed class PlaybackPlaylistV1 : BaseResponse, ITextOutput
+    {
+        public PlaybackPlaylistV1(string text)
+        {
+            Text = text;
+        }
+
+        [JsonIgnore]
+        public string Text { get; }
+
+        [JsonIgnore]
+        public string ContentType => "application/vnd.apple.mpegurl";
+    }
+
     public sealed class PlaybackItemV1 : BaseResponse
     {
         public PlaybackItemV1(long mediaAssetId, long workId, string canonicalTitle, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber,

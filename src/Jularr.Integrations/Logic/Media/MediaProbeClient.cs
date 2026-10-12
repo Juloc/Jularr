@@ -45,6 +45,16 @@ namespace Jularr.Integrations.Logic.Media
             }
 
             using var owned = process;
+
+            // Library analysis yields to active playback.
+            try
+            {
+                process.PriorityClass = ProcessPriorityClass.BelowNormal;
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
+            {
+            }
+
             try
             {
                 var output = process.StandardOutput.ReadToEndAsync(timeout.Token);

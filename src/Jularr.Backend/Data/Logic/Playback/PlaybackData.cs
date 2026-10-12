@@ -79,12 +79,16 @@ namespace Jularr.Backend.Data.Logic.Playback
 
     internal sealed class PlaybackTrackData : BaseData
     {
-        public PlaybackTrackData(MediaTrackType mediaTrackTypeId, string? codec, bool isDefault)
+        public PlaybackTrackData(int streamIndex, MediaTrackType mediaTrackTypeId, string? codec, bool isDefault)
         {
+            StreamIndex = streamIndex;
             MediaTrackTypeId = mediaTrackTypeId;
             Codec = codec;
             IsDefault = isDefault;
         }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex))]
+        public int StreamIndex { get; }
 
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.MediaTrackTypeId))]
         public MediaTrackType MediaTrackTypeId { get; }

@@ -21,6 +21,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.storage_configuration_changed", "The mounted connection uses different settings. Disconnect it before applying the saved configuration."),
             new("errors.storage_waking", "The storage device is waking up. Please try again shortly."),
             new("errors.playback_conversion_unavailable", "This file cannot be played directly, and conversion is not available yet."),
+            new("errors.playback_conversion_failed", "The media conversion failed. Please try again."),
+            new("errors.playback_capacity_exhausted", "The server is converting as many streams as it allows. Please try again shortly."),
             new("errors.storage_wake_failed", "The Wake-on-LAN packet could not be sent."),
             new("errors.concurrent_change", "Another change was made at the same time. Please reload and try again."),
             new("errors.internal_error", "An unexpected error occurred."),

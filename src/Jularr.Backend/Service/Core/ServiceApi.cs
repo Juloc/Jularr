@@ -17,6 +17,7 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.System.Operation;
+using Jularr.Backend.Service.User.Playback;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -59,7 +60,9 @@ namespace Jularr.Backend.Service.Core
             services.Configure<AuthenticationOptions>(configuration.GetSection("Authentication"));
             services.Configure<StorageOptions>(configuration.GetSection("Storage"));
             services.AddSingleton(new NasMountClient { SocketPath = configuration["Storage:MountHelperSocket"] });
+            services.Configure<MediaOptions>(configuration.GetSection("Media"));
             services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
+            services.AddSingleton(new MediaTranscoder { ExecutablePath = configuration["Media:FfmpegPath"] });
             return RegisterServices(services, [typeof(Service).Assembly]);
         }
 
@@ -82,6 +85,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<NasMountClient>();
             services.TryAddSingleton<MediaProbeClient>();
             services.TryAddSingleton<WakeOnLanClient>();
+            services.TryAddSingleton<MediaTranscoder>();
+            services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
             services.AddHttpContextAccessor();
@@ -288,6 +293,12 @@ namespace Jularr.Backend.Service.Core
                 {
                     http.Response.Headers.CacheControl = "private,no-store";
                     return (IResult)Results.File(file.FilePath, file.ContentType, enableRangeProcessing: true);
+                }
+
+                if (result is ITextOutput text)
+                {
+                    http.Response.Headers.CacheControl = "private,no-store";
+                    return Results.Text(text.Text, text.ContentType);
                 }
 
                 if (service.OperationType == ServiceOperationType.Read)

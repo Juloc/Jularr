@@ -318,8 +318,13 @@ Profile-Auswahl mit PIN, vollständige Profile-Verwaltung und alte Android-/TV-V
 Plex wurde mit kontrollierten Provider-Antworten getestet, noch nicht gegen eine echte Installation.
 Details/Watchlist, manuelle Medienverwaltung und Requests/Wanted verwenden echte
 Services. Der Player spielt kompatible Dateien direkt (Direct Play mit HTTP-Range),
-setzt pro Profil exakt fort und markiert nur ein echtes Ende als gesehen; Remux und
-Transcoding (FFmpeg/HLS), Home und automatische Arr-Abläufe bleiben offen.
+setzt pro Profil exakt fort und markiert nur ein echtes Ende als gesehen. Andere
+Dateien laufen als HLS: FFmpeg kopiert passende Spuren (Remux) oder wandelt nach
+H.264/AAC (Transcode), erzeugt Segmente erst bei Bedarf und begrenzt Vorlauf und
+parallele Jobs. Konfiguration: `Media:FfmpegPath`, `Media:TranscodeCachePath`,
+`Media:MaxTranscodes`, optional `Media:VideoEncoderArguments` und
+`Media:HardwareAccelerationArguments` mit Software-Fallback. Home und automatische
+Arr-Abläufe bleiben offen.
 Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.

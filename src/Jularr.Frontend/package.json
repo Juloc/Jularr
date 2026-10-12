@@ -15,5 +15,8 @@
     "svg-sprite": "^2.0.4",
     "typescript": "^5.9.2",
     "vite": "^7.1.7"
+  },
+  "dependencies": {
+    "hls.js": "1.7.3"
   }
 }

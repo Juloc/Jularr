@@ -6,23 +6,40 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Playback
 {
+    internal sealed record PlaybackConversion(PlaybackModeType PlaybackModeTypeId, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio);
+
     internal static class PlaybackLogic
     {
-        public static PlaybackModeType Decide(string container, IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
+        public static bool CanPlayDirectly(string container, IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
             IReadOnlySet<string> audioCodecs)
         {
             // Unanalysed files are tried directly when the container plays.
-            var containerPlays = containers.Contains(container);
-            if (tracks.Count == 0)
+            if (!containers.Contains(container))
             {
-                return containerPlays ? PlaybackModeType.DirectPlay : PlaybackModeType.Remux;
+                return false;
             }
 
             var video = Select(tracks, MediaTrackType.Video);
             var audio = Select(tracks, MediaTrackType.Audio);
-            var codecsPlay = (video is null || video.Codec is { } videoCodec && videoCodecs.Contains(videoCodec))
+            return (video is null || video.Codec is { } videoCodec && videoCodecs.Contains(videoCodec))
                 && (audio is null || audio.Codec is { } audioCodec && audioCodecs.Contains(audioCodec));
-            return codecsPlay ? containerPlays ? PlaybackModeType.DirectPlay : PlaybackModeType.Remux : PlaybackModeType.Transcode;
+        }
+
+        public static PlaybackConversion? PlanConversion(IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
+            IReadOnlySet<string> audioCodecs)
+        {
+            // HLS delivers H.264 and AAC; matching streams are copied.
+            var video = Select(tracks, MediaTrackType.Video);
+            var audio = Select(tracks, MediaTrackType.Audio);
+            if (tracks.Count == 0 || !containers.Contains("hls") || video is not null && !videoCodecs.Contains("h264") || audio is not null && !audioCodecs.Contains("aac"))
+            {
+                return null;
+            }
+
+            var copyVideo = video is null || video.Codec == "h264";
+            var copyAudio = audio is null || audio.Codec is "aac" or "mp3" && audioCodecs.Contains(audio.Codec);
+            var mode = copyVideo && copyAudio ? PlaybackModeType.Remux : PlaybackModeType.Transcode;
+            return new PlaybackConversion(mode, video?.StreamIndex, audio?.StreamIndex, copyVideo, copyAudio);
         }
 
         public static async Task<Guid> CreatePlaybackSessionAsync(this LogicContext ctx, PlaybackSessionCreationData data, CancellationToken ct)

@@ -11,6 +11,7 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
+using Jularr.Backend.Service.User.Playback;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Playback.V1
@@ -58,11 +59,13 @@ namespace Jularr.Backend.Service.User.Playback.V1
     {
         private readonly StorageOptions _options;
         private readonly WakeOnLanClient _wake;
+        private readonly PlaybackTranscodes _transcodes;
 
-        internal StartPlaybackV1(IOptions<StorageOptions> options, WakeOnLanClient wake)
+        internal StartPlaybackV1(IOptions<StorageOptions> options, WakeOnLanClient wake, PlaybackTranscodes transcodes)
         {
             _options = options.Value;
             _wake = wake;
+            _transcodes = transcodes;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -114,6 +117,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 sql.Statement =
                     """
                     SELECT
+                        track."StreamIndex",
                         track."MediaTrackTypeId",
                         track."Codec",
                         track."IsDefault"
@@ -129,19 +133,22 @@ namespace Jularr.Backend.Service.User.Playback.V1
             }, CancellationToken);
 
             // Delivery follows the client's actual capabilities.
-            var stream = LibraryFileTypes.GetStream(source.RelativePath);
-            var mode = PlaybackLogic.Decide(stream.Container, tracks, Data.Containers.ToHashSet(StringComparer.OrdinalIgnoreCase),
-                Data.VideoCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase), Data.AudioCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase));
-            if (mode != PlaybackModeType.DirectPlay)
+            var containers = Data.Containers.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var videoCodecs = Data.VideoCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var audioCodecs = Data.AudioCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var direct = PlaybackLogic.CanPlayDirectly(LibraryFileTypes.GetStream(source.RelativePath).Container, tracks, containers, videoCodecs, audioCodecs);
+            var conversion = direct ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs);
+            if (!direct && (conversion is null || source.DurationMs is null || !_transcodes.IsAvailable))
             {
                 throw new ServiceUnavailableException("playback_conversion_unavailable");
             }
 
             // Sleeping storage wakes only when the Owner allowed it.
+            string path;
             try
             {
                 var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
-                StorageFileSystem.ResolveFile(directory, source.RelativePath);
+                path = StorageFileSystem.ResolveFile(directory, source.RelativePath);
             }
             catch (NasMountException) when (source is { WakeOnDemand: true, WakeMacAddress: { } macAddress })
             {
@@ -150,9 +157,20 @@ namespace Jularr.Backend.Service.User.Playback.V1
             }
 
             var resume = source.ResumePositionMs ?? 0;
+            var mode = conversion?.PlaybackModeTypeId ?? PlaybackModeType.DirectPlay;
             var sessionId = await Context.ExecuteBatchAsync((ctx, ct) =>
                 ctx.CreatePlaybackSessionAsync(new PlaybackSessionCreationData(lookup.ProfileId, Parameters.MediaAssetId, source.StoredFileId, mode, resume), ct), CancellationToken);
-            return new PlaybackPlanV1(sessionId, mode, "/api/v1/playback/sessions/" + sessionId.ToString("D") + "/stream", resume, source.DurationMs);
+
+            // Conversions stream on-demand HLS segments.
+            var url = "/api/v1/playback/sessions/" + sessionId.ToString("D");
+            if (conversion is { } plan)
+            {
+                _transcodes.Register(new PlaybackTranscodeSource(sessionId, lookup.ProfileId, path, plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
+                    source.DurationMs!.Value));
+                return new PlaybackPlanV1(sessionId, mode, url + "/playlist.m3u8", resume, source.DurationMs);
+            }
+
+            return new PlaybackPlanV1(sessionId, mode, url + "/stream", resume, source.DurationMs);
         }
     }
 
@@ -207,9 +225,60 @@ namespace Jularr.Backend.Service.User.Playback.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/playback/sessions/{playbackSessionId:guid}/playlist.m3u8")]
+    public sealed class ReadPlaybackPlaylistV1 : UserService<PlaybackSessionParametersV1>
+    {
+        private readonly PlaybackTranscodes _transcodes;
+
+        internal ReadPlaybackPlaylistV1(PlaybackTranscodes transcodes)
+        {
+            _transcodes = transcodes;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlaybackPlaylistV1>()];
+        protected override ModuleRequirement GetInstanceModules(PlaybackSessionParametersV1 parameters) => ModuleRequirement.All("Library", "Playback");
+        protected override ServicePermission GetPermission(PlaybackSessionParametersV1 parameters, Type resultType) => new("profile.playback");
+
+        protected override Task<IServiceOutput> OnRead()
+        {
+            // Only the planning profile's conversion is listed.
+            var source = _transcodes.Find(Parameters.PlaybackSessionId, Auth.ProfileId!.Value) ?? throw new KeyNotFoundException("The playback session is not active.");
+            return Task.FromResult<IServiceOutput>(new PlaybackPlaylistV1(PlaybackTranscodes.BuildPlaylist(source)));
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/playback/sessions/{playbackSessionId:guid}/segments/{index:int}.ts")]
+    public sealed class ReadPlaybackSegmentV1 : UserService<PlaybackSegmentParametersV1>
+    {
+        private readonly PlaybackTranscodes _transcodes;
+
+        internal ReadPlaybackSegmentV1(PlaybackTranscodes transcodes)
+        {
+            _transcodes = transcodes;
+        }
+
+        // Segments of an authorized session wait without database work.
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlaybackStreamV1>()];
+        protected override ModuleRequirement GetInstanceModules(PlaybackSegmentParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(PlaybackSegmentParametersV1 parameters, Type resultType) => new("profile.playback");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var path = await _transcodes.GetSegmentAsync(Parameters.PlaybackSessionId, Auth.ProfileId!.Value, Parameters.Index, CancellationToken);
+            return new PlaybackStreamV1(path, "video/mp2t");
+        }
+    }
+
     [ServiceEndpoint("PUT", "/api/v1/playback/sessions/{playbackSessionId:guid}")]
     public sealed class UpdatePlaybackV1 : UserService<PlaybackSessionParametersV1, UpdatePlaybackDataV1>
     {
+        private readonly PlaybackTranscodes _transcodes;
+
+        internal UpdatePlaybackV1(PlaybackTranscodes transcodes)
+        {
+            _transcodes = transcodes;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(PlaybackSessionParametersV1 parameters) => ModuleRequirement.All("Library", "Playback");
@@ -219,6 +288,9 @@ namespace Jularr.Backend.Service.User.Playback.V1
         {
             var data = new PlaybackUpdateData(Parameters.PlaybackSessionId, Auth.ProfileId!.Value, Data.PositionMs, Data.DurationMs, Data.IsEnded, Data.IsCompleted);
             await Context.UpdatePlaybackAsync(data, CancellationToken);
+
+            // Ended playback releases its conversion.
+            if (Data.IsEnded) _transcodes.Stop(Parameters.PlaybackSessionId);
             return new UpdateResult(true);
         }
     }

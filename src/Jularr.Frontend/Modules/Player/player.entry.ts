@@ -51,9 +51,18 @@ async function start(player: HTMLElement): Promise<void> {
 
     status.hidden = true;
     player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[plan.playbackModeTypeId] ?? "");
-    // Metadata loads at once so resume applies before the first frame.
-    video.preload = "metadata";
-    video.src = plan.streamUrl;
+    // Conversions use HLS: native where available, otherwise hls.js on demand.
+    if (plan.playbackModeTypeId !== 1 && video.canPlayType("application/vnd.apple.mpegurl") === "") {
+        const { default: Hls } = await import("hls.js/light");
+        const hls = new Hls({ startPosition: plan.resumePositionMs / 1000 });
+        hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
+        hls.loadSource(plan.streamUrl);
+        hls.attachMedia(video);
+    } else {
+        // Metadata loads at once so resume applies before the first frame.
+        video.preload = "metadata";
+        video.src = plan.streamUrl;
+    }
     video.addEventListener("loadedmetadata", () => {
         timeline.max = String(Math.floor(video.duration));
         player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
@@ -186,11 +195,13 @@ async function start(player: HTMLElement): Promise<void> {
 
 function capabilities(): { containers: string[]; videoCodecs: string[]; audioCodecs: string[] } {
     const probe = document.createElement("video");
-    const supported = (types: Record<string, string>) => Object.keys(types).filter(name => probe.canPlayType(types[name]) !== "");
+    const video = (type: string) => probe.canPlayType(type) !== "";
+    const supported = (types: Record<string, string>) => Object.keys(types).filter(name => video(types[name]));
+    const hls = video("application/vnd.apple.mpegurl") || typeof MediaSource !== "undefined" && MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E,mp4a.40.2"');
     return {
-        containers: supported({
+        containers: [...(hls ? ["hls"] : []), ...supported({
             mp4: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", mp3: "audio/mpeg", ogg: "audio/ogg", flac: "audio/flac", wav: "audio/wav", aac: "audio/aac"
-        }),
+        })],
         videoCodecs: supported({
             h264: 'video/mp4; codecs="avc1.640028"', hevc: 'video/mp4; codecs="hvc1.1.6.L120.90"', vp9: 'video/webm; codecs="vp9"', av1: 'video/mp4; codecs="av01.0.05M.08"'
         }),
