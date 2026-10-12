@@ -20,9 +20,10 @@ namespace Jularr.Backend.Service.User.Playback
     internal sealed class PlaybackTranscodes : IDisposable
     {
         public const int SegmentSeconds = 6;
-        private const int Lookahead = 4;
+        private const int Lookahead = 1;
         private const int HighWater = 30;
         private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(90);
+        private static readonly TimeSpan ExpiryTimeout = TimeSpan.FromHours(6);
         private static readonly TimeSpan SegmentTimeout = TimeSpan.FromSeconds(30);
 
         private readonly ConcurrentDictionary<Guid, Job> _jobs = new();
@@ -40,7 +41,7 @@ namespace Jularr.Backend.Service.User.Playback
             {
                 foreach (var directory in new DirectoryInfo(_options.TranscodeCachePath).EnumerateDirectories())
                 {
-                    if (DateTime.UtcNow - directory.LastWriteTimeUtc > 2 * IdleTimeout) TryDelete(directory.FullName);
+                    if (DateTime.UtcNow - directory.LastWriteTimeUtc > ExpiryTimeout) TryDelete(directory.FullName);
                 }
             }
 
@@ -154,16 +155,18 @@ namespace Jularr.Backend.Service.User.Playback
         {
             foreach (var (sessionId, job) in _jobs)
             {
-                if (Stopwatch.GetElapsedTime(job.LastAccess) > IdleTimeout)
+                // Paused sessions keep their cache until they expire.
+                var idle = Stopwatch.GetElapsedTime(job.LastAccess);
+                if (idle > ExpiryTimeout)
                 {
                     Stop(sessionId);
                     continue;
                 }
 
-                // Bound work far ahead of the viewer.
+                // Bound work while idle or far ahead of the viewer.
                 lock (job)
                 {
-                    if (job.IsRunning && job.Produced() > job.LastRequested + HighWater)
+                    if (job.IsRunning && (idle > IdleTimeout || job.Produced() > job.LastRequested + HighWater))
                     {
                         Kill(job);
                     }

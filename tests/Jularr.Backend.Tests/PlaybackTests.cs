@@ -215,6 +215,47 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.NotFound, gone.StatusCode);
         }
 
+        [TestMethod]
+        public async Task Hls_RealFfmpeg_TranscodesSeeksAndStaysWithinBudget()
+        {
+            // Opt-in: JULARR_TEST_FFMPEG names an ffmpeg executable (7.0 or newer).
+            if (Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG") is not { Length: > 0 } ffmpeg)
+            {
+                Assert.Inconclusive("JULARR_TEST_FFMPEG is not configured.");
+                return;
+            }
+
+            using var cache = new LibraryTests.TemporaryDirectory();
+            using var media = new LibraryTests.TemporaryDirectory();
+            var input = Path.Combine(media.Path, "clip.mkv");
+            using (var generate = System.Diagnostics.Process.Start(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=25",
+                "-f", "lavfi", "-i", "sine=frequency=440", "-t", "300", "-c:v", "mpeg4", "-c:a", "ac3", "-shortest", input]))
+            {
+                await generate.WaitForExitAsync();
+                Assert.AreEqual(0, generate.ExitCode);
+            }
+
+            using var transcodes = new PlaybackTranscodes(new MediaTranscoder { ExecutablePath = ffmpeg },
+                Microsoft.Extensions.Options.Options.Create(new Jularr.Backend.Service.Core.MediaOptions { TranscodeCachePath = cache.Path, MaxTranscodes = 1 }));
+            var session = Guid.NewGuid();
+            transcodes.Register(new PlaybackTranscodeSource(session, 7, input, 0, 1, false, false, 300_000));
+
+            // First segment, then a seek that restarts the job.
+            var first = await transcodes.GetSegmentAsync(session, 7, 0, CancellationToken.None);
+            Assert.IsTrue(new FileInfo(first).Length > 0);
+            var seek = await transcodes.GetSegmentAsync(session, 7, 6, CancellationToken.None);
+            Assert.IsTrue(new FileInfo(seek).Length > 0);
+
+            // A second conversion exceeds the budget of one.
+            var other = Guid.NewGuid();
+            transcodes.Register(new PlaybackTranscodeSource(other, 7, input, 0, 1, false, false, 300_000));
+            var busy = await Assert.ThrowsExactlyAsync<Jularr.Backend.Data.Common.ServiceUnavailableException>(() => transcodes.GetSegmentAsync(other, 7, 0, CancellationToken.None));
+            Assert.AreEqual("playback_capacity_exhausted", busy.Code);
+
+            transcodes.Stop(session);
+            Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(first)));
+        }
+
         private static async Task<(long AssetId, long WorkId)> CreatePlayableAsync(Host host, string storagePath, bool wakeOnDemand, string fileName = "Film.mp4")
         {
             var mountId = await LibraryTests.CreateMountAsync(host);
