@@ -1,5 +1,12 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Text.Encodings.Web;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Service.Core;
+using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -8,6 +15,39 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class FrontendAuthenticationTests
     {
+        [TestMethod]
+        public async Task Form_PasswordMetadataAndBackendError_RenderAutomaticallyWithoutSecrets()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+
+            // Validate through the backend field.
+            var data = new RegisterDataV1("new@example.test", "New", "short", 1);
+            var validation = Assert.ThrowsExactly<DataValidationException>(data.Validate);
+            Assert.AreEqual("Password", validation.Field);
+            Assert.AreEqual("too_short", validation.Code);
+            new LoginDataV1("a@example.test", "short").Validate();
+            new RegisterDataV1("new@example.test", "New", "  valid passphrase  ", 1).Validate();
+            Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new@example.test", "New", new string('x', 129), 1).Validate());
+
+            // The component consumes shared metadata/errors.
+            var form = new Form<RegisterDataV1>(fields => fields.Password(item => item.Password, "account.field.password", "new-password"),
+                "/Account/Login", "test-antiforgery-token", data, ServiceError.FromException(validation));
+            using var writer = new StringWriter();
+            form.WriteTo(writer, HtmlEncoder.Default, texts);
+            var html = writer.ToString();
+            StringAssert.Contains(html, "minlength=\"12\"");
+            StringAssert.Contains(html, "maxlength=\"128\"");
+            StringAssert.Contains(html, "required=\"required\"");
+            StringAssert.Contains(html, "aria-invalid=\"true\"");
+            StringAssert.Contains(html, texts["errors.validation.too_short"]);
+            Assert.IsFalse(html.Contains("value=\"short\"", StringComparison.Ordinal));
+        }
+
         [TestMethod]
         [DataRow(3, true, false)]
         [DataRow(1, true, true)]

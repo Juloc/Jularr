@@ -36,13 +36,8 @@ namespace Jularr.Frontend.Pages.Account
                     form.Text(x => x.Email, "account.field.email", "username");
                     form.Password(x => x.Password, "account.field.password", "current-password");
                     form.Submit("account.login.submit");
-                }, action, token, new LoginDataV1(_email, ""), Error?.Field is "Email" or "Password" ? Error : null)
+                }, action, token, new LoginDataV1(_email, ""), Error)
             ).Class("auth-card"));
-
-            if (Error is not null && Error.Field is not ("Email" or "Password"))
-            {
-                page.Content.Add(new P(new Text(Error.FieldResourceKey ?? Error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
-            }
 
             // Advertise configured methods only.
             if (_authentication?.PlexLoginEnabled == true)

@@ -34,9 +34,9 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [ProfileSelection.cs](../src/Jularr.Backend/Data/User/Profile/V1/ProfileSelection.cs), [Session.cs](../src/Jularr.Backend/Data/User/Session/V1/Session.cs): versioned selection/session contracts with hidden credential transport.
 - [Data/Public/Authentication/V1](../src/Jularr.Backend/Data/Public/Authentication/V1): versioned Public auth contracts; [BaseParameters.cs](../src/Jularr.Backend/Data/Common/BaseParameters.cs), [BaseResponse.cs](../src/Jularr.Backend/Data/Common/BaseResponse.cs): service contract roles over BaseData.
 - [Data/Public/Localization/V1](../src/Jularr.Backend/Data/Public/Localization/V1): versioned locale list and language-pack parameters/results; there is no parallel consumer catalog interface.
-- [Data/Logic](../src/Jularr.Backend/Data/Logic): neutral Profile lookup/mutation and session authentication data.
-- [ProfileFields.cs](../src/Jularr.Backend/Data/Fields/Profile/ProfileFields.cs), [SessionFields.cs](../src/Jularr.Backend/Data/Fields/Session/SessionFields.cs): canonical Profile/session fields.
-- [Data/Fields/Account](../src/Jularr.Backend/Data/Fields/Account): Account, membership, credential, challenge and external-login fields.
+- [Data/Logic](../src/Jularr.Backend/Data/Logic): neutral entity lookups/mutations and session authentication data. [AccountProfileData.cs](../src/Jularr.Backend/Data/Logic/Account/AccountProfileData.cs) is the shared Account/Profile association; [AccountParameters.cs](../src/Jularr.Backend/Data/Logic/Account/AccountParameters.cs) scopes account reads.
+- [ProfileFields.cs](../src/Jularr.Backend/Data/Fields/Profile/ProfileFields.cs), [AccountSessionFields.cs](../src/Jularr.Backend/Data/Fields/Account/AccountSessionFields.cs): canonical Profile/account-session fields.
+- [Data/Fields/Account](../src/Jularr.Backend/Data/Fields/Account): Account, AccountProfile, credential, challenge and external-login fields; names match the singular schema entity.
 - [Data/Enums](../src/Jularr.Backend/Data/Enums): enums grouped by Account, Service and Sql owner.
 - [UiLocaleFields.cs](../src/Jularr.Backend/Data/Fields/Localization/UiLocaleFields.cs), [ProviderFields.cs](../src/Jularr.Backend/Data/Fields/Provider/ProviderFields.cs): required locale/provider catalog fields.
 - [BaseData.cs](../src/Jularr.Backend/Data/Common/BaseData.cs): cached field validation, same-name property merging, Id-based list merging and partial/list JSON binding.

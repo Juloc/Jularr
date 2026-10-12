@@ -35,6 +35,11 @@ data supports email/password; username login has no confirmed backend contract.
 Login, configured Plex authentication, profile selection, session revocation,
 logout and profile name/language settings invoke typed Backend services directly.
 POST forms use antiforgery, canonical field metadata and shared sanitized errors.
+Required values and minimum/maximum lengths come from Backend fields. The Backend
+service validates inputs; shared page handling and Form place translated field or
+form-level errors without page-local validation rules. Password creation currently
+requires 12-128 Unicode characters; sign-in checks existing credentials without
+applying the new-password minimum. A compromised-password blocklist is not implemented.
 Password values and session secrets are never rendered. PIN-protected profiles
 remain inaccessible until the PIN contract is implemented; passkeys are not guessed.
 The Jularr-specific application Shell belongs to `Pages/Shared/Shell.cs`,

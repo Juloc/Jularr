@@ -55,7 +55,10 @@ later Admin settings; do not create a separate configuration system per page.
 Choose the installation/bootstrap proof. Owner administers configuration; MediaManager
 is limited to manual media management and Requests/Wanted. Storage includes configurable
 SMB/NFS/Synology and permitted Compose paths; exact runtime capabilities must be verified
-before activating connection/mount controls. Timezone/region/default-preference contracts need their exact
+before activating connection/mount controls. Prefer direct SMB/NFS access; mounting
+is only a consumer-dependent fallback, not a required Owner choice before development.
+Instance metadata uses a fixed locale or profile locale; localized artwork is an
+independent Owner setting. Timezone/region/default-preference contracts need their exact
 field/catalog definitions before adding SQL. First Owner uses the current required
 Email and DisplayName, not the obsolete UserName/optional-email form.
 

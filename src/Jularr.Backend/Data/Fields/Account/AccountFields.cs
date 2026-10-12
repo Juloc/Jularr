@@ -29,11 +29,4 @@ namespace Jularr.Backend.Data.Fields.Account
         public static readonly EnumField Id = new(typeof(AccountRoleType));
         public static readonly StringField Key = new() { AllowBlank = false };
     }
-
-    public static class AccountProfileFields
-    {
-        public static readonly LongField AccountId = new() { Minimum = 1 };
-        public static readonly LongField ProfileId = new() { Minimum = 1 };
-        public static readonly DateTimeField CreatedAt = new();
-    }
 }

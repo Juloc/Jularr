@@ -277,6 +277,7 @@ namespace Jularr.Backend.Tests
 
             public Fixture Fixture { get; }
             public PlexHandler Plex { get; }
+            public IServiceProvider Services => _app.Services;
             public Dictionary<string, string> Cookies { get; } = new(StringComparer.Ordinal);
 
             public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false)

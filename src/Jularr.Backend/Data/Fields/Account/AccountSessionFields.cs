@@ -1,8 +1,6 @@
-using Jularr.Backend.Data.Fields;
-
-namespace Jularr.Backend.Data.Fields.Session
+namespace Jularr.Backend.Data.Fields.Account
 {
-    public static class SessionFields
+    public static class AccountSessionFields
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly GuidField PublicId = new();

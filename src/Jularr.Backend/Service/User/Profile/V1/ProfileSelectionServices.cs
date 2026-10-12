@@ -1,7 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
-using Jularr.Backend.Data.Logic.Profile;
+using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Session;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -20,7 +20,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Read selectable memberships only.
+            // Read linked profiles only.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -29,18 +29,18 @@ namespace Jularr.Backend.Service.User.Profile.V1
                     profile."DisplayName",
                     (profile."PinHash" IS NOT NULL) AS "IsLocked"
                 FROM
-                    "AccountProfiles" AS membership
+                    "AccountProfiles" AS accountProfile
                 INNER JOIN
-                    "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                    "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
                 WHERE
-                    membership."AccountId" = @AccountId
+                    accountProfile."AccountId" = @AccountId
                 ORDER BY
                     profile."DisplayName",
                     profile."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new SessionAccountParameters(Auth.AccountId!.Value));
+            sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ProfileSelectionDetailsV1>(sql, CancellationToken);
         }
@@ -58,7 +58,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
         {
             // Rotate the verified session context.
             var proof = new SessionParameters(Auth.SessionPublicId!.Value, Auth.SessionRevision!.Value, Auth.SessionTokenHash!);
-            var target = new ProfileMembershipParameters(Auth.AccountId!.Value, Parameters.ProfileId);
+            var target = new AccountProfileData(Auth.AccountId!.Value, Parameters.ProfileId);
             var session = await Context.SelectSessionProfileAsync(proof, target, CancellationToken);
             return new SelectProfileResultV1(session);
         }

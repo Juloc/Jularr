@@ -309,7 +309,7 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private sealed class ReadWithForbiddenLogicService : UserReadService<AccountParameters>
+        private sealed class ReadWithForbiddenLogicService : UserService<AccountParameters>
         {
             protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
             protected override ModuleRequirement GetInstanceModules(AccountParameters parameters) => ModuleRequirement.None;
@@ -354,7 +354,7 @@ namespace Jularr.Backend.Tests
             }
         }
 
-        private sealed class AccountReadService : UserReadService<AccountParameters>
+        private sealed class AccountReadService : UserService<AccountParameters>
         {
             protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<AccountResult>()];
 

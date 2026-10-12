@@ -137,6 +137,7 @@ namespace Jularr.Frontend.Framework
             // Use canonical field metadata.
             if (_action is null) input.Attribute("disabled", "disabled");
             if (field.Required) input.Attribute("required", "required");
+            if (field.MinimumLength is { } minimumLength) input.Attribute("minlength", minimumLength.ToString(CultureInfo.InvariantCulture));
             if (field.MaximumLength is { } length) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
             if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));
             if (field.Maximum is { } maximum) input.Attribute("max", maximum.ToString(CultureInfo.InvariantCulture));

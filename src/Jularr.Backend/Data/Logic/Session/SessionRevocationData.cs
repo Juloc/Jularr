@@ -1,5 +1,5 @@
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Fields.Session;
+using Jularr.Backend.Data.Fields.Account;
 
 namespace Jularr.Backend.Data.Logic.Session
 {
@@ -11,10 +11,10 @@ namespace Jularr.Backend.Data.Logic.Session
             AccountId = accountId;
         }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.PublicId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
         public Guid SessionPublicId { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.AccountId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.AccountId))]
         public long AccountId { get; }
     }
 }

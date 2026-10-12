@@ -1,5 +1,5 @@
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Fields.Session;
+using Jularr.Backend.Data.Fields.Account;
 
 namespace Jularr.Backend.Data.User.Session.V1
 {
@@ -29,13 +29,13 @@ namespace Jularr.Backend.Data.User.Session.V1
             IsCurrent = isCurrent;
         }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.PublicId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
         public Guid Id { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.CreatedAt))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.CreatedAt))]
         public DateTime CreatedAt { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.ExpiresAt))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ExpiresAt))]
         public DateTime ExpiresAt { get; }
 
         public bool IsCurrent { get; }
@@ -48,7 +48,7 @@ namespace Jularr.Backend.Data.User.Session.V1
             SessionPublicId = sessionPublicId;
         }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.PublicId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
         public Guid SessionPublicId { get; }
     }
 

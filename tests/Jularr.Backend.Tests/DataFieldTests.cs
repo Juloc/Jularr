@@ -5,7 +5,6 @@ using System.Text.Json;
 using Jularr.Backend.Data.Fields;
 using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Fields.Profile;
-using Jularr.Backend.Data.Fields.Session;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Tests.Infrastructure;
@@ -97,8 +96,8 @@ namespace Jularr.Backend.Tests
             Assert.ThrowsExactly<DataValidationException>(() => ProfileFields.UiLocaleId.Validate(0L, "UiLocaleId"));
 
             // Nullability and the all-zero Guid are separate field rules.
-            Assert.ThrowsExactly<DataValidationException>(() => SessionFields.PublicId.Validate(null, "SessionPublicId"));
-            Assert.ThrowsExactly<DataValidationException>(() => SessionFields.PublicId.Validate(Guid.Empty, "SessionPublicId"));
+            Assert.ThrowsExactly<DataValidationException>(() => AccountSessionFields.PublicId.Validate(null, "SessionPublicId"));
+            Assert.ThrowsExactly<DataValidationException>(() => AccountSessionFields.PublicId.Validate(Guid.Empty, "SessionPublicId"));
             AccountPasskeyFields.Aaguid.Validate(null, "Aaguid");
             AccountPasskeyFields.Aaguid.Validate(Guid.Empty, "Aaguid");
         }

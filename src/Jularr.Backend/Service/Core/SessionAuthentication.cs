@@ -78,10 +78,10 @@ namespace Jularr.Backend.Service.Core
                 INNER JOIN
                     "Accounts" AS account ON account."Id" = session."AccountId"
                 LEFT JOIN
-                    "AccountProfiles" AS membership ON membership."AccountId" = account."Id"
-                        AND membership."ProfileId" = session."ActiveProfileId"
+                    "AccountProfiles" AS accountProfile ON accountProfile."AccountId" = account."Id"
+                        AND accountProfile."ProfileId" = session."ActiveProfileId"
                 LEFT JOIN
-                    "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                    "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
                 WHERE
                     session."PublicId" = @SessionPublicId
                     AND session."RotationRevision" = @SessionRevision

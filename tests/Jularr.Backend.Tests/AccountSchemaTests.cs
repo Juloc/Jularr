@@ -8,7 +8,6 @@ using Jularr.Backend.Data.Fields;
 using Jularr.Backend.Data.Fields.Localization;
 using Jularr.Backend.Data.Fields.Profile;
 using Jularr.Backend.Data.Fields.Provider;
-using Jularr.Backend.Data.Fields.Session;
 using Jularr.Backend.Infrastructure.Sql;
 using Npgsql;
 using NpgsqlTypes;
@@ -42,7 +41,7 @@ namespace Jularr.Backend.Tests
                 ["AuthChallengePurposeTypes"] = typeof(AuthChallengePurposeTypeFields),
                 ["AccountAuthChallenges"] = typeof(AccountAuthChallengeFields),
                 ["AccountExternalAuthFlows"] = typeof(AccountExternalAuthFlowFields),
-                ["AccountSessions"] = typeof(SessionFields)
+                ["AccountSessions"] = typeof(AccountSessionFields)
             };
             var databaseTypes = new Dictionary<string, NpgsqlDbType>
             {
@@ -94,6 +93,7 @@ namespace Jularr.Backend.Tests
 
             foreach (var (table, type) in definitions)
             {
+                Assert.AreEqual(table[..^1] + "Fields", type.Name, table);
                 foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Static))
                 {
                     Assert.IsTrue(seen.Contains((table, field.Name)), table + "." + field.Name);
@@ -181,8 +181,8 @@ namespace Jularr.Backend.Tests
             var data = new AuthBinding(43, "c@example.test", AccountRoleType.User, [1], [2], ["internal"], "Passkey");
             data.Validate();
             Assert.ThrowsExactly<DataValidationException>(() => new AuthBinding(data.AccountId, data.Email, (AccountRoleType)99, data.CredentialId, data.PublicKey, data.Transports, data.DisplayName).Validate());
-            Assert.ThrowsExactly<DataValidationException>(() => SessionFields.TokenHash.Validate(new byte[31], "TokenHash"));
-            Assert.ThrowsExactly<DataValidationException>(() => SessionFields.TokenHash.Validate(new byte[33], "TokenHash"));
+            Assert.ThrowsExactly<DataValidationException>(() => AccountSessionFields.TokenHash.Validate(new byte[31], "TokenHash"));
+            Assert.ThrowsExactly<DataValidationException>(() => AccountSessionFields.TokenHash.Validate(new byte[33], "TokenHash"));
             await using (var context = new SqlContext(fixture.Database))
             {
                 await context.BeginAsync(SqlAccessMode.ReadWrite);

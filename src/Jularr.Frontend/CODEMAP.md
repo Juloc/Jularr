@@ -48,7 +48,7 @@ Shared conventions and Backend ownership:
 - [BaseField.cs](Framework/BaseField.cs) and
   [Form.cs](Framework/Components/Form.cs): `Form<TData>` owns label/input
   markup, field errors and local antiforgery POSTs using canonical backend
-  `DataField` metadata. Unbound forms remain disabled.
+  `DataField` metadata, including minimum/maximum string lengths. Unbound forms remain disabled.
 - [Shell.cs](Pages/Shared/Shell.cs) and
   [Shell.scss](Pages/Shared/Shell.scss): Jularr-specific Header, Sidebar,
   Mobile navigation and their private helpers in **one** shell owner.

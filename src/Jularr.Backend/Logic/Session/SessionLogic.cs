@@ -10,9 +10,9 @@ namespace Jularr.Backend.Logic.Session
 {
     internal static class SessionLogic
     {
-        public static async Task<SessionCredentialsData> SelectSessionProfileAsync(this LogicContext context, SessionParameters proof, ProfileMembershipParameters target, CancellationToken cancellationToken)
+        public static async Task<SessionCredentialsData> SelectSessionProfileAsync(this LogicContext context, SessionParameters proof, AccountProfileData target, CancellationToken cancellationToken)
         {
-            // Lock the target membership.
+            // Lock the account/profile link.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -22,17 +22,17 @@ namespace Jularr.Backend.Logic.Session
                     session."ExpiresAt",
                     session."CredentialRevision"
                 FROM
-                    "AccountProfiles" AS membership
+                    "AccountProfiles" AS accountProfile
                 INNER JOIN
-                    "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                    "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
                 INNER JOIN
-                    "AccountSessions" AS session ON session."AccountId" = membership."AccountId"
+                    "AccountSessions" AS session ON session."AccountId" = accountProfile."AccountId"
                 WHERE
                     session."PublicId" = @SessionPublicId
-                    AND membership."AccountId" = @AccountId
-                    AND membership."ProfileId" = @ProfileId
+                    AND accountProfile."AccountId" = @AccountId
+                    AND accountProfile."ProfileId" = @ProfileId
                 FOR UPDATE OF
-                    membership, profile;
+                    accountProfile, profile;
                 """;
             sql.Parameters.Add(proof);
             sql.Parameters.Add(target);
@@ -104,11 +104,11 @@ namespace Jularr.Backend.Logic.Session
                     profile."DisplayName",
                     profile."UiLocaleId"
                 FROM
-                    "AccountProfiles" AS membership
+                    "AccountProfiles" AS accountProfile
                 INNER JOIN
-                    "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                    "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
                 WHERE
-                    membership."AccountId" = @AccountId
+                    accountProfile."AccountId" = @AccountId
                     AND profile."PinHash" IS NULL
                     AND (SELECT count(*) FROM "AccountProfiles" WHERE "AccountId" = @AccountId) = 1
                 ORDER BY
@@ -116,9 +116,9 @@ namespace Jularr.Backend.Logic.Session
                     profile."Id"
                 LIMIT 1
                 FOR UPDATE OF
-                    membership, profile;
+                    accountProfile, profile;
                 """;
-            sql.Parameters.Add(new SessionAccountParameters(account.Id));
+            sql.Parameters.Add(new AccountParameters(account.Id));
 
             // A profile remains optional.
             var profile = await context.ReadOptionalAsync<ProfileUpdateData>(sql, cancellationToken);
@@ -168,14 +168,14 @@ namespace Jularr.Backend.Logic.Session
                         profile."OwnerAccountId",
                         profile."UiLocaleId"
                     FROM
-                        "AccountProfiles" AS membership
+                        "AccountProfiles" AS accountProfile
                     INNER JOIN
-                        "Profiles" AS profile ON profile."Id" = membership."ProfileId"
+                        "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
                     WHERE
-                        membership."AccountId" = account."Id"
-                        AND membership."ProfileId" = session."ActiveProfileId"
+                        accountProfile."AccountId" = account."Id"
+                        AND accountProfile."ProfileId" = session."ActiveProfileId"
                     FOR UPDATE OF
-                        membership, profile
+                        accountProfile, profile
                 ) AS profile ON TRUE
                 WHERE
                     session."PublicId" = @SessionPublicId

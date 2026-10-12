@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Fields.Profile;
-using Jularr.Backend.Data.Fields.Session;
+using Jularr.Backend.Data.Fields.Account;
 
 namespace Jularr.Backend.Data.Logic.Session
 {
@@ -22,10 +22,10 @@ namespace Jularr.Backend.Data.Logic.Session
         [DataField(typeof(ProfileFields), nameof(ProfileFields.PinHash))]
         public string? PinHash { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.ExpiresAt))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ExpiresAt))]
         public DateTime ExpiresAt { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.CredentialRevision))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.CredentialRevision))]
         public long CredentialRevision { get; }
     }
 }

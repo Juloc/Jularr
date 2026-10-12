@@ -19,7 +19,7 @@ namespace Jularr.Backend.Service.Core
         public static ServiceSortKey<TSort> Additional(TSort value) => new(value, false);
     }
 
-    public abstract class UserListService<TParameters, TSort> : UserReadService<TParameters>
+    public abstract class UserListService<TParameters, TSort> : UserService<TParameters>
         where TSort : struct, Enum
     {
         private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;
@@ -72,7 +72,7 @@ namespace Jularr.Backend.Service.Core
         }
     }
 
-    public abstract class AdminListService<TParameters, TSort> : AdminReadService<TParameters>
+    public abstract class AdminListService<TParameters, TSort> : AdminService<TParameters>
         where TSort : struct, Enum
     {
         private IReadOnlyList<ServiceSortKey<TSort>>? _sortKeys;

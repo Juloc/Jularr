@@ -33,6 +33,10 @@ and commit together. No migration, active-database installation or extra server.
   SMB, NFS and Synology API. Docker Compose can expose additional permitted host
   paths to the same Storage/Library owner. No arbitrary filesystem browser or
   implicit Docker socket/privileged-container access.
+- Prefer direct SMB/NFS protocol access without an OS mount. Use a managed mount
+  only for a demonstrated filesystem-path requirement in an actual consumer;
+  its platform support and required permissions must be explicit in configuration.
+  Compose paths remain a separate supported input, not the only NAS access mode.
 - Synology management API and file access are distinct responsibilities in
   Integrations, not additional Backend projects or canonical media systems.
 - Jularr is a standalone Arr system. Sonarr/Radarr/Prowlarr are optional one-time
@@ -44,6 +48,14 @@ and commit together. No migration, active-database installation or extra server.
   behavior/technical reference, not a structure to copy into the new framework.
 - Profile PIN is optional, protects selection/switching and must support numeric
   TV/remote interaction. It never replaces account authentication.
+- Media metadata and artwork share canonical media identities, not one Work per
+  language. The Owner chooses a fixed instance metadata locale or each profile's
+  effective locale, and independently whether covers/artwork follow that locale.
+  Keep metadata and artwork variants for enabled instance locales, synchronized
+  through the canonical import/provider owner, not provider requests during page
+  rendering. Preserve manual edits; store provider language/region and provenance.
+  Missing translations/artwork require explicit fallback; never invent unavailable
+  localized assets. Locale IDs stay canonical; provider codes belong at the adapter.
 - Admin localization edits use existing Logic. AI generation remains explicitly
   requested only; do not translate during ordinary page reads.
 - Permission overrides are conditional in the supplied model, not permission to
@@ -54,8 +66,9 @@ and commit together. No migration, active-database installation or extra server.
 1. First-Owner installation proof and isolated preview database configuration.
 2. Optional PIN length/retry/cooldown/recovery policy; profile creation limits.
 3. Exact instance/profile preference catalogs and incomplete media/storage columns.
-4. SMB/NFS runtime access: align implementation with container capabilities and
-   the approved Storage mount model; never silently grant host mount privileges.
+4. NAS adapter/runtime support and incomplete media fields: validate direct
+   read/write/seek access first; introduce managed mounts only where the consumer
+   actually requires one. Do not impose mounting as a product prerequisite.
 
 Role authorization and session revocation/rotation are implemented; administrative
 domain operations, Storage/NAS, media pages, standalone Arr, takeover and Player
@@ -65,3 +78,10 @@ for native and external downloaders and the same Storage locations for imports/p
 Dev reference owners: [Acquisition core](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Acquisition/Core/CODEMAP.md),
 [Playback plan](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Playback/Decision/PlaybackPlan.cs),
 [Storage contract](https://github.com/Juloc/Jularr/blob/dev/docs/mockups/admin-storage/SPEC.md).
+
+Provider references: [TMDB metadata locales](https://developer.themoviedb.org/docs/languages),
+[TMDB artwork languages](https://developer.themoviedb.org/docs/image-languages).
+Image language support is not identical to regional text support; keep language-neutral
+artwork as eligible fallback. Direct access candidates (not installed dependencies):
+[SMB client examples](https://github.com/TalAloni/SMBLibrary/blob/master/ClientExamples.md),
+[NFS client APIs](https://github.com/sahlberg/libnfs).

@@ -1,5 +1,5 @@
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Fields.Session;
+using Jularr.Backend.Data.Fields.Account;
 
 namespace Jularr.Backend.Data.Logic.Session
 {
@@ -12,13 +12,13 @@ namespace Jularr.Backend.Data.Logic.Session
             SessionTokenHash = sessionTokenHash;
         }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.PublicId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
         public Guid SessionPublicId { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.RotationRevision))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.RotationRevision))]
         public long SessionRevision { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.TokenHash))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.TokenHash))]
         public byte[] SessionTokenHash { get; }
     }
 }

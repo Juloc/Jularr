@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Fields.Session;
+using Jularr.Backend.Data.Fields.Account;
 
 namespace Jularr.Backend.Data.Logic.Session
 {
@@ -19,29 +19,29 @@ namespace Jularr.Backend.Data.Logic.Session
             RotationRevision = rotationRevision;
         }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.PublicId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
         public Guid PublicId { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.AccountId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.AccountId))]
         public long AccountId { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.ActiveProfileId))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ActiveProfileId))]
         public long? ProfileId { get; }
 
         [JsonIgnore]
-        [DataField(typeof(SessionFields), nameof(SessionFields.TokenHash))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.TokenHash))]
         public byte[] TokenHash { get; }
 
         [JsonIgnore]
         public string Token { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.CredentialRevision))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.CredentialRevision))]
         public long CredentialRevision { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.ExpiresAt))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ExpiresAt))]
         public DateTime ExpiresAt { get; }
 
-        [DataField(typeof(SessionFields), nameof(SessionFields.RotationRevision))]
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.RotationRevision))]
         public long RotationRevision { get; }
     }
 }

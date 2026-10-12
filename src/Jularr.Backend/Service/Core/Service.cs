@@ -269,9 +269,7 @@ namespace Jularr.Backend.Service.Core
             => base.ExecuteAsync<TOutput>(parameters, default, cancellationToken);
     }
 
-    public abstract class UserReadService<TParameters> : UserService<TParameters>;
-
-    public abstract class AdminReadService<TParameters> : AdminService<TParameters, NoData>
+    public abstract class AdminService<TParameters> : AdminService<TParameters, NoData>
     {
         protected sealed override ServiceOperationType GetOperationType() => ServiceOperationType.Read;
 
