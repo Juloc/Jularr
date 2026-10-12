@@ -1,0 +1,13 @@
+using Jularr.Backend.Data.Fields;
+using NpgsqlTypes;
+
+namespace Jularr.Backend.Data.Fields.Instance
+{
+    public static class InstanceSettingsFields
+    {
+        public static readonly LongField Id = new() { Minimum = 1, Maximum = 1 };
+        public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
+        public static readonly LongField UiLocaleId = new() { Minimum = 1 };
+        public static readonly LongField Version = new() { Minimum = 1 };
+    }
+}

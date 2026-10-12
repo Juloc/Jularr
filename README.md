@@ -105,6 +105,14 @@ unter derselben Session-Transaktion. Owner verwalten Accounts unter `/Admin/Acco
 und UI-Beschreibungen/Übersetzungen unter `/Admin/Localization`; Settings verlinkt
 die jeweils freigegebenen Bereiche. Requests/Wanted und Medieninventar bleiben offen.
 
+`/Admin/Instance` bietet Ownern Instanzname und Sprache über
+`ReadInstanceSettingsV1` / `UpdateInstanceSettingsV1` mit Versionsprüfung.
+Die API liegt unter `GET|PUT /api/v1/admin/instance/settings`; SQL und
+Sprachvalidierung bleiben im Backend. Eine neue Installation benötigt hierfür
+die frische [Instance-Baseline](database/Instance.sql) nach der Account-Baseline.
+Module, User-Capabilities, öffentliche Branding-/Sprachdefaults und die Anbindung
+an den weiteren Setup Wizard sind noch nicht implementiert.
+
 `/Admin/Works` legt kanonische Works manuell an; `/Admin/Works/{id}` bearbeitet
 den Titel mit Versionsprüfung und erhält weitere Titelquellen. `/Details/{id}`
 und `/Watchlist` lesen persistierte Medien und bearbeiten ausschließlich die

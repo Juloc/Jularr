@@ -69,6 +69,11 @@ namespace Jularr.Frontend.Pages.User.Settings
             ]));
 
             // Expose granted administration routes.
+            if (_authentication?.Permissions.Contains("instance.settings.read", StringComparer.Ordinal) is true)
+            {
+                page.Content.Add(new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance"));
+            }
+
             if (_authentication?.Permissions.Contains("accounts.read", StringComparer.Ordinal) is true)
             {
                 page.Content.Add(new A(new Text("admin.accounts.title")).Attribute("href", "/Admin/Accounts"));

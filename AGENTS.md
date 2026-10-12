@@ -15,7 +15,7 @@
 - Preserve unrelated and uncommitted changes. Do not reset, delete or overwrite user work without explicit authorization.
 - Never expose or commit secrets. Do not change an active database; use isolated databases for tests.
 - Ask only when a missing decision or permission materially changes scope or safety.
-- Current scope includes the complete clean-start Backend and Frontend: service/SQL integration first, then the started pages with canonical services, Logic and fresh-baseline tables. Frontend owns the single web host and invokes Services only. Setup Wizard follows those slices. Record unresolved product decisions, continue independent work and ask bundled questions at handoff. Phase B remains stopped; no clean-cut migrations or active-database changes.
+- Current scope includes the clean-start Backend and Frontend. Propose each area's Services, tables, Logic and rough Frontend to the owner before implementation. Deliver approved work in small verified bundles, one commit and push per topic; agree the next topic before starting it. Frontend owns the single web host and invokes Services only. Phase B remains stopped; no clean-cut migrations or active-database changes.
 
 ## Validation and Git
 

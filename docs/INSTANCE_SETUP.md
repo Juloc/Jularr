@@ -7,8 +7,8 @@ versioned Backend Data/Services, canonical Logic writers and shared transactions
 
 ## Pages and canonical owners
 
-Except for the first-Owner services/state, new service names and tables below
-remain proposals, not existing contracts. Each
+Except for first-Owner services/state and instance name/language settings,
+new service names and tables below remain proposals, not existing contracts. Each
 Admin owner provides its ordinary read/update/test operations for both Setup and
 later Admin settings; do not create a separate configuration system per page.
 
@@ -16,7 +16,7 @@ later Admin settings; do not create a separate configuration system per page.
 | --- | --- | --- | --- |
 | 1. Start & system | First-Owner form is connected. Remaining database/system/storage readiness checks are pending. | Public `ReadSetupV1`, `CreateOwnerV1`; Account Logic owns exactly-once account/profile/password creation and the shared Session writer signs in. | Existing Accounts, AccountPasswords, Profiles, AccountProfiles, UiLocales; implemented InstanceSetupState. |
 | 2. Setup type | New instance; later supported backup restore or migration. A source cannot be both restored and migrated. | Setup orchestration delegates to canonical Backup or Migration operations. | InstanceSetupState references the operation; proposed Operations/OperationLogs. No duplicated backup or migration data. |
-| 3. Instance & modules | Instance name, language/region/timezone; enabled modules; default media order, landing page, density, theme/accent and Continue priority; registration/invite policy. | Admin `ReadInstanceV1` / `UpdateInstanceV1`; Instance Logic validates actual module capabilities and settings. | Proposed InstanceSettings and InstanceModules; existing UiLocales. Profile overrides belong to later Profile settings, not duplicate instance settings. |
+| 3. Instance & modules | Owner name/language editor implemented; region/timezone, modules and default preferences remain pending. | Admin `ReadInstanceSettingsV1` / `UpdateInstanceSettingsV1`; Instance Logic owns revision checks and enabled-locale validation. Proposed User `ReadInstanceCapabilitiesV1` is separate from configuration. | Implemented InstanceSettings and existing UiLocales; InstanceModules remains proposed. Profile overrides belong to later Profile settings. |
 | 4. Storage & roots | Configure SMB/NFS/Synology connections or permitted Docker Compose paths; choose mounts and logical roots, media types and storage roles; check access, space and conflicts. | Owner Storage read/update/test; Storage Logic owns allowed paths and Library Logic owns roots. Integrations owns NAS I/O. | Proposed StorageMounts and the agreed LibraryRoots; storage-role relations when their capabilities exist. |
 | 5. Downloader / Usenet | Optional native Usenet settings or external client; TLS, credentials, connections, workspace/categories and path mapping; connection test. | Admin Downloader read/update/test; Downloader Logic owns configuration; Integrations performs external protocol calls. | Proposed UsenetServers / DownloadClients and their workspace/root references. No fake media module or Arr-specific copy of the library model. |
 | 6. Providers | Identity/login, metadata, search/indexers, subtitles, translation/reading as needed; required versus optional status and bounded tests. TMDB is required for Movie/TV unless a supported substitute covers the same capability. | Admin Provider read/update/test; Provider Logic owns saved configuration and capability requirements. Reuse existing Public auth/Plex services. | Existing Providers; proposed ProviderConnections with protected credentials. Extend the canonical owner, not setup-only Plex/TMDB settings. |
@@ -32,6 +32,11 @@ later Admin settings; do not create a separate configuration system per page.
   password, session and permanent bootstrap closure together. It currently opens
   Profile settings afterward; this is not full wizard completion. Other configuration
   steps and resumable progress remain pending.
+- `/Admin/Instance` edits the instance name and UiLocaleId through the same
+  services intended for Setup. Its fresh baseline is installed explicitly after
+  Account.sql, never by application startup. Module activation, User capabilities,
+  public branding/default-language consumption and the wizard step are not yet
+  integrated; no unsupported module toggle is presented.
 - Resume on the server: current page, completed configuration and pending operation
   references survive reloads. Recheck stale external health; it is not permanent truth.
 - Setup reads use static SELECTs; all mutations go through their canonical Logic.

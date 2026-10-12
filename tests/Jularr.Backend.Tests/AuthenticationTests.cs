@@ -319,6 +319,7 @@ namespace Jularr.Backend.Tests
                         options.Conventions.AuthorizePage("/Admin/Languages/Languages", ServiceApi.LocalizationReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Accounts/Accounts", ServiceApi.AccountsReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Providers/Providers", ServiceApi.ProvidersReadPolicyName);
+                        options.Conventions.AuthorizePage("/Admin/Instance/Instance", ServiceApi.InstanceSettingsReadPolicyName);
                         options.Conventions.AllowAnonymousToPage("/Account/Login/Login");
                         options.Conventions.AllowAnonymousToPage("/Setup/Start/Start");
                         options.Conventions.AllowAnonymousToPage("/Development/ShellPreview/ShellPreview");

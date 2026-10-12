@@ -3,6 +3,14 @@
 `Account.sql` installs one fresh PostgreSQL baseline in one transaction. It is
 embedded as `Jularr.Database.Account.sql` for isolated tests. The host never applies it.
 
+`Instance.sql` follows `Account.sql` in a new installation. It adds the singleton
+InstanceSettings (Name, UiLocaleId, Version), using the shared English locale as
+its initial language. It is embedded as `Jularr.Database.Instance.sql` for focused
+isolated tests; it is never installed automatically on an existing database.
+Owner services provide version-checked name/language edits. Module gates,
+public branding/default-language consumption and Setup integration follow in
+separate approved slices; this baseline does not claim those features.
+
 `Media.sql` follows `Account.sql` in a new installation. It is embedded as
 `Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles and
 WatchlistEntries. It is not a migration for an existing database. Media integration
