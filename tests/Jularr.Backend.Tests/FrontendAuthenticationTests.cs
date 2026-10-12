@@ -18,7 +18,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Razor_PageFolders_PreservePublicRoutes()
         {
-            await using var host = await Host.CreateAsync(razor: true);
+            await using var host = await Host.CreateAsync(razor: true, media: true);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Route test')");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
@@ -74,7 +75,8 @@ namespace Jularr.Backend.Tests
         [DataRow(2, false, false)]
         public async Task Razor_RolePolicies_SeparateManualMediaAndConfiguration(int role, bool mediaAllowed, bool configurationAllowed)
         {
-            await using var host = await Host.CreateAsync(razor: true);
+            await using var host = await Host.CreateAsync(razor: true, media: true);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Policy test')");
             await host.Fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {role} WHERE \"Id\" = 41");
             using var login = await host.SendAsync(HttpMethod.Get, "/Account/Login");
             using var signedIn = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await login.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));

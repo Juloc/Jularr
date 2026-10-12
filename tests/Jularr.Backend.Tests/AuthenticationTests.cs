@@ -280,9 +280,17 @@ namespace Jularr.Backend.Tests
             public IServiceProvider Services => _app.Services;
             public Dictionary<string, string> Cookies { get; } = new(StringComparer.Ordinal);
 
-            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false)
+            public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false)
             {
                 var fixture = await Fixture.CreateAsync();
+                if (media)
+                {
+                    // Install the requested baseline.
+                    using var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Media.sql")!;
+                    using var reader = new StreamReader(schema);
+                    await fixture.RunSqlAsync(await reader.ReadToEndAsync());
+                }
+
                 var hasher = new PasswordHasher<AccountAuthenticationData>();
                 var hash = hasher.HashPassword(new AccountAuthenticationData(41, 1, null, true, false), Password);
                 await fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 1 WHERE \"Id\" = 41");
