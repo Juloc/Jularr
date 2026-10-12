@@ -75,19 +75,33 @@ function Invoke-Preview([string]$Method, [string]$Path, $Body, $Session)
 
 function Initialize-PreviewData
 {
-    # Owner, test library and first scans through the public services.
+    # Idempotent: Owner, test library and first scans through the public services.
     $seed = $settings.Seed
     $session = [Microsoft.PowerShell.Commands.WebRequestSession]::new()
     $script:antiforgery = $null
     Invoke-Preview 'GET' '/api/v1/auth' $null $session | Out-Null
-    $english = (Invoke-Preview 'GET' '/api/v1/localization/locales' $null $session) | Where-Object { $_.locale -eq 'en' } | Select-Object -First 1
-    Invoke-Preview 'POST' '/api/v1/setup/owner' @{ email = $seed.OwnerEmail; displayName = $seed.OwnerName; password = $seed.OwnerPassword; passwordConfirmation = $seed.OwnerPassword; uiLocaleId = $english.id } $session | Out-Null
-    Invoke-Preview 'GET' '/api/v1/admin/storage/mounts' $null $session | Out-Null
-    $mount = Invoke-Preview 'POST' '/api/v1/admin/storage/mounts' @{
-        name = $seed.LocalName; storageProtocolTypeId = 3; host = $null; sharePath = $seed.LocalPath; protocolVersion = $null; username = $null; domain = $null
-        isReadOnly = $true; password = $null; wakeMacAddress = $null; wakeBroadcastAddress = $null; wakeOnDemand = $false
-    } $session
-    foreach ($root in $seed.LibraryRoots)
+    if ((Invoke-Preview 'GET' '/api/v1/setup' $null $session).requiresOwner)
+    {
+        $english = (Invoke-Preview 'GET' '/api/v1/localization/locales' $null $session) | Where-Object { $_.locale -eq 'en' } | Select-Object -First 1
+        Invoke-Preview 'POST' '/api/v1/setup/owner' @{ email = $seed.OwnerEmail; displayName = $seed.OwnerName; password = $seed.OwnerPassword; passwordConfirmation = $seed.OwnerPassword; uiLocaleId = $english.id } $session | Out-Null
+    }
+    else
+    {
+        Invoke-Preview 'POST' '/api/v1/auth/login' @{ email = $seed.OwnerEmail; password = $seed.OwnerPassword } $session | Out-Null
+    }
+
+    $mounts = (Invoke-Preview 'GET' '/api/v1/admin/storage/mounts?pageSize=100' $null $session).items
+    $mount = $mounts | Where-Object { $_.sharePath -eq $seed.LocalPath } | Select-Object -First 1
+    if (-not $mount)
+    {
+        $mount = Invoke-Preview 'POST' '/api/v1/admin/storage/mounts' @{
+            name = $seed.LocalName; storageProtocolTypeId = 3; host = $null; sharePath = $seed.LocalPath; protocolVersion = $null; username = $null; domain = $null
+            isReadOnly = $true; password = $null; wakeMacAddress = $null; wakeBroadcastAddress = $null; wakeOnDemand = $false
+        } $session
+    }
+
+    $roots = (Invoke-Preview 'GET' "/api/v1/admin/library/roots?storageMountId=$($mount.id)&pageSize=100" $null $session).items
+    foreach ($root in $seed.LibraryRoots | Where-Object { $roots.relativePath -notcontains $_.RelativePath })
     {
         $created = Invoke-Preview 'POST' '/api/v1/admin/library/roots' @{ name = $root.Name; mediaTypeId = $root.MediaTypeId; storageMountId = $mount.id; relativePath = $root.RelativePath } $session
         Invoke-Preview 'POST' "/api/v1/admin/library/roots/$($created.id)/scans" $null $session | Out-Null
@@ -158,11 +172,12 @@ try
 
                 # Changed baselines rebuild the preview database.
                 $schema = Get-SchemaHash
-                $initialize = -not (Test-Path -LiteralPath $schemaMarker) -or (Get-Content -LiteralPath $schemaMarker) -ne $schema
-                if ($initialize)
+                $initialized = Join-Path $RootDirectory 'schema.installed'
+                if (-not (Test-Path -LiteralPath $initialized) -or (Get-Content -LiteralPath $initialized) -ne $schema)
                 {
                     Remove-Item -LiteralPath $schemaMarker -ErrorAction SilentlyContinue
                     Reset-PreviewDatabase
+                    $schema | Set-Content -LiteralPath $initialized
                     $runningDirectory = $null
                 }
 
@@ -208,14 +223,6 @@ try
                     throw 'New host failed its startup check; inspect the host logs.'
                 }
 
-                # A failed setup is retried with a fresh database.
-                if ($initialize)
-                {
-                    Initialize-PreviewData
-                    $schema | Set-Content -LiteralPath $schemaMarker
-                    Write-Log "Preview database initialized for clean-start $commit"
-                }
-
                 $runningCommit = $commit
                 $runningDirectory = $release
                 @{
@@ -225,6 +232,14 @@ try
                     StartedAt = [DateTimeOffset]::UtcNow.ToString('O')
                 } | ConvertTo-Json | Set-Content (Join-Path $RootDirectory 'status.json')
                 Write-Log "Running clean-start $commit"
+            }
+
+            # Setup repeats until it succeeded for this schema.
+            if ($null -ne $app -and -not $app.HasExited -and -not (Test-Path -LiteralPath $schemaMarker))
+            {
+                Initialize-PreviewData
+                Get-SchemaHash | Set-Content -LiteralPath $schemaMarker
+                Write-Log "Preview data initialized for clean-start $runningCommit"
             }
         }
         catch

@@ -32,9 +32,10 @@ library roots. The database runs in the dedicated loopback container `jularr-pre
 it is never an active installation.
 
 The runner hashes the fresh baselines in its installation order. When the hash changes,
-it drops and recreates only the preview database, installs the baselines, starts the
-host and creates the Owner, the local connection `D:\testlibrary` and its library roots
-through the public services, then queues their scans. Preview data is disposable: a
+it drops and recreates only the preview database and installs the baselines
+(`schema.installed`). After the host starts it creates, idempotently and through the
+public services, the Owner, the local connection `D:\testlibrary` and its library roots,
+and queues their scans; it retries every minute until this succeeds (`schema.sha256`). Preview data is disposable: a
 baseline change resets it. A new baseline file must be added to the runner's order.
 The Owner credentials are only in the settings file.
 
