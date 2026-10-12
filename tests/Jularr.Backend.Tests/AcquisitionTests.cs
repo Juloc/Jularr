@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
@@ -16,6 +17,7 @@ using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
@@ -47,7 +49,7 @@ namespace Jularr.Backend.Tests
             CollectionAssert.Contains(test.SearchModes, "Movie");
 
             // Every candidate stays visible with its decision.
-            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search");
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
             Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
             var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
             Assert.AreEqual(Feature, candidates[0].Title);
@@ -151,6 +153,90 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Series_TmdbImportSeasonPackAndEpisodes_CompleteOnlyWhenAllAiredEpisodesExist()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Results = FakeUsenet.SeriesResults };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
+
+            // Without a key TMDB is unavailable; the key is stored write-only.
+            var search = new SearchMetadataDataV1(MediaType.Series, "Example Show");
+            using var unavailable = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", search);
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
+            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            using var providers = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/providers");
+            Assert.IsFalse((await providers.Content.ReadAsStringAsync()).Contains(FakeUsenet.TmdbToken, StringComparison.Ordinal));
+
+            using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", search);
+            Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+            var result = (await found.Content.ReadFromJsonAsync<BaseDataList<MetadataSearchResultV1>>())!.Single();
+            Assert.AreEqual(2020, result.ReleaseYear);
+            Assert.IsNull(result.WorkId);
+
+            // Import maps identities and the episode catalog; a repeat updates the same Work.
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.TmdbId));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.TmdbId));
+            Assert.AreEqual(work.Id, (await again.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
+            Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
+            Assert.AreEqual("Beispiel Serie", await host.ScalarAsync("SELECT \"Title\" FROM \"WorkTitles\" WHERE \"Title\" <> 'Example Show'"));
+
+            // A fully aired season comes as a pack, the aired episode of the running season alone.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (500, {work.Id}, 202, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
+                """);
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEquivalent(new[] { "https://indexer.example.test/getnzb/s1", "https://indexer.example.test/getnzb/s2e1" }, usenet.Grabbed);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"SeasonNumber\" = 1 AND \"EpisodeStart\" IS NULL"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"SeasonNumber\" = 2 AND \"EpisodeStart\" = 1 AND \"EpisodeEnd\" = 1"));
+
+            // Claimed episodes are not searched again.
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(2, usenet.Grabbed.Count);
+
+            // The pack imports into the existing TMDB episodes; the request waits for season 2.
+            var pack = Path.Combine(downloads.Path, "Example.Show.S01.1080p.WEB-DL.H264-GRP");
+            Directory.CreateDirectory(pack);
+            foreach (var episode in new[] { 1, 2, 3 })
+            {
+                File.WriteAllText(Path.Combine(pack, $"Example.Show.S01E0{episode}.1080p.WEB-DL.H264-GRP.mkv"), new string('x', 1000 + episode));
+            }
+
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Pack","status":"Completed","storage":"/downloads/Example.Show.S01.1080p.WEB-DL.H264-GRP"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Movies", "Example Show", "Season 01", "Example Show - S01E03.mkv")));
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"WorkUnitId\" IS NOT NULL"));
+            Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
+            Assert.AreEqual((short)4, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
+
+            var single = Path.Combine(downloads.Path, "Example.Show.S02E01.1080p.WEB-DL.H264-GRP");
+            Directory.CreateDirectory(single);
+            File.WriteAllText(Path.Combine(single, "Example.Show.S02E01.1080p.WEB-DL.H264-GRP.mkv"), new string('x', 2000));
+            usenet.History = """{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_2","name":"Episode","status":"Completed","storage":"/downloads/Example.Show.S02E01.1080p.WEB-DL.H264-GRP"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
+            using var wantedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/600");
+            Assert.IsTrue((await wantedRead.Content.ReadFromJsonAsync<WantedDetailsV1>())!.HasMedia);
+
+            // Manual search can target one episode.
+            using var manual = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/600/search", new SearchWantedDataV1(2, 1));
+            var candidates = (await manual.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
+            Assert.AreEqual("Example.Show.S02E01.1080p.WEB-DL.H264-GRP", candidates.First(candidate => candidate.ReleaseDecisionTypeId == ReleaseDecisionType.Eligible).Title);
+            Assert.AreEqual("WrongSeason", candidates.Single(candidate => candidate.Title == "Example.Show.S01E01.1080p.WEB-DL.H264-GRP").ReasonCode);
+        }
+
+        [TestMethod]
         public async Task Connections_ValidateInputAndStayOwnerOnly()
         {
             using var storage = new TemporaryDirectory();
@@ -239,6 +325,7 @@ namespace Jularr.Backend.Tests
             {
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => usenet);
             });
 
             // A writable movie library and one indexer plus one client.
@@ -303,11 +390,16 @@ namespace Jularr.Backend.Tests
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                if (request.RequestUri!.Host == "api.themoviedb.org")
+                {
+                    return Tmdb(request);
+                }
+
                 if (request.RequestUri!.Host == "indexer.example.test")
                 {
                     var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
                     if (query["apikey"] != IndexerKey) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
-                    return Xml(query["t"] == "caps" ? Capabilities : Results);
+                    return Xml(query["t"] == "caps" ? Capabilities : Results ?? MovieResults);
                 }
 
                 // SABnzbd receives form posts.
@@ -327,12 +419,42 @@ namespace Jularr.Backend.Tests
                 }
             }
 
-            private static string Results => $"""
+            public string? Results { get; set; }
+
+            private static string MovieResults => $"""
                 <rss><channel>
                   {Item(Lower, "lower", 1_000_000_000)}
                   {Item(Feature, "feature", 2_000_000_000)}
                   {Item("Other.Movie.2020.1080p.WEB-DL.H264-GRP", "other", 2_000_000_000)}
                   {Item("Example.Movie.1999.1080p.WEB-DL.H264-GRP", "old", 2_000_000_000)}
+                </channel></rss>
+                """;
+
+            // One series: two seasons, the last episode still unaired.
+            private static HttpResponseMessage Tmdb(HttpRequestMessage request)
+            {
+                if (request.Headers.Authorization?.Parameter != TmdbToken) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                var path = request.RequestUri!.AbsolutePath;
+                var future = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                return path switch
+                {
+                    "/3/search/tv" => Json("""{"results":[{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","overview":"A show."}]}"""),
+                    "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189,"imdb_id":"tt0903747"},"seasons":[{"season_number":0,"name":"Specials","episode_count":1},{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":3},{"season_number":2,"name":"Season 2","air_date":"2021-04-01","episode_count":2}]}"""),
+                    "/3/tv/1399/season/0" => Json("""{"episodes":[{"season_number":0,"episode_number":1,"name":"Pilot extra","air_date":"2020-01-01"}]}"""),
+                    "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01"},{"season_number":1,"episode_number":2,"name":"Two","air_date":"2020-04-08"},{"season_number":1,"episode_number":3,"name":"Three","air_date":"2020-04-15"}]}"""),
+                    "/3/tv/1399/season/2" => Json($$$"""{"episodes":[{"season_number":2,"episode_number":1,"name":"Four","air_date":"2021-04-01"},{"season_number":2,"episode_number":2,"name":"Five","air_date":"{{{future}}}"}]}"""),
+                    _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                };
+            }
+
+            public const string TmdbToken = "eyJ-test-read-token";
+
+            public const string SeriesResults = """
+                <rss><channel>
+                  <item><title>Example.Show.S01.1080p.WEB-DL.H264-GRP</title><guid>s1</guid><enclosure url="/getnzb/s1" length="6000000000" /></item>
+                  <item><title>Example.Show.S01E01.1080p.WEB-DL.H264-GRP</title><guid>s1e1</guid><enclosure url="/getnzb/s1e1" length="2000000000" /></item>
+                  <item><title>Example.Show.S02E01.1080p.WEB-DL.H264-GRP</title><guid>s2e1</guid><enclosure url="/getnzb/s2e1" length="2000000000" /></item>
+                  <item><title>Example.Show.S02.1080p.WEB-DL.H264-GRP</title><guid>s2</guid><enclosure url="/getnzb/s2" length="4000000000" /></item>
                 </channel></rss>
                 """;
 

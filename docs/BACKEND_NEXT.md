@@ -128,9 +128,12 @@ intent, moderation, atomic Wanted targets and pause/resume. The Arr+ core runs o
 those targets under the Requests switch: Owner-managed Newznab indexers and SABnzbd
 clients, manual search and grab, automatic search for missing movies with backoff,
 download monitoring, failed-release exclusion, path mapping and hardlink/copy import
-into the first writable library of the media type. Series Works can be searched and
-grabbed manually; episode targets, season packs, the other media types, profile
-editing, Prowlarr/Sonarr/Radarr one-time import and a separate Arr+ switch follow. The
+into the first writable library of the media type. TMDB (key in the Providers
+registry) creates movies and series with tmdb/tvdb/imdb mappings and the episode
+catalog. Wanted series are searched per season: a fully aired, empty season as a
+pack, otherwise episode by episode, several downloads in parallel; requests complete
+once every aired regular episode exists. The other media types, profile editing,
+Prowlarr/Sonarr/Radarr one-time import and a separate Arr+ switch follow. The
 remaining modules are not advertised as available. Tracking must be rebuilt from
 the desired progress/resume/history behavior, not copied from the buggy legacy
 implementation. Library's physical scanning/import integration still needs its

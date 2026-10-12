@@ -16,7 +16,7 @@ Null definitions are unresolved, not PostgreSQL nullability declarations.
 | Later functional extensions | Providers, AccountExternalAuthFlows, AuthChallengePurposeTypes, UiTranslationStatusTypes, InstanceSetupState, InstanceSettings, InstanceModules, AcquisitionRequestStatusTypes, AcquisitionRequests, WantedItems and RequestTargets supplement the incomplete snapshot. Arr+ adds AcquisitionConnectionTypes, AcquisitionConnections, AcquisitionProfiles, AcquisitionReleaseStatusTypes and AcquisitionReleases; indexers and download clients share one connection table, and release history doubles as the blocklist. |
 | Approved Storage extension | StorageMounts, StorageProtocolTypes and StorageProtocolVersions add configurable physical SMB/NFS/Local connections with Wake-on-LAN settings. LibraryRoots reference them; they are not canonical media identity. |
 
-Twenty-eight original table names currently overlap; eight more are merged as described above. The existing named positive field
+Twenty-nine original table names currently overlap (WorkExternalIdentities joined with TMDB metadata); eight more are merged as described above. The existing named positive field
 definitions align in types/keys/relationships; exact unresolved columns are supplied
 by the fresh baseline and later owner decisions. Current Account schema tests verify
 PostgreSQL field types/nullability and catalog seeds; focused media and Storage

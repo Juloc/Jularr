@@ -3,6 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -20,6 +21,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         private PageResult<WantedDetailsV1>? _wanted;
         private WantedDetailsV1? _selected;
         private BaseDataList<WantedReleaseCandidateV1>? _candidates;
+        private SearchWantedDataV1? _search;
         private BaseDataList<WantedReleaseV1>? _history;
 
         [BindProperty(SupportsGet = true)]
@@ -88,11 +90,12 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return LocalRedirect(Address(PageNumber, WantedItemId, SelectedTab));
         }
 
-        public async Task<IActionResult> OnPostSearchAsync()
+        public async Task<IActionResult> OnPostSearchAsync(int? seasonNumber, int? episodeNumber)
         {
             // Results belong to this response; grabs pick from the server-side search.
+            _search = new SearchWantedDataV1(seasonNumber, episodeNumber);
             await LoadDataAsync();
-            _candidates = await search.ExecuteAsync<BaseDataList<WantedReleaseCandidateV1>>(new WantedItemParametersV1(SelectedId()), default, HttpContext.RequestAborted);
+            _candidates = await search.ExecuteAsync<BaseDataList<WantedReleaseCandidateV1>>(new WantedItemParametersV1(SelectedId()), _search, HttpContext.RequestAborted);
             PreparePage();
             return Page();
         }
@@ -120,8 +123,17 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
         private void DefineSearch(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
         {
-            content.Add(new Form<WantedItemParametersV1>(form => form.Submit("wanted.search.start"), Address(PageNumber, selected.Id, SearchTab, "Search"), csrf,
-                new WantedItemParametersV1(selected.Id)));
+            // Series searches may narrow to a season or episode.
+            content.Add(new Form<SearchWantedDataV1>(form =>
+            {
+                if (selected.MediaTypeId == MediaType.Series)
+                {
+                    form.Number(data => data.SeasonNumber, "wanted.search.season");
+                    form.Number(data => data.EpisodeNumber, "wanted.search.episode");
+                }
+
+                form.Submit("wanted.search.start");
+            }, Address(PageNumber, selected.Id, SearchTab, "Search"), csrf, _search ?? new SearchWantedDataV1()));
             if (_candidates is not { } candidates)
             {
                 return;

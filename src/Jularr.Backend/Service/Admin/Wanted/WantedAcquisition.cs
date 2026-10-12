@@ -45,7 +45,8 @@ namespace Jularr.Backend.Service.Admin.Wanted
             _ => null
         };
 
-        public async Task<WantedSearchResult> SearchAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, CancellationToken ct)
+        public async Task<WantedSearchResult> SearchAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, CancellationToken ct,
+            EpisodeScope? episodes = null)
         {
             // Only supported media types with a profile can be ranked.
             if (GetKind(target.MediaTypeId) is not { } kind || target.Definition is null)
@@ -54,7 +55,14 @@ namespace Jularr.Backend.Service.Admin.Wanted
             }
 
             var profile = ReadProfile(target);
-            var intent = new SearchIntent(kind, target.CanonicalTitle) { Aliases = target.Titles, Year = target.ReleaseYear };
+            var intent = new SearchIntent(kind, target.CanonicalTitle)
+            {
+                Aliases = target.Titles,
+                Year = target.ReleaseYear,
+                ExternalIds = ExternalIds(target),
+                Season = episodes?.SeasonNumber,
+                Episode = episodes?.EpisodeNumber
+            };
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
             var failures = 0;
@@ -78,7 +86,7 @@ namespace Jularr.Backend.Service.Admin.Wanted
                     }
                 });
 
-                selection = Select(profile, target, kind, offers.Values);
+                selection = Select(profile, target, kind, episodes, offers.Values);
                 if (selection.Outcome == SelectionOutcome.Usable)
                 {
                     break;
@@ -127,7 +135,20 @@ namespace Jularr.Backend.Service.Admin.Wanted
                 throw new ServiceUnavailableException("acquisition_grab_failed");
             }
 
-            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, Limit(result.NzoIds[0], 128));
+            // Series releases record which episodes they claim.
+            int? season = null, start = null, end = null;
+            if (target.MediaTypeId == MediaType.Series && ReleaseParser.TryParse(offer.Title, out var parsed) && parsed.SeasonNumber is { } number)
+            {
+                season = number;
+                if (!parsed.IsSeasonPack && parsed.EpisodeStart is { } first)
+                {
+                    start = first;
+                    end = Math.Max(first, parsed.EpisodeEnd ?? first);
+                }
+            }
+
+            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, Limit(result.NzoIds[0], 128),
+                season, start, end);
             await context.ExecuteBatchAsync((ctx, token) => ctx.RecordGrabAsync(grab, token), ct);
         }
 
@@ -166,13 +187,13 @@ namespace Jularr.Backend.Service.Admin.Wanted
             }
         }
 
-        private static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, IEnumerable<ReleaseOffer> offers)
+        private static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, EpisodeScope? episodes, IEnumerable<ReleaseOffer> offers)
         {
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer =>
             {
-                var judgement = VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, null, VideoUnitScope.Empty, offer);
+                var judgement = VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, episodes?.Unit, episodes?.Units ?? VideoUnitScope.Empty, offer);
                 return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
                     judgement.Coverage)
                 {
@@ -192,6 +213,18 @@ namespace Jularr.Backend.Service.Admin.Wanted
                 definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules);
         }
 
+        // Provider mappings in the planner's key space.
+        private static Dictionary<string, string> ExternalIds(WantedTargetData target)
+        {
+            var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in target.ExternalIdentities.Select(identity => identity.Split(':', 2)).Where(pair => pair.Length == 2))
+            {
+                ids[pair[0].StartsWith("tmdb", StringComparison.Ordinal) ? "tmdb" : pair[0]] = pair[1];
+            }
+
+            return ids;
+        }
+
         private static NewznabCapabilities? ReadCapabilities(AcquisitionConnectionData indexer) =>
             indexer.Capabilities is null ? null : JsonSerializer.Deserialize<NewznabCapabilities>(indexer.Capabilities);
 
@@ -208,6 +241,21 @@ namespace Jularr.Backend.Service.Admin.Wanted
 
         private sealed record ProfileDefinition(string[] AllowedQualities, string[] QualityOrder, bool UpgradeAllowed, string? UpgradeCutoffQuality, long? MinimumSizeBytes,
             long? MaximumSizeBytes, string[] MustContain, string[] MustNotContain, string[] RequiredRegex, string[] RejectedRegex, ReleaseScoreRule[] ScoreRules);
+    }
+
+    // The season or episode a series search is for and the units it may cover.
+    internal sealed record EpisodeScope(int SeasonNumber, int? EpisodeNumber, VideoUnit Unit, VideoUnitScope Units)
+    {
+        public static EpisodeScope For(IReadOnlyList<EpisodeStateData> episodes, int seasonNumber, int? episodeNumber)
+        {
+            var season = episodes.Where(episode => episode.SeasonNumber == seasonNumber).ToArray();
+            var units = season.Select(episode => new VideoUnit(episode.WorkUnitId, episode.SeasonNumber, episode.EpisodeNumber, episode.HasMedia)).ToArray();
+            var wanted = units.Where(unit => season.Any(episode => episode.WorkUnitId == unit.Id && episode.IsMissing)).ToArray();
+            var target = episodeNumber is { } number
+                ? units.FirstOrDefault(unit => unit.EpisodeNumber == number) ?? new VideoUnit(0, seasonNumber, number, false)
+                : wanted.FirstOrDefault() ?? units.FirstOrDefault() ?? new VideoUnit(0, seasonNumber, 1, false);
+            return new EpisodeScope(seasonNumber, episodeNumber, target, new VideoUnitScope(units, wanted.Length > 0 ? wanted : [target]));
+        }
     }
 
     internal sealed record WantedSearchResult(SelectionResult Selection, IReadOnlyDictionary<string, ReleaseOffer> Offers, bool IndexersUnavailable)

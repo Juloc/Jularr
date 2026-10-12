@@ -24,5 +24,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField OutcomeKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly BoolField HasMedia = new();
         public static readonly BoolField IsDownloading = new();
+        public static readonly BoolField IsAired = new();
+        public static readonly BoolField IsCovered = new();
+        public static readonly BoolField IsComplete = new();
     }
 }

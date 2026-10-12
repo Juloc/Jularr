@@ -17,9 +17,11 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.System.Acquisition;
 using Jularr.Backend.Service.System.Operation;
+using Jularr.Backend.Service.Admin.Media;
 using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.User.Playback;
 using Jularr.Backend.Service.Public.Localization.V1;
@@ -93,6 +95,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<MediaTranscoder>();
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddTransient<WantedAcquisition>();
+            services.TryAddTransient<WorkMetadata>();
             services.AddMemoryCache();
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
@@ -162,6 +165,13 @@ namespace Jularr.Backend.Service.Core
             {
                 http.Timeout = TimeSpan.FromSeconds(30);
                 http.MaxResponseContentBufferSize = 16 * 1024 * 1024;
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+                .RemoveAllLoggers();
+            services.AddHttpClient<TmdbClient>(http =>
+            {
+                http.BaseAddress = new Uri("https://api.themoviedb.org/3/");
+                http.Timeout = TimeSpan.FromSeconds(15);
+                http.MaxResponseContentBufferSize = 4 * 1024 * 1024;
             }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
                 .RemoveAllLoggers();
             services.AddHttpClient<SabnzbdClient>(http =>

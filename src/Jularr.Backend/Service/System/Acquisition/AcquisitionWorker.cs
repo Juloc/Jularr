@@ -19,10 +19,11 @@ namespace Jularr.Backend.Service.System.Acquisition
             using var timer = new PeriodicTimer(MonitorInterval, time);
             do
             {
-                // Downloads are tracked often; due targets are searched in small passes.
+                // Downloads are tracked often; metadata and due targets are refreshed in small passes.
                 await RunAsync<MonitorDownloadsV1>(stoppingToken);
                 if (time.GetUtcNow() >= nextSearch)
                 {
+                    await RunAsync<RefreshWantedMetadataV1>(stoppingToken);
                     await RunAsync<SearchDueWantedV1>(stoppingToken);
                     nextSearch = time.GetUtcNow() + SearchInterval;
                 }

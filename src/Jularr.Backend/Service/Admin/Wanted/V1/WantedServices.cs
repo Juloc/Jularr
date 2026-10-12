@@ -77,6 +77,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 SELECT
                     wanted."Id",
                     wanted."WorkId",
+                    work."MediaTypeId",
                     work."CanonicalTitle",
                     wanted."IsPaused",
                     wanted."LastSearchedAt",
@@ -91,6 +92,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             SELECT
                 wanted_page."Id",
                 wanted_page."WorkId",
+                wanted_page."MediaTypeId",
                 wanted_page."CanonicalTitle",
                 wanted_page."IsPaused",
                 wanted_page."Version",
@@ -101,7 +103,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         "MediaAssets" AS asset
                     WHERE
                         asset."WorkId" = wanted_page."WorkId"
-                ) AS "HasMedia",
+                ) AND NOT {DownloadLogic.MissingEpisode("wanted_page.\"WorkId\"")} AS "HasMedia",
                 download."Id" IS NOT NULL AS "IsDownloading",
                 download."ProgressPercent"::integer AS "ProgressPercent",
                 wanted_page."LastSearchedAt",

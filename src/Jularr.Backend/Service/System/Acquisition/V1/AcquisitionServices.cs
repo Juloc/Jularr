@@ -7,13 +7,16 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
+using Jularr.Backend.Service.Admin.Media;
 using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
@@ -28,6 +31,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     public sealed class SearchDueWantedV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private const int BatchSize = 5;
+        private const int SeasonsPerPass = 3;
+        private const int GrabsPerSeason = 5;
         private readonly WantedAcquisition _acquisition;
         private readonly TimeProvider _time;
 
@@ -62,6 +67,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
+                if (target.MediaTypeId == MediaType.Series)
+                {
+                    await SearchSeriesAsync(target, indexers, clients, now);
+                    continue;
+                }
+
                 var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken);
                 if (result.Selection.Winner is not { } winner)
                 {
@@ -84,6 +95,65 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             return new UpdateResult(true);
         }
 
+        private async Task SearchSeriesAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, IReadOnlyList<AcquisitionConnectionData> clients, DateTime now)
+        {
+            var episodes = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEpisodeStatesAsync(target.WantedItemId, ct), CancellationToken);
+            var claimed = new HashSet<(int Season, int Episode)>();
+            bool IsOpen(EpisodeStateData episode) => episode.IsMissing && !claimed.Contains((episode.SeasonNumber, episode.EpisodeNumber));
+
+            // A fully aired season with nothing yet is searched as a pack, otherwise episode by episode.
+            var grabbed = 0;
+            var unavailable = false;
+            string? outcome = null;
+            foreach (var seasonNumber in episodes.Where(IsOpen).Select(episode => episode.SeasonNumber).Distinct().Take(SeasonsPerPass).ToArray())
+            {
+                for (var attempt = 0; attempt < GrabsPerSeason; attempt++)
+                {
+                    var season = episodes.Where(episode => episode.SeasonNumber == seasonNumber).ToArray();
+                    if (season.FirstOrDefault(IsOpen) is not { } next)
+                    {
+                        break;
+                    }
+
+                    var wholeSeason = attempt == 0 && season.All(IsOpen);
+                    var scope = EpisodeScope.For(episodes.Select(episode => IsOpen(episode) || !episode.IsMissing ? episode
+                        : new EpisodeStateData(episode.WorkUnitId, episode.SeasonNumber, episode.EpisodeNumber, episode.IsAired, episode.HasMedia, true)).ToArray(),
+                        seasonNumber, wholeSeason ? null : next.EpisodeNumber);
+                    var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken, scope);
+                    unavailable |= result.IndexersUnavailable;
+                    if (result.Selection.Winner is not { } winner)
+                    {
+                        outcome ??= result.OutcomeKey;
+                        break;
+                    }
+
+                    var offer = result.Offers[winner.Candidate.Id];
+                    try
+                    {
+                        await _acquisition.GrabAsync(Context, target, offer, winner.Score?.QualityKey, clients, CancellationToken);
+                    }
+                    catch (ServiceUnavailableException exception)
+                    {
+                        await RecordAsync(target.WantedItemId, exception.Code, now.AddMinutes(30));
+                        return;
+                    }
+
+                    // The grabbed release claims its episodes for the rest of this pass.
+                    grabbed++;
+                    var parsed = winner.Candidate.Parsed;
+                    foreach (var episode in season.Where(episode => parsed is null || parsed.IsSeasonPack
+                        || episode.EpisodeNumber >= (parsed.EpisodeStart ?? next.EpisodeNumber) && episode.EpisodeNumber <= (parsed.EpisodeEnd ?? parsed.EpisodeStart ?? next.EpisodeNumber)))
+                    {
+                        claimed.Add((episode.SeasonNumber, episode.EpisodeNumber));
+                    }
+                }
+            }
+
+            // Grabs continue soon; empty results back off.
+            var nextSearch = grabbed > 0 ? now.AddMinutes(15) : unavailable ? now.AddMinutes(30) : now + Backoff(target.SearchCount);
+            await RecordAsync(target.WantedItemId, grabbed > 0 ? "grabbed" : outcome ?? "no_candidates", nextSearch);
+        }
+
         private Task RecordAsync(long wantedItemId, string outcomeKey, DateTime nextSearchAt) =>
             Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
@@ -97,6 +167,67 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             1 => TimeSpan.FromHours(12),
             _ => TimeSpan.FromHours(24)
         };
+    }
+
+    public sealed class RefreshWantedMetadataV1 : SystemService<AcquisitionCycleParametersV1, NoData>
+    {
+        private readonly WorkMetadata _metadata;
+
+        internal RefreshWantedMetadataV1(WorkMetadata metadata)
+        {
+            _metadata = metadata;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(AcquisitionCycleParametersV1 parameters, Type resultType) => new("system.acquisition");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // Wanted series learn about new episodes once a day.
+            var stale = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        identity."Namespace",
+                        identity."Value",
+                        identity."WorkId"
+                    FROM
+                        "WantedItems" AS wanted
+                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = wanted."WorkId" AND identity."Namespace" = 'tmdb_tv'
+                    WHERE
+                        NOT wanted."IsPaused"
+                        AND identity."UpdatedAt" < now() - interval '1 day'
+                    ORDER BY
+                        identity."UpdatedAt"
+                    LIMIT 5;
+                    """;
+                return ctx.ReadSql.ReadListAsync<WorkIdentityData>(sql, ct);
+            }, CancellationToken);
+            if (stale.Count == 0)
+            {
+                return new UpdateResult(true);
+            }
+
+            // Without a reachable provider the series keep their known episodes.
+            try
+            {
+                var connection = await _metadata.ConnectAsync(Context, CancellationToken);
+                foreach (var identity in stale)
+                {
+                    await _metadata.ImportAsync(Context, connection, MediaType.Series, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                }
+            }
+            catch (ServiceUnavailableException)
+            {
+                return new UpdateResult(false);
+            }
+
+            return new UpdateResult(true);
+        }
     }
 
     public sealed class MonitorDownloadsV1 : SystemService<AcquisitionCycleParametersV1, NoData>

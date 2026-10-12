@@ -1,3 +1,4 @@
+using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Common;
@@ -6,6 +7,7 @@ using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Provider;
 using Jularr.Backend.Service.Core;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Provider.V1
 {
@@ -26,7 +28,8 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
                 SELECT
                     provider."Id",
                     provider."Key",
-                    provider."IsEnabled"
+                    provider."IsEnabled",
+                    provider."ProtectedSecret" IS NOT NULL AS "HasSecret"
                 FROM
                     "Providers" AS provider
                 ORDER BY
@@ -51,6 +54,31 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.UpdateProviderAsync(new ProviderUpdateData(Parameters.ProviderId, Data.IsEnabled, Data.ExpectedIsEnabled), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/providers/{providerId:long}/secret")]
+    public sealed class SaveProviderSecretV1 : AdminService<UpdateProviderParametersV1, SaveProviderSecretDataV1>
+    {
+        public const string ProtectorPurpose = "Jularr.Provider.Secret.V1";
+        private readonly IDataProtector _protector;
+
+        internal SaveProviderSecretV1(IDataProtectionProvider protection)
+        {
+            _protector = protection.CreateProtector(ProtectorPurpose);
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateProviderParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateProviderParametersV1 parameters, Type resultType) => new("providers.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            // Protect before persistence.
+            var secret = Data.Secret is { Length: > 0 } value ? _protector.Protect(Encoding.UTF8.GetBytes(value)) : null;
+            await Context.SaveProviderSecretAsync(new ProviderSecretData(Parameters.ProviderId, secret), CancellationToken);
             return new UpdateResult(true);
         }
     }

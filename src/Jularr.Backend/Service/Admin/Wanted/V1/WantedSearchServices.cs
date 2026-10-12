@@ -2,6 +2,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
@@ -11,7 +12,7 @@ using Jularr.Backend.Service.Core;
 namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
     [ServiceEndpoint("POST", "/api/v1/admin/wanted/{wantedItemId:long}/search")]
-    public sealed class SearchWantedV1 : AdminService<WantedItemParametersV1, NoData>
+    public sealed class SearchWantedV1 : AdminService<WantedItemParametersV1, SearchWantedDataV1>
     {
         private readonly WantedAcquisition _acquisition;
 
@@ -30,8 +31,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var (target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Newznab, ct)), CancellationToken);
 
+            // Series searches may target one season or episode.
+            EpisodeScope? scope = null;
+            if (target.MediaTypeId == MediaType.Series && Data.SeasonNumber is { } season)
+            {
+                var episodes = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEpisodeStatesAsync(target.WantedItemId, ct), CancellationToken);
+                scope = EpisodeScope.For(episodes, season, Data.EpisodeNumber);
+            }
+
             // A manual search shows every candidate and keeps the automatic schedule.
-            var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken);
+            var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken, scope);
             if (result.IndexersUnavailable)
             {
                 throw new ServiceUnavailableException("acquisition_unavailable");
@@ -73,7 +82,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 ?? throw new DataValidationException(nameof(GrabWantedReleaseDataV1.CandidateId), "outdated_version");
             var (target, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Sabnzbd, ct)), CancellationToken);
-            if (target.IsDownloading)
+            if (target.IsDownloading && target.MediaTypeId != MediaType.Series)
             {
                 throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");
             }

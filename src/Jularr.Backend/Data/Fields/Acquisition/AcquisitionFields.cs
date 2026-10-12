@@ -44,6 +44,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField ReasonValue = new() { MaximumLength = 1000, Required = false };
         public static readonly IntField ProgressPercent = new() { Minimum = 0, Maximum = 100, Required = false };
         public static readonly StringField ExternalId = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false };
+        public static readonly IntField SeasonNumber = new() { Minimum = 0, Maximum = 32767, Required = false };
+        public static readonly IntField EpisodeStart = new() { Minimum = 1, Maximum = 32767, Required = false };
+        public static readonly IntField EpisodeEnd = new() { Minimum = 1, Maximum = 32767, Required = false };
         public static readonly LongField SizeBytes = new() { Minimum = 0, Required = false };
         public static readonly DateTimeField PublishedAt = new() { Required = false };
         public static readonly DateTimeField CreatedAt = new();

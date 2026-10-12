@@ -102,10 +102,14 @@ CREATE TABLE "AcquisitionReleases" (
     "ReleaseIdentity" varchar(600) NOT NULL,
     "Title" varchar(1000) NOT NULL,
     "QualityKey" varchar(64) NULL,
+    "SeasonNumber" smallint NULL CHECK ("SeasonNumber" >= 0),
+    "EpisodeStart" smallint NULL CHECK ("EpisodeStart" > 0),
+    "EpisodeEnd" smallint NULL CHECK ("EpisodeEnd" >= "EpisodeStart"),
     "AcquisitionReleaseStatusTypeId" smallint NOT NULL REFERENCES "AcquisitionReleaseStatusTypes" ("Id"),
     "ReasonKey" varchar(64) NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
+    CHECK (("EpisodeStart" IS NULL) = ("EpisodeEnd" IS NULL) AND ("EpisodeStart" IS NULL OR "SeasonNumber" IS NOT NULL)),
     UNIQUE ("WantedItemId", "ReleaseIdentity")
 );
 CREATE INDEX "IX_AcquisitionReleases_Recent" ON "AcquisitionReleases" ("WantedItemId", "CreatedAt" DESC, "Id" DESC);

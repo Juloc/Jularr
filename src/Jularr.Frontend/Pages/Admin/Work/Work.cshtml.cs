@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Work
 {
-    public sealed class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, IAntiforgery antiforgery) : JularrPage
+    public sealed class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, RefreshWorkMetadataV1 refresh, IAntiforgery antiforgery) : JularrPage
     {
         private WorkDetailsV1? _work;
         private UpdateWorkDataV1? _input;
@@ -34,7 +34,10 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     form.Number(item => item.ReleaseYear, "media.year");
                     form.Submit("common.save");
                 }, "/Admin/Works/" + work.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _input ?? new UpdateWorkDataV1(work.CanonicalTitle, work.Version, work.ReleaseYear), Error));
+                    _input ?? new UpdateWorkDataV1(work.CanonicalTitle, work.Version, work.ReleaseYear), _input is null ? null : Error));
+                page.Content.Add(new Form<WorkParametersV1>(form => form.Submit("admin.work.refreshMetadata"),
+                    "/Admin/Works/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Refresh", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, new WorkParametersV1(work.Id)));
+                if (_input is null && Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
             }
             else if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
@@ -50,6 +53,12 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             _input = new UpdateWorkDataV1(canonicalTitle ?? "", version, releaseYear);
             await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), _input, HttpContext.RequestAborted);
+            return RedirectToPage("/Admin/Work/Work", new { id = Id });
+        }
+
+        public async Task<IActionResult> OnPostRefreshAsync()
+        {
+            await refresh.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), default, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = Id });
         }
 

@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Media;
 
@@ -45,9 +46,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class WantedDetailsV1 : BaseResponse
     {
-        public WantedDetailsV1(long id, long workId, string canonicalTitle, bool isPaused, long version, string[] requestedLanguages, bool hasMedia, bool isDownloading,
-            int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey)
+        public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, string canonicalTitle, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey)
         {
+            MediaTypeId = mediaTypeId;
             Id = id;
             WorkId = workId;
             CanonicalTitle = canonicalTitle;
@@ -66,6 +68,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
@@ -152,6 +157,32 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonValue))]
         public string? ReasonValue { get; }
+    }
+
+    public sealed class SearchWantedDataV1 : BaseData
+    {
+        public SearchWantedDataV1(int? seasonNumber = null, int? episodeNumber = null)
+        {
+            SeasonNumber = seasonNumber;
+            EpisodeNumber = episodeNumber;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SeasonNumber))]
+        public int? SeasonNumber { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.EpisodeStart))]
+        public int? EpisodeNumber { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+
+            // An episode belongs to a season.
+            if (EpisodeNumber is not null && SeasonNumber is null)
+            {
+                throw new DataValidationException(nameof(SeasonNumber), "required");
+            }
+        }
     }
 
     public sealed class GrabWantedReleaseDataV1 : BaseData

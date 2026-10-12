@@ -28,8 +28,9 @@ namespace Jularr.Backend.Data.Admin.Provider.V1
 
     public sealed class ProviderDetailsV1 : BaseResponse
     {
-        public ProviderDetailsV1(long id, string key, bool isEnabled)
+        public ProviderDetailsV1(long id, string key, bool isEnabled, bool hasSecret)
         {
+            HasSecret = hasSecret;
             Id = id;
             Key = key;
             IsEnabled = isEnabled;
@@ -43,6 +44,20 @@ namespace Jularr.Backend.Data.Admin.Provider.V1
 
         [DataField(typeof(ProviderFields), nameof(ProviderFields.IsEnabled))]
         public bool IsEnabled { get; }
+
+        [DataField(typeof(ProviderCredentialFields), nameof(ProviderCredentialFields.HasSecret))]
+        public bool HasSecret { get; }
+    }
+
+    public sealed class SaveProviderSecretDataV1 : BaseData
+    {
+        public SaveProviderSecretDataV1(string? secret)
+        {
+            Secret = secret;
+        }
+
+        [DataField(typeof(ProviderCredentialFields), nameof(ProviderCredentialFields.Secret))]
+        public string? Secret { get; }
     }
 
     public sealed class UpdateProviderDataV1 : BaseData

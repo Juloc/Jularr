@@ -14,8 +14,9 @@ capabilities expose implemented grants, and Razor consumes both. Setup module
 progress, per-media/profile visibility and Arr+/Playback/Tracking remain pending.
 
 `Media.sql` follows `Account.sql` in a new installation. It is embedded as
-`Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles and
-WatchlistEntries. It is not a migration for an existing database. Media integration
+`Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles,
+WorkExternalIdentities (tmdb/tvdb/imdb mappings, never an alternative Work ID) and
+WatchlistEntries. Episode units carry their air date for acquisition. It is not a migration for an existing database. Media integration
 tests explicitly install it in their disposable Account fixture.
 
 `Acquisition.sql` follows Account and Media in a fresh installation. It adds
@@ -28,7 +29,9 @@ one table, protected API keys, cached capabilities, client path mapping),
 AcquisitionProfiles (one default per media type, JSON definition for the shared
 selection engine), search state on WantedItems and AcquisitionReleases (grabbed,
 imported, failed and blocked releases of a target: history and blocklist in one
-table). Downloads are `Operations` of type 2 linked to their release.
+table; series releases record the season and episode range they claim). Downloads
+are `Operations` of type 2 linked to their release. Providers keep an optional
+protected credential (the TMDB key).
 Unit/edition targets, rules/quotas, cancellation and profile editing remain pending.
 Tests explicitly install this embedded baseline only in their disposable Media
 fixture; the host never installs it.
