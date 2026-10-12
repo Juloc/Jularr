@@ -15,6 +15,7 @@
 }
 .app-header-brand { display: none; }
 .app-header-location { font-weight: 650; font-size: 16px; }
+.app-header .search-box { margin-left: auto; }
 @media (max-width: 780px) {
     .app-header { min-height: 62px; position: sticky; top: 0; padding: 0 16px; }
     .app-header-brand { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 800; }

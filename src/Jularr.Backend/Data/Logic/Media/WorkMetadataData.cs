@@ -8,8 +8,9 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class WorkMetadataData : BaseData
     {
         public WorkMetadataData(MediaType mediaTypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,
-            string units)
+            string units, string facts)
         {
+            Facts = facts;
             MediaTypeId = mediaTypeId;
             Namespace = @namespace;
             Value = value;
@@ -43,6 +44,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Units))]
         public string Units { get; }
+
+        // JSON rows of Key, Value and whether the value is in the instance language.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Facts))]
+        public string Facts { get; }
     }
 
     internal sealed class WorkIdentityData : BaseData
@@ -88,5 +93,44 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
         public string Values { get; }
+    }
+
+    // Viewer state of a provider title that already is a Work.
+    internal sealed class DiscoverOverlayData : BaseData
+    {
+        public DiscoverOverlayData(string value, long workId, MediaStateType mediaStateTypeId)
+        {
+            Value = value;
+            WorkId = workId;
+            MediaStateTypeId = mediaStateTypeId;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value))]
+        public string Value { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
+        public MediaStateType MediaStateTypeId { get; }
+    }
+
+    internal sealed class LibraryFilterData : BaseData
+    {
+        public LibraryFilterData(MediaType? mediaTypeId, string? query, LibrarySortType librarySortTypeId)
+        {
+            MediaTypeId = mediaTypeId;
+            Query = query;
+            LibrarySortTypeId = librarySortTypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query), false)]
+        public string? Query { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
+        public LibrarySortType LibrarySortTypeId { get; }
     }
 }

@@ -46,7 +46,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
             page.Asset("Modules/Appearance/appearance.entry.scss");
             JularrPage? source = SelectedView switch
             {
-                "discover" => new IndexModel(),
+                "discover" => ActivatorUtilities.CreateInstance<IndexModel>(HttpContext.RequestServices),
                 "details" => ActivatorUtilities.CreateInstance<DetailsModel>(HttpContext.RequestServices),
                 "player" => ActivatorUtilities.CreateInstance<PlayerModel>(HttpContext.RequestServices),
                 "watchlist" => ActivatorUtilities.CreateInstance<WatchlistModel>(HttpContext.RequestServices),

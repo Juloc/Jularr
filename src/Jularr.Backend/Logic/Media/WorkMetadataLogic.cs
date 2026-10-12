@@ -92,6 +92,46 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
+            // Provider facts are replaced; manual facts stay.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "WorkMetadataFacts" AS fact
+                USING
+                    "Providers" AS provider
+                WHERE
+                    fact."WorkId" = @Id
+                    AND fact."ProviderId" = provider."Id"
+                    AND provider."Key" = 'tmdb'
+                    AND NOT fact."IsManual";
+                """;
+            sql.Parameters.Add(new WorkIdData(workId.Value));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "WorkMetadataFacts" ("WorkId", "FactKey", "UiLocaleId", "Value", "ProviderId")
+                SELECT
+                    @Id,
+                    item."Key",
+                    CASE WHEN item."Localized" THEN settings."UiLocaleId" END,
+                    item."Value",
+                    provider."Id"
+                FROM
+                    jsonb_to_recordset(@Facts::jsonb) AS item ("Key" text, "Value" text, "Localized" boolean)
+                    CROSS JOIN "Providers" AS provider
+                    CROSS JOIN "InstanceSettings" AS settings
+                WHERE
+                    provider."Key" = 'tmdb'
+                    AND length(btrim(item."Value")) > 0;
+                """;
+            sql.Parameters.Add(data);
+            sql.Parameters.Add(new WorkIdData(workId.Value));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
             // Mappings refresh unless corrected by hand; a mapping owned by another Work is left alone.
             sql = new SqlStatement();
             sql.Statement =

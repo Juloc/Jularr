@@ -24,8 +24,9 @@ namespace Jularr.Integrations.Data.Tmdb
 
     internal sealed class TmdbSearchResult
     {
-        public TmdbSearchResult(int id, string title, string? originalTitle, int? year, string? overview, string? posterPath)
+        public TmdbSearchResult(int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath)
         {
+            BackdropPath = backdropPath;
             Id = id;
             Title = title;
             OriginalTitle = originalTitle;
@@ -40,6 +41,7 @@ namespace Jularr.Integrations.Data.Tmdb
         public int? Year { get; }
         public string? Overview { get; }
         public string? PosterPath { get; }
+        public string? BackdropPath { get; }
     }
 
     internal sealed class TmdbSeason
@@ -76,8 +78,10 @@ namespace Jularr.Integrations.Data.Tmdb
 
     internal sealed class TmdbWork
     {
-        public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? imdbId, int? tvdbId, IReadOnlyList<TmdbSeason> seasons)
+        public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,
+            IReadOnlyList<TmdbSeason> seasons)
         {
+            BackdropPath = backdropPath;
             Kind = kind;
             Id = id;
             Title = title;
@@ -97,9 +101,19 @@ namespace Jularr.Integrations.Data.Tmdb
         public int? Year { get; }
         public string? Overview { get; }
         public string? PosterPath { get; }
+        public string? BackdropPath { get; }
         public string? ImdbId { get; }
         public int? TvdbId { get; }
         public IReadOnlyList<TmdbSeason> Seasons { get; }
+    }
+
+    // Ranked lists; Upcoming exists for movies only.
+    internal enum TmdbFeed : byte
+    {
+        Trending = 1,
+        Top = 2,
+        New = 3,
+        Upcoming = 4
     }
 
     internal enum TmdbFailure : byte

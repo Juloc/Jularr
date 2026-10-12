@@ -1,0 +1,65 @@
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Media;
+
+namespace Jularr.Backend.Data.User.Library.V1
+{
+    public sealed class ReadLibraryParametersV1 : BaseParameters
+    {
+        public ReadLibraryParametersV1(MediaType? mediaTypeId = null, string? query = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded, int page = 1, int pageSize = 48)
+        {
+            MediaTypeId = mediaTypeId;
+            Query = query;
+            LibrarySortTypeId = librarySortTypeId;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query), false)]
+        public string? Query { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
+        public LibrarySortType LibrarySortTypeId { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
+    public sealed class LibraryItemV1 : BaseResponse
+    {
+        public LibraryItemV1(long id, MediaType mediaTypeId, string title, int? releaseYear, string? posterUrl, MediaStateType mediaStateTypeId, bool isWatchlisted)
+        {
+            Id = id;
+            MediaTypeId = mediaTypeId;
+            Title = title;
+            ReleaseYear = releaseYear;
+            PosterUrl = posterUrl;
+            MediaStateTypeId = mediaStateTypeId;
+            IsWatchlisted = isWatchlisted;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
+        public MediaStateType MediaStateTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
+        public bool IsWatchlisted { get; }
+    }
+}

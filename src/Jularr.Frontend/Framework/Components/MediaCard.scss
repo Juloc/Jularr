@@ -1,0 +1,109 @@
+@use "MediaImage";
+
+.media-card {
+    display: flex;
+    flex-direction: column;
+    width: 160px;
+    flex: 0 0 auto;
+
+    &__link {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--text);
+        text-decoration: none;
+    }
+
+    &__art {
+        aspect-ratio: 2 / 3;
+        overflow: hidden;
+        border-radius: 10px;
+        background: var(--surface);
+    }
+
+    &__art .media-image {
+        height: 100%;
+    }
+
+    &__placeholder {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        color: var(--muted);
+        text-align: center;
+    }
+
+    &__title {
+        font-weight: 600;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    &__meta {
+        color: var(--muted);
+        font-size: 13px;
+    }
+
+    &__status {
+        position: relative;
+        margin-top: 6px;
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 13px;
+        color: var(--muted);
+        text-align: center;
+    }
+
+    // The action stays focusable while the state is shown.
+    &__action {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    &__status--action:hover &__state,
+    &__status--action:focus-within &__state {
+        display: none;
+    }
+
+    &__status--action:hover &__action,
+    &__status--action:focus-within &__action {
+        position: static;
+        width: auto;
+        height: auto;
+        clip-path: none;
+    }
+
+    @media (hover: none) {
+        &__status--action &__state {
+            display: none;
+        }
+
+        &__status--action &__action {
+            position: static;
+            width: auto;
+            height: auto;
+            clip-path: none;
+        }
+    }
+}
+
+// Grids reuse the card at a fluid width.
+.media-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 20px 16px;
+
+    .media-card {
+        width: auto;
+    }
+}

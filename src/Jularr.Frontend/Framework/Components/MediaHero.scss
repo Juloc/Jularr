@@ -1,0 +1,50 @@
+@use "MediaImage";
+
+.media-hero {
+    position: relative;
+    overflow: hidden;
+    min-height: 260px;
+    margin-bottom: 24px;
+    border-radius: 16px;
+    background: var(--surface);
+
+    .media-image {
+        position: absolute;
+        inset: 0;
+        height: 100%;
+    }
+
+    &__body {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 640px;
+        min-height: 260px;
+        justify-content: flex-end;
+        padding: 24px;
+        background: linear-gradient(90deg, rgb(0 0 0 / 75%), rgb(0 0 0 / 0%));
+        color: #fff;
+    }
+
+    &__title {
+        margin: 0;
+        font-size: 28px;
+    }
+
+    &__meta {
+        margin: 0;
+        opacity: 0.85;
+    }
+
+    &__overview {
+        margin: 0;
+        line-height: 1.45;
+    }
+
+    &__actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+    }
+}

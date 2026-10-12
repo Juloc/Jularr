@@ -27,7 +27,44 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."Id",
                     work."MediaTypeId",
                     work."CanonicalTitle",
-                    (entry."WorkId" IS NOT NULL) AS "IsWatchlisted"
+                    (entry."WorkId" IS NOT NULL) AS "IsWatchlisted",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Overview'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "Overview",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Poster'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "PosterUrl",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Backdrop'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "BackdropUrl"
                 FROM
                     "Works" AS work
                 LEFT JOIN
@@ -136,7 +173,22 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."Id",
                     work."MediaTypeId",
                     work."CanonicalTitle",
-                    TRUE AS "IsWatchlisted"
+                    TRUE AS "IsWatchlisted",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    NULL::text AS "Overview",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Poster'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "PosterUrl",
+                    NULL::text AS "BackdropUrl"
                 FROM
                     "WatchlistEntries" AS entry
                 INNER JOIN

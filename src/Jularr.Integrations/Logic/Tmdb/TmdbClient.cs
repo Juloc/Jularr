@@ -23,6 +23,31 @@ namespace Jularr.Integrations.Logic.Tmdb
                 : [];
         }
 
+        public async Task<IReadOnlyList<TmdbSearchResult>> ReadFeedAsync(TmdbConnection connection, TmdbMediaKind kind, TmdbFeed feed, string? region, int page, CancellationToken ct)
+        {
+            var type = kind == TmdbMediaKind.Movie ? "movie" : "tv";
+            var path = feed switch
+            {
+                TmdbFeed.Trending => "trending/" + type + "/week",
+                TmdbFeed.Top => type + "/top_rated",
+                TmdbFeed.New => kind == TmdbMediaKind.Movie ? "movie/now_playing" : "tv/on_the_air",
+                TmdbFeed.Upcoming when kind == TmdbMediaKind.Movie => "movie/upcoming",
+                _ => throw new ArgumentOutOfRangeException(nameof(feed))
+            };
+
+            // Regional lists only use a real region.
+            var parameters = new List<KeyValuePair<string, string>> { new("page", Math.Clamp(page, 1, 500).ToString(CultureInfo.InvariantCulture)) };
+            if (region is { Length: 2 } && feed is TmdbFeed.New or TmdbFeed.Upcoming)
+            {
+                parameters.Add(new("region", region));
+            }
+
+            using var document = await ReadAsync(connection, path, parameters, ct);
+            return document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array
+                ? results.EnumerateArray().Select(item => ParseResult(kind, item)).OfType<TmdbSearchResult>().ToArray()
+                : [];
+        }
+
         public async Task<TmdbWork> ReadWorkAsync(TmdbConnection connection, TmdbMediaKind kind, int id, CancellationToken ct)
         {
             var path = (kind == TmdbMediaKind.Movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture);
@@ -38,7 +63,7 @@ namespace Jularr.Integrations.Logic.Tmdb
                     .Select(season => new TmdbSeason(Int(season, "season_number")!.Value, Text(season, "name"), Date(season, "air_date"), Int(season, "episode_count") ?? 0))
                     .ToArray()
                 : [];
-            return new TmdbWork(kind, result.Id, result.Title, result.OriginalTitle, result.Year, result.Overview, result.PosterPath,
+            return new TmdbWork(kind, result.Id, result.Title, result.OriginalTitle, result.Year, result.Overview, result.PosterPath, result.BackdropPath,
                 Text(externalIds, "imdb_id") ?? Text(root, "imdb_id"), Int(externalIds, "tvdb_id"), seasons);
         }
 
@@ -122,10 +147,18 @@ namespace Jularr.Integrations.Logic.Tmdb
                 return null;
             }
 
-            var poster = Text(item, "poster_path");
             return new TmdbSearchResult(id, title, Text(item, movie ? "original_title" : "original_name"), Date(item, movie ? "release_date" : "first_air_date")?.Year,
-                Text(item, "overview"), poster is { Length: <= 200 } && poster.StartsWith('/') ? poster : null);
+                Text(item, "overview"), ImagePath(Text(item, "poster_path")), ImagePath(Text(item, "backdrop_path")));
         }
+
+        // Posters and backdrops are served by TMDB's image host in fixed sizes.
+        public static string? PosterUrl(string? path) => path is null ? null : "https://image.tmdb.org/t/p/w500" + path;
+
+        public static string? BackdropUrl(string? path) => path is null ? null : "https://image.tmdb.org/t/p/w1280" + path;
+
+        // Image paths are file names below TMDB's image host.
+        private static string? ImagePath(string? path) =>
+            path is { Length: > 1 and <= 200 } && path[0] == '/' && path[1..].All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-') ? path : null;
 
         private static string? Text(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String

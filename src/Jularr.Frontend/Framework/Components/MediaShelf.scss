@@ -1,4 +1,6 @@
 .media-shelf {
+    margin-bottom: 24px;
+
     &__heading {
         display: flex;
         align-items: baseline;
@@ -12,5 +14,9 @@
     &__items {
         display: flex;
         gap: 12px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        scroll-snap-type: x proximity;
+        scrollbar-width: thin;
     }
 }

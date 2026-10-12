@@ -15,6 +15,9 @@ namespace Jularr.Frontend.Pages.Shared
 
             if (texts.Capabilities?.CanReadMedia is true)
             {
+                var library = new ShellLink("nav.library", "/Library", "library");
+                primary.Add(library);
+                mobile.Insert(1, library);
                 var watchlist = new ShellLink("watchlist.title", "/Watchlist", "home");
                 primary.Add(watchlist);
                 mobile.Add(watchlist);
@@ -42,11 +45,18 @@ namespace Jularr.Frontend.Pages.Shared
             }
 
             // Render shared navigation.
-            new Header(
+            // The one global search sits in the header.
+            var header = new List<IUiComponent>
+            {
                 new Brand(assets, compact: true),
-                new Nav(new Span(new Text(pageTitleKey)).Attribute("aria-current", "page"))
-                    .Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"])
-            ).Class("app-header").WriteTo(writer, encoder, texts);
+                new Nav(new Span(new Text(pageTitleKey)).Attribute("aria-current", "page")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"])
+            };
+            if (texts.Capabilities?.CanReadMedia is true)
+            {
+                header.Add(new SearchBox("/", "search.global", null));
+            }
+
+            new Header([.. header]).Class("app-header").WriteTo(writer, encoder, texts);
 
             new Aside(
                 new Brand(assets),

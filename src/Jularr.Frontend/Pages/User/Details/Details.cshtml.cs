@@ -36,8 +36,8 @@ namespace Jularr.Frontend.Pages.User.Details
             if (_work is { } work)
             {
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-                page.Content.Add(new P(new ValueText(work.CanonicalTitle)));
-                page.Content.Add(new P(new Text("media.type." + work.MediaTypeId)));
+                page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts["media.type." + work.MediaTypeId], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }
+                    .Where(part => part is not null)), work.Overview));
                 page.Content.Add(new Form<UpdateWatchlistDataV1>(form =>
                 {
                     form.Hidden(item => item.IsWatchlisted);

@@ -1,0 +1,22 @@
+@use "../../../Framework/Components/NavigationTabs";
+@use "../../../Framework/Components/MediaCard";
+@use "../../../Framework/Components/SearchBox";
+
+.library-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin: 12px 0 20px;
+
+    &__sort {
+        display: flex;
+        gap: 8px;
+    }
+}
+
+.library-paging {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}

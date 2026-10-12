@@ -31,12 +31,16 @@ namespace Jularr.Backend.Data.User.Media.V1
 
     public sealed class WorkDetailsV1 : BaseResponse
     {
-        public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, bool isWatchlisted)
+        public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
             IsWatchlisted = isWatchlisted;
+            ReleaseYear = releaseYear;
+            Overview = overview;
+            PosterUrl = posterUrl;
+            BackdropUrl = backdropUrl;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -50,6 +54,18 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.IsWatchlisted))]
         public bool IsWatchlisted { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Overview))]
+        public string? Overview { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? BackdropUrl { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData

@@ -44,9 +44,15 @@ Shared conventions and Backend ownership:
   reusable, localized accessible navigation tabs driven by supplied links.
 - [MediaShelf.cs](Framework/Components/MediaShelf.cs):
   reusable media shelf with truthful title, optional browse link and real cards.
-- [Discover/Index.cshtml.cs](Pages/User/Discover/Index.cshtml.cs): **owns the page composition**
-  (enabled media-type navigation, browse navigation, Hero, Continue and
-  type-grouped shelves); awaits the authorized instance/profile discovery read.
+- [Discover/Index.cshtml.cs](Pages/User/Discover/Index.cshtml.cs): **owns the Home/Discover composition**
+  at `/`: media-type and browse navigation, Hero, Continue, Recently added, TMDB shelves per
+  type (Trending/Top/New/Upcoming where TMDB has them), full browse views and global search results.
+  [DiscoverItem](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs) shows a TMDB title before it is a
+  Work and requests it; [Library](Pages/User/Library/Library.cshtml.cs) is the local catalog with
+  type scope, local search, sort and paging.
+- [MediaCard.cs](Framework/Components/MediaCard.cs) (one card grammar with a fixed status area that
+  becomes the action), [MediaHero.cs](Framework/Components/MediaHero.cs) and
+  [SearchBox.cs](Framework/Components/SearchBox.cs) (GET search used by the shell header and Library).
 - [BaseField.cs](Framework/BaseField.cs) and
   [Form.cs](Framework/Components/Form.cs): `Form<TData>` owns label/input
   markup, field errors and local antiforgery POSTs using canonical backend
