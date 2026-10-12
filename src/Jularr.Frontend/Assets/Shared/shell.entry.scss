@@ -1,5 +1,6 @@
 @use "../../Pages/Shared/Shell";
 @use "../../Framework/Components/Icon";
+@use "../../Framework/Components/Button";
 
 :root {
     font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -110,23 +111,6 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 }
 .preview-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
 
-.button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 42px;
-    padding: 9px 15px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-    font-weight: 650;
-}
-.button:hover:not(:disabled) { background: var(--surface-hover); }
-.button-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
-.button-primary:hover:not(:disabled) { filter: brightness(1.06); background: var(--accent); }
-.button:disabled { opacity: .65; cursor: not-allowed; }
 .ui-page-error {
     border: 1px solid var(--danger);
     border-radius: 12px;

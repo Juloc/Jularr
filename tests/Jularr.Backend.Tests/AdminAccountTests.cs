@@ -19,7 +19,7 @@ namespace Jularr.Backend.Tests
     public sealed class AdminAccountTests
     {
         [TestMethod]
-        public async Task Accounts_ExactlyFullPage_HasNoFalseNextPage()
+        public async Task Accounts_FullAndEmptyPages_ReturnOnlyRequestedRows()
         {
             await using var host = await Host.CreateAsync();
             await SignInAsync(host);
@@ -27,7 +27,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
             using var page = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             Assert.AreEqual(2, page.RootElement.GetProperty("items").GetArrayLength());
-            Assert.IsFalse(page.RootElement.GetProperty("hasMore").GetBoolean());
+            Assert.IsFalse(page.RootElement.TryGetProperty("hasMore", out _));
+            Assert.IsFalse(page.RootElement.TryGetProperty("totalCount", out _));
+
+            using var next = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts?page=2&pageSize=2");
+            using var empty = JsonDocument.Parse(await next.Content.ReadAsStringAsync());
+            Assert.AreEqual(0, empty.RootElement.GetProperty("items").GetArrayLength());
         }
 
         [TestMethod]
@@ -66,6 +71,60 @@ namespace Jularr.Backend.Tests
                 Assert.AreEqual(409, ServiceError.FromException(exception).StatusCode);
                 return false;
             }
+        }
+
+        [TestMethod]
+        public async Task Sessions_OwnerRevokesOnlySelectedAccount_AndMediaManagerIsDenied()
+        {
+            await using var host = await Host.CreateAsync();
+            await SignInAsync(host);
+            var sessionId = Guid.NewGuid();
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AccountSessions" ("PublicId", "AccountId", "TokenHash", "CredentialRevision", "ExpiresAt")
+                VALUES ('{sessionId}', 42, decode(repeat('ab', 32), 'hex'), 1, now() + interval '1 hour');
+                """);
+
+            // No sequential IDs or secrets.
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/42/sessions");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            using var page = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+            var item = page.RootElement.GetProperty("items")[0];
+            Assert.AreEqual(sessionId, item.GetProperty("id").GetGuid());
+            Assert.IsFalse(item.TryGetProperty("tokenHash", out _));
+            Assert.IsFalse(page.RootElement.TryGetProperty("hasMore", out _));
+
+            // Account scope is enforced.
+            using var foreign = await host.SendAsync(HttpMethod.Delete, $"/api/v1/admin/accounts/41/sessions/{sessionId}");
+            Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
+            using var revoked = await host.SendAsync(HttpMethod.Delete, $"/api/v1/admin/accounts/42/sessions/{sessionId}");
+            Assert.AreEqual(HttpStatusCode.OK, revoked.StatusCode, await revoked.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"AccountId\" = 42 AND \"RevokedAt\" IS NOT NULL"));
+
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var deniedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/42/sessions");
+            Assert.AreEqual(HttpStatusCode.Forbidden, deniedRead.StatusCode);
+            using var deniedWrite = await host.SendAsync(HttpMethod.Delete, $"/api/v1/admin/accounts/42/sessions/{sessionId}");
+            Assert.AreEqual(HttpStatusCode.Forbidden, deniedWrite.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task Razor_OwnerRevokesCurrentSession_ClearsAuthentication()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await SignInAsync(host);
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/41/sessions");
+            using var sessions = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+            var sessionId = sessions.RootElement.GetProperty("items").EnumerateArray().Single(item => item.GetProperty("isCurrent").GetBoolean()).GetProperty("id").GetGuid();
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Accounts?AccountId=41");
+            var csrf = Regex.Match(await page.Content.ReadAsStringAsync(), "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
+            using var revoke = await host.SendAsync(HttpMethod.Post, "/Admin/Accounts?AccountId=41&handler=RevokeSession", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf), ["SessionPublicId"] = sessionId.ToString()
+            });
+            Assert.AreEqual(HttpStatusCode.Redirect, revoke.StatusCode, await revoke.Content.ReadAsStringAsync());
+            StringAssert.Contains(revoke.Headers.Location!.OriginalString, "/Account/Login");
+            using var protectedRead = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts");
+            Assert.AreEqual(HttpStatusCode.Unauthorized, protectedRead.StatusCode);
         }
 
         [TestMethod]
@@ -168,6 +227,68 @@ namespace Jularr.Backend.Tests
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task AccountProfiles_AccessRemoval_RevokesAffectedSessionAndPreservesProfile()
+        {
+            await using var host = await Host.CreateAsync();
+            await SignInAsync(host);
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            using var duplicate = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
+            Assert.AreEqual(HttpStatusCode.BadRequest, duplicate.StatusCode);
+            using var selected = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/202");
+            Assert.AreEqual(HttpStatusCode.OK, selected.StatusCode, await selected.Content.ReadAsStringAsync());
+            using var removed = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/accounts/41/profiles/202");
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" WHERE \"AccountId\" = 41 AND \"ProfileId\" = 202"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" WHERE \"AccountId\" = 42 AND \"ProfileId\" = 202"));
+            Assert.AreEqual(42L, await host.ScalarAsync("SELECT \"OwnerAccountId\" FROM \"Profiles\" WHERE \"Id\" = 202"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"AccountId\" = 41 AND \"ActiveProfileId\" = 202"));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            Assert.IsFalse((await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.IsAuthenticated);
+        }
+
+        [TestMethod]
+        public async Task AccountProfiles_OwnershipAndUnknownReferences_DoNotMutate()
+        {
+            await using var host = await Host.CreateAsync();
+            await SignInAsync(host);
+            using var owned = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/accounts/41/profiles/101");
+            Assert.AreEqual(HttpStatusCode.BadRequest, owned.StatusCode);
+            using var missing = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/999");
+            Assert.AreEqual(HttpStatusCode.BadRequest, missing.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" WHERE \"AccountId\" = 41 AND \"ProfileId\" = 101"));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            Assert.IsTrue((await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.IsAuthenticated);
+
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var denied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
+            Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" WHERE \"AccountId\" = 41 AND \"ProfileId\" = 202"));
+        }
+
+        [TestMethod]
+        public async Task Razor_ProfileAssignments_UseServicesAndAntiforgery()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await SignInAsync(host);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Accounts?AccountId=42");
+            var html = await page.Content.ReadAsStringAsync();
+            var csrf = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/Admin/Accounts?AccountId=42&handler=AddProfile", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf), ["ProfileId"] = "101"
+            });
+            Assert.AreEqual(HttpStatusCode.Redirect, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" WHERE \"AccountId\" = 42 AND \"ProfileId\" = 101"));
+            using var removed = await host.SendAsync(HttpMethod.Post, "/Admin/Accounts?AccountId=42&handler=RemoveProfile", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = WebUtility.HtmlDecode(csrf), ["ProfileId"] = "101"
+            });
+            Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountProfiles\" WHERE \"AccountId\" = 42 AND \"ProfileId\" = 101"));
         }
     }
 }

@@ -8,9 +8,10 @@ namespace Jularr.Frontend.Framework
 {
     public sealed class Form<TData> : IUiComponent where TData : BaseData
     {
+        private static long _nextId;
         private readonly List<IUiComponent> _content = [];
         private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
-        private readonly string _id = "form-" + typeof(TData).Name;
+        private readonly string _id = "form-" + typeof(TData).FullName + "-" + Interlocked.Increment(ref _nextId).ToString(CultureInfo.InvariantCulture);
         private readonly string? _action;
         private readonly TData? _data;
         private readonly ServiceError? _error;
@@ -42,7 +43,7 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Multiline<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
         {
             var field = Declare(selector, FieldControl.Text, labelKey);
-            var input = new HtmlTextarea(new ValueText(Value(selector) ?? "")).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("rows", "5");
+            var input = new HtmlTextarea(new ValueText(Value(field) ?? "")).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("rows", "5");
             Configure(field, input);
             AddField(field, input);
             return this;
@@ -51,7 +52,7 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Select<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, IEnumerable<SelectOption> options)
         {
             var field = Declare(selector, FieldControl.Select, labelKey);
-            var value = Value(selector);
+            var value = Value(field);
             var items = options.Select(option =>
             {
                 var element = new HtmlOption(new ValueText(option.Label)).Attribute("value", option.Value);
@@ -77,18 +78,16 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Hidden<TValue>(Expression<Func<TData, TValue>> selector)
         {
             var field = Declare(selector, FieldControl.Text, "");
-            _content.Add(new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", Value(selector) ?? ""));
+            _content.Add(new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", Value(field) ?? ""));
             return this;
         }
 
         public Form<TData> Submit(string key, string? value = null)
         {
             var label = value is null ? (IUiComponent)new Text(key) : new Span(new Text(key), new Span(new ValueText(value)));
-            var button = new Button(label).Class("button button-primary").Attribute("type", _action is null ? "button" : "submit");
-            if (_action is null)
-            {
-                button.Attribute("disabled", "disabled");
-            }
+            var button = new Button(label).Primary();
+            if (_action is null) button.Disabled();
+            else button.Submit();
 
             _content.Add(button);
             return this;
@@ -118,7 +117,7 @@ namespace Jularr.Frontend.Framework
                 .Attribute("type", control == FieldControl.Password ? "password" : control == FieldControl.Number ? "number" : "text").Attribute("autocomplete", autocomplete);
 
             // Never render submitted passwords.
-            if (control != FieldControl.Password && Value(selector) is { } value)
+            if (control != FieldControl.Password && Value(field) is { } value)
             {
                 input.Attribute("value", value);
             }
@@ -139,12 +138,12 @@ namespace Jularr.Frontend.Framework
             return field;
         }
 
-        private string? Value<TValue>(Expression<Func<TData, TValue>> selector)
+        private string? Value(BaseField field)
         {
             if (_data is null) return null;
 
             // Preserve IDs and concurrency values.
-            return selector.Compile()(_data) switch
+            return field.ReadValue(_data) switch
             {
                 DateTime timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
                 DateTimeOffset timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),

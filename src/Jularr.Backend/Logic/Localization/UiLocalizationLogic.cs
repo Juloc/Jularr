@@ -7,6 +7,50 @@ namespace Jularr.Backend.Logic.Localization
 {
     internal static class UiLocalizationLogic
     {
+        public static async Task<UiLocaleData> CreateUiLocaleAsync(this LogicContext context, UiLocaleCreationData data, CancellationToken cancellationToken)
+        {
+            // Create supported language metadata.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "UiLocales" ("Locale", "Name", "IsRightToLeft")
+                VALUES
+                    (@Locale, @Name, @IsRightToLeft)
+                ON CONFLICT ("Locale") DO NOTHING
+                RETURNING
+                    "Id";
+                """;
+            sql.Parameters.Add(data);
+            return await context.ReadOptionalAsync<UiLocaleData>(sql, cancellationToken)
+                ?? throw new DataValidationException(nameof(data.Locale), "duplicate_value");
+        }
+
+        public static async Task UpdateUiLocaleAsync(this LogicContext context, UiLocaleUpdateData data, CancellationToken cancellationToken)
+        {
+            // Retain the English fallback.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "UiLocales" AS locale
+                SET
+                    "Name" = @Name,
+                    "IsEnabled" = @IsEnabled,
+                    "IsRightToLeft" = @IsRightToLeft,
+                    "CatalogVersion" = locale."CatalogVersion" + 1
+                WHERE
+                    locale."Id" = @Id
+                    AND locale."CatalogVersion" = @CatalogVersion
+                    AND (lower(locale."Locale") <> 'en' OR @IsEnabled = TRUE);
+                """;
+            sql.Parameters.Add(data);
+            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
+            {
+                throw new DataValidationException(nameof(data.CatalogVersion), "invalid_transition");
+            }
+        }
+
         internal static async Task SynchronizeUiResourcesAsync(this LogicContext context,
             IReadOnlyList<UiTextResource> resources, CancellationToken cancellationToken)
         {

@@ -37,12 +37,29 @@ namespace Jularr.Frontend.Framework
 
             Error = error;
             Response.StatusCode = error.StatusCode;
+
+            // Reload only failed mutations.
+            if (HttpMethods.IsPost(Request.Method))
+            {
+                try
+                {
+                    await LoadDataAsync();
+                }
+                catch (Exception exception) when (ServiceError.FromException(exception).StatusCode < StatusCodes.Status500InternalServerError)
+                {
+                    Error = ServiceError.FromException(exception);
+                    Response.StatusCode = Error.StatusCode;
+                }
+            }
+
             PreparePage();
             executed.ExceptionHandled = true;
             executed.Result = Page();
         }
 
         protected abstract void Define(Page page);
+
+        protected virtual Task LoadDataAsync() => Task.CompletedTask;
 
         protected void PreparePage() => Definition = BuildDefinition();
 

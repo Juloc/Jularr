@@ -26,6 +26,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.too_short", "The value is too short."),
             new("errors.validation.too_long", "The value is too long."),
             new("errors.validation.invalid_email", "Please enter a valid email address."),
+            new("errors.validation.invalid_locale", "Please enter a language code supported by this server."),
+            new("errors.validation.duplicate_value", "This value is already in use."),
             new("errors.validation.utc_required", "The timestamp must use UTC."),
             new("errors.validation.unknown_catalog_value", "The selection is invalid."),
             new("errors.validation.unknown_reference", "The referenced resource is unavailable."),

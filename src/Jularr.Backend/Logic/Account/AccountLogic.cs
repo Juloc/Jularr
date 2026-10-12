@@ -12,6 +12,10 @@ namespace Jularr.Backend.Logic.Account
 {
     internal static class AccountLogic
     {
+        private static readonly PasswordHasher<AccountAuthenticationData> PasswordHasher = new(Options.Create(new PasswordHasherOptions { IterationCount = 600_000 }));
+        private static readonly AccountAuthenticationData MissingAccount = new(1, 1, null, false, false);
+        private static readonly string MissingPasswordHash = PasswordHasher.HashPassword(MissingAccount, Guid.NewGuid().ToString());
+
         public static Task<AccountUpdateData> ReadAccountAsync(this LogicContext context, long accountId, CancellationToken cancellationToken)
         {
             var sql = new SqlStatement();
@@ -95,11 +99,6 @@ namespace Jularr.Backend.Logic.Account
                 throw new DataValidationException(nameof(data.AccountRoleTypeId), "invalid_transition");
             }
         }
-
-        private static readonly PasswordHasher<AccountAuthenticationData> PasswordHasher = new(
-            Options.Create(new PasswordHasherOptions { IterationCount = 600_000 }));
-        private static readonly AccountAuthenticationData MissingAccount = new(1, 1, null, false, false);
-        private static readonly string MissingPasswordHash = PasswordHasher.HashPassword(MissingAccount, Guid.NewGuid().ToString());
 
         public static async Task<AccountAuthenticationData> AuthenticatePasswordAsync(
             this LogicContext context,

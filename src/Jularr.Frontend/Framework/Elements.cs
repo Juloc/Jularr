@@ -36,7 +36,9 @@ namespace Jularr.Frontend.Framework
                 throw new ArgumentException("Unsafe URL.", nameof(value));
             }
 
-            _attributes.Add((name, value));
+            var index = _attributes.FindIndex(attribute => attribute.Name == name);
+            if (index >= 0) _attributes[index] = (name, value);
+            else _attributes.Add((name, value));
             return this;
         }
 
@@ -86,7 +88,6 @@ namespace Jularr.Frontend.Framework
     public sealed class Ul(params IUiComponent[] children) : HtmlElement("ul", children);
     public sealed class Li(params IUiComponent[] children) : HtmlElement("li", children);
     public sealed class A(params IUiComponent[] children) : HtmlElement("a", children);
-    public sealed class Button(params IUiComponent[] children) : HtmlElement("button", children);
     public sealed class Input() : HtmlElement("input");
     public sealed class Img() : HtmlElement("img");
     public sealed class TableElement(params IUiComponent[] children) : HtmlElement("table", children);

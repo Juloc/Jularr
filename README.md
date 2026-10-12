@@ -111,6 +111,24 @@ letzten aktiven Owners. Rollen-/Statusänderungen widerrufen alte Sessions; Frei
 verifiziert keine E-Mail. Parallele Account-Mutationen laufen serialisierbar und
 melden einen bereinigten `concurrent_change`-Konflikt statt Daten zu überschreiben.
 API: `GET /api/v1/admin/accounts`, `GET|PUT /api/v1/admin/accounts/{accountId:long}`.
+`ReadAccountProfilesV1`, `AddAccountProfileV1` und `RemoveAccountProfileV1` verwalten
+vorhandene Profile-Zuordnungen: `GET .../{accountId}/profiles`,
+`POST|DELETE .../{accountId}/profiles/{profileId}`. Die Eigentümer-Zuordnung bleibt
+erhalten; Entfernen widerruft betroffene Sessions atomar, ohne das Profile zu löschen.
+`ReadAccountSessionsV1` und `RevokeAccountSessionV1` verwenden die bestehende Session-
+Logic für `GET .../{accountId}/sessions` und `DELETE .../{accountId}/sessions/{sessionPublicId}`.
+Auch der Owner erhält nur öffentliche Session-UUIDs, niemals Secrets oder interne IDs.
+
+Listen liefern nur `Items`, `Page` und `PageSize`. Eine volle Seite bietet Weiter;
+die folgende Seite darf leer sein. Keine zusätzlichen Paging- oder Zählabfragen.
+Admin-Mutationen laden Listen nur beim Fehler erneut; Formulare und Buttons besitzen
+gemeinsame Komponenten und Styles, keine nachgebauten Controls je Seite.
+
+`/Admin/Providers` verwendet `ReadProvidersV1` und `UpdateProviderV1` zum Aktivieren
+vorhandener Provider. API: `GET /api/v1/admin/providers`,
+`PUT /api/v1/admin/providers/{providerId}`. Deaktiviertes Plex verschwindet aus dem
+Anmeldeangebot. Verbindungsdaten, Fähigkeiten und Gesundheitstests bleiben offen;
+die Oberfläche behauptet keinen erfolgreichen Verbindungstest.
 
 ## Plex-Konfiguration
 
@@ -200,7 +218,16 @@ Status und Quellversion. Beschreibungen und manuelle Übersetzungen sind editier
 Quell- und Übersetzungsversionen verhindern veraltetes Überschreiben. Benannte
 Platzhalter wie `{name}` werden geprüft. `TranslationVersion = null` bedeutet eine
 neue Übersetzung, nicht bedingungsloses Überschreiben. Nur aktivierte Sprachen sind
-beschreibbar. KI-Anforderung und Sprachverwaltung sind noch nicht implementiert.
+beschreibbar. Beschreibungen gehören zur globalen Quelle, nicht zu einer Sprache:
+`PUT /api/v1/admin/localization/messages/{uiTranslationMessageId}/description`.
+`/Admin/Languages` nutzt die Admin-Services `ReadUiLocalesV1`, `CreateUiLocaleV1`
+und `UpdateUiLocaleV1`: Sprachkennung, Anzeigename, Richtung und Aktivierung.
+API: `GET|POST /api/v1/admin/localization/locales`,
+`PUT /api/v1/admin/localization/locales/{uiLocaleId}`. Die kanonische Field-Validierung
+akzeptiert vom Server unterstützte .NET-Sprachkennungen und normalisiert deren
+Schreibweise. Versionsprüfung schützt Änderungen; Englisch bleibt aktiviert.
+Das Abschalten der Profile-Sprache erhält weiterhin den Elternsprach-Fallback.
+KI-Anforderung ist noch nicht implementiert.
 Normale Seitenaufrufe und Hoststart führen keine KI-Übersetzung aus.
 
 ProblemDetails enthält `code`, `resourceKey`, `traceId` und bei Feldfehlern `errors`

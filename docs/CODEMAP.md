@@ -18,6 +18,10 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [UiLocalizationLogic.cs](../src/Jularr.Backend/Logic/Localization/UiLocalizationLogic.cs): source sync and canonical description/translation mutations; [host contract and gaps](../README.md#gemeinsamer-postgresql-textkatalog).
 - [Admin localization services](../src/Jularr.Backend/Service/Admin/Localization/V1/UiMessageServices.cs), [versioned catalog contracts](../src/Jularr.Backend/Data/Admin/Localization/V1/UiMessages.cs): paged editable reads and Owner description/manual translation updates.
 - [Admin account services](../src/Jularr.Backend/Service/Admin/Account/V1/AccountServices.cs), [versioned account contracts](../src/Jularr.Backend/Data/Admin/Account/V1/Accounts.cs): directory, approval, name/role/status editing through Account Logic.
+- [AccountProfileServices.cs](../src/Jularr.Backend/Service/Admin/Account/V1/AccountProfileServices.cs), [AccountProfileLogic.cs](../src/Jularr.Backend/Logic/Account/AccountProfileLogic.cs): existing profile access assignment/removal, retained owner link and transactional session invalidation.
+- [AccountSessionServices.cs](../src/Jularr.Backend/Service/Admin/Account/V1/AccountSessionServices.cs): Owner account-scoped session reads/revocation through the canonical Session writer.
+- [UiLocaleServices.cs](../src/Jularr.Backend/Service/Admin/Localization/V1/UiLocaleServices.cs), [UiLocales.cs](../src/Jularr.Backend/Data/Admin/Localization/V1/UiLocales.cs): Owner language registry editing; canonical field format and localization writer.
+- [ProviderServices.cs](../src/Jularr.Backend/Service/Admin/Provider/V1/ProviderServices.cs), [Providers.cs](../src/Jularr.Backend/Data/Admin/Provider/V1/Providers.cs): existing provider registry enablement, not connection/capability management.
 - [ProfileServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileServices.cs): the one read and one update; permissions and orchestration.
 - [ServiceGate.cs](../src/Jularr.Backend/Service/Core/ServiceGate.cs): DB-role-based account/Profile and Admin grants; MediaManager is limited to manual media/Requests/Wanted. Role changes are revalidated in the write transaction.
 - [ProfileSelectionServices.cs](../src/Jularr.Backend/Service/User/Profile/V1/ProfileSelectionServices.cs): membership-scoped paged list and session profile selection.
@@ -62,6 +66,7 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 - Account/auth schema and catalog/field consistency: `AccountSchemaTests.cs`.
 - Shared localization, startup idempotence, manual protection, fallback, cache invalidation and rollback: `UiLocalizationTests.cs`.
 - Owner account updates, last-Owner concurrency, session invalidation and Razor editor: `AdminAccountTests.cs`; catalog authorization, stale edits and encoded Razor forms: `AdminLocalizationTests.cs`.
+- Account assignments and Owner session revocation: `AdminAccountTests.cs`; language creation/editing/fallback and Razor: `AdminLocaleTests.cs`; provider enablement/auth availability and forms: `AdminProviderTests.cs`.
 - Login/cookies, pending registration, Plex grants, browser proof, expiry and replay: `AuthenticationTests.cs` (isolated PostgreSQL and controlled provider responses).
 - Real Razor forms, antiforgery, language settings, selection rotation, session revocation and logout: `FrontendAuthenticationTests.cs`; requires built Frontend assets.
 - `Infrastructure/TestPostgres.cs`: explicit isolated PostgreSQL fixture; never use the application database.

@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Collections.Frozen;
+using System.Globalization;
 using System.Net.Mail;
 using System.Text;
 using Jularr.Backend.Data.Common;
@@ -88,6 +90,10 @@ namespace Jularr.Backend.Data.Fields
 
     public sealed class StringField : DataField
     {
+        private static readonly FrozenDictionary<string, string> LocaleNames = CultureInfo.GetCultures(CultureTypes.AllCultures)
+            .Where(culture => culture.Name.Length > 0).GroupBy(culture => culture.Name, StringComparer.OrdinalIgnoreCase)
+            .ToFrozenDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
+
         public StringField() : this(NpgsqlDbType.Text)
         {
         }
@@ -108,9 +114,10 @@ namespace Jularr.Backend.Data.Fields
 
         public override object? Normalize(object? value)
         {
-            if (Trim && value is string text)
+            if (value is string text)
             {
-                return text.Trim();
+                if (Trim) text = text.Trim();
+                return Format == StringFormat.Locale && LocaleNames.TryGetValue(text, out var locale) ? locale : text;
             }
 
             return value;
@@ -145,6 +152,11 @@ namespace Jularr.Backend.Data.Fields
             if (length < MinimumLength)
             {
                 throw new DataValidationException(name, "too_short");
+            }
+
+            if (Format == StringFormat.Locale && !LocaleNames.ContainsKey(text))
+            {
+                throw new DataValidationException(name, "invalid_locale");
             }
 
             if (maximumLength is { } limit && length > limit)

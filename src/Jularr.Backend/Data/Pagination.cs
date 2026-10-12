@@ -34,7 +34,7 @@ namespace Jularr.Backend.Data
 
     public sealed class PageResult<T> : BaseResponse
     {
-        public PageResult(IReadOnlyList<T> items, PageRequest request, long? totalCount = null, bool? hasMore = null)
+        public PageResult(IReadOnlyList<T> items, PageRequest request)
         {
             ArgumentNullException.ThrowIfNull(items);
             ArgumentNullException.ThrowIfNull(request);
@@ -45,23 +45,14 @@ namespace Jularr.Backend.Data
                 throw new ArgumentException("Page contains more items than requested.", nameof(items));
             }
 
-            if (totalCount < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(totalCount));
-            }
-
             Items = items;
             Page = request.Page;
             PageSize = request.PageSize;
-            TotalCount = totalCount;
-            HasMore = hasMore;
         }
 
         public IReadOnlyList<T> Items { get; }
         public int Page { get; }
         public int PageSize { get; }
-        public long? TotalCount { get; }
-        public bool? HasMore { get; }
 
         public override void Validate()
         {

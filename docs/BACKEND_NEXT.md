@@ -33,10 +33,14 @@ and commit together. No migration, active-database installation or extra server.
   SMB, NFS and Synology API. Docker Compose can expose additional permitted host
   paths to the same Storage/Library owner. No arbitrary filesystem browser or
   implicit Docker socket/privileged-container access.
-- Prefer direct SMB/NFS protocol access without an OS mount. Use a managed mount
-  only for a demonstrated filesystem-path requirement in an actual consumer;
-  its platform support and required permissions must be explicit in configuration.
-  Compose paths remain a separate supported input, not the only NAS access mode.
+- Choose NAS access by measured throughput, reliability and consumer needs. Prefer
+  system mounts when they are necessary or better for streaming/imports; direct
+  SMB/NFS remains possible. Make mount options, permissions and platform support
+  explicit. Compose paths are a separate supported input.
+- NAS failure must not block account/admin/catalog browsing. Retain compressed
+  display covers in PostgreSQL and interoperable artwork beside the media on NAS
+  for Plex coexistence and a later return to Sonarr. Exact artwork names/formats,
+  size budgets and pending-write/recovery behavior still need a concrete contract.
 - Synology management API and file access are distinct responsibilities in
   Integrations, not additional Backend projects or canonical media systems.
 - Jularr is a standalone Arr system. Sonarr/Radarr/Prowlarr are optional one-time
@@ -66,9 +70,9 @@ and commit together. No migration, active-database installation or extra server.
 1. First-Owner installation proof and isolated preview database configuration.
 2. Optional PIN length/retry/cooldown/recovery policy; profile creation limits.
 3. Exact instance/profile preference catalogs and incomplete media/storage columns.
-4. NAS adapter/runtime support and incomplete media fields: validate direct
-   read/write/seek access first; introduce managed mounts only where the consumer
-   actually requires one. Do not impose mounting as a product prerequisite.
+4. NAS runtime/access support, current mount configuration and incomplete media
+   fields; compare mount versus direct read/write/seek before selecting adapters.
+   New third-party/native dependencies require owner approval.
 
 Role authorization, session revocation/rotation, Owner account directory/edit/approval
 and Owner catalog description/manual translation editing are implemented. Account
@@ -77,6 +81,10 @@ changes; stale catalog/account edits cannot overwrite newer data. These use exis
 baseline tables. Storage/NAS, media pages, standalone Arr, takeover and Player remain
 unfinished. Implement the shared owners in that order, with the same pipeline
 for native and external downloaders and the same Storage locations for imports/playback.
+Owner account/profile associations, account session revocation, provider registry
+enablement and language registry administration are now connected to real Razor
+pages. These reuse existing baseline entities. Provider connections/capabilities,
+NAS access/mount management and the incomplete media model are not implemented.
 
 Dev reference owners: [Acquisition core](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Acquisition/Core/CODEMAP.md),
 [Playback plan](https://github.com/Juloc/Jularr/blob/dev/src/Jularr.Web/Features/Playback/Decision/PlaybackPlan.cs),

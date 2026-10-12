@@ -13,6 +13,7 @@ namespace Jularr.Frontend.Pages.Account
     {
         private PageResult<ProfileSelectionDetailsV1>? _profiles;
         private string _returnUrl = "/";
+        private int _pageNumber = 1;
 
         protected override void Define(Page page)
         {
@@ -59,7 +60,8 @@ namespace Jularr.Frontend.Pages.Account
         public async Task<IActionResult> OnGetAsync(string? returnUrl, int pageNumber = 1)
         {
             _returnUrl = SafeReturnUrl(returnUrl);
-            _profiles = await readProfiles.ExecuteAsync<PageResult<ProfileSelectionDetailsV1>>(new ReadProfilesParametersV1(pageNumber), HttpContext.RequestAborted);
+            _pageNumber = pageNumber;
+            await LoadDataAsync();
             PreparePage();
             return Page();
         }
@@ -67,10 +69,16 @@ namespace Jularr.Frontend.Pages.Account
         public async Task<IActionResult> OnPostAsync(long profileId, string? returnUrl)
         {
             _returnUrl = SafeReturnUrl(returnUrl);
-            _profiles = await readProfiles.ExecuteAsync<PageResult<ProfileSelectionDetailsV1>>(new ReadProfilesParametersV1(), HttpContext.RequestAborted);
+
+            // Select, then apply committed proof.
             var result = await selectProfile.ExecuteAsync<SelectProfileResultV1>(new SelectProfileParametersV1(profileId), default, HttpContext.RequestAborted);
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
             return LocalRedirect(_returnUrl);
+        }
+
+        protected override async Task LoadDataAsync()
+        {
+            _profiles = await readProfiles.ExecuteAsync<PageResult<ProfileSelectionDetailsV1>>(new ReadProfilesParametersV1(_pageNumber), HttpContext.RequestAborted);
         }
 
         private string SafeReturnUrl(string? returnUrl) => Url.IsLocalUrl(returnUrl) && !returnUrl!.StartsWith("/Account/", StringComparison.OrdinalIgnoreCase) ? returnUrl : "/";

@@ -23,6 +23,7 @@ Shared conventions and Backend ownership:
 
 - [Page.cs](Framework/Page.cs): `JularrPage`, `PreparedPage`,
   `Page`, page definitions and shared service-error feedback.
+  Connected pages reuse `LoadDataAsync` for error redisplay instead of list reads before successful mutations.
 - [UiComponent.cs](Framework/UiComponent.cs): component-to-Razor HTML boundary,
   interface and encoder wiring, **no type switch**.
 - [Elements.cs](Framework/Elements.cs): minimal encoded C# HTML DSL;
@@ -48,7 +49,8 @@ Shared conventions and Backend ownership:
 - [BaseField.cs](Framework/BaseField.cs) and
   [Form.cs](Framework/Components/Form.cs): `Form<TData>` owns label/input
   markup, field errors and local antiforgery POSTs using canonical backend
-  `DataField` metadata, including minimum/maximum string lengths. Unbound forms remain disabled.
+  `DataField` metadata, including minimum/maximum string lengths. Metadata and property
+  getters are cached by property, not compiled per field/row. Unbound forms remain disabled.
 - [Shell.cs](Pages/Shared/Shell.cs) and
   [Shell.scss](Pages/Shared/Shell.scss): Jularr-specific Header, Sidebar,
   Mobile navigation and their private helpers in **one** shell owner.
@@ -71,7 +73,10 @@ Shared conventions and Backend ownership:
 - [Profiles](Pages/Account/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions.cshtml.cs),
   [Logout](Pages/Account/Logout.cshtml.cs): typed service-driven account session flows.
 - [AccessDenied](Pages/Account/AccessDenied.cshtml.cs): sanitized catalog-backed 403 page for denied Razor routes.
-- [Accounts](Pages/Admin/Accounts.cshtml.cs): Owner directory/editor for account name, role and approval; separate from request-limit Users.
+- [Accounts](Pages/Admin/Accounts.cshtml.cs): Owner directory/editor, profile assignments and session revocation; separate from request-limit Users.
+- [Providers](Pages/Admin/Providers.cshtml.cs): real provider registry enablement via Owner services.
+- [Languages](Pages/Admin/Languages.cshtml.cs): supported locale creation, names/direction/enablement and versioned edits via Owner services.
+- [Button.cs](Framework/Components/Button.cs), [Button.scss](Framework/Components/Button.scss): shared button variants/style imported by the shell; Form owns submission/disabled behavior.
 - [Localization](Pages/Admin/Localization.cshtml.cs): Owner catalog list, source descriptions and manual translation forms; versions and field errors come from Backend services.
 - [Settings](Pages/Settings.cshtml.cs): active profile name/language editing,
   read-only non-owner view and grant-based account/admin navigation; no page-local SQL or permissions.

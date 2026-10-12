@@ -1,4 +1,3 @@
-using System.Data;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Localization.V1;
 using Jularr.Backend.Data.Common;
@@ -18,7 +17,6 @@ namespace Jularr.Backend.Service.Admin.Localization.V1
         protected override ModuleRequirement GetInstanceModules(ReadUiMessagesParametersV1 parameters) => ModuleRequirement.None;
         protected override ServicePermission GetPermission(ReadUiMessagesParametersV1 parameters, Type resultType) => new("localization.read");
         protected override PageRequest GetPageRequest(ReadUiMessagesParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
-        protected override IsolationLevel? GetTransaction(ReadUiMessagesParametersV1 parameters) => IsolationLevel.RepeatableRead;
 
         protected override async Task<IServiceOutput> OnRead()
         {
@@ -50,27 +48,7 @@ namespace Jularr.Backend.Service.Admin.Localization.V1
             sql.Parameters.Add(new UiLocaleParameters(Parameters.UiLocaleId));
             sql.Page = Page;
 
-            var rows = await Context.ReadSql.ReadPageAsync<UiMessageDetailsV1>(sql, CancellationToken);
-
-            // Probe the next row exactly.
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT EXISTS (
-                    SELECT
-                        message."Id"
-                    FROM
-                        "UiTranslationMessages" AS message
-                    ORDER BY
-                        message."Key",
-                        message."Id"
-                    LIMIT 1
-                    OFFSET (@Offset + @PageSize)
-                );
-                """;
-            sql.Page = Page;
-            var hasMore = (bool)(await Context.ReadSql.ExecuteScalarAsync(sql, CancellationToken))!;
-            return new PageResult<UiMessageDetailsV1>(rows.Items, Page, hasMore: hasMore);
+            return await Context.ReadSql.ReadPageAsync<UiMessageDetailsV1>(sql, CancellationToken);
         }
     }
 
@@ -111,13 +89,13 @@ namespace Jularr.Backend.Service.Admin.Localization.V1
         }
     }
 
-    [ServiceEndpoint("PUT", "/api/v1/admin/localization/messages/{uiTranslationMessageId:long}/{uiLocaleId:long}/description")]
-    public sealed class UpdateUiDescriptionV1 : AdminService<UiMessageParametersV1, UpdateUiDescriptionDataV1>
+    [ServiceEndpoint("PUT", "/api/v1/admin/localization/messages/{uiTranslationMessageId:long}/description")]
+    public sealed class UpdateUiDescriptionV1 : AdminService<UpdateUiDescriptionParametersV1, UpdateUiDescriptionDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(UiMessageParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(UiMessageParametersV1 parameters, Type resultType) => new("localization.update");
+        protected override ModuleRequirement GetInstanceModules(UpdateUiDescriptionParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateUiDescriptionParametersV1 parameters, Type resultType) => new("localization.update");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {

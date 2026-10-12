@@ -13,9 +13,8 @@ namespace Jularr.Frontend.Pages.Account
         {
             page.Title("account.logout.title");
             page.Asset("Pages/Settings.entry.scss");
-            page.Content.Add(new UiSection("account.logout.title", [
-                new Form<SessionParametersV1>(form => form.Submit("account.logout.submit"), Url.Page("/Account/Logout"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, error: Error)
-            ]));
+            page.Content.Add(new Form<SessionParametersV1>(form => form.Submit("account.logout.submit"), Url.Page("/Account/Logout"),
+                antiforgery.GetAndStoreTokens(HttpContext).RequestToken, error: Error));
         }
 
         public IActionResult OnGet()

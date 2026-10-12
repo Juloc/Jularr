@@ -16,7 +16,6 @@ namespace Jularr.Backend.Service.Admin.Account.V1
         protected override ModuleRequirement GetInstanceModules(ReadAccountsParametersV1 parameters) => ModuleRequirement.None;
         protected override ServicePermission GetPermission(ReadAccountsParametersV1 parameters, Type resultType) => new("accounts.read");
         protected override PageRequest GetPageRequest(ReadAccountsParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
-        protected override IsolationLevel? GetTransaction(ReadAccountsParametersV1 parameters) => IsolationLevel.RepeatableRead;
 
         protected override async Task<IServiceOutput> OnRead()
         {
@@ -41,27 +40,7 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                 OFFSET @Offset;
                 """;
             sql.Page = Page;
-            var rows = await Context.ReadSql.ReadPageAsync<AccountDetailsV1>(sql, CancellationToken);
-
-            // Probe the next row exactly.
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT EXISTS (
-                    SELECT
-                        account."Id"
-                    FROM
-                        "Accounts" AS account
-                    ORDER BY
-                        account."DisplayName",
-                        account."Id"
-                    LIMIT 1
-                    OFFSET (@Offset + @PageSize)
-                );
-                """;
-            sql.Page = Page;
-            var hasMore = (bool)(await Context.ReadSql.ExecuteScalarAsync(sql, CancellationToken))!;
-            return new PageResult<AccountDetailsV1>(rows.Items, Page, hasMore: hasMore);
+            return await Context.ReadSql.ReadPageAsync<AccountDetailsV1>(sql, CancellationToken);
         }
     }
 

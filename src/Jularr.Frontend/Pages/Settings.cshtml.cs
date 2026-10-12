@@ -78,18 +78,24 @@ namespace Jularr.Frontend.Pages
             {
                 page.Content.Add(new A(new Text("admin.localization.title")).Attribute("href", "/Admin/Localization"));
             }
+
+            if (_authentication?.Permissions.Contains("providers.read", StringComparer.Ordinal) is true)
+            {
+                page.Content.Add(new A(new Text("admin.providers.title")).Attribute("href", "/Admin/Providers"));
+            }
         }
 
         public async Task<IActionResult> OnGetAsync()
         {
-            await LoadAsync();
+            await LoadDataAsync();
             PreparePage();
             return Page();
         }
 
         public async Task<IActionResult> OnPostAsync(string? displayName, long uiLocaleId)
         {
-            await LoadAsync();
+            // Read verified scope only.
+            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
             var profileId = _authentication!.ProfileId ?? throw new UnauthorizedAccessException("An active profile is required.");
             _input = new UpdateProfileDataV1 { DisplayName = displayName ?? "", UiLocaleId = uiLocaleId };
 
@@ -99,7 +105,7 @@ namespace Jularr.Frontend.Pages
             return RedirectToPage("/Settings");
         }
 
-        private async Task LoadAsync()
+        protected override async Task LoadDataAsync()
         {
             var token = HttpContext.RequestAborted;
             _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: token);

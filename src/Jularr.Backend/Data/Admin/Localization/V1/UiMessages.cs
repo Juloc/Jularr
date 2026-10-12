@@ -35,6 +35,17 @@ namespace Jularr.Backend.Data.Admin.Localization.V1
         public long UiLocaleId { get; }
     }
 
+    public sealed class UpdateUiDescriptionParametersV1 : BaseParameters
+    {
+        public UpdateUiDescriptionParametersV1(long uiTranslationMessageId)
+        {
+            UiTranslationMessageId = uiTranslationMessageId;
+        }
+
+        [DataField(typeof(UiTranslationMessageFields), nameof(UiTranslationMessageFields.Id))]
+        public long UiTranslationMessageId { get; }
+    }
+
     public sealed class UiMessageDetailsV1 : BaseResponse
     {
         public UiMessageDetailsV1(long id, string key, string englishText, string? description, long version, string? text, UiTranslationStatusType? uiTranslationStatusTypeId,

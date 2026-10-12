@@ -37,6 +37,7 @@ namespace Jularr.Backend.Service.Core
         public const string WantedReadPolicyName = "wanted.read";
         public const string LocalizationReadPolicyName = "localization.read";
         public const string AccountsReadPolicyName = "accounts.read";
+        public const string ProvidersReadPolicyName = "providers.read";
 
         public static IServiceCollection AddJularrServices(this IServiceCollection services, IConfiguration configuration)
         {
@@ -78,6 +79,7 @@ namespace Jularr.Backend.Service.Core
             services.AddProblemDetails();
             services.AddExceptionHandler<ServiceExceptionHandler>();
             services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+            services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
             services.AddScoped<IServiceGate, ServiceGate>();
             services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
@@ -89,7 +91,7 @@ namespace Jularr.Backend.Service.Core
             {
                 foreach (var (policyName, permission) in new[] { (AdminPolicyName, "admin.access"), (StorageReadPolicyName, "storage.read"), (RulesReadPolicyName, "rules.read"),
                     (MediaReadPolicyName, "media.read"), (RequestsReadPolicyName, "requests.read"), (WantedReadPolicyName, "wanted.read"),
-                    (LocalizationReadPolicyName, "localization.read"), (AccountsReadPolicyName, "accounts.read") })
+                    (LocalizationReadPolicyName, "localization.read"), (AccountsReadPolicyName, "accounts.read"), (ProvidersReadPolicyName, "providers.read") })
                 {
                     options.AddPolicy(policyName, policy => policy.RequireAuthenticatedUser().RequireAssertion(async authorization =>
                     {

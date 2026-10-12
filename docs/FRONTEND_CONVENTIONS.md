@@ -226,6 +226,9 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Avoid N+1 calls, unbounded lists, repeated field metadata reflection,
   unnecessary allocations/extra requests, speculative caching and heavy JS.
   Keep the view HTML server-rendered and the language cache bounded.
+- Use the shared Button and its variants rather than rebuilding buttons in pages.
+  Custom interaction requires an owner decision. Keep SCSS BEM selectors together
+  with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
 - Preserve Clean/Original, light/dark/system, and desktop/mobile/tablet
   accessibility. Player is a separate fullscreen page without Learning
   until its own design/PlaybackPlan contract exists.

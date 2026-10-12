@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using Jularr.Backend.Data.Common;
@@ -26,7 +27,10 @@ namespace Jularr.Frontend.Framework
         long? Maximum,
         string LabelKey)
     {
+        private static readonly ConcurrentDictionary<PropertyInfo, (DataFieldAttribute Field, Func<BaseData, object?> Read)> Properties = new();
+
         public int? MinimumLength { get; init; }
+        internal Func<BaseData, object?> ReadValue { get; init; } = _ => throw new InvalidOperationException("Field access requires property metadata.");
 
         public static BaseField From<TData, TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string? labelKey = null)
             where TData : BaseData
@@ -37,13 +41,23 @@ namespace Jularr.Frontend.Framework
 
             if (body is not MemberExpression { Member: PropertyInfo property }
                 || property.DeclaringType is null
-                || !property.DeclaringType.IsAssignableFrom(typeof(TData)))
+                || !property.DeclaringType.IsAssignableFrom(typeof(TData))
+                || ((MemberExpression)body).Expression != selector.Parameters[0])
             {
                 throw new ArgumentException("Fields must select a data property.", nameof(selector));
             }
 
-            var field = property.GetCustomAttribute<DataFieldAttribute>()
-                ?? throw new InvalidOperationException("Editable fields require backend DataField metadata.");
+            // Cache metadata and property access.
+            var cached = Properties.GetOrAdd(property, member =>
+            {
+                var metadata = member.GetCustomAttribute<DataFieldAttribute>()
+                    ?? throw new InvalidOperationException("Editable fields require backend DataField metadata.");
+                var data = Expression.Parameter(typeof(BaseData), "data");
+                var value = Expression.Property(Expression.Convert(data, member.DeclaringType!), member);
+                var getter = Expression.Lambda<Func<BaseData, object?>>(Expression.Convert(value, typeof(object)), data).Compile();
+                return (metadata, getter);
+            });
+            var field = cached.Field;
             var minimum = field.Field is LongField number ? number.Minimum : (long?)null;
             var maximum = field.Field is LongField limit ? limit.Maximum : (long?)null;
 
@@ -57,6 +71,7 @@ namespace Jularr.Frontend.Framework
                 maximum,
                 labelKey ?? $"field.{typeof(TData).Name}.{property.Name}")
             {
+                ReadValue = cached.Read,
                 MinimumLength = field.Field is StringField text && text.MinimumLength > 0 ? text.MinimumLength : null
             };
         }

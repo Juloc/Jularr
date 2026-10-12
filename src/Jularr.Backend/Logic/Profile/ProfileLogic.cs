@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Localization;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Account;
 
 namespace Jularr.Backend.Logic.Profile
 {
@@ -42,19 +43,7 @@ namespace Jularr.Backend.Logic.Profile
             }
 
             // Establish ownership before commit.
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                INSERT INTO
-                    "AccountProfiles" ("AccountId", "ProfileId")
-                VALUES
-                    (@AccountId, @ProfileId);
-                """;
-            sql.Parameters.Add(new AccountProfileData(data.OwnerAccountId, profile.Id));
-            if (await context.ExecuteAsyncForAffectedRows(sql, cancellationToken) != 1)
-            {
-                throw new InvalidOperationException("The profile membership could not be created.");
-            }
+            await context.AddAccountProfileAsync(new AccountProfileData(data.OwnerAccountId, profile.Id), cancellationToken);
         }
 
         public static Task<ProfileUpdateData> ReadProfileAsync(this LogicContext context, long profileId, CancellationToken cancellationToken)

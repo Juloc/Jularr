@@ -60,7 +60,7 @@ namespace Jularr.Frontend.Framework
                 ?? throw new InvalidOperationException("The English UI locale is unavailable.");
 
             _catalog = await textsService.ExecuteAsync<ReadUiTextsResultV1>(
-                new ReadUiTextsParametersV1(matched.Id), token);
+                new ReadUiTextsParametersV1(authentication.UiLocaleId ?? matched.Id), token);
 
             // Locale selection is data-driven. Culture formatting follows the resolved locale.
             var culture = CultureInfo.GetCultureInfo(_catalog.Locale);

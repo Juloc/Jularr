@@ -1,0 +1,24 @@
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 9px 15px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 650;
+
+    &:hover:not(:disabled) { background: var(--surface-hover); }
+    &:disabled { opacity: .65; cursor: not-allowed; }
+
+    &--primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--accent-contrast);
+
+        &:hover:not(:disabled) { filter: brightness(1.06); background: var(--accent); }
+    }
+}

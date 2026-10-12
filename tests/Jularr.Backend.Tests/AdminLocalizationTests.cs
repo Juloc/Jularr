@@ -21,14 +21,15 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             using var rows = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
             Assert.AreEqual(2, rows.RootElement.GetProperty("items").GetArrayLength());
-            Assert.IsTrue(rows.RootElement.GetProperty("hasMore").GetBoolean());
+            Assert.IsFalse(rows.RootElement.TryGetProperty("hasMore", out _));
             var item = rows.RootElement.GetProperty("items")[0].Deserialize<UiMessageDetailsV1>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
             var route = $"/api/v1/admin/localization/messages/{item.Id}/1";
 
             // Context and source revision.
-            using var description = await host.SendAsync(HttpMethod.Put, route + "/description", new UpdateUiDescriptionDataV1(item.Version, "Account form label, not a media title."));
+            var descriptionRoute = $"/api/v1/admin/localization/messages/{item.Id}/description";
+            using var description = await host.SendAsync(HttpMethod.Put, descriptionRoute, new UpdateUiDescriptionDataV1(item.Version, "Account form label, not a media title."));
             Assert.AreEqual(HttpStatusCode.OK, description.StatusCode, await description.Content.ReadAsStringAsync());
-            using var staleDescription = await host.SendAsync(HttpMethod.Put, route + "/description", new UpdateUiDescriptionDataV1(item.Version, "Stale context"));
+            using var staleDescription = await host.SendAsync(HttpMethod.Put, descriptionRoute, new UpdateUiDescriptionDataV1(item.Version, "Stale context"));
             Assert.AreEqual(HttpStatusCode.BadRequest, staleDescription.StatusCode);
 
             // Create, edit, reject stale writes.

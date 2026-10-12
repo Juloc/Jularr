@@ -316,7 +316,9 @@ namespace Jularr.Backend.Tests
                         options.Conventions.AuthorizePage("/Admin/Rules", ServiceApi.RulesReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Users", ServiceApi.RulesReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Localization", ServiceApi.LocalizationReadPolicyName);
+                        options.Conventions.AuthorizePage("/Admin/Languages", ServiceApi.LocalizationReadPolicyName);
                         options.Conventions.AuthorizePage("/Admin/Accounts", ServiceApi.AccountsReadPolicyName);
+                        options.Conventions.AuthorizePage("/Admin/Providers", ServiceApi.ProvidersReadPolicyName);
                         options.Conventions.AllowAnonymousToPage("/Account/Login");
                     });
                     builder.Services.AddAuthorization();

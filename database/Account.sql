@@ -12,6 +12,7 @@ CREATE TABLE "UiLocales" (
     CONSTRAINT "PK_UiLocales" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_UiLocales_Locale" UNIQUE ("Locale"),
     CONSTRAINT "CK_UiLocales_Locale" CHECK (length(btrim("Locale")) > 0),
+    CONSTRAINT "CK_UiLocales_Name" CHECK (length(btrim("Name")) > 0),
     CONSTRAINT "CK_UiLocales_CatalogVersion" CHECK ("CatalogVersion" > 0)
 );
 

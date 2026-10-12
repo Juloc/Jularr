@@ -12,6 +12,7 @@ namespace Jularr.Frontend.Pages.Account
     public sealed class SessionsModel(ReadSessionsV1 readSessions, RevokeSessionV1 revokeSession, IAntiforgery antiforgery) : JularrPage
     {
         private PageResult<SessionDetailsV1>? _sessions;
+        private int _pageNumber = 1;
 
         protected override void Define(Page page)
         {
@@ -43,17 +44,23 @@ namespace Jularr.Frontend.Pages.Account
 
         public async Task<IActionResult> OnGetAsync(int pageNumber = 1)
         {
-            _sessions = await readSessions.ExecuteAsync<PageResult<SessionDetailsV1>>(new ReadSessionsParametersV1(pageNumber), HttpContext.RequestAborted);
+            _pageNumber = pageNumber;
+            await LoadDataAsync();
             PreparePage();
             return Page();
         }
 
         public async Task<IActionResult> OnPostAsync(Guid sessionPublicId)
         {
-            _sessions = await readSessions.ExecuteAsync<PageResult<SessionDetailsV1>>(new ReadSessionsParametersV1(), HttpContext.RequestAborted);
+            // Revoke, then update authentication.
             var result = await revokeSession.ExecuteAsync<RevokeSessionResultV1>(new RevokeSessionParametersV1(sessionPublicId), default, HttpContext.RequestAborted);
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
             return RedirectToPage("/Account/Sessions");
+        }
+
+        protected override async Task LoadDataAsync()
+        {
+            _sessions = await readSessions.ExecuteAsync<PageResult<SessionDetailsV1>>(new ReadSessionsParametersV1(_pageNumber), HttpContext.RequestAborted);
         }
     }
 }

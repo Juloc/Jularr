@@ -13,6 +13,7 @@ documents need not be reread for every task.
 - Async methods use `Async` when naming is under our control. Framework hooks retain their declared names, such as `OnRead` and `OnUpdate`.
 - Prefer `string`, `long`, `bool` and other C# aliases; use `var` when the initializer makes the type clear.
 - Use nullable types accurately; do not hide missing values with defaults or unjustified null-forgiving operators.
+- Obtain owner approval before adding third-party libraries or native dependencies. Discuss framework limitations instead of building workaround layers.
 - Keep coherent control flow together. No forwarding wrappers, artificial mini-methods, speculative interfaces or dependencies.
 - Keep straightforward method/constructor signatures, class declarations and calls on one line up to a 200-character guideline (including indentation). Do not wrap a short parameter list merely because it has several arguments. Wrap genuinely long signatures/inheritance or complex expressions at logical boundaries; keep Allman body braces and meaningful section spacing. The backend/integration EditorConfig uses the same limit.
 - Propagate cancellation and finite I/O timeouts. Dispose owned resources; preserve exception meaning and do not swallow failures.
@@ -56,6 +57,7 @@ use the same services through the shared API adapter.
 - Bind typed parameter/data objects through `sql.Parameters.Add(...)`. Trusted actor/profile IDs come from the verified invocation context, never request data.
 - Parameter binding uses readable data properties, cached field metadata and compiled getters. Npgsql handles named placeholders; PostgreSQL evaluates explicit SQL casts. Unused mapped properties are allowed; duplicate names across supplied objects are rejected. Each property type must have an explicit mapping in the data contract.
 - Paged reads explicitly set `sql.Page = Page` (or a validated `PageRequest` in Backend code outside a service). The list-service hook is evaluated once per invocation; SQL binding and the result use that same request. `PageResult<T>` is a BaseResponse and validates nested BaseData items.
+- Each page executes one bounded list SELECT and returns items, page and page size. Frontend offers Next when item count equals page size; a subsequent empty page is valid. Do not read extra rows or counts solely for navigation.
 - SQL infrastructure has no Account/Profile/auth state and injects no entity IDs. Bind needed trusted values explicitly from the verified caller. Session Logic reads and locks the session by its proof; the gate compares its current Account/Profile with the verified caller.
 - Uppercase SQL keywords; double-quote PascalCase table/column names; use clear aliases and explicit columns, never `SELECT *`.
 - Format multi-line queries by clause (`SELECT`, `FROM`, `JOIN`, `WHERE`, `SET`); one selected/assigned column per line and aligned conditions.
