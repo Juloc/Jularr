@@ -7,6 +7,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Jularr.Backend.Tests" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="HtmlSanitizer" Version="9.2.1039" />
     <PackageReference Include="Npgsql" Version="10.0.3" />
     <ProjectReference Include="../Jularr.Integrations/Jularr.Integrations.csproj" />
     <EmbeddedResource Include="../../database/Account.sql" LogicalName="Jularr.Database.Account.sql" />

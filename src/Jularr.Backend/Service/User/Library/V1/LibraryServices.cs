@@ -130,14 +130,16 @@ namespace Jularr.Backend.Service.User.Library.V1
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",
                     parent."Number" AS "ParentUnitNumber",
-                    progress."PositionMs",
-                    progress."DurationMs"
+                    coalesce(progress."PositionMs", 0) AS "PositionMs",
+                    progress."DurationMs",
+                    asset."MediaAssetTypeId"
                 FROM
                     "MediaProgress" AS progress
                     JOIN "Works" AS work ON work."Id" = progress."WorkId"
                     JOIN LATERAL (
                         SELECT
-                            candidate."Id"
+                            candidate."Id",
+                            candidate."MediaAssetTypeId"
                         FROM
                             "MediaAssets" AS candidate
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = candidate."Id" AND available."MissingSince" IS NULL
@@ -153,7 +155,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 WHERE
                     progress."ProfileId" = @ProfileId
                     AND NOT progress."IsCompleted"
-                    AND progress."PositionMs" > 0
+                    AND (progress."PositionMs" > 0 OR progress."Locator" IS NOT NULL)
                 ORDER BY
                     progress."UpdatedAt" DESC,
                     progress."Id" DESC

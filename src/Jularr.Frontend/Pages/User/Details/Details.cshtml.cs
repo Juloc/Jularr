@@ -80,6 +80,12 @@ namespace Jularr.Frontend.Pages.User.Details
 
         private IUiComponent Play(WorkAvailabilityV1 item)
         {
+            // Books open in the reader.
+            if (item.MediaAssetTypeId == MediaAssetType.Ebook)
+            {
+                return new A(new Text("details.read")).Attribute("href", "/Read/" + item.Id.ToString(CultureInfo.InvariantCulture));
+            }
+
             // Continue where this profile stopped.
             if (!item.IsAvailable || texts.Capabilities?.CanPlay is not true)
             {

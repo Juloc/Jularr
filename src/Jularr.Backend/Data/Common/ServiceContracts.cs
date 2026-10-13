@@ -11,6 +11,13 @@ namespace Jularr.Backend.Data.Common
         string ContentType { get; }
     }
 
+    // Authorized bytes from the database, such as cached book resources.
+    public interface IBinaryOutput
+    {
+        byte[] Bytes { get; }
+        string ContentType { get; }
+    }
+
     // Generated text documents such as streaming playlists.
     public interface ITextOutput
     {

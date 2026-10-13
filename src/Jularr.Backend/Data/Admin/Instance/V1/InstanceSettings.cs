@@ -13,11 +13,13 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
     public sealed class InstanceSettingsDetailsV1 : BaseResponse
     {
-        public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version)
+        public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version, int readingCacheMegabytes, int readingCacheWorks)
         {
             Name = name;
             UiLocaleId = uiLocaleId;
             Version = version;
+            ReadingCacheMegabytes = readingCacheMegabytes;
+            ReadingCacheWorks = readingCacheWorks;
         }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
@@ -28,16 +30,32 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Version))]
         public long Version { get; }
+
+        // Reading cache budget in the database.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ReadingCacheMegabytes))]
+        public int ReadingCacheMegabytes { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ReadingCacheWorks))]
+        public int ReadingCacheWorks { get; }
     }
 
     public sealed class UpdateInstanceSettingsDataV1 : BaseData
     {
-        public UpdateInstanceSettingsDataV1(string name, long uiLocaleId, long version)
+        public UpdateInstanceSettingsDataV1(string name, long uiLocaleId, long version, int? readingCacheMegabytes = null, int? readingCacheWorks = null)
         {
             Name = name;
             UiLocaleId = uiLocaleId;
             Version = version;
+            ReadingCacheMegabytes = readingCacheMegabytes;
+            ReadingCacheWorks = readingCacheWorks;
         }
+
+        // Empty keeps the current budget.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ReadingCacheMegabytes), false)]
+        public int? ReadingCacheMegabytes { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ReadingCacheWorks), false)]
+        public int? ReadingCacheWorks { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
         public string Name { get; }

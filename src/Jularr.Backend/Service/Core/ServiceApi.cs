@@ -23,6 +23,7 @@ using Jularr.Backend.Service.System.Acquisition;
 using Jularr.Backend.Service.System.Operation;
 using Jularr.Backend.Service.Admin.Media;
 using Jularr.Backend.Service.Admin.Provider;
+using Jularr.Backend.Service.User.Reading;
 using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.User.Playback;
 using Jularr.Backend.Service.Public.Localization.V1;
@@ -98,6 +99,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<PlexServer>();
+            services.TryAddTransient<ReadingContent>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
@@ -331,6 +333,13 @@ namespace Jularr.Backend.Service.Core
                 {
                     http.Response.Headers.CacheControl = "private,no-store";
                     return (IResult)Results.File(file.FilePath, file.ContentType, enableRangeProcessing: true);
+                }
+
+                if (result is IBinaryOutput binary)
+                {
+                    http.Response.Headers.CacheControl = "private,max-age=3600";
+                    http.Response.Headers.XContentTypeOptions = "nosniff";
+                    return Results.Bytes(binary.Bytes, binary.ContentType);
                 }
 
                 if (result is ITextOutput text)

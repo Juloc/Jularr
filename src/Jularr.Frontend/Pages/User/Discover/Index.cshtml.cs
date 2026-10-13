@@ -92,7 +92,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
-                "/Player/" + item.MediaAssetId.ToString(CultureInfo.InvariantCulture)))]));
+                (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture)))]));
             page.Content.Add(new MediaShelf("discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]));
             foreach (var group in _shelves.GroupBy(shelf => shelf.Type))

@@ -4,6 +4,8 @@ CREATE TABLE "InstanceSettings" (
     "Id" bigint PRIMARY KEY CHECK ("Id" = 1),
     "Name" varchar(128) NOT NULL CHECK (length(btrim("Name")) > 0),
     "UiLocaleId" bigint NOT NULL REFERENCES "UiLocales" ("Id") ON DELETE RESTRICT,
+    "ReadingCacheBytes" bigint NOT NULL DEFAULT 2147483648 CHECK ("ReadingCacheBytes" >= 0),
+    "ReadingCacheWorks" integer NOT NULL DEFAULT 100 CHECK ("ReadingCacheWorks" BETWEEN 0 AND 10000),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
 );
 
