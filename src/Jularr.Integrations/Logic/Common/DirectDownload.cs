@@ -151,23 +151,36 @@ namespace Jularr.Integrations.Logic.Common
 
             if (IPAddress.TryParse(uri.IdnHost, out var address))
             {
-                if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
-                if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
-                {
-                    var bytes = address.GetAddressBytes();
-                    return (bytes[0] & 0xe0) == 0x20 && !(bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8);
-                }
-
-                var octets = address.GetAddressBytes();
-                return octets[0] is >= 1 and < 224 && octets[0] != 10 && octets[0] != 127
-                    && !(octets[0] == 100 && octets[1] is >= 64 and <= 127)
-                    && !(octets[0] == 169 && octets[1] == 254)
-                    && !(octets[0] == 172 && octets[1] is >= 16 and <= 31)
-                    && !(octets[0] == 192 && octets[1] == 168)
-                    && !(octets[0] == 198 && octets[1] is 18 or 19);
+                return IsPublicAddress(address);
             }
 
             return uri.HostNameType == UriHostNameType.Dns && uri.IdnHost.Contains('.');
+        }
+
+        public static bool IsPublicAddress(IPAddress address)
+        {
+            if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+            if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            {
+                var bytes = address.GetAddressBytes();
+                return (bytes[0] & 0xe0) == 0x20 && !(bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8);
+            }
+
+            if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                return false;
+            }
+
+            var octets = address.GetAddressBytes();
+            return octets[0] is >= 1 and < 224 && octets[0] != 10 && octets[0] != 127
+                && !(octets[0] == 100 && octets[1] is >= 64 and <= 127)
+                && !(octets[0] == 169 && octets[1] == 254)
+                && !(octets[0] == 172 && octets[1] is >= 16 and <= 31)
+                && !(octets[0] == 192 && octets[1] == 168)
+                && !(octets[0] == 192 && octets[1] == 0 && (octets[2] == 0 || octets[2] == 2))
+                && !(octets[0] == 198 && octets[1] is 18 or 19)
+                && !(octets[0] == 198 && octets[1] == 51 && octets[2] == 100)
+                && !(octets[0] == 203 && octets[1] == 0 && octets[2] == 113);
         }
 
         private static async Task<SourceGate?> ReadGateAsync(HttpResponseMessage response, Uri uri, CancellationToken ct)
