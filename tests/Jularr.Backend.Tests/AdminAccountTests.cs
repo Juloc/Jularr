@@ -286,7 +286,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Profiles_AccountCreatesUpToTenAndDeletionTakesItsRequests()
+        public async Task Profiles_AccountCreatesUpToTenAndDeletionCancelsItsOpenRequests()
         {
             await using var host = await Host.CreateAsync(razor: true);
             await SignInAsync(host);
@@ -307,7 +307,7 @@ namespace Jularr.Backend.Tests
             using var picker = await host.SendAsync(HttpMethod.Get, "/Account/Profiles");
             Assert.IsFalse((await picker.Content.ReadAsStringAsync()).Contains("Add profile", StringComparison.Ordinal));
 
-            // Deleting the active profile removes its requests and returns the session to the picker.
+            // Deleting the active profile cancels its open requests, keeps them with the account and returns the session to the picker.
             var child = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Profiles\" WHERE \"DisplayName\" = 'Child 9'"))!;
             await host.Fixture.RunSqlAsync($$"""
                 WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Requested Film') RETURNING "Id")
@@ -320,7 +320,7 @@ namespace Jularr.Backend.Tests
             using var deleted = await host.SendAsync(HttpMethod.Delete, "/api/v1/profiles/" + child);
             Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Profiles\" WHERE \"Id\" = " + child));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual((short)9, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"RequestedByProfileId\" IS NULL"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CanonicalTitle\" = 'Requested Film'"));
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             Assert.IsNull((await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.ProfileId);

@@ -69,7 +69,7 @@ namespace Jularr.Backend.Logic.Profile
                 throw new KeyNotFoundException("The profile was not found.");
             }
 
-            // Sessions on the profile return to the picker; its requests, sign-in flows and links go with it.
+            // Sessions on the profile return to the picker; its open requests are cancelled, the others stay with the account; sign-in flows and links go with it.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -86,24 +86,15 @@ namespace Jularr.Backend.Logic.Profile
             sql = new SqlStatement();
             sql.Statement =
                 """
-                DELETE FROM
-                    "RequestTargets" AS target
-                USING
+                UPDATE
                     "AcquisitionRequests" AS request
+                SET
+                    "AcquisitionRequestStatusTypeId" = 9,
+                    "UpdatedAt" = now(),
+                    "Version" = request."Version" + 1
                 WHERE
-                    target."AcquisitionRequestId" = request."Id"
-                    AND request."RequestedByProfileId" = @ProfileId;
-                """;
-            sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-
-            sql = new SqlStatement();
-            sql.Statement =
-                """
-                DELETE FROM
-                    "AcquisitionRequests" AS request
-                WHERE
-                    request."RequestedByProfileId" = @ProfileId;
+                    request."RequestedByProfileId" = @ProfileId
+                    AND request."AcquisitionRequestStatusTypeId" = 1;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

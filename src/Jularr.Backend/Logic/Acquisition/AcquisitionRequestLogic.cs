@@ -106,7 +106,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     @AcquisitionProfileId
                 )
                 ON CONFLICT ("RequestedByProfileId", "WorkId", "UiLocaleId", "GamePlatformId")
-                    WHERE "AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5)
+                    WHERE "AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5) AND "RequestedByProfileId" IS NOT NULL
                 DO UPDATE SET
                     "WorkId" = EXCLUDED."WorkId"
                 RETURNING
