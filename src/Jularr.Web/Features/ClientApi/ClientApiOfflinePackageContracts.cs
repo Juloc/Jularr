@@ -1,9 +1,9 @@
 namespace Jularr.Web.Features.ClientApi;
 
 /// <summary>
-/// Stable wire vocabulary for the cross-media device-local Offline package flow.
-/// Canonical MediaCore works and canonical Games identities stay separate; this contract only
-/// describes what the client wants to keep on its own device.
+/// Stable wire vocabulary for the current device-local Offline package flow.
+/// The pre-cutover Game target remains wire-compatible until #880. The clean-cut target uses
+/// canonical WorkId for Games too, with WorkVersion/release context below that Work.
 /// </summary>
 public static class ClientApiOfflinePackageContract
 {
@@ -149,8 +149,8 @@ public enum ClientOfflinePackageIntent
 }
 
 /// <summary>
-/// Canonical target of a device-local package. Work and Game identities are intentionally a
-/// discriminated union because Games does not belong to MediaCore.
+/// Current pre-cutover target shape. GameId/GameReleaseId are legacy wire fields only.
+/// After #880, Games use the canonical Work target and release context resolves through WorkVersion.
 /// </summary>
 public sealed record ClientOfflinePackageTarget(
     string? Kind,

@@ -4,7 +4,10 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Jularr.Web.Features.Games;
 
-/// <summary>Games-owned EF configuration; AppDbContext only invokes this module boundary.</summary>
+/// <summary>
+/// Legacy pre-#880 Games EF mapping kept only for the running schema.
+/// The clean-cut target uses Work/WorkVersion plus Games-specific extensions.
+/// </summary>
 public static class GamesModelConfiguration
 {
     public static void Configure(ModelBuilder modelBuilder)

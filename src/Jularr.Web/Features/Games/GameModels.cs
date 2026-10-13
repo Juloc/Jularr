@@ -1,6 +1,9 @@
 namespace Jularr.Web.Features.Games;
 
-/// <summary>Provider-independent canonical Game identity. Games deliberately stays outside MediaCore Work identity.</summary>
+/// <summary>
+/// Legacy pre-cutover Game root. Target identity is MediaCore Work (media type Game).
+/// Do not build new features against this root; #880 removes it during the atomic cutover.
+/// </summary>
 public sealed class Game
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -22,7 +25,7 @@ public enum GameTitleKind
     Romanized = 3
 }
 
-/// <summary>An alternate/localized title; the canonical product title remains on <see cref="Game"/>.</summary>
+/// <summary>Legacy pre-cutover Game title. Target titles are WorkTitle rows on the canonical Game Work.</summary>
 public sealed class GameTitle
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -33,7 +36,7 @@ public sealed class GameTitle
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
-/// <summary>Provider identity is matching/provenance evidence, never the canonical Game ID.</summary>
+/// <summary>Legacy pre-cutover provider mapping. Target Game provider identities are WorkExternalIdentity rows.</summary>
 public sealed class GameExternalIdentity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -54,7 +57,7 @@ public enum GameArtworkKind
     Banner = 5
 }
 
-/// <summary>Reference to artwork; provider/cache fetching remains outside the canonical Game entity.</summary>
+/// <summary>Legacy pre-cutover Game artwork row. Target artwork is assigned to the canonical Game Work.</summary>
 public sealed class GameArtwork
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -84,7 +87,7 @@ public enum GameReleaseKind
     Prototype = 4
 }
 
-/// <summary>One concrete playable release/version of a canonical Game.</summary>
+/// <summary>Legacy pre-cutover release root. Target GameRelease extends the canonical WorkVersion.</summary>
 public sealed class GameRelease
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -130,8 +133,8 @@ public enum GameReleaseFileRole
 }
 
 /// <summary>
-/// One physical file belonging to a release. LibraryRoot + RelativePath is physical placement only,
-/// never canonical Game identity.
+/// Legacy pre-cutover release-file row. Target multi-file/disc membership references canonical
+/// StoredFile rows and never creates a second file identity.
 /// </summary>
 public sealed class GameReleaseFile
 {
