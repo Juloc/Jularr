@@ -244,6 +244,7 @@ namespace Jularr.Frontend.Localization
             new("source.assistance.step1", "1. Open the source and complete the requested confirmation."),
             new("source.assistance.step2", "2. Copy the HTTPS file link into the field below and continue."),
             new("source.assistance.open", "Show steps"),
+            new("source.assistance.paste", "Paste link"),
             new("instance.module.SourceAssistance", "Source download assistance"),
             new("acquisition.outcome.source_manual_link", "Confirm at the source, then paste the file link"),
             new("acquisition.outcome.source_gate", "The source asks for a manual login or confirmation"),
