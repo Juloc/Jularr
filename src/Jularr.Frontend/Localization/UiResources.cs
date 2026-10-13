@@ -192,6 +192,7 @@ namespace Jularr.Frontend.Localization
             new("sources.group.Manga", "Manga"),
             new("sources.group.Audiobooks", "Audiobooks"),
             new("sources.group.Acquisition", "Usenet"),
+            new("sources.group.Music", "Music"),
             new("sources.capability.Metadata", "metadata"),
             new("sources.capability.Search", "search"),
             new("sources.capability.Download", "download"),

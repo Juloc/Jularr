@@ -19,6 +19,7 @@ namespace Jularr.Backend.Logic.Acquisition
             MediaType.Series => AcquisitionKind.Tv,
             MediaType.Book => AcquisitionKind.Book,
             MediaType.Manga => AcquisitionKind.Manga,
+            MediaType.Music => AcquisitionKind.Music,
             MediaType.LightNovel => AcquisitionKind.LightNovel,
             _ => null
         };
@@ -44,6 +45,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             MediaType.Book or MediaType.LightNovel => ReleaseQuality.GetKey(BookReleaseJudge.Parse(title)),
             MediaType.Manga => ReleaseQuality.GetKey(MangaReleaseJudge.Parse(title)),
+            MediaType.Music => ReleaseQuality.GetKey(MusicReleaseJudge.Parse(title)),
             _ => ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null
         };
 
@@ -71,7 +73,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 AcquisitionKind.Movie => 2000,
                 AcquisitionKind.Tv or AcquisitionKind.Anime => 5000,
                 AcquisitionKind.Book or AcquisitionKind.LightNovel or AcquisitionKind.Manga => 7000,
-                AcquisitionKind.Audiobook => 3000,
+                AcquisitionKind.Audiobook or AcquisitionKind.Music => 3000,
                 _ => 0
             };
             var own = configured.Where(category => category / 1000 * 1000 == range).ToArray();
@@ -91,6 +93,7 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge(target.CanonicalTitle, target.Author, offer)),
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer)),
+                AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
                 _ => Candidate(offer, VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, scope?.Unit, scope?.Units ?? UnitSet.Empty, offer))
             })]);
 

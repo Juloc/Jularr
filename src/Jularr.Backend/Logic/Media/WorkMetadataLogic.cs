@@ -184,7 +184,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Seasons first, then their episodes, or volumes; existing units keep their identity.
+            // Seasons first, then their episodes, or volumes and tracks; existing units keep their identity.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -192,21 +192,22 @@ namespace Jularr.Backend.Logic.Media
                     SELECT
                         *
                     FROM
-                        jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Title" text, "ReleasedOn" date)
-                ), volumes AS (
+                        jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Track" integer, "Title" text, "ReleasedOn" date)
+                ), leaves AS (
                     INSERT INTO
                         "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn")
                     SELECT
                         @Id,
                         NULL,
-                        3,
-                        item."Volume",
+                        CASE WHEN item."Volume" IS NOT NULL THEN 3 ELSE 5 END,
+                        COALESCE(item."Volume", item."Track"),
                         NULLIF(btrim(item."Title"), ''),
                         item."ReleasedOn"
                     FROM
                         item
                     WHERE
                         item."Volume" IS NOT NULL
+                        OR item."Track" IS NOT NULL
                     ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
                     SET
                         "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
@@ -252,6 +253,42 @@ namespace Jularr.Backend.Logic.Media
                 SET
                     "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
                     "ReleasedOn" = EXCLUDED."ReleasedOn";
+                """;
+            sql.Parameters.Add(data);
+            sql.Parameters.Add(new WorkIdData(workId.Value));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            // An album's tracks follow its edition; tracks holding files stay.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "WorkUnits" AS track
+                WHERE
+                    track."WorkId" = @Id
+                    AND track."WorkUnitTypeId" = 5
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            jsonb_to_recordset(@Units::jsonb) AS item ("Track" integer)
+                        WHERE
+                            item."Track" IS NOT NULL
+                    )
+                    AND track."Number" > (
+                        SELECT
+                            max(item."Track")
+                        FROM
+                            jsonb_to_recordset(@Units::jsonb) AS item ("Track" integer)
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                        WHERE
+                            asset."WorkUnitId" = track."Id"
+                    );
                 """;
             sql.Parameters.Add(data);
             sql.Parameters.Add(new WorkIdData(workId.Value));

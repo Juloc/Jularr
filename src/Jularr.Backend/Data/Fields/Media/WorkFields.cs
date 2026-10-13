@@ -5,6 +5,7 @@ namespace Jularr.Backend.Data.Fields.Media
 {
     public static class WorkFields
     {
+        public static readonly IntField TrackCount = new() { Minimum = 0 };
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly EnumField MediaTypeId = new(typeof(MediaType));
         public static readonly StringField CanonicalTitle = new(NpgsqlDbType.Varchar) { AllowBlank = false, Trim = true, MaximumLength = 500 };

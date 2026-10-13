@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Ebooks and comics must be what their names say.
-            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author)
+            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author, download.TrackCount)
                 .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
                 .ToArray();
             if (placements.Length == 0)

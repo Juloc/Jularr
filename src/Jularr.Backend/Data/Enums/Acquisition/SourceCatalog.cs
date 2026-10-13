@@ -25,7 +25,8 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Novels = 2,
         Manga = 3,
         Audiobooks = 4,
-        Acquisition = 5
+        Acquisition = 5,
+        Music = 6
     }
 
     // One suggested source; ready entries map to a connection type or a metadata provider.
@@ -88,6 +89,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("empirenovel", "EmpireNovel", SourceGroup.Novels, SourceCapability.Link, SourceAvailability.ReferenceOnly),
             new("novelping", "NovelPing", SourceGroup.Novels, SourceCapability.Link, SourceAvailability.ReferenceOnly),
             new("anilist", "AniList", SourceGroup.Manga, MetadataSearch, SourceAvailability.Ready, providerKey: "anilist"),
+            new("musicbrainz", "MusicBrainz", SourceGroup.Music, MetadataSearch, SourceAvailability.Ready, providerKey: "musicbrainz"),
             new("mangadex", "MangaDex", SourceGroup.Manga, MetadataSearch | SourceCapability.Monitoring, SourceAvailability.Planned),
             new("librivox", "LibriVox", SourceGroup.Audiobooks, MetadataSearch, SourceAvailability.Planned),
             new("newznab", "Newznab indexer", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab),

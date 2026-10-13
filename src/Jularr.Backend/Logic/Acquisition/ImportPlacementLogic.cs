@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -9,7 +10,7 @@ using Jularr.Integrations.Data.Storage;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
-    internal static class ImportPlacementLogic
+    internal static partial class ImportPlacementLogic
     {
         private static readonly HashSet<char> InvalidNameCharacters = [.. Path.GetInvalidFileNameChars(), '<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
@@ -27,7 +28,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return rest.Split('/').Any(segment => segment is "." or "..") ? null : rest;
         }
 
-        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files, string? author = null)
+        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files, string? author = null, int trackCount = 0)
         {
             if (mediaType is MediaType.Book or MediaType.LightNovel)
             {
@@ -37,6 +38,11 @@ namespace Jularr.Backend.Logic.Acquisition
             if (mediaType == MediaType.Manga)
             {
                 return PlanManga(title, files);
+            }
+
+            if (mediaType == MediaType.Music)
+            {
+                return PlanMusic(title, year, author, files, trackCount);
             }
 
             var videos = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video && !MediaPathParser.IsSample(file.RelativePath)).ToArray();
@@ -116,6 +122,28 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
+        // Tracks keep the release's natural order and land on their units only when the album's track count matches; the artist names the folder.
+        private static IReadOnlyList<ImportPlacementData> PlanMusic(string title, int? year, string? artist, IReadOnlyList<StorageFile> files, int trackCount)
+        {
+            var album = SafeName(title) + (year is { } value ? " (" + value.ToString(CultureInfo.InvariantCulture) + ")" : "");
+            var folder = (artist is { Length: > 0 } ? SafeName(artist) + "/" : "") + album;
+            var tracks = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Audio)
+                .OrderBy(file => Digits().Replace(file.RelativePath, match => match.Value.PadLeft(10, '0')), StringComparer.OrdinalIgnoreCase).ToArray();
+            var numbered = tracks.All(file => Path.GetFileName(file.RelativePath) is { Length: > 0 } name && char.IsAsciiDigit(name[0]));
+            var units = tracks.Length == trackCount;
+            var placements = new List<ImportPlacementData>();
+            for (var index = 0; index < tracks.Length; index++)
+            {
+                var stem = Path.GetFileNameWithoutExtension(tracks[index].RelativePath);
+                var name = (numbered ? TrackNumber().Replace(stem, "") : stem).Trim(' ', '-', '.', '_');
+                var number = (index + 1).ToString("00", CultureInfo.InvariantCulture);
+                AddGroup(placements, files, tracks[index], $"{folder}/{number} - {(name.Length > 0 ? SafeName(name) : "Track " + number)}", units ? WorkUnitType.Track : null,
+                    units ? index + 1 : null, null);
+            }
+
+            return placements;
+        }
+
         // Taken names are never reused; a counter keeps both files.
         public static string Alternative(string stem, int attempt) => attempt <= 1 ? stem : $"{stem} ({attempt.ToString(CultureInfo.InvariantCulture)})";
 
@@ -155,6 +183,12 @@ namespace Jularr.Backend.Logic.Acquisition
                 }
             }
         }
+
+        [GeneratedRegex(@"^\s*(?:\d{1,2}[-.])?\d{1,3}(?=[\s._-]|$)")]
+        private static partial Regex TrackNumber();
+
+        [GeneratedRegex(@"\d+")]
+        private static partial Regex Digits();
 
         private static string SafeName(string value)
         {

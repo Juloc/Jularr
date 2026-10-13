@@ -237,10 +237,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
-            string? sourceLinkUrl)
+            string? sourceLinkUrl, int trackCount)
         {
             SourceUrl = sourceUrl;
             SourceLinkUrl = sourceLinkUrl;
+            TrackCount = trackCount;
             Author = author;
             QualityKey = qualityKey;
             OperationId = operationId;
@@ -296,6 +297,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl))]
         public string? SourceLinkUrl { get; }
+
+        // Tracks the album's edition names; files are tied to them only when the counts agree.
+        [DataField(typeof(WorkFields), nameof(WorkFields.TrackCount))]
+        public int TrackCount { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData

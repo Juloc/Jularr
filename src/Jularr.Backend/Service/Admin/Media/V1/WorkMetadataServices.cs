@@ -16,12 +16,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
         private readonly MangaMetadata _manga;
+        private readonly MusicMetadata _music;
 
-        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga)
+        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music)
         {
             _metadata = metadata;
             _books = books;
             _manga = manga;
+            _music = music;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -31,12 +33,17 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Books come from Open Library, Manga from AniList, video from TMDB.
+            // Books come from Open Library, Manga from AniList, albums from MusicBrainz, video from TMDB.
             IReadOnlyList<MetadataSearchResultV1> results;
             if (BookMetadata.Handles(Data.MediaTypeId))
             {
                 results = [.. (await _books.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.WorkId, Limit(result.Title, 500)!,
                     null, result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, Limit(string.Join(", ", result.Authors), 4000)))];
+            }
+            else if (MusicMetadata.Handles(Data.MediaTypeId))
+            {
+                results = [.. (await _music.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.Id, result.Title, null,
+                    result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist))];
             }
             else if (MangaMetadata.Handles(Data.MediaTypeId))
             {
@@ -68,7 +75,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         identity."Namespace" = @Namespace
                         AND identity."Value" IN (SELECT jsonb_array_elements_text(@Values::jsonb));
                     """;
-                var space = BookMetadata.Handles(Data.MediaTypeId) ? BookMetadata.Namespace : MangaMetadata.Handles(Data.MediaTypeId) ? MangaMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
+                var space = BookMetadata.Handles(Data.MediaTypeId) ? BookMetadata.Namespace : MangaMetadata.Handles(Data.MediaTypeId) ? MangaMetadata.Namespace
+                    : MusicMetadata.Handles(Data.MediaTypeId) ? MusicMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
                 sql.Parameters.Add(new WorkIdentityLookupData(space, JsonSerializer.Serialize(results.Select(result => result.ExternalId))));
                 return ctx.ReadSql.ReadListAsync<WorkIdentityData>(sql, ct);
             }, CancellationToken);
@@ -86,12 +94,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
         private readonly MangaMetadata _manga;
+        private readonly MusicMetadata _music;
 
-        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga)
+        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music)
         {
             _metadata = metadata;
             _books = books;
             _manga = manga;
+            _music = music;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -111,6 +121,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 workId = await _manga.ImportAsync(Context, Data.ExternalId, CancellationToken);
             }
+            else if (MusicMetadata.Handles(Data.MediaTypeId))
+            {
+                workId = await _music.ImportAsync(Context, Data.ExternalId, CancellationToken);
+            }
             else
             {
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
@@ -127,12 +141,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
         private readonly MangaMetadata _manga;
+        private readonly MusicMetadata _music;
 
-        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga)
+        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music)
         {
             _metadata = metadata;
             _books = books;
             _manga = manga;
+            _music = music;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -142,7 +158,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Only Works mapped to TMDB, Open Library or AniList can be refreshed.
+            // Only Works mapped to TMDB, Open Library, AniList or MusicBrainz can be refreshed.
             var (work, identity) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct),
                 await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, Parameters.WorkId, ct)), CancellationToken);
             if (identity is null)
@@ -157,6 +173,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             else if (identity.Namespace == MangaMetadata.Namespace)
             {
                 await _manga.ImportAsync(Context, identity.Value, CancellationToken);
+            }
+            else if (identity.Namespace == MusicMetadata.Namespace)
+            {
+                await _music.ImportAsync(Context, identity.Value, CancellationToken);
             }
             else
             {
@@ -202,7 +222,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     "WorkExternalIdentities" AS identity
                 WHERE
                     identity."WorkId" = @Id
-                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'anilist');
+                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'anilist', 'musicbrainz');
                 """;
             sql.Parameters.Add(new WorkIdData(workId));
             return ctx.ReadSql.ReadOptionalAsync<WorkIdentityData>(sql, ct);
