@@ -232,6 +232,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "handler=SourceLink");
             StringAssert.Contains(html, "source-assistance");
             StringAssert.Contains(html, "data-source-paste");
+            StringAssert.Contains(html, "Automatic CAPTCHA handling is disabled for security reasons.");
             StringAssert.Contains(html, "type=\"url\"");
             using var confirmed = await host.SendAsync(HttpMethod.Post, "/api/v1/requests/710/source-link", link);
             Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
