@@ -24,7 +24,7 @@ namespace Jularr.Frontend.Pages.User.Watchlist
             if (_works is { } works)
             {
                 page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.type." + item.MediaTypeId))]).Class("media-grid"));
+                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))]).Class("media-grid"));
 
                 if (works.Items.Count == 0) page.Content.Add(new P(new Text("media.watchlist.empty")));
                 if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", "/Watchlist?pageNumber=" + (works.Page - 1)));

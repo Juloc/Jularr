@@ -7,7 +7,7 @@ namespace Jularr.Backend.Logic.Media
     {
         public static async Task UpdateWatchlistAsync(this LogicContext ctx, WatchlistData data, bool isWatchlisted, CancellationToken ct)
         {
-            // Verify canonical target.
+            // Only Works the profile may open.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -20,9 +20,11 @@ namespace Jularr.Backend.Logic.Media
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Version"
                 FROM
-                    "Works" AS work
+                    "ProfileWorks" AS visible
+                    JOIN "Works" AS work ON work."Id" = visible."WorkId"
                 WHERE
-                    work."Id" = @WorkId
+                    visible."ProfileId" = @ProfileId
+                    AND work."Id" = @WorkId
                 FOR SHARE OF work;
                 """;
             sql.Parameters.Add(data);

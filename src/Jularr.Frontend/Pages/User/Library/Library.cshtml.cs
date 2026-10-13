@@ -1,14 +1,19 @@
 using System.Globalization;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Library.V1;
+using Jularr.Backend.Data.User.Profile.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.User.Library.V1;
+using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Library
 {
-    public sealed class LibraryModel(ReadLibraryV1 read, UiText texts) : JularrPage
+    public sealed class LibraryModel(ReadAuthenticationV1 authentication, ReadLibraryV1 read, ReadProfileMediaV1 readMedia, UiText texts) : JularrPage
     {
         private static readonly (string Slug, MediaType? Type, MediaSubtype? Subtype)[] Scopes =
         [
@@ -17,6 +22,7 @@ namespace Jularr.Frontend.Pages.User.Library
         ];
 
         private PageResult<LibraryItemV1>? _items;
+        private IReadOnlyList<ProfileMediaV1> _media = [];
 
         [BindProperty(SupportsGet = true, Name = "type")]
         public string? TypeSlug { get; set; }
@@ -40,9 +46,9 @@ namespace Jularr.Frontend.Pages.User.Library
                 return;
             }
 
-            // Media type scope, then a quiet toolbar and the grid.
+            // Scopes of the profile's visible media types, then a quiet toolbar and the grid.
             var scope = Scopes.FirstOrDefault(item => item.Slug == TypeSlug).Slug ?? "all";
-            page.Content.Add(new NavigationTabs([.. Scopes.Select(item => new NavigationTab("library.scope." + item.Slug, Address(item.Slug, Query, Sort, 1), item.Slug == scope))],
+            page.Content.Add(new NavigationTabs([.. Scopes.Where(IsListed).Select(item => new NavigationTab("library.scope." + item.Slug, Address(item.Slug, Query, Sort, 1), item.Slug == scope))],
                 "discover.mediaTypes", "media"));
             page.Content.Add(new Div(
                 new SearchBox("/Library", "library.search", Query, new Dictionary<string, string> { ["type"] = scope, ["sort"] = Sort.ToString() }),
@@ -80,10 +86,16 @@ namespace Jularr.Frontend.Pages.User.Library
                 return;
             }
 
+            var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted)).ProfileId
+                ?? throw new UnauthorizedAccessException("An active profile is required.");
+            _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), HttpContext.RequestAborted);
             var scope = Scopes.FirstOrDefault(item => item.Slug == TypeSlug);
             _items = await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(scope.Type, string.IsNullOrWhiteSpace(Query) ? null : Query.Trim(), Sort,
                 Math.Max(1, PageNumber), mediaSubtypeId: scope.Subtype), HttpContext.RequestAborted);
         }
+
+        private bool IsListed((string Slug, MediaType? Type, MediaSubtype? Subtype) scope) =>
+            scope.Slug == "all" || _media.Any(item => !item.IsHidden && item.Key == (scope.Subtype?.ToString() ?? scope.Type?.ToString()));
 
         private static string Address(string scope, string? query, LibrarySortType sort, int page) =>
             "/Library?type=" + scope + "&sort=" + sort + (string.IsNullOrWhiteSpace(query) ? "" : "&q=" + Uri.EscapeDataString(query)) + (page > 1 ? "&p=" + page.ToString(CultureInfo.InvariantCulture) : "");

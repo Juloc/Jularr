@@ -165,6 +165,7 @@ namespace Jularr.Backend.Logic.Acquisition
         public static Task<IReadOnlyList<WantedItemParameters>> ReadDueWantedItemsAsync(this LogicContext ctx, WantedDueData data, CancellationToken ct)
         {
             // Whole Works without media or a running download, and Works with unclaimed missing episodes or volumes, oldest schedule first.
+            // Only enabled types with a library of their own are searched.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -173,8 +174,19 @@ namespace Jularr.Backend.Logic.Acquisition
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    JOIN "WorkClasses" AS class ON class."WorkId" = work."Id"
                 WHERE
                     NOT wanted."IsPaused"
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "LibraryRoots" AS root
+                            JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId" AND NOT mount."IsReadOnly"
+                        WHERE
+                            root."Id" = wanted."LibraryRootId"
+                            OR root."MediaTypeId" = class."MediaTypeId" AND root."MediaSubtypeId" IS NOT DISTINCT FROM class."MediaSubtypeId"
+                    )
                     AND (wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now)
                     AND (
                         work."MediaTypeId" IN (1, 3, 6, 7)
@@ -714,6 +726,7 @@ namespace Jularr.Backend.Logic.Acquisition
                                 "AcquisitionReleases" AS release
                                 JOIN "RequestTargets" AS target ON target."WantedItemId" = release."WantedItemId"
                                 JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
+                                JOIN "ProfileWorks" AS visible ON visible."WorkId" = request."WorkId" AND visible."ProfileId" = request."RequestedByProfileId"
                                 JOIN "InstanceSettings" AS settings ON settings."UsersConfirmSources"
                                 JOIN "Accounts" AS account ON account."Id" = @AccountId AND account."MayConfirmSources"
                             WHERE
@@ -823,7 +836,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static Task<LibraryRootLocationData?> ReadImportRootAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
         {
-            // The target's chosen library, else the first one of its subtype, else of its parent type.
+            // The target's chosen library, else the first one of its type and enabled subtype.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -838,15 +851,15 @@ namespace Jularr.Backend.Logic.Acquisition
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    LEFT JOIN "WorkClasses" AS class ON class."WorkId" = work."Id"
                     JOIN "LibraryRoots" AS root ON root."MediaTypeId" = work."MediaTypeId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                 WHERE
                     wanted."Id" = @WantedItemId
                     AND NOT mount."IsReadOnly"
-                    AND (root."Id" = wanted."LibraryRootId" OR root."MediaSubtypeId" IS NULL OR root."MediaSubtypeId" = work."MediaSubtypeId")
+                    AND (root."Id" = wanted."LibraryRootId" OR root."MediaSubtypeId" IS NOT DISTINCT FROM CASE WHEN class."WorkId" IS NULL THEN work."MediaSubtypeId" ELSE class."MediaSubtypeId" END)
                 ORDER BY
                     root."Id" = wanted."LibraryRootId" DESC NULLS LAST,
-                    root."MediaSubtypeId" = work."MediaSubtypeId" DESC NULLS LAST,
                     root."Id"
                 LIMIT 1;
                 """;

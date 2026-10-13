@@ -37,6 +37,8 @@ namespace Jularr.Backend.Service.User.Request.V1
                 FROM
                     "AcquisitionRequests" AS request
                 INNER JOIN
+                    "ProfileWorks" AS visible ON visible."WorkId" = request."WorkId" AND visible."ProfileId" = request."RequestedByProfileId"
+                INNER JOIN
                     "Works" AS work ON work."Id" = request."WorkId"
                 INNER JOIN
                     "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"

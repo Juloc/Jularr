@@ -28,14 +28,17 @@ namespace Jularr.Backend.Service.User.Media.V1
                     platform."Name",
                     platform."Abbreviation"
                 FROM
-                    "WorkPlatforms" AS listed
+                    "ProfileWorks" AS visible
+                    JOIN "WorkPlatforms" AS listed ON listed."WorkId" = visible."WorkId"
                     JOIN "GamePlatforms" AS platform ON platform."Id" = listed."GamePlatformId"
                 WHERE
-                    listed."WorkId" = @WorkId
+                    visible."ProfileId" = @ProfileId
+                    AND visible."WorkId" = @WorkId
                 ORDER BY
                     platform."Name";
                 """;
             sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return new BaseDataList<GamePlatformV1>([.. await Context.ReadSql.ReadListAsync<GamePlatformV1>(sql, CancellationToken)]);
         }
     }
@@ -49,13 +52,14 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Persisted metadata only.
+            // Persisted metadata of a Work the profile may open.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     work."Id",
                     work."MediaTypeId",
+                    visible."MediaSubtypeId",
                     work."CanonicalTitle",
                     (entry."WorkId" IS NOT NULL) AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
@@ -106,11 +110,12 @@ namespace Jularr.Backend.Service.User.Media.V1
                             AND plex."Namespace" = 'plex'
                     ) AS "PlexUrl"
                 FROM
-                    "Works" AS work
-                LEFT JOIN
-                    "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
+                    "ProfileWorks" AS visible
+                    JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
                 WHERE
-                    work."Id" = @WorkId;
+                    visible."ProfileId" = @ProfileId
+                    AND work."Id" = @WorkId;
                 """;
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
@@ -180,6 +185,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     asset."WorkId" = @WorkId
                     AND files."FileCount" > 0
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = asset."WorkId")
                 ORDER BY
                     parent."Number" NULLS FIRST,
                     unit."Number" NULLS FIRST,
@@ -212,6 +218,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 SELECT
                     work."Id",
                     work."MediaTypeId",
+                    visible."MediaSubtypeId",
                     work."CanonicalTitle",
                     TRUE AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
@@ -232,10 +239,11 @@ namespace Jularr.Backend.Service.User.Media.V1
                     NULL::text AS "PlexUrl"
                 FROM
                     "WatchlistEntries" AS entry
-                INNER JOIN
-                    "Works" AS work ON work."Id" = entry."WorkId"
+                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
+                    JOIN "Works" AS work ON work."Id" = entry."WorkId"
                 WHERE
                     entry."ProfileId" = @ProfileId
+                    AND NOT visible."IsHidden"
                 ORDER BY
                     work."CanonicalTitle",
                     work."Id"

@@ -12,7 +12,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Instance
 {
     public sealed class InstanceModel(ReadInstanceSettingsV1 read, UpdateInstanceSettingsV1 update, ReadUiLocalesV1 readLocales,
-        ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadInstanceModulesV1 readModules, UpdateInstanceModuleV1 updateModule, ReadInstanceMediaV1 readMedia, UpdateInstanceMediaV1 updateMedia, IAntiforgery antiforgery,
+        UiText texts) : JularrPage
     {
         private InstanceSettingsDetailsV1? _settings;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
@@ -20,6 +21,8 @@ namespace Jularr.Frontend.Pages.Admin.Instance
         private IReadOnlyList<InstanceModuleDetailsV1> _modules = [];
         private UpdateInstanceModuleDataV1? _moduleInput;
         private long? _moduleId;
+        private IReadOnlyList<InstanceMediaDetailsV1> _media = [];
+        private UpdateInstanceMediaDataV1? _mediaInput;
 
         protected override void Define(Page page)
         {
@@ -41,7 +44,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                         [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                     form.Submit("common.save");
                 }, Url.Page("/Admin/Instance/Instance"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources), _moduleId is null ? FormError : null));
+                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources), _moduleId is null && _mediaInput is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
@@ -69,6 +72,24 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             }
 
             if (_modules.Count > 0) page.Content.Add(new UiSection("admin.instance.modules", moduleForms));
+
+            // Subtypes take their Works out of the parent lists; an enabled one needs its own library.
+            var mediaForms = new List<IUiComponent>();
+            foreach (var media in _media)
+            {
+                mediaForms.Add(new P(new Text(MediaTypeLabel.Key(media.Key, media.IsSubtype))));
+                if (media.IsEnabled && !media.HasLibrary) mediaForms.Add(new P(new Text("admin.instance.media.noLibrary")).Attribute("role", "status"));
+                mediaForms.Add(new Form<UpdateInstanceMediaDataV1>(form =>
+                {
+                    form.Hidden(item => item.Key);
+                    form.Hidden(item => item.Version);
+                    form.Select(item => item.IsEnabled, "admin.instance.media.state", stateOptions);
+                    form.Submit("common.save");
+                }, Url.Page("/Admin/Instance/Instance", "Media"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                    _mediaInput?.Key == media.Key ? _mediaInput : new UpdateInstanceMediaDataV1(media.Key, media.IsEnabled, media.Version), _mediaInput?.Key == media.Key ? FormError : null));
+            }
+
+            if (_media.Count > 0) page.Content.Add(new UiSection("admin.instance.media", mediaForms));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -94,6 +115,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             _settings = await read.ExecuteAsync<InstanceSettingsDetailsV1>(new ReadInstanceSettingsParametersV1(), token);
             _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
             _modules = await readModules.ExecuteAsync<BaseDataList<InstanceModuleDetailsV1>>(new ReadInstanceModulesParametersV1(), token);
+            _media = await readMedia.ExecuteAsync<BaseDataList<InstanceMediaDetailsV1>>(new ReadInstanceMediaParametersV1(), token);
         }
 
         public async Task<IActionResult> OnPostModuleAsync(long instanceModuleId, [BindRequired] bool isEnabled, long version)
@@ -101,6 +123,13 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             _moduleId = instanceModuleId;
             _moduleInput = new UpdateInstanceModuleDataV1(isEnabled, version);
             await updateModule.ExecuteAsync<UpdateResult>(new UpdateInstanceModuleParametersV1(instanceModuleId), _moduleInput, HttpContext.RequestAborted);
+            return RedirectToPage("/Admin/Instance/Instance");
+        }
+
+        public async Task<IActionResult> OnPostMediaAsync(string? key, [BindRequired] bool isEnabled, long version)
+        {
+            _mediaInput = new UpdateInstanceMediaDataV1(key ?? "", isEnabled, version);
+            await updateMedia.ExecuteAsync<UpdateResult>(new UpdateInstanceMediaParametersV1(), _mediaInput, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Instance/Instance");
         }
     }

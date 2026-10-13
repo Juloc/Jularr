@@ -13,12 +13,15 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Settings
 {
-    public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery) : JularrPage
+    public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
+        ReadUiLocalesV1 readLocales, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private AuthenticationResultV1? _authentication;
         private ReadProfileResultV1? _profile;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
         private UpdateProfileDataV1? _input;
+        private IReadOnlyList<ProfileMediaV1> _media = [];
+        private bool _savingMedia;
 
         protected override void Define(Page page)
         {
@@ -40,7 +43,18 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Submit("profile.settings.save");
-                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, FormError));
+                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia ? null : FormError));
+
+                    // Hidden types leave the profile's lists; they stay reachable.
+                    if (_media.Count > 0)
+                    {
+                        content.Add(new Form<UpdateProfileMediaDataV1>(form =>
+                        {
+                            form.Choices(x => x.HiddenKeys, "profile.media.hidden", _media.Select(item => new SelectOption(item.Key, texts[MediaTypeLabel.Key(item.Key, item.IsSubtype)])));
+                            form.Submit("profile.settings.save");
+                        }, Url.Page("/User/Settings/Settings", "Media"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                            new UpdateProfileMediaDataV1([.. _media.Where(item => item.IsHidden).Select(item => item.Key)]), _savingMedia ? FormError : null));
+                    }
                 }
                 else
                 {
@@ -124,6 +138,16 @@ namespace Jularr.Frontend.Pages.User.Settings
             return RedirectToPage("/User/Settings/Settings");
         }
 
+        public async Task<IActionResult> OnPostMediaAsync(string[]? hiddenKeys)
+        {
+            _savingMedia = true;
+            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            var profileId = _authentication!.ProfileId ?? throw new UnauthorizedAccessException("An active profile is required.");
+            await updateMedia.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId), new UpdateProfileMediaDataV1(hiddenKeys ?? []), HttpContext.RequestAborted);
+            TempData["ProfileSaved"] = true;
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
         protected override async Task LoadDataAsync()
         {
             var token = HttpContext.RequestAborted;
@@ -131,6 +155,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             if (_authentication.ProfileId is { } profileId)
             {
                 _profile = await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
+                _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
                 _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
             }
         }

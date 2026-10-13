@@ -393,8 +393,8 @@ namespace Jularr.Backend.Tests
             public static async Task<Host> CreateAsync(bool plexEnabled = false, bool razor = false, bool media = false, bool storage = false, bool library = false, IReadOnlyDictionary<string, string>? settings = null,
                 Action<IServiceCollection>? services = null)
             {
-                // Catalog baselines are installed together, as in a fresh installation.
-                library |= media || storage;
+                // Catalog baselines are installed together, as in a fresh installation; Razor pages need all of them.
+                library |= media || storage || razor;
                 media = storage = library;
                 var fixture = await Fixture.CreateAsync();
                 using (var schema = typeof(ServiceApi).Assembly.GetManifestResourceStream("Jularr.Database.Instance.sql")!)

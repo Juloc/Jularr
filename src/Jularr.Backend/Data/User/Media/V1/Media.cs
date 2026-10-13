@@ -52,12 +52,13 @@ namespace Jularr.Backend.Data.User.Media.V1
 
     public sealed class WorkDetailsV1 : BaseResponse
     {
-        public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
+        public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
             string? plexUrl)
         {
             PlexUrl = plexUrl;
             Id = id;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             CanonicalTitle = canonicalTitle;
             IsWatchlisted = isWatchlisted;
             ReleaseYear = releaseYear;
@@ -71,6 +72,10 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        // The subtype as the instance shows it; none while that subtype is switched off.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }

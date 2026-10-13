@@ -20,7 +20,7 @@ namespace Jularr.Backend.Service.User.Library.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Works with media, a Plex item or an acquisition target; search stays local.
+            // Works the profile lists that have media, a Plex item or an acquisition target; search stays local.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -52,7 +52,8 @@ namespace Jularr.Backend.Service.User.Library.V1
                             AND entry."ProfileId" = @ProfileId
                     ) AS "IsWatchlisted"
                 FROM
-                    "Works" AS work
+                    "ProfileWorks" AS visible
+                    JOIN "Works" AS work ON work."Id" = visible."WorkId"
                     LEFT JOIN LATERAL (
                         SELECT
                             max(file."CreatedAt") AS "AddedAt"
@@ -64,7 +65,9 @@ namespace Jularr.Backend.Service.User.Library.V1
                     ) AS available ON TRUE
                     LEFT JOIN "WorkExternalIdentities" AS plex ON plex."WorkId" = work."Id" AND plex."Namespace" = 'plex'
                 WHERE
-                    (available."AddedAt" IS NOT NULL OR plex."Value" IS NOT NULL OR EXISTS (
+                    visible."ProfileId" = @ProfileId
+                    AND NOT visible."IsHidden"
+                    AND (available."AddedAt" IS NOT NULL OR plex."Value" IS NOT NULL OR EXISTS (
                         SELECT
                             1
                         FROM
@@ -72,8 +75,8 @@ namespace Jularr.Backend.Service.User.Library.V1
                         WHERE
                             wanted."WorkId" = work."Id"
                     ))
-                    AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR work."MediaSubtypeId" IS NULL))
-                    AND (@MediaSubtypeId::smallint IS NULL OR work."MediaSubtypeId" = @MediaSubtypeId)
+                    AND (@MediaTypeId::smallint IS NULL OR visible."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
+                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
                     AND (@Query::text IS NULL OR EXISTS (
                         SELECT
                             1
@@ -136,6 +139,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                     asset."MediaAssetTypeId"
                 FROM
                     "MediaProgress" AS progress
+                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = progress."ProfileId" AND visible."WorkId" = progress."WorkId" AND NOT visible."IsHidden"
                     JOIN "Works" AS work ON work."Id" = progress."WorkId"
                     JOIN LATERAL (
                         SELECT

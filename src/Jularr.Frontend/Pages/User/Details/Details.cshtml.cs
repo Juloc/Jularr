@@ -51,7 +51,7 @@ namespace Jularr.Frontend.Pages.User.Details
                     actionHref = PlayHref(playable);
                 }
 
-                page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts["media.type." + work.MediaTypeId], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }
+                page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts[MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }
                     .Where(part => part is not null)), work.Overview, actionKey, actionHref));
 
                 // Shared personal actions.

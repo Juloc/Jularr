@@ -18,4 +18,12 @@ namespace Jularr.Backend.Data.Enums.Media
             _ => mediaType == MediaType.Book
         };
     }
+
+    // A media category is a type or a subtype, named by its catalog key.
+    public static class MediaCategories
+    {
+        private static readonly HashSet<string> Keys = [.. Enum.GetNames<MediaType>(), .. Enum.GetNames<MediaSubtype>()];
+
+        public static bool IsKey(string key) => Keys.Contains(key);
+    }
 }

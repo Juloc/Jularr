@@ -182,6 +182,7 @@ namespace Jularr.Backend.Logic.Reading
                 WHERE
                     asset."Id" = @MediaAssetId
                     AND asset."MediaAssetTypeId" IN (3, 4)
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
                 ON CONFLICT ("ProfileId", "WorkId", "WorkUnitId") DO UPDATE
                 SET
                     "ProgressPositionTypeId" = 2,

@@ -2,10 +2,14 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Account.V1;
+using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Media.V1;
+using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using AdminWork = Jularr.Backend.Data.Admin.Media.V1.WorkDetailsV1;
@@ -89,6 +93,99 @@ namespace Jularr.Backend.Tests
             using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?" + filter);
             var page = (await library.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!;
             CollectionAssert.AreEquivalent(expected, page.Items.Select(item => item.Id).ToArray());
+        }
+
+        [TestMethod]
+        public async Task MediaSwitches_MoveSubtypesBackAndHideTypesWithoutDeleting()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (10, 2, NULL, 'Series'), (20, 2, 1, 'Anime'), (30, 3, NULL, 'Book'), (40, 1, 1, 'Anime Movie'), (50, 3, 2, 'Manga');
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                """);
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/instance/media");
+            var media = (await listed.Content.ReadFromJsonAsync<BaseDataList<InstanceMediaDetailsV1>>())!;
+            CollectionAssert.AreEqual(new[] { "Movie", "Series", "Anime", "Book", "Manga", "LightNovel", "Music", "Game" }, media.Select(item => item.Key).ToArray());
+            Assert.IsTrue(media.All(item => item.IsEnabled && !item.HasLibrary));
+
+            // Anime off: its Works return to their parent lists.
+            await SwitchAsync(host, "Anime", false, 1);
+            CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, "mediaTypeId=2"));
+            CollectionAssert.AreEquivalent(Array.Empty<long>(), await LibraryAsync(host, "mediaSubtypeId=1"));
+
+            // Series off: its Works leave the user area, Anime movies come back with Anime.
+            await SwitchAsync(host, "Series", false, 1);
+            await SwitchAsync(host, "Anime", true, 2);
+            CollectionAssert.AreEquivalent(new long[] { 30, 40, 50 }, await LibraryAsync(host, ""));
+            using var closed = await host.SendAsync(HttpMethod.Get, "/api/v1/works/20");
+            Assert.AreEqual(HttpStatusCode.NotFound, closed.StatusCode);
+
+            // A subtype needs an enabled parent; switching deletes nothing.
+            await SwitchAsync(host, "Book", false, 1);
+            await SwitchAsync(host, "Manga", false, 1);
+            using var orphan = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/media", new UpdateInstanceMediaDataV1("Manga", true, 2));
+            Assert.AreEqual(HttpStatusCode.BadRequest, orphan.StatusCode);
+            Assert.AreEqual(5L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" JOIN \"WantedItems\" ON \"WantedItems\".\"WorkId\" = \"Works\".\"Id\""));
+        }
+
+        [TestMethod]
+        public async Task ProfileMedia_BlockedTypesCloseHiddenTypesOnlyLeaveLists()
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (10, 2, NULL, 'Series'), (20, 2, 1, 'Anime'), (30, 3, NULL, 'Book');
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                """);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            var profileId = (await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.ProfileId!.Value;
+
+            // The Owner blocks Anime; the profile hides Books.
+            using var blocked = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/profiles/" + profileId + "/media", new UpdateProfileMediaAccessDataV1(["Anime"]));
+            Assert.AreEqual(HttpStatusCode.OK, blocked.StatusCode, await blocked.Content.ReadAsStringAsync());
+            using var hidden = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/" + profileId + "/media", new UpdateProfileMediaDataV1(["Book"]));
+            Assert.AreEqual(HttpStatusCode.OK, hidden.StatusCode, await hidden.Content.ReadAsStringAsync());
+            using var unknown = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/" + profileId + "/media", new UpdateProfileMediaDataV1(["Comics"]));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+
+            CollectionAssert.AreEquivalent(new long[] { 10 }, await LibraryAsync(host, ""));
+            using var anime = await host.SendAsync(HttpMethod.Get, "/api/v1/works/20");
+            Assert.AreEqual(HttpStatusCode.NotFound, anime.StatusCode);
+            using var book = await host.SendAsync(HttpMethod.Get, "/api/v1/works/30");
+            Assert.AreEqual(HttpStatusCode.OK, book.StatusCode);
+            using var request = await host.SendAsync(HttpMethod.Post, "/api/v1/works/20/requests", new Jularr.Backend.Data.User.Request.V1.CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.NotFound, request.StatusCode);
+
+            // A form only replaces what it shows: a block survives a switched-off subtype and the profile's own save.
+            await SwitchAsync(host, "Anime", false, 1);
+            using var resaved = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/" + profileId + "/media", new UpdateProfileMediaDataV1(["Book"]));
+            Assert.AreEqual(HttpStatusCode.OK, resaved.StatusCode);
+            using var ownerSaved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/profiles/" + profileId + "/media", new UpdateProfileMediaAccessDataV1([]));
+            Assert.AreEqual(HttpStatusCode.OK, ownerSaved.StatusCode);
+            await SwitchAsync(host, "Anime", true, 2);
+            using var stillBlocked = await host.SendAsync(HttpMethod.Get, "/api/v1/works/20");
+            Assert.AreEqual(HttpStatusCode.NotFound, stillBlocked.StatusCode);
+
+            // The profile sees what it may use; unblocking keeps its own hiding.
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/" + profileId + "/media");
+            var own = (await read.Content.ReadFromJsonAsync<BaseDataList<ProfileMediaV1>>())!;
+            Assert.IsFalse(own.Any(item => item.Key == "Anime"));
+            Assert.IsTrue(own.Single(item => item.Key == "Book").IsHidden);
+            using var unblocked = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/profiles/" + profileId + "/media", new UpdateProfileMediaAccessDataV1([]));
+            Assert.AreEqual(HttpStatusCode.OK, unblocked.StatusCode);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ProfileMediaRules\""));
+            CollectionAssert.AreEquivalent(new long[] { 10, 20 }, await LibraryAsync(host, ""));
+        }
+
+        private static async Task SwitchAsync(Host host, string key, bool isEnabled, long version)
+        {
+            using var switched = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/media", new UpdateInstanceMediaDataV1(key, isEnabled, version));
+            Assert.AreEqual(HttpStatusCode.OK, switched.StatusCode, await switched.Content.ReadAsStringAsync());
+        }
+
+        private static async Task<long[]> LibraryAsync(Host host, string filter)
+        {
+            using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?" + filter);
+            return [.. (await library.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!.Items.Select(item => item.Id)];
         }
 
         [TestMethod]

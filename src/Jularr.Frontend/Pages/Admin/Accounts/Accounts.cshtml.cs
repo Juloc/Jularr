@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
 {
     public sealed class AccountsModel(ReadAccountsV1 accounts, ReadAccountV1 account, UpdateAccountV1 update, ReadAccountProfilesV1 profiles,
         AddAccountProfileV1 addProfile, RemoveAccountProfileV1 removeProfile, ReadAccountSessionsV1 sessions, RevokeAccountSessionV1 revokeSession,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadProfileMediaAccessV1 readMedia, UpdateProfileMediaAccessV1 updateMedia, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<AccountDetailsV1>? _accounts;
         private AccountDetailsV1? _selected;
@@ -22,6 +22,8 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
         private PageResult<AccountProfileDetailsV1>? _profiles;
         private AccountProfileParametersV1? _assignment;
         private bool _removingProfile;
+        private ILookup<long, ProfileMediaAccessV1> _media = Array.Empty<ProfileMediaAccessV1>().ToLookup(item => item.ProfileId);
+        private long? _mediaProfileId;
         private PageResult<AccountSessionDetailsV1>? _sessions;
         private RevokeAccountSessionParametersV1? _revocation;
 
@@ -87,6 +89,17 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                     foreach (var profile in _profiles?.Items ?? [])
                     {
                         split.Secondary.Add(new P(new ValueText(profile.DisplayName + " · " + profile.ProfileId.ToString(CultureInfo.InvariantCulture))));
+                        if (_media[profile.ProfileId].ToArray() is { Length: > 0 } media)
+                        {
+                            split.Secondary.Add(new Form<UpdateProfileMediaAccessDataV1>(form =>
+                            {
+                                form.Choices(item => item.BlockedKeys, "admin.accounts.profileMediaBlocked",
+                                    media.Select(item => new SelectOption(item.Key, texts[MediaTypeLabel.Key(item.Key, item.IsSubtype)])));
+                                form.Submit("common.save");
+                            }, Address(_selected.Id) + "&handler=ProfileMedia&profileId=" + profile.ProfileId.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                                new UpdateProfileMediaAccessDataV1([.. media.Where(item => item.IsBlocked).Select(item => item.Key)]), _mediaProfileId == profile.ProfileId ? FormError : null));
+                        }
+
                         if (profile.OwnerAccountId == _selected.Id)
                         {
                             split.Secondary.Add(new P(new Text("admin.accounts.profileOwned")));
@@ -163,6 +176,13 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
             return LocalRedirect(Address(AccountId));
         }
 
+        public async Task<IActionResult> OnPostProfileMediaAsync(long profileId, string[]? blockedKeys)
+        {
+            _mediaProfileId = profileId;
+            await updateMedia.ExecuteAsync<UpdateResult>(new ProfileMediaAccessParametersV1(profileId), new UpdateProfileMediaAccessDataV1(blockedKeys ?? []), HttpContext.RequestAborted);
+            return LocalRedirect(Address(AccountId));
+        }
+
         public async Task<IActionResult> OnPostRevokeSessionAsync(Guid sessionPublicId)
         {
             _revocation = new RevokeAccountSessionParametersV1(SelectedParameters().AccountId, sessionPublicId);
@@ -179,6 +199,8 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
             {
                 _selected = await account.ExecuteAsync<AccountDetailsV1>(SelectedParameters(), token);
                 _profiles = await profiles.ExecuteAsync<PageResult<AccountProfileDetailsV1>>(new ReadAccountProfilesParametersV1(AccountId.Value, ProfilePageNumber), token);
+                _media = (await readMedia.ExecuteAsync<BaseDataList<ProfileMediaAccessV1>>(new AccountProfileMediaParametersV1(AccountId.Value), token)).ToLookup(item => item.ProfileId);
+
                 _sessions = await sessions.ExecuteAsync<PageResult<AccountSessionDetailsV1>>(new ReadAccountSessionsParametersV1(AccountId.Value, SessionPageNumber), token);
             }
         }
