@@ -16,6 +16,7 @@ namespace Jularr.Frontend.Framework
                     new P(new Text("source.assistance.step1")).Class("source-assistance__step"),
                     new Div(openSource).Class("source-assistance__open"),
                     new P(new Text("source.assistance.step2")).Class("source-assistance__step"),
+                    new Button(new Text("source.assistance.paste")).Attribute("data-source-paste", "true"),
                     confirmationForm).Class("source-assistance__body")).Class("source-assistance")
                 .WriteTo(writer, encoder, texts);
         }
