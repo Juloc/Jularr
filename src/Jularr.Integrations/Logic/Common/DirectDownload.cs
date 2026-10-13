@@ -100,7 +100,8 @@ namespace Jularr.Integrations.Logic.Common
                     throw new DirectDownloadException(DirectDownloadFailure.Unavailable, "The source could not be reached.", exception);
                 }
 
-                // Gates go to the resolver once; production resolvers never pass them.
+                // Challenge test seam: a resolver may answer only in isolated simulated tests.
+                // Production injects NoSourceGateResolver, which always requires manual confirmation.
                 if (await ReadGateAsync(response, uri, ct) is { } gate)
                 {
                     response.Dispose();
@@ -208,6 +209,8 @@ namespace Jularr.Integrations.Logic.Common
         }
     }
 
+    // Production fail-closed policy. Test challenge responses belong in SourceTests only;
+    // never bind a fake resolver to the live service container.
     internal sealed class NoSourceGateResolver : ISourceGateResolver
     {
         public Task<string?> ResolveAsync(SourceGate gate, CancellationToken ct) => Task.FromResult<string?>(null);
