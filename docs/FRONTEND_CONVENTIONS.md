@@ -96,6 +96,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   restrained; outlined fields indicate focus with their thin border.
 - Tabs and subsection navigation reuse `NavigationTabs`: button-like segments
   inside one shared capsule. `Tabs` adds only the server-selected content pane.
+  Keep the capsule single-row and horizontally scrollable when necessary, with
+  complete labels and a soft accent selection. Mobile shell navigation is an
+  opaque floating pill above the safe area, not an edge-to-edge footer. Its active
+  destination uses the accent; the compact Topbar keeps the brand mark and page context.
 - Settings is a page, not a special `SettingsGroup` renderer.
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.

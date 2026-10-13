@@ -2,29 +2,38 @@
     display: inline-flex;
     justify-self: start;
     max-width: 100%;
-    flex-wrap: wrap;
+    min-width: 0;
     align-items: center;
     gap: 4px;
     padding: 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scroll-padding-inline: 4px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
-    background: var(--surface-hover);
+    background: var(--surface);
 
     &__link {
-        padding: 8px 14px;
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 16px;
         min-height: 44px;
         border-radius: var(--radius-control);
         color: var(--muted);
         text-decoration: none;
-        overflow-wrap: anywhere;
+        font-size: 13px;
+        font-weight: 650;
+        white-space: nowrap;
 
-        &:hover { background: var(--surface); color: var(--text); }
+        &:hover { background: var(--surface-hover); color: var(--text); }
 
         &--active {
-            background: var(--accent);
-            color: var(--accent-contrast);
+            background: var(--accent-soft);
+            color: var(--accent-text);
 
-            &:hover { background: var(--accent-hover); color: var(--accent-contrast); }
+            &:hover { background: var(--accent-soft); color: var(--accent-text); }
         }
     }
 }

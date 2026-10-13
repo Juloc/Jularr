@@ -85,9 +85,19 @@ test("shared base styles cover forms, tables and capsule navigation on every pag
     }
     assert.doesNotMatch(css, /backdrop-filter|--glass|box-shadow:inset/);
     assert.match(css, /\.page-screen\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
-    assert.match(css, /\.app-main \[id\]\{scroll-margin-top:80px/);
+    assert.match(css, /\.app-main \[id\]\{scroll-margin-top:var\(--shell-header-offset,\s*80px\)/);
     assert.match(css, /\.split\{grid-template-columns:minmax\(0,1fr\)/);
     assert.ok(!manifest["Pages/User/Settings/Settings.entry.scss"], "base-only pages need no duplicate bundle");
+});
+
+test("shared navigation stays single-row and the mobile bar floats above its safe area", () => {
+    const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    assert.match(css, /\.navigation-tabs\{[^}]*overflow-x:auto/);
+    assert.doesNotMatch(css, /\.navigation-tabs\{[^}]*flex-wrap:wrap/);
+    assert.match(css, /\.navigation-tabs__link--active[^{}]*\{background:var\(--accent-soft\);color:var\(--accent-text\)/);
+    assert.match(css, /\.mobile-navigation\{[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)[^}]*border-radius:var\(--radius-control\)/);
+    assert.match(css, /\.mobile-link\{[^}]*min-height:54px/);
+    assert.match(css, /body\{min-width:0/);
 });
 
 test("appearance choices wrap at their natural width and search retains an accessible target", () => {

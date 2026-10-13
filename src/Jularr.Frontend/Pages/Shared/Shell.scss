@@ -3,28 +3,39 @@
 .app-header {
     background: var(--surface);
     position: sticky;
-    top: 0;
+    top: 12px;
     z-index: 10;
     display: flex;
     grid-column: 2;
     grid-row: 1;
     align-items: center;
     gap: 18px;
-    padding: 0 24px;
-    border-bottom: 1px solid var(--border);
+    min-width: 0;
+    min-height: 64px;
+    margin: 12px 24px 0;
+    padding: 10px 18px;
+    border: 1px solid var(--border);
+    border-radius: 24px;
 }
 .app-header-brand { display: none; }
-.app-header-location { font-weight: 650; font-size: 16px; }
+.app-header-location { min-width: 0; overflow-wrap: anywhere; font-weight: 650; font-size: 16px; }
 .app-header .search-box { margin-left: auto; }
 @media (max-width: 780px) {
-    .app-header { min-height: 62px; position: sticky; top: 0; padding: 0 16px; }
-    .app-header-brand { display: flex; align-items: center; gap: 8px; text-decoration: none; font-weight: 800; }
+    // Mark, context, then search.
+    .app-header {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+        top: max(8px, env(safe-area-inset-top));
+        min-height: 62px;
+        margin: max(8px, env(safe-area-inset-top)) 12px 0;
+        padding: 10px 14px;
+    }
+    .app-header-brand { display: flex; align-items: center; text-decoration: none; }
     .app-header-brand .brand-symbol { width: 30px; height: 30px; font-size: 20px; }
-    .app-header-location { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
-}
-@media (max-width: 400px) {
-    .app-header-brand { display: none; }
-    .app-header-location { display: block; }
+    .app-header-brand :is(.shell-brand__name, .shell-brand__attribution) { display: none; }
+    .app-header-location { font-size: 14px; }
+    .app-header .search-box { grid-column: 1 / -1; width: 100%; max-width: none; margin: 0; }
 }
 
 .app-sidebar {
@@ -61,6 +72,7 @@ html[data-skin="original"] .app-header {
         content: "";
         position: absolute;
         inset: 0;
+        border-radius: inherit;
         z-index: -1;
         pointer-events: none;
         background: url("../../Modules/Appearance/Original/blossom-branch.webp") right 35% / 250px auto no-repeat;
@@ -112,39 +124,52 @@ html[data-skin="original"] .sidebar-secondary {
         background: var(--surface);
         position: fixed;
         z-index: 20;
-        right: 0;
-        bottom: 0;
-        left: 0;
+        right: max(12px, env(safe-area-inset-right));
+        bottom: calc(12px + env(safe-area-inset-bottom));
+        left: max(12px, env(safe-area-inset-left));
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
-        padding: 8px 5px max(8px, env(safe-area-inset-bottom));
-        border-top: 1px solid var(--border);
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 4px;
+        max-width: 560px;
+        margin-inline: auto;
+        padding: 6px 8px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow);
     }
     .mobile-link {
         display: grid;
         justify-items: center;
+        align-content: center;
+        min-width: 0;
         gap: 3px;
-        padding: 6px 0;
-        min-height: 44px;
+        padding: 8px 4px;
+        min-height: 54px;
         border-radius: var(--radius-control);
         text-decoration: none;
-        font-size: 10px;
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1.25;
         color: var(--muted);
 
-        & > span { overflow-wrap: anywhere; }
+        & > span { max-width: 100%; overflow-wrap: anywhere; }
+        &:hover { background-color: var(--surface-hover); color: var(--text); }
     }
     .mobile-link.is-active { background-color: var(--accent); color: var(--accent-contrast); }
 }
 
 .app-layout {
+    --shell-header-offset: 96px;
     display: grid;
     min-height: 100dvh;
     grid-template-columns: 220px minmax(0, 1fr);
-    grid-template-rows: 62px 1fr;
+    grid-template-rows: auto 1fr;
 }
 .app-main { grid-column: 2; grid-row: 2; width: 100%; min-width: 0; padding: 24px; }
 
 @media (max-width: 780px) {
     .app-layout { display: flex; flex-direction: column; min-height: 100dvh; }
-    .app-main { flex: 1; padding: 22px 16px calc(88px + env(safe-area-inset-bottom)); }
+    .app-layout:has(.app-header .search-box) { --shell-header-offset: calc(134px + env(safe-area-inset-top)); }
+    .app-main { flex: 1; padding: 22px 16px calc(112px + env(safe-area-inset-bottom)); }
 }
