@@ -41,7 +41,19 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."RemainingBytes",
                     operation."EtaSeconds",
                     operation."DownloadStateTypeId",
-                    CASE WHEN operation."AttentionKey" = 'source_manual_link' THEN replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0' END AS "ManualUrl"
+                    CASE
+                        WHEN operation."AttentionKey" = 'source_manual_link'
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "InstanceModules" AS assistance
+                                WHERE
+                                    assistance."Key" = 'SourceAssistance'
+                                    AND assistance."IsEnabled"
+                            )
+                        THEN replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0'
+                    END AS "ManualUrl"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -91,7 +103,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition", "SourceAssistance");
         protected override ServicePermission GetPermission(ActivityOperationParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnExecute()
