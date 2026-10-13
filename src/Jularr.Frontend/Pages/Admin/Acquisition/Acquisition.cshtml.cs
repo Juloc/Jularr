@@ -3,6 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -37,8 +38,9 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         protected override void Define(Page page)
         {
             page.Title("admin.acquisition.title");
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Downloads, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.Acquisition);
+            if (!SetupWizard.IsActive(Request)) page.Content.Add(AdminNavigation.Acquisition);
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var type = _selected?.AcquisitionConnectionTypeId ?? Type;
 
@@ -200,7 +202,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         private string Address(long? id = null, AcquisitionConnectionType? type = null, string? handler = null, int? pageNumber = null)
         {
-            var address = "/Admin/Acquisition?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture);
+            var address = SetupWizard.Address(Request, SetupStepType.Downloads, "/Admin/Acquisition") + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture);
             if (id is { } connectionId) address += "&AcquisitionConnectionId=" + connectionId.ToString(CultureInfo.InvariantCulture);
             else if (type is { } connectionType) address += "&Type=" + connectionType + (SuggestedUrl is { } url ? "&url=" + Uri.EscapeDataString(url) : "")
                 + (SuggestedName is { } name ? "&name=" + Uri.EscapeDataString(name) : "");

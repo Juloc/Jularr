@@ -37,7 +37,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Settings](Pages/User/Settings/Settings.cshtml.cs): profile settings, appearance and granted administration links.
 - [Login](Pages/Account/Login/Login.cshtml.cs), [Profiles](Pages/Account/Profiles/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions/Sessions.cshtml.cs), [Logout](Pages/Account/Logout/Logout.cshtml.cs): canonical service-driven authentication flows.
 - [AccessDenied](Pages/Account/AccessDenied/AccessDenied.cshtml.cs): catalog-backed 403.
-- [Setup](Pages/Setup/Start/Start.cshtml.cs), [Setup Storage](Pages/Setup/Storage/Storage.cshtml.cs): first Owner and shared storage editor.
+- [Setup](Pages/Setup/Start/Start.cshtml.cs), [Setup Storage](Pages/Setup/Storage/Storage.cshtml.cs), [Progress](Pages/Setup/Progress/Progress.cshtml.cs), [Finish](Pages/Setup/Finish/Finish.cshtml.cs): first Owner, resumable steps and completion. The Admin Instance, Acquisition, Providers and Takeover editors also answer under `/Setup` ([PageConventions.cs](Framework/PageConventions.cs)) inside the [SetupWizard.cs](Framework/SetupWizard.cs) frame.
 
 ## Admin pages
 
@@ -58,5 +58,5 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Discover tests](Tools/discover.test.mjs), [progress tests](Tools/progress.test.mjs), [Reader/Player tests](Tools/reader.test.mjs), [UI-key verification](Tools/verify-ui-resources.mjs).
 - Backend tests: FrontendAuthenticationTests, DiscoverTests, MediaTests, LibraryTests, ReadingTests and PlaybackTests; isolated PostgreSQL only.
 - [Design lab](Pages/Development/Design/Design.cshtml.cs), [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs): Development-only; browser verification is separate.
-- Remaining: persistent shell/miniplayer, previous/next playback targets, AniList Discover, provider facets, complete episode details, profile media visibility/order, metadata-locale policy, full Setup/PIN/quota/rules.
+- Remaining: persistent shell/miniplayer, previous/next playback targets, AniList Discover, provider facets, complete episode details, profile media visibility/order, metadata-locale policy, Setup backup/restore, PIN/quota/rules.
 - [Local preview](../../docs/LOCAL_PREVIEW.md); feature scope and Backend integration gaps: [BACKEND_NEXT](../../docs/BACKEND_NEXT.md).

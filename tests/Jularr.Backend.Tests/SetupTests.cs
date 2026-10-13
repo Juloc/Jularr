@@ -48,9 +48,42 @@ namespace Jularr.Backend.Tests
             // Owner, profile and session commit together.
             using var created = await host.SendAsync(HttpMethod.Post, "/Setup", Form(html, "owner-password-123", "owner-password-123"));
             Assert.AreEqual(HttpStatusCode.Redirect, created.StatusCode);
-            Assert.AreEqual("/Setup/Storage", created.Headers.Location!.OriginalString);
+            Assert.AreEqual("/Setup/Progress", created.Headers.Location!.OriginalString);
+
+            // The wizard resumes at its step and moves on through the real editors.
+            using var resume = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/Instance", resume.Headers.Location!.OriginalString);
+            using var instance = await host.SendAsync(HttpMethod.Get, "/Setup/Instance");
+            var instanceHtml = await instance.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, instance.StatusCode, instanceHtml);
+            StringAssert.Contains(instanceHtml, "action=\"/Setup/Instance?handler=Media\"");
+            using var next = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "2")));
+            Assert.AreEqual("/Setup/Storage", next.Headers.Location!.OriginalString);
+            using var back = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "1")));
+            Assert.AreEqual(HttpStatusCode.Redirect, back.StatusCode);
+            using var resumed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/Setup/Storage", resumed.Headers.Location!.OriginalString);
             using var storage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
             Assert.AreEqual(HttpStatusCode.OK, storage.StatusCode, await storage.Content.ReadAsStringAsync());
+
+            // Missing essentials block the end; once nothing blocks, the wizard closes.
+            using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Finish");
+            var blockedHtml = await blocked.Content.ReadAsStringAsync();
+            StringAssert.Contains(blockedHtml, "Movies and series need a TMDB key.");
+            Assert.IsFalse(blockedHtml.Contains("Finish setup", StringComparison.Ordinal));
+            await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = FALSE; UPDATE \"MediaSubtypes\" SET \"IsEnabled\" = FALSE");
+            using var ready = await host.SendAsync(HttpMethod.Get, "/Setup/Finish");
+            var readyHtml = await ready.Content.ReadAsStringAsync();
+            StringAssert.Contains(readyHtml, "has no indexer yet.");
+            var version = Regex.Match(readyHtml, "name=\"Version\" value=\"(\\d+)\"").Groups[1].Value;
+            using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Finish", Token(readyHtml, ("Version", version)));
+            Assert.AreEqual("/", finished.Headers.Location!.OriginalString);
+            using var closed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
+            Assert.AreEqual("/", closed.Headers.Location!.OriginalString);
+            using var late = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "3")));
+            Assert.AreEqual(HttpStatusCode.BadRequest, late.StatusCode);
+            using var adminStill = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
+            Assert.AreEqual(HttpStatusCode.OK, adminStill.StatusCode);
             using var settings = await host.SendAsync(HttpMethod.Get, "/Settings");
             Assert.AreEqual(HttpStatusCode.OK, settings.StatusCode);
             StringAssert.Contains(await settings.Content.ReadAsStringAsync(), "First Owner");
@@ -103,6 +136,13 @@ namespace Jularr.Backend.Tests
             {
                 return false;
             }
+        }
+
+        private static Dictionary<string, string> Token(string html, params (string Key, string Value)[] values)
+        {
+            var token = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"");
+            Assert.IsTrue(token.Success);
+            return values.Append(("__RequestVerificationToken", WebUtility.HtmlDecode(token.Groups[1].Value))).ToDictionary(pair => pair.Item1, pair => pair.Item2);
         }
 
         private static Dictionary<string, string> Form(string html, string password, string confirmation, string uiLocaleId = "1")

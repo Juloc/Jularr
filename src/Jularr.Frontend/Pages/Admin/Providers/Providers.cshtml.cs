@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -19,9 +20,12 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         private UpdateProviderDataV1? _input;
         private long? _providerId;
 
+        private string Home => SetupWizard.Address(Request, SetupStepType.Providers, "/Admin/Providers");
+
         protected override void Define(Page page)
         {
             page.Title("admin.providers.title");
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Providers, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
             page.Navigation("nav.admin");
             page.Content.Add(new P(new Text("admin.providers.scope")));
 
@@ -36,7 +40,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                     form.Hidden(item => item.ExpectedIsEnabled);
                     form.Select(item => item.IsEnabled, "admin.providers.state", options);
                     form.Submit("common.save");
-                }, "/Admin/Providers?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? FormError : null));
 
                 // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id.
@@ -52,7 +56,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
 
                         form.Password(item => item.Secret, provider.Key == "igdb" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
                         form.Submit("common.save");
-                    }, "/Admin/Providers?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                    }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         new SaveProviderSecretDataV1(null)));
                 }
 
@@ -63,8 +67,8 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 }
             }
 
-            if (_providers?.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", "/Admin/Providers?pageNumber=" + (_providers.Page - 1)));
-            if (_providers is { } && _providers.Items.Count == _providers.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", "/Admin/Providers?pageNumber=" + (_providers.Page + 1)));
+            if (_providers?.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Home + "?pageNumber=" + (_providers.Page - 1)));
+            if (_providers is { } && _providers.Items.Count == _providers.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Home + "?pageNumber=" + (_providers.Page + 1)));
             if (FormError is not null && _providerId is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
@@ -81,11 +85,11 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 form.Text(item => item.BaseUrl, "admin.plex.baseUrl");
                 form.Password(item => item.Token, "admin.plex.token", "new-password");
                 form.Submit(plex.ExternalId is null ? "admin.plex.connect" : "common.save");
-            }, "/Admin/Providers?handler=Plex", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
+            }, Home + "?handler=Plex", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
             if (plex.ExternalId is not null)
             {
-                page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.sync"), "/Admin/Providers?handler=PlexSync", csrf, new PlexServerParametersV1()));
-                page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.disconnect"), "/Admin/Providers?handler=PlexDisconnect", csrf, new PlexServerParametersV1()));
+                page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.sync"), Home + "?handler=PlexSync", csrf, new PlexServerParametersV1()));
+                page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.disconnect"), Home + "?handler=PlexDisconnect", csrf, new PlexServerParametersV1()));
             }
         }
 
@@ -104,14 +108,14 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             _providerId = providerId;
             _input = new UpdateProviderDataV1(isEnabled, expectedIsEnabled);
             await update.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), _input, HttpContext.RequestAborted);
-            return RedirectToPage("/Admin/Providers/Providers");
+            return LocalRedirect(Home);
         }
         public async Task<IActionResult> OnPostSecretAsync(long providerId, string? secret, string? clientId)
         {
             _providerId = providerId;
             await saveSecret.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), new SaveProviderSecretDataV1(string.IsNullOrWhiteSpace(secret) ? null : secret,
                 string.IsNullOrWhiteSpace(clientId) ? null : clientId), HttpContext.RequestAborted);
-            return RedirectToPage("/Admin/Providers/Providers");
+            return LocalRedirect(Home);
         }
 
         public async Task<IActionResult> OnPostPlexAsync(string? baseUrl, string? token)
@@ -119,20 +123,20 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             _plexInput = new SavePlexServerDataV1(baseUrl ?? "", string.IsNullOrWhiteSpace(token) ? null : token);
             var test = await savePlex.ExecuteAsync<PlexServerTestV1>(new PlexServerParametersV1(), _plexInput, HttpContext.RequestAborted);
             TempData["PlexResult"] = string.Format(CultureInfo.InvariantCulture, texts["admin.plex.tested"], test.Version ?? "?", string.Join(", ", test.Sections));
-            return RedirectToPage("/Admin/Providers/Providers");
+            return LocalRedirect(Home);
         }
 
         public async Task<IActionResult> OnPostPlexSyncAsync()
         {
             var sync = await syncPlex.ExecuteAsync<PlexSyncResultV1>(new PlexServerParametersV1(), default, HttpContext.RequestAborted);
             TempData["PlexResult"] = string.Format(CultureInfo.InvariantCulture, texts["admin.plex.synced"], sync.LinkedCount, sync.CreatedCount);
-            return RedirectToPage("/Admin/Providers/Providers");
+            return LocalRedirect(Home);
         }
 
         public async Task<IActionResult> OnPostPlexDisconnectAsync()
         {
             await disconnectPlex.ExecuteAsync<UpdateResult>(new PlexServerParametersV1(), default, HttpContext.RequestAborted);
-            return RedirectToPage("/Admin/Providers/Providers");
+            return LocalRedirect(Home);
         }
 
         protected override async Task LoadDataAsync()
