@@ -1,5 +1,6 @@
 @use "MediaImage";
 @use "MediaAvailability";
+@use "IconInfo";
 
 .media-card {
     position: relative;
@@ -63,6 +64,7 @@
     }
 
     &__language { display: inline-flex; align-items: center; gap: 6px; }
+
     &__languages .icon-info {
         .icon-info__label,
         .icon-info__trigger::after { top: auto; bottom: 100%; }
@@ -93,7 +95,17 @@
         .tag { padding: 4px 7px; font-size: 11px; }
     }
 
-    &__availability { position: absolute; top: 2px; right: 2px; pointer-events: auto; }
+    &__availability {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        pointer-events: auto;
+
+        // Bare status, full touch target.
+        .icon-info__trigger { background: none; }
+        .icon-info__label,
+        .icon-info__trigger::after { left: auto; right: 0; }
+    }
 
     &__action-area { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
 

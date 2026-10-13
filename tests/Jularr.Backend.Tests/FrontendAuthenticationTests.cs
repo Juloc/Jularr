@@ -51,9 +51,20 @@ namespace Jularr.Backend.Tests
             await texts.InitializeAsync(http);
             var assets = scope.ServiceProvider.GetRequiredService<FrontendAssets>();
 
+            // Standalone status stays noninteractive.
+            var availability = new MediaAvailability(assets, MediaAvailabilityState.Partial, 18, 24);
+            using var symbolWriter = new StringWriter();
+            availability.WriteTo(symbolWriter, HtmlEncoder.Default, texts);
+            var symbolHtml = symbolWriter.ToString();
+            StringAssert.Contains(symbolHtml, "role=\"img\" aria-label=\"");
+            StringAssert.Contains(symbolHtml, "stroke-dasharray=\"75 100\"");
+            Assert.IsFalse(symbolHtml.Contains("icon-info", StringComparison.Ordinal));
+            Assert.IsFalse(symbolHtml.Contains("<a", StringComparison.Ordinal));
+            Assert.IsFalse(symbolHtml.Contains("<details", StringComparison.Ordinal));
+
             // Preference and fallback independently.
             var card = new MediaCard("<Title>", "/Details/1", null, null, "media.state.InProgress", "media.continue", "/Player/2")
-                .SeriesStatus("media.series.Continuing").Availability(new MediaAvailability(assets, MediaAvailabilityState.Partial, 18, 24))
+                .SeriesStatus("media.series.Continuing").Availability(availability)
                 .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 3, null, 6)
                 .Genres(new ValueText("<Genre>"), new ValueText("Second"), new ValueText("Third"), new ValueText("Fourth")).Continue(30000, 90000);
             using var writer = new StringWriter();
@@ -84,6 +95,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2, Regex.Matches(html, "data-preview-open=\"preview-test\"").Count);
             Assert.AreEqual(2, Regex.Matches(html, "aria-haspopup=\"dialog\"").Count);
             Assert.IsFalse(Regex.IsMatch(html, "<a[^>]*>[^<]*<a"));
+
+            // Cards never mutate shared symbols.
+            symbolWriter.GetStringBuilder().Clear();
+            availability.WriteTo(symbolWriter, HtmlEncoder.Default, texts);
+            Assert.AreEqual(symbolHtml, symbolWriter.ToString());
 
             // Inert artwork, no embedded player.
             writer.GetStringBuilder().Clear();

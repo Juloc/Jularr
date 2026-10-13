@@ -136,6 +136,13 @@ test("icon hints remain painted on closed summaries and language hints open abov
     assert.match(css, /\.media-card__languages \.icon-info \.icon-info__trigger:{1,2}after\{top:auto;bottom:100%\}/);
 });
 
+test("availability symbols and their card targets have no painted background", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-card__availability \.icon-info__trigger\{background:none\}/);
+    assert.match(css, /\.media-availability\{position:relative;display:block;width:28px;height:28px\}/);
+    assert.match(css, /\.icon-info__trigger\{[^}]*min-width:44px;min-height:44px/);
+});
+
 test("manifest URLs are relative and cannot escape the asset root", () => {
     for (const file of [...files, icons.file]) {
         assert.ok(!file.startsWith("/") && !file.includes("..") && !file.includes("?"), file);

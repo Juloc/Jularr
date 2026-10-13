@@ -15,14 +15,12 @@ namespace Jularr.Frontend.Framework
 
     public sealed class MediaAvailability(FrontendAssets assets, MediaAvailabilityState state, int availableUnits = 0, int monitoredUnits = 0) : IUiComponent
     {
-        private string? _previewId;
-        private string? _href;
-
-        public MediaAvailability Preview(string id, string href)
+        internal string GetLabel(UiText texts)
         {
-            _previewId = id;
-            _href = href;
-            return this;
+            var label = texts["media.availability." + state];
+            return state == MediaAvailabilityState.Partial
+                ? string.Format(CultureInfo.CurrentCulture, label, availableUnits, monitoredUnits)
+                : label;
         }
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
@@ -49,14 +47,10 @@ namespace Jularr.Frontend.Framework
                 _ => null
             };
             if (icon is not null) symbol.Add(new Icon(icon, assets));
-            var label = texts["media.availability." + state];
-            if (state == MediaAvailabilityState.Partial)
-                label = string.Format(CultureInfo.CurrentCulture, label, availableUnits, monitoredUnits);
 
-            var info = new IconInfo(new Span([.. symbol]).Class("media-availability__symbol"), label);
-            if (_previewId is not null) info.Preview(_previewId, _href!);
-            new Div(info)
-                .Class("media-availability media-availability--" + state.ToString().ToLowerInvariant()).WriteTo(writer, encoder, texts);
+            // Symbol only, no interaction.
+            new Span([.. symbol]).Class("media-availability media-availability--" + state.ToString().ToLowerInvariant())
+                .Attribute("role", "img").Attribute("aria-label", GetLabel(texts)).WriteTo(writer, encoder, texts);
         }
 
         private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);

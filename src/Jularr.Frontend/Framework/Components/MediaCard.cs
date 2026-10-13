@@ -74,8 +74,9 @@ namespace Jularr.Frontend.Framework
             }
             if (_availability is not null)
             {
-                if (_previewId is not null) _availability.Preview(_previewId, href);
-                overlays.Add(new Div(_availability).Class("media-card__availability"));
+                var info = new IconInfo(_availability, _availability.GetLabel(texts));
+                if (_previewId is not null) info.Preview(_previewId, href);
+                overlays.Add(new Div(info).Class("media-card__availability"));
             }
             if (actionKey is not null)
             {
