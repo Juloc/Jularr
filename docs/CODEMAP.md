@@ -40,7 +40,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 ## External security audit tools
 
-- [Owned-instance CAPTCHA gate auditor](../tools/SOURCE_GATE_AUDIT.md): [read-only real HTTP probe](../tools/source_gate_audit.py) and [focused local tests](../tools/test_source_gate_audit.py); standalone Python standard-library tool, not an Arr+ source, no changes to production request handlers.
+- [Owned-instance CAPTCHA gate auditor](../tools/SOURCE_GATE_AUDIT.md): [real HTTP probe](../tools/source_gate_audit.py), optional [real-browser probe](../tools/source_gate_browser_audit.py) using Chromium/Firefox/WebKit JavaScript and cookies, and [focused HTTP](../tools/test_source_gate_audit.py) / [browser](../tools/test_source_gate_browser_audit.py) tests; standalone external tools, not Arr+ sources, no changes to production handlers.
 
 ## Contracts and persistence
 
