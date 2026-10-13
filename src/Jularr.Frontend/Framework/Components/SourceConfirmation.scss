@@ -37,6 +37,7 @@
     &__step { color: var(--muted); font-size: .92em; }
     &__open { display: flex; flex-wrap: wrap; }
     &__open a { min-height: 44px; display: inline-flex; align-items: center; }
+    [data-source-paste] { min-height: 44px; justify-self: start; }
 
     &[open] &__summary { border-bottom: 1px solid var(--border); border-radius: var(--radius-panel) var(--radius-panel) 0 0; margin-bottom: 12px; }
 
@@ -44,6 +45,6 @@
         width: min(100%, calc(100vw - 48px));
         &__summary { padding: 12px; }
         &__body { padding: 0 12px 12px; }
-        &__open a, .ui-form button { width: 100%; justify-content: center; }
+        &__open a, [data-source-paste], .ui-form button { width: 100%; justify-content: center; }
     }
 }
