@@ -2,7 +2,7 @@ namespace Jularr.Backend.Service.Core
 {
     public sealed class AuthenticationOptions
     {
-        public int SessionLifetimeHours { get; set; } = 24;
+        public int SessionLifetimeHours { get; set; } = 720;
 
         // Plex authentication policy.
         public bool PlexLoginEnabled { get; set; }

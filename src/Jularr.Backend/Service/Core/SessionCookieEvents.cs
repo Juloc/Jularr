@@ -1,22 +1,40 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Core
 {
     internal sealed class SessionCookieEvents : CookieAuthenticationEvents
     {
         private readonly SessionAuthentication _authentication;
+        private readonly AuthenticationOptions _options;
+        private readonly TimeProvider _time;
 
-        public SessionCookieEvents(SessionAuthentication authentication)
+        public SessionCookieEvents(SessionAuthentication authentication, IOptions<AuthenticationOptions> options, TimeProvider time)
         {
             _authentication = authentication;
+            _options = options.Value;
+            _time = time;
         }
 
         public override async Task ValidatePrincipal(CookieValidatePrincipalContext context)
         {
             try
             {
-                await _authentication.VerifyCookieAsync(context.HttpContext, context.Principal, context.HttpContext.RequestAborted);
+                // Renew after half-life only.
+                var now = _time.GetUtcNow();
+                var lifetime = TimeSpan.FromHours(_options.SessionLifetimeHours);
+                var renew = context.Properties.AllowRefresh != false && context.Properties.ExpiresUtc is { } expiry && expiry - now < lifetime / 2;
+                var renewedExpiry = now.Add(lifetime);
+                await _authentication.VerifyCookieAsync(context.HttpContext, context.Principal, context.HttpContext.RequestAborted, renew ? renewedExpiry.UtcDateTime : null);
+
+                // Publish after database commit.
+                if (renew)
+                {
+                    context.Properties.IssuedUtc = now;
+                    context.Properties.ExpiresUtc = renewedExpiry;
+                    context.ShouldRenew = true;
+                }
             }
             catch (UnauthorizedAccessException)
             {

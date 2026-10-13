@@ -10,6 +10,30 @@ namespace Jularr.Backend.Logic.Session
 {
     internal static class SessionLogic
     {
+        public static async Task RenewSessionAsync(this LogicContext ctx, SessionParameters proof, SessionRenewalData data, CancellationToken ct)
+        {
+            // Retain the current proof.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountSessions" AS session
+                SET
+                    "ExpiresAt" = GREATEST(session."ExpiresAt", @ExpiresAt),
+                    "LastSeenAt" = statement_timestamp()
+                WHERE
+                    session."PublicId" = @SessionPublicId
+                    AND session."RotationRevision" = @SessionRevision
+                    AND session."TokenHash" = @SessionTokenHash;
+                """;
+            sql.Parameters.Add(proof);
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new UnauthorizedAccessException("The account session changed.");
+            }
+        }
+
         public static async Task RevokeOutdatedAccountSessionsAsync(this LogicContext ctx, AccountParameters parameters, CancellationToken ct)
         {
             // Revoke obsolete credential proofs.

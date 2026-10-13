@@ -44,8 +44,21 @@ Nach `Build()`: `app.UseExceptionHandler()` für den registrierten zentralen Han
 `app.UseRouting()`, `app.UseRateLimiter()`, `app.UseAuthentication()` und
 `app.UseAuthorization()`; dann `app.MapJularrServices()` neben `app.MapRazorPages()`.
 Keine zweite Cookie-Registrierung. Backend ergänzt die vorhandene Cookie-Konfiguration
-um DB-validierende Events, Secure/HttpOnly/SameSite und deaktivierte Sliding Expiration.
-Der Host muss Data-Protection-Schlüssel dauerhaft und geschützt verwalten.
+um DB-validierende Events und Secure/HttpOnly/SameSite. Sessions und persistente Cookies
+gelten standardmäßig 30 Tage für alle Geräte. Bei Nutzung nach halber Laufzeit verlängert
+das Backend zuerst die gültige DB-Session transaktional und danach das Cookie; normale
+Seitenaufrufe schreiben nichts. Widerruf, Logout und abgelaufene Sessions bleiben endgültig.
+Die unabhängige Cookie-Sliding-Expiration ist deaktiviert, damit Cookie und DB zusammen verlängert werden.
+
+Data Protection verwendet den stabilen Anwendungskontext `Jularr`, unabhängig vom
+Release-Verzeichnis. Ohne `DataProtection:KeyDirectory` gelten die ASP.NET-Plattformdefaults;
+unter Windows werden Schlüssel im Benutzerprofil gespeichert und durch DPAPI geschützt.
+Für Container `DataProtection__KeyDirectory` auf einen absoluten Pfad in einem persistenten,
+nur dieser Instanz zugänglichen Volume setzen. Unter Linux zusätzlich den Schlüsselordner
+durch restriktive Dateirechte und gegebenenfalls Volume-Verschlüsselung schützen; das
+Verzeichnis enthält vertrauliches Schlüsselmaterial. Schlüssel und DB müssen Updates überleben.
+Cookies und Provider-Secrets aus dem bisherigen pfadabhängigen Schutzkontext müssen beim
+einmaligen Wechsel neu ausgestellt beziehungsweise neu hinterlegt werden.
 Keine automatische Schema-Installation oder Migration; [Baseline](database/README.md).
 
 Razor ruft per DI dieselben Services direkt auf, beispielsweise
@@ -184,7 +197,7 @@ die Oberfläche behauptet keinen erfolgreichen Verbindungstest.
 
 Plex ist standardmäßig aus. Konfiguration unter `Authentication`:
 
-- `SessionLifetimeHours`: 24, zulässig 1–720.
+- `SessionLifetimeHours`: 720 (30 Tage), zulässig 1–720; gilt auch ohne Plex.
 - `PlexLoginEnabled`, `PlexRegistrationEnabled`: jeweils false.
 - `PlexRequireApproval`: true; neue Plex-Accounts bleiben bis zur Freigabe deaktiviert.
 - `PlexUiLocaleId`: 1, muss auf einen aktivierten Locale-Eintrag zeigen.

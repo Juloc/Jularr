@@ -17,6 +17,10 @@ for development. It runs only `origin/clean-start`, independently of developer b
   build fingerprinted assets, publish outside the checkout, then replace the host
   after a successful build. Startup health check uses the login page; a failed
   startup restores the previous release. Builds retain the running host.
+- Sessions use the same persisted Windows Data-Protection keys and the stable `Jularr`
+  application context across release folders. Ordinary restarts/deployments preserve
+  authentication; the default persistent login lasts 30 days and renews during use.
+  Adopting the stable context requires signing in once again.
 - Dirty/divergent checkouts are never reset. Fetch/build errors retain the current
   process and retry; deployments can therefore lag behind clean-start until resolved.
 - Status: `status.json` (running commit, URL, host PID); logs: `logs\controller.log`,
@@ -38,6 +42,9 @@ public services, the Owner, the local connection `D:\testlibrary` and its librar
 and queues their scans; it retries every minute until this succeeds (`schema.sha256`). Preview data is disposable: a
 baseline change resets it. A new baseline file must be added to the runner's order.
 The Owner credentials are only in the settings file.
+This reset also deletes account sessions and requires signing in again; session renewal
+cannot preserve a deleted database. No baseline or preview-database change is part of
+the session persistence fix.
 
 To stop safely, create the exact marker `D:\jularr-clean-start-server\stop.request`;
 the runner stops its own host and exits. To resume, remove only that marker and start

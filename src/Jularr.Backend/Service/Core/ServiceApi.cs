@@ -30,6 +30,7 @@ using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Npgsql;
@@ -66,6 +67,22 @@ namespace Jularr.Backend.Service.Core
             }
 
             services.AddSingleton(_ => new SqlDatabase(new NpgsqlDataSourceBuilder(connectionString).Build()));
+
+            // Keep keys outside releases.
+            if (configuration["DataProtection:KeyDirectory"] is { Length: > 0 } keyDirectory)
+            {
+                if (!Path.IsPathFullyQualified(keyDirectory))
+                {
+                    throw new InvalidOperationException("DataProtection:KeyDirectory must be an absolute persistent path.");
+                }
+
+                var protection = services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
+                if (OperatingSystem.IsWindows())
+                {
+                    protection.ProtectKeysWithDpapi();
+                }
+            }
+
             services.Configure<AuthenticationOptions>(configuration.GetSection("Authentication"));
             services.Configure<StorageOptions>(configuration.GetSection("Storage"));
             services.AddSingleton(new NasMountClient { SocketPath = configuration["Storage:MountHelperSocket"] });
@@ -112,7 +129,7 @@ namespace Jularr.Backend.Service.Core
             services.AddScoped<IServiceGate, ServiceGate>();
             services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
-            services.AddDataProtection();
+            services.AddDataProtection().SetApplicationName("Jularr");
 
             // Razor consumes verified service grants.
             services.AddRouting();

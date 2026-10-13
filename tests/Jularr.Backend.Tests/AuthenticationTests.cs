@@ -11,6 +11,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.DataProtection;
+using AuthenticationTicket = Microsoft.AspNetCore.Authentication.AuthenticationTicket;
+using AuthenticationProperties = Microsoft.AspNetCore.Authentication.AuthenticationProperties;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Npgsql;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -29,6 +34,111 @@ namespace Jularr.Backend.Tests
     public sealed class AuthenticationTests
     {
         private const string Password = "test-password-123";
+
+        [TestMethod]
+        public async Task Session_ActiveAfterHalfLife_RenewsDatabaseAndPersistentCookie()
+        {
+            await using var host = await Host.CreateAsync();
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
+            Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+            var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get("Cookies");
+            var ticket = options.TicketDataFormat.Unprotect(host.Cookies[options.Cookie.Name!])!;
+            Assert.IsTrue(ticket.Properties.IsPersistent);
+            Assert.IsTrue(Math.Abs((ticket.Properties.ExpiresUtc!.Value - DateTimeOffset.UtcNow).TotalDays - 30) < .01);
+            var sessionId = ticket.Principal.FindFirst(ServiceGate.SessionClaimType)!.Value;
+            var originalClaims = ticket.Principal.Claims.Select(claim => (claim.Type, claim.Value)).ToArray();
+
+            // Simulate twenty inactive days.
+            ticket.Properties.IssuedUtc = DateTimeOffset.UtcNow.AddDays(-20);
+            ticket.Properties.ExpiresUtc = DateTimeOffset.UtcNow.AddDays(10);
+            await host.Fixture.RunSqlAsync($"UPDATE \"AccountSessions\" SET \"ExpiresAt\" = now() + interval '10 days' WHERE \"PublicId\" = '{sessionId}'");
+            var oldCookie = options.TicketDataFormat.Protect(ticket);
+            host.Cookies[options.Cookie.Name!] = oldCookie;
+
+            using var renewed = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/101");
+            Assert.AreEqual(HttpStatusCode.OK, renewed.StatusCode);
+            Assert.AreNotEqual(oldCookie, host.Cookies[options.Cookie.Name!]);
+            var updated = options.TicketDataFormat.Unprotect(host.Cookies[options.Cookie.Name!])!;
+            CollectionAssert.AreEqual(originalClaims, updated.Principal.Claims.Select(claim => (claim.Type, claim.Value)).ToArray());
+            Assert.IsTrue(updated.Properties.IsPersistent);
+            Assert.IsTrue(Math.Abs((updated.Properties.ExpiresUtc!.Value - DateTimeOffset.UtcNow).TotalDays - 30) < .01);
+            var databaseExpiry = (DateTime)(await host.ScalarAsync($"SELECT \"ExpiresAt\" FROM \"AccountSessions\" WHERE \"PublicId\" = '{sessionId}'"))!;
+            Assert.IsTrue(Math.Abs((databaseExpiry - updated.Properties.ExpiresUtc.Value.UtcDateTime).TotalSeconds) < 1);
+            Assert.IsNotNull(await host.ScalarAsync($"SELECT \"LastSeenAt\" FROM \"AccountSessions\" WHERE \"PublicId\" = '{sessionId}'"));
+
+            // Ordinary reads avoid renewal.
+            var currentCookie = host.Cookies[options.Cookie.Name!];
+            using var subsequent = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/101");
+            Assert.AreEqual(HttpStatusCode.OK, subsequent.StatusCode);
+            Assert.AreEqual(currentCookie, host.Cookies[options.Cookie.Name!]);
+            Assert.AreEqual(databaseExpiry, await host.ScalarAsync($"SELECT \"ExpiresAt\" FROM \"AccountSessions\" WHERE \"PublicId\" = '{sessionId}'"));
+        }
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        public async Task Session_ExpiredOrRevoked_IsNotRenewed(bool revoked)
+        {
+            await using var host = await Host.CreateAsync();
+            await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
+            var options = host.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get("Cookies");
+            var ticket = options.TicketDataFormat.Unprotect(host.Cookies[options.Cookie.Name!])!;
+            var sessionId = ticket.Principal.FindFirst(ServiceGate.SessionClaimType)!.Value;
+            ticket.Properties.IssuedUtc = DateTimeOffset.UtcNow.AddDays(-20);
+            ticket.Properties.ExpiresUtc = DateTimeOffset.UtcNow.AddDays(10);
+            host.Cookies[options.Cookie.Name!] = options.TicketDataFormat.Protect(ticket);
+
+            // Invalidate server-side proof.
+            var change = revoked ? "\"RevokedAt\" = now()" : "\"CreatedAt\" = now() - interval '20 days', \"ExpiresAt\" = now() - interval '1 minute'";
+            await host.Fixture.RunSqlAsync($"UPDATE \"AccountSessions\" SET {change} WHERE \"PublicId\" = '{sessionId}'");
+            var expiry = await host.ScalarAsync($"SELECT \"ExpiresAt\" FROM \"AccountSessions\" WHERE \"PublicId\" = '{sessionId}'");
+            using var rejected = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles/101");
+            Assert.AreEqual(HttpStatusCode.Unauthorized, rejected.StatusCode);
+            Assert.AreEqual(expiry, await host.ScalarAsync($"SELECT \"ExpiresAt\" FROM \"AccountSessions\" WHERE \"PublicId\" = '{sessionId}'"));
+        }
+
+        [TestMethod]
+        public async Task Session_NewDeploymentRoot_PreservesCookieAndProtectedSecrets()
+        {
+            // Share only persisted keys.
+            var directory = Directory.CreateTempSubdirectory("jularr-protection-");
+            try
+            {
+                var keyDirectory = Path.Combine(directory.FullName, "keys");
+                string? cookie = null;
+                byte[]? secret = null;
+                foreach (var release in new[] { "first", "second" })
+                {
+                    var contentRoot = Directory.CreateDirectory(Path.Combine(directory.FullName, release));
+                    var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = contentRoot.FullName });
+                    builder.Services.AddAuthentication("Cookies").AddCookie();
+                    builder.Configuration["JULARR_DB"] = "Host=127.0.0.1;Port=1;Username=unused;Database=unused;Timeout=1";
+                    builder.Configuration["DataProtection:KeyDirectory"] = keyDirectory;
+                    builder.Services.AddJularrServices(builder.Configuration);
+                    await using var app = builder.Build();
+                    var options = app.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get("Cookies");
+                    var protection = app.Services.GetRequiredService<IDataProtectionProvider>().CreateProtector("restart-test");
+                    if (release == "first")
+                    {
+                        var principal = new ClaimsPrincipal(new ClaimsIdentity("Cookies"));
+                        cookie = options.TicketDataFormat.Protect(new AuthenticationTicket(principal,
+                            new AuthenticationProperties { IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays(30) }, "Cookies"));
+                        secret = protection.Protect([1, 2, 3]);
+                    }
+                    else
+                    {
+                        Assert.IsNotNull(options.TicketDataFormat.Unprotect(cookie!));
+                        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, protection.Unprotect(secret!));
+                    }
+                }
+            }
+            finally
+            {
+                directory.Delete(recursive: true);
+            }
+        }
 
         [TestMethod]
         public async Task Logout_AccountSessionWithoutProfile_RevokesCookieAndDatabaseSession()
