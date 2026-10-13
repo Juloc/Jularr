@@ -43,6 +43,10 @@ namespace Jularr.Frontend.Pages.Account.Profiles
                 }
 
                 if (_profiles.Items.Count == 0) content.Add(new P(new Text("account.profile.empty")).Attribute("role", "status"));
+                if (_profiles.Items.Count(profile => profile.IsOwned) < 10)
+                {
+                    content.Add(new A(new Text("account.profile.add")).Attribute("href", Url.Page("/Account/ProfileNew/ProfileNew", new { returnUrl = _returnUrl })!));
+                }
                 if (_profiles.Page > 1)
                 {
                     content.Add(new A(new Text("common.previous")).Attribute("href", Url.Page("/Account/Profiles/Profiles", new { pageNumber = _profiles.Page - 1, returnUrl = _returnUrl })!));

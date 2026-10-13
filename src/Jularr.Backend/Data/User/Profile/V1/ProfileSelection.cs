@@ -31,12 +31,13 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
     public sealed class ProfileSelectionDetailsV1 : BaseResponse
     {
-        public ProfileSelectionDetailsV1(long id, string displayName, bool isLocked, int? pinLength)
+        public ProfileSelectionDetailsV1(long id, string displayName, bool isLocked, int? pinLength, bool isOwned)
         {
             Id = id;
             DisplayName = displayName;
             IsLocked = isLocked;
             PinLength = pinLength;
+            IsOwned = isOwned;
         }
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
@@ -50,6 +51,24 @@ namespace Jularr.Backend.Data.User.Profile.V1
         // A PIN confirms itself once this many digits are entered.
         [DataField(typeof(ProfileFields), nameof(ProfileFields.PinLength))]
         public int? PinLength { get; }
+
+        // Owned profiles count against the account's limit.
+        public bool IsOwned { get; }
+    }
+
+    public sealed class CreateProfileDataV1 : BaseData
+    {
+        public CreateProfileDataV1(string displayName, long uiLocaleId)
+        {
+            DisplayName = displayName;
+            UiLocaleId = uiLocaleId;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
+        public string DisplayName { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
+        public long UiLocaleId { get; }
     }
 
     public sealed class VerifyProfilePinDataV1 : BaseData

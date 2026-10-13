@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.User.Settings
 {
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
-        UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery, UiText texts) : JularrPage
+        UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private AuthenticationResultV1? _authentication;
         private ReadProfileResultV1? _profile;
@@ -67,6 +67,18 @@ namespace Jularr.Frontend.Pages.User.Settings
                     {
                         content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.pin.remove"), Url.Page("/User/Settings/Settings", "PinRemove"),
                             antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+                    }
+
+                    // Deleting asks once more; nothing of the profile remains.
+                    if (Request.Query["delete"] == "true")
+                    {
+                        content.Add(new P(new Text("profile.delete.warning")).Attribute("role", "alert"));
+                        content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.delete.confirm"), Url.Page("/User/Settings/Settings", "Delete"),
+                            antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+                    }
+                    else
+                    {
+                        content.Add(new A(new Text("profile.delete")).Class("button").Attribute("href", Url.Page("/User/Settings/Settings", new { delete = true })!));
                     }
                 }
                 else
@@ -175,6 +187,12 @@ namespace Jularr.Frontend.Pages.User.Settings
             await removePin.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), default, HttpContext.RequestAborted);
             TempData["ProfileSaved"] = true;
             return RedirectToPage("/User/Settings/Settings");
+        }
+
+        public async Task<IActionResult> OnPostDeleteAsync()
+        {
+            await deleteProfile.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), default, HttpContext.RequestAborted);
+            return Redirect("/Account/Profiles");
         }
 
         private async Task<UpdateProfileParametersV1> ActiveProfileAsync()
