@@ -100,14 +100,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string? Author { get; }
     }
 
-    internal sealed class EpisodeStateData : BaseData
+    internal sealed class UnitStateData : BaseData
     {
-        public EpisodeStateData(long workUnitId, int seasonNumber, int episodeNumber, bool isAired, bool hasMedia, bool isCovered)
+        public UnitStateData(long workUnitId, int? parentNumber, int number, bool isAvailable, bool hasMedia, bool isCovered)
         {
             WorkUnitId = workUnitId;
-            SeasonNumber = seasonNumber;
-            EpisodeNumber = episodeNumber;
-            IsAired = isAired;
+            ParentNumber = parentNumber;
+            Number = number;
+            IsAvailable = isAvailable;
             HasMedia = hasMedia;
             IsCovered = isCovered;
         }
@@ -115,14 +115,15 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId))]
         public long WorkUnitId { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SeasonNumber), true)]
-        public int SeasonNumber { get; }
+        // The season of an episode; volumes have none.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ParentUnitNumber), false)]
+        public int? ParentNumber { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.EpisodeStart), true)]
-        public int EpisodeNumber { get; }
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart), true)]
+        public int Number { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsAired))]
-        public bool IsAired { get; }
+        public bool IsAvailable { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]
         public bool HasMedia { get; }
@@ -130,7 +131,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsCovered))]
         public bool IsCovered { get; }
 
-        public bool IsMissing => IsAired && !HasMedia && !IsCovered;
+        public bool IsMissing => IsAvailable && !HasMedia && !IsCovered;
     }
 
     internal sealed class WantedCompletionData : BaseData
@@ -169,13 +170,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionGrabData : BaseData
     {
-        public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? seasonNumber,
-            int? episodeStart, int? episodeEnd, string? sourceUrl = null)
+        public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
+            int? unitStart, int? unitEnd, string? sourceUrl = null)
         {
             SourceUrl = sourceUrl;
-            SeasonNumber = seasonNumber;
-            EpisodeStart = episodeStart;
-            EpisodeEnd = episodeEnd;
+            ParentUnitNumber = parentUnitNumber;
+            UnitStart = unitStart;
+            UnitEnd = unitEnd;
             WantedItemId = wantedItemId;
             IndexerConnectionId = indexerConnectionId;
             ReleaseIdentity = releaseIdentity;
@@ -202,14 +203,15 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
         public long DownloadConnectionId { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SeasonNumber))]
-        public int? SeasonNumber { get; }
+        // The season and episode range, or the volume range, a release claims.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ParentUnitNumber))]
+        public int? ParentUnitNumber { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.EpisodeStart))]
-        public int? EpisodeStart { get; }
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
+        public int? UnitStart { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.EpisodeEnd))]
-        public int? EpisodeEnd { get; }
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitEnd))]
+        public int? UnitEnd { get; }
 
         // Where a direct source serves the file.
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl))]

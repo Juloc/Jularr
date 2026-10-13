@@ -35,8 +35,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     public sealed class SearchDueWantedV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private const int BatchSize = 5;
-        private const int SeasonsPerPass = 3;
-        private const int GrabsPerSeason = 5;
+        private const int GroupsPerPass = 3;
+        private const int GrabsPerGroup = 5;
         private readonly WantedAcquisition _acquisition;
         private readonly TimeProvider _time;
 
@@ -71,10 +71,15 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     continue;
                 }
 
-                if (target.MediaTypeId == MediaType.Series)
+                // Series and Manga with volumes are searched by their missing units.
+                if (target.MediaTypeId is MediaType.Series or MediaType.Manga)
                 {
-                    await SearchSeriesAsync(target, indexers, clients, now);
-                    continue;
+                    var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
+                    if (target.MediaTypeId == MediaType.Series || units.Count > 0)
+                    {
+                        await SearchUnitsAsync(target, units, indexers, clients, now);
+                        continue;
+                    }
                 }
 
                 var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken);
@@ -99,17 +104,17 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             return new UpdateResult(true);
         }
 
-        private async Task SearchSeriesAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, IReadOnlyList<AcquisitionConnectionData> clients, DateTime now)
+        private async Task SearchUnitsAsync(WantedTargetData target, IReadOnlyList<UnitStateData> units, IReadOnlyList<AcquisitionConnectionData> indexers,
+            IReadOnlyList<AcquisitionConnectionData> clients, DateTime now)
         {
-            var episodes = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEpisodeStatesAsync(target.WantedItemId, ct), CancellationToken);
             var grabbed = 0;
             var unavailable = false;
             string? outcome = null;
-            foreach (var seasonNumber in episodes.Where(episode => episode.IsMissing).Select(episode => episode.SeasonNumber).Distinct().Take(SeasonsPerPass).ToArray())
+            foreach (var parentNumber in units.Where(unit => unit.IsMissing).Select(unit => unit.ParentNumber).Distinct().Take(GroupsPerPass).ToArray())
             {
-                for (var attempt = 0; attempt < GrabsPerSeason; attempt++)
+                for (var attempt = 0; attempt < GrabsPerGroup; attempt++)
                 {
-                    if (AcquisitionSelectionLogic.ReadNextSeriesScope(episodes, seasonNumber, attempt == 0) is not { } scope)
+                    if (AcquisitionSelectionLogic.ReadNextUnitScope(units, parentNumber, attempt == 0) is not { } scope)
                     {
                         break;
                     }
@@ -133,7 +138,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
 
                     grabbed++;
-                    episodes = AcquisitionSelectionLogic.Claim(episodes, scope, winner.Candidate.Parsed);
+                    units = AcquisitionSelectionLogic.Claim(units, scope, target.MediaTypeId, winner.Candidate.Parsed);
                 }
             }
 
@@ -160,10 +165,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     public sealed class RefreshWantedMetadataV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private readonly WorkMetadata _metadata;
+        private readonly MangaMetadata _manga;
 
-        internal RefreshWantedMetadataV1(WorkMetadata metadata)
+        internal RefreshWantedMetadataV1(WorkMetadata metadata, MangaMetadata manga)
         {
             _metadata = metadata;
+            _manga = manga;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -173,7 +180,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Wanted series learn about new episodes once a day.
+            // Wanted series and Manga learn about new episodes and volumes once a day.
             var stale = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -185,7 +192,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         identity."WorkId"
                     FROM
                         "WantedItems" AS wanted
-                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = wanted."WorkId" AND identity."Namespace" = 'tmdb_tv'
+                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = wanted."WorkId" AND identity."Namespace" IN ('tmdb_tv', 'anilist')
                     WHERE
                         NOT wanted."IsPaused"
                         AND identity."UpdatedAt" < now() - interval '1 day'
@@ -200,13 +207,21 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return new UpdateResult(true);
             }
 
-            // Without a reachable provider the series keep their known episodes.
+            // Without a reachable provider the Works keep their known units.
             try
             {
-                var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                foreach (var identity in stale)
+                foreach (var identity in stale.Where(identity => identity.Namespace == MangaMetadata.Namespace))
                 {
-                    await _metadata.ImportAsync(Context, connection, MediaType.Series, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                    await _manga.ImportAsync(Context, identity.Value, CancellationToken);
+                }
+
+                if (stale.Any(identity => identity.Namespace != MangaMetadata.Namespace))
+                {
+                    var connection = await _metadata.ConnectAsync(Context, CancellationToken);
+                    foreach (var identity in stale.Where(identity => identity.Namespace != MangaMetadata.Namespace))
+                    {
+                        await _metadata.ImportAsync(Context, connection, MediaType.Series, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                    }
                 }
             }
             catch (ServiceUnavailableException)
@@ -440,9 +455,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Ebooks must be what their names say.
+            // Ebooks and comics must be what their names say.
             var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author)
-                .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) != MediaAssetType.Ebook || IsEbook(source, placement))
+                .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
                 .ToArray();
             if (placements.Length == 0)
             {
@@ -513,12 +528,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             await _plex.RefreshAsync(Context, download.MediaTypeId, CancellationToken);
         }
 
-        private static bool IsEbook(string source, ImportPlacementData placement)
+        private static bool IsDocument(string source, ImportPlacementData placement)
         {
             var header = new byte[128];
             using var stream = File.OpenRead(StorageFileSystem.ResolveFile(source, placement.SourcePath));
             var read = stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
-            return LibraryFileTypes.IsEbookContent(placement.Extension, header.AsSpan(0, read));
+            return LibraryFileTypes.IsDocumentContent(placement.Extension, header.AsSpan(0, read));
         }
 
         // Jularr downloads direct-source books itself into staging, then imports them like any other job.

@@ -83,5 +83,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         // Optional non-video container/document quality supplied by a media-specific parser.
         public string? DocumentFormat { get; init; }
+
+        // Volume range of a Manga release; empty for a complete or unnumbered one.
+        public int? VolumeStart { get; init; }
+        public int? VolumeEnd { get; init; }
     }
 }

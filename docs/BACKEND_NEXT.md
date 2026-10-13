@@ -134,7 +134,9 @@ Requested languages order releases of equal quality. TMDB (key in the Providers
 registry) creates movies and series with tmdb/tvdb/imdb mappings and the episode
 catalog. Wanted series are searched per season: a fully aired, empty season as a
 pack, otherwise episode by episode, several downloads in parallel; requests complete
-once every aired regular episode exists. The other media types, profile editing,
+once every aired regular episode exists. Books and Light Novels come through Open Library and
+direct sources; Manga through AniList with volumes as units on the same unit pass as series
+episodes. The other media types, profile editing,
 Prowlarr/Sonarr/Radarr one-time import follow. The
 remaining modules are not advertised as available. Tracking must be rebuilt from
 the desired progress/resume/history behavior, not copied from the buggy legacy

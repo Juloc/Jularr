@@ -13,6 +13,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Data.Common;
+using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.AnnasArchive;
 using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Gutenberg;
@@ -121,6 +122,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<BookMetadata>();
+            services.TryAddTransient<MangaMetadata>();
             services.TryAddTransient<DirectSources>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddTransient<ReadingContent>();
@@ -188,6 +190,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true);
+            AddClient<AniListClient>(services, 15, 4, agent: true);
             AddClient<PlexServerClient>(services, 20, 16);
             AddClient<NewznabClient>(services, 30, 16);
             AddClient<TmdbClient>(services, 15, 4, baseAddress: new Uri("https://api.themoviedb.org/3/"));

@@ -103,10 +103,10 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { 7020 }, AcquisitionSelectionLogic.ReadCategories(AcquisitionKind.Book, [2040, 5040, 7020], null));
             CollectionAssert.AreEqual(new[] { 7000 }, AcquisitionSelectionLogic.ReadCategories(AcquisitionKind.Book, [2040], null));
             CollectionAssert.AreEqual(new[] { 2040 }, AcquisitionSelectionLogic.ReadCategories(AcquisitionKind.Movie, [2040, 7020], null));
-            Assert.IsTrue(LibraryFileTypes.IsEbookContent(".epub", ReadingTests.BuildEpub("x").AsSpan(0, 128)));
-            Assert.IsTrue(LibraryFileTypes.IsEbookContent(".pdf", "%PDF-1.7"u8));
-            Assert.IsFalse(LibraryFileTypes.IsEbookContent(".epub", "PK\u0003\u0004 something else entirely here..........................."u8));
-            Assert.IsFalse(LibraryFileTypes.IsEbookContent(".pdf", "<html>"u8));
+            Assert.IsTrue(LibraryFileTypes.IsDocumentContent(".epub", ReadingTests.BuildEpub("x").AsSpan(0, 128)));
+            Assert.IsTrue(LibraryFileTypes.IsDocumentContent(".pdf", "%PDF-1.7"u8));
+            Assert.IsFalse(LibraryFileTypes.IsDocumentContent(".epub", "PK\u0003\u0004 something else entirely here..........................."u8));
+            Assert.IsFalse(LibraryFileTypes.IsDocumentContent(".pdf", "<html>"u8));
         }
 
         private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeBookSources sources)

@@ -15,11 +15,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
+        private readonly MangaMetadata _manga;
 
-        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books)
+        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga)
         {
             _metadata = metadata;
             _books = books;
+            _manga = manga;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -29,12 +31,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Books come from Open Library, video from TMDB.
+            // Books come from Open Library, Manga from AniList, video from TMDB.
             IReadOnlyList<MetadataSearchResultV1> results;
             if (BookMetadata.Handles(Data.MediaTypeId))
             {
                 results = [.. (await _books.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.WorkId, Limit(result.Title, 500)!,
                     null, result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, Limit(string.Join(", ", result.Authors), 4000)))];
+            }
+            else if (MangaMetadata.Handles(Data.MediaTypeId))
+            {
+                results = [.. (await _manga.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.Id.ToString(CultureInfo.InvariantCulture),
+                    Limit(MangaMetadata.Title(result), 500)!, Limit(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Description, 4000), null,
+                    Limit(string.Join(", ", result.Authors), 4000)))];
             }
             else
             {
@@ -60,7 +68,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         identity."Namespace" = @Namespace
                         AND identity."Value" IN (SELECT jsonb_array_elements_text(@Values::jsonb));
                     """;
-                var space = BookMetadata.Handles(Data.MediaTypeId) ? BookMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
+                var space = BookMetadata.Handles(Data.MediaTypeId) ? BookMetadata.Namespace : MangaMetadata.Handles(Data.MediaTypeId) ? MangaMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
                 sql.Parameters.Add(new WorkIdentityLookupData(space, JsonSerializer.Serialize(results.Select(result => result.ExternalId))));
                 return ctx.ReadSql.ReadListAsync<WorkIdentityData>(sql, ct);
             }, CancellationToken);
@@ -77,11 +85,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
+        private readonly MangaMetadata _manga;
 
-        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books)
+        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga)
         {
             _metadata = metadata;
             _books = books;
+            _manga = manga;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -96,6 +106,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             if (BookMetadata.Handles(Data.MediaTypeId))
             {
                 workId = await _books.ImportAsync(Context, Data.MediaTypeId, Data.ExternalId, CancellationToken);
+            }
+            else if (MangaMetadata.Handles(Data.MediaTypeId))
+            {
+                workId = await _manga.ImportAsync(Context, Data.ExternalId, CancellationToken);
             }
             else
             {
@@ -112,11 +126,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
+        private readonly MangaMetadata _manga;
 
-        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books)
+        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga)
         {
             _metadata = metadata;
             _books = books;
+            _manga = manga;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -126,7 +142,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Only Works mapped to TMDB or Open Library can be refreshed.
+            // Only Works mapped to TMDB, Open Library or AniList can be refreshed.
             var (work, identity) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct),
                 await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, Parameters.WorkId, ct)), CancellationToken);
             if (identity is null)
@@ -137,6 +153,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             if (identity.Namespace == BookMetadata.Namespace)
             {
                 await _books.ImportAsync(Context, work.MediaTypeId, identity.Value, CancellationToken);
+            }
+            else if (identity.Namespace == MangaMetadata.Namespace)
+            {
+                await _manga.ImportAsync(Context, identity.Value, CancellationToken);
             }
             else
             {
@@ -182,7 +202,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     "WorkExternalIdentities" AS identity
                 WHERE
                     identity."WorkId" = @Id
-                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary');
+                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'anilist');
                 """;
             sql.Parameters.Add(new WorkIdData(workId));
             return ctx.ReadSql.ReadOptionalAsync<WorkIdentityData>(sql, ct);

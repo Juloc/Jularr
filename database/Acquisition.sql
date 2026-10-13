@@ -77,6 +77,7 @@ INSERT INTO "AcquisitionProfiles" ("Name", "MediaTypeId", "IsDefault", "Definiti
     ('Movies 1080p', 1, TRUE, '{"AllowedQualities":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"QualityOrder":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"UpgradeAllowed":true,"UpgradeCutoffQuality":"WEB-1080p","MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Name":"Prefer Proper","Field":"Proper","Match":"Equals","Value":"true","Score":5},{"Name":"Prefer Repack","Field":"Repack","Match":"Equals","Value":"true","Score":5}]}'),
     ('Series 1080p', 2, TRUE, '{"AllowedQualities":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"QualityOrder":["BLURAY-1080p","WEB-1080p","HDTV-1080p","BLURAY-720p","WEB-720p","HDTV-720p"],"UpgradeAllowed":true,"UpgradeCutoffQuality":"WEB-1080p","MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Name":"Prefer Proper","Field":"Proper","Match":"Equals","Value":"true","Score":5},{"Name":"Prefer Repack","Field":"Repack","Match":"Equals","Value":"true","Score":5}]}'),
     ('Books', 3, TRUE, '{"AllowedQualities":["EPUB","AZW3","MOBI","PDF","EBOOK"],"QualityOrder":["EPUB","AZW3","MOBI","PDF","EBOOK"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Name":"Prefer Retail","Field":"RawTitle","Match":"Contains","Value":"retail","Score":5}]}'),
+    ('Manga', 4, TRUE, '{"AllowedQualities":["CBZ","CBR","EPUB","PDF","COMIC"],"QualityOrder":["CBZ","CBR","EPUB","PDF","COMIC"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Name":"Prefer Digital","Field":"RawTitle","Match":"Contains","Value":"digital","Score":5}]}'),
     ('Light Novels', 5, TRUE, '{"AllowedQualities":["EPUB","AZW3","MOBI","PDF","EBOOK"],"QualityOrder":["EPUB","AZW3","MOBI","PDF","EBOOK"],"UpgradeAllowed":false,"UpgradeCutoffQuality":null,"MinimumSizeBytes":null,"MaximumSizeBytes":null,"MustContain":[],"MustNotContain":[],"RequiredRegex":[],"RejectedRegex":[],"ScoreRules":[{"Name":"Prefer Retail","Field":"RawTitle","Match":"Contains","Value":"retail","Score":5}]}');
 
 -- Whole-Work targets with their automatic search state.
@@ -110,14 +111,14 @@ CREATE TABLE "AcquisitionReleases" (
     "Title" varchar(1000) NOT NULL,
     "SourceUrl" varchar(2048) NULL CHECK ("SourceUrl" ~ '^https?://'),
     "QualityKey" varchar(64) NULL,
-    "SeasonNumber" smallint NULL CHECK ("SeasonNumber" >= 0),
-    "EpisodeStart" smallint NULL CHECK ("EpisodeStart" > 0),
-    "EpisodeEnd" smallint NULL CHECK ("EpisodeEnd" >= "EpisodeStart"),
+    "ParentUnitNumber" smallint NULL CHECK ("ParentUnitNumber" >= 0),
+    "UnitStart" smallint NULL CHECK ("UnitStart" >= 0),
+    "UnitEnd" smallint NULL CHECK ("UnitEnd" >= "UnitStart"),
     "AcquisitionReleaseStatusTypeId" smallint NOT NULL REFERENCES "AcquisitionReleaseStatusTypes" ("Id"),
     "ReasonKey" varchar(64) NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
-    CHECK (("EpisodeStart" IS NULL) = ("EpisodeEnd" IS NULL) AND ("EpisodeStart" IS NULL OR "SeasonNumber" IS NOT NULL)),
+    CHECK (("UnitStart" IS NULL) = ("UnitEnd" IS NULL)),
     UNIQUE ("WantedItemId", "ReleaseIdentity")
 );
 CREATE INDEX "IX_AcquisitionReleases_Recent" ON "AcquisitionReleases" ("WantedItemId", "CreatedAt" DESC, "Id" DESC);

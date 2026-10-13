@@ -17,7 +17,7 @@ namespace Jularr.Backend.Logic.Acquisition
         [GeneratedRegex(@"^(?:19|20)\d{2}$")]
         private static partial Regex YearToken();
 
-        public static ReleaseJudgement<VideoIdentityMatch> Judge(AcquisitionKind kind, string title, int? year, VideoUnit? unit, VideoUnitScope scope, ReleaseOffer offer)
+        public static ReleaseJudgement<VideoIdentityMatch> Judge(AcquisitionKind kind, string title, int? year, TargetUnit? unit, UnitSet scope, ReleaseOffer offer)
         {
             if (offer.DownloadUri is null)
             {
@@ -110,9 +110,9 @@ namespace Jularr.Backend.Logic.Acquisition
             return (VideoIdentityMatch.Matches, viaId || hasYear ? ReleaseIdentityEvidence.Exact(viaId ? "MatchesById" : "MatchesTitleAndYear") : ReleaseIdentityEvidence.Strong("Matches"));
         }
 
-        private static ReleaseJudgement<VideoIdentityMatch> JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, VideoUnit unit, VideoUnitScope scope, bool viaId)
+        private static ReleaseJudgement<VideoIdentityMatch> JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, TargetUnit unit, UnitSet scope, bool viaId)
         {
-            if (parsed.SeasonNumber != unit.SeasonNumber)
+            if (parsed.SeasonNumber != unit.ParentNumber)
             {
                 return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.WrongSeason, parsed, ReleaseIdentityEvidence.Conflict("WrongSeason", parsed.SeasonNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture)), SelectionCoverage.Single, null);
             }
@@ -121,16 +121,16 @@ namespace Jularr.Backend.Logic.Acquisition
             ReleaseIdentityEvidence Fit(string code) =>
                 title.Confidence == IdentityConfidence.Ambiguous ? title : viaId ? ReleaseIdentityEvidence.Exact(code) : ReleaseIdentityEvidence.Strong(code);
 
-            var seasonUnits = scope.All.Where(candidate => candidate.SeasonNumber == unit.SeasonNumber).ToArray();
+            var seasonUnits = scope.All.Where(candidate => candidate.ParentNumber == unit.ParentNumber).ToArray();
             if (parsed.IsSeasonPack)
             {
-                var covered = scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber);
+                var covered = scope.Wanted.Count(candidate => candidate.ParentNumber == unit.ParentNumber);
                 return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.ContainsTarget, parsed, Fit("ContainsTarget"), new SelectionCoverage(covered, scope.Wanted.Count, Math.Max(0, seasonUnits.Length - covered)), null);
             }
 
-            if (parsed.EpisodeStart is int start && parsed.EpisodeEnd is int end && unit.EpisodeNumber >= start && unit.EpisodeNumber <= end)
+            if (parsed.EpisodeStart is int start && parsed.EpisodeEnd is int end && unit.Number >= start && unit.Number <= end)
             {
-                var covered = scope.Wanted.Count(candidate => candidate.SeasonNumber == unit.SeasonNumber && candidate.EpisodeNumber >= start && candidate.EpisodeNumber <= end);
+                var covered = scope.Wanted.Count(candidate => candidate.ParentNumber == unit.ParentNumber && candidate.Number >= start && candidate.Number <= end);
                 return new ReleaseJudgement<VideoIdentityMatch>(titleMatch == VideoIdentityMatch.AmbiguousTitle ? VideoIdentityMatch.AmbiguousTitle : VideoIdentityMatch.Matches, parsed, Fit("Matches"), new SelectionCoverage(Math.Max(1, covered), scope.Wanted.Count, Math.Max(0, end - start + 1 - covered)), null);
             }
 

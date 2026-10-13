@@ -31,12 +31,16 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var (target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledSearchConnectionsAsync(ct)), CancellationToken);
 
-            // Series searches may target one season or episode.
-            EpisodeScope? scope = null;
-            if (target.MediaTypeId == MediaType.Series && Data.SeasonNumber is { } season)
+            // Series searches may target one season or episode, Manga searches one volume.
+            UnitScope? scope = null;
+            if (target.MediaTypeId == MediaType.Series && Data.ParentUnitNumber is not null || target.MediaTypeId == MediaType.Manga && Data.UnitNumber is not null)
             {
-                var episodes = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEpisodeStatesAsync(target.WantedItemId, ct), CancellationToken);
-                scope = AcquisitionSelectionLogic.ReadEpisodeScope(episodes, season, Data.EpisodeNumber);
+                var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
+                scope = AcquisitionSelectionLogic.ReadUnitScope(units, target.MediaTypeId == MediaType.Manga ? null : Data.ParentUnitNumber, Data.UnitNumber);
+            }
+            else if (Data.UnitNumber is not null)
+            {
+                throw new DataValidationException(nameof(SearchWantedDataV1.ParentUnitNumber), "required");
             }
 
             // A manual search shows every candidate and keeps the automatic schedule.

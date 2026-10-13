@@ -472,8 +472,8 @@ namespace Jularr.Backend.Tests
                 """);
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEquivalent(new[] { "https://indexer.example.test/getnzb/s1", "https://indexer.example.test/getnzb/s2e1" }, usenet.Grabbed);
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"SeasonNumber\" = 1 AND \"EpisodeStart\" IS NULL"));
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"SeasonNumber\" = 2 AND \"EpisodeStart\" = 1 AND \"EpisodeEnd\" = 1"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"ParentUnitNumber\" = 1 AND \"UnitStart\" IS NULL"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionReleases\" WHERE \"ParentUnitNumber\" = 2 AND \"UnitStart\" = 1 AND \"UnitEnd\" = 1"));
 
             // Claimed episodes are not searched again.
             await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
@@ -544,7 +544,7 @@ namespace Jularr.Backend.Tests
             var offers = new[] { Offer("Example.Movie.2020.1080p.WEB-DL.H264-AAA", "english"), Offer("Example.Movie.2020.German.DL.1080p.WEB-DL.H264-ZZZ", "german") };
             var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
             {
-                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, VideoUnitScope.Empty, offer);
+                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, UnitSet.Empty, offer);
                 return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
                     judgement.Coverage) { Languages = judgement.Languages ?? [] };
             }).ToArray());
@@ -607,7 +607,7 @@ namespace Jularr.Backend.Tests
             };
             var result = ReleaseSelectionEngine.Select(profile, offers.Select(offer =>
             {
-                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, VideoUnitScope.Empty, offer);
+                var judgement = VideoReleaseJudge.Judge(AcquisitionKind.Movie, "Example Movie", 2020, null, UnitSet.Empty, offer);
                 return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence,
                     judgement.Coverage);
             }).ToArray());

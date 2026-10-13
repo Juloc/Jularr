@@ -21,6 +21,12 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         public static IReadOnlyList<string> Order { get; } = ["EPUB", "AZW3", "MOBI", "PDF", "EBOOK"];
     }
 
+    // Manga formats, best first; COMIC is a release that does not name its format.
+    public static class MangaQualities
+    {
+        public static IReadOnlyList<string> Order { get; } = ["CBZ", "CBR", "EPUB", "PDF", "COMIC"];
+    }
+
     public static class ProfileQualities
     {
         // Media types with release qualities; empty means no profiles.
@@ -28,6 +34,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         {
             MediaType.Movie or MediaType.Series => VideoQualities.Order,
             MediaType.Book or MediaType.LightNovel => BookQualities.Order,
+            MediaType.Manga => MangaQualities.Order,
             _ => []
         };
     }

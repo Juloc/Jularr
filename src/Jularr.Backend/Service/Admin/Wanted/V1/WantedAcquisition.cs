@@ -37,7 +37,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             _offers = offers;
         }
 
-        public async Task<WantedSearchResult> SearchAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, CancellationToken ct, EpisodeScope? episodes = null)
+        public async Task<WantedSearchResult> SearchAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, CancellationToken ct, UnitScope? scope = null)
         {
             // Only supported media types with a profile can be ranked.
             if (AcquisitionSelectionLogic.GetKind(target.MediaTypeId) is not { } kind || target.Definition is null)
@@ -46,7 +46,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             var profile = AcquisitionSelectionLogic.ReadProfile(target);
-            var intent = AcquisitionSelectionLogic.ReadIntent(target, kind, episodes);
+            var intent = AcquisitionSelectionLogic.ReadIntent(target, kind, scope);
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
             var failures = 0;
@@ -69,7 +69,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 }
             }
 
-            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, episodes, offers.Values);
+            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values);
 
             // Expansion tiers only run while too few releases are usable.
             for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     }
                 });
 
-                selection = AcquisitionSelectionLogic.Select(profile, target, kind, episodes, offers.Values);
+                selection = AcquisitionSelectionLogic.Select(profile, target, kind, scope, offers.Values);
                 if (selection.Ranked.Count(evaluation => evaluation.IsSelectable) >= budget.TargetUsable)
                 {
                     break;
@@ -135,8 +135,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Reserve first so concurrent grabs cannot start a second download.
             var client = clients[0];
-            var (season, start, end) = AcquisitionSelectionLogic.ReadCoverage(target.MediaTypeId, offer.Title);
-            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, season, start, end);
+            var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(target.MediaTypeId, offer.Title);
+            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end);
             var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
 
             // The best client by priority receives the release.

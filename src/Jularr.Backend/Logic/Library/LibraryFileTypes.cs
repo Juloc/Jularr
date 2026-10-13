@@ -53,9 +53,12 @@ namespace Jularr.Backend.Logic.Library
             return Game.Contains(extension) ? MediaAssetType.Game : null;
         }
 
-        // Ebooks are recognized by their bytes, not their names.
-        public static bool IsEbookContent(string extension, ReadOnlySpan<byte> header) => extension.ToLowerInvariant() switch
+        // Ebooks and comic archives are recognized by their bytes, not their names.
+        public static bool IsDocumentContent(string extension, ReadOnlySpan<byte> header) => extension.ToLowerInvariant() switch
         {
+            ".cbz" => header.Length >= 4 && header[..4].SequenceEqual("PK\u0003\u0004"u8),
+            ".cbr" => header.Length >= 6 && header[..6].SequenceEqual("Rar!\u001A\u0007"u8),
+            ".cb7" => header.Length >= 6 && header[..6].SequenceEqual(new byte[] { 0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C }),
             ".epub" => header.Length >= 58 && header[..4].SequenceEqual("PK\u0003\u0004"u8) && header[30..38].SequenceEqual("mimetype"u8) && header.IndexOf("application/epub+zip"u8) > 0,
             ".pdf" => header.Length >= 5 && header[..5].SequenceEqual("%PDF-"u8),
             ".mobi" or ".azw3" => header.Length >= 68 && header[60..68].SequenceEqual("BOOKMOBI"u8),

@@ -455,6 +455,7 @@ namespace Jularr.Frontend.Localization
             new("wanted.search.start", "Start search"),
             new("wanted.search.season", "Season"),
             new("wanted.search.episode", "Episode"),
+            new("wanted.search.volume", "Volume"),
             new("wanted.search.empty", "No releases were found."),
             new("wanted.search.decision", "Decision"),
             new("wanted.search.score", "Score"),

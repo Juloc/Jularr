@@ -18,6 +18,7 @@ namespace Jularr.Backend.Logic.Acquisition
             MediaType.Movie => AcquisitionKind.Movie,
             MediaType.Series => AcquisitionKind.Tv,
             MediaType.Book => AcquisitionKind.Book,
+            MediaType.Manga => AcquisitionKind.Manga,
             MediaType.LightNovel => AcquisitionKind.LightNovel,
             _ => null
         };
@@ -39,11 +40,14 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // The quality a release is stored with.
-        public static string? QualityKey(MediaType mediaType, string title) => mediaType is MediaType.Book or MediaType.LightNovel
-            ? ReleaseQuality.GetKey(BookReleaseJudge.Parse(title))
-            : ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null;
+        public static string? QualityKey(MediaType mediaType, string title) => mediaType switch
+        {
+            MediaType.Book or MediaType.LightNovel => ReleaseQuality.GetKey(BookReleaseJudge.Parse(title)),
+            MediaType.Manga => ReleaseQuality.GetKey(MangaReleaseJudge.Parse(title)),
+            _ => ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null
+        };
 
-        public static SearchIntent ReadIntent(WantedTargetData target, AcquisitionKind kind, EpisodeScope? episodes)
+        public static SearchIntent ReadIntent(WantedTargetData target, AcquisitionKind kind, UnitScope? scope)
         {
             // Provider mappings in the planner's key space.
             var ids = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -54,7 +58,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
             return new SearchIntent(kind, target.CanonicalTitle)
             {
-                Aliases = target.Titles, Year = target.ReleaseYear, Creator = target.Author, ExternalIds = ids, Season = episodes?.SeasonNumber, Episode = episodes?.EpisodeNumber
+                Aliases = target.Titles, Year = target.ReleaseYear, Creator = target.Author, ExternalIds = ids, Season = kind == AcquisitionKind.Manga ? null : scope?.ParentNumber,
+                Episode = kind == AcquisitionKind.Manga ? null : scope?.UnitNumber, Volume = kind == AcquisitionKind.Manga ? scope?.UnitNumber : null
             };
         }
 
@@ -78,13 +83,16 @@ namespace Jularr.Backend.Logic.Acquisition
             new(existing.Title, existing.ConnectionId, existing.ConnectionName, existing.ConnectionPriority, existing.Guid, existing.DownloadUri, existing.InfoUrl, existing.SizeBytes,
                 existing.PublishedAt, [.. existing.Stages.Union(found.Stages)]);
 
-        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, EpisodeScope? episodes, IEnumerable<ReleaseOffer> offers)
+        public static SelectionResult Select(QualityProfile profile, WantedTargetData target, AcquisitionKind kind, UnitScope? scope, IEnumerable<ReleaseOffer> offers)
         {
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
-            return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind is AcquisitionKind.Book or AcquisitionKind.LightNovel
-                ? Candidate(offer, BookReleaseJudge.Judge(target.CanonicalTitle, target.Author, offer))
-                : Candidate(offer, VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, episodes?.Unit, episodes?.Units ?? VideoUnitScope.Empty, offer)))]);
+            return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
+            {
+                AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge(target.CanonicalTitle, target.Author, offer)),
+                AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer)),
+                _ => Candidate(offer, VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, scope?.Unit, scope?.Units ?? UnitSet.Empty, offer))
+            })]);
 
             SelectionCandidate Candidate<TMatch>(ReleaseOffer offer, ReleaseJudgement<TMatch> judgement) =>
                 new(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
@@ -105,50 +113,61 @@ namespace Jularr.Backend.Logic.Acquisition
             _ => "no_candidates"
         };
 
-        public static EpisodeScope ReadEpisodeScope(IReadOnlyList<EpisodeStateData> episodes, int seasonNumber, int? episodeNumber)
+        public static UnitScope ReadUnitScope(IReadOnlyList<UnitStateData> states, int? parentNumber, int? unitNumber)
         {
-            // Missing episodes of the season are wanted; the target is the asked or first missing one.
-            var season = episodes.Where(episode => episode.SeasonNumber == seasonNumber).ToArray();
-            var units = season.Select(episode => new VideoUnit(episode.WorkUnitId, episode.SeasonNumber, episode.EpisodeNumber, episode.HasMedia)).ToArray();
-            var wanted = units.Where(unit => season.Any(episode => episode.WorkUnitId == unit.Id && episode.IsMissing)).ToArray();
-            var target = episodeNumber is { } number
-                ? units.FirstOrDefault(unit => unit.EpisodeNumber == number) ?? new VideoUnit(0, seasonNumber, number, false)
-                : wanted.FirstOrDefault() ?? units.FirstOrDefault() ?? new VideoUnit(0, seasonNumber, 1, false);
-            return new EpisodeScope(seasonNumber, episodeNumber, target, new VideoUnitScope(units, wanted.Length > 0 ? wanted : [target]));
+            // Missing units of the group are wanted; the target is the asked or first missing one.
+            var group = states.Where(state => state.ParentNumber == parentNumber).ToArray();
+            var units = group.Select(state => new TargetUnit(state.WorkUnitId, state.ParentNumber, state.Number, state.HasMedia)).ToArray();
+            var wanted = units.Where(unit => group.Any(state => state.WorkUnitId == unit.Id && state.IsMissing)).ToArray();
+            var target = unitNumber is { } number
+                ? units.FirstOrDefault(unit => unit.Number == number) ?? new TargetUnit(0, parentNumber, number, false)
+                : wanted.FirstOrDefault() ?? units.FirstOrDefault() ?? new TargetUnit(0, parentNumber, 1, false);
+            return new UnitScope(parentNumber, unitNumber, target, new UnitSet(units, wanted.Length > 0 ? wanted : [target]));
         }
 
-        public static EpisodeScope? ReadNextSeriesScope(IReadOnlyList<EpisodeStateData> episodes, int seasonNumber, bool firstAttempt)
+        public static UnitScope? ReadNextUnitScope(IReadOnlyList<UnitStateData> states, int? parentNumber, bool firstAttempt)
         {
-            // A fully aired season with nothing yet is searched as a pack, otherwise episode by episode.
-            var season = episodes.Where(episode => episode.SeasonNumber == seasonNumber).ToArray();
-            if (season.FirstOrDefault(episode => episode.IsMissing) is not { } next)
+            // A group with nothing yet (a fully aired season, a Manga without volumes) is searched as a pack, otherwise unit by unit.
+            var group = states.Where(state => state.ParentNumber == parentNumber).ToArray();
+            if (group.FirstOrDefault(state => state.IsMissing) is not { } next)
             {
                 return null;
             }
 
-            return ReadEpisodeScope(episodes, seasonNumber, firstAttempt && season.All(episode => episode.IsMissing) ? null : next.EpisodeNumber);
+            return ReadUnitScope(states, parentNumber, firstAttempt && group.All(state => state.IsMissing) ? null : next.Number);
         }
 
-        public static IReadOnlyList<EpisodeStateData> Claim(IReadOnlyList<EpisodeStateData> episodes, EpisodeScope scope, ReleaseInfo? parsed)
+        public static IReadOnlyList<UnitStateData> Claim(IReadOnlyList<UnitStateData> states, UnitScope scope, MediaType mediaType, ReleaseInfo? parsed)
         {
-            // A grabbed release claims its season or episode range for the rest of the pass.
-            var start = parsed?.EpisodeStart ?? scope.Unit.EpisodeNumber;
-            var end = parsed?.EpisodeEnd ?? start;
-            return episodes.Select(episode => episode.IsMissing && episode.SeasonNumber == scope.SeasonNumber
-                && (parsed is null || parsed.IsSeasonPack || episode.EpisodeNumber >= start && episode.EpisodeNumber <= end)
-                    ? new EpisodeStateData(episode.WorkUnitId, episode.SeasonNumber, episode.EpisodeNumber, episode.IsAired, episode.HasMedia, true)
-                    : episode).ToArray();
+            // A grabbed release claims its group or unit range for the rest of the pass.
+            var (start, end, pack) = ReadRange(mediaType, parsed);
+            var first = start ?? scope.Unit.Number;
+            var last = end ?? first;
+            return states.Select(state => state.IsMissing && state.ParentNumber == scope.ParentNumber && (parsed is null || pack || state.Number >= first && state.Number <= last)
+                ? new UnitStateData(state.WorkUnitId, state.ParentNumber, state.Number, state.IsAvailable, state.HasMedia, true)
+                : state).ToArray();
         }
 
-        public static (int? Season, int? Start, int? End) ReadCoverage(MediaType mediaType, string title)
+        public static (int? Parent, int? Start, int? End) ReadCoverage(MediaType mediaType, string title)
         {
-            // Series releases claim a season or an episode range.
+            // Series releases claim a season or an episode range, Manga releases a volume range or the whole Work.
+            if (mediaType == MediaType.Manga)
+            {
+                var (start, end, _) = ReadRange(mediaType, MangaReleaseJudge.Parse(title));
+                return (null, start, end);
+            }
+
             if (mediaType != MediaType.Series || !ReleaseParser.TryParse(title, out var parsed) || parsed.SeasonNumber is not { } season)
             {
                 return (null, null, null);
             }
 
-            return parsed.IsSeasonPack || parsed.EpisodeStart is not { } first ? (season, null, null) : (season, first, Math.Max(first, parsed.EpisodeEnd ?? first));
+            var (first, last, pack) = ReadRange(mediaType, parsed);
+            return pack || first is null ? (season, null, null) : (season, first, last);
         }
+
+        private static (int? Start, int? End, bool Pack) ReadRange(MediaType mediaType, ReleaseInfo? parsed) => mediaType == MediaType.Manga
+            ? (parsed?.VolumeStart, parsed?.VolumeStart is { } volume ? Math.Max(volume, parsed.VolumeEnd ?? volume) : null, parsed?.VolumeStart is null)
+            : (parsed?.EpisodeStart, parsed?.EpisodeStart is { } episode ? Math.Max(episode, parsed.EpisodeEnd ?? episode) : null, parsed?.IsSeasonPack == true);
     }
 }

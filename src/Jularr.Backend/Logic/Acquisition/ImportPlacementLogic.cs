@@ -34,6 +34,11 @@ namespace Jularr.Backend.Logic.Acquisition
                 return PlanBook(title, year, author, files);
             }
 
+            if (mediaType == MediaType.Manga)
+            {
+                return PlanManga(title, files);
+            }
+
             var videos = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video && !MediaPathParser.IsSample(file.RelativePath)).ToArray();
             var name = SafeName(title);
             var quality = qualityKey is { Length: > 0 } ? " [" + SafeName(qualityKey) + "]" : "";
@@ -88,6 +93,27 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
+        // One file per volume, the largest; a single unnumbered file is the whole series.
+        private static IReadOnlyList<ImportPlacementData> PlanManga(string title, IReadOnlyList<StorageFile> files)
+        {
+            var name = SafeName(title);
+            var documents = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Comic or MediaAssetType.Ebook)
+                .Select(file => (File: file, Volume: MangaReleaseJudge.Parse(Path.GetFileNameWithoutExtension(file.RelativePath)).VolumeStart))
+                .ToArray();
+            var placements = new List<ImportPlacementData>();
+            foreach (var volume in documents.Where(document => document.Volume is not null).GroupBy(document => document.Volume!.Value).Select(group => group.MaxBy(document => document.File.SizeBytes)))
+            {
+                AddGroup(placements, files, volume.File, $"{name}/{name} v{volume.Volume!.Value.ToString("00", CultureInfo.InvariantCulture)}", WorkUnitType.Volume, volume.Volume, null);
+            }
+
+            if (placements.Count == 0 && documents.Length == 1)
+            {
+                AddGroup(placements, files, documents[0].File, $"{name}/{name}", null, null, null);
+            }
+
+            return placements;
+        }
+
         // Taken names are never reused; a counter keeps both files.
         public static string Alternative(string stem, int attempt) => attempt <= 1 ? stem : $"{stem} ({attempt.ToString(CultureInfo.InvariantCulture)})";
 
@@ -104,20 +130,20 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        private static void AddGroup(List<ImportPlacementData> placements, IReadOnlyList<StorageFile> files, StorageFile video, string stem, WorkUnitType? unitType, decimal? unitNumber,
+        private static void AddGroup(List<ImportPlacementData> placements, IReadOnlyList<StorageFile> files, StorageFile media, string stem, WorkUnitType? unitType, decimal? unitNumber,
             decimal? parentUnitNumber)
         {
             var group = placements.Count;
-            var extension = Path.GetExtension(video.RelativePath).ToLowerInvariant();
+            var extension = Path.GetExtension(media.RelativePath).ToLowerInvariant();
             if (!IsStorable(stem + extension))
             {
                 return;
             }
 
-            placements.Add(new ImportPlacementData(group, video.RelativePath, stem, extension, true, unitType, unitNumber, parentUnitNumber));
+            placements.Add(new ImportPlacementData(group, media.RelativePath, stem, extension, true, unitType, unitNumber, parentUnitNumber));
 
             // Subtitles named like the video follow it.
-            var videoStem = video.RelativePath[..^Path.GetExtension(video.RelativePath).Length];
+            var videoStem = media.RelativePath[..^Path.GetExtension(media.RelativePath).Length];
             foreach (var subtitle in files.Where(file => file.RelativePath.StartsWith(videoStem + ".", StringComparison.Ordinal) && LibraryFileTypes.IsSubtitle(file.RelativePath)))
             {
                 var suffix = subtitle.RelativePath[videoStem.Length..].ToLowerInvariant();

@@ -49,8 +49,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
             var fields = Regex.Matches(html, "id=\"(form-[^\"]+-IsEnabled)\"").Select(match => match.Groups[1].Value).ToArray();
-            Assert.AreEqual(4, fields.Length);
-            Assert.AreEqual(4, fields.Distinct(StringComparer.Ordinal).Count());
+            Assert.AreEqual(5, fields.Length);
+            Assert.AreEqual(5, fields.Distinct(StringComparer.Ordinal).Count());
             var csrf = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
             var id = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'plex'"))!;
             using var incomplete = await host.SendAsync(HttpMethod.Post, "/Admin/Providers?providerId=" + id, new Dictionary<string, string>

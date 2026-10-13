@@ -145,52 +145,52 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public IReadOnlyList<string>? Languages { get; init; }
     }
 
-    // One canonical episode a video search targets; movies have none.
-    internal sealed class VideoUnit
+    // One canonical unit a search targets: an episode in its season or a volume; movies and books have none.
+    internal sealed class TargetUnit
     {
-        public VideoUnit(long id, int seasonNumber, int episodeNumber, bool hasFile)
+        public TargetUnit(long id, int? parentNumber, int number, bool hasFile)
         {
             Id = id;
-            SeasonNumber = seasonNumber;
-            EpisodeNumber = episodeNumber;
+            ParentNumber = parentNumber;
+            Number = number;
             HasFile = hasFile;
         }
 
         public long Id { get; }
-        public int SeasonNumber { get; }
-        public int EpisodeNumber { get; }
+        public int? ParentNumber { get; }
+        public int Number { get; }
         public bool HasFile { get; }
     }
 
-    // The units of a Series a search is for.
-    internal sealed class VideoUnitScope
+    // The units of a Work a search is for.
+    internal sealed class UnitSet
     {
-        public VideoUnitScope(IReadOnlyList<VideoUnit> all, IReadOnlyList<VideoUnit> wanted)
+        public UnitSet(IReadOnlyList<TargetUnit> all, IReadOnlyList<TargetUnit> wanted)
         {
             All = all;
             Wanted = wanted;
         }
 
-        public IReadOnlyList<VideoUnit> All { get; }
-        public IReadOnlyList<VideoUnit> Wanted { get; }
-        public static VideoUnitScope Empty { get; } = new([], []);
+        public IReadOnlyList<TargetUnit> All { get; }
+        public IReadOnlyList<TargetUnit> Wanted { get; }
+        public static UnitSet Empty { get; } = new([], []);
     }
 
-    // The season or episode a series search is for and the units it may cover.
-    internal sealed class EpisodeScope
+    // The group (season) and unit a search is for and the units it may cover; no unit number means the whole group.
+    internal sealed class UnitScope
     {
-        public EpisodeScope(int seasonNumber, int? episodeNumber, VideoUnit unit, VideoUnitScope units)
+        public UnitScope(int? parentNumber, int? unitNumber, TargetUnit unit, UnitSet units)
         {
-            SeasonNumber = seasonNumber;
-            EpisodeNumber = episodeNumber;
+            ParentNumber = parentNumber;
+            UnitNumber = unitNumber;
             Unit = unit;
             Units = units;
         }
 
-        public int SeasonNumber { get; }
-        public int? EpisodeNumber { get; }
-        public VideoUnit Unit { get; }
-        public VideoUnitScope Units { get; }
+        public int? ParentNumber { get; }
+        public int? UnitNumber { get; }
+        public TargetUnit Unit { get; }
+        public UnitSet Units { get; }
     }
 
     internal sealed class WantedSearchResult

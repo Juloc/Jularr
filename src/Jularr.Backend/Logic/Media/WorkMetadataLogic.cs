@@ -184,7 +184,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Seasons first, then their episodes; existing units keep their identity.
+            // Seasons first, then their episodes, or volumes; existing units keep their identity.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -192,7 +192,25 @@ namespace Jularr.Backend.Logic.Media
                     SELECT
                         *
                     FROM
-                        jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Title" text, "ReleasedOn" date)
+                        jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Title" text, "ReleasedOn" date)
+                ), volumes AS (
+                    INSERT INTO
+                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn")
+                    SELECT
+                        @Id,
+                        NULL,
+                        3,
+                        item."Volume",
+                        NULLIF(btrim(item."Title"), ''),
+                        item."ReleasedOn"
+                    FROM
+                        item
+                    WHERE
+                        item."Volume" IS NOT NULL
+                    ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
+                    SET
+                        "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
+                        "ReleasedOn" = COALESCE(EXCLUDED."ReleasedOn", "WorkUnits"."ReleasedOn")
                 ), seasons AS (
                     INSERT INTO
                         "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn")
@@ -206,7 +224,8 @@ namespace Jularr.Backend.Logic.Media
                     FROM
                         item
                     WHERE
-                        item."Episode" IS NULL
+                        item."Season" IS NOT NULL
+                        AND item."Episode" IS NULL
                     ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
                     SET
                         "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),

@@ -105,10 +105,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return LocalRedirect(Address(PageNumber, WantedItemId, HistoryTab));
         }
 
-        public async Task<IActionResult> OnPostSearchAsync(int? seasonNumber, int? episodeNumber)
+        public async Task<IActionResult> OnPostSearchAsync(int? parentUnitNumber, int? unitNumber)
         {
             // Results belong to this response; grabs pick from the server-side search.
-            _search = new SearchWantedDataV1(seasonNumber, episodeNumber);
+            _search = new SearchWantedDataV1(parentUnitNumber, unitNumber);
             await LoadDataAsync();
             _candidates = await search.ExecuteAsync<BaseDataList<WantedReleaseCandidateV1>>(new WantedItemParametersV1(SelectedId()), _search, HttpContext.RequestAborted);
             PreparePage();
@@ -142,13 +142,17 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
         private void DefineSearch(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
         {
-            // Series searches may narrow to a season or episode.
+            // Series searches may narrow to a season or episode, Manga searches to a volume.
             content.Add(new Form<SearchWantedDataV1>(form =>
             {
                 if (selected.MediaTypeId == MediaType.Series)
                 {
-                    form.Number(data => data.SeasonNumber, "wanted.search.season");
-                    form.Number(data => data.EpisodeNumber, "wanted.search.episode");
+                    form.Number(data => data.ParentUnitNumber, "wanted.search.season");
+                    form.Number(data => data.UnitNumber, "wanted.search.episode");
+                }
+                else if (selected.MediaTypeId == MediaType.Manga)
+                {
+                    form.Number(data => data.UnitNumber, "wanted.search.volume");
                 }
 
                 form.Submit("wanted.search.start");

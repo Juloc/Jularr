@@ -169,28 +169,18 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class SearchWantedDataV1 : BaseData
     {
-        public SearchWantedDataV1(int? seasonNumber = null, int? episodeNumber = null)
+        public SearchWantedDataV1(int? parentUnitNumber = null, int? unitNumber = null)
         {
-            SeasonNumber = seasonNumber;
-            EpisodeNumber = episodeNumber;
+            ParentUnitNumber = parentUnitNumber;
+            UnitNumber = unitNumber;
         }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SeasonNumber))]
-        public int? SeasonNumber { get; }
+        // A season, optionally with its episode, or a volume.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ParentUnitNumber))]
+        public int? ParentUnitNumber { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.EpisodeStart))]
-        public int? EpisodeNumber { get; }
-
-        public override void Validate()
-        {
-            base.Validate();
-
-            // An episode belongs to a season.
-            if (EpisodeNumber is not null && SeasonNumber is null)
-            {
-                throw new DataValidationException(nameof(SeasonNumber), "required");
-            }
-        }
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart))]
+        public int? UnitNumber { get; }
     }
 
     public sealed class GrabWantedReleaseDataV1 : BaseData
