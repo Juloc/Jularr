@@ -30,9 +30,9 @@ namespace Jularr.Frontend.Pages.User.Player
                     "/api/v1/playback/sessions/", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "");
                 page.Content.Add(new UiPlayer(source, assets));
             }
-            else if (FormError is not null)
+            else if (Error is not null)
             {
-                page.Content.Add(new P(new Text(FormError.ResourceKey)).Class("player__status").Attribute("role", "alert"));
+                page.Content.Add(new P(new Text(Error.ResourceKey)).Class("player__status").Attribute("role", "alert"));
             }
         }
 

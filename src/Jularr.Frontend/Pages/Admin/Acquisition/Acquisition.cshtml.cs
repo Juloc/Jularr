@@ -58,6 +58,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     if (list.Items.Count == list.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
                     split.Primary.Add(new A(new Text("acquisition.connection.addIndexer")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Newznab)));
                     split.Primary.Add(new A(new Text("acquisition.connection.addClient")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Sabnzbd)));
+                    split.Primary.Add(new A(new Text("acquisition.connection.addUsenet")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Usenet)));
                 }
 
                 if (type is { } selectedType)
@@ -81,7 +82,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
             }).MasterDetail(type is not null, Address()));
 
-            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -92,10 +93,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
-            [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username)
+            [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
+            int? maxConnections)
         {
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", Blank(apiKey), isEnabled, priority, Categories(categories),
-                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username));
+                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username), maxConnections);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -134,7 +136,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
-                    selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username)
+                    selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections)
                 : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, SuggestedUrl ?? "", null, true, type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [],
                     null, null, null));
 
@@ -144,7 +146,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 form.Text(item => item.Name, "acquisition.connection.name");
                 form.Text(item => item.BaseUrl, "acquisition.connection.baseUrl");
                 // Catalog logins belong to the instance; keys and passwords are never shown again.
-                if (type == AcquisitionConnectionType.Opds)
+                if (type is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet)
                 {
                     form.Text(item => item.Username, "acquisition.connection.username", "username");
                     form.Password(item => item.ApiKey, "acquisition.connection.password", "new-password");
@@ -167,6 +169,12 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     form.Text(item => item.Categories, "acquisition.connection.categories");
                 }
 
+                // News servers allow a limited number of sessions.
+                if (type == AcquisitionConnectionType.Usenet)
+                {
+                    form.Number(item => item.MaxConnections, "acquisition.connection.maxConnections");
+                }
+
                 // Only download clients place files and report their own paths.
                 if (type == AcquisitionConnectionType.Sabnzbd)
                 {
@@ -176,7 +184,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 form.Submit("common.save");
-            }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : FormError);
+            }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : Error);
         }
 
         private static IUiComponent Health(AcquisitionConnectionDetailsV1 item) =>

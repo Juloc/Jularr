@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Http;
@@ -44,6 +45,11 @@ namespace Jularr.Frontend.Framework
             {
                 Capabilities = await capabilitiesService.ExecuteAsync<InstanceCapabilitiesDetailsV1>(new ReadInstanceCapabilitiesParametersV1(), token);
             }
+
+            // Apply resolved culture.
+            var culture = CultureInfo.GetCultureInfo(_catalog.Locale);
+            CultureInfo.CurrentUICulture = culture;
+            CultureInfo.CurrentCulture = culture;
         }
     }
 }

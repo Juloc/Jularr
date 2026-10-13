@@ -13,7 +13,7 @@ namespace Jularr.Frontend.Pages.Account.Logout
         {
             page.Title("account.logout.title");
             page.Content.Add(new Form<SessionParametersV1>(form => form.Submit("account.logout.submit"), Url.Page("/Account/Logout/Logout"),
-                antiforgery.GetAndStoreTokens(HttpContext).RequestToken, error: FormError));
+                antiforgery.GetAndStoreTokens(HttpContext).RequestToken, error: Error));
         }
 
         public IActionResult OnGet()

@@ -43,7 +43,7 @@ namespace Jularr.Frontend.Pages.User.Requests
                 if (requests.Items.Count == requests.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", "/Requests?PageNumber=" + (requests.Page + 1)));
             }
 
-            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
 
         // The user passes the source's check in their own browser; the server takes the file link from there.
@@ -55,7 +55,7 @@ namespace Jularr.Frontend.Pages.User.Requests
                 form.Text(data => data.SourceLinkUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, "/Requests?handler=SourceLink&requestId=" + requestId.ToString(CultureInfo.InvariantCulture), csrf, new SaveRequestSourceLinkDataV1(operationId, ""),
-                FormError?.Field == nameof(SaveRequestSourceLinkDataV1.SourceLinkUrl) ? FormError : null));
+                Error?.Field == nameof(SaveRequestSourceLinkDataV1.SourceLinkUrl) ? Error : null));
 
         public async Task<IActionResult> OnPostSourceLinkAsync([BindRequired] long requestId, [BindRequired] long operationId, string? sourceLinkUrl)
         {

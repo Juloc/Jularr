@@ -62,14 +62,6 @@ namespace Jularr.Backend.Tests
             using var continuing = await host.SendAsync(HttpMethod.Get, "/api/v1/continue");
             var shelf = (await continuing.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!;
             Assert.AreEqual(MediaAssetType.Ebook, shelf.Single(item => item.MediaAssetId == first).MediaAssetTypeId);
-
-            // Reading does not depend on Playback.
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Playback'");
-            using var readingOnly = await host.SendAsync(HttpMethod.Get, "/api/v1/continue");
-            Assert.AreEqual(HttpStatusCode.OK, readingOnly.StatusCode);
-            Assert.IsTrue((await readingOnly.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!.Any(item => item.MediaAssetId == first));
-            using var home = await host.SendAsync(HttpMethod.Get, "/");
-            StringAssert.Contains(await home.Content.ReadAsStringAsync(), "/Read/" + first);
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);

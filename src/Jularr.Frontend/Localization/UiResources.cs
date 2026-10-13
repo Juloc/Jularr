@@ -8,8 +8,6 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
-            new("progress.saveFailed", "Progress could not be saved. Jularr will retry temporary failures."),
-            new("discover.loadRecommendations", "Load recommendations"),
             new("appearance.accent", "Accent color"),
             new("appearance.jularrRed", "Jularr red"),
             new("appearance.jularrPurple", "Jularr purple"),
@@ -238,6 +236,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.type.Gutenberg", "Project Gutenberg (public-domain books)"),
             new("acquisition.connection.type.Opds", "OPDS catalog"),
             new("acquisition.connection.type.AnnasArchive", "Anna's Archive"),
+            new("acquisition.connection.type.Usenet", "News server"),
             new("acquisition.connection.username", "User name"),
             new("acquisition.connection.password", "Password"),
             new("acquisition.connection.memberKey", "Member key"),
@@ -248,6 +247,8 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.localPath", "Same path for Jularr"),
             new("acquisition.connection.addIndexer", "Add indexer"),
             new("acquisition.connection.addClient", "Add download client"),
+            new("acquisition.connection.addUsenet", "Add news server"),
+            new("acquisition.connection.maxConnections", "Connections"),
             new("acquisition.connection.test", "Test connection"),
             new("acquisition.connection.delete", "Delete"),
             new("acquisition.connection.unchecked", "Not tested"),

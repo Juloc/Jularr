@@ -18,7 +18,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
         {
             page.Title("settings.sessions");
             page.Navigation("nav.settings");
-            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             if (_sessions is not null)
             {
                 foreach (var session in _sessions.Items)

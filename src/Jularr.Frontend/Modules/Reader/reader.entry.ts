@@ -1,5 +1,4 @@
 import "./reader.scss";
-import { progressReporter } from "../Tracking/Progress";
 
 // Reader client: settings, exact block position and progress reporting.
 interface ReaderSettings {
@@ -24,11 +23,7 @@ if (reader) {
     const sections = Number(reader.dataset.sections);
     let settings = load();
     let timer = 0;
-    const allBlocks = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
-    const save = progressReporter(reader.dataset.progressUrl!, reader.dataset.antiforgery!, failed => {
-        const feedback = reader.querySelector<HTMLElement>('[data-role=save-error]');
-        if (feedback) feedback.hidden = !failed;
-    });
+    let lastLocator = "";
 
     apply();
     restore();
@@ -40,8 +35,8 @@ if (reader) {
         if (button.dataset.setting === "size") settings.size = Math.min(2, Math.max(0.8, settings.size + (value === "larger" ? 0.1 : -0.1)));
         if (button.dataset.setting === "theme") settings.theme = value as ReaderSettings["theme"];
         if (button.dataset.setting === "mode") settings.mode = value as ReaderSettings["mode"];
+        localStorage.setItem(SettingsKey, JSON.stringify(settings));
         apply();
-        try { localStorage.setItem(SettingsKey, JSON.stringify(settings)); } catch { /* Optional device storage. */ }
     }));
 
     // Paged mode turns pages; the edges continue to the neighbouring section.
@@ -61,12 +56,7 @@ if (reader) {
 
     function load(): ReaderSettings {
         try {
-            const value = JSON.parse(localStorage.getItem(SettingsKey) ?? "{}") as Partial<ReaderSettings> | null;
-            return {
-                size: typeof value?.size === 'number' && Number.isFinite(value.size) ? Math.min(2, Math.max(0.8, value.size)) : Defaults.size,
-                theme: value?.theme === 'sepia' || value?.theme === 'dark' ? value.theme : Defaults.theme,
-                mode: value?.mode === 'paged' ? value.mode : Defaults.mode
-            };
+            return { ...Defaults, ...JSON.parse(localStorage.getItem(SettingsKey) ?? "{}") };
         } catch {
             return { ...Defaults };
         }
@@ -109,20 +99,19 @@ if (reader) {
         } else if (direction < 0 && atStart) {
             reader!.querySelector<HTMLAnchorElement>("[data-role=previous]")?.click();
         } else {
-            content.scrollBy({ left: direction * width, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+            content.scrollBy({ left: direction * width, behavior: "smooth" });
         }
     }
 
     function current(): number {
         // First block whose top is visible.
-        const bounds = content.getBoundingClientRect();
-        const top = reader!.querySelector('.reader__top')?.getBoundingClientRect().bottom ?? 0;
-        for (const block of allBlocks) {
+        const all = Array.from(content.querySelectorAll<HTMLElement>("[data-b]"));
+        for (const block of all) {
             const box = block.getBoundingClientRect();
-            if (settings.mode === "paged" ? box.right > bounds.left + 1 : box.bottom > top + 1) return Number(block.dataset.b);
+            if (settings.mode === "paged" ? box.right > content.getBoundingClientRect().left + 1 : box.bottom > 1) return Number(block.dataset.b);
         }
 
-        return allBlocks.length > 0 ? Number(allBlocks[allBlocks.length - 1].dataset.b) : 0;
+        return all.length > 0 ? Number(all[all.length - 1].dataset.b) : 0;
     }
 
     function schedule() {
@@ -132,14 +121,18 @@ if (reader) {
 
     function report(leaving: boolean) {
         const block = current();
-        // Completion requires the section end.
-        const bounds = content.getBoundingClientRect();
-        const atEnd = allBlocks.length > 0 && (settings.mode === 'paged'
-            ? content.scrollLeft + content.clientWidth >= content.scrollWidth - 4
-            : bounds.bottom <= window.innerHeight);
-        const completed = section === sections - 1 && atEnd;
-        const progression = completed ? 1 : Math.min(1, (before + characters * (block / blocks)) / total);
+        const locator = `s${section}/b${block}`;
+        if (locator === lastLocator) return;
+        lastLocator = locator;
+
+        const progression = Math.min(1, (before + characters * (block / blocks)) / total);
         if (position) position.textContent = `${Math.round(progression * 100)} %`;
-        save({ locator: `s${section}/b${block}`, progression: Number(progression.toFixed(4)), isCompleted: completed }, leaving);
+        const completed = section === sections - 1 && block >= blocks - 1;
+        void fetch(reader!.dataset.progressUrl!, {
+            method: "PUT",
+            keepalive: leaving,
+            headers: { "Content-Type": "application/json", RequestVerificationToken: reader!.dataset.antiforgery! },
+            body: JSON.stringify({ locator, progression: Number(progression.toFixed(4)), isCompleted: completed })
+        });
     }
 }

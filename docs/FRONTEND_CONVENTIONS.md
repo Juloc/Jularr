@@ -11,18 +11,14 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   the same-process class library. Razor invokes typed services through DI,
   never by HTTP requests to its own server.
 - Server-side rendering (SSR), **not** a JavaScript SPA. The response is complete,
-  encoded HTML. Small TypeScript enhancements may handle playback, reading,
-  live search and server-rendered fragments; no client hydration, client-side
-  business templates or translation-bundle fetching. Preserve native navigation
-  and forms wherever the feature does not inherently require JavaScript.
+  encoded HTML. JavaScript is reserved for unavoidable client interactions
+  such as playback; no client hydration or translation-bundle fetching.
 - Server-rendered fragment navigation is approved to keep the application shell
   and active Player alive. Keep normal full-page routes usable without JavaScript;
   authorization, form validation and rendering stay server-owned.
 - Frontend owns UI appearance, accessible interaction, presentation-only state.
   Backend owns permissions, identities, validation, business decisions,
   transaction boundaries, persistence, paging data and API contracts.
-- Browser interactions use the canonical Backend API or an authorized Razor HTML
-  fragment. This does not permit server-side Razor to call its own host over HTTP.
 - No second database, duplicate permission logic, fake row/provider data,
   invented service procedures, dummy playback state or inactive buttons
   presented as functional. If a backend contract is missing, prepare the
@@ -81,11 +77,6 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   classes into each page. Do not activate submission, provider buttons,
   session persistence or password reveal actions without a real, authorized
   backend operation and antiforgery handling.
-- Form transport values are invariant, independently of the display language.
-  `Form<TData>` emits ASP.NET's `__Invariant` field markers; use normal framework
-  binding, not per-page parsing or a parallel binder. Field validation remains
-  Backend-owned. Hidden-field errors must be visible at form level; failed reads
-  receive the shared Page error presentation, including empty-result pages.
 - Buttons and single-line fields use the shared pill radius. Form labels sit
   in the fieldset's native legend cutout, without a painted label background,
   remain associated through `for`/id and wrap without
@@ -184,9 +175,6 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   default. The shared Backend language-pack service resolves enabled exact/parent
   locale and English fallback; browser hints do not override configured defaults.
   Offline language bundles for all local profiles are future-only.
-- Apply the resolved request culture around downstream rendering in the host
-  middleware. Setting culture inside an awaited initialization method alone does
-  not establish the caller's rendering culture. Never localize IDs or wire values.
 
 ## Asset ownership, build and caching (MANDATORY)
 
@@ -264,20 +252,6 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Avoid N+1 calls, unbounded lists, repeated field metadata reflection,
   unnecessary allocations/extra requests, speculative caching and heavy JS.
   Keep the view HTML server-rendered and the language cache bounded.
-- Local content must not wait for optional external recommendations. Load their
-  server-rendered fragments independently, retaining usable native links and
-  visible failures. Do not parallelize operations over one shared SQL transaction.
-- Paging uses returned item count only. Empty later pages keep Previous and the
-  current filter/sort scope; every bounded editable collection remains navigable.
-- Playback and Reading are independent capabilities. Continue reads and actions
-  include only assets whose own module is enabled; no Frontend-only bypass.
-- Progress writes are serialized, retain only the latest pending state and become
-  acknowledged only after a successful response. Retry transient failures finitely
-  and display unsaved state. Unload delivery is best-effort, not guaranteed durable
-  storage. Reader completion requires reaching the actual content end.
-- Device preferences are optional: validate stored shapes/ranges once on load and
-  keep controls functional when browser storage is unavailable. Focused playback
-  controls stay visible; honor reduced motion and prefer wrapping over truncation.
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.

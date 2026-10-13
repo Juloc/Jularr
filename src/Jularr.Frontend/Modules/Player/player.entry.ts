@@ -1,5 +1,4 @@
 import "./player.scss";
-import { progressReporter } from "../Tracking/Progress";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -16,13 +15,7 @@ const WakeRetries = 6;
 
 const element = document.querySelector<HTMLElement>('.player[data-start-url]:not([data-start-url=""])');
 if (element) {
-    void start(element).catch(() => {
-        const status = element.querySelector<HTMLElement>('[data-role=status]');
-        if (status) {
-            status.textContent = element.querySelector('[data-status=failed]')?.textContent ?? '';
-            status.hidden = false;
-        }
-    });
+    void start(element);
 }
 
 async function start(player: HTMLElement): Promise<void> {
@@ -34,6 +27,7 @@ async function start(player: HTMLElement): Promise<void> {
     const mute = player.querySelector<HTMLButtonElement>("[data-action=mute]")!;
     const antiforgery = player.dataset.antiforgery ?? "";
     let plan: PlaybackPlan | null = null;
+    let reported = 0;
     let idle = 0;
 
     // Planning needs the real browser capabilities.
@@ -77,26 +71,29 @@ async function start(player: HTMLElement): Promise<void> {
     }, { once: true });
     video.addEventListener("error", () => show("failed"));
 
-    // Save acknowledged progress only.
-    const save = progressReporter(player.dataset.sessionUrl + plan.playbackSessionId, antiforgery, failed => {
-        const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
-        if (feedback) feedback.hidden = !failed;
-    });
+    // Progress is reported, never inferred as completion; leaving ends the session.
     const report = (ended: boolean, completed = ended) => {
-        if (!plan) return;
-        save({
-            positionMs: Math.floor(video.currentTime * 1000),
-            durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
-            isEnded: ended,
-            isCompleted: completed
-        }, ended);
+        if (!plan || (!ended && Math.abs(video.currentTime * 1000 - reported) < 1000)) return;
+        reported = Math.floor(video.currentTime * 1000);
+        void fetch(player.dataset.sessionUrl + plan.playbackSessionId, {
+            method: "PUT",
+            credentials: "same-origin",
+            keepalive: true,
+            headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
+            body: JSON.stringify({
+                positionMs: reported,
+                durationMs: Number.isFinite(video.duration) && video.duration > 0 ? Math.round(video.duration * 1000) : null,
+                isEnded: ended,
+                isCompleted: completed
+            })
+        }).catch(() => undefined);
         if (ended) plan = null;
     };
     setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
     video.addEventListener("pause", () => report(false));
     video.addEventListener("ended", () => report(true));
     document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
-    window.addEventListener("pagehide", event => report(!event.persisted, false));
+    window.addEventListener("pagehide", () => report(true, false));
 
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));
@@ -159,7 +156,6 @@ async function start(player: HTMLElement): Promise<void> {
 
     // Chrome hides only while playing without an open panel.
     player.addEventListener("pointermove", wake);
-    player.addEventListener("focusin", wake);
     wake();
 
     function seek(seconds: number): void {
@@ -176,7 +172,7 @@ async function start(player: HTMLElement): Promise<void> {
         player.classList.remove("player--idle");
         clearTimeout(idle);
         idle = window.setTimeout(() => {
-            if (!video.paused && !player.querySelector(".player__panel:not([hidden])") && !player.contains(document.activeElement)) player.classList.add("player--idle");
+            if (!video.paused && !player.querySelector(".player__panel:not([hidden])")) player.classList.add("player--idle");
         }, IdleDelay);
     }
 

@@ -3,7 +3,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Xml;
 using System.Xml.Linq;
+using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Newznab;
+using Jularr.Integrations.Logic.Common;
+using Jularr.Integrations.Logic.Usenet;
 
 namespace Jularr.Integrations.Logic.Newznab
 {
@@ -148,6 +151,34 @@ namespace Jularr.Integrations.Logic.Newznab
             }
 
             return items;
+        }
+
+        // The release's own link carries the indexer's access; Jularr keeps the NZB for its own downloader.
+        public async Task DownloadNzbAsync(Uri nzb, string destination, CancellationToken ct)
+        {
+            try
+            {
+                using var response = await httpClient.GetAsync(nzb, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                {
+                    throw new NewznabException(NewznabFailure.AuthenticationFailed, "The indexer refused the NZB.");
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new NewznabException(NewznabFailure.Unavailable, "The indexer did not deliver the NZB.");
+                }
+
+                await DirectDownload.SaveAsync(response, destination, NzbReader.MaximumBytes, ct);
+            }
+            catch (DirectDownloadException exception)
+            {
+                throw new NewznabException(NewznabFailure.InvalidResponse, "The NZB is too large.", null, exception);
+            }
+            catch (Exception exception) when (exception is HttpRequestException || exception is OperationCanceledException && !ct.IsCancellationRequested)
+            {
+                throw new NewznabException(NewznabFailure.Unavailable, "No connection, or no answer in time.", null, exception);
+            }
         }
 
         private async Task<XDocument> ReadAsync(NewznabConnection connection, string function, IReadOnlyList<KeyValuePair<string, string>> parameters, CancellationToken ct)

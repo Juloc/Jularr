@@ -7,7 +7,6 @@ using Jularr.Workers;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorPages(options =>
@@ -78,13 +77,8 @@ app.Use(async (context, next) =>
     if (context.GetEndpoint()?.Metadata.GetMetadata<PageActionDescriptor>() is not null)
     {
         context.Response.Headers.CacheControl = "private,no-store";
-        var texts = context.RequestServices.GetRequiredService<UiText>();
-        await texts.InitializeAsync(context);
-
-        // Culture covers downstream rendering.
-        var culture = CultureInfo.GetCultureInfo(texts.Locale);
-        CultureInfo.CurrentCulture = culture;
-        CultureInfo.CurrentUICulture = culture;
+        await context.RequestServices.GetRequiredService<UiText>()
+            .InitializeAsync(context);
     }
 
     await next(context);

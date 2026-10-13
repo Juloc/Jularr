@@ -67,7 +67,6 @@ namespace Jularr.Frontend.Framework
                     ).Class("player__panel").Attribute("data-panel", "more").Attribute("hidden", "hidden")
                 ).Class("player__chrome"),
                 new P().Class("player__status").Attribute("role", "status").Attribute("data-role", "status").Attribute("hidden", "hidden"),
-                new P(new Text("progress.saveFailed")).Class("player__save-error").Attribute("role", "status").Attribute("data-role", "save-error").Attribute("hidden", "hidden"),
                 new Div([
                     .. Statuses.Select(status => new Span(new Text("player.status." + status)).Attribute("data-status", status)),
                     .. new[] { "DirectPlay", "Remux", "Transcode" }.Select(mode => new Span(new Text("player.mode." + mode)).Attribute("data-mode", mode))

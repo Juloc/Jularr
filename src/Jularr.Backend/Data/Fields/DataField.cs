@@ -222,7 +222,8 @@ namespace Jularr.Backend.Data.Fields
                 throw new DataValidationException(name, "invalid_text");
             }
 
-            if (Format == StringFormat.HttpUrl && (!Uri.TryCreate(text, UriKind.Absolute, out var url) || url.Scheme is not ("http" or "https") || url.UserInfo.Length > 0 || url.Fragment.Length > 0))
+            if (Format is StringFormat.HttpUrl or StringFormat.ServiceUrl && (!Uri.TryCreate(text, UriKind.Absolute, out var url) || url.UserInfo.Length > 0 || url.Fragment.Length > 0
+                || url.Scheme is not ("http" or "https") && (Format == StringFormat.HttpUrl || url.Scheme is not ("nntp" or "nntps"))))
             {
                 throw new DataValidationException(name, "invalid_url");
             }

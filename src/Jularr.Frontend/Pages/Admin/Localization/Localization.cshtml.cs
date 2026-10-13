@@ -67,7 +67,7 @@ namespace Jularr.Frontend.Pages.Admin.Localization
                         form.Multiline(item => item.Description, "admin.localization.description");
                         form.Submit("common.save");
                     }, Address(UiLocaleId, _selected.Id, handler: "Description"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        _description ?? new UpdateUiDescriptionDataV1(_selected.Version, _selected.Description), _description is null ? null : FormError));
+                        _description ?? new UpdateUiDescriptionDataV1(_selected.Version, _selected.Description), _description is null ? null : Error));
                     split.Secondary.Add(new Form<SaveUiTranslationDataV1>(form =>
                     {
                         form.Hidden(item => item.MessageVersion);
@@ -75,11 +75,11 @@ namespace Jularr.Frontend.Pages.Admin.Localization
                         form.Multiline(item => item.Text, "admin.localization.translation");
                         form.Submit("common.save");
                     }, Address(UiLocaleId, _selected.Id, handler: "Translation"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        _translation ?? new SaveUiTranslationDataV1(_selected.Version, _selected.TranslationVersion, _selected.Text ?? ""), _translation is null ? null : FormError));
+                        _translation ?? new SaveUiTranslationDataV1(_selected.Version, _selected.TranslationVersion, _selected.Text ?? ""), _translation is null ? null : Error));
                 }
             }).MasterDetail(_selected is not null, Address(UiLocaleId)));
 
-            if (FormError is not null && _description is null && _translation is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (Error is not null && _description is null && _translation is null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
             if (TempData["CatalogSaved"] is true) page.Content.Add(new P(new Text("profile.settings.saved")).Attribute("role", "status"));
         }
 

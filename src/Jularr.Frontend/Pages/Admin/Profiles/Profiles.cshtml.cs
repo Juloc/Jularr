@@ -63,7 +63,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 }
             }).MasterDetail(editing, Address()));
 
-            if (FormError is not null && _input is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (Error is not null && _input is null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
 
         private Form<SaveAcquisitionProfileDataV1> ProfileForm(string? csrf)
@@ -88,7 +88,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 form.Text(item => item.MustContain, "profile.mustContain");
                 form.Text(item => item.MustNotContain, "profile.mustNotContain");
                 form.Submit("common.save");
-            }, Address(AcquisitionProfileId, NewFor), csrf, input, _input is null ? null : FormError);
+            }, Address(AcquisitionProfileId, NewFor), csrf, input, _input is null ? null : Error);
         }
 
         // Sensible starting points per kind.

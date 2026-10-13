@@ -349,6 +349,9 @@ Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes Postgr
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.
 
 Arr+ betreibt Jularr vollständig selbst. Nativer Downloader und optionale externe
-Downloader wie SABnzbd verwenden dieselbe Pipeline. Sonarr/Radarr/Prowlarr dienen
+Downloader wie SABnzbd verwenden dieselbe Pipeline. Der native Downloader nutzt
+News-Server (`nntp://` oder `nntps://`, Login, Verbindungen) unter `/Admin/Acquisition`;
+Reparatur und Entpacken übernehmen `Usenet:Par2Path` (par2) und `Usenet:SevenZipPath`
+(7-Zip). Ohne diese Programme warten beschädigte oder gepackte Downloads mit Hinweis. Sonarr/Radarr/Prowlarr dienen
 nur einer ausdrücklich gewählten einmaligen Übernahme, nicht dem laufenden Betrieb.
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.

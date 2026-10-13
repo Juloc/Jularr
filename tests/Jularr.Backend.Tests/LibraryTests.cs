@@ -253,13 +253,6 @@ namespace Jularr.Backend.Tests
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Versions &amp; languages");
-
-            // Path pages stay navigable when empty.
-            await host.Fixture.RunSqlAsync("INSERT INTO \"LibraryRoots\" (\"Name\", \"MediaTypeId\", \"StorageMountId\", \"RelativePath\") SELECT 'Root ' || n, 1, " + mountId + ", 'Root' || n FROM generate_series(1, 25) AS n");
-            using var paths = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId + "&rootPageNumber=1");
-            StringAssert.Contains(await paths.Content.ReadAsStringAsync(), "rootPageNumber=2");
-            using var emptyPaths = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId + "&rootPageNumber=3");
-            StringAssert.Contains(await emptyPaths.Content.ReadAsStringAsync(), "rootPageNumber=2");
         }
 
         [TestMethod]

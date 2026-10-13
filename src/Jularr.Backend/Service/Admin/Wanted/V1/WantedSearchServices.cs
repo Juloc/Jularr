@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var offer = _acquisition.FindOffer(Parameters.WantedItemId, Data.CandidateId)
                 ?? throw new DataValidationException(nameof(GrabWantedReleaseDataV1.CandidateId), "outdated_version");
             var (target, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Sabnzbd, ct)), CancellationToken);
+                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadDownloadClientsAsync(ct)), CancellationToken);
             if (target.IsDownloading && target.MediaTypeId != MediaType.Series)
             {
                 throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");

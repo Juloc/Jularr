@@ -12,7 +12,9 @@ using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Microsoft.AspNetCore.DataProtection;
+using Jularr.Backend.Service.Core;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
@@ -27,15 +29,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly DirectSources _direct;
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _offers;
+        private readonly StorageOptions _storage;
 
-        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers)
+        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers, IOptions<StorageOptions> storage)
         {
             _newznab = newznab;
             _sabnzbd = sabnzbd;
             _direct = direct;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _offers = offers;
+            _storage = storage.Value;
         }
+
+        // Where Jularr's own downloads wait until the import.
+        public static string Staging(StorageOptions storage, long operationId) => Path.Combine(storage.DirectDownloadPath, operationId.ToString(CultureInfo.InvariantCulture));
 
         public async Task<WantedSearchResult> SearchAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, CancellationToken ct, UnitScope? scope = null)
         {
@@ -139,26 +146,52 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end);
             var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
 
-            // The best client by priority receives the release.
+            // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.
             string? failure = null;
-            SabnzbdGrabResult? result = null;
-            try
+            string? externalId = null;
+            if (client.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
             {
-                var connection = new SabnzbdConnection(client.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
-                result = await _sabnzbd.GrabAsync(connection, new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, client.DownloadCategory), ct);
-            }
-            catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
-            {
-                failure = "acquisition_unavailable";
-            }
-            catch (SabnzbdException)
-            {
-                failure = "acquisition_grab_failed";
-            }
+                var staging = Staging(_storage, operationId);
+                try
+                {
+                    Directory.CreateDirectory(staging);
+                    File.Delete(Path.Combine(staging, UsenetJob.NzbName));
+                    await _newznab.DownloadNzbAsync(offer.DownloadUri, Path.Combine(staging, UsenetJob.NzbName), ct);
+                    externalId = UsenetJob.ExternalId;
+                }
+                catch (NewznabException exception)
+                {
+                    failure = exception.Failure == NewznabFailure.Unavailable ? "acquisition_unavailable" : "acquisition_grab_failed";
+                }
+                catch (IOException)
+                {
+                    failure = "acquisition_unavailable";
+                }
 
-            if (failure is null && (result is not { Success: true } || result.NzoIds.Count == 0))
+                if (failure is not null && Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+            }
+            else
             {
-                failure = "acquisition_grab_failed";
+                SabnzbdGrabResult? result = null;
+                try
+                {
+                    var connection = new SabnzbdConnection(client.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, client.ProtectedApiKey));
+                    result = await _sabnzbd.GrabAsync(connection, new SabnzbdGrabRequest(offer.DownloadUri, offer.Title, client.DownloadCategory), ct);
+                }
+                catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
+                {
+                    failure = "acquisition_unavailable";
+                }
+                catch (SabnzbdException)
+                {
+                    failure = "acquisition_grab_failed";
+                }
+
+                externalId = result is { Success: true, NzoIds.Count: > 0 } ? result.NzoIds[0] : null;
+                failure ??= externalId is null ? "acquisition_grab_failed" : null;
             }
 
             // A refused grab releases the reservation; the target is searched again later.
@@ -174,7 +207,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.StartDownloadAsync(new DownloadStartData(operationId, Limit(result!.NzoIds[0], 128)), token);
+                await ctx.StartDownloadAsync(new DownloadStartData(operationId, Limit(externalId!, 128)), token);
                 return true;
             }, ct);
         }

@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Pages.User.DiscoverItem
             page.Asset("Pages/User/DiscoverItem/DiscoverItem.entry.scss");
             if (_item is not { } item)
             {
-                if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+                if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
                 return;
             }
 
@@ -50,7 +50,7 @@ namespace Jularr.Frontend.Pages.User.DiscoverItem
                 {
                     form.Select(data => data.UiLocaleId, "request.language", options);
                     form.Submit("request.create");
-                }, Address(), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), FormError));
+                }, Address(), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), Error));
             }
         }
 

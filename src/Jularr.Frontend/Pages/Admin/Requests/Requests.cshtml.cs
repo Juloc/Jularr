@@ -53,7 +53,7 @@ namespace Jularr.Frontend.Pages.Admin.Requests
                 if (requests.Items.Count == requests.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(requests.Page + 1, Tab)));
             }
 
-            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
 
         private Form<UpdateRequestDataV1> Decision(RequestDetailsV1 request, AcquisitionRequestStatusType status, string? csrf)
