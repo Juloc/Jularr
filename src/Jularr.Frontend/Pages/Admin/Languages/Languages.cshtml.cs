@@ -21,7 +21,6 @@ namespace Jularr.Frontend.Pages.Admin.Languages
         {
             page.Title("admin.languages.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Languages/Languages.entry.scss");
             page.Content.Add(new A(new Text("admin.localization.title")).Attribute("href", "/Admin/Localization"));
             var states = new[] { new SelectOption("True", texts["admin.languages.enabled"]), new SelectOption("False", texts["admin.languages.disabled"]) };
             var directions = new[] { new SelectOption("False", texts["admin.languages.leftToRight"]), new SelectOption("True", texts["admin.languages.rightToLeft"]) };

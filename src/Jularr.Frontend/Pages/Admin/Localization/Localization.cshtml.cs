@@ -34,7 +34,6 @@ namespace Jularr.Frontend.Pages.Admin.Localization
         {
             page.Title("admin.localization.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Localization/Localization.entry.scss");
             page.Content.Add(new A(new Text("admin.languages.title")).Attribute("href", "/Admin/Languages"));
 
             // Navigate real enabled locales.

@@ -18,7 +18,6 @@ namespace Jularr.Frontend.Pages.Account.Sessions
         {
             page.Title("settings.sessions");
             page.Navigation("nav.settings");
-            page.Asset("Pages/User/Settings/Settings.entry.scss");
             if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             if (_sessions is not null)
             {

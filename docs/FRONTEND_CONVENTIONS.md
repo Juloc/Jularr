@@ -78,11 +78,15 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   session persistence or password reveal actions without a real, authorized
   backend operation and antiforgery handling.
 - Buttons and single-line fields use the shared pill radius. Form labels sit
-  on the input outline, remain associated through `for`/id and wrap without
+  in the fieldset's native legend cutout, without a painted label background,
+  remain associated through `for`/id and wrap without
   truncation. Reuse `Tag` and native-checkbox `Toggle`; bind editable switches
   through `Form.Toggle` so Backend field metadata and POST values stay central.
-- Control depth remains subtle: a light edge and small shadow from the shared
-  Material mixin, not independent per-page gradients or heavy neon effects.
+- Controls and navigation are flat and opaque: no glass blur, transparency
+  settings, bevels or 3D button gradients. Keep keyboard focus visible but
+  restrained; outlined fields indicate focus with their thin border.
+- Tabs and subsection navigation reuse `NavigationTabs`: button-like segments
+  inside one shared capsule. `Tabs` adds only the server-selected content pane.
 - Settings is a page, not a special `SettingsGroup` renderer.
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.
@@ -201,7 +205,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   entries automatically; no central list of all Pages/Modules and no
   per-component runtime injection by default. A Page opts in to owned
   entries with `page.Asset("Pages/User/Discover/Index.entry.scss")` (or the module path).
-  Imported component Sass/TS is bundled only with the entry that needs it.
+  Fundamental Form, Table, layout, Tag/Toggle and capsule-navigation styles
+  load once through the shared shell entry, retaining their colocated SCSS owners.
+  Pages need no entry solely to import these base components. Optional media,
+  player and reader styles/TS remain bundled with the entry that needs them.
   Don't import all optional Pages/Modules into the shared shell.
 - `npm ci` (locked package versions), `npm run check` (TypeScript, Vite,
   SVG sprite), `npm test`, then `dotnet build` are required in Frontend

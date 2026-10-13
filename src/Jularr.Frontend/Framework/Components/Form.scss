@@ -5,16 +5,17 @@
     display: grid;
     gap: 6px;
 
-    &__control { position: relative; min-width: 0; margin-top: 8px; }
-    &__label {
-        position: absolute;
-        z-index: 1;
-        inset-block-start: 0;
-        inset-inline-start: 22px;
-        max-width: calc(100% - 44px);
-        padding: 0 6px;
-        transform: translateY(-50%);
+    &__control {
+        min-width: 0;
+        margin: 0;
+        padding: 0 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-control);
         background: var(--field);
+    }
+    &__control > legend {
+        max-width: 100%;
+        padding: 0 6px;
         color: var(--muted);
         font-weight: 650;
         font-size: 12px;
@@ -24,22 +25,23 @@
 
     &__control > :is(input, select, textarea) {
         width: 100%;
-        min-height: 50px;
-        padding: 12px 20px;
-        border: 1px solid var(--border);
+        min-height: 44px;
+        padding: 8px 6px;
+        border: 0;
         border-radius: var(--radius-control);
-        background: var(--field);
+        background: transparent;
         color: var(--text);
 
         &:disabled { opacity: .75; }
-        &:hover:not(:disabled) { border-color: var(--muted); }
-        &:focus-visible { border-color: var(--accent); }
-        &[aria-invalid="true"] { border-color: var(--danger); }
+        &:focus-visible { outline: none; }
     }
 
     &__control > textarea { border-radius: 24px; resize: vertical; }
-    &__control:focus-within &__label { color: var(--accent-text); }
-    &__control:has([aria-invalid="true"]) &__label { color: var(--danger); }
+    &__control:has(textarea) { border-radius: 24px; }
+    &__control:focus-within { border-color: var(--accent); }
+    &__control:focus-within > legend { color: var(--accent-text); }
+    &__control:has([aria-invalid="true"]) { border-color: var(--danger); }
+    &__control:has([aria-invalid="true"]) > legend { color: var(--danger); }
 }
 fieldset.ui-field {
     margin: 0;

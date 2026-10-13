@@ -68,7 +68,10 @@ test("Split offers MasterDetail as optional layout mode", () => {
 test("Tabs show only selected content and provide real server navigation", () => {
     const tabs = load("Framework/Components/Tabs.cs");
     assert.match(tabs, /Items\.Single\(item => item\.Selected\)/);
-    assert.match(tabs, /Attribute\("href", item\.Href\)/);
+    assert.match(tabs, /new NavigationTabs\(/);
+    const navigation = load("Framework/Components/NavigationTabs.cs");
+    assert.match(navigation, /Attribute\("href", tab\.Href\)/);
+    assert.match(navigation, /Attribute\("aria-current", "page"\)/);
     assert.match(tabs, /Exactly one tab must be selected/);
 });
 

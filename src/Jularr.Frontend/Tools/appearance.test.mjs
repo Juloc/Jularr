@@ -29,14 +29,11 @@ function appearance(saved = {}, unavailable = false) {
     const reset = new Element({ resetAccent: "true" });
     const picker = new Element({ accentInput: "true" });
     const value = {};
-    const transparency = new Element({ transparencyInput: "true" });
-    const transparencyValue = {};
     const meta = new Element({});
     const storage = new Map(Object.entries(saved));
     const document = {
         documentElement: root,
-        querySelectorAll: selector => selector.includes("data-transparency-input") ? [transparency] : selector.includes("data-transparency-value") ? [transparencyValue]
-            : selector.includes("data-accent-input") ? [picker] : selector.includes("data-accent-value") ? [value]
+        querySelectorAll: selector => selector.includes("data-accent-input") ? [picker] : selector.includes("data-accent-value") ? [value]
             : selector.includes("data-set-accent") ? accentButtons : buttons,
         querySelector: () => meta,
         addEventListener: (name, handler) => { events[name] = handler; }
@@ -48,36 +45,9 @@ function appearance(saved = {}, unavailable = false) {
     };
     const systemMode = { matches: false, addEventListener() {} };
     runInNewContext(script, { document, localStorage, Element, HTMLInputElement: Element, Set, exports: {}, require: () => palette, window: { matchMedia: () => systemMode } });
-    return { root, buttons, storage, styles, accentButtons, reset, picker, value, meta, transparency, transparencyValue,
-        click: button => events.click({ target: button }), input: color => { picker.value = color; events.input({ target: picker }); },
-        setTransparency: value => { transparency.value = String(value); events.input({ target: transparency }); } };
+    return { root, buttons, storage, styles, accentButtons, reset, picker, value, meta,
+        click: button => events.click({ target: button }), input: color => { picker.value = color; events.input({ target: picker }); } };
 }
-
-test("transparency is opaque by default and shared by all controls", () => {
-    const ui = appearance();
-    assert.equal(ui.styles.get("--glass-opacity-setting"), "100%");
-    assert.equal(ui.styles.get("--glass-blur-setting"), "0px");
-    for (const value of [0, 30, 60]) {
-        ui.setTransparency(value);
-        assert.equal(ui.styles.get("--glass-opacity-setting"), (100 - value) + "%");
-        assert.equal(ui.styles.get("--glass-blur-setting"), value === 0 ? "0px" : "14px");
-        assert.equal(ui.transparency.value, String(value));
-        assert.equal(ui.transparencyValue.textContent, value + "%");
-        assert.equal(ui.storage.get("jularr-ui-transparency"), String(value));
-    }
-    ui.setTransparency(100);
-    assert.equal(ui.storage.get("jularr-ui-transparency"), "60");
-});
-
-test("transparency restores only valid values and works without storage", () => {
-    for (const value of ["-1", "100", "NaN", ""]) {
-        assert.equal(appearance({ "jularr-ui-transparency": value }).transparency.value, "0");
-    }
-    assert.equal(appearance({ "jularr-ui-transparency": "35" }).transparency.value, "35");
-    const ui = appearance({}, true);
-    ui.setTransparency(20);
-    assert.equal(ui.styles.get("--glass-opacity-setting"), "80%");
-});
 
 test("appearance restores valid preferences and exposes selected controls", () => {
     const ui = appearance({ "jularr-ui-skin": "original", "jularr-ui-mode": "dark" });

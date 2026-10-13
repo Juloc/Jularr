@@ -32,8 +32,7 @@ namespace Jularr.Backend.Tests
             // Real components, no playback client.
             var html = await response.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "data-accent-input=\"true\"");
-            StringAssert.Contains(html, "data-transparency-input=\"true\"");
-            StringAssert.Contains(html, "data-transparency-value=\"true\"");
+            Assert.IsFalse(html.Contains("data-transparency-", StringComparison.Ordinal));
             StringAssert.Contains(html, "aria-invalid=\"true\"");
             StringAssert.Contains(html, "media-hero--placeholder");
             StringAssert.Contains(html, "appearance-approved-");
@@ -41,6 +40,8 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"tag tag--accent\"");
             StringAssert.Contains(html, "role=\"switch\"");
             StringAssert.Contains(html, "class=\"ui-field__label\"");
+            StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+            StringAssert.Contains(html, "class=\"navigation-tabs\"");
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
             StringAssert.Contains(html, "poster=\"/build/assets/your-name-backdrop-");
@@ -187,6 +188,13 @@ namespace Jularr.Backend.Tests
             {
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(mediaAllowed ? HttpStatusCode.OK : HttpStatusCode.Redirect, page.StatusCode, path);
+                if (path == "/Admin/Works" && mediaAllowed)
+                {
+                    var html = await page.Content.ReadAsStringAsync();
+                    StringAssert.Contains(html, "<fieldset class=\"ui-field__control\"><legend>");
+                    StringAssert.Contains(html, "class=\"page-table\"");
+                    StringAssert.Contains(html, "/build/assets/Assets/Shared/shell-");
+                }
                 if (path == "/Admin/Requests" && mediaAllowed)
                 {
                     var html = await page.Content.ReadAsStringAsync();

@@ -5,8 +5,7 @@ namespace Jularr.Frontend.Framework
     public sealed record NavigationTab(string LabelKey, string Href, bool Selected);
 
     // A reusable component, not a page or its navigation policy.
-    public sealed class NavigationTabs(
-        IReadOnlyList<NavigationTab> tabs, string ariaLabelKey, string? modifier = null) : IUiComponent
+    public sealed class NavigationTabs(IReadOnlyList<NavigationTab> tabs, string ariaLabelKey, string? modifier = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
