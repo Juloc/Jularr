@@ -40,11 +40,11 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Submit("profile.settings.save");
-                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, Error));
+                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, FormError));
                 }
                 else
                 {
-                    if (Error is not null) content.Add(new P(new Text(Error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+                    if (FormError is not null) content.Add(new P(new Text(FormError.ResourceKey)).Class("field-error").Attribute("role", "alert"));
                     content.Add(new P(new ValueText(_profile.DisplayName)));
                     var locale = _locales.FirstOrDefault(item => item.Id == _profile.UiLocaleId);
                     if (locale is not null) content.Add(new P(new ValueText(locale.Name)));
@@ -61,7 +61,7 @@ namespace Jularr.Frontend.Pages.User.Settings
             {
                 page.Content.Add(new P(new Text("account.profile.required")).Attribute("role", "status"));
                 page.Content.Add(new A(new Text("account.profile.title")).Attribute("href", "/Account/Profiles?returnUrl=%2FSettings"));
-                if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+                if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             }
 
             page.Content.Add(new UiSection("settings.account", [

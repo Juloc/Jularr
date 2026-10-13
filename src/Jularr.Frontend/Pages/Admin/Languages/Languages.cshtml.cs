@@ -33,7 +33,7 @@ namespace Jularr.Frontend.Pages.Admin.Languages
                 form.Select(item => item.IsRightToLeft, "admin.languages.direction", directions);
                 form.Submit("admin.languages.add");
             }, "/Admin/Languages?handler=Create", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                _creation ?? new CreateUiLocaleDataV1("", "", false), _creation is null ? null : Error));
+                _creation ?? new CreateUiLocaleDataV1("", "", false), _creation is null ? null : FormError));
 
             foreach (var locale in _locales?.Items ?? [])
             {
@@ -47,12 +47,12 @@ namespace Jularr.Frontend.Pages.Admin.Languages
                     form.Submit("common.save");
                 }, "/Admin/Languages?uiLocaleId=" + locale.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _localeId == locale.Id ? _update : new UpdateUiLocaleDataV1(locale.Name, locale.IsEnabled, locale.IsRightToLeft, locale.CatalogVersion),
-                    _localeId == locale.Id ? Error : null));
+                    _localeId == locale.Id ? FormError : null));
             }
 
             if (_locales?.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", "/Admin/Languages?pageNumber=" + (_locales.Page - 1)));
             if (_locales is { } && _locales.Items.Count == _locales.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", "/Admin/Languages?pageNumber=" + (_locales.Page + 1)));
-            if (Error is not null && _localeId is null && _creation is null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null && _localeId is null && _creation is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         [BindProperty(SupportsGet = true)]

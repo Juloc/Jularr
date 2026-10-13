@@ -75,6 +75,13 @@ namespace Jularr.Backend.Tests
             using var home = await host.SendAsync(HttpMethod.Get, "/");
             var html = await home.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, home.StatusCode, html);
+            StringAssert.Contains(html, "data-discover-recommendations=\"true\"");
+            Assert.IsFalse(html.Contains("The Matrix", StringComparison.Ordinal));
+
+            // Native recommendation route stays usable.
+            using var recommendations = await host.SendAsync(HttpMethod.Get, "/?handler=Recommendations");
+            html = await recommendations.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, recommendations.StatusCode, html);
             StringAssert.Contains(html, "The Matrix");
             StringAssert.Contains(html, "media-hero");
             StringAssert.Contains(html, "/Discover/movies/603");
@@ -94,6 +101,13 @@ namespace Jularr.Backend.Tests
 
             using var library = await host.SendAsync(HttpMethod.Get, "/Library?type=movies");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode);
+            using var empty = await host.SendAsync(HttpMethod.Get, "/Library?type=movies&p=2");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "class=\"library-paging\"");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "/Library?type=movies&amp;sort=RecentlyAdded");
+            using var invalid = await host.SendAsync(HttpMethod.Get, "/Library?p=2147483647");
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "class=\"ui-page-error\"");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(await invalid.Content.ReadAsStringAsync(), "role=\"alert\"").Count);
             using var search = await host.SendAsync(HttpMethod.Get, "/?q=Matrix");
             StringAssert.Contains(await search.Content.ReadAsStringAsync(), "The Matrix Show");
         }

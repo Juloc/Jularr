@@ -8,11 +8,38 @@ if (searchForm && searchInput && results) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let loading = false;
     let observer: IntersectionObserver | undefined;
+    let recommendationRequest: AbortController | undefined;
+
+    // Provider shelves never block local HTML.
+    async function recommendations(): Promise<void> {
+        const link = results!.querySelector<HTMLAnchorElement>('[data-discover-recommendations]');
+        if (!link) return;
+        recommendationRequest?.abort();
+        recommendationRequest = new AbortController();
+        const signal = recommendationRequest.signal;
+        const current = generation;
+        try {
+            const response = await fetch(link.href, { signal, headers: { Accept: 'text/html', 'X-Jularr-Fragment': 'recommendations' } });
+            if (!response.ok || response.redirected) throw new Error('Unavailable recommendations');
+            const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const featured = page.querySelector('#discover-featured');
+            const shelves = page.querySelector('#discover-recommendations');
+            if (!featured || !shelves) throw new Error('Missing recommendations');
+            if (current !== generation || signal.aborted) return;
+            results!.querySelector('#discover-featured')?.replaceWith(featured);
+            results!.querySelector('#discover-recommendations')?.replaceWith(shelves);
+        } catch {
+            if (signal.aborted || current !== generation) return;
+            const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
+            if (feedback) feedback.textContent = results!.dataset.loadError ?? '';
+        }
+    }
 
     // Only HTML from this route.
     async function load(address: URL, append: boolean): Promise<void> {
         if (append && loading) return;
         request?.abort();
+        recommendationRequest?.abort();
         request = new AbortController();
         const current = ++generation;
         const signal = request.signal;
@@ -57,6 +84,7 @@ if (searchForm && searchInput && results) {
 
             // Repeated pages require deliberate navigation.
             if (!append || appended > 0) observeNext();
+            if (!append) void recommendations();
         } catch (error) {
             if (signal.aborted || current !== generation) return;
             const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
@@ -92,6 +120,8 @@ if (searchForm && searchInput && results) {
     // Cancel at the next keystroke.
     searchInput.addEventListener('input', () => {
         request?.abort();
+        recommendationRequest?.abort();
+        recommendationRequest?.abort();
         ++generation;
         loading = false;
         observer?.disconnect();
@@ -113,4 +143,5 @@ if (searchForm && searchInput && results) {
     });
 
     observeNext();
+    void recommendations();
 }

@@ -8,7 +8,8 @@ namespace Jularr.Frontend.Framework
     public abstract class JularrPage : PageModel
     {
         public Page Definition { get; private set; } = new();
-        public ServiceError? Error { get; private set; }
+        private ServiceError? _error;
+        protected ServiceError? FormError => _error is not null && HttpMethods.IsPost(Request.Method) ? _error : null;
 
         // Shared service failure feedback.
         public override async Task OnPageHandlerExecutionAsync(PageHandlerExecutingContext context, PageHandlerExecutionDelegate next)
@@ -38,7 +39,7 @@ namespace Jularr.Frontend.Framework
 
         private async Task<IActionResult> PrepareFailureAsync(ServiceError error)
         {
-            Error = error;
+            _error = error;
             Response.StatusCode = error.StatusCode;
 
             // Reload only failed mutations.
@@ -50,8 +51,8 @@ namespace Jularr.Frontend.Framework
                 }
                 catch (Exception exception) when (ServiceError.FromException(exception).StatusCode < StatusCodes.Status500InternalServerError)
                 {
-                    Error = ServiceError.FromException(exception);
-                    Response.StatusCode = Error.StatusCode;
+                    _error = ServiceError.FromException(exception);
+                    Response.StatusCode = _error.StatusCode;
                 }
             }
 
@@ -69,6 +70,11 @@ namespace Jularr.Frontend.Framework
         {
             var page = new Page();
             Define(page);
+            if (_error is not null && HttpMethods.IsGet(Request.Method))
+            {
+                // Failed reads always explain why.
+                page.Content.Insert(0, new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("ui-page-error").Attribute("role", "alert"));
+            }
             return page;
         }
     }

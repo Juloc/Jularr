@@ -29,7 +29,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
             // Render only available setup.
             if (!_requiresOwner)
             {
-                if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+                if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                 page.Content.Add(new P(new Text("setup.owner.closed")));
                 page.Content.Add(new A(new Text("account.login.submit")).Attribute("href", "/Account/Login"));
                 return;
@@ -44,7 +44,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
                 form.Password(item => item.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password");
                 form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                 form.Submit("setup.owner.create");
-            }, Url.Page("/Setup/Start/Start"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, Error)]));
+            }, Url.Page("/Setup/Start/Start"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError)]));
         }
 
         public async Task<IActionResult> OnGetAsync()

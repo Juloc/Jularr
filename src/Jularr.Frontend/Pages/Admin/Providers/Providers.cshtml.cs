@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                     form.Select(item => item.IsEnabled, "admin.providers.state", options);
                     form.Submit("common.save");
                 }, "/Admin/Providers?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? Error : null));
+                    _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? FormError : null));
 
                 // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id.
                 if (provider.Key is "tmdb" or "igdb")
@@ -65,7 +65,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
 
             if (_providers?.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", "/Admin/Providers?pageNumber=" + (_providers.Page - 1)));
             if (_providers is { } && _providers.Items.Count == _providers.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", "/Admin/Providers?pageNumber=" + (_providers.Page + 1)));
-            if (Error is not null && _providerId is null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null && _providerId is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         private void DefinePlex(Page page, PlexServerDetailsV1 plex)
@@ -81,7 +81,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 form.Text(item => item.BaseUrl, "admin.plex.baseUrl");
                 form.Password(item => item.Token, "admin.plex.token", "new-password");
                 form.Submit(plex.ExternalId is null ? "admin.plex.connect" : "common.save");
-            }, "/Admin/Providers?handler=Plex", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : Error));
+            }, "/Admin/Providers?handler=Plex", csrf, _plexInput ?? new SavePlexServerDataV1(plex.BaseUrl ?? "", null), _plexInput is null ? null : FormError));
             if (plex.ExternalId is not null)
             {
                 page.Content.Add(new Form<PlexServerParametersV1>(form => form.Submit("admin.plex.sync"), "/Admin/Providers?handler=PlexSync", csrf, new PlexServerParametersV1()));

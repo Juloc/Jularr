@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
                 form.Select(item => item.Apply, "takeover.mode", [new SelectOption("False", texts["takeover.preview"]), new SelectOption("True", texts["takeover.apply"])]);
                 form.Submit("takeover.run");
             }, "/Admin/Acquisition/Takeover", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input is { } input ? new RunTakeoverDataV1(input.TakeoverSourceTypeId, input.BaseUrl, "", input.Apply)
-                : new RunTakeoverDataV1(TakeoverSourceType.Prowlarr, "", "", false), Error));
+                : new RunTakeoverDataV1(TakeoverSourceType.Prowlarr, "", "", false), FormError));
 
             if (_items is { } items)
             {

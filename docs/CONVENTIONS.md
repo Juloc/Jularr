@@ -61,6 +61,7 @@ use the same services through the shared API adapter.
 - Parameter binding uses readable data properties, cached field metadata and compiled getters. Npgsql handles named placeholders; PostgreSQL evaluates explicit SQL casts. Unused mapped properties are allowed; duplicate names across supplied objects are rejected. Each property type must have an explicit mapping in the data contract.
 - Paged reads explicitly set `sql.Page = Page` (or a validated `PageRequest` in Backend code outside a service). The list-service hook is evaluated once per invocation; SQL binding and the result use that same request. `PageResult<T>` is a BaseResponse and validates nested BaseData items.
 - Each page executes one bounded list SELECT and returns items, page and page size. Frontend offers Next when item count equals page size; a subsequent empty page is valid. Do not read extra rows or counts solely for navigation.
+- An empty subsequent page retains Previous and its filter/sort scope. Bounded lists used for editing need navigation rather than a silently truncated maximum-sized read.
 - SQL infrastructure has no Account/Profile/auth state and injects no entity IDs. Bind needed trusted values explicitly from the verified caller. Session Logic reads and locks the session by its proof; the gate compares its current Account/Profile with the verified caller.
 - Uppercase SQL keywords; double-quote PascalCase table/column names; use clear aliases and explicit columns, never `SELECT *`.
 - Format multi-line queries by clause (`SELECT`, `FROM`, `JOIN`, `WHERE`, `SET`); one selected/assigned column per line and aligned conditions.
@@ -81,6 +82,7 @@ use the same services through the shared API adapter.
 - Test changed behavior and realistic regressions, especially authorization and atomic mutations. Reuse existing fixtures; avoid trivial plumbing tests and redundant permutations.
 - Use concise `Subject_Condition_Result` names and data-driven equivalent cases. No test XML prose.
 - Ordinary changes run the affected build and the smallest relevant test set. Full-suite validation is a separate requested/release gate.
+- Before integrating parallel work, compare against the current target branch and preserve its fixes, tests and conventions. Resolve overlapping changes by their intended behavior; never replace current files with an older branch snapshot.
 - `README.md` describes startup, current capabilities and integration gaps; it is not a second rules document.
 - `docs/CODEMAP.md` indexes current owners, entry points, persistence and focused tests. Read the relevant section first, then inspect only those paths.
 - Add a feature-local CODEMAP only when the root map is no longer sufficient, normally 30-60 lines. No map per folder, mirrored source tree or copied architecture prose.

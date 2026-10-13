@@ -101,8 +101,8 @@ namespace Jularr.Backend.Service.User.Library.V1
     public sealed class ReadContinueV1 : UserService<ReadContinueParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ContinueItemV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadContinueParametersV1 parameters) => ModuleRequirement.All("Library", "Playback");
-        protected override ServicePermission GetPermission(ReadContinueParametersV1 parameters, Type resultType) => new("profile.playback");
+        protected override ModuleRequirement GetInstanceModules(ReadContinueParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadContinueParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnRead()
         {
@@ -143,6 +143,11 @@ namespace Jularr.Backend.Service.User.Library.V1
                         FROM
                             "MediaAssets" AS candidate
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = candidate."Id" AND available."MissingSince" IS NULL
+                            JOIN "InstanceModules" AS module ON module."Key" = CASE candidate."MediaAssetTypeId"
+                                WHEN 3 THEN 'Reading'
+                                WHEN 1 THEN 'Playback'
+                                WHEN 2 THEN 'Playback'
+                            END AND module."IsEnabled"
                         WHERE
                             candidate."WorkId" = progress."WorkId"
                             AND candidate."WorkUnitId" IS NOT DISTINCT FROM progress."WorkUnitId"

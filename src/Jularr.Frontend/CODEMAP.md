@@ -1,197 +1,58 @@
 # Frontend CODEMAP
 
-Navigation only. Rules:
-[Frontend conventions](../../docs/FRONTEND_CONVENTIONS.md).
-Shared conventions and Backend ownership:
-[CONVENTIONS](../../docs/CONVENTIONS.md),
-[Backend CODEMAP](../../docs/CODEMAP.md).
+Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.md),
+[shared conventions](../../docs/CONVENTIONS.md). Backend owners: [CODEMAP](../../docs/CODEMAP.md).
 
-## Host / localization
+## Host and framework
 
-- [Program.cs](Program.cs): one ASP.NET Core host; DI Backend service
-  registration; `AddJularrLocalization` startup resource sync; Razor request
-  middleware; API and Razor routing.
-- [UiResources.cs](Localization/UiResources.cs): every English UI source
-  declaration. Not a runtime translation store.
-- [UiText.cs](Framework/UiText.cs): per-request render values via Services: cached
-  language pack, Public instance name/default locale, User capabilities. Profile
-  locale overrides instance default; Backend owns exact/parent/English fallback.
-- [Backend locale services](../Jularr.Backend/Service/Public/Localization/V1),
-  [Backend resource sync](../Jularr.Backend/Service/Core/Localization/UiLocalizationRegistration.cs):
-  only canonical locale/query/DB owners.
+- [Program.cs](Program.cs): single host, service registration, authorization, request culture and Razor/API routing.
+- [UiText.cs](Framework/UiText.cs), [UiResources.cs](Localization/UiResources.cs): service-backed request language pack and English registration inputs.
+- [Page.cs](Framework/Page.cs): page definitions, shared read errors and mutation redisplay.
+- [Elements.cs](Framework/Elements.cs), [UiComponent.cs](Framework/UiComponent.cs): encoded HTML primitives and Razor boundary.
+- [Form.cs](Framework/Components/Form.cs), [BaseField.cs](Framework/BaseField.cs): canonical Backend metadata, invariant form binding, antiforgery and field/form errors.
+- [Table.cs](Framework/Components/Table.cs): typed rows and composed cells.
+- [Button.cs](Framework/Components/Button.cs), [Tag.cs](Framework/Components/Tag.cs), [Toggle.cs](Framework/Components/Toggle.cs): shared controls.
+- [Split.cs](Framework/Components/Split.cs), [Tabs.cs](Framework/Components/Tabs.cs), [NavigationTabs.cs](Framework/Components/NavigationTabs.cs): layout and route-backed navigation.
+- [Shell.cs](Pages/Shared/Shell.cs), [Brand.cs](Pages/Shared/Brand.cs): capability-driven application chrome and branding.
+- [Shared layout](Pages/Shared/_Layout.cshtml), [page body](Pages/Shared/_PageBody.cshtml): thin Razor bridges.
+- [FrontendAssets.cs](Framework/FrontendAssets.cs), [Vite](vite.config.ts), [build tools](Tools): fingerprinted, entry-scoped assets and SVG sprite.
+- [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
+- [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
+- [MediaCard](Framework/Components/MediaCard.cs), [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
 
-## Rendering and reusable components
+## User and account pages
 
-- [Page.cs](Framework/Page.cs): `JularrPage`, `PreparedPage`,
-  `Page`, page definitions and shared service-error feedback.
-  Connected pages reuse `LoadDataAsync` for failed POST binding/service redisplay instead of list reads before successful mutations.
-- [UiComponent.cs](Framework/UiComponent.cs): component-to-Razor HTML boundary,
-  interface and encoder wiring, **no type switch**.
-- [Elements.cs](Framework/Elements.cs): minimal encoded C# HTML DSL;
-  `Div`, `H1`, `Text`, `Button` and related small primitives.
-- [Components](Framework/Components): reusable typed tables, field-aware
-  forms, navigational controls and layout primitives.
-- [Split.cs](Framework/Components/Split.cs): generic two-area layout with
-  optional `MasterDetail(detailOpen, backHref)` mode; Mobile list/editor
-  switching is driven by server-selected state, not a second component.
-- [Tabs.cs](Framework/Components/Tabs.cs): actual SSR tab navigation
-  with exactly one selected pane. [NavigationTabs.cs](Framework/Components/NavigationTabs.cs)
-  is the shared capsule renderer for tabs and subsection navigation, without local tab content.
-- [Section.cs](Framework/Components/Section.cs) and
-  [ItemList.cs](Framework/Components/ItemList.cs): reusable localized
-  grouping and read-only lists, used by Settings instead of `SettingsGroup`.
-- [NavigationTabs.cs](Framework/Components/NavigationTabs.cs):
-  reusable, localized accessible navigation tabs driven by supplied links.
-- [MediaShelf.cs](Framework/Components/MediaShelf.cs):
-  reusable media shelf with truthful title, optional browse link and real cards.
-- [Discover/Index.cshtml.cs](Pages/User/Discover/Index.cshtml.cs): **owns the Home/Discover composition**
-  at `/`: media-type and browse navigation, Hero, Continue, Recently added, TMDB shelves per
-  type (Trending/Top/New/Upcoming where TMDB has them), full browse views and global search results.
-  [Discover client](Pages/User/Discover/Index.entry.ts) debounces the header search, cancels obsolete requests
-  and exchanges only the Razor `Results` region. Browse/search progressively append provider pages near
-  the viewport end, deduplicate cards and retain loaded results after errors. Native page links remain usable.
-  New means first release, not a metadata update or another episode of an older series.
-  [DiscoverItem](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs) shows a TMDB title before it is a
-  Work and requests it; [Library](Pages/User/Library/Library.cshtml.cs) is the local catalog with
-  type scope, local search, sort and paging.
-- [MediaCard.cs](Framework/Components/MediaCard.cs) (one card grammar with a fixed status area that
-  becomes the action), [MediaHero.cs](Framework/Components/MediaHero.cs) and
-  [SearchBox.cs](Framework/Components/SearchBox.cs) (GET search used by the shell header and Library).
-- [BaseField.cs](Framework/BaseField.cs) and
-  [Form.cs](Framework/Components/Form.cs): `Form<TData>` owns label/input
-  markup, field errors and local antiforgery POSTs using canonical backend
-  `DataField` metadata, including minimum/maximum string lengths. Metadata and property
-  getters are cached by property, not compiled per field/row. Unbound forms remain disabled.
-  Outlined labels use a native fieldset/legend cutout without a painted background
-  and stay associated with their controls; `Form.Toggle` binds canonical Boolean
-  metadata with native checkbox posting. [Toggle](Framework/Components/Toggle.cs) owns switch
-  states; [Tag](Framework/Components/Tag.cs) owns neutral/accent badges.
-- [Shell.cs](Pages/Shared/Shell.cs) and
-  [Shell.scss](Pages/Shared/Shell.scss): Jularr-specific Header, Sidebar,
-  Mobile navigation and their private helpers in **one** shell owner.
-  Watchlist/manual Works navigation follows the verified User capability result.
-- [Brand.cs](Pages/Shared/Brand.cs): shared Jularr brand for Shell and Login;
-  Original and Clean marks fit a shared square viewport, use the fingerprinted SVG sprite and inherit skin colors.
-  [Icon.cs](Framework/Components/Icon.cs): generic fingerprinted SVG primitive.
-  Shared SVGs retain the original Jularr outline shapes; the Design lab shows the catalog.
-- [AdminNavigation.cs](Framework/AdminNavigation.cs):
-  Requests/Rules/Users section links; Requests hides configuration links using verified service grants.
-- [Shared layout](Pages/Shared/_Layout.cshtml):
-  document shell, asset/locale setup and RenderBody only.
-  [App shell](Pages/Shared/_AppShell.cshtml): delegates actual markup
-  to component renderers.
-  [Page body](Pages/Shared/_PageBody.cshtml),
-  [Ui component boundary](Pages/Shared/_UiComponent.cshtml):
-  thin Razor-to-C# bridges.
-- [Login Page](Pages/Account/Login/Login.cshtml.cs) and
-  [Login SCSS](Pages/Account/Login/Login.entry.scss): short declarative Login
-  composition using `Form<LoginDataV1>` and shared Brand. Backend
-  exposes email/password and configured Plex flows through Public services.
-- [Profiles](Pages/Account/Profiles/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions/Sessions.cshtml.cs),
-  [Logout](Pages/Account/Logout/Logout.cshtml.cs): typed service-driven account session flows.
-- [AccessDenied](Pages/Account/AccessDenied/AccessDenied.cshtml.cs): sanitized catalog-backed 403 page for denied Razor routes.
-- [Setup start](Pages/Setup/Start/Start.cshtml.cs): first Owner through Public services, field-driven form and shared authentication effects. Remaining wizard steps are not connected.
-- [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): Owner directory/editor (including "may confirm source checks"), profile assignments and session revocation; separate from request-limit Users.
-- [Providers](Pages/Admin/Providers/Providers.cshtml.cs): real provider registry enablement via Owner services; Plex server connect/test, sync and disconnect. Details and Discover offer "Open in Plex" when Jularr cannot play the title here (no local file or Playback switched off).
-- [Storage](Pages/Admin/Storage/Storage.cshtml.cs), [Setup Storage](Pages/Setup/Storage/Storage.cshtml.cs): shared Owner-only SMB/NFS/Local editor with Wake-on-LAN, explicit mount/wake/remove actions and the paths-on-this-connection table with safe folder browser, scan and removal. Colocated Storage assets import shared Form/Split/Table styles.
-- [Player](Pages/User/Player/Player.cshtml.cs), [UiPlayer](Framework/Components/Player.cs), [player.entry.ts](Modules/Player/player.entry.ts): canonical asset route, server-rendered chrome (-10/+30 transport, timeline, volume, speed, PiP, fullscreen, delivery info) and the client that probes capabilities, requests the PlaybackPlan, resumes and reports progress. Conversions play through native HLS or the on-demand `hls.js/light` chunk ([type declaration](Modules/Player/hls-light.d.ts)). [MediaUnitLabel.cs](Framework/MediaUnitLabel.cs) formats structure units for Details and Player.
-- [Library](Pages/Admin/Library/Library.cshtml.cs): Owner/MediaManager inventory tabs, manual identification from Backend suggestions and unit rules.
-- [Reader](Pages/User/Reader/Reader.cshtml.cs) and [Modules/Reader](Modules/Reader): one reader shell for reflowable books (contents, text size, light/sepia/dark, scroll or pages, block locator progress); [ReaderSection.cs](Framework/Components/ReaderSection.cs) writes only HTML sanitized by the reading service. Details shows "Read" for Ebook assets; Continue links books to the reader.
-- [Sources](Pages/Admin/Sources/Sources.cshtml.cs): the source catalog by group with capabilities and honest availability, "Set up all available sources", and links into the connection editor with defaults (OPDS user name and password, Anna's Archive member key, optional).
-- [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs): Movie/Series profiles with allowed qualities, upgrade cutoff, size limits and terms; shares the Arr+ subnav with [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs). Wanted offers the per-target profile (Current) and block/allow per release (History). `Form.Choices` renders checkbox groups.
-- [Activity](Pages/Admin/Activity/Activity.cshtml.cs): Activity, To-Do and History tabs for scans and downloads with reasons, retry and dismiss; a download waiting at a source check offers "open the source" plus a file-link field.
-- [Instance](Pages/Admin/Instance/Instance.cshtml.cs): Owner name/language, reading cache, "users may confirm source checks" and implemented module editor using shared field-aware forms and versioned services; disable retains data. Requests is a manual slice, not automatic acquisition.
-- [Works](Pages/Admin/Works/Works.cshtml.cs), [Work editor](Pages/Admin/Work/Work.cshtml.cs): real paged catalog, TMDB search/add, manual creation, version-checked title/year editing and TMDB refresh through Admin media services. [Providers](Pages/Admin/Providers/Providers.cshtml.cs) stores the write-only TMDB key.
-- [Details](Pages/User/Details/Details.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): persisted Work identity, stored availability, personal list actions and explicit language requests through Services/shared forms. Details links Play/Continue/Read from its Hero and pages versions with one bounded availability read. No provider/NAS/playback call.
-- [My requests](Pages/User/Requests/Requests.cshtml.cs), [Admin requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs): actual profile queues, six status tabs, approval/rejection and shared-target pause/resume; permitted users confirm a source check of their own request with a file link. Wanted shows acquisition state and opens one target in Search (series by season/episode; candidates with decision, score and reason; grab), Current and History tabs. [Table.cs](Framework/Components/Table.cs) supports composed row cells using the same shared Form/Button renderer. Unit targets, filters and the candidate detail drawer are not connected.
-- [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs): Owner list and editor for Newznab indexers and SABnzbd clients, write-only keys, connection test and client path mapping; linked from Settings.
-- [Request users](Pages/Admin/Users/Users.cshtml.cs): read-only canonical account directory; account administration links to its existing owner. Quotas/rule assignments are not implemented.
-- [Languages](Pages/Admin/Languages/Languages.cshtml.cs): supported locale creation, names/direction/enablement and versioned edits via Owner services.
-- [Button.cs](Framework/Components/Button.cs), [Button.scss](Framework/Components/Button.scss): shared button variants/style imported by the shell; Form owns submission/disabled behavior.
-- [Localization](Pages/Admin/Localization/Localization.cshtml.cs): Owner catalog list, source descriptions and manual translation forms; versions and field errors come from Backend services.
-- [Settings](Pages/User/Settings/Settings.cshtml.cs): active profile name/language editing,
-  read-only non-owner view and grant-based account/admin navigation; no page-local SQL or permissions.
-- [Vite build](vite.config.ts), [package.json](package.json),
-  [locked dependencies](package-lock.json), [tsconfig](tsconfig.json):
-  compile/fingerprint Sass and TypeScript from colocated `*.entry.scss`
-  and `*.entry.ts` files without loading unused modules.
-- [Generated private manifests](Assets/Generated): build-only, published alongside
-  server content but never in `wwwroot`; regenerated from Vite and icon build.
-- [FrontendAssets.cs](Framework/FrontendAssets.cs): cached hashed manifest
-  resolver for Razor styles, scripts, icons and source image entries, without request-time builds.
-- [Shared shell SCSS](Assets/Shared/shell.entry.scss),
-  [appearance module](Modules/Appearance/theme.entry.ts),
-  [Discover CSS entry](Pages/User/Discover/Index.entry.scss),
-  [Player entry](Modules/Player/player.entry.ts): currently declared
-  page/module assets. Base Form/Table/layout/navigation Sass loads once through the shell;
-  optional media/player/reader assets remain entry-scoped.
-- [Theme tokens](Modules/Appearance/Theme.scss): Clean purple and Original ink/paper
-  skins over the same components; Original reuses artwork from the former Web project.
-- [Palette.ts](Modules/Appearance/Palette.ts): one accent-seed calculation for both
-  brightness palettes, readable labels, monochrome handling and Original artwork hue.
-- [Appearance](Modules/Appearance/Appearance.cs) and [styles](Modules/Appearance/appearance.entry.scss):
-  shared Original/Clean, System/Light/Dark and free-accent controls in Login, Settings and preview.
-  The appearance script stores device-local choices and updates shared tokens and pressed states.
-  Controls and navigation are flat and opaque; there is no glass or 3D effect layer.
-  Instance defaults/profile override policy are not implemented here.
-- [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
-  deduplicated hashed sprite, with icons also allowed beside modules/pages.
-- [MediaImage.cs](Framework/Components/MediaImage.cs): accessible lazy or
-  priority image markup and optional responsive variants; Backend owns image
-  resizing, ETag/cache, permissions and thumbnail generation.
+- [Discover](Pages/User/Discover/Index.cshtml.cs), [client](Pages/User/Discover/Index.entry.ts): local-first landing, recommendation HTML fragments, debounced search and progressive result paging.
+- [Provider title](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs): TMDB title and authorized request before canonical Work creation.
+- [Library](Pages/User/Library/Library.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): real bounded catalogs.
+- [Details](Pages/User/Details/Details.cshtml.cs): Work, paged versions, personal actions and capability-based Play/Read links.
+- [Player](Pages/User/Player/Player.cshtml.cs), [chrome](Framework/Components/Player.cs), [client](Modules/Player/player.entry.ts): PlaybackPlan, transport, HLS and progress.
+- [Reader](Pages/User/Reader/Reader.cshtml.cs), [client](Modules/Reader/reader.entry.ts): sanitized sections, device settings, semantic locators and end-of-content completion.
+- [Progress transport](Modules/Tracking/Progress.ts): serialized acknowledged writes, finite transient retries and visible unsaved state for Reader/Player.
+- [Requests](Pages/User/Requests/Requests.cshtml.cs): profile queue and authorized source confirmation.
+- [Settings](Pages/User/Settings/Settings.cshtml.cs): profile settings, appearance and granted administration links.
+- [Login](Pages/Account/Login/Login.cshtml.cs), [Profiles](Pages/Account/Profiles/Profiles.cshtml.cs), [Sessions](Pages/Account/Sessions/Sessions.cshtml.cs), [Logout](Pages/Account/Logout/Logout.cshtml.cs): canonical service-driven authentication flows.
+- [AccessDenied](Pages/Account/AccessDenied/AccessDenied.cshtml.cs): catalog-backed 403.
+- [Setup](Pages/Setup/Start/Start.cshtml.cs), [Setup Storage](Pages/Setup/Storage/Storage.cshtml.cs): first Owner and shared storage editor.
 
-## Pages
+## Admin pages
 
-Areas contain one folder per page, with its Razor entry, C# definition and
-owned assets together. Public URLs remain explicit and independent of folders.
-Shared Razor bridges remain in `Pages/Shared`; optional module assets remain
-in `Modules/<Module>/`.
+- [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments and sessions.
+- [Instance](Pages/Admin/Instance/Instance.cshtml.cs): supported settings and module controls.
+- [Storage](Pages/Admin/Storage/Storage.cshtml.cs): mounts, WOL, safe browsing and independently paged library paths.
+- [Providers](Pages/Admin/Providers/Providers.cshtml.cs): registry, protected TMDB/IGDB credentials and Plex server.
+- [Works](Pages/Admin/Works/Works.cshtml.cs), [Work](Pages/Admin/Work/Work.cshtml.cs), [Library inventory](Pages/Admin/Library/Library.cshtml.cs): metadata, editing and file identification.
+- [Requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs), [Activity](Pages/Admin/Activity/Activity.cshtml.cs): moderation, acquisition and recovery.
+- [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs), [Sources](Pages/Admin/Sources/Sources.cshtml.cs), [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs): connection/catalog/profile configuration.
+- [Takeover](Pages/Admin/Takeover/Takeover.cshtml.cs): one-time Prowlarr/Sonarr/Radarr preview and import.
+- [Localization](Pages/Admin/Localization/Localization.cshtml.cs), [Languages](Pages/Admin/Languages/Languages.cshtml.cs): DB descriptions, translations and locale administration.
+- [Request users](Pages/Admin/Users/Users.cshtml.cs), [Rules](Pages/Admin/Rules/Rules.cshtml.cs): directory and currently unconnected rule editing.
 
-- [Discover](Pages/User/Discover/Index.cshtml.cs) and
-  [Discover redirect](Pages/User/DiscoverRedirect/DiscoverRedirect.cshtml.cs).
-- [Details](Pages/User/Details/Details.cshtml.cs),
-  [Player](Pages/User/Player/Player.cshtml.cs),
-  [Reader](Pages/User/Reader/Reader.cshtml.cs),
-  [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs),
-  [Settings](Pages/User/Settings/Settings.cshtml.cs),
-  [Login](Pages/Account/Login/Login.cshtml.cs).
-- [Requests](Pages/Admin/Requests/Requests.cshtml.cs),
-  [Rules](Pages/Admin/Rules/Rules.cshtml.cs),
-  [Users](Pages/Admin/Users/Users.cshtml.cs),
-  [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs),
-  [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs),
-  [Works](Pages/Admin/Works/Works.cshtml.cs),
-  [Work detail](Pages/Admin/Work/Work.cshtml.cs),
-  [Library](Pages/Admin/Library/Library.cshtml.cs),
-  [Activity](Pages/Admin/Activity/Activity.cshtml.cs),
-  [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs).
-- [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs):
-  Development-only, shares real page definitions without service data.
-- [Design lab](Pages/Development/Design/Design.cshtml.cs): `/Design`, Development-only
-  component workshop with labeled examples, disabled playback chrome and the earlier
-  approved Appearance/Library references. [Styles](Pages/Development/Design/Design.entry.scss)
-  import the actual component owners; no playback JS or business mutations.
-  Local TMDB [sample artwork](Pages/Development/Design/Images/README.md) is fingerprinted and attributed.
-  Player transport includes disabled previous/next episode controls until real targets are available.
-  Same-host review and optional LAN configuration: [Local preview](../../docs/LOCAL_PREVIEW.md).
+## Verification and open work
 
-## Verification and integration gaps
-
-- Frontend UI-key coverage tool: [verify-ui-resources.mjs](Tools/verify-ui-resources.mjs).
-- [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
-- [Appearance tests](Tools/appearance.test.mjs) cover preferences, selected state,
-  unavailable storage, free accents, artwork hue and light/dark text contrast.
-- [Discover tests](Tools/discover.test.mjs) cover debouncing, cancellation, stale answers, viewport paging,
-  deduplication and failed-page retention. Backend `DiscoverTests.cs` covers provider parameters,
-  canonical identity, local search pages and the Razor result fragment on isolated PostgreSQL.
-- `FrontendAuthenticationTests.Design_EnvironmentGate_OnlyRendersDevelopmentExamples`
-  checks public Development rendering and Production exclusion on isolated PostgreSQL.
-- Persistent shell navigation and same-element minimized playback are approved but
-  not integrated yet; the current full Player still belongs to its Razor page.
-- Discover currently exposes Movie/Series through TMDB. AniList discovery/identity, provider-backed
-  genre/year/status facets, effective metadata-locale policy and complete season/episode detail reads
-  remain integration gaps; no static filters or fabricated Anime shelves are shown.
-- Module/profile visibility, localized metadata policy, complete Requests/Wanted lifecycle, quota/rules, NAS health/reconnect/Synology and PIN verification remain pending.
-- Admin routing consumes Backend policies: MediaManager reaches manual media, Library identification and Requests/Wanted; Rules, user limits and Storage remain Owner-only.
-- Backend CI builds Frontend assets and runs real Razor/PostgreSQL integration tests;
-  browser verification remains a separate gate.
+- [Asset tests](Tools/asset-manifest.test.mjs), [appearance tests](Tools/appearance.test.mjs), [structure tests](Tools/shell-login.test.mjs).
+- [Discover tests](Tools/discover.test.mjs), [progress tests](Tools/progress.test.mjs), [Reader/Player tests](Tools/reader.test.mjs), [UI-key verification](Tools/verify-ui-resources.mjs).
+- Backend tests: FrontendAuthenticationTests, DiscoverTests, MediaTests, LibraryTests, ReadingTests and PlaybackTests; isolated PostgreSQL only.
+- [Design lab](Pages/Development/Design/Design.cshtml.cs), [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs): Development-only; browser verification is separate.
+- Remaining: persistent shell/miniplayer, previous/next playback targets, AniList Discover, provider facets, complete episode details, profile media visibility/order, metadata-locale policy, full Setup/PIN/quota/rules.
+- [Local preview](../../docs/LOCAL_PREVIEW.md); feature scope and Backend integration gaps: [BACKEND_NEXT](../../docs/BACKEND_NEXT.md).

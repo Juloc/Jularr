@@ -60,7 +60,7 @@ namespace Jularr.Frontend.Pages.User.Details
                     form.Hidden(item => item.IsWatchlisted);
                     form.Submit(work.IsWatchlisted ? "media.watchlist.remove" : "media.watchlist.add");
                 }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture), csrf,
-                    new UpdateWatchlistDataV1(!work.IsWatchlisted), Error));
+                    new UpdateWatchlistDataV1(!work.IsWatchlisted), FormError));
 
                 // Explicit desired content language.
                 if (_locales is { } languages)
@@ -72,7 +72,7 @@ namespace Jularr.Frontend.Pages.User.Details
                         form.Select(item => item.UiLocaleId, "request.language", options);
                         form.Submit("request.create");
                     }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Request", csrf,
-                        _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : Error));
+                        _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : FormError));
                 }
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
@@ -102,7 +102,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("details-paging").Attribute("aria-label", texts["details.pages"]));
             }
-            else if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         private IUiComponent Play(WorkAvailabilityV1 item)

@@ -9,7 +9,7 @@ const script = ts.transpileModule(source, { compilerOptions: { target: ts.Script
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 // Small event/DOM doubles, not a browser.
-function discover() {
+function discover(landing = false) {
     const inputEvents = {};
     const formEvents = {};
     const documentEvents = {};
@@ -24,15 +24,19 @@ function discover() {
     let observerAction;
     let address;
 
-    function region(ids, next = null, unavailable = false) {
+    function region(ids, next = null, unavailable = false, recommendations = false) {
         const cards = ids.map(id => ({ querySelector: () => ({ getAttribute: () => '/Details/' + id }) }));
         const grid = { querySelectorAll: () => cards.map(card => card.querySelector()), append: card => cards.push(card) };
         const paging = { next: next ? { href: 'https://jularr.test/?q=Matrix&p=' + next } : null, replaceChildren: (...nodes) => { paging.next = nodes[0] ?? null; } };
         const feedback = { textContent: '' };
+        const slots = {};
         return {
-            cards, feedback, attributes: {}, dataset: { loadError: 'Try again', providerUnavailable: String(unavailable) },
+            cards, feedback, slots, attributes: {}, dataset: { loadError: 'Try again', providerUnavailable: String(unavailable) },
             querySelector: selector => selector === '.media-grid' ? grid : selector === '.discover-paging' ? paging
-                : selector === '.discover-feedback' ? feedback : paging.next,
+                : selector === '.discover-feedback' ? feedback : selector === '[data-discover-next]' ? paging.next
+                : selector === '[data-discover-recommendations]' ? recommendations ? { href: 'https://jularr.test/?handler=Recommendations' } : null
+                : selector === '#discover-featured' ? { replaceWith: value => slots.featured = value }
+                : selector === '#discover-recommendations' ? { replaceWith: value => slots.shelves = value } : null,
             querySelectorAll: () => cards,
             setAttribute(name, value) { this.attributes[name] = value; },
             removeAttribute(name) { delete this.attributes[name]; },
@@ -40,7 +44,7 @@ function discover() {
         };
     }
 
-    active = region([1, 2], 2);
+    active = region([1, 2], landing ? null : 2, false, landing);
     class Observer {
         constructor(action) { observerAction = action; }
         disconnect() { observed = undefined; }
@@ -52,7 +56,10 @@ function discover() {
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
         AbortController, URL, Set, Error,
         FormData: class { forEach(action) { action(input.value, 'q'); action('movies', 'type'); } },
-        DOMParser: class { parseFromString(key) { return { querySelector: () => pages.get(key) }; } },
+        DOMParser: class { parseFromString(key) { return { querySelector: selector => {
+            const value = pages.get(key);
+            return value?.featured ? selector === '#discover-featured' ? value.featured : value.shelves : value;
+        } }; } },
         history: { replaceState: (_, __, url) => { address = url.href; } },
         fetch: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })),
         setTimeout: action => { timers.set(++timerId, action); return timerId; },
@@ -135,4 +142,22 @@ test('a repeated provider page cannot create an automatic loading loop', async (
     assert.equal(ui.active.cards.length, 2);
     assert.equal(ui.observing, false);
     assert.equal(ui.active.querySelector('[data-discover-next]').href, 'https://jularr.test/?q=Matrix&p=3');
+});
+
+test('recommendation fragments preserve local content and obsolete responses are discarded', async () => {
+    const ui = discover(true);
+    const local = ui.active;
+    assert.equal(ui.requests.length, 1);
+    assert.equal(ui.requests[0].options.headers['X-Jularr-Fragment'], 'recommendations');
+    const providers = { featured: {}, shelves: {} };
+    await ui.answer(0, providers);
+    assert.equal(ui.active, local);
+    assert.equal(local.cards.length, 2);
+    assert.equal(local.slots.featured, providers.featured);
+
+    const obsolete = discover(true);
+    obsolete.type('Matrix');
+    assert.equal(obsolete.requests[0].options.signal.aborted, true);
+    await obsolete.answer(0, providers);
+    assert.equal(obsolete.active.slots.featured, undefined);
 });

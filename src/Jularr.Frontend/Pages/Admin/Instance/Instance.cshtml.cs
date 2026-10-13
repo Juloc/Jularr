@@ -41,16 +41,16 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                         [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                     form.Submit("common.save");
                 }, Url.Page("/Admin/Instance/Instance"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources), _moduleId is null ? Error : null));
+                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources), _moduleId is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
                     page.Content.Add(new P(new Text("admin.instance.saved")).Attribute("role", "status"));
                 }
             }
-            else if (Error is not null)
+            else if (FormError is not null)
             {
-                page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+                page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
             }
 
             // Only implemented module controls.
@@ -65,7 +65,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Select(item => item.IsEnabled, "admin.instance.module.state", stateOptions);
                     form.Submit("common.save");
                 }, Url.Page("/Admin/Instance/Instance", "Module", new { instanceModuleId = module.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _moduleId == module.Id ? _moduleInput : new UpdateInstanceModuleDataV1(module.IsEnabled, module.Version), _moduleId == module.Id ? Error : null));
+                    _moduleId == module.Id ? _moduleInput : new UpdateInstanceModuleDataV1(module.IsEnabled, module.Version), _moduleId == module.Id ? FormError : null));
             }
 
             if (_modules.Count > 0) page.Content.Add(new UiSection("admin.instance.modules", moduleForms));

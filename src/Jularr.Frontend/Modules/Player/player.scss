@@ -30,6 +30,7 @@
     }
 
     &--idle &__chrome { opacity: 0; }
+    &:focus-within &__chrome { opacity: 1; }
     &--idle { cursor: none; }
 
     &__top {
@@ -186,6 +187,18 @@
         border-radius: 12px;
         background: rgb(20 20 24 / 92%);
         text-align: center;
+
+        &[hidden] { display: none; }
+    }
+
+    &__save-error {
+        position: absolute;
+        top: 76px;
+        left: 20px;
+        max-width: calc(100% - 40px);
+        padding: 8px 12px;
+        border-radius: var(--radius-panel);
+        background: #242428;
 
         &[hidden] { display: none; }
     }

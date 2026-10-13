@@ -52,11 +52,12 @@ namespace Jularr.Frontend.Pages.User.Library
             if (items.Items.Count == 0)
             {
                 page.Content.Add(new P(new Text(Query is null ? "library.userEmpty" : "discover.noResults")).Attribute("role", "status"));
-                return;
             }
-
-            page.Content.Add(new Div([.. items.Items.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]).Class("media-grid"));
+            else
+            {
+                page.Content.Add(new Div([.. items.Items.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]).Class("media-grid"));
+            }
 
             // A full page offers the next one.
             var paging = new List<IUiComponent>();

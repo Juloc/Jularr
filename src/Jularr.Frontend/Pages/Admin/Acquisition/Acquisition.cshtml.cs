@@ -82,7 +82,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
             }).MasterDetail(type is not null, Address()));
 
-            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -184,7 +184,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 }
 
                 form.Submit("common.save");
-            }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : Error);
+            }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : FormError);
         }
 
         private static IUiComponent Health(AcquisitionConnectionDetailsV1 item) =>
