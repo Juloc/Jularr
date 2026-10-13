@@ -107,8 +107,9 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class AssignLibraryFileDataV1 : BaseData
     {
-        public AssignLibraryFileDataV1(long? workId, string? title, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber)
+        public AssignLibraryFileDataV1(long? workId, string? title, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber, long? gamePlatformId = null)
         {
+            GamePlatformId = gamePlatformId;
             WorkId = workId;
             Title = title;
             WorkUnitTypeId = workUnitTypeId;
@@ -130,6 +131,10 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
+
+        // A game's platform; without one its platform folder names it.
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
+        public long? GamePlatformId { get; }
     }
 
     public sealed class AssignLibraryFileResultV1 : BaseResponse

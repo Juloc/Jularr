@@ -103,17 +103,22 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class GameReleaseData : BaseData
     {
-        public GameReleaseData(long mediaAssetId, long gamePlatformId)
+        public GameReleaseData(long mediaAssetId, long? gamePlatformId, string folder)
         {
             MediaAssetId = mediaAssetId;
             GamePlatformId = gamePlatformId;
+            Folder = folder;
         }
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
         public long MediaAssetId { get; }
 
-        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id))]
-        public long GamePlatformId { get; }
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
+        public long? GamePlatformId { get; }
+
+        // The top folder of the file, a platform's name or abbreviation.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string Folder { get; }
     }
 
     internal sealed class WorkLookupData : BaseData

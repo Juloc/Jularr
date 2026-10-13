@@ -43,6 +43,9 @@ namespace Jularr.Backend.Logic.Library
                         ? new MediaPathInfo(title, year, WorkUnitType.Track, Number(track.Groups["number"]), null)
                         : new MediaPathInfo(title, year, null, null, null);
 
+                case MediaType.Game when segments.Length > 2:
+                    return new MediaPathInfo(Clean(segments[1], out var gameYear), gameYear, null, null, null);
+
                 default:
                     return new MediaPathInfo(title, year, null, null, null);
             }

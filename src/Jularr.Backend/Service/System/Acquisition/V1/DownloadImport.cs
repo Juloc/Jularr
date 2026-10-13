@@ -90,11 +90,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 {
                     if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), token) is { } file)
                     {
-                        var asset = await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber, placement.ParentUnitNumber), token);
-                        if (download.GamePlatformId is { } platform)
-                        {
-                            await ctx.TagGameReleaseAsync(new GameReleaseData(asset.Id, platform), token);
-                        }
+                        await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber, placement.ParentUnitNumber,
+                            download.GamePlatformId), token);
                     }
                 }
 

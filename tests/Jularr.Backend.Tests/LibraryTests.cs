@@ -268,6 +268,7 @@ namespace Jularr.Backend.Tests
         [DataRow("Manga Title/Manga Title v03 c012.5.cbz", MediaType.Book, "Manga Title", WorkUnitType.Chapter, "12.5", "3")]
         [DataRow("Novel/Novel Vol. 4.epub", MediaType.Book, "Novel", WorkUnitType.Volume, "4", null)]
         [DataRow("Album (1999)/03 - Song.flac", MediaType.Music, "Album", WorkUnitType.Track, "3", null)]
+        [DataRow("Nintendo Switch/Example Quest (2017)/quest.nsp", MediaType.Game, "Example Quest", null, null, null)]
         [DataRow("Movie.Name.2010.2160p.BluRay.x265.mkv", MediaType.Movie, "Movie Name", null, null, null)]
         public void Parser_CommonLayouts_SuggestTitleAndUnit(string path, MediaType mediaType, string title, WorkUnitType? unitType, string? number, string? parent)
         {

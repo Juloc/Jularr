@@ -116,6 +116,12 @@ namespace Jularr.Backend.Logic.Media
                 """;
             sql.Parameters.Add(new StoredFileLinkData(file.Id, file.LibraryRootId, Stem(file.RelativePath), asset.Id));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            if (file.MediaTypeId == MediaType.Game)
+            {
+                await ctx.TagGameReleaseAsync(new GameReleaseData(asset.Id, data.GamePlatformId, file.RelativePath.Split('/')[0]), ct);
+            }
+
             return asset;
         }
 

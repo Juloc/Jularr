@@ -105,7 +105,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var data = new StoredFileAssignmentData(Parameters.StoredFileId, Data.WorkId, Data.Title, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber);
+            var data = new StoredFileAssignmentData(Parameters.StoredFileId, Data.WorkId, Data.Title, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, Data.GamePlatformId);
             return new AssignLibraryFileResultV1((await Context.AssignStoredFileAsync(data, CancellationToken)).Id);
         }
     }

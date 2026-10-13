@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Request.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
@@ -137,6 +138,17 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "example.quest.nsp" }, Directory.GetFiles(folder).Select(Path.GetFileName).ToArray());
             Assert.AreEqual(nsw.Id, (long)(await host.ScalarAsync("SELECT \"GamePlatformId\" FROM \"GameReleases\""))!);
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
+
+            // A scanned copy takes the platform its folder names; details list every platform on hand.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt")
+                SELECT "Id", 'PC/Example Quest (2017)/setup.iso', 10, now(), now() FROM "LibraryRoots"
+                """);
+            var scanned = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE 'PC/%'"))!;
+            using var identified = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + scanned + "/assignment", new AssignLibraryFileDataV1(work.Id, null, null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, identified.StatusCode, await identified.Content.ReadAsStringAsync());
+            using var details = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id);
+            CollectionAssert.AreEqual(new[] { "Nintendo Switch", "PC (Microsoft Windows)" }, (await details.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!.Platforms);
         }
 
         [TestMethod]

@@ -108,7 +108,20 @@ namespace Jularr.Backend.Service.User.Media.V1
                         WHERE
                             plex."WorkId" = work."Id"
                             AND plex."Namespace" = 'plex'
-                    ) AS "PlexUrl"
+                    ) AS "PlexUrl",
+                    ARRAY(
+                        SELECT DISTINCT
+                            platform."Name"
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "GameReleases" AS release ON release."WorkVersionId" = asset."WorkVersionId"
+                            JOIN "GamePlatforms" AS platform ON platform."Id" = release."GamePlatformId"
+                        WHERE
+                            asset."WorkId" = work."Id"
+                            AND EXISTS (SELECT 1 FROM "StoredFiles" AS file WHERE file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL)
+                        ORDER BY
+                            platform."Name"
+                    ) AS "Platforms"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
@@ -236,7 +249,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                         LIMIT 1
                     ) AS "PosterUrl",
                     NULL::text AS "BackdropUrl",
-                    NULL::text AS "PlexUrl"
+                    NULL::text AS "PlexUrl",
+                    ARRAY[]::text[] AS "Platforms"
                 FROM
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"

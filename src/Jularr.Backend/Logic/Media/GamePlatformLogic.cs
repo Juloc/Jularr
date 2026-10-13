@@ -58,7 +58,7 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task TagGameReleaseAsync(this LogicContext ctx, GameReleaseData data, CancellationToken ct)
         {
-            // The version a game file starts runs on the wanted platform.
+            // The version a game file starts runs on the given platform, else on the one its folder names.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -66,9 +66,21 @@ namespace Jularr.Backend.Logic.Media
                     "GameReleases" ("WorkVersionId", "GamePlatformId")
                 SELECT
                     asset."WorkVersionId",
-                    @GamePlatformId
+                    platform."Id"
                 FROM
                     "MediaAssets" AS asset
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            candidate."Id"
+                        FROM
+                            "GamePlatforms" AS candidate
+                        WHERE
+                            candidate."Id" = @GamePlatformId
+                            OR @GamePlatformId::bigint IS NULL AND (lower(candidate."Name") = lower(@Folder) OR lower(candidate."Abbreviation") = lower(@Folder))
+                        ORDER BY
+                            candidate."Id"
+                        LIMIT 1
+                    ) AS platform
                 WHERE
                     asset."Id" = @MediaAssetId
                 ON CONFLICT ("WorkVersionId") DO NOTHING;

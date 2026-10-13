@@ -53,8 +53,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl)
+            string? plexUrl, string[] platforms)
         {
+            Platforms = platforms;
             PlexUrl = plexUrl;
             Id = id;
             MediaTypeId = mediaTypeId;
@@ -98,6 +99,10 @@ namespace Jularr.Backend.Data.User.Media.V1
         // Opens the title on the connected Plex server.
         [DataField(typeof(PlexFields), nameof(PlexFields.Url))]
         public string? PlexUrl { get; }
+
+        // Platforms a game is available on.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Titles))]
+        public string[] Platforms { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData
