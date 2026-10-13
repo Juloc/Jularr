@@ -25,6 +25,7 @@
         overflow-x: auto;
         padding: 4px 2px 8px;
         scroll-snap-type: x proximity;
+        scroll-padding-inline: 2px;
         scrollbar-width: none;
         &::-webkit-scrollbar { display: none; }
     }

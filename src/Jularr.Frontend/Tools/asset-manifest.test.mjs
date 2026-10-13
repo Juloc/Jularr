@@ -112,6 +112,12 @@ test("appearance choices wrap at their natural width and search retains an acces
     assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent\)/);
 });
 
+test("media shelf snap alignment includes its focus padding without visible scrollbars", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-shelf__items\{[^}]*padding:4px 2px 8px;[^}]*scroll-padding-inline:2px;scrollbar-width:none/);
+    assert.match(css, /\.media-shelf__items::-webkit-scrollbar\{display:none\}/);
+});
+
 test("manifest URLs are relative and cannot escape the asset root", () => {
     for (const file of [...files, icons.file]) {
         assert.ok(!file.startsWith("/") && !file.includes("..") && !file.includes("?"), file);
