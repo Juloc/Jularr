@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Playback;
 
@@ -42,6 +44,75 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.SegmentIndex))]
         public int Index { get; }
+    }
+
+    // An audio or subtitle choice; image subtitles are listed but not yet supported.
+    public sealed class PlaybackTrackV1 : BaseResponse
+    {
+        public PlaybackTrackV1(string key, MediaTrackType mediaTrackTypeId, string? language, string? title, int? channels, bool isDefault, bool isForced, bool isSupported)
+        {
+            Key = key;
+            MediaTrackTypeId = mediaTrackTypeId;
+            Language = language;
+            Title = title;
+            Channels = channels;
+            IsDefault = isDefault;
+            IsForced = isForced;
+            IsSupported = isSupported;
+        }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string Key { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.MediaTrackTypeId))]
+        public MediaTrackType MediaTrackTypeId { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Language))]
+        public string? Language { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Channels))]
+        public int? Channels { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.IsDefault))]
+        public bool IsDefault { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.IsForced))]
+        public bool IsForced { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsSupported))]
+        public bool IsSupported { get; }
+    }
+
+    public sealed class PlaybackSubtitleParametersV1 : BaseParameters
+    {
+        public PlaybackSubtitleParametersV1(long mediaAssetId, string key)
+        {
+            MediaAssetId = mediaAssetId;
+            Key = key;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.TrackKey))]
+        public string Key { get; }
+    }
+
+    public sealed class PlaybackSubtitleV1 : BaseResponse, ITextOutput
+    {
+        public PlaybackSubtitleV1(string text)
+        {
+            Text = text;
+        }
+
+        [JsonIgnore]
+        public string Text { get; }
+
+        [JsonIgnore]
+        public string ContentType => "text/vtt; charset=utf-8";
     }
 
     public sealed class PlaybackPlaylistV1 : BaseResponse, ITextOutput
@@ -100,11 +171,12 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
     public sealed class StartPlaybackDataV1 : BaseData
     {
-        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs)
+        public StartPlaybackDataV1(string[] containers, string[] videoCodecs, string[] audioCodecs, int? audioStreamIndex = null)
         {
             Containers = containers;
             VideoCodecs = videoCodecs;
             AudioCodecs = audioCodecs;
+            AudioStreamIndex = audioStreamIndex;
         }
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Formats))]
@@ -115,6 +187,10 @@ namespace Jularr.Backend.Data.User.Playback.V1
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.Formats))]
         public string[] AudioCodecs { get; }
+
+        // An audio track other than the file's default is delivered through a conversion.
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex), false)]
+        public int? AudioStreamIndex { get; }
 
         public override void Validate()
         {

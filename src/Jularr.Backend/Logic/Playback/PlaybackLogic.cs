@@ -9,26 +9,26 @@ namespace Jularr.Backend.Logic.Playback
     internal static class PlaybackLogic
     {
         public static bool CanPlayDirectly(string container, IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
-            IReadOnlySet<string> audioCodecs)
+            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null)
         {
-            // Unanalysed files are tried directly when the container plays.
-            if (!containers.Contains(container))
+            // Unanalysed files are tried directly when the container plays; browsers play the file's default audio only.
+            var audio = Select(tracks, MediaTrackType.Audio);
+            if (!containers.Contains(container) || audioStreamIndex is { } chosen && audio?.StreamIndex != chosen)
             {
                 return false;
             }
 
             var video = Select(tracks, MediaTrackType.Video);
-            var audio = Select(tracks, MediaTrackType.Audio);
             return (video is null || video.Codec is { } videoCodec && videoCodecs.Contains(videoCodec))
                 && (audio is null || audio.Codec is { } audioCodec && audioCodecs.Contains(audioCodec));
         }
 
         public static PlaybackConversion? PlanConversion(IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
-            IReadOnlySet<string> audioCodecs)
+            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null)
         {
-            // HLS delivers H.264 and AAC; matching streams are copied.
+            // HLS delivers H.264 and AAC; matching streams are copied, a chosen audio track replaces the default.
             var video = Select(tracks, MediaTrackType.Video);
-            var audio = Select(tracks, MediaTrackType.Audio);
+            var audio = audioStreamIndex is { } chosen ? tracks.FirstOrDefault(track => track.StreamIndex == chosen) : Select(tracks, MediaTrackType.Audio);
             if (tracks.Count == 0 || !containers.Contains("hls") || video is not null && !videoCodecs.Contains("h264") || audio is not null && !audioCodecs.Contains("aac"))
             {
                 return null;

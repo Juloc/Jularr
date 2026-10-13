@@ -1,4 +1,6 @@
+using System.Globalization;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Library;
@@ -51,6 +53,180 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 """;
             sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadRequiredAsync<PlaybackItemV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/playback/assets/{mediaAssetId:long}/tracks")]
+    public sealed class ReadPlaybackTracksV1 : UserService<MediaAssetParametersV1>
+    {
+        private readonly PlaybackSubtitles _subtitles;
+
+        internal ReadPlaybackTracksV1(PlaybackSubtitles subtitles)
+        {
+            _subtitles = subtitles;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<PlaybackTrackV1>>()];
+        protected override ModuleRequirement GetInstanceModules(MediaAssetParametersV1 parameters) => ModuleRequirement.All("Library", "Playback");
+        protected override ServicePermission GetPermission(MediaAssetParametersV1 parameters, Type resultType) => new("profile.playback");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The played file's audio and subtitle streams, then subtitle files beside it.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH media AS (
+                    SELECT
+                        file."Id"
+                    FROM
+                        "MediaAssets" AS asset
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
+                    WHERE
+                        asset."Id" = @MediaAssetId
+                        AND file."MissingSince" IS NULL
+                        AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                    ORDER BY
+                        file."Id"
+                    LIMIT 1
+                )
+                SELECT
+                    track."StreamIndex",
+                    NULL::bigint AS "StoredFileId",
+                    NULL::varchar AS "RelativePath",
+                    track."MediaTrackTypeId",
+                    track."Codec",
+                    track."Language",
+                    track."Title",
+                    track."Channels",
+                    track."IsDefault",
+                    track."IsForced"
+                FROM
+                    media
+                    JOIN "MediaTracks" AS track ON track."StoredFileId" = media."Id"
+                WHERE
+                    track."MediaTrackTypeId" IN (2, 3)
+                UNION ALL
+                SELECT
+                    NULL,
+                    sidecar."Id",
+                    sidecar."RelativePath",
+                    3,
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL,
+                    FALSE,
+                    FALSE
+                FROM
+                    media
+                    JOIN "StoredFiles" AS sidecar ON sidecar."MediaAssetId" = @MediaAssetId
+                WHERE
+                    sidecar."MissingSince" IS NULL
+                    AND sidecar."RelativePath" ~* '\.(srt|vtt|ass|ssa|sub|idx|sup)$'
+                ORDER BY
+                    4,
+                    1 NULLS LAST,
+                    2;
+                """;
+            sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
+            var rows = await Context.ReadSql.ReadListAsync<PlaybackTrackRowData>(sql, CancellationToken);
+            return new BaseDataList<PlaybackTrackV1>([.. rows.Select(row =>
+            {
+                if (row.StoredFileId is { } fileId)
+                {
+                    var (language, isForced) = PlaybackTracks.Describe(row.RelativePath!);
+                    var supported = PlaybackTracks.IsTextFile(row.RelativePath!) && (_subtitles.CanConvert || row.RelativePath!.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
+                        || row.RelativePath!.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase));
+                    return new PlaybackTrackV1(PlaybackTracks.FileKey(fileId), MediaTrackType.Subtitle, language, null, null, false, isForced, supported);
+                }
+
+                // Another audio track and embedded text subtitles need FFmpeg.
+                var playable = row.MediaTrackTypeId == MediaTrackType.Audio ? row.IsDefault || _subtitles.CanConvert : PlaybackTracks.IsText(row.Codec) && _subtitles.CanConvert;
+                return new PlaybackTrackV1(PlaybackTracks.StreamKey(row.StreamIndex!.Value), row.MediaTrackTypeId, row.Language, row.Title, row.Channels, row.IsDefault, row.IsForced, playable);
+            })]);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/playback/assets/{mediaAssetId:long}/subtitles/{key}")]
+    public sealed class ReadPlaybackSubtitleV1 : UserService<PlaybackSubtitleParametersV1>
+    {
+        private readonly StorageOptions _options;
+        private readonly PlaybackSubtitles _subtitles;
+
+        internal ReadPlaybackSubtitleV1(IOptions<StorageOptions> options, PlaybackSubtitles subtitles)
+        {
+            _options = options.Value;
+            _subtitles = subtitles;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PlaybackSubtitleV1>()];
+        protected override ModuleRequirement GetInstanceModules(PlaybackSubtitleParametersV1 parameters) => ModuleRequirement.All("Library", "Playback");
+        protected override ServicePermission GetPermission(PlaybackSubtitleParametersV1 parameters, Type resultType) => new("profile.playback");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // A subtitle file of the asset, or a text stream of its played file.
+            var (streamIndex, fileId) = PlaybackTracks.ParseKey(Parameters.Key);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."Id" AS "StoredFileId",
+                    file."RelativePath",
+                    file."ModifiedAt",
+                    root."RelativePath" AS "RootRelativePath",
+                    mount."Id" AS "StorageMountId",
+                    mount."StorageProtocolTypeId",
+                    mount."SharePath",
+                    track."Codec"
+                FROM
+                    "MediaAssets" AS asset
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                    LEFT JOIN "MediaTracks" AS track ON track."StoredFileId" = file."Id" AND track."StreamIndex" = @StreamIndex AND track."MediaTrackTypeId" = 3
+                WHERE
+                    asset."Id" = @MediaAssetId
+                    AND file."MissingSince" IS NULL
+                    AND (file."Id" = @StoredFileId AND file."RelativePath" ~* '\.(srt|vtt|ass|ssa)$'
+                        OR @StoredFileId::bigint IS NULL AND track."StreamIndex" IS NOT NULL AND file."Id" = (
+                            SELECT
+                                media."Id"
+                            FROM
+                                "StoredFiles" AS media
+                            WHERE
+                                media."MediaAssetId" = asset."Id"
+                                AND media."MissingSince" IS NULL
+                                AND media."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                            ORDER BY
+                                media."Id"
+                            LIMIT 1
+                        ));
+                """;
+            sql.Parameters.Add(new PlaybackSubtitleLookupData(Parameters.MediaAssetId, Auth.ProfileId!.Value, streamIndex, fileId));
+            var source = await Context.ReadSql.ReadOptionalAsync<PlaybackSubtitleSourceData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The subtitle was not found.");
+            if (streamIndex is not null && !PlaybackTracks.IsText(source.Codec))
+            {
+                throw new KeyNotFoundException("The subtitle was not found.");
+            }
+
+            string path;
+            try
+            {
+                var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
+                path = StorageFileSystem.ResolveFile(directory, source.RelativePath);
+            }
+            catch (NasMountException)
+            {
+                throw new ServiceUnavailableException("storage_unavailable");
+            }
+
+            var cacheKey = source.StoredFileId.ToString(CultureInfo.InvariantCulture) + "-" + (streamIndex is { } stream ? PlaybackTracks.StreamKey(stream) : "file") + "-"
+                + source.ModifiedAt.Ticks.ToString(CultureInfo.InvariantCulture);
+            return new PlaybackSubtitleV1(await _subtitles.ReadAsync(path, streamIndex, cacheKey, CancellationToken));
         }
     }
 
@@ -133,12 +309,17 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 return (source, await ctx.ReadSql.ReadListAsync<PlaybackTrackData>(sql, ct));
             }, CancellationToken);
 
-            // Delivery follows the client's actual capabilities.
+            // Delivery follows the client's actual capabilities and the chosen audio track.
+            if (Data.AudioStreamIndex is { } chosen && !tracks.Any(track => track.StreamIndex == chosen && track.MediaTrackTypeId == MediaTrackType.Audio))
+            {
+                throw new DataValidationException(nameof(Data.AudioStreamIndex), "unknown_reference");
+            }
+
             var containers = Data.Containers.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var videoCodecs = Data.VideoCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var audioCodecs = Data.AudioCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var direct = PlaybackLogic.CanPlayDirectly(LibraryFileTypes.GetStream(source.RelativePath).Container, tracks, containers, videoCodecs, audioCodecs);
-            var conversion = direct ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs);
+            var direct = PlaybackLogic.CanPlayDirectly(LibraryFileTypes.GetStream(source.RelativePath).Container, tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex);
+            var conversion = direct ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex);
             if (!direct && (conversion is null || source.DurationMs is null || !_transcodes.IsAvailable))
             {
                 throw new ServiceUnavailableException("playback_conversion_unavailable");

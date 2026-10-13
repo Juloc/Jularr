@@ -210,4 +210,117 @@ namespace Jularr.Backend.Data.Logic.Playback
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
         public bool IsCompleted { get; }
     }
+
+    // An audio or subtitle stream of the media file, or a subtitle file beside it.
+    internal sealed class PlaybackTrackRowData : BaseData
+    {
+        public PlaybackTrackRowData(int? streamIndex, long? storedFileId, string? relativePath, MediaTrackType mediaTrackTypeId, string? codec, string? language, string? title, int? channels,
+            bool isDefault, bool isForced)
+        {
+            StreamIndex = streamIndex;
+            StoredFileId = storedFileId;
+            RelativePath = relativePath;
+            MediaTrackTypeId = mediaTrackTypeId;
+            Codec = codec;
+            Language = language;
+            Title = title;
+            Channels = channels;
+            IsDefault = isDefault;
+            IsForced = isForced;
+        }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex), false)]
+        public int? StreamIndex { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id), false)]
+        public long? StoredFileId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath), false)]
+        public string? RelativePath { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.MediaTrackTypeId))]
+        public MediaTrackType MediaTrackTypeId { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec))]
+        public string? Codec { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Language))]
+        public string? Language { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Channels))]
+        public int? Channels { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.IsDefault))]
+        public bool IsDefault { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.IsForced))]
+        public bool IsForced { get; }
+    }
+
+    // Where a subtitle comes from: a subtitle file, or a text stream of the media file.
+    internal sealed class PlaybackSubtitleSourceData : BaseData
+    {
+        public PlaybackSubtitleSourceData(long storedFileId, string relativePath, DateTime modifiedAt, string rootRelativePath, long storageMountId, StorageProtocolType storageProtocolTypeId,
+            string sharePath, string? codec)
+        {
+            StoredFileId = storedFileId;
+            RelativePath = relativePath;
+            ModifiedAt = modifiedAt;
+            RootRelativePath = rootRelativePath;
+            StorageMountId = storageMountId;
+            StorageProtocolTypeId = storageProtocolTypeId;
+            SharePath = sharePath;
+            Codec = codec;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
+        public string RootRelativePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
+        public StorageProtocolType StorageProtocolTypeId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
+        public string SharePath { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Codec))]
+        public string? Codec { get; }
+    }
+
+    internal sealed class PlaybackSubtitleLookupData : BaseData
+    {
+        public PlaybackSubtitleLookupData(long mediaAssetId, long profileId, int? streamIndex, long? storedFileId)
+        {
+            MediaAssetId = mediaAssetId;
+            ProfileId = profileId;
+            StreamIndex = streamIndex;
+            StoredFileId = storedFileId;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.StreamIndex), false)]
+        public int? StreamIndex { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id), false)]
+        public long? StoredFileId { get; }
+    }
 }

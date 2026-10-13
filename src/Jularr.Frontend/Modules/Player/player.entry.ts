@@ -34,54 +34,16 @@ async function start(player: HTMLElement): Promise<void> {
     const mute = player.querySelector<HTMLButtonElement>("[data-action=mute]")!;
     const antiforgery = player.dataset.antiforgery ?? "";
     let plan: PlaybackPlan | null = null;
+    let hls: { destroy(): void } | null = null;
+    let save: (value: object, leaving?: boolean) => void = () => undefined;
+    let switching = false;
     let idle = 0;
 
-    // Planning needs the real browser capabilities.
-    for (let attempt = 0; ; attempt++) {
-        const response = await fetch(player.dataset.startUrl!, {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
-            body: JSON.stringify(capabilities())
-        });
-        if (response.ok) {
-            plan = await response.json() as PlaybackPlan;
-            break;
-        }
+    plan = await requestPlan(null);
+    if (!plan) return;
+    await attach(plan, plan.resumePositionMs / 1000);
 
-        const code = await errorCode(response);
-        show(code);
-        if (code !== "storage_waking" || attempt >= WakeRetries) return;
-        await new Promise(resolve => setTimeout(resolve, 10_000));
-    }
-
-    status.hidden = true;
-    player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[plan.playbackModeTypeId] ?? "");
-    // Conversions use HLS: native where available, otherwise hls.js on demand.
-    if (plan.playbackModeTypeId !== 1 && video.canPlayType("application/vnd.apple.mpegurl") === "") {
-        const { default: Hls } = await import("hls.js/light");
-        const hls = new Hls({ startPosition: plan.resumePositionMs / 1000 });
-        hls.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
-        hls.loadSource(plan.streamUrl);
-        hls.attachMedia(video);
-    } else {
-        // Metadata loads at once so resume applies before the first frame.
-        video.preload = "metadata";
-        video.src = plan.streamUrl;
-    }
-    video.addEventListener("loadedmetadata", () => {
-        timeline.max = String(Math.floor(video.duration));
-        player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
-        if (plan!.resumePositionMs > 0 && plan!.resumePositionMs / 1000 < video.duration) video.currentTime = plan!.resumePositionMs / 1000;
-        void video.play().catch(() => undefined);
-    }, { once: true });
-    video.addEventListener("error", () => show("failed"));
-
-    // Save acknowledged progress only.
-    const save = progressReporter(player.dataset.sessionUrl + plan.playbackSessionId, antiforgery, failed => {
-        const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
-        if (feedback) feedback.hidden = !failed;
-    });
+    // Save acknowledged progress only; each plan has its own session.
     const report = (ended: boolean, completed = ended) => {
         if (!plan) return;
         save({
@@ -97,6 +59,98 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("ended", () => report(true));
     document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
     window.addEventListener("pagehide", event => report(!event.persisted, false));
+
+    // Planning needs the real browser capabilities; another audio track asks for a new plan.
+    async function requestPlan(audioStreamIndex: number | null): Promise<PlaybackPlan | null> {
+        for (let attempt = 0; ; attempt++) {
+            const response = await fetch(player.dataset.startUrl!, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json", RequestVerificationToken: antiforgery },
+                body: JSON.stringify({ ...capabilities(), audioStreamIndex })
+            });
+            if (response.ok) {
+                status.hidden = true;
+                return await response.json() as PlaybackPlan;
+            }
+
+            const code = await errorCode(response);
+            show(code);
+            if (code !== "storage_waking" || attempt >= WakeRetries) return null;
+            await new Promise(resolve => setTimeout(resolve, 10_000));
+        }
+    }
+
+    // Conversions use HLS: native where available, otherwise hls.js on demand.
+    async function attach(next: PlaybackPlan, position: number): Promise<void> {
+        hls?.destroy();
+        hls = null;
+        player.querySelector<HTMLElement>("[data-role=mode]")!.textContent = text("data-mode", Modes[next.playbackModeTypeId] ?? "");
+        save = progressReporter(player.dataset.sessionUrl + next.playbackSessionId, antiforgery, failed => {
+            const feedback = player.querySelector<HTMLElement>('[data-role=save-error]');
+            if (feedback) feedback.hidden = !failed;
+        });
+        if (next.playbackModeTypeId !== 1 && video.canPlayType("application/vnd.apple.mpegurl") === "") {
+            const { default: Hls } = await import("hls.js/light");
+            const instance = new Hls({ startPosition: position });
+            instance.on(Hls.Events.ERROR, (_, data) => { if (data.fatal) show("failed"); });
+            instance.loadSource(next.streamUrl);
+            instance.attachMedia(video);
+            hls = instance;
+        } else {
+            // Metadata loads at once so the position applies before the first frame.
+            video.preload = "metadata";
+            video.src = next.streamUrl;
+        }
+
+        // A new source resets the speed; the chosen one stays.
+        const rate = video.playbackRate;
+        video.addEventListener("loadedmetadata", () => {
+            timeline.max = String(Math.floor(video.duration));
+            player.querySelector("[data-role=duration]")!.textContent = clock(video.duration);
+            if (position > 0 && position < video.duration) video.currentTime = position;
+            video.playbackRate = rate;
+            void video.play().catch(() => undefined);
+        }, { once: true });
+    }
+
+    // The new plan comes first; only then the old session ends and playback continues at the same position.
+    async function switchAudio(streamIndex: number): Promise<void> {
+        if (switching) return;
+        switching = true;
+        try {
+            const position = video.currentTime;
+            const next = await requestPlan(streamIndex);
+            if (!next) return;
+            report(true, false);
+            plan = next;
+            await attach(next, position);
+        } finally {
+            switching = false;
+        }
+    }
+
+    // Subtitles are WebVTT tracks on the same video; Off removes them.
+    function showSubtitle(key: string, language: string | undefined): void {
+        video.querySelectorAll("track").forEach(track => track.remove());
+        if (!key) return;
+        const track = document.createElement("track");
+        track.kind = "subtitles";
+        track.src = (player.dataset.subtitleUrl ?? "") + encodeURIComponent(key);
+        if (language) track.srclang = language;
+        track.default = true;
+        track.addEventListener("load", () => { track.track.mode = "showing"; });
+        track.addEventListener("error", () => {
+            show("failed");
+            track.remove();
+            const off = player.querySelector<HTMLElement>('[data-subtitle=""]');
+            if (off) choose("data-subtitle", off);
+        });
+        video.append(track);
+        track.track.mode = "showing";
+    }
+
+    video.addEventListener("error", () => show("failed"));
 
     // Transport state.
     video.addEventListener("play", () => setPlaying(true));
@@ -122,11 +176,27 @@ async function start(player: HTMLElement): Promise<void> {
         fullscreen: () => void (document.fullscreenElement ? document.exitFullscreen() : player.requestFullscreen()),
         pip: () => void (document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture()),
         speed: () => panel("speed"),
+        audio: () => panel("audio"),
+        subtitles: () => panel("subtitles"),
         more: () => panel("more"),
         close: () => report(true, false)
     };
     player.addEventListener("click", event => {
         const target = event.target as Element;
+        const audio = target.closest<HTMLButtonElement>("[data-audio]");
+        if (audio && !audio.disabled && !switching) {
+            choose("data-audio", audio);
+            void switchAudio(Number(audio.dataset.audio));
+            return;
+        }
+
+        const subtitle = target.closest<HTMLButtonElement>("[data-subtitle]");
+        if (subtitle && !subtitle.disabled) {
+            choose("data-subtitle", subtitle);
+            showSubtitle(subtitle.dataset.subtitle ?? "", subtitle.dataset.language);
+            return;
+        }
+
         const speed = target.closest<HTMLElement>("[data-speed]");
         if (speed) {
             video.playbackRate = Number(speed.dataset.speed);
@@ -182,9 +252,14 @@ async function start(player: HTMLElement): Promise<void> {
 
     function panel(name: string | null): void {
         player.querySelectorAll<HTMLElement>("[data-panel]").forEach(item => { item.hidden = item.dataset.panel !== name || !item.hidden; });
-        player.querySelectorAll<HTMLElement>("[data-action=speed], [data-action=more]")
+        player.querySelectorAll<HTMLElement>("[data-action=speed], [data-action=audio], [data-action=subtitles], [data-action=more]")
             .forEach(button => button.setAttribute("aria-expanded", String(!player.querySelector<HTMLElement>(`[data-panel=${button.dataset.action}]`)!.hidden)));
         wake();
+    }
+
+    function choose(attribute: string, chosen: HTMLElement): void {
+        player.querySelectorAll(`[${attribute}]`).forEach(item => item.setAttribute("aria-checked", String(item === chosen)));
+        panel(null);
     }
 
     function show(code: string): void {

@@ -126,6 +126,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<WakeOnLanClient>();
             services.TryAddSingleton<MediaTranscoder>();
             services.TryAddSingleton<PlaybackTranscodes>();
+            services.TryAddTransient<PlaybackSubtitles>();
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<PlexServer>();

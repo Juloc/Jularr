@@ -22,6 +22,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.storage_waking", "The storage device is waking up. Please try again shortly."),
             new("errors.playback_conversion_unavailable", "This file cannot be played directly, and conversion is not available yet."),
             new("errors.playback_conversion_failed", "The media conversion failed. Please try again."),
+            new("errors.playback_subtitle_unavailable", "This subtitle cannot be shown."),
             new("errors.playback_capacity_exhausted", "The server is converting as many streams as it allows. Please try again shortly."),
             new("errors.storage_wake_failed", "The Wake-on-LAN packet could not be sent."),
             new("errors.scan_incomplete", "Some folders could not be read. Nothing was marked as missing."),

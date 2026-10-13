@@ -52,6 +52,74 @@ namespace Jularr.Integrations.Logic.Media
             }
         }
 
+        // A text subtitle stream or file as WebVTT; bounded so a stuck read never holds a request.
+        public async Task<bool> ConvertSubtitleAsync(string inputPath, string? inputFormat, int? streamIndex, string outputPath, CancellationToken ct)
+        {
+            if (!IsAvailable)
+            {
+                throw new ProviderUnavailableException();
+            }
+
+            var start = new ProcessStartInfo(ExecutablePath!)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            // Only local files; a subtitle file is read as what its name says, never sniffed.
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file"])
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            if (inputFormat is not null)
+            {
+                start.ArgumentList.Add("-f");
+                start.ArgumentList.Add(inputFormat);
+            }
+
+            start.ArgumentList.Add("-i");
+            start.ArgumentList.Add(inputPath);
+
+            if (streamIndex is { } stream)
+            {
+                start.ArgumentList.Add("-map");
+                start.ArgumentList.Add("0:" + stream.ToString(CultureInfo.InvariantCulture));
+            }
+
+            foreach (var argument in (string[])["-f", "webvtt", outputPath])
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMinutes(5));
+            try
+            {
+                using var process = Process.Start(start) ?? throw new ProviderUnavailableException();
+                var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+                try
+                {
+                    await process.WaitForExitAsync(timeout.Token);
+                    await Task.WhenAll(output, errors);
+                }
+                catch (OperationCanceledException)
+                {
+                    process.Kill(true);
+                    ct.ThrowIfCancellationRequested();
+                    return false;
+                }
+
+                return process.ExitCode == 0;
+            }
+            catch (Win32Exception)
+            {
+                throw new ProviderUnavailableException();
+            }
+        }
+
         internal static IReadOnlyList<string> BuildArguments(TranscodeRequest request)
         {
             var offset = (request.StartSegment * request.SegmentSeconds).ToString(CultureInfo.InvariantCulture);

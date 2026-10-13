@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Enums.Library;
@@ -142,6 +143,98 @@ namespace Jularr.Backend.Tests
             // Without HLS or H.264 there is nothing to convert to.
             Assert.IsNull(PlaybackLogic.PlanConversion(tracks, Browser.Containers.ToHashSet(), Browser.VideoCodecs.ToHashSet(), Browser.AudioCodecs.ToHashSet()));
             Assert.IsNull(PlaybackLogic.PlanConversion(tracks, Hls.Containers.ToHashSet(), new HashSet<string> { "vp9" }, Hls.AudioCodecs.ToHashSet()));
+        }
+
+        [TestMethod]
+        public void Tracks_SidecarNamesAndSubRip_BecomeLanguagesAndWebVtt()
+        {
+            Assert.AreEqual(("de", true), PlaybackTracks.Describe("Film (2001)/Film.de.forced.srt"));
+            Assert.AreEqual(("pt-br", false), PlaybackTracks.Describe("Film.pt-br.sdh.srt"));
+            Assert.AreEqual(((string?)null, false), PlaybackTracks.Describe("Film (2001)/Film.srt"));
+            Assert.AreEqual(((string?)null, false), PlaybackTracks.Describe("Film.The.Cut.srt"));
+            StringAssert.Contains(PlaybackTracks.SrtToVtt("1\n0:00:01,000 --> 0:00:02,000\nHi\n"), "00:00:01.000 --> 00:00:02.000");
+            Assert.AreEqual("WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.500\nHallo\n", PlaybackTracks.SrtToVtt("\uFEFF1\r\n00:00:01,000 --> 00:00:02,500\r\nHallo\r\n"));
+            Assert.AreEqual(((int?)3, (long?)null), PlaybackTracks.ParseKey("s3"));
+            Assert.AreEqual(((int?)null, (long?)12), PlaybackTracks.ParseKey("f12"));
+            Assert.ThrowsExactly<KeyNotFoundException>(() => PlaybackTracks.ParseKey("x1"));
+            Assert.AreEqual("Grüße", PlaybackTracks.Decode(System.Text.Encoding.Latin1.GetBytes("Grüße")));
+
+            // Another audio track never plays directly; its conversion maps that track.
+            var tracks = new[] { new PlaybackTrackData(0, MediaTrackType.Video, "h264", true), new PlaybackTrackData(1, MediaTrackType.Audio, "aac", true),
+                new PlaybackTrackData(2, MediaTrackType.Audio, "aac", false) };
+            Assert.IsTrue(PlaybackLogic.CanPlayDirectly("mp4", tracks, Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(), Hls.AudioCodecs.ToHashSet(), 1));
+            Assert.IsFalse(PlaybackLogic.CanPlayDirectly("mp4", tracks, Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(), Hls.AudioCodecs.ToHashSet(), 2));
+            var conversion = PlaybackLogic.PlanConversion(tracks, Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(), Hls.AudioCodecs.ToHashSet(), 2)!;
+            Assert.AreEqual(2, conversion.AudioStreamIndex);
+            Assert.AreEqual(PlaybackModeType.Remux, conversion.PlaybackModeTypeId);
+        }
+
+        [TestMethod]
+        public async Task Tracks_ListAudioAndSubtitlesAndServeSubRipAsWebVtt()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var cache = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, settings: new Dictionary<string, string>
+            {
+                ["Media:FfmpegPath"] = Path.Combine(cache.Path, "missing-ffmpeg"),
+                ["Media:TranscodeCachePath"] = cache.Path
+            });
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Movies", "Film (2001)");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Film.mp4"), "jklmnopq");
+            File.WriteAllText(Path.Combine(folder, "Film.de.forced.srt"), "1\r\n00:00:01,000 --> 00:00:02,000\r\nGrüße\r\n");
+            File.WriteAllText(Path.Combine(folder, "Film.en.ass"), "[Script Info]");
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%.mp4'"))!;
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, "Film", null, null, null));
+            var assetId = (await assigned.Content.ReadFromJsonAsync<AssignLibraryFileResultV1>())!.MediaAssetId;
+            await host.Fixture.RunSqlAsync($$"""
+                UPDATE "StoredFiles" SET "ProbedAt" = now(), "DurationMs" = 13500 WHERE "Id" = {{fileId}};
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Codec", "Language", "Title", "Channels", "IsDefault", "IsForced") VALUES
+                    ({{fileId}}, 0, 1, 'h264', NULL, NULL, NULL, TRUE, FALSE),
+                    ({{fileId}}, 1, 2, 'aac', 'eng', NULL, 6, TRUE, FALSE),
+                    ({{fileId}}, 2, 2, 'aac', 'ger', 'Kommentar', 2, FALSE, FALSE),
+                    ({{fileId}}, 3, 3, 'subrip', 'eng', NULL, NULL, FALSE, FALSE),
+                    ({{fileId}}, 4, 3, 'hdmv_pgs_subtitle', 'ger', NULL, NULL, FALSE, FALSE);
+                """);
+
+            // Streams first, then the subtitle files beside the film; image subtitles are listed but unsupported.
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/tracks");
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            var tracks = (await listed.Content.ReadFromJsonAsync<BaseDataList<PlaybackTrackV1>>())!;
+            CollectionAssert.AreEqual(new[] { "s1", "s2", "s3", "s4" }, tracks.Take(4).Select(track => track.Key).ToArray());
+            Assert.IsFalse(tracks.Single(track => track.Key == "s4").IsSupported);
+            var sidecar = tracks.Single(track => track.Language == "de" && track.Key.StartsWith('f'));
+            Assert.IsTrue(sidecar.IsForced);
+            Assert.IsTrue(sidecar.IsSupported);
+
+            // SubRip arrives as WebVTT; an image stream is no text subtitle.
+            using var subtitle = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/" + sidecar.Key);
+            Assert.AreEqual(HttpStatusCode.OK, subtitle.StatusCode, await subtitle.Content.ReadAsStringAsync());
+            Assert.AreEqual("text/vtt", subtitle.Content.Headers.ContentType!.MediaType);
+            var vtt = await subtitle.Content.ReadAsStringAsync();
+            StringAssert.StartsWith(vtt, "WEBVTT");
+            StringAssert.Contains(vtt, "00:00:01.000 --> 00:00:02.000");
+            StringAssert.Contains(vtt, "Grüße");
+            using var image = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/" + assetId + "/subtitles/s4");
+            Assert.AreEqual(HttpStatusCode.NotFound, image.StatusCode);
+
+            // The commentary is remuxed; unknown tracks are refused.
+            using var commentary = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", new StartPlaybackDataV1(Hls.Containers, Hls.VideoCodecs, Hls.AudioCodecs, 2));
+            Assert.AreEqual(HttpStatusCode.OK, commentary.StatusCode, await commentary.Content.ReadAsStringAsync());
+            Assert.AreEqual(PlaybackModeType.Remux, (await commentary.Content.ReadFromJsonAsync<PlaybackPlanV1>())!.PlaybackModeTypeId);
+            using var unknown = await host.SendAsync(HttpMethod.Post, "/api/v1/playback/assets/" + assetId + "/sessions", new StartPlaybackDataV1(Hls.Containers, Hls.VideoCodecs, Hls.AudioCodecs, 0));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+
+            // The player offers both choices with readable languages.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "data-action=\"audio\"");
+            StringAssert.Contains(html, "Deutsch &#xB7; Kommentar &#xB7; Stereo");
+            StringAssert.Contains(html, "data-subtitle=\"" + sidecar.Key + "\"");
         }
 
         [TestMethod]

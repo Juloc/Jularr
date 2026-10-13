@@ -32,7 +32,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Provider title](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs): TMDB title and authorized request before canonical Work creation.
 - [Library](Pages/User/Library/Library.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): real bounded catalogs.
 - [Details](Pages/User/Details/Details.cshtml.cs): Work, paged versions, personal actions and capability-based Play/Read links.
-- [Player](Pages/User/Player/Player.cshtml.cs), [chrome](Framework/Components/Player.cs), [client](Modules/Player/player.entry.ts): PlaybackPlan, transport, HLS and progress.
+- [Player](Pages/User/Player/Player.cshtml.cs), [chrome](Framework/Components/Player.cs), [client](Modules/Player/player.entry.ts): PlaybackPlan, transport, HLS and progress; Audio and Subtitles direct actions with their panels (another audio track asks for a new plan at the same position, subtitles are WebVTT tracks), languages through [LanguageLabel.cs](Framework/LanguageLabel.cs).
 - [Reader](Pages/User/Reader/Reader.cshtml.cs), [client](Modules/Reader/reader.entry.ts): sanitized sections, device settings, semantic locators and end-of-content completion. Comics use the [comic client](Modules/Reader/comic.entry.ts): one page or a spread (cover and wide pages alone), reading direction (Manga right to left), three pages preloaded, `p<page>` as locator; without script, page links.
 - [Progress transport](Modules/Tracking/Progress.ts): serialized acknowledged writes, finite transient retries and visible unsaved state for Reader/Player.
 - [Requests](Pages/User/Requests/Requests.cshtml.cs): profile queue and authorized source confirmation.

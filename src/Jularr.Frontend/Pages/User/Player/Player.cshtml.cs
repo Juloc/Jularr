@@ -1,4 +1,6 @@
 using System.Globalization;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Frontend.Framework;
@@ -7,9 +9,10 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Player
 {
-    public sealed class PlayerModel(ReadPlaybackItemV1 read, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+    public sealed class PlayerModel(ReadPlaybackItemV1 read, ReadPlaybackTracksV1 readTracks, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private PlaybackItemV1? _item;
+        private IReadOnlyList<PlaybackTrackV1> _tracks = [];
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -27,7 +30,10 @@ namespace Jularr.Frontend.Pages.User.Player
                 var asset = item.MediaAssetId.ToString(CultureInfo.InvariantCulture);
                 var context = MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber);
                 var source = new PlayerSource(item.CanonicalTitle, context, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), "/api/v1/playback/assets/" + asset + "/sessions",
-                    "/api/v1/playback/sessions/", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "");
+                    "/api/v1/playback/sessions/", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", null,
+                    [.. _tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Audio).Select(Track)],
+                    [.. _tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Subtitle).Select(Track)],
+                    "/api/v1/playback/assets/" + asset + "/subtitles/");
                 page.Content.Add(new UiPlayer(source, assets));
             }
             else if (FormError is not null)
@@ -46,6 +52,25 @@ namespace Jularr.Frontend.Pages.User.Player
         protected override async Task LoadDataAsync()
         {
             _item = await read.ExecuteAsync<PlaybackItemV1>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
+            _tracks = await readTracks.ExecuteAsync<BaseDataList<PlaybackTrackV1>>(new MediaAssetParametersV1(Id), HttpContext.RequestAborted);
+        }
+
+        // Language, then the track's own title and channel layout.
+        private PlayerTrack Track(PlaybackTrackV1 track, int index)
+        {
+            var parts = new List<string> { LanguageLabel.Name(track.Language) ?? texts["player.track.unknown"] + " " + (index + 1).ToString(CultureInfo.InvariantCulture) };
+            if (!string.IsNullOrWhiteSpace(track.Title)) parts.Add(track.Title);
+            if (track.Channels is { } channels)
+            {
+                parts.Add(channels switch
+                {
+                    1 => texts["player.channels.mono"], 2 => texts["player.channels.stereo"], 6 => "5.1", 8 => "7.1",
+                    _ => string.Format(CultureInfo.InvariantCulture, texts["player.channels.count"], channels)
+                });
+            }
+            if (track.IsForced) parts.Add(texts["player.subtitles.forced"]);
+            var key = track.MediaTrackTypeId == MediaTrackType.Audio ? track.Key[1..] : track.Key;
+            return new PlayerTrack(key, string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase)), track.Language, track.IsDefault, track.IsSupported);
         }
     }
 }

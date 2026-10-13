@@ -3,7 +3,11 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // Server-rendered player chrome; Modules/Player owns the client behavior.
-    public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null);
+    public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null,
+        IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null);
+
+    // One audio or subtitle choice; unsupported ones stay visible but disabled.
+    public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsDefault, bool IsSupported);
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
@@ -49,18 +53,25 @@ namespace Jularr.Frontend.Framework
                                 Action("forward", "player.forward30", "forward-30"),
                                 Action("next", "player.nextEpisode", "next").Attribute("disabled", "disabled")
                             ).Class("player__transport"),
-                            new Div(
+                            new Div([
+                                .. Choice("subtitles", "player.subtitles", new Icon("subtitles", assets), Subtitles.Count > 0),
+                                .. Choice("audio", "player.audio", new Icon("headphones", assets), Audio.Count > 1),
                                 new Button(new Span(new ValueText("1×")).Attribute("data-role", "speed-label")).Class("player__button")
                                     .Attribute("data-action", "speed").Attribute("aria-label", texts["player.speed"]).Attribute("aria-expanded", "false"),
                                 Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
                                 Action("fullscreen", "player.fullscreen", "fullscreen"),
                                 Action("more", "player.more", "more").Attribute("aria-expanded", "false")
-                            ).Class("player__options")
+                            ]).Class("player__options")
                         ).Class("player__actions")
                     ).Class("player__bottom"),
                     new Div([.. Speeds.Select(speed => new Button(new ValueText(speed + "×")).Class("player__option")
                         .Attribute("data-speed", speed).Attribute("role", "menuitemradio").Attribute("aria-checked", speed == "1" ? "true" : "false"))])
                         .Class("player__panel").Attribute("data-panel", "speed").Attribute("role", "menu").Attribute("aria-label", texts["player.speed"]).Attribute("hidden", "hidden"),
+                    TrackPanel("audio", "player.audio", Audio.Select(track => Option("audio", track.Key, new ValueText(track.Label), track.IsDefault, track.IsSupported, track.Language))),
+                    TrackPanel("subtitles", "player.subtitles", [
+                        Option("subtitle", "", new Text("player.subtitles.off"), true, true, null),
+                        .. Subtitles.Select(track => Option("subtitle", track.Key, new ValueText(track.Label), false, track.IsSupported, track.Language))
+                    ]),
                     new Div(
                         new P(new Text("player.delivery")),
                         new P().Attribute("data-role", "mode")
@@ -76,11 +87,33 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-start-url", source.StartUrl)
                 .Attribute("data-session-url", source.SessionUrl)
                 .Attribute("data-antiforgery", source.AntiforgeryToken)
+                .Attribute("data-subtitle-url", source.SubtitleUrl ?? "")
                 .WriteTo(writer, encoder, texts);
 
             HtmlElement Action(string action, string labelKey, string icon) => new Button(Icon(icon)).Class("player__button")
                 .Attribute("data-action", action).Attribute("aria-label", texts[labelKey]);
+
+            // Direct actions open their own part of the shared settings panels.
+            IEnumerable<IUiComponent> Choice(string action, string labelKey, IUiComponent icon, bool visible) => visible
+                ? [new Button(icon).Class("player__button").Attribute("data-action", action).Attribute("aria-label", texts[labelKey]).Attribute("aria-expanded", "false")]
+                : [];
+
+            HtmlElement TrackPanel(string name, string labelKey, IEnumerable<IUiComponent> options) => new Div([.. options]).Class("player__panel")
+                .Attribute("data-panel", name).Attribute("role", "menu").Attribute("aria-label", texts[labelKey]).Attribute("hidden", "hidden");
+
+            HtmlElement Option(string kind, string key, IUiComponent label, bool isChecked, bool isSupported, string? language)
+            {
+                var option = new Button(label).Class("player__option").Attribute("data-" + kind, key).Attribute("role", "menuitemradio")
+                    .Attribute("aria-checked", isChecked ? "true" : "false");
+                if (language is not null) option.Attribute("data-language", language);
+                if (!isSupported) option.Attribute("disabled", "disabled").Attribute("title", texts["player.track.unsupported"]);
+                return option;
+            }
         }
+
+        private IReadOnlyList<PlayerTrack> Audio => source.AudioTracks ?? [];
+
+        private IReadOnlyList<PlayerTrack> Subtitles => source.Subtitles ?? [];
 
         private Icon Icon(string name) => new("player-" + name, assets);
     }
