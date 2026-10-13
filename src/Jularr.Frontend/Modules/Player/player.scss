@@ -1,3 +1,5 @@
+@use "../Appearance/Material";
+
 .player-page { background: #080809; color: #fff; }
 .player-main { width: 100%; min-height: 100dvh; }
 .player-main .page-screen,
@@ -97,6 +99,8 @@
     &__spacer { flex: 1; }
 
     &__button {
+        @include Material.control;
+        @include Material.glass(#242428);
         display: inline-grid;
         place-items: center;
         min-width: 44px;
@@ -104,12 +108,11 @@
         padding: 0 8px;
         border: 0;
         border-radius: 999px;
-        background: rgb(255 255 255 / 8%);
         color: inherit;
         font: inherit;
         cursor: pointer;
 
-        &:hover { background: rgb(255 255 255 / 18%); }
+        &:hover { background-color: #38383e; }
         &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         &[hidden] { display: none; }
 
@@ -119,7 +122,11 @@
     &__button--primary {
         min-width: 64px;
         min-height: 64px;
-        background: rgb(255 255 255 / 16%);
+        background-color: var(--accent);
+        color: var(--accent-contrast);
+        backdrop-filter: none;
+
+        &:hover { background-color: var(--accent-hover); }
 
         .ui-icon { width: 32px; height: 32px; }
     }
@@ -149,17 +156,18 @@
     }
 
     &__option {
+        @include Material.control;
         min-height: 40px;
         border: 0;
         border-radius: 8px;
-        background: transparent;
+        background-color: #242428;
         color: inherit;
         font: inherit;
         text-align: start;
         padding: 0 12px;
         cursor: pointer;
 
-        &[aria-checked=true] { background: rgb(255 255 255 / 14%); }
+        &[aria-checked=true] { background-color: var(--accent); color: var(--accent-contrast); }
         &:focus-visible { outline: 2px solid #fff; }
     }
 

@@ -23,6 +23,13 @@
     --jularr-ink: var(--text);
     --art-hue-rotate: 0deg;
     --art-saturate: 1;
+    --glass-opacity: var(--glass-opacity-setting, 100%);
+    --glass-blur: var(--glass-blur-setting, 0px);
+}
+
+// Respect accessible system preferences.
+@media (prefers-reduced-transparency: reduce) {
+    :root { --glass-opacity: 100%; --glass-blur: 0px; }
 }
 
 // Brightness stays independent.

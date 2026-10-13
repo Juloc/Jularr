@@ -16,5 +16,10 @@
     &__color { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
     &__color input { width: 54px; height: 40px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--field); cursor: pointer; }
     &__color [data-accent-value] { color: var(--muted); font-family: ui-monospace, monospace; }
+    &__transparency { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; font-size: 13px; font-weight: 600; }
+    &__transparency > span:first-child,
+    &__transparency > .appearance__hint { grid-column: 1 / -1; }
+    &__transparency input { min-width: 0; width: 100%; accent-color: var(--accent); }
+    &__transparency [data-transparency-value] { min-width: 4ch; text-align: end; font-variant-numeric: tabular-nums; }
     &__hint { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
 }

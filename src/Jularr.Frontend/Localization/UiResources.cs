@@ -12,6 +12,8 @@ namespace Jularr.Frontend.Localization
             new("appearance.jularrRed", "Jularr red"),
             new("appearance.jularrPurple", "Jularr purple"),
             new("appearance.accentDefault", "Use style default"),
+            new("appearance.transparency", "Glass transparency"),
+            new("appearance.transparencyHint", "0% is fully opaque. Applies to navigation and secondary controls, not content panels. Reduced-transparency system preferences take precedence where supported."),
             new("appearance.devicePreference", "Appearance choices are stored in this browser. Instance defaults and profile policies are not connected yet."),
             new("design.title", "Design lab"),
             new("design.introduction", "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages."),

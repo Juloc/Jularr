@@ -1,6 +1,8 @@
 @use "./Brand";
+@use "../../Modules/Appearance/Material";
 
 .app-header {
+    @include Material.glass;
     position: sticky;
     top: 0;
     z-index: 10;
@@ -11,7 +13,6 @@
     gap: 18px;
     padding: 0 24px;
     border-bottom: 1px solid var(--border);
-    background: var(--surface);
 }
 .app-header-brand { display: none; }
 .app-header-location { font-weight: 650; font-size: 16px; }
@@ -28,6 +29,7 @@
 }
 
 .app-sidebar {
+    @include Material.glass;
     position: sticky;
     top: 0;
     display: flex;
@@ -38,7 +40,6 @@
     gap: 28px;
     padding: 22px 12px;
     border-right: 1px solid var(--border);
-    background: var(--surface);
 }
 .sidebar-brand {
     display: flex;
@@ -79,13 +80,14 @@ html[data-skin="original"] .app-sidebar {
     text-decoration: none;
     font-weight: 550;
 }
-.nav-link:hover { background: var(--surface-hover); color: var(--text); }
-.nav-link.is-active { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 3px 0 var(--accent); }
+.nav-link:hover { background-color: var(--surface-hover); color: var(--text); }
+.nav-link.is-active { @include Material.control; background-color: var(--accent); color: var(--accent-contrast); }
 @media (max-width: 780px) { .app-sidebar { display: none; } }
 
 .mobile-navigation { display: none; }
 @media (max-width: 780px) {
     .mobile-navigation {
+        @include Material.glass;
         position: fixed;
         z-index: 20;
         right: 0;
@@ -95,7 +97,6 @@ html[data-skin="original"] .app-sidebar {
         grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
         padding: 8px 5px max(8px, env(safe-area-inset-bottom));
         border-top: 1px solid var(--border);
-        background: var(--surface);
     }
     .mobile-link {
         display: grid;
@@ -107,7 +108,7 @@ html[data-skin="original"] .app-sidebar {
         font-size: 10px;
         color: var(--muted);
     }
-    .mobile-link.is-active { color: var(--accent-text); }
+    .mobile-link.is-active { @include Material.control; background-color: var(--accent); color: var(--accent-contrast); }
 }
 
 .app-layout {

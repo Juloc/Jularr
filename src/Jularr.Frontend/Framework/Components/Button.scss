@@ -1,4 +1,8 @@
+@use "../../Modules/Appearance/Material";
+
 .button {
+    @include Material.control;
+    @include Material.glass;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -6,7 +10,6 @@
     padding: 9px 15px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
-    background: var(--surface);
     color: var(--text);
     cursor: pointer;
     font-weight: 650;
@@ -14,15 +17,23 @@
     gap: 8px;
     transition: background-color .12s, border-color .12s;
 
-    &:hover:not(:disabled) { background: var(--surface-hover); }
+    &:hover:not(:disabled) { background-color: var(--surface-hover); }
     &:disabled { opacity: .65; cursor: not-allowed; }
-    &[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
+    &[aria-pressed="true"] {
+        border-color: var(--accent);
+        background-color: var(--accent);
+        color: var(--accent-contrast);
+        backdrop-filter: none;
+
+        &:hover:not(:disabled) { background-color: var(--accent-hover); }
+    }
 
     &--primary {
         border-color: var(--accent);
-        background: var(--accent);
+        background-color: var(--accent);
         color: var(--accent-contrast);
+        backdrop-filter: none;
 
-        &:hover:not(:disabled) { background: var(--accent-hover); }
+        &:hover:not(:disabled) { background-color: var(--accent-hover); }
     }
 }

@@ -31,6 +31,8 @@ namespace Jularr.Backend.Tests
             // Real components, no playback client.
             var html = await response.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "data-accent-input=\"true\"");
+            StringAssert.Contains(html, "data-transparency-input=\"true\"");
+            StringAssert.Contains(html, "data-transparency-value=\"true\"");
             StringAssert.Contains(html, "aria-invalid=\"true\"");
             StringAssert.Contains(html, "media-hero--placeholder");
             StringAssert.Contains(html, "appearance-approved-");

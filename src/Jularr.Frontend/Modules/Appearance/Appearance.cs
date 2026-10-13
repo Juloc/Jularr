@@ -19,7 +19,12 @@ namespace Jularr.Frontend.Modules.Appearance
                         new Button(new Text("appearance.jularrRed")).Attribute("data-set-accent", "#c8102e").Attribute("aria-pressed", "false"),
                         new Button(new Text("appearance.jularrPurple")).Attribute("data-set-accent", "#7c3aed").Attribute("aria-pressed", "false"),
                         new Button(new Text("appearance.accentDefault")).Attribute("data-reset-accent", "true")).Class("appearance__choices"),
-                    new P(new Text("appearance.devicePreference")).Class("appearance__hint")))
+                    new P(new Text("appearance.devicePreference")).Class("appearance__hint")),
+                new Label(new Span(new Text("appearance.transparency")),
+                    new Input().Attribute("type", "range").Attribute("min", "0").Attribute("max", "60").Attribute("step", "5").Attribute("value", "0")
+                        .Attribute("data-transparency-input", "true").Attribute("aria-label", texts["appearance.transparency"]),
+                    new Span().Attribute("data-transparency-value", "true"),
+                    new Span(new Text("appearance.transparencyHint")).Class("appearance__hint")).Class("appearance__transparency"))
                 .Class("appearance__options");
 
             if (collapsible)

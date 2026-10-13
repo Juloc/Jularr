@@ -122,6 +122,9 @@ Shared conventions and Backend ownership:
 - [Appearance](Modules/Appearance/Appearance.cs) and [styles](Modules/Appearance/appearance.entry.scss):
   shared Original/Clean, System/Light/Dark and free-accent controls in Login, Settings and preview.
   The appearance script stores device-local choices and updates shared tokens and pressed states.
+  Glass transparency defaults to opaque, affects chrome/secondary controls only and respects
+  reduced-transparency preferences where supported. [Material mixins](Modules/Appearance/_Material.scss)
+  own shared control depth and the opaque blur fallback for Button, Shell and Player.
   Instance defaults/profile override policy are not implemented here.
 - [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
   deduplicated hashed sprite, with icons also allowed beside modules/pages.
@@ -160,6 +163,7 @@ in `Modules/<Module>/`.
   component workshop with labeled examples, disabled playback chrome and the earlier
   approved Appearance/Library references. [Styles](Pages/Development/Design/Design.entry.scss)
   import the actual component owners; no playback JS or business mutations.
+  Same-host review and optional LAN configuration: [Local preview](../../docs/LOCAL_PREVIEW.md).
 
 ## Verification and integration gaps
 

@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory)][string]$RootDirectory,
     [int]$HttpPort = 5241,
     [int]$HttpsPort = 7241,
+    [string]$LanAddress,
+    [string]$CertificateSubject,
     [string]$DotNetPath = 'dotnet',
     [string]$GitPath = 'git',
     [string]$NpmPath = 'npm.cmd',
@@ -123,6 +125,27 @@ try
 
     $env:ASPNETCORE_ENVIRONMENT = 'Development'
     $env:ASPNETCORE_URLS = "http://localhost:$HttpPort;https://localhost:$HttpsPort"
+    if ($LanAddress)
+    {
+        # Bind only the selected interface.
+        $address = [System.Net.IPAddress]::Parse($LanAddress)
+        $octets = $address.GetAddressBytes()
+        $privateAddress = $octets[0] -eq 10 -or ($octets[0] -eq 172 -and $octets[1] -ge 16 -and $octets[1] -le 31) -or ($octets[0] -eq 192 -and $octets[1] -eq 168)
+        if ($address.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork -or -not $privateAddress)
+        {
+            throw 'LanAddress must be a specific private IPv4 address.'
+        }
+        if (-not $CertificateSubject) { throw 'LAN HTTPS requires a certificate covering localhost and the LAN address.' }
+        $env:ASPNETCORE_URLS += ";https://${LanAddress}:$HttpsPort"
+    }
+    if ($CertificateSubject)
+    {
+        # Private key stays in Windows.
+        $env:Kestrel__Certificates__Default__Subject = $CertificateSubject
+        $env:Kestrel__Certificates__Default__Store = 'My'
+        $env:Kestrel__Certificates__Default__Location = 'CurrentUser'
+        $env:Kestrel__Certificates__Default__AllowInvalid = 'false'
+    }
     $env:ASPNETCORE_HTTPS_PORT = "$HttpsPort"
     $env:DOTNET_NOLOGO = '1'
     $env:GIT_TERMINAL_PROMPT = '0'
@@ -228,6 +251,7 @@ try
                 @{
                     Commit = $commit
                     Url = $baseUrl
+                    LanUrl = if ($LanAddress) { "https://${LanAddress}:$HttpsPort" } else { $null }
                     ProcessId = $app.Id
                     StartedAt = [DateTimeOffset]::UtcNow.ToString('O')
                 } | ConvertTo-Json | Set-Content (Join-Path $RootDirectory 'status.json')

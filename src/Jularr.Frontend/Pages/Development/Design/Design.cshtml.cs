@@ -29,6 +29,10 @@ namespace Jularr.Frontend.Pages.Development.Design
                 items.Add(new P(new Text("design.introduction")));
                 items.Add(new Appearance());
             }));
+            page.Content.Add(new NavigationTabs([
+                new("design.controls", "/Design#controls", false), new("design.forms", "/Design#forms", false),
+                new("design.media", "/Design#media", false), new("design.player", "/Design#player", false)
+            ], "nav.tabs"));
 
             // Live brand and artwork.
             page.Content.Add(new UiSection("design.branding", [
@@ -52,13 +56,13 @@ namespace Jularr.Frontend.Pages.Development.Design
             var data = new CreateWorkDataV1(MediaType.Movie, texts["design.exampleTitle"], 2026);
             var options = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type])).ToArray();
             var error = ServiceError.FromException(new DataValidationException(nameof(data.CanonicalTitle), "required"));
-            page.Content.Add(new UiSection("design.forms", [new Split(split =>
+            page.Content.Add(new Div(new UiSection("design.forms", [new Split(split =>
             {
                 split.Primary.Add(WorkForm(data));
                 split.Primary.Add(new Form<LoginDataV1>(form => form.Password(item => item.Password, "account.field.password").Submit("account.login.submit")));
                 split.Secondary.Add(new H3(new Text("design.validationExample")));
                 split.Secondary.Add(WorkForm(new CreateWorkDataV1(MediaType.Movie, ""), error));
-            })]));
+            })])).Attribute("id", "forms"));
 
             // Typed table and layouts.
             var rows = new[]
@@ -84,8 +88,10 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new SearchBox("/Design", "design.search", null)
             ])).Attribute("id", "layouts"));
 
-            // Media and empty artwork.
+            // Labeled media examples.
             page.Content.Add(new Div(new UiSection("design.media", [
+                new MediaHero(texts["design.exampleTitle"], assets.ImageUrl("Modules/Appearance/Original/hero-fuji.webp"), texts["design.exampleContext"],
+                    texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
                 new MediaShelf("design.media", null, [
                     new MediaCard(texts["design.exampleTitle"], "/Design#media", null, texts["design.exampleContext"], "design.exampleStatus"),
