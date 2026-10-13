@@ -68,7 +68,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             new(form => form.Submit(labelKey), Address(handler: handler) + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new ActivityOperationParametersV1(item.Id));
 
         // The person passes the source's check in their own browser; the server takes the file link from there.
-        private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new Div(
+        private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new SourceConfirmation(
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveActivitySourceLinkDataV1>(form =>
             {
