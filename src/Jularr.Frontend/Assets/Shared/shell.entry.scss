@@ -76,7 +76,9 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 
 
 // Base components load once.
-.page-screen { display: grid; align-content: start; gap: 20px; min-width: 0; }
+// Bound the shared content column.
+.page-screen { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 20px; min-width: 0; }
+.app-main [id] { scroll-margin-top: 80px; }
 .page-section h2 { font-size: 18px; margin: 0 0 12px; }
 .preview-screen-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .preview-screen-links a { text-decoration: none; border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; }

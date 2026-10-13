@@ -84,6 +84,9 @@ test("shared base styles cover forms, tables and capsule navigation on every pag
         assert.ok(css.includes(selector), selector);
     }
     assert.doesNotMatch(css, /backdrop-filter|--glass|box-shadow:inset/);
+    assert.match(css, /\.page-screen\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+    assert.match(css, /\.app-main \[id\]\{scroll-margin-top:80px/);
+    assert.match(css, /\.split\{grid-template-columns:minmax\(0,1fr\)/);
     assert.ok(!manifest["Pages/User/Settings/Settings.entry.scss"], "base-only pages need no duplicate bundle");
 });
 
