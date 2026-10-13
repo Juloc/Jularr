@@ -22,6 +22,10 @@
     @Assets.Styles("Assets/Shared/shell.entry.scss")
     @Assets.Styles(pageAssets)
     @Assets.Scripts("Modules/Appearance/theme.entry.ts")
+    @if (showShell && !isPreview)
+    {
+        @Assets.Scripts("Framework/Components/ContinueReadingBar.entry.ts")
+    }
     @Assets.Scripts(pageAssets)
     @await RenderSectionAsync("Head", required: false)
 </head>

@@ -88,6 +88,12 @@ namespace Jularr.Backend.Tests
             new MediaCard("Book", "/Details/1", null, null, "media.state.InProgress").Continue(30000, null).WriteTo(writer, HtmlEncoder.Default, texts);
             Assert.IsFalse(writer.ToString().Contains("<progress", StringComparison.Ordinal));
 
+            // Reading shows the read share.
+            writer.GetStringBuilder().Clear();
+            new MediaCard("Book", "/Details/1", null, null, "media.state.InProgress").ContinueReading(0.455m).WriteTo(writer, HtmlEncoder.Default, texts);
+            StringAssert.Contains(writer.ToString(), "<progress max=\"100\" value=\"46\" aria-label=\"" + texts["media.readProgress"] + "\"");
+            StringAssert.Contains(writer.ToString(), string.Format(CultureInfo.CurrentCulture, texts["media.percentRead"], 46));
+
             // Both tags, ordinary fallback links.
             writer.GetStringBuilder().Clear();
             card.Preview("preview-test").WriteTo(writer, HtmlEncoder.Default, texts);

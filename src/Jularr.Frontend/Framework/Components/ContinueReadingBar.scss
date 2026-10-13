@@ -1,0 +1,95 @@
+// One compact row at the bottom of the app content; above the mobile navigation on small screens.
+.continue-bar {
+    position: sticky;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 760px;
+    margin: 24px auto 0;
+    padding: 10px 10px 10px 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__progress {
+        position: absolute;
+        inset: 0 0 auto;
+        appearance: none;
+        width: 100%;
+        height: 3px;
+        border: 0;
+        background: var(--border);
+        color: var(--accent);
+
+        &::-webkit-progress-bar { background: var(--border); }
+        &::-webkit-progress-value { background: var(--accent); }
+        &::-moz-progress-bar { background: var(--accent); }
+    }
+
+    &__identity {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+        text-decoration: none;
+    }
+
+    &__cover {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 40px;
+        height: 60px;
+        overflow: hidden;
+        border-radius: var(--radius-control);
+        background: var(--surface-hover);
+        color: var(--muted);
+
+        img { width: 100%; height: 100%; object-fit: cover; }
+    }
+
+    &__details {
+        display: grid;
+        min-width: 0;
+        line-height: 1.35;
+    }
+
+    &__title,
+    &__meta {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__meta {
+        font-size: 13px;
+        color: var(--muted);
+    }
+
+    &__action { flex: none; }
+
+    &__dismiss {
+        flex: none;
+        min-width: 44px;
+        padding: 0;
+        border-color: transparent;
+        background: none;
+    }
+
+    @media (max-width: 780px) {
+        bottom: calc(84px + env(safe-area-inset-bottom));
+        gap: 8px;
+        margin-top: 16px;
+
+        &__label { display: none; }
+        &__action { min-width: 44px; padding-inline: 10px; }
+    }
+}
+
+// Playback owns the slot.
+.player-active .continue-bar { display: none; }

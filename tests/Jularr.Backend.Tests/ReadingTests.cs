@@ -139,9 +139,30 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(jpeg, await last.Content.ReadAsByteArrayAsync());
 
             // The exact page is the progress; the reader opens there again.
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + asset + "/progress", new SaveReadingProgressDataV1("p2", 1m, true));
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + asset + "/progress", new SaveReadingProgressDataV1("p2", 0.6667m, false));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             Assert.AreEqual("p2", (await OpenAsync(host, asset)).Locator);
+
+            // Comics continue on the reading shelf and in the Continue Reading bar.
+            using var continuing = await host.SendAsync(HttpMethod.Get, "/api/v1/continue");
+            var item = (await continuing.Content.ReadFromJsonAsync<BaseDataList<ContinueItemV1>>())!.Single(entry => entry.MediaAssetId == asset);
+            Assert.AreEqual(MediaAssetType.Comic, item.MediaAssetTypeId);
+            Assert.AreEqual(0.6667m, item.Progression);
+            using var home = await host.SendAsync(HttpMethod.Get, "/");
+            var homeHtml = await home.Content.ReadAsStringAsync();
+            StringAssert.Contains(homeHtml, "Continue reading");
+            StringAssert.Contains(homeHtml, "href=\"/Read/" + asset + "\"");
+            StringAssert.Contains(homeHtml, "<progress max=\"100\" value=\"67\"");
+            using var bar = await host.SendAsync(HttpMethod.Get, "/Continue/Reading");
+            var barHtml = await bar.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, bar.StatusCode, barHtml);
+            StringAssert.Contains(barHtml, "data-continue-key=\"" + asset + ":0.6667\"");
+            StringAssert.Contains(barHtml, "67% read");
+            StringAssert.Contains(barHtml, "data-continue-dismiss");
+            using var completed = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + asset + "/progress", new SaveReadingProgressDataV1("p2", 1m, true));
+            Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode, await completed.Content.ReadAsStringAsync());
+            using var finished = await host.SendAsync(HttpMethod.Get, "/Continue/Reading");
+            Assert.AreEqual(HttpStatusCode.NoContent, finished.StatusCode);
             using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + asset);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);

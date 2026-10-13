@@ -115,11 +115,12 @@ namespace Jularr.Frontend.Pages.User.Discover
             DefineFeatured(featured);
             page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
 
-            page.Content.Add(new MediaShelf(assets, "discover.continue", null, [.. _continue.Where(item => (selected.Slug is null || item.MediaTypeId == selected.Type)
-                && (ReadableMedia.IsReadable(item.MediaAssetTypeId) ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true)).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
-                item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
-                (ReadableMedia.IsReadable(item.MediaAssetTypeId) ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
-                .Continue(item.PositionMs, ReadableMedia.IsReadable(item.MediaAssetTypeId) ? null : item.DurationMs))]));
+            // Watching, listening and reading continue on their own shelves.
+            var continuing = _continue.Where(item => selected.Slug is null || item.MediaTypeId == selected.Type).ToList();
+            var canPlay = texts.Capabilities?.CanPlay is true;
+            page.Content.Add(ContinueShelf("discover.continueWatching", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Video) : []));
+            page.Content.Add(ContinueShelf("discover.continueListening", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Audio) : []));
+            page.Content.Add(ContinueShelf("media.continueReading", texts.Capabilities?.CanRead is true ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []));
             page.Content.Add(new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]));
 
@@ -132,6 +133,15 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
             page.Content.Add(new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations"));
         }
+
+        private MediaShelf ContinueShelf(string titleKey, IEnumerable<ContinueItemV1> items) => new(assets, titleKey, null, [.. items.Select(item =>
+        {
+            var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
+            var card = new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
+                (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture));
+            return readable ? card.ContinueReading(item.Progression) : card.Continue(item.PositionMs, item.DurationMs);
+        })]);
 
         private void DefineFeatured(Page page)
         {

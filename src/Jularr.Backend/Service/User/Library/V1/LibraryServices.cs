@@ -136,6 +136,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                     parent."Number" AS "ParentUnitNumber",
                     coalesce(progress."PositionMs", 0) AS "PositionMs",
                     progress."DurationMs",
+                    progress."Progression",
                     asset."MediaAssetTypeId"
                 FROM
                     "MediaProgress" AS progress
@@ -148,10 +149,9 @@ namespace Jularr.Backend.Service.User.Library.V1
                         FROM
                             "MediaAssets" AS candidate
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = candidate."Id" AND available."MissingSince" IS NULL
-                            JOIN "InstanceModules" AS module ON module."Key" = CASE candidate."MediaAssetTypeId"
-                                WHEN 3 THEN 'Reading'
-                                WHEN 1 THEN 'Playback'
-                                WHEN 2 THEN 'Playback'
+                            JOIN "InstanceModules" AS module ON module."Key" = CASE
+                                WHEN candidate."MediaAssetTypeId" IN (3, 4) THEN 'Reading'
+                                WHEN candidate."MediaAssetTypeId" IN (1, 2) THEN 'Playback'
                             END AND module."IsEnabled"
                         WHERE
                             candidate."WorkId" = progress."WorkId"

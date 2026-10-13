@@ -19,7 +19,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
 - [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
 - [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
-- [MediaCard](Framework/Components/MediaCard.cs): Continue progress, top-corner status/availability, up to three genres and centered hover/focus actions.
+- [MediaCard](Framework/Components/MediaCard.cs): Continue progress (time left, or the read share for books and comics), top-corner status/availability, up to three genres and centered hover/focus actions.
 - [MediaPreview](Framework/Components/MediaPreview.cs), [client](Framework/Components/MediaPreview.ts), [tests](Tools/media-preview.test.mjs): opt-in status links, inert SSR content and one native modal; official trailer embed on Play, released on close. Design examples await real trailer/request/download service fields.
 - [MediaAvailability](Framework/Components/MediaAvailability.cs): noninteractive, background-free status symbol with monitored-unit counts; MediaCard composes its separate hint/preview target.
 - [MediaLanguages](Framework/Components/MediaLanguages.cs), [IconInfo](Framework/Components/IconInfo.cs): supplied preferred flags/counts and native accessible disclosures; Design labels missing service fields.
@@ -28,12 +28,13 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 ## User and account pages
 
-- [Discover](Pages/User/Discover/Index.cshtml.cs), [client](Pages/User/Discover/Index.entry.ts): local-first landing, recommendation HTML fragments, debounced search and progressive result paging.
+- [Discover](Pages/User/Discover/Index.cshtml.cs), [client](Pages/User/Discover/Index.entry.ts): local-first landing with Continue Watching, Listening and Reading shelves, recommendation HTML fragments, debounced search and progressive result paging.
 - [Provider title](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs): TMDB title and authorized request before canonical Work creation.
 - [Library](Pages/User/Library/Library.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): real bounded catalogs.
 - [Details](Pages/User/Details/Details.cshtml.cs): Work, paged versions, personal actions and capability-based Play/Read links.
 - [Player](Pages/User/Player/Player.cshtml.cs), [chrome](Framework/Components/Player.cs), [client](Modules/Player/player.entry.ts): PlaybackPlan, transport, HLS and progress; Audio and Subtitles direct actions with their panels (another audio track asks for a new plan at the same position, subtitles are WebVTT tracks), languages through [LanguageLabel.cs](Framework/LanguageLabel.cs). Minimize keeps the same session in a bar while [Navigation.ts](Modules/Navigation/Navigation.ts) swaps the app area for same-origin app links (page scripts run again per visit; forms, reader, account and setup pages, failures and script-less browsers load normally); Expand returns to the full player, Stop ends the session.
 - [Reader](Pages/User/Reader/Reader.cshtml.cs), [client](Modules/Reader/reader.entry.ts): sanitized sections, device settings, semantic locators and end-of-content completion. Comics use the [comic client](Modules/Reader/comic.entry.ts): one page or a spread (cover and wide pages alone), reading direction (Manga right to left), three pages preloaded, `p<page>` as locator; without script, page links.
+- [Continue Reading bar](Framework/Components/ContinueReadingBar.cs), [fragment](Pages/User/ContinueReading/ContinueReading.cshtml.cs), [client](Framework/Components/ContinueReadingBar.ts), [tests](Tools/continue-reading.test.mjs): the most recent unfinished book or comic at the bottom of app pages; one Continue action and Dismiss, which hides it on this device until the position changes. Playback owns the slot while the mini player is open.
 - [Progress transport](Modules/Tracking/Progress.ts): serialized acknowledged writes, finite transient retries and visible unsaved state for Reader/Player.
 - [Requests](Pages/User/Requests/Requests.cshtml.cs): profile queue and authorized source confirmation.
 - [Settings](Pages/User/Settings/Settings.cshtml.cs): profile settings, appearance and granted administration links.

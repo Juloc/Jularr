@@ -12,6 +12,7 @@ namespace Jularr.Frontend.Framework
         private IUiComponent? _languages;
         private long? _positionMs;
         private long? _durationMs;
+        private decimal? _progression;
         private string? _previewId;
 
         public MediaCard Preview(string id)
@@ -24,6 +25,14 @@ namespace Jularr.Frontend.Framework
         {
             _positionMs = positionMs;
             _durationMs = durationMs;
+            return this;
+        }
+
+        // Books and comics: the read share instead of time.
+        public MediaCard ContinueReading(decimal? progression)
+        {
+            _positionMs = 0;
+            _progression = progression;
             return this;
         }
 
@@ -98,6 +107,13 @@ namespace Jularr.Frontend.Framework
                 content.Add(new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["media.minutesLeft"],
                     Math.Ceiling((duration - boundedPosition) / 60000m)))).Class("media-card__meta"));
             }
+            else if (_progression is { } share)
+            {
+                var percent = ReadPercent(share);
+                content.Add(new Progress().Attribute("max", "100").Attribute("value", percent.ToString(CultureInfo.InvariantCulture))
+                    .Attribute("aria-label", texts["media.readProgress"]).Class("media-card__progress"));
+                content.Add(new Span(new ValueText(string.Format(CultureInfo.CurrentCulture, texts["media.percentRead"], percent))).Class("media-card__meta"));
+            }
 
             // Unknown detail keeps coarse status.
             if (_availability is null) content.Add(new Div(new Span(new Text(statusKey)).Class("media-card__state")).Class("media-card__status"));
@@ -106,6 +122,6 @@ namespace Jularr.Frontend.Framework
             new Div([.. content]).Class("media-card" + variant).WriteTo(writer, encoder, texts);
         }
 
-        private sealed class Progress() : HtmlElement("progress");
+        public static int ReadPercent(decimal progression) => (int)Math.Round(Math.Clamp(progression, 0, 1) * 100, MidpointRounding.AwayFromZero);
     }
 }

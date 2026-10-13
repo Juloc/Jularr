@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Provider;
+using Jularr.Backend.Data.Fields.Reading;
 
 namespace Jularr.Backend.Data.User.Discover.V1
 {
@@ -118,8 +119,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
     public sealed class ContinueItemV1 : BaseResponse
     {
         public ContinueItemV1(long workId, long mediaAssetId, MediaType mediaTypeId, string title, string? posterUrl, WorkUnitType? workUnitTypeId, decimal? unitNumber,
-            decimal? parentUnitNumber, long positionMs, long? durationMs, MediaAssetType mediaAssetTypeId)
+            decimal? parentUnitNumber, long positionMs, long? durationMs, decimal? progression, MediaAssetType mediaAssetTypeId)
         {
+            Progression = progression;
             MediaAssetTypeId = mediaAssetTypeId;
             WorkId = workId;
             MediaAssetId = mediaAssetId;
@@ -162,6 +164,10 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DurationMs))]
         public long? DurationMs { get; }
+
+        // Read share of a book or comic.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Progression), false)]
+        public decimal? Progression { get; }
 
         // Books continue in the reader.
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.MediaAssetTypeId))]

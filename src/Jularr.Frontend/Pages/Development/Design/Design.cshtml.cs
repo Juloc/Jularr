@@ -124,7 +124,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                     texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
                 new P(new Text("design.mediaNotice")),
-                new MediaShelf(assets, "discover.continue", null, [
+                new MediaShelf(assets, "discover.continueWatching", null, [
                     new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.InProgress", "media.continue")
                         .Continue(3000000, 6360000),
                     new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.InProgress", "media.continue")
