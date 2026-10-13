@@ -11,7 +11,6 @@ using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Storage;
-using Jularr.Backend.Service.User.Playback;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Playback.V1

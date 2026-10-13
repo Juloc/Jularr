@@ -2,7 +2,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.System.Acquisition.V1;
-using Jularr.Backend.Service.Admin.Provider;
+using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.System.Provider.V1

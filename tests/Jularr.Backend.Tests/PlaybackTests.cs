@@ -10,7 +10,7 @@ using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Logic.Playback;
-using Jularr.Backend.Service.User.Playback;
+using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
 using Microsoft.AspNetCore.Hosting.Server;

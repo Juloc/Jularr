@@ -57,7 +57,7 @@ connection never overlap. Their location and media type are fixed, the name is
 version-checked. Removing a path forgets its inventory and empty assets, never
 Works or files. `QueueLibraryScanV1` queues one active scan per path in Operations.
 
-Hosts opt in to `AddJularrBackgroundWork`; its worker requeues interrupted scans on
+Hosts opt in to `AddJularrWorkers` (`Jularr.Workers`); its worker requeues interrupted scans on
 start, claims queued operations with `SKIP LOCKED` and calls System services, which
 run only outside HTTP requests. A scan resolves the path below
 `Storage:MountRoot/<StorageMountId>` (or the Local path), skips hidden files, links,

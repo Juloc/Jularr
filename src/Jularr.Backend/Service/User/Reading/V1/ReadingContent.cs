@@ -13,7 +13,7 @@ using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
 
-namespace Jularr.Backend.Service.User.Reading
+namespace Jularr.Backend.Service.User.Reading.V1
 {
     // Prepares books from storage into the shared reading cache; I/O stays outside transactions.
     internal sealed class ReadingContent

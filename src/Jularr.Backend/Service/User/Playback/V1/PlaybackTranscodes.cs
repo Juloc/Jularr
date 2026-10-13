@@ -8,7 +8,7 @@ using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
 using Microsoft.Extensions.Options;
 
-namespace Jularr.Backend.Service.User.Playback
+namespace Jularr.Backend.Service.User.Playback.V1
 {
     internal sealed record PlaybackTranscodeSource(Guid SessionId, long ProfileId, string InputPath, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio,
         long DurationMs)

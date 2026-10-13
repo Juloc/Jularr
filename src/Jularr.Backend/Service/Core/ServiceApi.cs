@@ -21,13 +21,11 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Backend.Service.Core.Localization;
-using Jularr.Backend.Service.System.Acquisition;
-using Jularr.Backend.Service.System.Operation;
-using Jularr.Backend.Service.Admin.Media;
-using Jularr.Backend.Service.Admin.Provider;
-using Jularr.Backend.Service.User.Reading;
-using Jularr.Backend.Service.Admin.Wanted;
-using Jularr.Backend.Service.User.Playback;
+using Jularr.Backend.Service.Admin.Media.V1;
+using Jularr.Backend.Service.Admin.Provider.V1;
+using Jularr.Backend.Service.User.Reading.V1;
+using Jularr.Backend.Service.Admin.Wanted.V1;
+using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
@@ -268,14 +266,6 @@ namespace Jularr.Backend.Service.Core
                 });
             }
 
-            return services;
-        }
-
-        // Hosts opt in to background work explicitly.
-        public static IServiceCollection AddJularrBackgroundWork(this IServiceCollection services)
-        {
-            services.AddHostedService<OperationWorker>();
-            services.AddHostedService<AcquisitionWorker>();
             return services;
         }
 

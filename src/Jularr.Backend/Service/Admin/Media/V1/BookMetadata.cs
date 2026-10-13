@@ -7,7 +7,7 @@ using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.OpenLibrary;
 using Jularr.Integrations.Logic.OpenLibrary;
 
-namespace Jularr.Backend.Service.Admin.Media
+namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // Open Library lookups and imports for books and light novels.
     internal sealed class BookMetadata(OpenLibraryClient openLibrary)

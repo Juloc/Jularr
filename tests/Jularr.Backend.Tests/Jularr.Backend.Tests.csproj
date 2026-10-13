@@ -14,5 +14,6 @@
     <ProjectReference Include="../../src/Jularr.Backend/Jularr.Backend.csproj" />
     <ProjectReference Include="../../src/Jularr.Frontend/Jularr.Frontend.csproj" />
     <ProjectReference Include="../../src/Jularr.MountHelper/Jularr.MountHelper.csproj" />
+    <ProjectReference Include="../../src/Jularr.Workers/Jularr.Workers.csproj" />
   </ItemGroup>
 </Project>

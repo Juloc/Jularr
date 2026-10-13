@@ -25,7 +25,7 @@ documents need not be reread for every task.
 
 Keep one modular monolith and one canonical owner per responsibility. Current
 implementation is one backend class library hosted by `Jularr.Frontend`, not separate
-webservers or projects for every layer. Razor uses DI service calls; external clients
+webservers or projects for every layer. Background work lives in `Jularr.Workers`. Razor uses DI service calls; external clients
 use the same services through the shared API adapter.
 
 - Frontend consumers use versioned services and their Data contracts. Host registration and authentication use the designated `Service/Core` adapters. The Backend owns database configuration, connections and transactions; Logic and SQL infrastructure are internal implementation details.
@@ -37,6 +37,8 @@ use the same services through the shared API adapter.
 - Keep Data properties explicit. Secret properties use `JsonIgnore`; do not hide transport secrets behind private fields or explicit interfaces. Backing fields remain appropriate for partial input change tracking.
 - `BaseData.SetData(params BaseData[])` copies provided values into writable properties with exactly the same name. It does not infer aliases from field definitions: assign `updateData.Id = Parameters.ProfileId` explicitly. Omitted partial fields stay unchanged; explicit null is validated separately. List updates match declared `Id` properties, never positions, and reject unknown or duplicate rows before applying changes.
 - `Service/User/<Feature>/V1`: declared permissions, result types, module requirements, extra access checks, static SELECTs and orchestration through operation hooks.
+- Below `Service/` every folder is versioned (`<Area>/<Feature>/V1`) except `Service/Core`. Shared I/O helpers of a feature's services (provider clients, offer caches, file preparation) live in that `V1` folder next to the services that use them.
+- `src/Jularr.Workers`: hosted timers and queue runners only. A worker resolves and executes versioned System services; it never touches Logic, SQL or Integrations, which the project boundary enforces. Hosts opt in with `AddJularrWorkers()`; the project could later run as its own process.
 - Services do not write tables or contain mutation business rules. Thin HTTP endpoints bind input and expose service results; they do not duplicate permissions or persistence.
 - `Logic/<Feature>`: canonical mutations, business validation, locking and transactional state changes. Logic uses neutral Data types, not Service or HTTP types.
 - Call logic extensions directly on `Context`, such as `Context.UpdateProfileAsync(...)`; no `Context.Sql.SomeDomainFunction(...)` or extra domain wrapper.

@@ -20,7 +20,8 @@ Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
 ## Backend im gemeinsamen Host
 
-Das Frontend braucht eine ProjectReference auf `../Jularr.Backend/Jularr.Backend.csproj`.
+Das Frontend braucht ProjectReferences auf `../Jularr.Backend/Jularr.Backend.csproj`
+und `../Jularr.Workers/Jularr.Workers.csproj`.
 Die Host-Anbindung ist in dessen `Program.cs` eingebaut.
 Razor verwendet Services und deren Datenverträge; der Host
 verwendet die vorgesehenen `Service/Core`-Adapter für Registrierung und Authentifizierung.
@@ -28,9 +29,14 @@ Datenbankkonfiguration, Connection und Transaction gehören vollständig ins Bac
 
 ```csharp
 using Jularr.Backend.Service.Core;
+using Jularr.Workers;
 
 builder.Services.AddJularrServices(builder.Configuration);
+builder.Services.AddJularrWorkers();
 ```
+
+`Jularr.Workers` enthält nur die Hintergrund-Worker (Scans, Download-Überwachung,
+automatische Suche, Plex-Sync); sie rufen ausschließlich versionierte System-Services auf.
 
 Das Backend liest `JULARR_DB` und bindet den Abschnitt `Authentication` selbst.
 Die DI-Registrierung erstellt eine gemeinsame Datenquelle bei Bedarf und entsorgt
@@ -156,7 +162,7 @@ Aktionen über den separaten Linux-Mount-Helfer. Lokale Compose-Pfade sind nur a
 `Storage:LocalPaths` wählbar; Wake-on-LAN ist pro Verbindung als „nur Owner“ oder
 „automatisch bei Abruf“ einstellbar. Library-Pfade liegen auf derselben Seite unter
 der Verbindung und werden über einen sicheren Ordner-Browser gewählt. Scans laufen
-im Hintergrund-Worker, `/Admin/Library` zeigt Inventar, Zuordnung und Scans, die
+im Hintergrund-Worker, `/Admin/Library` zeigt Inventar und Zuordnung, `/Admin/Activity` die Scans, die
 Detailseite die gespeicherte Verfügbarkeit. Dafür sind die frischen
 [Storage-](database/Storage.sql) und [Library-Baselines](database/Library.sql)
 erforderlich; `Media:FfprobePath` aktiviert die Stream-Analyse. Deployment, Rechte und
