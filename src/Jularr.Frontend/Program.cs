@@ -3,6 +3,7 @@ using Jularr.Backend.Service.Core.Localization;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Localization;
 using Jularr.Frontend.Pages.Shared;
+using Jularr.Workers;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -36,7 +37,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 
 builder.Services.AddJularrServices(builder.Configuration);
-builder.Services.AddJularrBackgroundWork();
+builder.Services.AddJularrWorkers();
 builder.Services.AddJularrLocalization(UiResources.English);
 builder.Services.AddScoped<UiText>();
 builder.Services.AddSingleton<ShellNavigation>();

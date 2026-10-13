@@ -11,7 +11,7 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
-using Jularr.Backend.Service.Admin.Media;
+using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;

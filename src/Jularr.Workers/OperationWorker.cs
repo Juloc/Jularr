@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Jularr.Backend.Service.System.Operation
+namespace Jularr.Workers
 {
     internal sealed class OperationWorker(IServiceScopeFactory scopes, ILogger<OperationWorker> logger) : BackgroundService
     {

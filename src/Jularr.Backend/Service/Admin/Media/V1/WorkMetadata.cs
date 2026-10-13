@@ -15,7 +15,7 @@ using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace Jularr.Backend.Service.Admin.Media
+namespace Jularr.Backend.Service.Admin.Media.V1
 {
     // TMDB lookups and imports; shared by Admin catalog work and the System refresh.
     internal sealed class WorkMetadata

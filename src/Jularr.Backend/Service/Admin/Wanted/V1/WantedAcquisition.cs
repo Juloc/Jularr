@@ -16,7 +16,7 @@ using Jularr.Integrations.Logic.Sabnzbd;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Memory;
 
-namespace Jularr.Backend.Service.Admin.Wanted
+namespace Jularr.Backend.Service.Admin.Wanted.V1
 {
     // Indexer and client I/O of one wanted Work; the decisions belong to AcquisitionSelectionLogic.
     internal sealed class WantedAcquisition
