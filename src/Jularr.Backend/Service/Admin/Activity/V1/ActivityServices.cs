@@ -3,8 +3,10 @@ using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Operation;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Activity.V1
@@ -38,7 +40,8 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."SizeBytes",
                     operation."RemainingBytes",
                     operation."EtaSeconds",
-                    operation."DownloadStateTypeId"
+                    operation."DownloadStateTypeId",
+                    CASE WHEN operation."AttentionKey" = 'source_manual_link' THEN replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0' END AS "ManualUrl"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -77,6 +80,31 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.RetryOperationAsync(new OperationActionData(Parameters.OperationId, Auth.AccountId), ct);
+                return true;
+            }, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/activity/{operationId:long}/source-link")]
+    public sealed class SaveActivitySourceLinkV1 : AdminService<ActivityOperationParametersV1, SaveActivitySourceLinkDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ActivityOperationParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // Files are fetched over HTTPS only.
+            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || link.Scheme != Uri.UriSchemeHttps)
+            {
+                throw new DataValidationException(nameof(SaveActivitySourceLinkDataV1.SourceUrl), "invalid_url");
+            }
+
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SetDownloadSourceLinkAsync(new DownloadSourceLinkData(Parameters.OperationId, link.ToString()), ct);
                 return true;
             }, CancellationToken);
             return new UpdateResult(true);

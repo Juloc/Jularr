@@ -32,6 +32,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
+        // The download waits for a person to pass the source's own check and paste the file link.
+        public const string ManualLinkKey = "source_manual_link";
+
+        // The longest waiting page Jularr sits through itself.
+        private static readonly TimeSpan SlowWait = TimeSpan.FromSeconds(90);
+
         public static bool IsDirect(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds or AcquisitionConnectionType.AnnasArchive;
 
         // Offer ids are "<source>:<key>:<format>"; the format names the stored file.
@@ -72,11 +78,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         {
             // A search that answers proves the source; null means healthy.
             var probe = new WantedTargetData(0, 0, Data.Enums.Media.MediaType.Book, "Austen", null, [], null, null, null, [], false, false, false, 0, [], [], null);
-            if (source.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive && source.ProtectedApiKey is null)
-            {
-                return "acquisition_authentication_failed";
-            }
-
             return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
         }
 
@@ -97,8 +98,28 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         await _opds.DownloadAsync(Opds(source), address, destination, ct);
                         break;
                     case AcquisitionConnectionType.AnnasArchive:
-                        var md5 = AnnasArchiveClient.ReadMd5(address) ?? throw new DirectSourceException("acquisition_grab_failed");
-                        await _annas.DownloadAsync(Catalog(source), AcquisitionConnectionInput.Unprotect(_protector, source.ProtectedApiKey), md5, destination, ct);
+                        // A record needs the member key or a person; a file link from that person is fetched plainly.
+                        if (AnnasArchiveClient.ReadMd5(address) is not { } md5)
+                        {
+                            await _annas.DownloadFileAsync(address, destination, ct);
+                        }
+                        else if (source.ProtectedApiKey is null)
+                        {
+                            // Without a key the public slow download is used; checks and long waits go to a person.
+                            try
+                            {
+                                await _annas.SlowDownloadAsync(Catalog(source), md5, destination, SlowWait, ct);
+                            }
+                            catch (AnnasArchiveException exception) when (exception.Failure is AnnasArchiveFailure.Gate or AnnasArchiveFailure.WaitTooLong)
+                            {
+                                throw new DirectSourceException(ManualLinkKey);
+                            }
+                        }
+                        else
+                        {
+                            await _annas.DownloadAsync(Catalog(source), AcquisitionConnectionInput.Unprotect(_protector, source.ProtectedApiKey), md5, destination, ct);
+                        }
+
                         break;
                     default:
                         throw new DirectSourceException("acquisition_grab_failed");

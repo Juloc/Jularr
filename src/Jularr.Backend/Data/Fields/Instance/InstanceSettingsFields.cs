@@ -11,5 +11,6 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly LongField Version = new() { Minimum = 1 };
         public static readonly IntField ReadingCacheMegabytes = new() { Minimum = 0, Maximum = 1_048_576 };
         public static readonly IntField ReadingCacheWorks = new() { Minimum = 0, Maximum = 10_000 };
+        public static readonly BoolField UsersConfirmSources = new();
     }
 }

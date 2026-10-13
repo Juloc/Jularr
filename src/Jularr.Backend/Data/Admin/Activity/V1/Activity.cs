@@ -36,8 +36,9 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
     public sealed class ActivityItemV1 : BaseResponse
     {
         public ActivityItemV1(long id, OperationType operationTypeId, OperationStatusType operationStatusTypeId, string title, long? workId, string? workTitle, int? progressPercent,
-            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId)
+            string? reasonKey, DateTime createdAt, DateTime? finishedAt, string? connectionName, long? sizeBytes, long? remainingBytes, int? etaSeconds, DownloadStateType? downloadStateTypeId, string? manualUrl = null)
         {
+            ManualUrl = manualUrl;
             Id = id;
             OperationTypeId = operationTypeId;
             OperationStatusTypeId = operationStatusTypeId;
@@ -99,5 +100,20 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.DownloadStateTypeId), false)]
         public DownloadStateType? DownloadStateTypeId { get; }
+
+        // The source page where a person passes the check and copies the file link.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), false)]
+        public string? ManualUrl { get; }
+    }
+
+    public sealed class SaveActivitySourceLinkDataV1 : BaseData
+    {
+        public SaveActivitySourceLinkDataV1(string sourceUrl)
+        {
+            SourceUrl = sourceUrl;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
+        public string SourceUrl { get; }
     }
 }

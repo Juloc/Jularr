@@ -13,8 +13,9 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
     public sealed class InstanceSettingsDetailsV1 : BaseResponse
     {
-        public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version, int readingCacheMegabytes, int readingCacheWorks)
+        public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version, int readingCacheMegabytes, int readingCacheWorks, bool usersConfirmSources)
         {
+            UsersConfirmSources = usersConfirmSources;
             Name = name;
             UiLocaleId = uiLocaleId;
             Version = version;
@@ -37,12 +38,17 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ReadingCacheWorks))]
         public int ReadingCacheWorks { get; }
+
+        // Users with the account switch may confirm source checks for their own requests.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UsersConfirmSources))]
+        public bool UsersConfirmSources { get; }
     }
 
     public sealed class UpdateInstanceSettingsDataV1 : BaseData
     {
-        public UpdateInstanceSettingsDataV1(string name, long uiLocaleId, long version, int? readingCacheMegabytes = null, int? readingCacheWorks = null)
+        public UpdateInstanceSettingsDataV1(string name, long uiLocaleId, long version, int? readingCacheMegabytes = null, int? readingCacheWorks = null, bool? usersConfirmSources = null)
         {
+            UsersConfirmSources = usersConfirmSources;
             Name = name;
             UiLocaleId = uiLocaleId;
             Version = version;
@@ -56,6 +62,9 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.ReadingCacheWorks), false)]
         public int? ReadingCacheWorks { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UsersConfirmSources), false)]
+        public bool? UsersConfirmSources { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
         public string Name { get; }

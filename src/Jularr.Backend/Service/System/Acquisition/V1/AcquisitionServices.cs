@@ -536,7 +536,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await _direct.DownloadAsync(connection, download, path + ".part", CancellationToken);
                     File.Move(path + ".part", path);
                 }
-                catch (DirectSourceException exception) when (exception.ErrorKey == "source_gate")
+                catch (DirectSourceException exception) when (exception.ErrorKey is "source_gate" or DirectSources.ManualLinkKey)
                 {
                     // A login or challenge waits for a person; nothing is bypassed.
                     await AttentionAsync(download.OperationId, exception.ErrorKey);

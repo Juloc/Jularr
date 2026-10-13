@@ -31,7 +31,8 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                     account."AccountRoleTypeId",
                     account."IsEnabled",
                     account."EmailVerifiedAt",
-                    account."UpdatedAt"
+                    account."UpdatedAt",
+                    account."MayConfirmSources"
                 FROM
                     "Accounts" AS account
                 ORDER BY
@@ -65,7 +66,8 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                     account."AccountRoleTypeId",
                     account."IsEnabled",
                     account."EmailVerifiedAt",
-                    account."UpdatedAt"
+                    account."UpdatedAt",
+                    account."MayConfirmSources"
                 FROM
                     "Accounts" AS account
                 WHERE
@@ -88,7 +90,7 @@ namespace Jularr.Backend.Service.Admin.Account.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Complete account replacement.
-            var data = new AccountUpdateData(Parameters.AccountId, Data.DisplayName, Data.AccountRoleTypeId, Data.IsEnabled);
+            var data = new AccountUpdateData(Parameters.AccountId, Data.DisplayName, Data.AccountRoleTypeId, Data.IsEnabled, Data.MayConfirmSources);
             await Context.UpdateAccountAsync(data, CancellationToken);
             return new UpdateResult(true);
         }

@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Activity
 {
-    public sealed class ActivityModel(ReadActivityV1 read, RetryActivityV1 retry, DismissActivityV1 dismiss, IAntiforgery antiforgery) : JularrPage
+    public sealed class ActivityModel(ReadActivityV1 read, RetryActivityV1 retry, DismissActivityV1 dismiss, SaveActivitySourceLinkV1 sourceLink, IAntiforgery antiforgery) : JularrPage
     {
         private PageResult<ActivityItemV1>? _items;
 
@@ -52,7 +52,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                     // Failures can be retried or put aside; waiting imports clear themselves.
                     table = table.Content("common.actions", item => item.OperationStatusTypeId == OperationStatusType.Failed
                         ? new Div(Action(item, "Retry", "activity.retry", csrf), Action(item, "Dismiss", "activity.dismiss", csrf))
-                        : new Span());
+                        : item.ManualUrl is { } manual ? ManualLink(item, manual, csrf) : new Span());
                 }
 
                 page.Content.Add(table);
@@ -66,6 +66,16 @@ namespace Jularr.Frontend.Pages.Admin.Activity
 
         private Form<ActivityOperationParametersV1> Action(ActivityItemV1 item, string handler, string labelKey, string? csrf) =>
             new(form => form.Submit(labelKey), Address(handler: handler) + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new ActivityOperationParametersV1(item.Id));
+
+        // The person passes the source's check in their own browser; the server takes the file link from there.
+        private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new Div(
+            new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
+            new Form<SaveActivitySourceLinkDataV1>(form =>
+            {
+                form.Text(data => data.SourceUrl, "activity.fileLink");
+                form.Submit("activity.continueDownload");
+            }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
+                Error?.Field == nameof(SaveActivitySourceLinkDataV1.SourceUrl) ? Error : null));
 
         // Scans report service errors; downloads report acquisition outcomes.
         private static string Reason(OperationType type, string key) => type == OperationType.LibraryScan ? "errors." + key : "acquisition.outcome." + key;
@@ -109,6 +119,12 @@ namespace Jularr.Frontend.Pages.Admin.Activity
         public async Task<IActionResult> OnPostRetryAsync([BindRequired] long operationId)
         {
             await retry.ExecuteAsync<UpdateResult>(new ActivityOperationParametersV1(operationId), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostSourceLinkAsync([BindRequired] long operationId, string? sourceUrl)
+        {
+            await sourceLink.ExecuteAsync<UpdateResult>(new ActivityOperationParametersV1(operationId), new SaveActivitySourceLinkDataV1(sourceUrl ?? ""), HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
 

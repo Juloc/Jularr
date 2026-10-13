@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Localization;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Operation;
 
 namespace Jularr.Backend.Data.User.Request.V1
 {
@@ -53,8 +54,11 @@ namespace Jularr.Backend.Data.User.Request.V1
 
     public sealed class RequestDetailsV1 : BaseResponse
     {
-        public RequestDetailsV1(long id, long workId, string canonicalTitle, string requestedLanguage, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, DateTime createdAt)
+        public RequestDetailsV1(long id, long workId, string canonicalTitle, string requestedLanguage, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, DateTime createdAt,
+            long? operationId = null, string? manualUrl = null)
         {
+            OperationId = operationId;
+            ManualUrl = manualUrl;
             Id = id;
             WorkId = workId;
             CanonicalTitle = canonicalTitle;
@@ -80,5 +84,38 @@ namespace Jularr.Backend.Data.User.Request.V1
 
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.CreatedAt))]
         public DateTime CreatedAt { get; }
+
+        // A download of this request waits for the user to pass the source's check.
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
+        public long? OperationId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), false)]
+        public string? ManualUrl { get; }
+    }
+
+    public sealed class RequestParametersV1 : BaseParameters
+    {
+        public RequestParametersV1(long acquisitionRequestId)
+        {
+            AcquisitionRequestId = acquisitionRequestId;
+        }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.Id))]
+        public long AcquisitionRequestId { get; }
+    }
+
+    public sealed class SaveRequestSourceLinkDataV1 : BaseData
+    {
+        public SaveRequestSourceLinkDataV1(long operationId, string sourceUrl)
+        {
+            OperationId = operationId;
+            SourceUrl = sourceUrl;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
+        public string SourceUrl { get; }
     }
 }

@@ -1,5 +1,6 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Enums.Service;
@@ -30,13 +31,37 @@ namespace Jularr.Backend.Service.User.Request.V1
                     work."CanonicalTitle",
                     locale."Name" AS "RequestedLanguage",
                     request."AcquisitionRequestStatusTypeId",
-                    request."CreatedAt"
+                    request."CreatedAt",
+                    waiting."OperationId",
+                    waiting."ManualUrl"
                 FROM
                     "AcquisitionRequests" AS request
                 INNER JOIN
                     "Works" AS work ON work."Id" = request."WorkId"
                 INNER JOIN
                     "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
+                LEFT JOIN LATERAL (
+                    SELECT
+                        operation."Id" AS "OperationId",
+                        replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0' AS "ManualUrl"
+                    FROM
+                        "RequestTargets" AS target
+                    INNER JOIN
+                        "AcquisitionReleases" AS release ON release."WantedItemId" = target."WantedItemId"
+                    INNER JOIN
+                        "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id" AND operation."OperationTypeId" = 2
+                    INNER JOIN
+                        "InstanceSettings" AS settings ON settings."UsersConfirmSources"
+                    INNER JOIN
+                        "Accounts" AS account ON account."Id" = @AccountId AND account."MayConfirmSources"
+                    WHERE
+                        target."AcquisitionRequestId" = request."Id"
+                        AND operation."OperationStatusTypeId" IN (1, 2)
+                        AND operation."AttentionKey" = 'source_manual_link'
+                    ORDER BY
+                        operation."Id" DESC
+                    LIMIT 1
+                ) AS waiting ON TRUE
                 WHERE
                     request."RequestedByProfileId" = @ProfileId
                 ORDER BY
@@ -46,8 +71,34 @@ namespace Jularr.Backend.Service.User.Request.V1
                 OFFSET @Offset;
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<RequestDetailsV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/requests/{acquisitionRequestId:long}/source-link")]
+    public sealed class SaveRequestSourceLinkV1 : UserService<RequestParametersV1, SaveRequestSourceLinkDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(RequestParametersV1 parameters) => ModuleRequirement.All("Requests", "Acquisition");
+        protected override ServicePermission GetPermission(RequestParametersV1 parameters, Type resultType) => new("profile.requests.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // Files are fetched over HTTPS only.
+            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || link.Scheme != Uri.UriSchemeHttps)
+            {
+                throw new DataValidationException(nameof(SaveRequestSourceLinkDataV1.SourceUrl), "invalid_url");
+            }
+
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SetRequestSourceLinkAsync(new RequestSourceLinkData(Parameters.AcquisitionRequestId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.OperationId, link.ToString()), ct);
+                return true;
+            }, CancellationToken);
+            return new UpdateResult(true);
         }
     }
 

@@ -3,13 +3,17 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Account.V1;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Activity.V1;
+using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Logic.AnnasArchive;
@@ -112,6 +116,109 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_WithoutKeyKeepsTheSlowCountdownAndImports()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedBookAsync(host);
+            await GrabAnnaAsync(host, wantedId);
+
+            // The page's own countdown is waited out before the file is fetched.
+            var started = DateTime.UtcNow;
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.IsTrue(DateTime.UtcNow - started >= TimeSpan.FromSeconds(1));
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub")));
+            Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
+            Assert.IsFalse(sources.Requests.Any(request => request.Contains("fast_download", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_ChecksWaitForAPermittedPersonAndThenContinue()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources { SlowGate = true };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var wantedId = await CreateWantedBookAsync(host);
+            await GrabAnnaAsync(host, wantedId);
+
+            // The check is never passed by Jularr; the download waits and the source is not asked again.
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("source_manual_link", await host.ScalarAsync("SELECT \"AttentionKey\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            var asked = sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal));
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual(asked, sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
+            var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+            using var todo = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo");
+            Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0",
+                (await todo.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId).ManualUrl);
+            using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link", new SaveActivitySourceLinkDataV1("http://files.example.test/0123.epub"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, plain.StatusCode);
+
+            // Users see and confirm only while the instance and their account allow it.
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            using var switched = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/202");
+            Assert.AreEqual(HttpStatusCode.OK, switched.StatusCode, await switched.Content.ReadAsStringAsync());
+            Assert.IsNull((await ReadOwnRequestAsync(host)).ManualUrl);
+            var link = new SaveRequestSourceLinkDataV1(operationId, "https://files.example.test/0123.epub");
+            using (var refused = await host.SendAsync(HttpMethod.Post, "/api/v1/requests/710/source-link", link))
+            {
+                Assert.AreEqual(HttpStatusCode.NotFound, refused.StatusCode);
+            }
+
+            using var settings = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/instance/settings");
+            var instance = (await settings.Content.ReadFromJsonAsync<InstanceSettingsDetailsV1>())!;
+            using var allowed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings", new UpdateInstanceSettingsDataV1(instance.Name, instance.UiLocaleId, instance.Version, usersConfirmSources: true));
+            Assert.AreEqual(HttpStatusCode.OK, allowed.StatusCode, await allowed.Content.ReadAsStringAsync());
+            Assert.IsNull((await ReadOwnRequestAsync(host)).ManualUrl);
+            using var account = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/accounts/41");
+            var owner = (await account.Content.ReadFromJsonAsync<AccountDetailsV1>())!;
+            Assert.IsFalse(owner.MayConfirmSources);
+            using var permitted = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/41", new UpdateAccountDataV1(owner.DisplayName, owner.AccountRoleTypeId, owner.IsEnabled, true));
+            Assert.AreEqual(HttpStatusCode.OK, permitted.StatusCode, await permitted.Content.ReadAsStringAsync());
+            var request = await ReadOwnRequestAsync(host);
+            Assert.AreEqual(operationId, request.OperationId);
+            StringAssert.StartsWith(request.ManualUrl, "https://annas.example.test/slow_download/");
+            using (var other = await host.SendAsync(HttpMethod.Post, "/api/v1/requests/999/source-link", link))
+            {
+                Assert.AreEqual(HttpStatusCode.NotFound, other.StatusCode);
+            }
+
+            using var page = await host.SendAsync(HttpMethod.Get, "/Requests");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "handler=SourceLink");
+            using var confirmed = await host.SendAsync(HttpMethod.Post, "/api/v1/requests/710/source-link", link);
+            Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
+
+            // The pasted file link is fetched without any key; the import follows as usual.
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, "1", "Books", "Jane Austen", "Pride and Prejudice (1813)", "Pride and Prejudice.epub")));
+            Assert.IsNull((await ReadOwnRequestAsync(host)).ManualUrl);
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_LongCountdownWaitsForAPerson()
+        {
+            var sources = new FakeSources { SlowWaitSeconds = 600 };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new Integrations.Logic.Common.NoSourceGateResolver());
+            using var target = new TemporaryDirectory();
+            var failure = await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
+                client.SlowDownloadAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", Path.Combine(target.Path, "book.epub"), TimeSpan.FromSeconds(90), CancellationToken.None));
+            Assert.AreEqual(Integrations.Data.AnnasArchive.AnnasArchiveFailure.WaitTooLong, failure.Failure);
+            Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("files.example.test", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
         public async Task SimulatedGates_PassOnlyForAllowedTestTargets()
         {
             // The override lives in the tests; it knows only its own simulated challenge and allowed hosts.
@@ -134,6 +241,22 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(new DirectCredentials(new Uri("https://opds.example.test/opds"), "Basic x").Covers(new Uri("https://cdn.example.test/file")));
         }
 
+        private static async Task GrabAnnaAsync(Host host, long wantedId)
+        {
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            var anna = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(candidate => candidate.ConnectionName == "Anna");
+            using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(anna.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+        }
+
+        private static async Task<RequestDetailsV1> ReadOwnRequestAsync(Host host)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/requests");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<PageResult<RequestDetailsV1>>())!.Items.Single(item => item.Id == 710);
+        }
+
         private static async Task<IReadOnlyList<SourceCatalogItemV1>> ReadCatalogAsync(Host host)
         {
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/sources");
@@ -143,7 +266,7 @@ namespace Jularr.Backend.Tests
 
         private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeSources sources)
         {
-            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = downloads }, services: services =>
+            var host = await LibraryTests.CreateHostAsync(storage, razor: true, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = downloads }, services: services =>
             {
                 services.AddHttpClient<OpdsClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<AnnasArchiveClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
@@ -195,6 +318,8 @@ namespace Jularr.Backend.Tests
             public const string ChallengeToken = "simulated-challenge";
 
             public bool Challenge { get; set; }
+            public bool SlowGate { get; set; }
+            public int SlowWaitSeconds { get; set; } = 1;
             public int SignedHits { get; private set; }
             public ConcurrentBag<string> AuthorizationSeenBy { get; } = [];
             public ConcurrentBag<string> Requests { get; } = [];
@@ -258,6 +383,19 @@ namespace Jularr.Backend.Tests
                     gate.Headers.Add("cf-mitigated", "challenge");
                     gate.Headers.Add("X-Challenge-Token", ChallengeToken);
                     return gate;
+                }
+
+                // The simulated slow download shows a check or a countdown with the file link.
+                if (uri.AbsolutePath.StartsWith("/slow_download/0123456789abcdef0123456789abcdef/0/", StringComparison.Ordinal))
+                {
+                    if (!SlowGate)
+                    {
+                        return Text($"""<html><body><p>Please wait {SlowWaitSeconds} seconds before downloading.</p><a href="/md5/0123456789abcdef0123456789abcdef">Back</a><a href="https://files.example.test/0123.epub">Download now</a></body></html>""", "text/html");
+                    }
+
+                    var check = Text("<html><body>Checking your browser</body></html>", "text/html", HttpStatusCode.ServiceUnavailable);
+                    check.Headers.Add("cf-mitigated", "challenge");
+                    return check;
                 }
 
                 return uri.AbsolutePath switch

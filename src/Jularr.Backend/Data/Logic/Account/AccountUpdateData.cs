@@ -6,8 +6,9 @@ namespace Jularr.Backend.Data.Logic.Account
 {
     internal sealed class AccountUpdateData : BaseData
     {
-        public AccountUpdateData(long id, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled)
+        public AccountUpdateData(long id, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, bool? mayConfirmSources = null)
         {
+            MayConfirmSources = mayConfirmSources;
             Id = id;
             DisplayName = displayName;
             AccountRoleTypeId = accountRoleTypeId;
@@ -25,5 +26,8 @@ namespace Jularr.Backend.Data.Logic.Account
 
         [DataField(typeof(AccountFields), nameof(AccountFields.IsEnabled))]
         public bool IsEnabled { get; set; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.MayConfirmSources), false)]
+        public bool? MayConfirmSources { get; set; }
     }
 }

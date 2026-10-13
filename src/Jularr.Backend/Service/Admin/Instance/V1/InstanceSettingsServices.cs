@@ -26,7 +26,8 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                     settings."UiLocaleId",
                     settings."Version",
                     (settings."ReadingCacheBytes" / 1048576)::integer AS "ReadingCacheMegabytes",
-                    settings."ReadingCacheWorks"
+                    settings."ReadingCacheWorks",
+                    settings."UsersConfirmSources"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE
@@ -47,7 +48,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Use the canonical writer.
-            await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks), CancellationToken);
+            await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks, Data.UsersConfirmSources), CancellationToken);
             return new UpdateResult(true);
         }
     }

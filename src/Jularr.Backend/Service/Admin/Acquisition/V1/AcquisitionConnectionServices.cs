@@ -119,7 +119,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override async Task<IServiceOutput> OnCreate()
         {
             // New connections carry a key unless the source needs none.
-            if (Data.ApiKey is null && Data.AcquisitionConnectionTypeId is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds))
+            if (Data.ApiKey is null && !DirectSources.IsDirect(Data.AcquisitionConnectionTypeId))
             {
                 throw new DataValidationException(nameof(SaveAcquisitionConnectionDataV1.ApiKey), "required");
             }

@@ -29,8 +29,10 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
     public sealed class AccountDetailsV1 : BaseResponse
     {
-        public AccountDetailsV1(long id, string email, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, DateTime? emailVerifiedAt, DateTime updatedAt)
+        public AccountDetailsV1(long id, string email, string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, DateTime? emailVerifiedAt, DateTime updatedAt,
+            bool mayConfirmSources = false)
         {
+            MayConfirmSources = mayConfirmSources;
             Id = id;
             Email = email;
             DisplayName = displayName;
@@ -60,12 +62,17 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
         [DataField(typeof(AccountFields), nameof(AccountFields.UpdatedAt))]
         public DateTime UpdatedAt { get; }
+
+        // May confirm source checks for own requests when the instance allows it.
+        [DataField(typeof(AccountFields), nameof(AccountFields.MayConfirmSources))]
+        public bool MayConfirmSources { get; }
     }
 
     public sealed class UpdateAccountDataV1 : BaseData
     {
-        public UpdateAccountDataV1(string displayName, AccountRoleType accountRoleTypeId, bool isEnabled)
+        public UpdateAccountDataV1(string displayName, AccountRoleType accountRoleTypeId, bool isEnabled, bool? mayConfirmSources = null)
         {
+            MayConfirmSources = mayConfirmSources;
             DisplayName = displayName;
             AccountRoleTypeId = accountRoleTypeId;
             IsEnabled = isEnabled;
@@ -79,5 +86,9 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
         [DataField(typeof(AccountFields), nameof(AccountFields.IsEnabled))]
         public bool IsEnabled { get; }
+
+        // Empty keeps the current switch.
+        [DataField(typeof(AccountFields), nameof(AccountFields.MayConfirmSources), false)]
+        public bool? MayConfirmSources { get; }
     }
 }

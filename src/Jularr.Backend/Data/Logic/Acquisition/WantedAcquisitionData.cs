@@ -1,10 +1,12 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Operation;
+using Jularr.Backend.Data.Fields.Profile;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
@@ -400,5 +402,47 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.IsFinished))]
         public bool IsFinished { get; }
+    }
+
+    internal sealed class DownloadSourceLinkData : BaseData
+    {
+        public DownloadSourceLinkData(long operationId, string sourceUrl)
+        {
+            OperationId = operationId;
+            SourceUrl = sourceUrl;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
+        public string SourceUrl { get; }
+    }
+
+    internal sealed class RequestSourceLinkData : BaseData
+    {
+        public RequestSourceLinkData(long acquisitionRequestId, long profileId, long accountId, long operationId, string sourceUrl)
+        {
+            AcquisitionRequestId = acquisitionRequestId;
+            ProfileId = profileId;
+            AccountId = accountId;
+            OperationId = operationId;
+            SourceUrl = sourceUrl;
+        }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.Id))]
+        public long AcquisitionRequestId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
+        public long AccountId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
+        public long OperationId { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
+        public string SourceUrl { get; }
     }
 }

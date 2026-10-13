@@ -31,6 +31,7 @@ namespace Jularr.Backend.Logic.Account
                     "DisplayName" = @DisplayName,
                     "AccountRoleTypeId" = @AccountRoleTypeId,
                     "IsEnabled" = @IsEnabled,
+                    "MayConfirmSources" = coalesce(@MayConfirmSources, account."MayConfirmSources"),
                     "CredentialRevision" = account."CredentialRevision" + CASE
                         WHEN account."AccountRoleTypeId" <> @AccountRoleTypeId OR account."IsEnabled" <> @IsEnabled THEN 1
                         ELSE 0

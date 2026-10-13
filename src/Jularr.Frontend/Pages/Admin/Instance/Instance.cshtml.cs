@@ -37,9 +37,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Select(item => item.UiLocaleId, "profile.field.uiLocale", options);
                     form.Number(item => item.ReadingCacheMegabytes, "admin.instance.readingCacheMegabytes");
                     form.Number(item => item.ReadingCacheWorks, "admin.instance.readingCacheWorks");
+                    form.Select(item => item.UsersConfirmSources, "admin.instance.usersConfirmSources",
+                        [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                     form.Submit("common.save");
                 }, Url.Page("/Admin/Instance/Instance"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks), _moduleId is null ? Error : null));
+                    _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources), _moduleId is null ? Error : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
@@ -76,10 +78,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks)
+        public async Task<IActionResult> OnPostAsync(string? name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks,
+            bool? usersConfirmSources)
         {
             // Save through the service.
-            _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks);
+            _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             TempData["InstanceSaved"] = true;
             return RedirectToPage("/Admin/Instance/Instance");

@@ -12,6 +12,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
     internal sealed partial class AnnasArchiveClient(HttpClient http, ISourceGateResolver gates)
     {
         public const long MaximumBytes = 500L * 1024 * 1024;
+        private const int SlowServers = 3;
         private const long MaximumPageBytes = 4L * 1024 * 1024;
 
         public static Uri RecordUri(Uri site, string md5) => new(site, "md5/" + md5);
@@ -106,6 +107,78 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
         }
 
+        // The public slow download: the page's waiting time is kept, its check is never passed.
+        public async Task SlowDownloadAsync(Uri site, string md5, string destination, TimeSpan maximumWait, CancellationToken ct)
+        {
+            AnnasArchiveException? last = null;
+            for (var server = 0; server < SlowServers; server++)
+            {
+                string page;
+                try
+                {
+                    using var response = await DirectDownload.SendAsync(http, new Uri(site, "slow_download/" + md5 + "/0/" + server.ToString(CultureInfo.InvariantCulture)), null, gates, ct);
+                    if (response.Content.Headers.ContentLength > MaximumPageBytes)
+                    {
+                        throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The download page is too large.");
+                    }
+
+                    page = await response.Content.ReadAsStringAsync(ct);
+                }
+                catch (DirectDownloadException exception) when (exception.Failure == DirectDownloadFailure.Gate)
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.Gate, "The slow download asks for a manual confirmation.", exception);
+                }
+                catch (DirectDownloadException exception)
+                {
+                    last = new AnnasArchiveException(AnnasArchiveFailure.Unavailable, "The slow download page could not be read.", exception);
+                    continue;
+                }
+
+                // The page names a waiting time and, after it, the file.
+                var document = new HtmlParser().ParseDocument(page);
+                var wait = Countdown().Match(document.Body?.TextContent ?? "") is { Success: true } countdown ? TimeSpan.FromSeconds(int.Parse(countdown.Groups[1].Value, CultureInfo.InvariantCulture)) : TimeSpan.Zero;
+                var link = document.QuerySelectorAll("a[href]")
+                    .Select(anchor => Uri.TryCreate(site, anchor.GetAttribute("href"), out var uri) ? (Uri: uri, Text: anchor.TextContent) : (Uri: (Uri?)null, Text: ""))
+                    .Where(candidate => candidate.Uri is { Scheme: "https" } uri && !IsSitePage(site, uri))
+                    .FirstOrDefault(candidate => Extension().IsMatch(candidate.Uri!.AbsolutePath) || candidate.Text.Contains("download", StringComparison.OrdinalIgnoreCase)).Uri;
+                if (link is null)
+                {
+                    last = new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The slow download page names no file.");
+                    continue;
+                }
+
+                if (wait > maximumWait)
+                {
+                    throw new AnnasArchiveException(AnnasArchiveFailure.WaitTooLong, "The slow download waits longer than allowed.");
+                }
+
+                await Task.Delay(wait, ct);
+                await DownloadFileAsync(link, destination, ct);
+                return;
+            }
+
+            throw last ?? new AnnasArchiveException(AnnasArchiveFailure.Unavailable, "No slow download server answered.");
+        }
+
+        // A file link a person obtained after the site's own check; no key is sent.
+        public async Task DownloadFileAsync(Uri file, string destination, CancellationToken ct)
+        {
+            try
+            {
+                using var response = await DirectDownload.SendAsync(http, file, null, gates, ct);
+                await DirectDownload.SaveAsync(response, destination, MaximumBytes, ct);
+            }
+            catch (DirectDownloadException exception)
+            {
+                throw new AnnasArchiveException(exception.Failure == DirectDownloadFailure.Gate ? AnnasArchiveFailure.Gate : AnnasArchiveFailure.Unavailable, "The file could not be downloaded.", exception);
+            }
+        }
+
+        private static bool IsSitePage(Uri site, Uri uri) => string.Equals(site.Host, uri.Host, StringComparison.OrdinalIgnoreCase)
+            && (uri.AbsolutePath.StartsWith("/md5/", StringComparison.Ordinal) || uri.AbsolutePath.StartsWith("/slow_download/", StringComparison.Ordinal)
+                || uri.AbsolutePath.StartsWith("/fast_download/", StringComparison.Ordinal) || uri.AbsolutePath.StartsWith("/search", StringComparison.Ordinal)
+                || uri.AbsolutePath.StartsWith("/account", StringComparison.Ordinal) || uri.AbsolutePath.StartsWith("/donate", StringComparison.Ordinal) || uri.AbsolutePath == "/");
+
         private static long? ReadSize(string facts)
         {
             var match = Size().Match(facts);
@@ -125,6 +198,9 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         [GeneratedRegex(@"\.(epub|pdf|mobi|azw3)\b", RegexOptions.IgnoreCase)]
         private static partial Regex Extension();
+
+        [GeneratedRegex(@"wait\D{0,40}?([0-9]{1,4})\s*(?:s\b|sec|second)", RegexOptions.IgnoreCase)]
+        private static partial Regex Countdown();
 
         [GeneratedRegex(@"\[([a-z]{2,3})\]")]
         private static partial Regex Language();
