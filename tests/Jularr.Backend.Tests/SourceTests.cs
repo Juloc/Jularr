@@ -157,6 +157,33 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual(asked, sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
             var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+            // The optional module hides the wizard and rejects submissions, without losing the waiting job.
+            using var modulesResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/instance/modules");
+            var assistance = (await modulesResponse.Content.ReadFromJsonAsync<BaseDataList<InstanceModuleDetailsV1>>())!.Single(module => module.Key == "SourceAssistance");
+            using (var disabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + assistance.Id,
+                new UpdateInstanceModuleDataV1(false, assistance.Version)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, disabled.StatusCode, await disabled.Content.ReadAsStringAsync());
+            }
+
+            using (var hidden = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo"))
+            {
+                var row = (await hidden.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId);
+                Assert.IsNull(row.ManualUrl);
+            }
+
+            using (var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link",
+                new SaveActivitySourceLinkDataV1("https://files.example.test/0123.epub")))
+            {
+                Assert.AreNotEqual(HttpStatusCode.OK, blocked.StatusCode);
+            }
+
+            using (var enabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + assistance.Id,
+                new UpdateInstanceModuleDataV1(true, assistance.Version + 1)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, enabled.StatusCode, await enabled.Content.ReadAsStringAsync());
+            }
+
             using var todo = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo");
             Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0",
                 (await todo.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId).ManualUrl);
@@ -197,6 +224,7 @@ namespace Jularr.Backend.Tests
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "handler=SourceLink");
+            StringAssert.Contains(html, "source-assistance");
             using var confirmed = await host.SendAsync(HttpMethod.Post, "/api/v1/requests/710/source-link", link);
             Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
 
