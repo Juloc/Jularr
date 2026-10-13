@@ -8,9 +8,11 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
-        public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead)
+        public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
+            bool canManageProfiles)
         {
             CanRead = canRead;
+            CanManageProfiles = canManageProfiles;
             CanReadMedia = canReadMedia;
             CanManageMedia = canManageMedia;
             CanUpdateWatchlist = canUpdateWatchlist;
@@ -32,5 +34,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
         // Book processing and the reader are switched on.
         public bool CanRead { get; }
+
+        // Several profiles with picker and PIN; otherwise each account uses its main profile.
+        public bool CanManageProfiles { get; }
     }
 }

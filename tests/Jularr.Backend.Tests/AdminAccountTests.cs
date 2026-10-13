@@ -232,6 +232,38 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ProfilesModule_Off_EveryAccountUsesItsMainProfileWithoutPickerOrPin()
+        {
+            // Off by default: a second linked profile and a PIN change nothing.
+            await using var host = await Host.CreateAsync(razor: true);
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = FALSE WHERE "Key" = 'Profiles';
+                INSERT INTO "AccountProfiles" ("AccountId", "ProfileId") VALUES (41, 202);
+                UPDATE "Profiles" SET "PinHash" = 'selection-guard', "PinLength" = 4 WHERE "Id" = 101;
+                """);
+            await SignInAsync(host);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            Assert.AreEqual(101L, (await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.ProfileId);
+            using var profiles = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles");
+            var listed = (await profiles.Content.ReadFromJsonAsync<PageResult<ProfileSelectionDetailsV1>>())!.Items.Single();
+            Assert.AreEqual(101L, listed.Id);
+            Assert.IsFalse(listed.IsLocked);
+
+            // No other profile, no new ones, no PIN management; the pages offer none of it.
+            using var foreign = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/202");
+            Assert.IsFalse(foreign.IsSuccessStatusCode);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/profiles", new CreateProfileDataV1("Child", 1));
+            Assert.IsFalse(created.IsSuccessStatusCode);
+            using var pin = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/pin", new UpdateProfilePinDataV1("1234"));
+            Assert.IsFalse(pin.IsSuccessStatusCode);
+            using var settings = await host.SendAsync(HttpMethod.Get, "/Settings");
+            var html = await settings.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, settings.StatusCode, html);
+            Assert.IsFalse(html.Contains("Save PIN", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("/Account/Profiles?", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
         public async Task ProfilePin_FailuresLockAcrossErrorsAndTheOwnerResets()
         {
             await using var host = await Host.CreateAsync(razor: true);

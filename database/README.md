@@ -8,7 +8,8 @@ InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shar
 its initial language. It is embedded as `Jularr.Database.Instance.sql` for focused
 isolated tests; it is never installed automatically on an existing database.
 Owner services provide version-checked settings/module edits. Library gates manual
-media/watchlist Services; Requests gates request creation/moderation and manual
+media/watchlist Services; Profiles (off by default) allows several profiles per account,
+otherwise the view SelectableProfiles offers each account its main profile only; Requests gates request creation/moderation and manual
 Wanted management; Acquisition (Arr+) gates indexers, download clients, search,
 grabs, monitoring and import, so Requests also work without automatic acquisition;
 Playback gates playback. Disabling a module retains data. Public presentation exposes only name/default language, User

@@ -403,6 +403,9 @@ namespace Jularr.Backend.Tests
                     await fixture.RunSqlAsync(await reader.ReadToEndAsync());
                 }
 
+                // The fixtures have several profiles per account; the default-off state has its own test.
+                await fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Profiles'");
+
                 if (media)
                 {
                     // Install the requested baseline.

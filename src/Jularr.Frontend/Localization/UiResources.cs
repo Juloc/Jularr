@@ -790,6 +790,7 @@ namespace Jularr.Frontend.Localization
             new("media.asset.Game", "Game"),
             new("instance.module.Playback", "Playback"),
             new("instance.module.Reading", "Book processing and reader"),
+            new("instance.module.Profiles", "Several profiles per account"),
             new("player.play", "Play"),
             new("player.pause", "Pause"),
             new("player.back10", "Back 10 seconds"),

@@ -82,7 +82,7 @@ namespace Jularr.Backend.Service.Admin.Account.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ProfilePinParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(ProfilePinParametersV1 parameters) => ModuleRequirement.All("Profiles");
         protected override ServicePermission GetPermission(ProfilePinParametersV1 parameters, Type resultType) => new("accounts.update");
 
         protected override async Task<IServiceOutput> OnDelete()

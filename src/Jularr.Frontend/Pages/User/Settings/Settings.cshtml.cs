@@ -57,28 +57,32 @@ namespace Jularr.Frontend.Pages.User.Settings
                             new UpdateProfileMediaDataV1([.. _media.Where(item => item.IsHidden).Select(item => item.Key)]), _savingMedia ? FormError : null));
                     }
 
-                    // A PIN guards switching to this profile.
-                    content.Add(new Form<UpdateProfilePinDataV1>(form =>
+                    // PIN and deletion belong to the Profiles module.
+                    if (texts.Capabilities?.CanManageProfiles is true)
                     {
-                        form.Pin(x => x.Pin, "account.profile.pin");
-                        form.Submit("profile.pin.save");
-                    }, Url.Page("/User/Settings/Settings", "Pin"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, null, _savingPin ? FormError : null));
-                    if (_profile.HasPin)
-                    {
-                        content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.pin.remove"), Url.Page("/User/Settings/Settings", "PinRemove"),
-                            antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
-                    }
+                        // A PIN guards switching to this profile.
+                        content.Add(new Form<UpdateProfilePinDataV1>(form =>
+                        {
+                            form.Pin(x => x.Pin, "account.profile.pin");
+                            form.Submit("profile.pin.save");
+                        }, Url.Page("/User/Settings/Settings", "Pin"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, null, _savingPin ? FormError : null));
+                        if (_profile.HasPin)
+                        {
+                            content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.pin.remove"), Url.Page("/User/Settings/Settings", "PinRemove"),
+                                antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+                        }
 
-                    // Deleting asks once more; nothing of the profile remains.
-                    if (Request.Query["delete"] == "true")
-                    {
-                        content.Add(new P(new Text("profile.delete.warning")).Attribute("role", "alert"));
-                        content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.delete.confirm"), Url.Page("/User/Settings/Settings", "Delete"),
-                            antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
-                    }
-                    else
-                    {
-                        content.Add(new A(new Text("profile.delete")).Class("button").Attribute("href", Url.Page("/User/Settings/Settings", new { delete = true })!));
+                        // Deleting asks once more; nothing of the profile remains.
+                        if (Request.Query["delete"] == "true")
+                        {
+                            content.Add(new P(new Text("profile.delete.warning")).Attribute("role", "alert"));
+                            content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.delete.confirm"), Url.Page("/User/Settings/Settings", "Delete"),
+                                antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+                        }
+                        else
+                        {
+                            content.Add(new A(new Text("profile.delete")).Class("button").Attribute("href", Url.Page("/User/Settings/Settings", new { delete = true })!));
+                        }
                     }
                 }
                 else
@@ -105,7 +109,9 @@ namespace Jularr.Frontend.Pages.User.Settings
 
             page.Content.Add(new UiSection("settings.account", [
                 new A(new Text("settings.sessions")).Class("button").Attribute("href", "/Account/Sessions"),
-                new A(new Text("account.profile.title")).Class("button").Attribute("href", "/Account/Profiles?returnUrl=%2FSettings"),
+                .. (texts.Capabilities?.CanManageProfiles is true
+                    ? new[] { new A(new Text("account.profile.title")).Class("button").Attribute("href", "/Account/Profiles?returnUrl=%2FSettings") }
+                    : []),
                 new A(new Text("account.logout.title")).Class("button").Attribute("href", "/Account/Logout")
             ]));
 

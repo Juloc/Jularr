@@ -102,7 +102,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         }
 
                         // A forgotten PIN is reset here.
-                        if (profile.HasPin)
+                        if (profile.HasPin && texts.Capabilities?.CanManageProfiles is true)
                         {
                             split.Secondary.Add(new Form<ProfilePinParametersV1>(form =>
                             {

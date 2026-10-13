@@ -66,7 +66,7 @@ namespace Jularr.Backend.Logic.Session
                 """
                 SELECT
                     profile."Id" AS "ProfileId",
-                    profile."PinHash",
+                    CASE WHEN selectable."IsPinRequired" THEN profile."PinHash" END AS "PinHash",
                     COALESCE(profile."PinLockedUntil" > statement_timestamp(), FALSE) AS "IsPinLocked",
                     session."ExpiresAt",
                     session."CredentialRevision"
@@ -74,6 +74,8 @@ namespace Jularr.Backend.Logic.Session
                     "AccountProfiles" AS accountProfile
                 INNER JOIN
                     "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
+                INNER JOIN
+                    "SelectableProfiles" AS selectable ON selectable."AccountId" = accountProfile."AccountId" AND selectable."ProfileId" = accountProfile."ProfileId"
                 INNER JOIN
                     "AccountSessions" AS session ON session."AccountId" = accountProfile."AccountId"
                 WHERE
@@ -171,10 +173,12 @@ namespace Jularr.Backend.Logic.Session
                     "AccountProfiles" AS accountProfile
                 INNER JOIN
                     "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
+                INNER JOIN
+                    "SelectableProfiles" AS selectable ON selectable."AccountId" = accountProfile."AccountId" AND selectable."ProfileId" = accountProfile."ProfileId"
                 WHERE
                     accountProfile."AccountId" = @AccountId
-                    AND profile."PinHash" IS NULL
-                    AND (SELECT count(*) FROM "AccountProfiles" WHERE "AccountId" = @AccountId) = 1
+                    AND NOT selectable."IsPinRequired"
+                    AND (SELECT count(*) FROM "SelectableProfiles" AS other WHERE other."AccountId" = @AccountId) = 1
                 ORDER BY
                     (profile."OwnerAccountId" = @AccountId) DESC,
                     profile."Id"

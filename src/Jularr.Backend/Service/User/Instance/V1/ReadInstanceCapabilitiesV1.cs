@@ -25,7 +25,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 FROM
                     "InstanceModules" AS module
                 WHERE
-                    module."Key" IN ('Library', 'Requests', 'Acquisition', 'Playback', 'Reading');
+                    module."Key" IN ('Library', 'Requests', 'Acquisition', 'Playback', 'Reading', 'Profiles');
                 """;
             var modules = await Context.ReadSql.ReadListAsync<InstanceModuleData>(sql, CancellationToken);
             var library = modules.Any(module => module.Key == "Library" && module.IsEnabled);
@@ -33,6 +33,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
             var acquisition = modules.Any(module => module.Key == "Acquisition" && module.IsEnabled);
             var playback = modules.Any(module => module.Key == "Playback" && module.IsEnabled);
             var reading = modules.Any(module => module.Key == "Reading" && module.IsEnabled);
+            var profiles = modules.Any(module => module.Key == "Profiles" && module.IsEnabled);
 
             // Reuse verified central grants.
             var permissions = ServiceGate.GetPermissions(Auth.AccountId, Auth.ProfileId, Auth.ProfileOwnerAccountId, Auth.AccountRoleTypeId);
@@ -45,7 +46,8 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 requests && permissions.Contains("wanted.update", StringComparer.Ordinal),
                 requests && acquisition && permissions.Contains("wanted.update", StringComparer.Ordinal),
                 library && playback && permissions.Contains("profile.playback", StringComparer.Ordinal),
-                library && reading && permissions.Contains("profile.media.read", StringComparer.Ordinal));
+                library && reading && permissions.Contains("profile.media.read", StringComparer.Ordinal),
+                profiles);
         }
     }
 }

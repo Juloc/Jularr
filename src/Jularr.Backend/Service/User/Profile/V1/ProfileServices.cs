@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.All("Profiles");
         protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters) =>
@@ -76,7 +76,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.All("Profiles");
         protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters) =>
@@ -94,7 +94,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.All("Profiles");
         protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters) =>

@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Account.Profiles
 {
-    public sealed class ProfilesModel(ReadProfilesV1 readProfiles, SelectProfileV1 selectProfile, IAntiforgery antiforgery, FrontendAssets assets) : JularrPage
+    public sealed class ProfilesModel(ReadProfilesV1 readProfiles, SelectProfileV1 selectProfile, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private PageResult<ProfileSelectionDetailsV1>? _profiles;
         private string _returnUrl = "/";
@@ -43,7 +43,7 @@ namespace Jularr.Frontend.Pages.Account.Profiles
                 }
 
                 if (_profiles.Items.Count == 0) content.Add(new P(new Text("account.profile.empty")).Attribute("role", "status"));
-                if (_profiles.Items.Count(profile => profile.IsOwned) < 10)
+                if (texts.Capabilities?.CanManageProfiles is true && _profiles.Items.Count(profile => profile.IsOwned) < 10)
                 {
                     content.Add(new A(new Text("account.profile.add")).Attribute("href", Url.Page("/Account/ProfileNew/ProfileNew", new { returnUrl = _returnUrl })!));
                 }

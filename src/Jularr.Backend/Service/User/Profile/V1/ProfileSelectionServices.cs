@@ -22,22 +22,22 @@ namespace Jularr.Backend.Service.User.Profile.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Read linked profiles only.
+            // The profiles the account may use; a PIN only counts with the Profiles module.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     profile."Id",
                     profile."DisplayName",
-                    (profile."PinHash" IS NOT NULL) AS "IsLocked",
-                    profile."PinLength",
+                    selectable."IsPinRequired" AS "IsLocked",
+                    CASE WHEN selectable."IsPinRequired" THEN profile."PinLength" END AS "PinLength",
                     (profile."OwnerAccountId" = @AccountId) AS "IsOwned"
                 FROM
-                    "AccountProfiles" AS accountProfile
+                    "SelectableProfiles" AS selectable
                 INNER JOIN
-                    "Profiles" AS profile ON profile."Id" = accountProfile."ProfileId"
+                    "Profiles" AS profile ON profile."Id" = selectable."ProfileId"
                 WHERE
-                    accountProfile."AccountId" = @AccountId
+                    selectable."AccountId" = @AccountId
                 ORDER BY
                     profile."DisplayName",
                     profile."Id"
@@ -55,7 +55,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ReadProfilesParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(ReadProfilesParametersV1 parameters) => ModuleRequirement.All("Profiles");
         protected override ServicePermission GetPermission(ReadProfilesParametersV1 parameters, Type resultType) => new("session.profile.create");
 
         protected override async Task<IServiceOutput> OnCreate()
@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.User.Profile.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<SelectProfileResultV1>()];
-        protected override ModuleRequirement GetInstanceModules(SelectProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(SelectProfileParametersV1 parameters) => ModuleRequirement.All("Profiles");
         protected override ServicePermission GetPermission(SelectProfileParametersV1 parameters, Type resultType) => new("session.profile.select");
 
         protected override async Task<IServiceOutput> OnExecute()
