@@ -18,8 +18,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private static readonly TimeSpan SearchLifetime = TimeSpan.FromHours(1);
         private static readonly TimeSpan ReadLifetime = TimeSpan.FromHours(12);
 
-        public static bool Handles(MediaType mediaType, MediaSubtype? subtype) => mediaType == MediaType.Book && subtype == MediaSubtype.Manga;
-
         public async Task<IReadOnlyList<AniListMedia>> SearchAsync(AniListMediaType type, IReadOnlyCollection<string> formats, string query, CancellationToken ct)
         {
             var key = $"anilist.search.{type}.{string.Join(',', formats.Order(StringComparer.Ordinal))}.{query.Trim().ToLowerInvariant()}";
@@ -60,9 +58,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<AniListMedia>> SearchMangaAsync(string query, int? year, CancellationToken ct)
+        public async Task<IReadOnlyList<AniListMedia>> SearchBooksAsync(MediaSubtype subtype, string query, int? year, CancellationToken ct)
         {
-            var results = await SearchAsync(AniListMediaType.Manga, AniListMatching.Formats(MediaType.Book, MediaSubtype.Manga), query, ct);
+            var results = await SearchAsync(AniListMediaType.Manga, AniListMatching.Formats(MediaType.Book, subtype), query, ct);
             return year is { } wanted ? [.. results.OrderByDescending(result => result.Year == wanted)] : results;
         }
 

@@ -38,15 +38,24 @@ namespace Jularr.Backend.Tests
             // AniList names the series, both titles and its volumes.
             using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", new SearchMetadataDataV1(MediaType.Book, "Example Manga", mediaSubtypeId: MediaSubtype.Manga));
             Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
-            var result = (await found.Content.ReadFromJsonAsync<BaseDataList<MetadataSearchResultV1>>())!.Single();
+            var results = (await found.Content.ReadFromJsonAsync<BaseDataList<MetadataSearchResultV1>>())!;
+            CollectionAssert.AreEquivalent(new[] { "openlibrary", "anilist" }, results.Select(item => item.Namespace).ToArray());
+            var result = results.Single(item => item.Namespace == "anilist");
             Assert.AreEqual("101", result.ExternalId);
             Assert.AreEqual("Mika Example", result.Author);
-            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, result.ExternalId, MediaSubtype.Manga));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, result.ExternalId, MediaSubtype.Manga, "anilist"));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             Assert.AreEqual("Example Manga", work.CanonicalTitle);
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 3 AND \"ParentWorkUnitId\" IS NULL"));
             Assert.AreEqual("Reidai Manga", await host.ScalarAsync("SELECT \"Title\" FROM \"WorkTitles\" WHERE \"Title\" <> 'Example Manga'"));
+
+            // The same series from Open Library joins the Work instead of becoming a second one.
+            using var joined = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL9W", MediaSubtype.Manga, "openlibrary"));
+            Assert.AreEqual(HttpStatusCode.OK, joined.StatusCode, await joined.Content.ReadAsStringAsync());
+            Assert.AreEqual(work.Id, (await joined.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
                 VALUES (700, {work.Id}, 202, 1, 2, 41, now());
@@ -171,6 +180,7 @@ namespace Jularr.Backend.Tests
             var host = await LibraryTests.CreateHostAsync(storage, services: services =>
             {
                 services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
+                services.AddHttpClient<Jularr.Integrations.Logic.OpenLibrary.OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
             });
@@ -219,6 +229,14 @@ namespace Jularr.Backend.Tests
                 var uri = request.RequestUri!;
                 switch (uri.Host)
                 {
+                    case "openlibrary.org":
+                        return uri.AbsolutePath switch
+                        {
+                            "/search.json" => Json("""{"docs":[{"key":"/works/OL9W","title":"Example Manga","author_name":["Mika Example"],"first_publish_year":2019}]}"""),
+                            "/works/OL9W.json" => Json("""{"title":"Example Manga","first_publish_date":"2019","authors":[{"author":{"key":"/authors/OL1A"}}]}"""),
+                            "/authors/OL1A.json" => Json("""{"name":"Mika Example"}"""),
+                            _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                        };
                     case "graphql.anilist.co":
                         var query = await request.Content!.ReadAsStringAsync(cancellationToken);
                         return Json(query.Contains("Page(", StringComparison.Ordinal) ? "{\"data\":{\"Page\":{\"media\":[" + Manga + "]}}}" : "{\"data\":{\"Media\":" + Manga + "}}");

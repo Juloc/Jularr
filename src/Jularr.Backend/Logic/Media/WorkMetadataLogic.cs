@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 
@@ -24,6 +25,47 @@ namespace Jularr.Backend.Logic.Media
                 """;
             sql.Parameters.Add(data);
             var workId = (await ctx.ReadOptionalAsync<WorkIdData>(sql, ct))?.Id;
+
+            // A Book of the same subtype, title and year from another provider is the same Work; anything less clear becomes a new one.
+            if (workId is null && data.MediaTypeId == MediaType.Book)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        work."Id"
+                    FROM
+                        "Works" AS work
+                    WHERE
+                        work."MediaTypeId" = 3
+                        AND work."MediaSubtypeId" IS NOT DISTINCT FROM @MediaSubtypeId
+                        AND (@ReleaseYear::integer IS NULL OR work."ReleaseYear" IS NULL OR abs(work."ReleaseYear" - @ReleaseYear) <= 1)
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkExternalIdentities" AS identity
+                            WHERE
+                                identity."WorkId" = work."Id"
+                                AND identity."Namespace" = @Namespace
+                        )
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkTitles" AS title
+                            WHERE
+                                title."WorkId" = work."Id"
+                                AND btrim(regexp_replace(lower(title."Title"), '[^[:alnum:]]+', ' ', 'g'))
+                                    IN (btrim(regexp_replace(lower(@CanonicalTitle), '[^[:alnum:]]+', ' ', 'g')), btrim(regexp_replace(lower(@OriginalTitle), '[^[:alnum:]]+', ' ', 'g')))
+                        )
+                    LIMIT 2
+                    FOR UPDATE OF work;
+                    """;
+                sql.Parameters.Add(data);
+                var same = await ctx.Sql.ReadListAsync<WorkIdData>(sql, ct);
+                workId = same.Count == 1 ? same[0].Id : null;
+            }
 
             sql = new SqlStatement();
             sql.Statement = workId is null
@@ -93,7 +135,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Provider facts are replaced; manual facts stay.
+            // Provider facts are replaced; manual facts stay, a fact another provider gives stays with it.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -128,7 +170,8 @@ namespace Jularr.Backend.Logic.Media
                     CROSS JOIN "InstanceSettings" AS settings
                 WHERE
                     provider."Key" = @ProviderKey
-                    AND length(btrim(item."Value")) > 0;
+                    AND length(btrim(item."Value")) > 0
+                ON CONFLICT DO NOTHING;
                 """;
             sql.Parameters.Add(data);
             sql.Parameters.Add(new WorkIdData(workId.Value));

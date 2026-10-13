@@ -44,8 +44,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class MetadataSearchResultV1 : BaseResponse
     {
-        public MetadataSearchResultV1(string externalId, string title, string? originalTitle, int? releaseYear, string? overview, long? workId, string? author = null)
+        public MetadataSearchResultV1(string @namespace, string externalId, string title, string? originalTitle, int? releaseYear, string? overview, long? workId, string? author = null)
         {
+            Namespace = @namespace;
             ExternalId = externalId;
             Author = author;
             Title = title;
@@ -55,7 +56,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             WorkId = workId;
         }
 
-        // TMDB id for video, Open Library work id for books.
+        // The provider: tmdb_movie, tmdb_tv, openlibrary, anilist, musicbrainz or igdb.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
         public string ExternalId { get; }
 
@@ -80,8 +84,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class ImportMetadataWorkDataV1 : BaseData
     {
-        public ImportMetadataWorkDataV1(MediaType mediaTypeId, string externalId, MediaSubtype? mediaSubtypeId = null)
+        public ImportMetadataWorkDataV1(MediaType mediaTypeId, string externalId, MediaSubtype? mediaSubtypeId = null, string? @namespace = null)
         {
+            Namespace = @namespace;
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
             ExternalId = externalId;
@@ -95,6 +100,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
         public string ExternalId { get; }
+
+        // Books name their provider; without one Open Library is meant.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace), false)]
+        public string? Namespace { get; }
 
         public override void Validate()
         {
