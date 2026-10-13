@@ -30,10 +30,11 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class SearchDiscoverDataV1 : BaseData
     {
-        public SearchDiscoverDataV1(string query, MediaType? mediaTypeId = null)
+        public SearchDiscoverDataV1(string query, MediaType? mediaTypeId = null, int page = 1)
         {
             Query = query;
             MediaTypeId = mediaTypeId;
+            Page = page;
         }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query))]
@@ -41,6 +42,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
         public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.Page))]
+        public int Page { get; }
     }
 
     public sealed class DiscoverItemParametersV1 : BaseParameters

@@ -47,6 +47,10 @@ Shared conventions and Backend ownership:
 - [Discover/Index.cshtml.cs](Pages/User/Discover/Index.cshtml.cs): **owns the Home/Discover composition**
   at `/`: media-type and browse navigation, Hero, Continue, Recently added, TMDB shelves per
   type (Trending/Top/New/Upcoming where TMDB has them), full browse views and global search results.
+  [Discover client](Pages/User/Discover/Index.entry.ts) debounces the header search, cancels obsolete requests
+  and exchanges only the Razor `Results` region. Browse/search progressively append provider pages near
+  the viewport end, deduplicate cards and retain loaded results after errors. Native page links remain usable.
+  New means first release, not a metadata update or another episode of an older series.
   [DiscoverItem](Pages/User/DiscoverItem/DiscoverItem.cshtml.cs) shows a TMDB title before it is a
   Work and requests it; [Library](Pages/User/Library/Library.cshtml.cs) is the local catalog with
   type scope, local search, sort and paging.
@@ -98,7 +102,7 @@ Shared conventions and Backend ownership:
 - [Activity](Pages/Admin/Activity/Activity.cshtml.cs): Activity, To-Do and History tabs for scans and downloads with reasons, retry and dismiss; a download waiting at a source check offers "open the source" plus a file-link field.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): Owner name/language, reading cache, "users may confirm source checks" and implemented module editor using shared field-aware forms and versioned services; disable retains data. Requests is a manual slice, not automatic acquisition.
 - [Works](Pages/Admin/Works/Works.cshtml.cs), [Work editor](Pages/Admin/Work/Work.cshtml.cs): real paged catalog, TMDB search/add, manual creation, version-checked title/year editing and TMDB refresh through Admin media services. [Providers](Pages/Admin/Providers/Providers.cshtml.cs) stores the write-only TMDB key.
-- [Details](Pages/User/Details/Details.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): persisted Work identity, stored availability, personal list actions and explicit language requests through Services/shared forms. No provider/NAS/playback call.
+- [Details](Pages/User/Details/Details.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): persisted Work identity, stored availability, personal list actions and explicit language requests through Services/shared forms. Details links Play/Continue/Read from its Hero and pages versions with one bounded availability read. No provider/NAS/playback call.
 - [My requests](Pages/User/Requests/Requests.cshtml.cs), [Admin requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs): actual profile queues, six status tabs, approval/rejection and shared-target pause/resume; permitted users confirm a source check of their own request with a file link. Wanted shows acquisition state and opens one target in Search (series by season/episode; candidates with decision, score and reason; grab), Current and History tabs. [Table.cs](Framework/Components/Table.cs) supports composed row cells using the same shared Form/Button renderer. Unit targets, filters and the candidate detail drawer are not connected.
 - [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs): Owner list and editor for Newznab indexers and SABnzbd clients, write-only keys, connection test and client path mapping; linked from Settings.
 - [Request users](Pages/Admin/Users/Users.cshtml.cs): read-only canonical account directory; account administration links to its existing owner. Quotas/rule assignments are not implemented.
@@ -177,10 +181,16 @@ in `Modules/<Module>/`.
 - [Asset tests](Tools/asset-manifest.test.mjs) assert hashed Vite entries and SVG sprite.
 - [Appearance tests](Tools/appearance.test.mjs) cover preferences, selected state,
   unavailable storage, free accents, artwork hue and light/dark text contrast.
+- [Discover tests](Tools/discover.test.mjs) cover debouncing, cancellation, stale answers, viewport paging,
+  deduplication and failed-page retention. Backend `DiscoverTests.cs` covers provider parameters,
+  canonical identity, local search pages and the Razor result fragment on isolated PostgreSQL.
 - `FrontendAuthenticationTests.Design_EnvironmentGate_OnlyRendersDevelopmentExamples`
   checks public Development rendering and Production exclusion on isolated PostgreSQL.
 - Persistent shell navigation and same-element minimized playback are approved but
   not integrated yet; the current full Player still belongs to its Razor page.
+- Discover currently exposes Movie/Series through TMDB. AniList discovery/identity, provider-backed
+  genre/year/status facets, effective metadata-locale policy and complete season/episode detail reads
+  remain integration gaps; no static filters or fabricated Anime shelves are shown.
 - Module/profile visibility, localized metadata policy, complete Requests/Wanted lifecycle, quota/rules, NAS health/reconnect/Synology and PIN verification remain pending.
 - Admin routing consumes Backend policies: MediaManager reaches manual media, Library identification and Requests/Wanted; Rules, user limits and Storage remain Owner-only.
 - Backend CI builds Frontend assets and runs real Razor/PostgreSQL integration tests;

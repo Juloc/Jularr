@@ -26,6 +26,9 @@ namespace Jularr.Frontend.Pages.User.Details
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
 
+        [BindProperty(SupportsGet = true, Name = "p")]
+        public int PageNumber { get; set; } = 1;
+
         protected override void Define(Page page)
         {
             page.Title("details.title");
@@ -38,9 +41,21 @@ namespace Jularr.Frontend.Pages.User.Details
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 // Plex plays what Jularr cannot play here.
                 var plex = work.PlexUrl is not null && (texts.Capabilities?.CanPlay is not true || _availability?.Items.Any(item => item.IsAvailable) is not true) ? work.PlexUrl : null;
+                var playable = _availability?.Items.Where(CanOpen).OrderByDescending(item => item.ResumePositionMs is > 0 && !item.IsCompleted).FirstOrDefault();
+                var actionKey = plex is null ? null : "media.openInPlex";
+                var actionHref = plex;
+                if (playable is not null)
+                {
+                    actionKey = PlayKey(playable);
+                    actionHref = PlayHref(playable);
+                }
+
                 page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts["media.type." + work.MediaTypeId], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }
-                    .Where(part => part is not null)), work.Overview, plex is null ? null : "media.openInPlex", plex));
-                page.Content.Add(new Form<UpdateWatchlistDataV1>(form =>
+                    .Where(part => part is not null)), work.Overview, actionKey, actionHref));
+
+                // Shared personal actions.
+                var actions = new List<IUiComponent>();
+                actions.Add(new Form<UpdateWatchlistDataV1>(form =>
                 {
                     form.Hidden(item => item.IsWatchlisted);
                     form.Submit(work.IsWatchlisted ? "media.watchlist.remove" : "media.watchlist.add");
@@ -52,7 +67,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 {
                     var options = languages.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
                     var selected = languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase));
-                    page.Content.Add(new Form<CreateRequestDataV1>(form =>
+                    actions.Add(new Form<CreateRequestDataV1>(form =>
                     {
                         form.Select(item => item.UiLocaleId, "request.language", options);
                         form.Submit("request.create");
@@ -60,10 +75,12 @@ namespace Jularr.Frontend.Pages.User.Details
                         _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : Error));
                 }
 
+                page.Content.Add(new Div([.. actions]).Class("details-actions"));
+
                 // Stored inventory, no storage access.
                 if (_availability is { Items.Count: > 0 } availability)
                 {
-                    page.Content.Add(new UiSection("details.availability", [new Table<WorkAvailabilityV1>(availability.Items)
+                    page.Content.Add(new UiSection("details.versions", [new Table<WorkAvailabilityV1>(availability.Items)
                         .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber) ?? texts["details.wholeWork"]))
                         .Resource(item => item.MediaAssetTypeId, "table.type", type => "media.asset." + type)
                         .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
@@ -72,32 +89,42 @@ namespace Jularr.Frontend.Pages.User.Details
                         .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? TimeSpan.FromMilliseconds(duration).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : ""))
                         .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))
                         .Content("common.actions", Play)]));
-                    if (availability.Items.Count == availability.PageSize) page.Content.Add(new P(new Text("details.availabilityMore")));
                 }
+
+                // One bounded inventory page.
+                var paging = new List<IUiComponent>();
+                var address = "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?p=";
+                if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", address + (PageNumber - 1).ToString(CultureInfo.InvariantCulture)));
+                if (_availability is { } rows && rows.Items.Count == rows.PageSize)
+                {
+                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", address + (PageNumber + 1).ToString(CultureInfo.InvariantCulture)));
+                }
+
+                if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("details-paging").Attribute("aria-label", texts["details.pages"]));
             }
             else if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
         }
 
         private IUiComponent Play(WorkAvailabilityV1 item)
         {
-            // Books open in the reader when book processing is on.
-            if (item.MediaAssetTypeId == MediaAssetType.Ebook)
-            {
-                return item.IsAvailable && texts.Capabilities?.CanRead is true
-                    ? new A(new Text("details.read")).Attribute("href", "/Read/" + item.Id.ToString(CultureInfo.InvariantCulture))
-                    : new Span();
-            }
-
             // Continue where this profile stopped.
-            if (!item.IsAvailable || texts.Capabilities?.CanPlay is not true)
+            if (!CanOpen(item))
             {
                 return new Span();
             }
 
-            var resume = item.ResumePositionMs is > 0 ? TimeSpan.FromMilliseconds(item.ResumePositionMs.Value).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : null;
-            var label = resume is null ? new Text(item.IsCompleted ? "details.playAgain" : "details.play") : (IUiComponent)new Span(new Text("details.resume"), new ValueText(" " + resume));
-            return new A(label).Attribute("href", "/Player/" + item.Id.ToString(CultureInfo.InvariantCulture));
+            var resume = item.MediaAssetTypeId != MediaAssetType.Ebook && item.ResumePositionMs is > 0 && !item.IsCompleted
+                ? TimeSpan.FromMilliseconds(item.ResumePositionMs.Value).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : null;
+            var label = resume is null ? new Text(PlayKey(item)) : (IUiComponent)new Span(new Text("details.resume"), new ValueText(" " + resume));
+            return new A(label).Class("button").Attribute("href", PlayHref(item));
         }
+
+        private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (item.MediaAssetTypeId == MediaAssetType.Ebook ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true);
+
+        private static string PlayKey(WorkAvailabilityV1 item) => item.MediaAssetTypeId == MediaAssetType.Ebook ? "details.read"
+            : item.IsCompleted ? "details.playAgain" : item.ResumePositionMs is > 0 ? "media.continue" : "details.play";
+
+        private static string PlayHref(WorkAvailabilityV1 item) => (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.Id.ToString(CultureInfo.InvariantCulture);
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -115,7 +142,7 @@ namespace Jularr.Frontend.Pages.User.Details
         protected override async Task LoadDataAsync()
         {
             _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, pageSize: PageRequest.MaximumPageSize), HttpContext.RequestAborted);
+            _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
             if (texts.Capabilities?.CanRequest is true)
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);

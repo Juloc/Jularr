@@ -181,10 +181,12 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     ORDER BY
                         work."CanonicalTitle",
                         work."Id"
-                    LIMIT 20;
+                    LIMIT @PageSize
+                    OFFSET @Offset;
                     """;
-                sql.Parameters.Add(Data);
+                sql.Parameters.Add(new LibraryFilterData(Data.MediaTypeId, Data.Query));
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+                sql.Page = new PageRequest(Data.Page, LocalLimit);
                 return ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct);
             }, CancellationToken);
 
@@ -200,9 +202,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         continue;
                     }
 
-                    var results = await _metadata.SearchAsync(connection, mediaType, Data.Query, null, CancellationToken);
+                    var results = await _metadata.SearchAsync(connection, mediaType, Data.Query, null, CancellationToken, Data.Page);
                     var overlay = await DiscoverQueries.ReadOverlayAsync(Context, mediaType, results.Select(result => result.Id), Auth.ProfileId!.Value, CancellationToken);
-                    items.AddRange(results.Where(result => !overlay.ContainsKey(result.Id)).Select(result => DiscoverQueries.ToItem(mediaType, result, overlay)));
+                    var localIds = items.Where(item => item.MediaTypeId == mediaType && item.TmdbId is not null).Select(item => item.TmdbId!.Value).ToHashSet();
+                    items.AddRange(results.Where(result => !localIds.Contains(result.Id)).Select(result => DiscoverQueries.ToItem(mediaType, result, overlay)));
                 }
             }
             catch (ServiceUnavailableException)

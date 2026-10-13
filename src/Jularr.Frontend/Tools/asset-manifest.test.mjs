@@ -22,11 +22,22 @@ test("shared asset and page/module entries have separate manifests", () => {
         "Modules/Appearance/theme.entry.ts",
         "Modules/Appearance/appearance.entry.scss",
         "Pages/User/Discover/Index.entry.scss",
+        "Pages/User/Discover/Index.entry.ts",
         "Pages/Account/Login/Login.entry.scss",
         "Pages/Development/Design/Design.entry.scss",
         "Modules/Player/player.entry.ts"
     ]) assert.ok(manifest[key], "missing entry " + key);
     assert.notEqual(manifest["Pages/User/Discover/Index.entry.scss"].file, manifest["Assets/Shared/shell.entry.scss"].file);
+});
+
+test("a page's CSS and TypeScript entries both survive discovery and publish", () => {
+    const styles = manifest["Pages/User/Discover/Index.entry.scss"];
+    const script = manifest["Pages/User/Discover/Index.entry.ts"];
+    assert.match(styles.file, /\.css$/);
+    assert.match(script.file, /\.js$/);
+    assert.notEqual(styles.file, script.file);
+    const css = readFileSync(join(build, styles.file), "utf8");
+    assert.ok(css.includes(".media-grid") && css.includes(".discover-paging"));
 });
 
 test("design references and Original artwork have fingerprinted image entries", () => {

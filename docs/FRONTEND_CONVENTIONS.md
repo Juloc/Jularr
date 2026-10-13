@@ -202,7 +202,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Browser JS is TypeScript. Add `*.entry.ts` only when a Page/Module has
   real client interactions. CSS-only entry points use `*.entry.scss`.
   The [Vite configuration](../src/Jularr.Frontend/vite.config.ts) discovers
-  entries automatically; no central list of all Pages/Modules and no
+  entries automatically, keyed by their complete source path including extension;
+  same-name CSS and TypeScript entries remain independent. No central list of all Pages/Modules and no
   per-component runtime injection by default. A Page opts in to owned
   entries with `page.Asset("Pages/User/Discover/Index.entry.scss")` (or the module path).
   Fundamental Form, Table, layout, Tag/Toggle and capsule-navigation styles

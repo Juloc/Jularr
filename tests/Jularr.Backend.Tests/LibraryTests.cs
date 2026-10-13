@@ -252,7 +252,7 @@ namespace Jularr.Backend.Tests
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Film'"))!;
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
-            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Available media");
+            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Versions &amp; languages");
         }
 
         [TestMethod]

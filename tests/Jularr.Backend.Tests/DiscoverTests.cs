@@ -10,6 +10,8 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Data.Tmdb;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
@@ -96,6 +98,66 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await search.Content.ReadAsStringAsync(), "The Matrix Show");
         }
 
+        [TestMethod]
+        public async Task Discover_SearchPages_KeepLocalResultsAndRenderOnlyTheRequestedRegion()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            await host.Fixture.RunSqlAsync("""
+                WITH created AS (
+                    INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle")
+                    SELECT 1, 'PagedOnly ' || lpad(number::text, 2, '0')
+                    FROM generate_series(1, 25) AS number
+                    RETURNING "Id", "CanonicalTitle"
+                )
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual")
+                SELECT "Id", "CanonicalTitle", TRUE FROM created;
+                """);
+
+            using var first = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("PagedOnly", MediaType.Movie));
+            var firstItems = (await first.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!;
+            Assert.AreEqual(20, firstItems.Count);
+            using var second = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("PagedOnly", MediaType.Movie, page: 2));
+            var secondItems = (await second.Content.ReadFromJsonAsync<BaseDataList<DiscoverItemV1>>())!;
+            Assert.AreEqual(5, secondItems.Count);
+            Assert.IsFalse(firstItems.Select(item => item.WorkId).Intersect(secondItems.Select(item => item.WorkId)).Any());
+
+            using var fragment = await host.SendAsync(HttpMethod.Get, "/?q=PagedOnly&type=movies&handler=Results");
+            var html = await fragment.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, fragment.StatusCode, html);
+            StringAssert.Contains(html, "id=\"discover-results\"");
+            StringAssert.Contains(html, "q=PagedOnly&amp;p=2");
+            Assert.IsFalse(html.Contains("<header", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("<script", StringComparison.Ordinal));
+
+            using var invalid = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/search", new SearchDiscoverDataV1("PagedOnly", page: 0));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var last = await host.SendAsync(HttpMethod.Get, "/?q=PagedOnly&type=movies&p=2&handler=Results");
+            Assert.IsFalse((await last.Content.ReadAsStringAsync()).Contains("data-discover-next", StringComparison.Ordinal));
+            Assert.AreEqual(25L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
+        }
+
+        [TestMethod]
+        [DataRow(true, "primary_release_date")]
+        [DataRow(false, "first_air_date")]
+        public async Task Tmdb_NewFeed_OrdersFirstReleasesAndSearchForwardsItsPage(bool movie, string dateField)
+        {
+            var kind = movie ? TmdbMediaKind.Movie : TmdbMediaKind.Series;
+            using var handler = new FakeTmdb();
+            using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.themoviedb.org/3/") };
+            var tmdb = new TmdbClient(client);
+            await tmdb.ReadFeedAsync(new TmdbConnection(Token, "en-US"), kind, TmdbFeed.New, "US", 2, CancellationToken.None);
+            var request = handler.Requests.Single();
+            StringAssert.Contains(request.AbsolutePath, "/discover/");
+            var query = QueryHelpers.ParseQuery(request.Query);
+            Assert.AreEqual(dateField + ".desc", query["sort_by"].ToString());
+            Assert.AreEqual(DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), query[dateField + ".lte"].ToString());
+            Assert.AreEqual("2", query["page"].ToString());
+            Assert.AreEqual("false", query["include_adult"].ToString());
+
+            await tmdb.SearchAsync(new TmdbConnection(Token, "en-US"), kind, "Matrix", null, CancellationToken.None, page: 3);
+            Assert.AreEqual("3", QueryHelpers.ParseQuery(handler.Requests.Last().Query)["page"].ToString());
+        }
+
         private static async Task<Host> CreateHostAsync(bool razor = false)
         {
             var tmdb = new FakeTmdb();
@@ -111,16 +173,22 @@ namespace Jularr.Backend.Tests
 
         private sealed class FakeTmdb : HttpMessageHandler
         {
+            public List<Uri> Requests { get; } = [];
             private const string Movie = """{"id":603,"title":"The Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"A hacker learns the truth.","poster_path":"/poster.jpg","backdrop_path":"/backdrop.jpg"}""";
             private const string Show = """{"id":1399,"name":"The Matrix Show","original_name":"The Matrix Show","first_air_date":"2020-01-01","overview":"A show.","poster_path":"/show.jpg"}""";
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                Requests.Add(request.RequestUri!);
                 if (request.Headers.Authorization?.Parameter != Token) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+                if (QueryHelpers.ParseQuery(request.RequestUri!.Query).GetValueOrDefault("query") == "PagedOnly")
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"results\":[]}", Encoding.UTF8, "application/json") });
+                }
                 var body = request.RequestUri!.AbsolutePath switch
                 {
-                    "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/movie/now_playing" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
-                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/tv/on_the_air" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
+                    "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
+                    "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
                     "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"}}",
                     _ => null
                 };

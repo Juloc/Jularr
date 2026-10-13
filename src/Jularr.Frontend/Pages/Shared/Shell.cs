@@ -4,7 +4,7 @@ using Jularr.Frontend.Framework;
 namespace Jularr.Frontend.Pages.Shared
 {
     // Shared application shell.
-    public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets) : IUiComponent
+    public sealed class Shell(string pageTitleKey, string currentPath, ShellNavigation navigation, FrontendAssets assets, string? searchQuery = null, string? searchType = null) : IUiComponent
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
@@ -54,7 +54,7 @@ namespace Jularr.Frontend.Pages.Shared
             };
             if (texts.Capabilities?.CanReadMedia is true)
             {
-                header.Add(new SearchBox("/", "search.global", null));
+                header.Add(new SearchBox("/", "search.global", searchQuery, searchType is null ? null : new Dictionary<string, string> { ["type"] = searchType }));
             }
 
             new Header([.. header]).Class("app-header").WriteTo(writer, encoder, texts);
