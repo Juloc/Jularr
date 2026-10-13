@@ -38,7 +38,8 @@ namespace Jularr.Backend.Service.User.Profile.V1
                 SELECT
                     profile."Id",
                     profile."DisplayName",
-                    profile."UiLocaleId"
+                    profile."UiLocaleId",
+                    (profile."PinHash" IS NOT NULL) AS "HasPin"
                 FROM
                     "Profiles" AS profile
                 WHERE
@@ -47,6 +48,43 @@ namespace Jularr.Backend.Service.User.Profile.V1
             sql.Parameters.Add(Parameters);
 
             return await Context.ReadRequiredAsync<ReadProfileResultV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/profiles/{profileId:long}/pin")]
+    public sealed class UpdateProfilePinV1 : UserService<UpdateProfileParametersV1, UpdateProfilePinDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
+
+        protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters) =>
+            parameters.ProfileId == Auth.ProfileId ? Task.CompletedTask : throw new KeyNotFoundException("The authorized profile was not found.");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            // The active profile already passed its PIN.
+            await Context.UpdateProfilePinAsync(Parameters.ProfileId, Data.Pin, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("DELETE", "/api/v1/profiles/{profileId:long}/pin")]
+    public sealed class RemoveProfilePinV1 : UserService<UpdateProfileParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
+
+        protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters) =>
+            parameters.ProfileId == Auth.ProfileId ? Task.CompletedTask : throw new KeyNotFoundException("The authorized profile was not found.");
+
+        protected override async Task<IServiceOutput> OnDelete()
+        {
+            await Context.UpdateProfilePinAsync(Parameters.ProfileId, null, CancellationToken);
+            return new UpdateResult(true);
         }
     }
 

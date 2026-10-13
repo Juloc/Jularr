@@ -27,7 +27,8 @@ namespace Jularr.Backend.Service.User.Profile.V1
                 SELECT
                     profile."Id",
                     profile."DisplayName",
-                    (profile."PinHash" IS NOT NULL) AS "IsLocked"
+                    (profile."PinHash" IS NOT NULL) AS "IsLocked",
+                    profile."PinLength"
                 FROM
                     "AccountProfiles" AS accountProfile
                 INNER JOIN
@@ -59,8 +60,26 @@ namespace Jularr.Backend.Service.User.Profile.V1
             // Rotate the verified session context.
             var proof = new SessionParameters(Auth.SessionPublicId!.Value, Auth.SessionRevision!.Value, Auth.SessionTokenHash!);
             var target = new AccountProfileData(Auth.AccountId!.Value, Parameters.ProfileId);
-            var session = await Context.SelectSessionProfileAsync(proof, target, CancellationToken);
-            return new SelectProfileResultV1(session);
+            var session = await Context.SelectSessionProfileAsync(proof, target, null, CancellationToken);
+            return new SelectProfileResultV1(session!);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/auth/profile/{profileId:long}/pin")]
+    public sealed class VerifyProfilePinV1 : UserService<SelectProfileParametersV1, VerifyProfilePinDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<SelectProfileResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(SelectProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(SelectProfileParametersV1 parameters, Type resultType) => new("session.profile.select");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // A failed attempt is committed before it is reported.
+            var proof = new SessionParameters(Auth.SessionPublicId!.Value, Auth.SessionRevision!.Value, Auth.SessionTokenHash!);
+            var target = new AccountProfileData(Auth.AccountId!.Value, Parameters.ProfileId);
+            var session = await Context.ExecuteBatchAsync((ctx, ct) => ctx.SelectSessionProfileAsync(proof, target, Data.Pin, ct), CancellationToken);
+            return session is null ? throw new DataValidationException(nameof(VerifyProfilePinDataV1.Pin), "invalid_pin") : new SelectProfileResultV1(session);
         }
     }
 }

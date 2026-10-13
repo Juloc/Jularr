@@ -41,6 +41,23 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Password, labelKey, autocomplete);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey) => Add(field, FieldControl.Number, labelKey, "off");
 
+        // Digits on a numeric keypad; a PIN of a known length is entered first and confirms itself.
+        public Form<TData> Pin<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, int? length = null)
+        {
+            var field = Declare(selector, FieldControl.Password, labelKey);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "password")
+                .Attribute("autocomplete", length is null ? "new-password" : "off").Attribute("inputmode", "numeric").Attribute("pattern", "[0-9]*");
+            Configure(field, input);
+            if (length is { } digits)
+            {
+                var value = digits.ToString(CultureInfo.InvariantCulture);
+                input.Attribute("maxlength", value).Attribute("data-pin-length", value).Attribute("autofocus", "autofocus");
+            }
+
+            AddField(field, input);
+            return this;
+        }
+
         public Form<TData> Multiline<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
         {
             var field = Declare(selector, FieldControl.Text, labelKey);

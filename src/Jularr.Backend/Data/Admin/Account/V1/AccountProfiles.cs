@@ -37,11 +37,12 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
     public sealed class AccountProfileDetailsV1 : BaseResponse
     {
-        public AccountProfileDetailsV1(long profileId, string displayName, long ownerAccountId)
+        public AccountProfileDetailsV1(long profileId, string displayName, long ownerAccountId, bool hasPin)
         {
             ProfileId = profileId;
             DisplayName = displayName;
             OwnerAccountId = ownerAccountId;
+            HasPin = hasPin;
         }
 
         [DataField(typeof(AccountProfileFields), nameof(AccountProfileFields.ProfileId))]
@@ -52,5 +53,18 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.OwnerAccountId))]
         public long OwnerAccountId { get; }
+
+        public bool HasPin { get; }
+    }
+
+    public sealed class ProfilePinParametersV1 : BaseParameters
+    {
+        public ProfilePinParametersV1(long profileId)
+        {
+            ProfileId = profileId;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
     }
 }
