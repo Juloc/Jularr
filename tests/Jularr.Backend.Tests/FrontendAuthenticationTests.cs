@@ -41,6 +41,39 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task MediaCard_ResumeAndLanguages_RenderEncodedAccessibleContext()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+
+            // Preference and fallback independently.
+            var card = new MediaCard("<Title>", "/Details/1", null, null, "media.state.InProgress", "media.continue", "/Player/2")
+                .Library(new ValueText("<Series>"), new ValueText("18 / 24")).Languages("DE", 3, null, 6).Continue(30000, 90000);
+            using var writer = new StringWriter();
+            card.WriteTo(writer, HtmlEncoder.Default, texts);
+            var html = writer.ToString();
+            StringAssert.Contains(html, "&lt;Title&gt;");
+            StringAssert.Contains(html, "&lt;Series&gt;");
+            StringAssert.Contains(html, "class=\"media-card__context\"><span>&lt;Series&gt;</span><span>18 / 24</span>");
+            StringAssert.Contains(html, texts["media.dubs"] + " DE");
+            StringAssert.Contains(html, texts["media.subs"] + " 6");
+            Assert.IsFalse(html.Contains(texts["media.dubs"] + " 3", StringComparison.Ordinal));
+            StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\" aria-label=\"" + texts["media.progress"] + "\"");
+            StringAssert.Contains(html, string.Format(CultureInfo.CurrentCulture, texts["media.minutesLeft"], 1));
+            StringAssert.Contains(html, "class=\"media-card__state\"");
+            StringAssert.Contains(html, "class=\"button media-card__action\" href=\"/Player/2\"");
+
+            // Unknown duration has no percentage.
+            writer.GetStringBuilder().Clear();
+            new MediaCard("Book", "/Details/1", null, null, "media.state.InProgress").Continue(30000, null).WriteTo(writer, HtmlEncoder.Default, texts);
+            Assert.IsFalse(writer.ToString().Contains("<progress", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
         [DataRow("Development", HttpStatusCode.OK)]
         [DataRow("Production", HttpStatusCode.NotFound)]
         public async Task Design_EnvironmentGate_OnlyRendersDevelopmentExamples(string environment, HttpStatusCode expected)
@@ -74,6 +107,10 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"navigation-tabs\"");
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
+            StringAssert.Contains(html, "media-card--continue");
+            StringAssert.Contains(html, "media-card--library");
+            StringAssert.Contains(html, "class=\"button media-card__action\" type=\"button\" disabled=\"disabled\"");
+            StringAssert.Contains(html, "<progress max=\"6360000\" value=\"3000000\"");
             StringAssert.Contains(html, "poster=\"/build/assets/your-name-backdrop-");
             StringAssert.Contains(html, "class=\"player__audio\"");
             StringAssert.Contains(html, "class=\"player__options\"");

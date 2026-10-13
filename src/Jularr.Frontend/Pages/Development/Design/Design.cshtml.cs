@@ -116,9 +116,24 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new MediaHero(texts["design.exampleTitle"], assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), texts["design.exampleContext"],
                     texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
-                new MediaShelf("design.media", null, [
-                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "design.exampleStatus"),
-                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "design.exampleStatus", "media.details", "/Design#media")
+                new P(new Text("design.mediaNotice")),
+                new MediaShelf("discover.continue", null, [
+                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.InProgress", "media.continue")
+                        .Continue(3000000, 6360000),
+                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.InProgress", "media.continue")
+                        .Continue(900000, 7320000)
+                ]),
+                new MediaShelf("design.mediaLibrary", null, [
+                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.Available")
+                        .Languages("DE", 3, "DE", 8),
+                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Available")
+                        .Languages(null, 2, null, 6),
+                    new MediaCard("Frieren", "/Design#media", null, "2023", "media.state.Requested")
+                        .Library(new Text("design.seriesContinuing"), new Text("design.partialAvailability")).Languages("DE", 2, null, 6)
+                ]),
+                new MediaShelf("design.mediaDiscover", null, [
+                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested", "request.create"),
+                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Requested")
                 ]),
                 new P(new Text("design.imageCredit"), new ValueText(" "),
                     new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images"))

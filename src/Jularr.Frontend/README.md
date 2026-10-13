@@ -33,6 +33,13 @@ referenced inside CSS. Do not add a parallel `/assets/` endpoint.
 - User: Discover, Library, Details, Watchlist, Requests, Player, Reader and Settings.
 - Discover displays local data first, then loads authorized recommendation HTML;
   the native recommendation link and normal browse routes work without JavaScript.
+- MediaCard shares Continue, Library and Discover presentations. Continue uses
+  the returned playback position/duration without another read. Status and action
+  remain visible together, including on touch. Library language summaries show an
+  available preferred dub/sub language, otherwise the distinct language count.
+  Library responses still need series status, unit availability and language
+  summaries before those fields can appear on real cards; `/Design#media` labels
+  these examples explicitly and disables acquisition/playback actions.
 - Login supports configured password/Plex flows; profile selection, sessions,
   logout and profile name/language editing use Backend services and antiforgery.
 - Admin: accounts, instance modules, providers/Plex, storage/WOL/library paths,

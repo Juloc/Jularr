@@ -19,7 +19,8 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
 - [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
 - [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
-- [MediaCard](Framework/Components/MediaCard.cs), [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
+- [MediaCard](Framework/Components/MediaCard.cs): Continue progress, Library context/language summaries and Discover status/actions; Design labels fields not yet returned by Library services.
+- [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
 
 ## User and account pages
 

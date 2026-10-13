@@ -5,6 +5,8 @@
     flex-direction: column;
     width: 160px;
     flex: 0 0 auto;
+    gap: 6px;
+    min-width: 0;
 
     &__link {
         display: flex;
@@ -46,54 +48,47 @@
         font-size: 13px;
     }
 
+    &__context,
+    &__languages {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+
+    &__progress {
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: var(--border);
+        color: var(--accent);
+
+        &::-webkit-progress-bar { background: var(--border); border-radius: var(--radius-control); }
+        &::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-control); }
+        &::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-control); }
+    }
+
     &__status {
-        position: relative;
-        margin-top: 6px;
         padding: 4px 8px;
         border: 1px solid var(--border);
         border-radius: var(--radius-control);
         font-size: 13px;
         color: var(--muted);
         text-align: center;
+        overflow-wrap: anywhere;
     }
 
-    // The action stays focusable while the state is shown.
+    // Shared buttons, including touch.
     &__action {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
-        color: var(--accent-text);
-        font-weight: 600;
-        text-decoration: none;
-    }
-
-    &__status--action:hover &__state,
-    &__status--action:focus-within &__state {
-        display: none;
-    }
-
-    &__status--action:hover &__action,
-    &__status--action:focus-within &__action {
-        position: static;
-        width: auto;
-        height: auto;
-        clip-path: none;
-    }
-
-    @media (hover: none) {
-        &__status--action &__state {
-            display: none;
-        }
-
-        &__status--action &__action {
-            position: static;
-            width: auto;
-            height: auto;
-            clip-path: none;
-        }
+        width: 100%;
+        font-size: 13px;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 }
 
