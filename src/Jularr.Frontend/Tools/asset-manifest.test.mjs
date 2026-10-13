@@ -93,6 +93,8 @@ test("shared base styles cover forms, tables and capsule navigation on every pag
 test("shared navigation stays single-row and the mobile bar floats above its safe area", () => {
     const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
     assert.match(css, /\.navigation-tabs\{[^}]*overflow-x:auto/);
+    assert.match(css, /\.navigation-tabs\{[^}]*scrollbar-width:none/);
+    assert.match(css, /\.navigation-tabs::-webkit-scrollbar\{display:none/);
     assert.doesNotMatch(css, /\.navigation-tabs\{[^}]*flex-wrap:wrap/);
     assert.match(css, /\.navigation-tabs__link--active[^{}]*\{background:var\(--accent-soft\);color:var\(--accent-text\)/);
     assert.match(css, /\.mobile-navigation\{[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)[^}]*border-radius:var\(--radius-control\)/);

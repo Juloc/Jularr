@@ -7,11 +7,14 @@
     gap: 4px;
     padding: 4px;
     overflow-x: auto;
-    scrollbar-width: thin;
+    scrollbar-width: none;
     scroll-padding-inline: 4px;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background: var(--surface);
+
+    // Keep native horizontal navigation.
+    &::-webkit-scrollbar { display: none; }
 
     &__link {
         display: inline-flex;
