@@ -22,6 +22,7 @@ namespace Jularr.Frontend.Pages.User.Requests
             page.Title("requests.title");
             page.Navigation("nav.home");
             page.Asset("Pages/User/Requests/Requests.entry.scss");
+            page.Asset("Pages/User/Requests/Requests.entry.ts");
 
             // Active-profile requests only.
             if (_requests is { } requests)
