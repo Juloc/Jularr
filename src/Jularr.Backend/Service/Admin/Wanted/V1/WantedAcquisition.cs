@@ -89,7 +89,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
                 await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
                 {
-                    if (!await SearchIndexerAsync(indexer, kind, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, token))
+                    if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, token))
                     {
                         Interlocked.Increment(ref failures);
                     }
@@ -212,14 +212,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }, ct);
         }
 
-        private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, IEnumerable<PlannedQuery> queries, SearchBudget budget,
+        private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, int? igdbPlatform, IEnumerable<PlannedQuery> queries, SearchBudget budget,
             ConcurrentDictionary<string, ReleaseOffer> offers, CancellationToken ct)
         {
             // A slow indexer only costs its own share.
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(budget.IndexerTimeout);
             var capabilities = ReadCapabilities(indexer);
-            var categories = AcquisitionSelectionLogic.ReadCategories(kind, indexer.Categories, capabilities);
+            var categories = AcquisitionSelectionLogic.ReadCategories(kind, indexer.Categories, capabilities, igdbPlatform);
             var limit = Math.Min(PageLimit, capabilities?.MaximumLimit ?? PageLimit);
             var connection = new NewznabConnection(indexer.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, indexer.ProtectedApiKey));
             try

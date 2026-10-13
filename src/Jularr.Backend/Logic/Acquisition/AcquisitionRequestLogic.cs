@@ -30,6 +30,39 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
             }
 
+            // A game names one of its platforms; nothing else names one.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."MediaTypeId" = 7 AS "IsGame",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkPlatforms" AS listed
+                        WHERE
+                            listed."WorkId" = work."Id"
+                            AND listed."GamePlatformId" = @GamePlatformId
+                    ) AS "IsPlatformListed"
+                FROM
+                    "Works" AS work
+                WHERE
+                    work."Id" = @WorkId;
+                """;
+            sql.Parameters.Add(data);
+            var work = await ctx.ReadOptionalAsync<RequestPlatformCheckData>(sql, ct) ?? throw new KeyNotFoundException("The requested work was not found.");
+            // A game is requested for one of its platforms; other media name none.
+            if (work.IsGame && data.GamePlatformId is null)
+            {
+                throw new DataValidationException(nameof(data.GamePlatformId), "required");
+            }
+
+            if (work.IsGame != work.IsPlatformListed)
+            {
+                throw new DataValidationException(nameof(data.GamePlatformId), "unknown_reference");
+            }
+
             // Repeated submissions share intent.
             sql = new SqlStatement();
             sql.Statement =
@@ -37,27 +70,26 @@ namespace Jularr.Backend.Logic.Acquisition
                 INSERT INTO "AcquisitionRequests" (
                     "WorkId",
                     "RequestedByProfileId",
-                    "UiLocaleId"
+                    "UiLocaleId",
+                    "GamePlatformId"
                 )
-                SELECT
-                    work."Id",
+                VALUES (
+                    @WorkId,
                     @RequestedByProfileId,
-                    @UiLocaleId
-                FROM
-                    "Works" AS work
-                WHERE
-                    work."Id" = @WorkId
-                ON CONFLICT ("RequestedByProfileId", "WorkId", "UiLocaleId")
+                    @UiLocaleId,
+                    @GamePlatformId
+                )
+                ON CONFLICT ("RequestedByProfileId", "WorkId", "UiLocaleId", "GamePlatformId")
                     WHERE "AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5)
                 DO UPDATE SET
                     "WorkId" = EXCLUDED."WorkId"
                 RETURNING
                     "Id",
-                    "WorkId";
+                    "WorkId",
+                    "GamePlatformId";
                 """;
             sql.Parameters.Add(data);
-            return await ctx.ReadOptionalAsync<AcquisitionRequestData>(sql, ct)
-                ?? throw new KeyNotFoundException("The requested work was not found.");
+            return await ctx.ReadRequiredAsync<AcquisitionRequestData>(sql, ct);
         }
 
         public static async Task UpdateAcquisitionRequestAsync(this LogicContext ctx, AcquisitionRequestUpdateData data, CancellationToken ct)
@@ -85,7 +117,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND request."AcquisitionRequestStatusTypeId" = 1
                 RETURNING
                     request."Id",
-                    request."WorkId";
+                    request."WorkId",
+                    request."GamePlatformId";
                 """;
             sql.Parameters.Add(data);
             var request = await ctx.ReadOptionalAsync<AcquisitionRequestData>(sql, ct)

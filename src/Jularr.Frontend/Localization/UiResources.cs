@@ -196,6 +196,7 @@ namespace Jularr.Frontend.Localization
             new("sources.group.Acquisition", "Usenet"),
             new("sources.group.Music", "Music"),
             new("sources.group.Games", "Games"),
+            new("request.platform", "Platform"),
             new("admin.takeover.title", "Take over"),
             new("takeover.source", "Application"),
             new("takeover.source.Prowlarr", "Prowlarr (indexers)"),

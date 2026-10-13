@@ -78,7 +78,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         public async Task<string?> TestAsync(AcquisitionConnectionData source, CancellationToken ct)
         {
             // A search that answers proves the source; null means healthy.
-            var probe = new WantedTargetData(0, 0, Data.Enums.Media.MediaType.Book, "Austen", null, [], null, null, null, [], false, false, false, 0, [], [], null);
+            var probe = new WantedTargetData(0, 0, Data.Enums.Media.MediaType.Book, "Austen", null, [], null, null, null, [], false, false, false, 0, [], [], null, null, null);
             return await SearchAsync(source, probe, ct) is null ? "acquisition_unavailable" : null;
         }
 

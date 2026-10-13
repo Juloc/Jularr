@@ -12,6 +12,9 @@ namespace Jularr.Backend.Logic.Acquisition
 {
     internal static partial class ImportPlacementLogic
     {
+        // Download bookkeeping that never belongs in a library.
+        private static readonly HashSet<string> ReleaseNoise = [".par2", ".sfv", ".nfo", ".srr", ".url", ".diz", ".nzb"];
+
         private static readonly HashSet<char> InvalidNameCharacters = [.. Path.GetInvalidFileNameChars(), '<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
         public static string? MapRemotePath(string storagePath, string remotePath)
@@ -28,7 +31,7 @@ namespace Jularr.Backend.Logic.Acquisition
             return rest.Split('/').Any(segment => segment is "." or "..") ? null : rest;
         }
 
-        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files, string? author = null, int trackCount = 0)
+        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files, string? author = null, int trackCount = 0, string? platform = null)
         {
             if (mediaType is MediaType.Book or MediaType.LightNovel)
             {
@@ -43,6 +46,11 @@ namespace Jularr.Backend.Logic.Acquisition
             if (mediaType == MediaType.Music)
             {
                 return PlanMusic(title, year, author, files, trackCount);
+            }
+
+            if (mediaType == MediaType.Game)
+            {
+                return PlanGame(title, year, platform, files);
             }
 
             var videos = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video && !MediaPathParser.IsSample(file.RelativePath)).ToArray();
@@ -139,6 +147,31 @@ namespace Jularr.Backend.Logic.Acquisition
                 var number = (index + 1).ToString("00", CultureInfo.InvariantCulture);
                 AddGroup(placements, files, tracks[index], $"{folder}/{number} - {(name.Length > 0 ? SafeName(name) : "Track " + number)}", units ? WorkUnitType.Track : null,
                     units ? index + 1 : null, null);
+            }
+
+            return placements;
+        }
+
+        // A game keeps its release's files below its platform; the largest game file is the media.
+        private static IReadOnlyList<ImportPlacementData> PlanGame(string title, int? year, string? platform, IReadOnlyList<StorageFile> files)
+        {
+            var folder = SafeName(platform ?? "Unknown") + "/" + SafeName(title) + (year is { } value ? " (" + value.ToString(CultureInfo.InvariantCulture) + ")" : "");
+            if (files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Game).MaxBy(file => file.SizeBytes) is not { } main)
+            {
+                return [];
+            }
+
+            var placements = new List<ImportPlacementData>();
+            foreach (var file in files.Where(file => !ReleaseNoise.Contains(Path.GetExtension(file.RelativePath).ToLowerInvariant())))
+            {
+                var extension = Path.GetExtension(file.RelativePath).ToLowerInvariant();
+                var stem = folder + "/" + string.Join('/', file.RelativePath[..^extension.Length].Split('/').Select(SafeName));
+                if (!IsStorable(stem + extension))
+                {
+                    return [];
+                }
+
+                placements.Add(new ImportPlacementData(placements.Count, file.RelativePath, stem, extension, ReferenceEquals(file, main), null, null, null));
             }
 
             return placements;

@@ -94,7 +94,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");
             }
 
-            var quality = AcquisitionSelectionLogic.QualityKey(target.MediaTypeId, offer.Title);
+            var quality = AcquisitionSelectionLogic.QualityKey(target.MediaTypeId, offer.Title, target.PlatformIgdbId);
             await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken);
             return new UpdateResult(true);
         }

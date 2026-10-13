@@ -20,6 +20,7 @@ namespace Jularr.Backend.Logic.Acquisition
             MediaType.Book => AcquisitionKind.Book,
             MediaType.Manga => AcquisitionKind.Manga,
             MediaType.Music => AcquisitionKind.Music,
+            MediaType.Game => AcquisitionKind.Game,
             MediaType.LightNovel => AcquisitionKind.LightNovel,
             _ => null
         };
@@ -41,11 +42,12 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // The quality a release is stored with.
-        public static string? QualityKey(MediaType mediaType, string title) => mediaType switch
+        public static string? QualityKey(MediaType mediaType, string title, int? igdbPlatform = null) => mediaType switch
         {
             MediaType.Book or MediaType.LightNovel => ReleaseQuality.GetKey(BookReleaseJudge.Parse(title)),
             MediaType.Manga => ReleaseQuality.GetKey(MangaReleaseJudge.Parse(title)),
             MediaType.Music => ReleaseQuality.GetKey(MusicReleaseJudge.Parse(title)),
+            MediaType.Game => ReleaseQuality.GetKey(GameReleaseJudge.Parse(title, igdbPlatform)),
             _ => ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null
         };
 
@@ -65,9 +67,15 @@ namespace Jularr.Backend.Logic.Acquisition
             };
         }
 
-        public static int[] ReadCategories(AcquisitionKind kind, int[] configured, NewznabCapabilities? capabilities)
+        public static int[] ReadCategories(AcquisitionKind kind, int[] configured, NewznabCapabilities? capabilities, int? igdbPlatform = null)
         {
-            // Configured categories count for their own Newznab range only.
+            // Configured categories count for their own Newznab range only; a game searches its platform's category.
+            if (kind == AcquisitionKind.Game)
+            {
+                var category = GameReleaseJudge.Category(igdbPlatform);
+                return new[] { category }.Where(value => capabilities?.Offers(value) ?? true).ToArray();
+            }
+
             var range = kind switch
             {
                 AcquisitionKind.Movie => 2000,
@@ -94,6 +102,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge(target.CanonicalTitle, target.Author, offer)),
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer)),
                 AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
+                AcquisitionKind.Game => Candidate(offer, GameReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.PlatformIgdbId, target.PlatformAbbreviation, offer)),
                 _ => Candidate(offer, VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, scope?.Unit, scope?.Units ?? UnitSet.Empty, offer))
             })]);
 

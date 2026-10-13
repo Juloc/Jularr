@@ -33,6 +33,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
                         wanted."AcquisitionProfileId",
+                        wanted."GamePlatformId",
                         wanted."Version"
                     FROM
                         "WantedItems" AS wanted
@@ -58,6 +59,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkId" = wanted_page."WorkId"
+                            AND (
+                                wanted_page."GamePlatformId" IS NULL
+                                OR EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "GameReleases" AS game
+                                    WHERE
+                                        game."WorkVersionId" = asset."WorkVersionId"
+                                        AND game."GamePlatformId" = wanted_page."GamePlatformId"
+                                )
+                            )
                     ) AND NOT EXISTS (
                         SELECT
                             1
@@ -84,6 +97,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."LastSearchedAt",
                     wanted_page."LastOutcomeKey" AS "OutcomeKey",
                     wanted_page."AcquisitionProfileId",
+                    (SELECT platform."Name" FROM "GamePlatforms" AS platform WHERE platform."Id" = wanted_page."GamePlatformId") AS "PlatformName",
                     ARRAY(
                         SELECT DISTINCT
                             locale."Name"
@@ -142,6 +156,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
                         wanted."AcquisitionProfileId",
+                        wanted."GamePlatformId",
                         wanted."Version"
                     FROM
                         "WantedItems" AS wanted
@@ -165,6 +180,18 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkId" = wanted_page."WorkId"
+                            AND (
+                                wanted_page."GamePlatformId" IS NULL
+                                OR EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "GameReleases" AS game
+                                    WHERE
+                                        game."WorkVersionId" = asset."WorkVersionId"
+                                        AND game."GamePlatformId" = wanted_page."GamePlatformId"
+                                )
+                            )
                     ) AND NOT EXISTS (
                         SELECT
                             1
@@ -191,6 +218,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."LastSearchedAt",
                     wanted_page."LastOutcomeKey" AS "OutcomeKey",
                     wanted_page."AcquisitionProfileId",
+                    (SELECT platform."Name" FROM "GamePlatforms" AS platform WHERE platform."Id" = wanted_page."GamePlatformId") AS "PlatformName",
                     ARRAY(
                         SELECT DISTINCT
                             locale."Name"

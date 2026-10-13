@@ -59,6 +59,18 @@ namespace Jularr.Backend.Logic.Acquisition
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkId" = work."Id"
+                            AND (
+                                wanted."GamePlatformId" IS NULL
+                                OR EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "GameReleases" AS game
+                                    WHERE
+                                        game."WorkVersionId" = asset."WorkVersionId"
+                                        AND game."GamePlatformId" = wanted."GamePlatformId"
+                                )
+                            )
                     ) AND NOT EXISTS (
                         SELECT
                             1
@@ -120,10 +132,13 @@ namespace Jularr.Backend.Logic.Acquisition
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
-                    ) AS "Author"
+                    ) AS "Author",
+                    platform."Abbreviation" AS "PlatformAbbreviation",
+                    platform."IgdbId" AS "PlatformIgdbId"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = wanted."GamePlatformId"
                     LEFT JOIN LATERAL (
                         SELECT
                             candidate."Id",
@@ -158,7 +173,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     NOT wanted."IsPaused"
                     AND (wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now)
                     AND (
-                        work."MediaTypeId" IN (1, 3, 4, 5, 6)
+                        work."MediaTypeId" IN (1, 3, 4, 5, 6, 7)
                         AND NOT EXISTS (
                             SELECT
                                 1
@@ -177,6 +192,18 @@ namespace Jularr.Backend.Logic.Acquisition
                                 JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                             WHERE
                                 asset."WorkId" = work."Id"
+                                AND (
+                                    wanted."GamePlatformId" IS NULL
+                                    OR EXISTS (
+                                        SELECT
+                                            1
+                                        FROM
+                                            "GameReleases" AS game
+                                        WHERE
+                                            game."WorkVersionId" = asset."WorkVersionId"
+                                            AND game."GamePlatformId" = wanted."GamePlatformId"
+                                    )
+                                )
                         )
                         AND NOT EXISTS (
                             SELECT
@@ -478,6 +505,8 @@ namespace Jularr.Backend.Logic.Acquisition
                             track."WorkId" = work."Id"
                             AND track."WorkUnitTypeId" = 5
                     ) AS "TrackCount",
+                    platform."Id" AS "GamePlatformId",
+                    platform."Name" AS "PlatformName",
                     (
                         SELECT
                             fact."Value"
@@ -495,6 +524,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
                     JOIN "WantedItems" AS wanted ON wanted."Id" = release."WantedItemId"
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = wanted."GamePlatformId"
                 WHERE
                     operation."OperationTypeId" = 2
                     AND operation."OperationStatusTypeId" IN (1, 2)

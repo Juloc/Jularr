@@ -55,5 +55,26 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
+
+        public static async Task TagGameReleaseAsync(this LogicContext ctx, GameReleaseData data, CancellationToken ct)
+        {
+            // The version a game file starts runs on the wanted platform.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "GameReleases" ("WorkVersionId", "GamePlatformId")
+                SELECT
+                    asset."WorkVersionId",
+                    @GamePlatformId
+                FROM
+                    "MediaAssets" AS asset
+                WHERE
+                    asset."Id" = @MediaAssetId
+                ON CONFLICT ("WorkVersionId") DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
     }
 }

@@ -10,17 +10,19 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         public static async Task RecordRequestTargetAsync(this LogicContext ctx, AcquisitionRequestData request, CancellationToken ct)
         {
-            // One shared target per Work.
+            // One shared target per Work, per platform for games.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 WITH target AS (
                     INSERT INTO "WantedItems" (
-                        "WorkId"
+                        "WorkId",
+                        "GamePlatformId"
                     ) VALUES (
-                        @WorkId
+                        @WorkId,
+                        @GamePlatformId
                     )
-                    ON CONFLICT ("WorkId") DO UPDATE SET
+                    ON CONFLICT ("WorkId", "GamePlatformId") DO UPDATE SET
                         "WorkId" = EXCLUDED."WorkId"
                     RETURNING
                         "Id"
@@ -53,7 +55,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 ) VALUES (
                     @Id
                 )
-                ON CONFLICT ("WorkId") DO NOTHING;
+                ON CONFLICT ("WorkId", "GamePlatformId") DO NOTHING;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

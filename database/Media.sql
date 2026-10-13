@@ -137,6 +137,13 @@ CREATE TABLE "GamePlatforms" (
     "IgdbId" integer NULL UNIQUE
 );
 
+-- An owned game version and the platform it runs on.
+CREATE TABLE "GameReleases" (
+    "WorkVersionId" bigint PRIMARY KEY REFERENCES "WorkVersions" ("Id") ON DELETE CASCADE,
+    "GamePlatformId" bigint NOT NULL REFERENCES "GamePlatforms" ("Id") ON DELETE RESTRICT
+);
+CREATE INDEX "IX_GameReleases_Platform" ON "GameReleases" ("GamePlatformId");
+
 -- The platforms a game exists on, as its providers name them.
 CREATE TABLE "WorkPlatforms" (
     "WorkId" bigint NOT NULL REFERENCES "Works" ("Id") ON DELETE CASCADE,

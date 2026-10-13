@@ -262,7 +262,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             // The provider identity resolves to one canonical Work before the request exists.
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, Parameters.TmdbId, CancellationToken);
-            var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Data.UiLocaleId), ct),
+            var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Data.UiLocaleId, null), ct),
                 CancellationToken);
             return new CreateRequestResultV1(request.Id);
         }

@@ -10,6 +10,36 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.User.Media.V1
 {
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/platforms")]
+    public sealed class ReadWorkPlatformsV1 : UserService<WorkParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<GamePlatformV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The platforms a game can be requested for.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    platform."Id",
+                    platform."Name",
+                    platform."Abbreviation"
+                FROM
+                    "WorkPlatforms" AS listed
+                    JOIN "GamePlatforms" AS platform ON platform."Id" = listed."GamePlatformId"
+                WHERE
+                    listed."WorkId" = @WorkId
+                ORDER BY
+                    platform."Name";
+                """;
+            sql.Parameters.Add(Parameters);
+            return new BaseDataList<GamePlatformV1>([.. await Context.ReadSql.ReadListAsync<GamePlatformV1>(sql, CancellationToken)]);
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/works/{workId:long}")]
     public sealed class ReadWorkV1 : UserService<WorkParametersV1>
     {

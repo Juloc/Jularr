@@ -137,7 +137,7 @@ pack, otherwise episode by episode, several downloads in parallel; requests comp
 once every aired regular episode exists. Books and Light Novels come through Open Library and
 direct sources; Manga through AniList with volumes as units on the same unit pass as series
 episodes; Music through MusicBrainz with the album as the Work and its tracks as units. Prowlarr, Sonarr and Radarr can be taken over once (indexers, clients, missing
-titles). Games: IGDB metadata with shared platforms is connected (G1); Arr+ for games (G2),
+titles). Games: IGDB metadata with shared platforms (G1) and Arr+ per requested platform (G2) are connected;
 ROM identification through Libretro and ScreenScraper (G3) and artwork/PC enrichment
 (G4) follow, as does the remaining profile editing. The
 remaining modules are not advertised as available. Tracking must be rebuilt from

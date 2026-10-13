@@ -32,13 +32,18 @@ namespace Jularr.Backend.Data.User.Request.V1
 
     public sealed class CreateRequestDataV1 : BaseData
     {
-        public CreateRequestDataV1(long uiLocaleId)
+        public CreateRequestDataV1(long uiLocaleId, long? gamePlatformId = null)
         {
             UiLocaleId = uiLocaleId;
+            GamePlatformId = gamePlatformId;
         }
 
         [DataField(typeof(UiLocaleFields), nameof(UiLocaleFields.Id))]
         public long UiLocaleId { get; }
+
+        // Games are requested for one of their platforms.
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
+        public long? GamePlatformId { get; }
     }
 
     public sealed class CreateRequestResultV1 : BaseResponse

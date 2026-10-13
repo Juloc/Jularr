@@ -48,7 +48,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 if (_wanted is { } wanted)
                 {
                     split.Primary.Add(new Table<WantedDetailsV1>(wanted.Items)
-                        .Text(item => item.CanonicalTitle, "table.work")
+                        .Content("table.work", item => new ValueText(item.PlatformName is { } platform ? item.CanonicalTitle + " · " + platform : item.CanonicalTitle))
                         .Content("request.language", item => new ValueText(string.Join(", ", item.RequestedLanguages)))
                         .Content("table.status", Status)
                         .Content("wanted.lastSearch", item => new ValueText(item.LastSearchedAt?.ToString("u", CultureInfo.InvariantCulture) ?? ""))
