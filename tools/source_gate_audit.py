@@ -97,12 +97,13 @@ def variants(url: str):
 
 def classify(status: int, headers, data: bytes, method: str, proof: bytes | None) -> tuple[str, str]:
     content_type = headers.get("Content-Type", "").lower()
+    # Real protected content takes precedence even when the HTML also mentions CAPTCHA.
+    if proof and proof in data and 200 <= status < 300:
+        return "EXPOSED", "Known protected bytes were returned without CAPTCHA clearance"
     if (headers.get("cf-mitigated", "").lower() == "challenge" or (
         "html" in content_type and any(marker in data.lower() for marker in CHALLENGE_MARKERS)
     )):
         return "BLOCKED", "Challenge detected"
-    if proof and proof in data and 200 <= status < 300:
-        return "EXPOSED", "Known protected bytes were returned without CAPTCHA clearance"
     if status in (401, 403, 407, 429, 503):
         return "BLOCKED", "Request rejected or rate-limited"
     if 300 <= status <= 399:
@@ -158,7 +159,7 @@ def run_audit(base: str, paths: list[str], proof: bytes | None, cookie: str | No
                 break  # Stop when exposure is confirmed to minimize live traffic.
     labels = {item["result"] for item in results}
     conclusion = ("EXPOSED" if "EXPOSED" in labels else "SUSPECT" if "SUSPECT" in labels else
-                  "INCONCLUSIVE" if "REVIEW" in labels or "ERROR" in labels or "REDIRECT" in labels else "BLOCKED")
+                  "INCONCLUSIVE" if labels.intersection({"REVIEW", "ERROR", "REDIRECT", "NOT_FOUND"}) else "BLOCKED")
     return {
         "tool": "Jularr Gate Audit",
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
