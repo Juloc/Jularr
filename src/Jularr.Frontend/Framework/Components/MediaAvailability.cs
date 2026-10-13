@@ -43,7 +43,7 @@ namespace Jularr.Frontend.Framework
             var icon = state switch
             {
                 MediaAvailabilityState.Available => "check",
-                MediaAvailabilityState.Missing => "player-close",
+                MediaAvailabilityState.Missing => "close",
                 MediaAvailabilityState.Downloading => "download",
                 MediaAvailabilityState.Searching => "search",
                 _ => null

@@ -65,7 +65,7 @@ namespace Jularr.Frontend.Framework
         }
 
         public static IUiComponent Host(FrontendAssets assets, UiText texts) => new Dialog(
-            new Div(new Button(new Icon("player-close", assets)).Class("button media-preview__close")
+            new Div(new Button(new Icon("close", assets)).Class("button media-preview__close")
                 .Attribute("data-preview-close", "").Attribute("aria-label", texts["media.preview.close"]).Attribute("autofocus", "autofocus"))
                 .Class("media-preview__toolbar"),
             new Div().Attribute("data-preview-content", "")

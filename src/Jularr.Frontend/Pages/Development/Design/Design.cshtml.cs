@@ -157,7 +157,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new P(new Text("design.imageCredit"), new ValueText(" "),
                     new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images")),
                 new P(new Text("design.trailerCredit"), new ValueText(" "),
-                    new A(new ValueText("Crunchyroll")).Attribute("href", "https://www.youtube.com/watch?v=ayi6VfCKBcA"))
+                    new A(new ValueText("TOHO")).Attribute("href", "https://www.youtube.com/watch?v=k4xGqY5IDBE"))
             ])).Attribute("id", "media"));
             page.Content.Add(MediaPreview.Host(assets, texts));
             page.Content.AddRange(previews);
@@ -199,7 +199,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                     .Actions(new Button(new Icon("requests", assets), new Text("request.create")).Primary().Disabled(),
                         new Button(new Icon("bookmark", assets), new Text("media.watchlist.add")).Disabled(),
                         new A(new Text("media.details")).Class("button").Attribute("href", "/Design#media"));
-                if (title == "Your Name.") preview.Trailer("ayi6VfCKBcA");
+                if (title == "Your Name.") preview.Trailer("k4xGqY5IDBE");
                 previews.Add(preview);
             }
 

@@ -142,7 +142,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
             Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);
             StringAssert.Contains(html, "data-preview-open=\"preview-series-Continuing\"");
-            StringAssert.Contains(html, "data-trailer-id=\"ayi6VfCKBcA\"");
+            StringAssert.Contains(html, "data-trailer-id=\"k4xGqY5IDBE\"");
+            StringAssert.Contains(html, "#icon-close");
             Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
             StringAssert.Contains(html, "Request status");
             StringAssert.Contains(html, "Download status");

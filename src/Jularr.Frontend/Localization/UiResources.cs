@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Localization
             new("design.toggleOn", "On example"),
             new("design.toggleNotice", "These switches demonstrate local control states only. They do not save settings."),
             new("design.imageCredit", "Development artwork examples from TMDB. Poster and film artwork rights belong to their respective owners."),
-            new("design.trailerCredit", "Official Your Name trailer from Crunchyroll. Trailer playback connects to YouTube only after Play."),
+            new("design.trailerCredit", "Official Your Name trailer from TOHO. Trailer playback connects to YouTube only after Play."),
             new("media.preview.title", "Title preview"),
             new("media.preview.close", "Close preview"),
             new("media.preview.playTrailer", "Play trailer"),

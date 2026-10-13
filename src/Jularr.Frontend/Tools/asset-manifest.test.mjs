@@ -71,7 +71,7 @@ test("CSS image URLs use the host build root and resolve to published assets", (
 
 test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
     for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-clean", "brand-original",
-        "books", "reading", "folder", "subtitles", "providers", "theme-system", "player-previous", "player-next"]) {
+        "books", "reading", "folder", "subtitles", "providers", "theme-system", "player-previous", "player-next", "close"]) {
         assert.equal(icons.symbols[key], "icon-" + key);
     }
     assert.ok(!readdirSync(join(build, "assets")).includes("icons.svg"));
@@ -80,6 +80,13 @@ test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
     for (const id of Object.values(icons.symbols)) {
         assert.ok(sprite.includes('id="' + id + '"'), "missing sprite symbol " + id);
     }
+});
+
+test("media preview bounds its hero width and uses full-width mobile context", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-preview__hero\{[^}]*width:100%/);
+    assert.match(css, /\.media-preview__body\{display:contents\}/);
+    assert.ok(css.includes('max-width:none'));
 });
 
 test("shared base styles cover forms, tables and capsule navigation on every page", () => {

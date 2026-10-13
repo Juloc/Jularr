@@ -2,6 +2,7 @@
 
 .media-preview {
     width: min(820px, calc(100% - 32px));
+    max-width: none;
     max-height: calc(100dvh - 32px);
     padding: 0;
     border: 1px solid var(--border);
@@ -27,6 +28,7 @@
 
     &__hero {
         position: relative;
+        width: 100%;
         aspect-ratio: 16 / 9;
         min-height: 200px;
         background: var(--field);
@@ -68,8 +70,13 @@
         width: calc(100% - 16px);
         max-height: calc(100dvh - 16px);
         &__identity { grid-template-columns: 96px minmax(0, 1fr); gap: 16px; padding: 16px; }
-        &__poster { margin-top: -48px; }
-        &__body h2 { font-size: 22px; }
+        &__poster { grid-column: 1; grid-row: 1 / span 2; align-self: start; margin-top: -48px; }
+        &__body {
+            display: contents;
+            h2 { grid-column: 2; font-size: 22px; margin-bottom: 0; }
+            > .media-preview__meta { grid-column: 2; margin: 0; }
+            > :not(h2):not(.media-preview__meta) { grid-column: 1 / -1; }
+        }
     }
 
     @media (prefers-reduced-motion: reduce) { &__poster { transition: none; } }
