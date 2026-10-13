@@ -6,6 +6,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Sabnzbd = 2,
         Gutenberg = 3,
         Opds = 4,
-        AnnasArchive = 5
+        AnnasArchive = 5,
+        Usenet = 6
     }
 }

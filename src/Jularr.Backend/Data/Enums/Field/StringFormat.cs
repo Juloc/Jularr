@@ -11,6 +11,9 @@ namespace Jularr.Backend.Data.Enums.Field
         MacAddress = 6,
         IPv4Address = 7,
         RelativePath = 8,
-        HttpUrl = 9
+        HttpUrl = 9,
+
+        // HTTP or NNTP service address.
+        ServiceUrl = 10
     }
 }

@@ -13,6 +13,7 @@ using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Microsoft.AspNetCore.DataProtection;
@@ -46,6 +47,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."RemotePath",
                     connection."LocalPath",
                     connection."Username",
+                    connection."MaxConnections",
                     connection."CheckedAt",
                     connection."LastErrorKey" AS "ErrorKey",
                     connection."Version"
@@ -88,6 +90,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."RemotePath",
                     connection."LocalPath",
                     connection."Username",
+                    connection."MaxConnections",
                     connection."CheckedAt",
                     connection."LastErrorKey" AS "ErrorKey",
                     connection."Version"
@@ -118,8 +121,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            // New connections carry a key unless the source needs none.
-            if (Data.ApiKey is null && !DirectSources.IsDirect(Data.AcquisitionConnectionTypeId))
+            // New connections carry a key unless the source needs none; open news servers have no login.
+            if (Data.ApiKey is null && !DirectSources.IsDirect(Data.AcquisitionConnectionTypeId) && Data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Usenet)
             {
                 throw new DataValidationException(nameof(SaveAcquisitionConnectionDataV1.ApiKey), "required");
             }
@@ -173,10 +176,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         private readonly NewznabClient _newznab;
         private readonly SabnzbdClient _sabnzbd;
         private readonly DirectSources _direct;
+        private readonly UsenetJob _usenet;
         private readonly IDataProtector _protector;
 
-        internal TestAcquisitionConnectionV1(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection)
+        internal TestAcquisitionConnectionV1(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, UsenetJob usenet, IDataProtectionProvider protection)
         {
+            _usenet = usenet;
             _newznab = newznab;
             _sabnzbd = sabnzbd;
             _direct = direct;
@@ -191,7 +196,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
-            var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId) ? "" : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
+            var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId) || connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet
+                ? ""
+                : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
 
             // Keep remote I/O outside transactions.
             AcquisitionConnectionTestV1 result;
@@ -200,6 +207,19 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 var error = await _direct.TestAsync(connection, CancellationToken);
                 result = new AcquisitionConnectionTestV1(error is null, error, null, error is null ? ["Book"] : []);
+            }
+            else if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+            {
+                // A login and one command prove the news server.
+                try
+                {
+                    await _usenet.TestAsync(connection, CancellationToken);
+                    result = new AcquisitionConnectionTestV1(true, null, null, []);
+                }
+                catch (UsenetException exception)
+                {
+                    result = new AcquisitionConnectionTestV1(false, exception.Failure == UsenetFailure.Unauthorized ? "acquisition_authentication_failed" : "acquisition_unavailable", null, []);
+                }
             }
             else if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
             {
@@ -240,7 +260,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             var apiKey = data.ApiKey is null ? null : protector.Protect(Encoding.UTF8.GetBytes(data.ApiKey));
             return new AcquisitionConnectionSaveData(id, data.Name, data.AcquisitionConnectionTypeId, data.BaseUrl.TrimEnd('/'), apiKey, data.IsEnabled, data.Priority,
                 data.Categories.Distinct().Order().ToArray(), data.DownloadCategory, data.RemotePath, data.LocalPath,
-                data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Opds ? data.Username : null);
+                data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet ? data.Username : null,
+                data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null);
         }
 
         public static string Unprotect(IDataProtector protector, byte[]? protectedApiKey)
