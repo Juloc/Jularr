@@ -52,6 +52,15 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                                 WHERE
                                     assistance."Key" = 'SourceAssistance'
                                     AND assistance."IsEnabled"
+                                    AND EXISTS (
+                                        SELECT
+                                            1
+                                        FROM
+                                            "InstanceModules" AS acquisition
+                                        WHERE
+                                            acquisition."Key" = 'Acquisition'
+                                            AND acquisition."IsEnabled"
+                                    )
                             )
                         THEN replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0'
                     END AS "ManualUrl"
