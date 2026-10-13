@@ -51,6 +51,8 @@ namespace Jularr.Backend.Service.User.Request.V1
                     INNER JOIN
                         "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id" AND operation."OperationTypeId" = 2
                     INNER JOIN
+                        "InstanceModules" AS assistance ON assistance."Key" = 'SourceAssistance' AND assistance."IsEnabled"
+                    INNER JOIN
                         "InstanceSettings" AS settings ON settings."UsersConfirmSources"
                     INNER JOIN
                         "Accounts" AS account ON account."Id" = @AccountId AND account."MayConfirmSources"
@@ -82,7 +84,7 @@ namespace Jularr.Backend.Service.User.Request.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(RequestParametersV1 parameters) => ModuleRequirement.All("Requests", "Acquisition");
+        protected override ModuleRequirement GetInstanceModules(RequestParametersV1 parameters) => ModuleRequirement.All("Requests", "Acquisition", "SourceAssistance");
         protected override ServicePermission GetPermission(RequestParametersV1 parameters, Type resultType) => new("profile.requests.update");
 
         protected override async Task<IServiceOutput> OnExecute()
