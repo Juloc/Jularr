@@ -3,20 +3,34 @@
 
     &__heading {
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
+        align-items: center;
         gap: 16px;
 
-        h2 { font-size: 18px; margin: 0 0 12px; }
+        margin-bottom: 12px;
+        h2 { font-size: 18px; margin: 0; flex: 1; min-width: 0; }
         a { color: var(--accent-text); white-space: nowrap; }
+    }
+
+    &__controls { display: flex; justify-content: end; gap: 6px; }
+    &__control {
+        width: 44px;
+        padding: 8px;
+        &--next .ui-icon { transform: rotate(180deg); }
+        &[hidden] { display: none; }
     }
 
     &__items {
         display: flex;
         gap: 12px;
         overflow-x: auto;
-        padding-bottom: 8px;
+        padding: 4px 2px 8px;
         scroll-snap-type: x proximity;
-        scrollbar-width: thin;
+        scrollbar-width: none;
+        &::-webkit-scrollbar { display: none; }
     }
+}
+
+[dir="rtl"] .media-shelf__control {
+    .ui-icon { transform: rotate(180deg); }
+    &--next .ui-icon { transform: none; }
 }

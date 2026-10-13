@@ -49,23 +49,28 @@ namespace Jularr.Backend.Tests
             scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
             var texts = scope.ServiceProvider.GetRequiredService<UiText>();
             await texts.InitializeAsync(http);
+            var assets = scope.ServiceProvider.GetRequiredService<FrontendAssets>();
 
             // Preference and fallback independently.
             var card = new MediaCard("<Title>", "/Details/1", null, null, "media.state.InProgress", "media.continue", "/Player/2")
-                .Library(new ValueText("<Series>"), new ValueText("18 / 24")).Languages("DE", 3, null, 6).Continue(30000, 90000);
+                .SeriesStatus("media.series.Continuing").Availability(new MediaAvailability(assets, MediaAvailabilityState.Partial, 18, 24))
+                .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 3, null, 6)
+                .Genres(new ValueText("<Genre>"), new ValueText("Second"), new ValueText("Third"), new ValueText("Fourth")).Continue(30000, 90000);
             using var writer = new StringWriter();
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
             StringAssert.Contains(html, "&lt;Title&gt;");
-            StringAssert.Contains(html, "&lt;Series&gt;");
-            StringAssert.Contains(html, "class=\"media-card__context\"><span>&lt;Series&gt;</span><span>18 / 24</span>");
-            StringAssert.Contains(html, texts["media.dubs"] + " DE");
-            StringAssert.Contains(html, texts["media.subs"] + " 6");
-            Assert.IsFalse(html.Contains(texts["media.dubs"] + " 3", StringComparison.Ordinal));
+            StringAssert.Contains(html, "class=\"media-card__series\">" + texts["media.series.Continuing"]);
+            StringAssert.Contains(html, "stroke-dasharray=\"75 100\"");
+            StringAssert.Contains(html, "#icon-flag-de");
+            StringAssert.Contains(html, "aria-label=\"" + string.Format(CultureInfo.CurrentCulture, texts["media.languagePreferred"], texts["media.dubs"], texts["design.languageGerman"]) + "\"");
+            StringAssert.Contains(html, "aria-label=\"" + string.Format(CultureInfo.CurrentCulture, texts["media.languageCount"], texts["media.subs"], 6) + "\"");
+            StringAssert.Contains(html, "&lt;Genre&gt;");
+            Assert.IsFalse(html.Contains("Fourth", StringComparison.Ordinal));
             StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\" aria-label=\"" + texts["media.progress"] + "\"");
             StringAssert.Contains(html, string.Format(CultureInfo.CurrentCulture, texts["media.minutesLeft"], 1));
-            StringAssert.Contains(html, "class=\"media-card__state\"");
-            StringAssert.Contains(html, "class=\"button media-card__action\" href=\"/Player/2\"");
+            StringAssert.Contains(html, "class=\"media-card__action-area\"><a class=\"button button--primary media-card__action\" href=\"/Player/2\"");
+            Assert.IsFalse(html.Contains("class=\"media-card__status\"", StringComparison.Ordinal));
 
             // Unknown duration has no percentage.
             writer.GetStringBuilder().Clear();
@@ -109,7 +114,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "suzume-poster-");
             StringAssert.Contains(html, "media-card--continue");
             StringAssert.Contains(html, "media-card--library");
-            StringAssert.Contains(html, "class=\"button media-card__action\" type=\"button\" disabled=\"disabled\"");
+            StringAssert.Contains(html, "class=\"button button--primary media-card__action\" type=\"button\" disabled=\"disabled\"");
+            StringAssert.Contains(html, "data-shelf-direction=\"next\"");
+            StringAssert.Contains(html, "class=\"media-shelf__items\" tabindex=\"0\" role=\"region\"");
+            foreach (var state in Enum.GetValues<MediaAvailabilityState>())
+                StringAssert.Contains(html, "media-availability--" + state.ToString().ToLowerInvariant());
             StringAssert.Contains(html, "<progress max=\"6360000\" value=\"3000000\"");
             StringAssert.Contains(html, "poster=\"/build/assets/your-name-backdrop-");
             StringAssert.Contains(html, "class=\"player__audio\"");

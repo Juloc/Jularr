@@ -285,6 +285,15 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
+- Media cards place request/resume actions centrally over artwork on hover/focus,
+  with reachable touch controls. Show at most three important, Backend-ordered
+  genres. Series lifecycle belongs top-left; monitored-unit availability belongs
+  top-right (green complete, proportional yellow partial, red missing, purple
+  downloading, blue searching/queued). Never infer completeness from coarse
+  availability. Audio/subtitle icons show an available preferred language flag,
+  otherwise distinct language counts; do not infer a country from a language code.
+  Shelves hide native scrollbars and use shared local chevrons while retaining
+  native touch/keyboard scrolling, without navigation-only server reads.
 - Truncated visible text (`text-overflow: ellipsis`, line clamping or text clipped by
   `overflow: hidden`) must expose its complete value through the owning shared
   component, at minimum a localized tooltip usable by pointer, keyboard and touch.

@@ -16,7 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.User.Discover
 {
     public sealed class IndexModel(ReadAuthenticationV1 authentication, ReadProfileMediaV1 readMedia, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search, ReadContinueV1 continuation,
-        ReadLibraryV1 library, UiText texts) : JularrPage
+        ReadLibraryV1 library, UiText texts, FrontendAssets assets) : JularrPage
     {
         // Only types with a real discovery provider; Books, Manga and Light Novels follow with their providers.
         private static readonly (string Slug, MediaType Type, DiscoverFeedType[] Feeds)[] Types =
@@ -115,12 +115,12 @@ namespace Jularr.Frontend.Pages.User.Discover
             DefineFeatured(featured);
             page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
 
-            page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Where(item => (selected.Slug is null || item.MediaTypeId == selected.Type)
+            page.Content.Add(new MediaShelf(assets, "discover.continue", null, [.. _continue.Where(item => (selected.Slug is null || item.MediaTypeId == selected.Type)
                 && (item.MediaAssetTypeId == MediaAssetType.Ebook ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true)).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
                 (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
                 .Continue(item.PositionMs, item.MediaAssetTypeId == MediaAssetType.Ebook ? null : item.DurationMs))]));
-            page.Content.Add(new MediaShelf("discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
+            page.Content.Add(new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]));
 
             var recommendations = new Page();
@@ -158,7 +158,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
                 foreach (var (_, feed, items) in group)
                 {
-                    page.Content.Add(new MediaShelf("discover.feed." + feed, Address(slug, feed, 1), [.. items.Select(Card)]));
+                    page.Content.Add(new MediaShelf(assets, "discover.feed." + feed, Address(slug, feed, 1), [.. items.Select(Card)]));
                 }
             }
         }

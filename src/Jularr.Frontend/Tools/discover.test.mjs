@@ -52,6 +52,11 @@ function discover(landing = false) {
     }
 
     runInNewContext(script, {
+        exports: {},
+        require: name => {
+            assert.equal(name, '../../../Framework/Components/MediaShelf');
+            return { initializeShelves() {} };
+        },
         document: { querySelector: selector => selector.includes('search-box') ? form : active, addEventListener: (name, action) => { documentEvents[name] = action; } },
         window: { IntersectionObserver: Observer }, IntersectionObserver: Observer,
         AbortController, URL, Set, Error,

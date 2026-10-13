@@ -1,0 +1,24 @@
+@use "IconInfo";
+
+.media-availability {
+    &--available { color: light-dark(#16834a, #73dca0); }
+    &--partial { color: light-dark(#946400, #f2c557); }
+    &--missing { color: light-dark(#bc3346, #ff94a2); }
+    &--downloading { color: light-dark(#7c3aed, #b99aff); }
+    &--searching { color: light-dark(#2476c5, #83bdff); }
+
+    &__symbol {
+        position: relative;
+        display: block;
+        width: 28px;
+        height: 28px;
+        color: inherit;
+
+        > svg { display: block; width: 28px; height: 28px; }
+        > .ui-icon { position: absolute; inset: 7px; width: 14px; height: 14px; }
+    }
+
+    &__track { color: var(--border); }
+    .icon-info__trigger { color: inherit; }
+    .icon-info__label { left: auto; right: 0; }
+}

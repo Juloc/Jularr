@@ -1,12 +1,15 @@
 @use "MediaImage";
+@use "MediaAvailability";
 
 .media-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 160px;
     flex: 0 0 auto;
     gap: 6px;
     min-width: 0;
+    scroll-snap-align: start;
 
     &__link {
         display: flex;
@@ -48,7 +51,7 @@
         font-size: 13px;
     }
 
-    &__context,
+    &__genres,
     &__languages {
         display: flex;
         flex-wrap: wrap;
@@ -58,6 +61,36 @@
         line-height: 1.5;
         overflow-wrap: anywhere;
     }
+
+    &__language { display: inline-flex; align-items: center; gap: 6px; }
+    &__languages .icon-info:last-child .icon-info__label { left: auto; right: 0; }
+
+    &__genres .tag { padding: 2px 7px; font-size: 11px; }
+
+    &__overlay {
+        position: absolute;
+        inset: 0 0 auto;
+        aspect-ratio: 2 / 3;
+        pointer-events: none;
+    }
+
+    &__series {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        max-width: calc(100% - 62px);
+        padding: 4px 7px;
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 650;
+        overflow-wrap: anywhere;
+    }
+
+    &__availability { position: absolute; top: 2px; right: 2px; pointer-events: auto; }
+
+    &__action-area { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
 
     &__progress {
         appearance: none;
@@ -83,12 +116,24 @@
         overflow-wrap: anywhere;
     }
 
-    // Shared buttons, including touch.
+    // Hover, keyboard and touch.
     &__action {
-        width: 100%;
+        max-width: calc(100% - 20px);
         font-size: 13px;
         white-space: normal;
         overflow-wrap: anywhere;
+        pointer-events: none;
+    }
+
+    &:hover &__action-area,
+    &:focus-within &__action-area { opacity: 1; }
+
+    &:hover &__action,
+    &:focus-within &__action { pointer-events: auto; }
+
+    @media (hover: none), (pointer: coarse) {
+        &__action-area { opacity: 1; }
+        &__action { pointer-events: auto; }
     }
 }
 

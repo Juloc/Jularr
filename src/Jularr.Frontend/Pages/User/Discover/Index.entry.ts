@@ -1,3 +1,7 @@
+import { initializeShelves } from '../../../Framework/Components/MediaShelf';
+
+initializeShelves();
+
 const searchForm = document.querySelector<HTMLFormElement>('.app-header .search-box');
 const searchInput = searchForm?.querySelector<HTMLInputElement>('input[type="search"]');
 let results = document.querySelector<HTMLElement>('#discover-results');
@@ -28,6 +32,7 @@ if (searchForm && searchInput && results) {
             if (current !== generation || signal.aborted) return;
             results!.querySelector('#discover-featured')?.replaceWith(featured);
             results!.querySelector('#discover-recommendations')?.replaceWith(shelves);
+            initializeShelves(results!);
         } catch {
             if (signal.aborted || current !== generation) return;
             const feedback = results!.querySelector<HTMLElement>('.discover-feedback');
@@ -81,6 +86,8 @@ if (searchForm && searchInput && results) {
                 results = incoming;
                 history.replaceState(null, '', address);
             }
+
+            initializeShelves(results!);
 
             // Repeated pages require deliberate navigation.
             if (!append || appended > 0) observeNext();

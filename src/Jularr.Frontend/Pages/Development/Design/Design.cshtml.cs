@@ -22,6 +22,7 @@ namespace Jularr.Frontend.Pages.Development.Design
         {
             page.Title("design.title");
             page.Asset("Pages/Development/Design/Design.entry.scss");
+            page.Asset("Framework/Components/MediaShelf.entry.ts");
             page.Asset("Modules/Appearance/appearance.entry.scss");
 
             // Shared appearance controls.
@@ -117,23 +118,31 @@ namespace Jularr.Frontend.Pages.Development.Design
                     texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
                 new P(new Text("design.mediaNotice")),
-                new MediaShelf("discover.continue", null, [
+                new MediaShelf(assets, "discover.continue", null, [
                     new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.InProgress", "media.continue")
                         .Continue(3000000, 6360000),
                     new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.InProgress", "media.continue")
                         .Continue(900000, 7320000)
                 ]),
-                new MediaShelf("design.mediaLibrary", null, [
+                new MediaShelf(assets, "design.mediaLibrary", null, [
                     new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.Available")
-                        .Languages("DE", 3, "DE", 8),
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available))
+                        .Genres(new Text("design.genreDrama"), new Text("design.genreRomance"))
+                        .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 3, new MediaLanguage("flag-de", "design.languageGerman"), 8),
                     new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Available")
-                        .Languages(null, 2, null, 6),
-                    new MediaCard("Frieren", "/Design#media", null, "2023", "media.state.Requested")
-                        .Library(new Text("design.seriesContinuing"), new Text("design.partialAvailability")).Languages("DE", 2, null, 6)
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available))
+                        .Genres(new Text("design.tagGenre"), new Text("design.genreAdventure")).Languages(assets, null, 2, null, 6),
+                    SeriesExample("Continuing", MediaAvailabilityState.Partial, 18, 24),
+                    SeriesExample("Releasing", MediaAvailabilityState.Searching),
+                    SeriesExample("Ended", MediaAvailabilityState.Available),
+                    SeriesExample("Canceled", MediaAvailabilityState.Missing),
+                    SeriesExample("Announced", MediaAvailabilityState.Downloading)
                 ]),
-                new MediaShelf("design.mediaDiscover", null, [
-                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested", "request.create"),
+                new MediaShelf(assets, "design.mediaDiscover", null, [
+                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested", "request.create")
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Missing)).Genres(new Text("design.genreDrama")),
                     new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Requested")
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Downloading)).Genres(new Text("design.tagGenre"))
                 ]),
                 new P(new Text("design.imageCredit"), new ValueText(" "),
                     new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images"))
@@ -155,6 +164,13 @@ namespace Jularr.Frontend.Pages.Development.Design
                     new MediaImage(assets.ImageUrl("Pages/Development/Design/References/library-approved.png"), texts["design.libraryReference"], 1448, 1086))
                     .Class("design-lab__references")
             ]));
+
+            // Explicitly illustrative series states.
+            MediaCard SeriesExample(string status, MediaAvailabilityState availability, int available = 0, int monitored = 0) =>
+                new MediaCard(texts["design.exampleTitle"], "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), null, "design.exampleStatus")
+                    .SeriesStatus("media.series." + status).Availability(new MediaAvailability(assets, availability, available, monitored))
+                    .Genres(new Text("design.tagGenre"), new Text("design.genreAdventure"))
+                    .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 2, null, 6);
 
             Form<CreateWorkDataV1> WorkForm(CreateWorkDataV1 example, ServiceError? failure = null) => new(form =>
                 form.Text(item => item.CanonicalTitle, "media.title").Select(item => item.MediaTypeId, "media.type", options)

@@ -19,7 +19,9 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
 - [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
 - [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
-- [MediaCard](Framework/Components/MediaCard.cs): Continue progress, Library context/language summaries and Discover status/actions; Design labels fields not yet returned by Library services.
+- [MediaCard](Framework/Components/MediaCard.cs): Continue progress, top-corner status/availability, up to three genres and centered hover/focus actions.
+- [MediaAvailability](Framework/Components/MediaAvailability.cs), [MediaLanguages](Framework/Components/MediaLanguages.cs), [IconInfo](Framework/Components/IconInfo.cs): fixed semantic symbols, supplied preferred flags/counts and native accessible disclosures; Design labels missing service fields.
+- [MediaShelf client](Framework/Components/MediaShelf.ts): shared local chevrons, native touch/keyboard scrolling and fragment observer cleanup; [tests](Tools/media-shelf.test.mjs).
 - [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
 
 ## User and account pages

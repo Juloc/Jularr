@@ -6,7 +6,9 @@ namespace Jularr.Frontend.Framework
     // Shared artwork and consumption context.
     public sealed class MediaCard(string title, string href, string? posterUrl, string? meta, string statusKey, string? actionKey = null, string? actionHref = null) : IUiComponent
     {
-        private IUiComponent[] _libraryContext = [];
+        private string? _seriesStatusKey;
+        private MediaAvailability? _availability;
+        private IUiComponent[] _genres = [];
         private IUiComponent? _languages;
         private long? _positionMs;
         private long? _durationMs;
@@ -18,19 +20,27 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        public MediaCard Library(IUiComponent seriesStatus, IUiComponent availability)
+        public MediaCard SeriesStatus(string key)
         {
-            _libraryContext = [new Span(seriesStatus), new Span(availability)];
+            _seriesStatusKey = key;
             return this;
         }
 
-        // Available preferences or language counts.
-        public MediaCard Languages(string? preferredDub, int dubCount, string? preferredSub, int subCount)
+        public MediaCard Availability(MediaAvailability availability)
         {
-            _languages = new Div(
-                new Span(new Text("media.dubs"), new ValueText(" " + (preferredDub ?? dubCount.ToString(CultureInfo.CurrentCulture)))),
-                new Span(new Text("media.subs"), new ValueText(" " + (preferredSub ?? subCount.ToString(CultureInfo.CurrentCulture)))))
-                .Class("media-card__languages");
+            _availability = availability;
+            return this;
+        }
+
+        public MediaCard Genres(params IUiComponent[] genres)
+        {
+            _genres = genres.Take(3).Select(genre => (IUiComponent)new Tag(genre)).ToArray();
+            return this;
+        }
+
+        public MediaCard Languages(FrontendAssets assets, MediaLanguage? preferredDub, int dubCount, MediaLanguage? preferredSub, int subCount)
+        {
+            _languages = new MediaLanguages(assets, preferredDub, dubCount, preferredSub, subCount);
             return this;
         }
 
@@ -44,10 +54,20 @@ namespace Jularr.Frontend.Framework
                 new Span(new ValueText(title)).Class("media-card__title"),
                 meta is null ? new Span() : new Span(new ValueText(meta)).Class("media-card__meta")).Class("media-card__link").Attribute("href", href);
 
-            // Status remains separate from actions.
-            var status = new Span(new Text(statusKey)).Class("media-card__state");
+            // Artwork overlays, separate links.
             var content = new List<IUiComponent> { link };
-            if (_libraryContext.Length > 0) content.Add(new Div(_libraryContext).Class("media-card__context"));
+            var overlays = new List<IUiComponent>();
+            if (_seriesStatusKey is not null) overlays.Add(new Span(new Text(_seriesStatusKey)).Class("media-card__series"));
+            if (_availability is not null) overlays.Add(new Div(_availability).Class("media-card__availability"));
+            if (actionKey is not null)
+            {
+                IUiComponent action = actionHref is null
+                    ? new Button(new Text(actionKey)).Disabled().Class("button button--primary media-card__action")
+                    : new A(new Text(actionKey)).Class("button button--primary media-card__action").Attribute("href", actionHref);
+                overlays.Add(new Div(action).Class("media-card__action-area"));
+            }
+            if (overlays.Count > 0) content.Add(new Div([.. overlays]).Class("media-card__overlay"));
+            if (_genres.Length > 0) content.Add(new Div(_genres).Class("media-card__genres"));
             if (_languages is not null) content.Add(_languages);
 
             // Informational resume progress.
@@ -60,15 +80,10 @@ namespace Jularr.Frontend.Framework
                     Math.Ceiling((duration - boundedPosition) / 60000m)))).Class("media-card__meta"));
             }
 
-            content.Add(new Div(status).Class("media-card__status"));
-            if (actionKey is not null)
-            {
-                content.Add(actionHref is null
-                    ? new Button(new Text(actionKey)).Disabled().Class("button media-card__action")
-                    : new A(new Text(actionKey)).Class("button media-card__action").Attribute("href", actionHref));
-            }
+            // Unknown detail keeps coarse status.
+            if (_availability is null) content.Add(new Div(new Span(new Text(statusKey)).Class("media-card__state")).Class("media-card__status"));
 
-            var variant = _positionMs is not null ? " media-card--continue" : _libraryContext.Length > 0 ? " media-card--library" : "";
+            var variant = _positionMs is not null ? " media-card--continue" : _availability is not null ? " media-card--library" : "";
             new Div([.. content]).Class("media-card" + variant).WriteTo(writer, encoder, texts);
         }
 
