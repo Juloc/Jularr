@@ -254,6 +254,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void PublicDownloadAddress_PrivateNetworks_AreRejected()
+        {
+            foreach (var address in new[] { "127.0.0.1", "10.0.0.2", "192.168.1.2", "172.16.1.1", "169.254.169.254", "100.64.0.1", "::1", "fc00::1", "2001:db8::1" })
+            {
+                Assert.IsFalse(Integrations.Logic.Common.DirectDownload.IsPublicAddress(IPAddress.Parse(address)), address);
+            }
+
+            Assert.IsTrue(Integrations.Logic.Common.DirectDownload.IsPublicAddress(IPAddress.Parse("1.1.1.1")));
+            Assert.IsFalse(Integrations.Logic.Common.DirectDownload.IsPublicFileUri(new Uri("https://localhost/file")));
+            Assert.IsFalse(Integrations.Logic.Common.DirectDownload.IsPublicFileUri(new Uri("https://printer.internal/file")));
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_FileRedirectToLocalHost_IsRejected()
         {
             var sources = new FakeSources { RedirectFileToLocal = true };
