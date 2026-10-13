@@ -209,10 +209,21 @@ namespace Jularr.Integrations.Logic.Common
         }
     }
 
-    // Production fail-closed policy. Test challenge responses belong in SourceTests only;
-    // never bind a fake resolver to the live service container.
+    // Real sources use this resolver. Automatic challenge resolution is intentionally disabled.
+    // Changing this guard alone cannot enable a solver: no live CAPTCHA bypass is implemented.
+    // Only provider-authorized verification integrations should be added here in the future.
     internal sealed class NoSourceGateResolver : ISourceGateResolver
     {
-        public Task<string?> ResolveAsync(SourceGate gate, CancellationToken ct) => Task.FromResult<string?>(null);
+        private static readonly bool AutomaticCaptchaDisabled = true;
+
+        public Task<string?> ResolveAsync(SourceGate gate, CancellationToken ct)
+        {
+            if (AutomaticCaptchaDisabled)
+            {
+                return Task.FromResult<string?>(null);
+            }
+
+            throw new NotSupportedException("Automatic CAPTCHA resolution has no authorized live implementation.");
+        }
     }
 }
