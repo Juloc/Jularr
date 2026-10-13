@@ -4,6 +4,8 @@ namespace Jularr.Backend.Data.Enums.Acquisition
     {
         Newznab = 1,
         Sabnzbd = 2,
-        Gutenberg = 3
+        Gutenberg = 3,
+        Opds = 4,
+        AnnasArchive = 5
     }
 }

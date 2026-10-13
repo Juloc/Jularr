@@ -25,6 +25,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."DownloadCategory",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."Username",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version"
                 FROM
@@ -54,6 +55,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."DownloadCategory",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."Username",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version"
                 FROM
@@ -87,12 +89,13 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."DownloadCategory",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."Username",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
-                    connection."AcquisitionConnectionTypeId" IN (1, 3)
+                    connection."AcquisitionConnectionTypeId" IN (1, 3, 4, 5)
                     AND connection."IsEnabled"
                 ORDER BY
                     connection."Priority",
@@ -109,9 +112,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories", "DownloadCategory",
-                        "RemotePath", "LocalPath")
+                        "RemotePath", "LocalPath", "Username")
                 VALUES
-                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath, @LocalPath)
+                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath, @LocalPath, @Username)
                 RETURNING
                     "Id";
                 """;
@@ -138,6 +141,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "DownloadCategory" = @DownloadCategory,
                     "RemotePath" = @RemotePath,
                     "LocalPath" = @LocalPath,
+                    "Username" = @Username,
                     "Capabilities" = CASE
                         WHEN connection."BaseUrl" = @BaseUrl AND connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId AND @ProtectedApiKey IS NULL
                             THEN connection."Capabilities"

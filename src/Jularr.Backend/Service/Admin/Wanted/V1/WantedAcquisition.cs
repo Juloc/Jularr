@@ -7,10 +7,8 @@ using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
-using Jularr.Integrations.Data.Gutenberg;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
-using Jularr.Integrations.Logic.Gutenberg;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Microsoft.AspNetCore.DataProtection;
@@ -24,19 +22,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private const int PageLimit = 100;
         private static readonly TimeSpan OfferLifetime = TimeSpan.FromMinutes(30);
 
-        public const string GutenbergPrefix = "gutenberg:";
-
         private readonly NewznabClient _newznab;
         private readonly SabnzbdClient _sabnzbd;
-        private readonly GutenbergClient _gutenberg;
+        private readonly DirectSources _direct;
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _offers;
 
-        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, GutenbergClient gutenberg, IDataProtectionProvider protection, IMemoryCache offers)
+        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers)
         {
             _newznab = newznab;
             _sabnzbd = sabnzbd;
-            _gutenberg = gutenberg;
+            _direct = direct;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _offers = offers;
         }
@@ -56,18 +52,24 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var failures = 0;
             var selection = new SelectionResult([], null, null, SelectionOutcome.NoCandidates);
             var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel
-                ? indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Gutenberg).ToArray()
+                ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray()
                 : [];
             var sources = catalogs.Length + indexers.Count(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab);
             indexers = [.. indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)];
             var plans = indexers.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
 
-            // Book catalogs answer one title and author query.
+            // Direct book sources answer one title and author query.
             foreach (var catalog in catalogs)
             {
-                if (!await SearchCatalogAsync(catalog, target, budget, offers, ct))
+                if (await _direct.SearchAsync(catalog, target, ct) is not { } found)
                 {
                     failures++;
+                    continue;
+                }
+
+                foreach (var offer in found.Take(budget.MaxResults))
+                {
+                    offers.TryAdd(offer.Identity, offer);
                 }
             }
 
@@ -111,13 +113,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct)
         {
             // Catalog books are downloaded by Jularr itself; the monitor takes the queued download.
-            if (offer.Guid?.StartsWith(GutenbergPrefix, StringComparison.Ordinal) == true)
+            if (DirectSources.IsDirectOffer(offer.Guid) && offer.DownloadUri is { } source)
             {
-                var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null);
+                var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
+                    source.ToString());
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     var reserved = await ctx.ReserveDownloadAsync(direct, token);
-                    await ctx.StartDownloadAsync(new DownloadStartData(reserved, offer.Guid), token);
+                    await ctx.StartDownloadAsync(new DownloadStartData(reserved, Limit(offer.Guid!, 128)), token);
                     return true;
                 }, ct);
                 return;
@@ -177,35 +180,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 await ctx.StartDownloadAsync(new DownloadStartData(operationId, Limit(result!.NzoIds[0], 128)), token);
                 return true;
             }, ct);
-        }
-
-        private async Task<bool> SearchCatalogAsync(AcquisitionConnectionData catalog, WantedTargetData target, SearchBudget budget, ConcurrentDictionary<string, ReleaseOffer> offers,
-            CancellationToken ct)
-        {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(budget.IndexerTimeout);
-            try
-            {
-                var query = string.Join(' ', new[] { target.CanonicalTitle, target.Author?.Split(',')[0] }.Where(part => !string.IsNullOrWhiteSpace(part)));
-                foreach (var book in await _gutenberg.SearchAsync(new Uri(catalog.BaseUrl + "/"), query, timeout.Token))
-                {
-                    // Named like a book release so the shared judge decides.
-                    var title = (book.Authors.Length > 0 ? string.Join(", ", book.Authors) + " - " : "") + book.Title + " (" + string.Join(' ', book.Languages.Select(language => language.ToUpperInvariant())) + ") (epub)";
-                    var offer = new ReleaseOffer(Limit(title, 1000), catalog.Id, catalog.Name, catalog.Priority, GutenbergPrefix + book.Id.ToString(CultureInfo.InvariantCulture),
-                        GutenbergClient.EpubUri(book.Id), "https://www.gutenberg.org/ebooks/" + book.Id.ToString(CultureInfo.InvariantCulture), null, null, ["title"]);
-                    offers.TryAdd(offer.Identity, offer);
-                }
-
-                return true;
-            }
-            catch (GutenbergException)
-            {
-                return false;
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                return false;
-            }
         }
 
         private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, IEnumerable<PlannedQuery> queries, SearchBudget budget,

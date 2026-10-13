@@ -49,8 +49,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     public sealed class AcquisitionConnectionDetailsV1 : BaseResponse
     {
         public AcquisitionConnectionDetailsV1(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, bool hasApiKey, bool isEnabled, int priority,
-            int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version)
+            int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null)
         {
+            Username = username;
             Id = id;
             Name = name;
             AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
@@ -108,13 +109,18 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Version))]
         public long Version { get; }
+
+        // OPDS catalogs may need an account; the password is the protected key.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Username))]
+        public string? Username { get; }
     }
 
     public sealed class SaveAcquisitionConnectionDataV1 : BaseData
     {
         public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, string? apiKey, bool isEnabled, int priority, int[] categories,
-            string? downloadCategory, string? remotePath, string? localPath)
+            string? downloadCategory, string? remotePath, string? localPath, string? username = null)
         {
+            Username = username;
             Name = name;
             AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
             BaseUrl = baseUrl;
@@ -172,6 +178,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
                 throw new DataValidationException(RemotePath is null ? nameof(RemotePath) : nameof(LocalPath), "required");
             }
         }
+
+        // OPDS catalogs may need an account; the password is the protected key.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Username))]
+        public string? Username { get; }
     }
 
     public sealed class CreateAcquisitionConnectionResultV1 : BaseResponse

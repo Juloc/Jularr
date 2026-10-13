@@ -21,9 +21,7 @@ using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
-using Jularr.Integrations.Data.Gutenberg;
 using Jularr.Integrations.Data.Sabnzbd;
-using Jularr.Integrations.Logic.Gutenberg;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
@@ -231,11 +229,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private readonly StorageOptions _options;
         private readonly TimeProvider _time;
         private readonly PlexServer _plex;
-        private readonly GutenbergClient _gutenberg;
+        private readonly DirectSources _direct;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, GutenbergClient gutenberg, PlexServer plex, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, DirectSources direct, PlexServer plex, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
         {
-            _gutenberg = gutenberg;
+            _direct = direct;
             _sabnzbd = sabnzbd;
             _plex = plex;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
@@ -255,11 +253,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             {
                 // An unreachable client keeps its downloads running.
                 var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(group.Key, ct), CancellationToken);
-                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Gutenberg)
+                if (DirectSources.IsDirect(connection.AcquisitionConnectionTypeId))
                 {
                     foreach (var download in group.Take(DirectPerCycle))
                     {
-                        await DownloadDirectAsync(download);
+                        await DownloadDirectAsync(download, connection);
                     }
 
                     continue;
@@ -523,28 +521,28 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             return LibraryFileTypes.IsEbookContent(placement.Extension, header.AsSpan(0, read));
         }
 
-        // Jularr downloads catalog books itself into staging, then imports them like any other job.
-        private async Task DownloadDirectAsync(DownloadData download)
+        // Jularr downloads direct-source books itself into staging, then imports them like any other job.
+        private async Task DownloadDirectAsync(DownloadData download, AcquisitionConnectionData connection)
         {
-            if (download.ExternalId is not { } external || !external.StartsWith(WantedAcquisition.GutenbergPrefix, StringComparison.Ordinal)
-                || !int.TryParse(external[WantedAcquisition.GutenbergPrefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var bookId))
-            {
-                await FailAsync(download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime);
-                return;
-            }
-
             var staging = Path.Combine(_options.DirectDownloadPath, download.OperationId.ToString(CultureInfo.InvariantCulture));
-            var name = bookId.ToString(CultureInfo.InvariantCulture) + ".epub";
+            var name = "book." + DirectSources.Format(download.ExternalId ?? "");
             var path = Path.Combine(staging, name);
             if (!File.Exists(path))
             {
                 Directory.CreateDirectory(staging);
                 try
                 {
-                    await _gutenberg.DownloadAsync(bookId, path + ".part", CancellationToken);
+                    File.Delete(path + ".part");
+                    await _direct.DownloadAsync(connection, download, path + ".part", CancellationToken);
                     File.Move(path + ".part", path);
                 }
-                catch (Exception exception) when (exception is GutenbergException or IOException)
+                catch (DirectSourceException exception) when (exception.ErrorKey == "source_gate")
+                {
+                    // A login or challenge waits for a person; nothing is bypassed.
+                    await AttentionAsync(download.OperationId, exception.ErrorKey);
+                    return;
+                }
+                catch (Exception exception) when (exception is DirectSourceException or IOException)
                 {
                     File.Delete(path + ".part");
                     await FailAsync(download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry);

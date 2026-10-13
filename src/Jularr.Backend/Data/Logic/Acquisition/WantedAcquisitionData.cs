@@ -168,8 +168,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class AcquisitionGrabData : BaseData
     {
         public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? seasonNumber,
-            int? episodeStart, int? episodeEnd)
+            int? episodeStart, int? episodeEnd, string? sourceUrl = null)
         {
+            SourceUrl = sourceUrl;
             SeasonNumber = seasonNumber;
             EpisodeStart = episodeStart;
             EpisodeEnd = episodeEnd;
@@ -207,6 +208,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.EpisodeEnd))]
         public int? EpisodeEnd { get; }
+
+        // Where a direct source serves the file.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl))]
+        public string? SourceUrl { get; }
     }
 
     internal sealed class DownloadStartData : BaseData
@@ -227,8 +232,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class DownloadData : BaseData
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
-            string? externalId, string title, DateTime startedAt, string? qualityKey, string? author)
+            string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl)
         {
+            SourceUrl = sourceUrl;
             Author = author;
             QualityKey = qualityKey;
             OperationId = operationId;
@@ -278,6 +284,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
         public string? Author { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl))]
+        public string? SourceUrl { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData

@@ -24,6 +24,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         [BindProperty(SupportsGet = true)]
         public AcquisitionConnectionType? Type { get; set; }
 
+        // Defaults handed over by the source catalog.
+        [BindProperty(SupportsGet = true, Name = "name")]
+        public string? SuggestedName { get; set; }
+
+        [BindProperty(SupportsGet = true, Name = "url")]
+        public string? SuggestedUrl { get; set; }
+
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
@@ -51,7 +58,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     if (list.Items.Count == list.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
                     split.Primary.Add(new A(new Text("acquisition.connection.addIndexer")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Newznab)));
                     split.Primary.Add(new A(new Text("acquisition.connection.addClient")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Sabnzbd)));
-                    split.Primary.Add(new A(new Text("acquisition.connection.addGutenberg")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Gutenberg)));
                 }
 
                 if (type is { } selectedType)
@@ -86,10 +92,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
-            [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath)
+            [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username)
         {
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", Blank(apiKey), isEnabled, priority, Categories(categories),
-                Blank(downloadCategory), Blank(remotePath), Blank(localPath));
+                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username));
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -128,18 +134,26 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
-                    selected.DownloadCategory, selected.RemotePath, selected.LocalPath)
-                : type == AcquisitionConnectionType.Gutenberg
-                    ? new SaveAcquisitionConnectionDataV1("Project Gutenberg", type, "https://gutendex.com", null, true, 50, [], null, null, null)
-                    : new SaveAcquisitionConnectionDataV1("", type, "", null, true, 25, [], null, null, null));
+                    selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username)
+                : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, SuggestedUrl ?? "", null, true, type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [],
+                    null, null, null));
 
             return new Form<SaveAcquisitionConnectionDataV1>(form =>
             {
                 form.Hidden(item => item.AcquisitionConnectionTypeId);
                 form.Text(item => item.Name, "acquisition.connection.name");
                 form.Text(item => item.BaseUrl, "acquisition.connection.baseUrl");
-                // Public catalogs need no key.
-                if (type != AcquisitionConnectionType.Gutenberg)
+                // Catalog logins belong to the instance; keys and passwords are never shown again.
+                if (type == AcquisitionConnectionType.Opds)
+                {
+                    form.Text(item => item.Username, "acquisition.connection.username", "username");
+                    form.Password(item => item.ApiKey, "acquisition.connection.password", "new-password");
+                }
+                else if (type == AcquisitionConnectionType.AnnasArchive)
+                {
+                    form.Password(item => item.ApiKey, "acquisition.connection.memberKey", "new-password");
+                }
+                else if (type != AcquisitionConnectionType.Gutenberg)
                 {
                     form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
                 }
@@ -180,7 +194,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var address = "/Admin/Acquisition?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture);
             if (id is { } connectionId) address += "&AcquisitionConnectionId=" + connectionId.ToString(CultureInfo.InvariantCulture);
-            else if (type is { } connectionType) address += "&Type=" + connectionType;
+            else if (type is { } connectionType) address += "&Type=" + connectionType + (SuggestedUrl is { } url ? "&url=" + Uri.EscapeDataString(url) : "")
+                + (SuggestedName is { } name ? "&name=" + Uri.EscapeDataString(name) : "");
             return handler is null ? address : address + "&handler=" + handler;
         }
     }

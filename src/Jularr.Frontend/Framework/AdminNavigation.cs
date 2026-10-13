@@ -10,7 +10,8 @@ namespace Jularr.Frontend.Framework
 
         public static UiSubnav Acquisition { get; } = new([
             new("admin.acquisition.title", "/Admin/Acquisition"),
-            new("admin.profiles.title", "/Admin/Acquisition/Profiles")
+            new("admin.profiles.title", "/Admin/Acquisition/Profiles"),
+            new("admin.sources.title", "/Admin/Acquisition/Sources")
         ]);
 
         // Hide unavailable configuration links.

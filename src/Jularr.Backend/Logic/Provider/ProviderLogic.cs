@@ -28,6 +28,24 @@ namespace Jularr.Backend.Logic.Provider
             }
         }
 
+        public static async Task EnableProviderAsync(this LogicContext ctx, string providerKey, CancellationToken ct)
+        {
+            // Turning on is idempotent.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Providers" AS provider
+                SET
+                    "IsEnabled" = TRUE
+                WHERE
+                    provider."Key" = @ProviderKey
+                    AND NOT provider."IsEnabled";
+                """;
+            sql.Parameters.Add(new ProviderParameters(providerKey));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task<ProviderData> ReadEnabledProviderAsync(this LogicContext ctx, ProviderParameters parameters, CancellationToken ct)
         {
             // Hold configuration through completion.

@@ -12,7 +12,11 @@ using Microsoft.Extensions.Configuration;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Integrations.Data.Common;
+using Jularr.Integrations.Logic.AnnasArchive;
+using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Gutenberg;
+using Jularr.Integrations.Logic.Opds;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.Plex;
 using Jularr.Integrations.Logic.Media;
@@ -117,6 +121,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<BookMetadata>();
+            services.TryAddTransient<DirectSources>();
+            services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddTransient<ReadingContent>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
@@ -184,6 +190,18 @@ namespace Jularr.Backend.Service.Core
             }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
                 .RemoveAllLoggers();
             services.AddHttpClient<GutenbergClient>(http =>
+            {
+                http.Timeout = TimeSpan.FromSeconds(60);
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+                .RemoveAllLoggers();
+            services.AddHttpClient<OpdsClient>(http =>
+            {
+                http.Timeout = TimeSpan.FromSeconds(60);
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+                .RemoveAllLoggers();
+            services.AddHttpClient<AnnasArchiveClient>(http =>
             {
                 http.Timeout = TimeSpan.FromSeconds(60);
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");

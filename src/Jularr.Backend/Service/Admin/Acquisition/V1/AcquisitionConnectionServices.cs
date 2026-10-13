@@ -9,11 +9,10 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
-using Jularr.Integrations.Data.Gutenberg;
-using Jularr.Integrations.Logic.Gutenberg;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Microsoft.AspNetCore.DataProtection;
@@ -46,6 +45,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."DownloadCategory",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."Username",
                     connection."CheckedAt",
                     connection."LastErrorKey" AS "ErrorKey",
                     connection."Version"
@@ -87,6 +87,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."DownloadCategory",
                     connection."RemotePath",
                     connection."LocalPath",
+                    connection."Username",
                     connection."CheckedAt",
                     connection."LastErrorKey" AS "ErrorKey",
                     connection."Version"
@@ -118,7 +119,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override async Task<IServiceOutput> OnCreate()
         {
             // New connections carry a key unless the source needs none.
-            if (Data.ApiKey is null && Data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Gutenberg)
+            if (Data.ApiKey is null && Data.AcquisitionConnectionTypeId is not (AcquisitionConnectionType.Gutenberg or AcquisitionConnectionType.Opds))
             {
                 throw new DataValidationException(nameof(SaveAcquisitionConnectionDataV1.ApiKey), "required");
             }
@@ -171,14 +172,14 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private readonly NewznabClient _newznab;
         private readonly SabnzbdClient _sabnzbd;
-        private readonly GutenbergClient _gutenberg;
+        private readonly DirectSources _direct;
         private readonly IDataProtector _protector;
 
-        internal TestAcquisitionConnectionV1(NewznabClient newznab, SabnzbdClient sabnzbd, GutenbergClient gutenberg, IDataProtectionProvider protection)
+        internal TestAcquisitionConnectionV1(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection)
         {
             _newznab = newznab;
             _sabnzbd = sabnzbd;
-            _gutenberg = gutenberg;
+            _direct = direct;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
@@ -190,22 +191,15 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
-            var apiKey = connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Gutenberg ? "" : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
+            var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId) ? "" : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
 
             // Keep remote I/O outside transactions.
             AcquisitionConnectionTestV1 result;
             string? capabilities = null;
-            if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Gutenberg)
+            if (DirectSources.IsDirect(connection.AcquisitionConnectionTypeId))
             {
-                try
-                {
-                    await _gutenberg.SearchAsync(new Uri(connection.BaseUrl + "/"), "Austen", CancellationToken);
-                    result = new AcquisitionConnectionTestV1(true, null, null, ["Book"]);
-                }
-                catch (GutenbergException)
-                {
-                    result = new AcquisitionConnectionTestV1(false, "acquisition_unavailable", null, []);
-                }
+                var error = await _direct.TestAsync(connection, CancellationToken);
+                result = new AcquisitionConnectionTestV1(error is null, error, null, error is null ? ["Book"] : []);
             }
             else if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
             {
@@ -245,7 +239,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             // Protect before persistence.
             var apiKey = data.ApiKey is null ? null : protector.Protect(Encoding.UTF8.GetBytes(data.ApiKey));
             return new AcquisitionConnectionSaveData(id, data.Name, data.AcquisitionConnectionTypeId, data.BaseUrl.TrimEnd('/'), apiKey, data.IsEnabled, data.Priority,
-                data.Categories.Distinct().Order().ToArray(), data.DownloadCategory, data.RemotePath, data.LocalPath);
+                data.Categories.Distinct().Order().ToArray(), data.DownloadCategory, data.RemotePath, data.LocalPath,
+                data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Opds ? data.Username : null);
         }
 
         public static string Unprotect(IDataProtector protector, byte[]? protectedApiKey)

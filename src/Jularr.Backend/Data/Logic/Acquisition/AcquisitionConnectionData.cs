@@ -8,8 +8,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class AcquisitionConnectionData : BaseData
     {
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
-            int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version)
+            int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username)
         {
+            Username = username;
             Id = id;
             Name = name;
             AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
@@ -64,13 +65,18 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Version))]
         public long Version { get; }
+
+        // OPDS catalogs may need an account; the password is the protected key.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Username))]
+        public string? Username { get; }
     }
 
     internal sealed class AcquisitionConnectionSaveData : BaseData
     {
         public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
-            int[] categories, string? downloadCategory, string? remotePath, string? localPath)
+            int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username)
         {
+            Username = username;
             Id = id;
             Name = name;
             AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
@@ -117,6 +123,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.LocalPath))]
         public string? LocalPath { get; }
+
+        // OPDS catalogs may need an account; the password is the protected key.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Username))]
+        public string? Username { get; }
     }
 
     internal sealed class AcquisitionConnectionCheckData : BaseData
@@ -188,5 +198,35 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
         public long Id { get; }
+    }
+
+    internal sealed class SourceConnectionData : BaseData
+    {
+        public SourceConnectionData(AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl)
+        {
+            AcquisitionConnectionTypeId = acquisitionConnectionTypeId;
+            BaseUrl = baseUrl;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
+        public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
+        public string BaseUrl { get; }
+    }
+
+    internal sealed class SourceProviderData : BaseData
+    {
+        public SourceProviderData(string key, bool isEnabled)
+        {
+            Key = key;
+            IsEnabled = isEnabled;
+        }
+
+        [DataField(typeof(Fields.Provider.ProviderFields), nameof(Fields.Provider.ProviderFields.Key))]
+        public string Key { get; }
+
+        [DataField(typeof(Fields.Provider.ProviderFields), nameof(Fields.Provider.ProviderFields.IsEnabled))]
+        public bool IsEnabled { get; }
     }
 }

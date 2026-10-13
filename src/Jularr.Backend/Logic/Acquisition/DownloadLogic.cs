@@ -297,12 +297,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 WITH release AS (
                     INSERT INTO
-                        "AcquisitionReleases" ("WantedItemId", "AcquisitionConnectionId", "ReleaseIdentity", "Title", "QualityKey", "SeasonNumber", "EpisodeStart", "EpisodeEnd",
+                        "AcquisitionReleases" ("WantedItemId", "AcquisitionConnectionId", "ReleaseIdentity", "Title", "SourceUrl", "QualityKey", "SeasonNumber", "EpisodeStart", "EpisodeEnd",
                             "AcquisitionReleaseStatusTypeId")
                     VALUES
-                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @QualityKey, @SeasonNumber, @EpisodeStart, @EpisodeEnd, 1)
+                        (@WantedItemId, @IndexerConnectionId, @ReleaseIdentity, @Title, @SourceUrl, @QualityKey, @SeasonNumber, @EpisodeStart, @EpisodeEnd, 1)
                     ON CONFLICT ("WantedItemId", "ReleaseIdentity") DO UPDATE
                     SET
+                        "SourceUrl" = EXCLUDED."SourceUrl",
                         "AcquisitionConnectionId" = EXCLUDED."AcquisitionConnectionId",
                         "Title" = EXCLUDED."Title",
                         "QualityKey" = EXCLUDED."QualityKey",
@@ -456,6 +457,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     release."Title",
                     operation."StartedAt",
                     release."QualityKey",
+                    release."SourceUrl",
                     (
                         SELECT
                             fact."Value"

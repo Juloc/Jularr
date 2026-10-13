@@ -11,6 +11,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly EnumField AcquisitionConnectionTypeId = new(typeof(AcquisitionConnectionType));
         public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Trim = true, Format = StringFormat.HttpUrl };
         public static readonly StringField ApiKey = new() { MaximumLength = 256, Required = false, Format = StringFormat.SingleLine };
+        public static readonly StringField Username = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly ByteArrayField ProtectedApiKey = new();
         public static readonly BoolField HasApiKey = new();
         public static readonly BoolField IsEnabled = new();
@@ -34,6 +35,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField ReleaseIdentity = new(NpgsqlDbType.Varchar) { MaximumLength = 600, AllowBlank = false };
         public static readonly StringArrayField ReleaseIdentities = new();
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false };
+        public static readonly StringField SourceUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
         public static readonly StringField QualityKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly EnumField AcquisitionReleaseStatusTypeId = new(typeof(AcquisitionReleaseStatusType));
         public static readonly StringField ReasonKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
@@ -69,5 +71,18 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringArrayField MustNotContain = new() { MaximumLength = 50 };
         public static readonly IntField WantedCount = new() { Minimum = 0 };
         public static readonly LongField Version = new() { Minimum = 1 };
+    }
+
+    // Suggested sources of the catalog page.
+    public static class SourceCatalogFields
+    {
+        public static readonly StringField Key = new() { MaximumLength = 64, AllowBlank = false };
+        public static readonly StringField Name = new() { MaximumLength = 128, AllowBlank = false };
+        public static readonly EnumField SourceGroupId = new(typeof(SourceGroup));
+        public static readonly EnumField SourceAvailabilityId = new(typeof(SourceAvailability));
+        public static readonly StringArrayField Capabilities = new();
+        public static readonly StringField DefaultBaseUrl = new() { MaximumLength = 500, Required = false };
+        public static readonly BoolField IsConfigured = new();
+        public static readonly StringArrayField Keys = new();
     }
 }
