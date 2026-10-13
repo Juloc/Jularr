@@ -72,7 +72,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveActivitySourceLinkDataV1>(form =>
             {
-                form.Text(data => data.SourceUrl, "activity.fileLink");
+                form.Url(data => data.SourceUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
                 Error?.Field == nameof(SaveActivitySourceLinkDataV1.SourceUrl) ? Error : null));
