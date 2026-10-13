@@ -9,6 +9,138 @@ namespace Jularr.Backend.Logic.Profile
 {
     internal static class ProfileLogic
     {
+        public static async Task CreateOwnedProfileAsync(this LogicContext ctx, ProfileCreationData data, CancellationToken ct)
+        {
+            // An account owns at most ten profiles; its row serializes concurrent creations.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    account."Id"
+                FROM
+                    "Accounts" AS account
+                WHERE
+                    account."Id" = @OwnerAccountId
+                FOR UPDATE OF
+                    account;
+                """;
+            sql.Parameters.Add(data);
+            _ = await ctx.ReadRequiredAsync<AccountIdData>(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    account."Id"
+                FROM
+                    "Accounts" AS account
+                WHERE
+                    account."Id" = @OwnerAccountId
+                    AND (SELECT count(*) FROM "Profiles" AS profile WHERE profile."OwnerAccountId" = account."Id") < 10;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<AccountIdData>(sql, ct) is null)
+            {
+                throw new DataValidationException(nameof(data.DisplayName), "profile_limit");
+            }
+
+            await ctx.CreateProfileAsync(data, ct);
+        }
+
+        public static async Task DeleteProfileAsync(this LogicContext ctx, AccountProfileData data, CancellationToken ct)
+        {
+            // Only the owning account deletes a profile.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id" AS "ProfileId"
+                FROM
+                    "Profiles" AS profile
+                WHERE
+                    profile."Id" = @ProfileId
+                    AND profile."OwnerAccountId" = @AccountId
+                FOR UPDATE OF
+                    profile;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<ProfileParameters>(sql, ct) is null)
+            {
+                throw new KeyNotFoundException("The profile was not found.");
+            }
+
+            // Sessions on the profile return to the picker; its requests, sign-in flows and links go with it.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountSessions" AS session
+                SET
+                    "ActiveProfileId" = NULL
+                WHERE
+                    session."ActiveProfileId" = @ProfileId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "RequestTargets" AS target
+                USING
+                    "AcquisitionRequests" AS request
+                WHERE
+                    target."AcquisitionRequestId" = request."Id"
+                    AND request."RequestedByProfileId" = @ProfileId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "AcquisitionRequests" AS request
+                WHERE
+                    request."RequestedByProfileId" = @ProfileId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "AccountExternalAuthFlows" AS flow
+                WHERE
+                    flow."StartedProfileId" = @ProfileId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "AccountProfiles" AS accountProfile
+                WHERE
+                    accountProfile."ProfileId" = @ProfileId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "Profiles" AS profile
+                WHERE
+                    profile."Id" = @ProfileId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
         public static async Task CreateProfileAsync(this LogicContext ctx, ProfileCreationData data, CancellationToken ct)
         {
             var sql = new SqlStatement();

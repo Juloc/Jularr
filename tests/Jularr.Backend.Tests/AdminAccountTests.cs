@@ -99,7 +99,7 @@ namespace Jularr.Backend.Tests
 
             // Account scope is enforced.
             using var foreign = await host.SendAsync(HttpMethod.Delete, $"/api/v1/admin/accounts/41/sessions/{sessionId}");
-            Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
+            Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode, await foreign.Content.ReadAsStringAsync());
             using var revoked = await host.SendAsync(HttpMethod.Delete, $"/api/v1/admin/accounts/42/sessions/{sessionId}");
             Assert.AreEqual(HttpStatusCode.OK, revoked.StatusCode, await revoked.Content.ReadAsStringAsync());
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"AccountId\" = 42 AND \"RevokedAt\" IS NOT NULL"));
@@ -283,6 +283,47 @@ namespace Jularr.Backend.Tests
             using var reset = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/profiles/101/pin");
             Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode, await reset.Content.ReadAsStringAsync());
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"PinHash\" FROM \"Profiles\" WHERE \"Id\" = 101"));
+        }
+
+        [TestMethod]
+        public async Task Profiles_AccountCreatesUpToTenAndDeletionTakesItsRequests()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await SignInAsync(host);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Account/Profiles/New");
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode);
+            var locale = (long)(await host.ScalarAsync("SELECT \"UiLocaleId\" FROM \"Profiles\" WHERE \"Id\" = 101"))!;
+
+            // Ten owned profiles at most; the picker stops offering more.
+            var owned = (long)(await host.ScalarAsync("SELECT count(*) FROM \"Profiles\" WHERE \"OwnerAccountId\" = 41"))!;
+            for (var index = owned; index < 10; index++)
+            {
+                using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/profiles", new CreateProfileDataV1("Child " + index, locale));
+                Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            }
+
+            using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/profiles", new CreateProfileDataV1("One too many", locale));
+            StringAssert.Contains(await limited.Content.ReadAsStringAsync(), "profile_limit");
+            using var picker = await host.SendAsync(HttpMethod.Get, "/Account/Profiles");
+            Assert.IsFalse((await picker.Content.ReadAsStringAsync()).Contains("Add profile", StringComparison.Ordinal));
+
+            // Deleting the active profile removes its requests and returns the session to the picker.
+            var child = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Profiles\" WHERE \"DisplayName\" = 'Child 9'"))!;
+            await host.Fixture.RunSqlAsync($$"""
+                WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Requested Film') RETURNING "Id")
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "UiLocaleId") SELECT "Id", {{child}}, {{locale}} FROM work
+                """);
+            using var foreign = await host.SendAsync(HttpMethod.Delete, "/api/v1/profiles/" + child);
+            Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode, await foreign.Content.ReadAsStringAsync());
+            using var selected = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/" + child);
+            Assert.AreEqual(HttpStatusCode.OK, selected.StatusCode, await selected.Content.ReadAsStringAsync());
+            using var deleted = await host.SendAsync(HttpMethod.Delete, "/api/v1/profiles/" + child);
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Profiles\" WHERE \"Id\" = " + child));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\" WHERE \"CanonicalTitle\" = 'Requested Film'"));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            Assert.IsNull((await state.Content.ReadFromJsonAsync<AuthenticationResultV1>())!.ProfileId);
         }
 
         [TestMethod]

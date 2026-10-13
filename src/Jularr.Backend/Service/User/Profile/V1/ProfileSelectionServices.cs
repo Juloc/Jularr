@@ -7,6 +7,8 @@ using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Session;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Data.Logic.Profile;
+using Jularr.Backend.Logic.Profile;
 
 namespace Jularr.Backend.Service.User.Profile.V1
 {
@@ -28,7 +30,8 @@ namespace Jularr.Backend.Service.User.Profile.V1
                     profile."Id",
                     profile."DisplayName",
                     (profile."PinHash" IS NOT NULL) AS "IsLocked",
-                    profile."PinLength"
+                    profile."PinLength",
+                    (profile."OwnerAccountId" = @AccountId) AS "IsOwned"
                 FROM
                     "AccountProfiles" AS accountProfile
                 INNER JOIN
@@ -44,6 +47,21 @@ namespace Jularr.Backend.Service.User.Profile.V1
             sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ProfileSelectionDetailsV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/auth/profiles")]
+    public sealed class CreateProfileV1 : UserService<ReadProfilesParametersV1, CreateProfileDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(ReadProfilesParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ReadProfilesParametersV1 parameters, Type resultType) => new("session.profile.create");
+
+        protected override async Task<IServiceOutput> OnCreate()
+        {
+            await Context.CreateOwnedProfileAsync(new ProfileCreationData(Auth.AccountId!.Value, Data.DisplayName, Data.UiLocaleId), CancellationToken);
+            return new UpdateResult(true);
         }
     }
 

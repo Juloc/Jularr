@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Profile;
@@ -84,6 +85,25 @@ namespace Jularr.Backend.Service.User.Profile.V1
         protected override async Task<IServiceOutput> OnDelete()
         {
             await Context.UpdateProfilePinAsync(Parameters.ProfileId, null, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("DELETE", "/api/v1/profiles/{profileId:long}")]
+    public sealed class DeleteProfileV1 : UserService<UpdateProfileParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(UpdateProfileParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(UpdateProfileParametersV1 parameters, Type resultType) => new("profile.self.update");
+
+        protected override Task ValidatePermissions(UpdateProfileParametersV1 parameters) =>
+            parameters.ProfileId == Auth.ProfileId ? Task.CompletedTask : throw new KeyNotFoundException("The authorized profile was not found.");
+
+        protected override async Task<IServiceOutput> OnDelete()
+        {
+            // Progress, lists and requests leave with the profile.
+            await Context.DeleteProfileAsync(new AccountProfileData(Auth.AccountId!.Value, Parameters.ProfileId), CancellationToken);
             return new UpdateResult(true);
         }
     }

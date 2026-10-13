@@ -174,7 +174,8 @@ namespace Jularr.Backend.Service.Core
                 return [];
             }
 
-            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select", "instance.capabilities.read" };
+            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select", "session.profile.create",
+                "instance.capabilities.read" };
 
             // Manual media management only.
             if (accountRoleTypeId is AccountRoleType.Owner or AccountRoleType.MediaManager)
