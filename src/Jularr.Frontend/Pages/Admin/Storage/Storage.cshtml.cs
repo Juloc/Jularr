@@ -3,6 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Service.Admin.Library.V1;
@@ -58,6 +59,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Storage/Storage.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage, csrf));
 
             var split = new Split(content =>
             {
@@ -100,7 +102,6 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             });
             var detailOpen = StorageMountId is not null || _input is not null || Request.Query.ContainsKey("protocol");
             page.Content.Add(split.MasterDetail(detailOpen, Address()));
-            if (IsSetup) page.Content.Add(new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance"));
         }
 
         private Form<SaveStorageMountDataV1> ConnectionForm(StorageProtocolType protocol, string? csrf)

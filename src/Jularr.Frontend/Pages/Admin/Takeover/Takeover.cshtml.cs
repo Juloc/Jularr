@@ -2,6 +2,7 @@ using System.Globalization;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -19,7 +20,8 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
         {
             page.Title("admin.takeover.title");
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.Acquisition);
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Media, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+            else page.Content.Add(AdminNavigation.Acquisition);
 
             // The key is used for this read only; a preview changes nothing.
             var sources = Enum.GetValues<TakeoverSourceType>().Select(source => new SelectOption(((byte)source).ToString(CultureInfo.InvariantCulture), texts["takeover.source." + source]));
@@ -30,7 +32,7 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
                 form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "off");
                 form.Select(item => item.Apply, "takeover.mode", [new SelectOption("False", texts["takeover.preview"]), new SelectOption("True", texts["takeover.apply"])]);
                 form.Submit("takeover.run");
-            }, "/Admin/Acquisition/Takeover", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input is { } input ? new RunTakeoverDataV1(input.TakeoverSourceTypeId, input.BaseUrl, "", input.Apply)
+            }, SetupWizard.Address(Request, SetupStepType.Media, "/Admin/Acquisition/Takeover"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input is { } input ? new RunTakeoverDataV1(input.TakeoverSourceTypeId, input.BaseUrl, "", input.Apply)
                 : new RunTakeoverDataV1(TakeoverSourceType.Prowlarr, "", "", false), FormError));
 
             if (_items is { } items)
@@ -40,7 +42,7 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
                     .Text(item => item.Name, "sources.name")
                     .Resource(item => item.OutcomeKey, "table.status", outcome => "takeover.outcome." + outcome)
                     .Content("common.actions", item => item.SuggestedUrl is { } url
-                        ? new A(new Text("sources.add")).Class("button").Attribute("href", "/Admin/Acquisition?Type=" + (item.TakeoverItemTypeId == TakeoverItemType.Client ? "Sabnzbd" : "Newznab")
+                        ? new A(new Text("sources.add")).Class("button").Attribute("href", SetupWizard.Address(Request, SetupStepType.Downloads, "/Admin/Acquisition") + "?Type=" + (item.TakeoverItemTypeId == TakeoverItemType.Client ? "Sabnzbd" : "Newznab")
                             + "&name=" + Uri.EscapeDataString(item.Name) + "&url=" + Uri.EscapeDataString(url))
                         : new Span()));
                 if (items.Count == 0)

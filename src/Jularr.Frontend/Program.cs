@@ -10,30 +10,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddRazorPages(options =>
-{
-    options.Conventions.AuthorizeFolder("/");
-    options.Conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Requests/Requests", ServiceApi.RequestsReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Wanted/Wanted", ServiceApi.WantedReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Acquisition/Acquisition", ServiceApi.AcquisitionManagePolicyName);
-    options.Conventions.AuthorizePage("/Admin/Profiles/Profiles", ServiceApi.AcquisitionManagePolicyName);
-    options.Conventions.AuthorizePage("/Admin/Sources/Sources", ServiceApi.AcquisitionManagePolicyName);
-    options.Conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Work/Work", ServiceApi.MediaReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Matches/Matches", ServiceApi.MediaReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.MediaReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Rules/Rules", ServiceApi.RulesReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Users/Users", ServiceApi.RulesReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Localization/Localization", ServiceApi.LocalizationReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Languages/Languages", ServiceApi.LocalizationReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Accounts/Accounts", ServiceApi.AccountsReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Providers/Providers", ServiceApi.ProvidersReadPolicyName);
-    options.Conventions.AuthorizePage("/Admin/Instance/Instance", ServiceApi.InstanceSettingsReadPolicyName);
-    options.Conventions.AllowAnonymousToPage("/Account/Login/Login");
-    options.Conventions.AllowAnonymousToPage("/Setup/Start/Start");
-    options.Conventions.AllowAnonymousToPage("/Development/ShellPreview/ShellPreview");
-});
+builder.Services.AddRazorPages(options => options.Conventions.AddJularrPages());
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options => options.LoginPath = "/Account/Login");
