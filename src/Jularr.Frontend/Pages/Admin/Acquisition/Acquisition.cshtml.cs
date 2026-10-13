@@ -51,6 +51,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     if (list.Items.Count == list.PageSize) split.Primary.Add(new A(new Text("common.next")).Attribute("href", Address(pageNumber: PageNumber + 1)));
                     split.Primary.Add(new A(new Text("acquisition.connection.addIndexer")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Newznab)));
                     split.Primary.Add(new A(new Text("acquisition.connection.addClient")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Sabnzbd)));
+                    split.Primary.Add(new A(new Text("acquisition.connection.addGutenberg")).Class("button").Attribute("href", Address(type: AcquisitionConnectionType.Gutenberg)));
                 }
 
                 if (type is { } selectedType)
@@ -128,14 +129,21 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
                     selected.DownloadCategory, selected.RemotePath, selected.LocalPath)
-                : new SaveAcquisitionConnectionDataV1("", type, "", null, true, 25, [], null, null, null));
+                : type == AcquisitionConnectionType.Gutenberg
+                    ? new SaveAcquisitionConnectionDataV1("Project Gutenberg", type, "https://gutendex.com", null, true, 50, [], null, null, null)
+                    : new SaveAcquisitionConnectionDataV1("", type, "", null, true, 25, [], null, null, null));
 
             return new Form<SaveAcquisitionConnectionDataV1>(form =>
             {
                 form.Hidden(item => item.AcquisitionConnectionTypeId);
                 form.Text(item => item.Name, "acquisition.connection.name");
                 form.Text(item => item.BaseUrl, "acquisition.connection.baseUrl");
-                form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
+                // Public catalogs need no key.
+                if (type != AcquisitionConnectionType.Gutenberg)
+                {
+                    form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
+                }
+
                 form.Number(item => item.Priority, "acquisition.connection.priority");
                 form.Select(item => item.IsEnabled, "acquisition.connection.enabled", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
 

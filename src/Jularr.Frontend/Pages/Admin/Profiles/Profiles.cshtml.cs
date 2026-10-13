@@ -16,7 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // Media types with release qualities.
-        private static readonly MediaType[] MediaTypes = [MediaType.Movie, MediaType.Series];
+        private static readonly MediaType[] MediaTypes = [MediaType.Movie, MediaType.Series, MediaType.Book, MediaType.LightNovel];
 
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private AcquisitionProfileDetailsV1? _selected;
@@ -71,8 +71,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionProfileDataV1(selected.Name, selected.MediaTypeId, selected.IsDefault, selected.AllowedQualities, selected.UpgradeAllowed, selected.UpgradeCutoffQuality,
                     selected.MinimumSizeMb, selected.MaximumSizeMb, selected.MustContain, selected.MustNotContain, selected.Version)
-                : new SaveAcquisitionProfileDataV1("", NewFor!.Value, false, ["WEB-1080p", "BLURAY-1080p"], true, "WEB-1080p", null, null, [], []));
-            var qualities = VideoQualities.Order.Select(quality => new SelectOption(quality, quality)).ToArray();
+                : NewProfile(NewFor!.Value));
+            var qualities = ProfileQualities.For(input.MediaTypeId).Select(quality => new SelectOption(quality, quality)).ToArray();
 
             return new Form<SaveAcquisitionProfileDataV1>(form =>
             {
@@ -90,6 +90,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 form.Submit("common.save");
             }, Address(AcquisitionProfileId, NewFor), csrf, input, _input is null ? null : Error);
         }
+
+        // Sensible starting points per kind.
+        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType mediaType) => mediaType is MediaType.Movie or MediaType.Series
+            ? new SaveAcquisitionProfileDataV1("", mediaType, false, ["WEB-1080p", "BLURAY-1080p"], true, "WEB-1080p", null, null, [], [])
+            : new SaveAcquisitionProfileDataV1("", mediaType, false, ["EPUB"], false, null, null, null, [], []);
 
         public async Task<IActionResult> OnGetAsync()
         {

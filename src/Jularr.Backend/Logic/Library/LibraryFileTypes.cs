@@ -52,5 +52,14 @@ namespace Jularr.Backend.Logic.Library
             if (Ebook.Contains(extension)) return MediaAssetType.Ebook;
             return Game.Contains(extension) ? MediaAssetType.Game : null;
         }
+
+        // Ebooks are recognized by their bytes, not their names.
+        public static bool IsEbookContent(string extension, ReadOnlySpan<byte> header) => extension.ToLowerInvariant() switch
+        {
+            ".epub" => header.Length >= 58 && header[..4].SequenceEqual("PK\u0003\u0004"u8) && header[30..38].SequenceEqual("mimetype"u8) && header.IndexOf("application/epub+zip"u8) > 0,
+            ".pdf" => header.Length >= 5 && header[..5].SequenceEqual("%PDF-"u8),
+            ".mobi" or ".azw3" => header.Length >= 68 && header[60..68].SequenceEqual("BOOKMOBI"u8),
+            _ => false
+        };
     }
 }

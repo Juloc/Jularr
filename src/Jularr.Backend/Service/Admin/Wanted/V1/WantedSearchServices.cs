@@ -29,7 +29,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var (target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Newznab, ct)), CancellationToken);
+                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledSearchConnectionsAsync(ct)), CancellationToken);
 
             // Series searches may target one season or episode.
             EpisodeScope? scope = null;
@@ -87,7 +87,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");
             }
 
-            var quality = ReleaseParser.TryParse(offer.Title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null;
+            var quality = AcquisitionSelectionLogic.QualityKey(target.MediaTypeId, offer.Title);
             await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken);
             return new UpdateResult(true);
         }

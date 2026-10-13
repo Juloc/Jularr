@@ -203,10 +203,19 @@ namespace Jularr.Backend.Tests
             return (assets[0], assets[1]);
         }
 
-        private static void WriteEpub(string path, string title)
+        private static void WriteEpub(string path, string title) => File.WriteAllBytes(path, BuildEpub(title));
+
+        // A small valid EPUB 3 with two sections, navigation, an image and hostile markup.
+        internal static byte[] BuildEpub(string title)
         {
-            using var stream = File.Create(path);
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
+            using var stream = new MemoryStream();
+            WriteArchive(stream, title);
+            return stream.ToArray();
+        }
+
+        private static void WriteArchive(Stream stream, string title)
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
             void Text(string name, string content, CompressionLevel level = CompressionLevel.Optimal)
             {
                 using var writer = new StreamWriter(archive.CreateEntry(name, level).Open(), new UTF8Encoding(false));

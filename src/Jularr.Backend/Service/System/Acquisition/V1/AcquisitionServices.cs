@@ -21,7 +21,9 @@ using Jularr.Backend.Service.Admin.Media;
 using Jularr.Backend.Service.Admin.Provider;
 using Jularr.Backend.Service.Admin.Wanted;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Gutenberg;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Logic.Gutenberg;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
@@ -55,7 +57,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         {
             var now = _time.GetUtcNow().UtcDateTime;
             var (due, indexers, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadDueWantedItemsAsync(new WantedDueData(now, BatchSize), ct),
-                await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Newznab, ct), await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Sabnzbd, ct)),
+                await ctx.ReadEnabledSearchConnectionsAsync(ct), await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Sabnzbd, ct)),
                 CancellationToken);
             if (indexers.Count == 0)
             {
@@ -223,14 +225,17 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private static readonly TimeSpan LostAfter = TimeSpan.FromMinutes(15);
         private static readonly TimeSpan ReservationGrace = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan InterruptedRetry = TimeSpan.FromMinutes(30);
+        private const int DirectPerCycle = 5;
         private readonly SabnzbdClient _sabnzbd;
         private readonly IDataProtector _protector;
         private readonly StorageOptions _options;
         private readonly TimeProvider _time;
         private readonly PlexServer _plex;
+        private readonly GutenbergClient _gutenberg;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, PlexServer plex, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, GutenbergClient gutenberg, PlexServer plex, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
         {
+            _gutenberg = gutenberg;
             _sabnzbd = sabnzbd;
             _plex = plex;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
@@ -250,6 +255,16 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             {
                 // An unreachable client keeps its downloads running.
                 var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(group.Key, ct), CancellationToken);
+                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Gutenberg)
+                {
+                    foreach (var download in group.Take(DirectPerCycle))
+                    {
+                        await DownloadDirectAsync(download);
+                    }
+
+                    continue;
+                }
+
                 var client = new SabnzbdConnection(connection.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey));
                 SabnzbdQueueSnapshot queue;
                 SabnzbdHistorySnapshot history;
@@ -388,13 +403,6 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            var root = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadImportRootAsync(download.WorkId, ct), CancellationToken);
-            if (root is null)
-            {
-                await AttentionAsync(download.OperationId, "import_no_library");
-                return;
-            }
-
             // Read the job below the mapped folder without following links.
             IReadOnlyList<StorageFile> files;
             string source;
@@ -421,10 +429,26 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files);
-            if (placements.Count == 0)
+            await PlaceAsync(download, source, files, state.IsComplete);
+        }
+
+        // Shared by every client: plan, check, link or copy and assign.
+        internal async Task PlaceAsync(DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete)
+        {
+            var root = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadImportRootAsync(download.WorkId, ct), CancellationToken);
+            if (root is null)
             {
-                if (state.IsComplete)
+                await AttentionAsync(download.OperationId, "import_no_library");
+                return;
+            }
+
+            // Ebooks must be what their names say.
+            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author)
+                .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) != MediaAssetType.Ebook || IsEbook(source, placement))
+                .ToArray();
+            if (placements.Length == 0)
+            {
+                if (isComplete)
                 {
                     await FailAsync(download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime);
                 }
@@ -489,6 +513,54 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // A connected Plex shows the title right away.
             await _plex.RefreshAsync(Context, download.MediaTypeId, CancellationToken);
+        }
+
+        private static bool IsEbook(string source, ImportPlacementData placement)
+        {
+            var header = new byte[128];
+            using var stream = File.OpenRead(StorageFileSystem.ResolveFile(source, placement.SourcePath));
+            var read = stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
+            return LibraryFileTypes.IsEbookContent(placement.Extension, header.AsSpan(0, read));
+        }
+
+        // Jularr downloads catalog books itself into staging, then imports them like any other job.
+        private async Task DownloadDirectAsync(DownloadData download)
+        {
+            if (download.ExternalId is not { } external || !external.StartsWith(WantedAcquisition.GutenbergPrefix, StringComparison.Ordinal)
+                || !int.TryParse(external[WantedAcquisition.GutenbergPrefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var bookId))
+            {
+                await FailAsync(download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime);
+                return;
+            }
+
+            var staging = Path.Combine(_options.DirectDownloadPath, download.OperationId.ToString(CultureInfo.InvariantCulture));
+            var name = bookId.ToString(CultureInfo.InvariantCulture) + ".epub";
+            var path = Path.Combine(staging, name);
+            if (!File.Exists(path))
+            {
+                Directory.CreateDirectory(staging);
+                try
+                {
+                    await _gutenberg.DownloadAsync(bookId, path + ".part", CancellationToken);
+                    File.Move(path + ".part", path);
+                }
+                catch (Exception exception) when (exception is GutenbergException or IOException)
+                {
+                    File.Delete(path + ".part");
+                    await FailAsync(download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry);
+                    return;
+                }
+            }
+
+            var file = new FileInfo(path);
+            await PlaceAsync(download, staging, [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true);
+
+            // Staging is kept only while the import waits for the Owner.
+            var finished = await Context.ExecuteBatchAsync((ctx, ct) => ctx.IsDownloadFinishedAsync(new DownloadOperationParameters(download.OperationId), ct), CancellationToken);
+            if (finished)
+            {
+                Directory.Delete(staging, recursive: true);
+            }
         }
 
         private Task AttentionAsync(long operationId, string attentionKey) =>

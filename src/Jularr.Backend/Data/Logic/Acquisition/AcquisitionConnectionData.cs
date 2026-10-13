@@ -7,7 +7,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionConnectionData : BaseData
     {
-        public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[] protectedApiKey, bool isEnabled, int priority,
+        public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version)
         {
             Id = id;
@@ -38,8 +38,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string BaseUrl { get; }
 
         [JsonIgnore]
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey))]
-        public byte[] ProtectedApiKey { get; }
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey), false)]
+        public byte[]? ProtectedApiKey { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IsEnabled))]
         public bool IsEnabled { get; }
