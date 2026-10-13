@@ -26,6 +26,10 @@ AcquisitionRequests, their status catalog, shared whole-Work WantedItems and
 RequestTargets. A profile's active Work/language intent is unique; only approval
 creates its Wanted link, atomically in the same transaction. Owner/MediaManager
 moderate Open requests and pause/resume Wanted. Language intent uses UiLocaleId.
+RequestRules (limit per rolling period, approval, blocked media keys, offered quality
+profiles, one default) and AccountRequestRules (assignment and single-value overrides)
+resolve through the view EffectiveRequestRules; requests record their account and
+chosen quality.
 The Arr+ core adds AcquisitionConnections (Newznab indexers and SABnzbd clients in
 one table, protected API keys, cached capabilities, client path mapping),
 AcquisitionProfiles (one default per media type and subtype, JSON definition for the shared

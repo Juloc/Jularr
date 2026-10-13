@@ -10,18 +10,24 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         public static async Task RecordRequestTargetAsync(this LogicContext ctx, AcquisitionRequestData request, CancellationToken ct)
         {
-            // One shared target per Work, per platform for games.
+            // One shared target per Work, per platform for games; a new target takes the requested quality, an existing one keeps its own.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 WITH target AS (
                     INSERT INTO "WantedItems" (
                         "WorkId",
-                        "GamePlatformId"
-                    ) VALUES (
-                        @WorkId,
-                        @GamePlatformId
+                        "GamePlatformId",
+                        "AcquisitionProfileId"
                     )
+                    SELECT
+                        @WorkId,
+                        @GamePlatformId,
+                        request."AcquisitionProfileId"
+                    FROM
+                        "AcquisitionRequests" AS request
+                    WHERE
+                        request."Id" = @Id
                     ON CONFLICT ("WorkId", "GamePlatformId") DO UPDATE SET
                         "WorkId" = EXCLUDED."WorkId"
                     RETURNING

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Request.V1;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Public.Authentication.V1;
@@ -26,7 +27,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync();
             await host.Fixture.RunSqlAsync("""
                 UPDATE "Accounts" SET "AccountRoleTypeId" = 2 WHERE "Id" = 41;
-                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "UiLocaleId") VALUES (20, 202, 1);
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId") VALUES (20, 202, 42, 1);
                 """);
             await SignInAsync(host);
 
@@ -53,9 +54,105 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Approval_TargetFailureRollsBack_AndTargetsAreShared()
+        public async Task RequestRules_BoundMediaLimitApprovalAndQuality()
         {
             await using var host = await CreateHostAsync();
+            await SignInAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (30, 1, 'Second film');
+                INSERT INTO "AcquisitionProfiles" ("Name", "MediaTypeId", "Definition") SELECT 'Movies 4K', 1, "Definition" FROM "AcquisitionProfiles" WHERE "Name" = 'Movies 1080p';
+                """);
+            var uhd = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Movies 4K'"))!;
+            var standard = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Movies 1080p'"))!;
+
+            // A rule trusting its accounts with one film a month in 4K.
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/requests/rules", new SaveRequestRuleDataV1(" Trusted ", "  ", 1, 30, true, ["Movie"], [uhd], false, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var rule = (await created.Content.ReadFromJsonAsync<CreateRequestRuleResultV1>())!.Id;
+            using var duplicate = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/requests/rules", new SaveRequestRuleDataV1("trusted", null, 1, 30, true, ["Movie"], [], false, null));
+            StringAssert.Contains(await duplicate.Content.ReadAsStringAsync(), "duplicate_value");
+            using var rules = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/requests/rules");
+            var listed = (await rules.Content.ReadFromJsonAsync<BaseDataList<RequestRuleDetailsV1>>())!;
+            Assert.AreEqual("Standard", listed.First().Name);
+            Assert.IsNull(listed.Single(item => item.Id == rule).Description);
+            CollectionAssert.AreEqual(new[] { "Movie" }, listed.Single(item => item.Id == rule).AllowedMediaKeys);
+
+            // The account follows the rule; only a changed period overrides it.
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/accounts/41/request-rule", new SaveAccountRequestRuleDataV1(rule, true, 1, 7, true, ["Movie"], [uhd]));
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"BlockedMediaKeys\" FROM \"AccountRequestRules\""));
+            using var users = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/requests/users");
+            var account = (await users.Content.ReadFromJsonAsync<PageResult<AccountRequestRuleV1>>())!.Items.Single(item => item.AccountId == 41);
+            Assert.AreEqual("Trusted", account.RequestRuleName);
+            Assert.IsTrue(account.IsOverridden);
+            Assert.AreEqual(7, account.PeriodDays);
+            Assert.AreEqual(1, account.RequestLimit);
+
+            // As a user: only films, only the offered quality, approved at once, once a week.
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 2 WHERE \"Id\" = 41");
+            await SignInAsync(host);
+            using var offered = await host.SendAsync(HttpMethod.Get, "/api/v1/works/10/request-profiles");
+            Assert.AreEqual("Movies 4K", (await offered.Content.ReadFromJsonAsync<BaseDataList<RequestProfileOptionV1>>())!.Single().Name);
+            using var book = await host.SendAsync(HttpMethod.Post, "/api/v1/works/20/requests", new CreateRequestDataV1(1));
+            StringAssert.Contains(await book.Content.ReadAsStringAsync(), "request_media_blocked");
+            using var other = await host.SendAsync(HttpMethod.Post, "/api/v1/works/10/requests", new CreateRequestDataV1(1, null, standard));
+            Assert.AreEqual(HttpStatusCode.BadRequest, other.StatusCode);
+            using var film = await host.SendAsync(HttpMethod.Post, "/api/v1/works/10/requests", new CreateRequestDataV1(1, null, uhd));
+            Assert.AreEqual(HttpStatusCode.OK, film.StatusCode, await film.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
+            Assert.AreEqual(uhd, (long)(await host.ScalarAsync("SELECT \"AcquisitionProfileId\" FROM \"WantedItems\""))!);
+            using var repeated = await host.SendAsync(HttpMethod.Post, "/api/v1/works/10/requests", new CreateRequestDataV1(1, null, uhd));
+            Assert.AreEqual(HttpStatusCode.OK, repeated.StatusCode);
+            using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/works/30/requests", new CreateRequestDataV1(1));
+            StringAssert.Contains(await limited.Content.ReadAsStringAsync(), "request_limit");
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
+        }
+
+        [TestMethod]
+        public async Task Razor_RulesAndUsers_EditRulesAndAssignments()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            await SignInAsync(host);
+            using var empty = await host.SendAsync(HttpMethod.Get, "/Admin/Rules?New=true");
+            var html = await empty.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, empty.StatusCode, html);
+            StringAssert.Contains(html, "Standard");
+            StringAssert.Contains(html, "10 requests / 30 days");
+
+            // A new rule from the editor; unchecked media are blocked.
+            using var created = await host.SendAsync(HttpMethod.Post, "/Admin/Rules?New=true", new FormUrlEncodedContent([
+                new("Name", "Family"), new("RequestLimit", "5"), new("PeriodDays", "14"), new("IsAutomaticApproval", "True"), new("AllowedMediaKeys", "Movie"),
+                new("AllowedMediaKeys", "Series"), new("IsDefault", "false")]));
+            Assert.AreEqual(HttpStatusCode.Redirect, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var family = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"RequestRules\" WHERE \"Name\" = 'Family'"))!;
+            Assert.IsTrue(((string[])(await host.ScalarAsync("SELECT \"BlockedMediaKeys\" FROM \"RequestRules\" WHERE \"Name\" = 'Family'"))!).Contains("Book"));
+            using var rules = await host.SendAsync(HttpMethod.Get, "/Admin/Rules?RequestRuleId=" + family);
+            StringAssert.Contains(await rules.Content.ReadAsStringAsync(), "5 requests / 14 days &#xB7; Automatic approval");
+
+            // The first account opens on entry and takes the rule.
+            using var users = await host.SendAsync(HttpMethod.Get, "/Admin/Requests/Users");
+            html = await users.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, users.StatusCode, html);
+            StringAssert.Contains(html, "Override the rule");
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/Admin/Requests/Users?PageNumber=1&AccountId=41", new FormUrlEncodedContent([
+                new("RequestRuleId", family.ToString(System.Globalization.CultureInfo.InvariantCulture)), new("IsOverridden", "false"), new("PeriodDays", "14"),
+                new("IsAutomaticApproval", "True"), new("AllowedMediaKeys", "Movie")]));
+            Assert.AreEqual(HttpStatusCode.Redirect, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            Assert.AreEqual(family, (long)(await host.ScalarAsync("SELECT \"RequestRuleId\" FROM \"AccountRequestRules\" WHERE \"AccountId\" = 41"))!);
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"BlockedMediaKeys\" FROM \"AccountRequestRules\" WHERE \"AccountId\" = 41"));
+
+            // A deleted rule returns its accounts to the default, without its overrides.
+            using var deleted = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/requests/rules/" + family + "?version=1");
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AccountRequestRules\""));
+        }
+
+        [TestMethod]
+        public async Task Approval_TargetFailureRollsBack_AndTargetsAreShared()
+        {
+            // A manager's request waits for moderation.
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             await SignInAsync(host);
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/works/10/requests", new CreateRequestDataV1(1));
             var request = (await created.Content.ReadFromJsonAsync<CreateRequestResultV1>())!;
@@ -69,7 +166,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
             await host.Fixture.RunSqlAsync("""
                 ALTER TABLE "WantedItems" DROP CONSTRAINT "TestTargetFailure";
-                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "UiLocaleId") VALUES (100, 10, 202, 2);
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId") VALUES (100, 10, 202, 42, 2);
                 UPDATE "Accounts" SET "AccountRoleTypeId" = 3 WHERE "Id" = 41;
                 """);
             await SignInAsync(host);
@@ -102,6 +199,7 @@ namespace Jularr.Backend.Tests
         public async Task Razor_RequestModerationAndWanted_UseEncodedFormsAndModuleGate()
         {
             await using var host = await CreateHostAsync(razor: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             await SignInAsync(host);
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/10");
             var html = await details.Content.ReadAsStringAsync();

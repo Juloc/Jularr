@@ -348,6 +348,24 @@ namespace Jularr.Backend.Data.Fields
         }
     }
 
+    public sealed class LongArrayField : DataField
+    {
+        public LongArrayField() : base(typeof(long[]), NpgsqlDbType.Array | NpgsqlDbType.Bigint)
+        {
+        }
+
+        public long Minimum { get; init; } = long.MinValue;
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+            var values = (long[])value;
+            if (maximumLength is { } limit && values.Length > limit || values.Any(item => item < Minimum))
+            {
+                throw new DataValidationException(name, "out_of_range");
+            }
+        }
+    }
+
     public sealed class StringArrayField : DataField
     {
         private static readonly StringField Element = new();

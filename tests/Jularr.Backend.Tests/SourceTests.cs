@@ -321,8 +321,8 @@ namespace Jularr.Backend.Tests
             var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES ({work.Id}, 'Author', 'Jane Austen', TRUE);
-                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
-                VALUES (710, {work.Id}, 202, 1, 2, 41, now());
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (710, {work.Id}, 202, 42, 1, 2, 41, now());
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (810, {work.Id});
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (710, 810);
                 """);

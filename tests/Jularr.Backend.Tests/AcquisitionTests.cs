@@ -465,8 +465,8 @@ namespace Jularr.Backend.Tests
 
             // A fully aired season comes as a pack, the aired episode of the running season alone.
             await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
-                VALUES (500, {work.Id}, 202, 1, 2, 41, now());
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (500, {work.Id}, 202, 42, 1, 2, 41, now());
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
                 """);
@@ -710,8 +710,8 @@ namespace Jularr.Backend.Tests
             var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             Assert.AreEqual(2020, work.ReleaseYear);
             await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
-                VALUES (500, {work.Id}, 202, 1, 2, 41, now());
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (500, {work.Id}, 202, 42, 1, 2, 41, now());
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
                 """);

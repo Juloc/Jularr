@@ -51,7 +51,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs), [Sources](Pages/Admin/Sources/Sources.cshtml.cs), [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs): connection/catalog/profile configuration.
 - [Takeover](Pages/Admin/Takeover/Takeover.cshtml.cs): one-time Prowlarr/Sonarr/Radarr preview and import.
 - [Localization](Pages/Admin/Localization/Localization.cshtml.cs), [Languages](Pages/Admin/Languages/Languages.cshtml.cs): DB descriptions, translations and locale administration.
-- [Request users](Pages/Admin/Users/Users.cshtml.cs), [Rules](Pages/Admin/Rules/Rules.cshtml.cs): directory and currently unconnected rule editing.
+- [Request users](Pages/Admin/Users/Users.cshtml.cs), [Rules](Pages/Admin/Rules/Rules.cshtml.cs): rule list and editor; accounts with their resolved rule, assignment and overrides. Details offers the rule's qualities when requesting.
 
 ## Verification and open work
 

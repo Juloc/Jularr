@@ -59,6 +59,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.overlapping_path", "This path overlaps another library path on the same connection."),
             new("errors.validation.in_use", "This item is still in use."),
             new("errors.validation.invalid_pin", "The PIN is incorrect."),
+            new("errors.validation.request_limit", "You have reached your request limit for now."),
+            new("errors.validation.request_media_blocked", "Your request rule does not allow this kind of media."),
             new("errors.validation.profile_limit", "An account can own up to ten profiles."),
             new("errors.validation.invalid_pin_format", "The PIN must have three to six digits."),
             new("errors.validation.pin_locked", "Too many incorrect PINs. Please try again in a minute."),

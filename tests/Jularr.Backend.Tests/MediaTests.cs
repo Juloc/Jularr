@@ -257,7 +257,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await watchlist.Content.ReadAsStringAsync(), "&lt;edited&gt;");
             using var users = await host.SendAsync(HttpMethod.Get, "/Admin/Requests/Users");
             Assert.AreEqual(HttpStatusCode.OK, users.StatusCode, await users.Content.ReadAsStringAsync());
-            StringAssert.Contains(await users.Content.ReadAsStringAsync(), "a@example.test");
+            StringAssert.Contains(await users.Content.ReadAsStringAsync(), "Standard");
         }
 
         private static async Task<Host> CreateHostAsync(bool razor = false)

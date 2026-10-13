@@ -311,7 +311,7 @@ namespace Jularr.Backend.Tests
             var child = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Profiles\" WHERE \"DisplayName\" = 'Child 9'"))!;
             await host.Fixture.RunSqlAsync($$"""
                 WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (1, 'Requested Film') RETURNING "Id")
-                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "UiLocaleId") SELECT "Id", {{child}}, {{locale}} FROM work
+                INSERT INTO "AcquisitionRequests" ("WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId") SELECT "Id", {{child}}, 41, {{locale}} FROM work
                 """);
             using var foreign = await host.SendAsync(HttpMethod.Delete, "/api/v1/profiles/" + child);
             Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode, await foreign.Content.ReadAsStringAsync());

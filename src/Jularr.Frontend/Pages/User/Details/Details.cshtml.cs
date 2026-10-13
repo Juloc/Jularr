@@ -16,12 +16,13 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Details
 {
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
-        ReadWorkPlatformsV1 readPlatforms, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private WorkDetailsV1? _work;
         private PageResult<WorkAvailabilityV1>? _availability;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
         private BaseDataList<GamePlatformV1>? _platforms;
+        private BaseDataList<RequestProfileOptionV1>? _requestProfiles;
         private CreateRequestDataV1? _requestInput;
 
         [BindProperty(SupportsGet = true)]
@@ -78,6 +79,13 @@ namespace Jularr.Frontend.Pages.User.Details
                         {
                             form.Select(item => item.GamePlatformId, "request.platform",
                                 platforms.Select(platform => new SelectOption(platform.Id.ToString(CultureInfo.InvariantCulture), platform.Name)));
+                        }
+
+                        // Qualities the request rule offers; none keeps the default.
+                        if (_requestProfiles is { Count: > 0 } qualities)
+                        {
+                            form.Select(item => item.AcquisitionProfileId, "request.quality",
+                                [new SelectOption("", texts["request.quality.default"]), .. qualities.Select(quality => new SelectOption(quality.Id.ToString(CultureInfo.InvariantCulture), quality.Name))]);
                         }
 
                         form.Submit("request.create");
@@ -156,6 +164,7 @@ namespace Jularr.Frontend.Pages.User.Details
             if (texts.Capabilities?.CanRequest is true)
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
+                _requestProfiles = await readRequestProfiles.ExecuteAsync<BaseDataList<RequestProfileOptionV1>>(new CreateRequestParametersV1(Id), HttpContext.RequestAborted);
                 if (_work.MediaTypeId == MediaType.Game)
                 {
                     _platforms = await readPlatforms.ExecuteAsync<BaseDataList<GamePlatformV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
@@ -163,9 +172,9 @@ namespace Jularr.Frontend.Pages.User.Details
             }
         }
 
-        public async Task<IActionResult> OnPostRequestAsync([BindRequired] long uiLocaleId, long? gamePlatformId)
+        public async Task<IActionResult> OnPostRequestAsync([BindRequired] long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId)
         {
-            _requestInput = new CreateRequestDataV1(uiLocaleId, gamePlatformId);
+            _requestInput = new CreateRequestDataV1(uiLocaleId, gamePlatformId, acquisitionProfileId);
             await request.ExecuteAsync<CreateRequestResultV1>(new CreateRequestParametersV1(Id), _requestInput, HttpContext.RequestAborted);
             return RedirectToPage("/User/Requests/Requests");
         }

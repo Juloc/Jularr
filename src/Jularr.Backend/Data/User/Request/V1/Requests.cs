@@ -32,10 +32,11 @@ namespace Jularr.Backend.Data.User.Request.V1
 
     public sealed class CreateRequestDataV1 : BaseData
     {
-        public CreateRequestDataV1(long uiLocaleId, long? gamePlatformId = null)
+        public CreateRequestDataV1(long uiLocaleId, long? gamePlatformId = null, long? acquisitionProfileId = null)
         {
             UiLocaleId = uiLocaleId;
             GamePlatformId = gamePlatformId;
+            AcquisitionProfileId = acquisitionProfileId;
         }
 
         [DataField(typeof(UiLocaleFields), nameof(UiLocaleFields.Id))]
@@ -44,6 +45,25 @@ namespace Jularr.Backend.Data.User.Request.V1
         // Games are requested for one of their platforms.
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
         public long? GamePlatformId { get; }
+
+        // One of the qualities the request rule offers for the Work.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
+        public long? AcquisitionProfileId { get; }
+    }
+
+    public sealed class RequestProfileOptionV1 : BaseResponse
+    {
+        public RequestProfileOptionV1(long id, string name)
+        {
+            Id = id;
+            Name = name;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
+        public string Name { get; }
     }
 
     public sealed class CreateRequestResultV1 : BaseResponse

@@ -11,12 +11,14 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionRequestCreationData : BaseData
     {
-        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long uiLocaleId, long? gamePlatformId)
+        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long requestedByAccountId, long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId)
         {
             WorkId = workId;
             RequestedByProfileId = requestedByProfileId;
+            RequestedByAccountId = requestedByAccountId;
             UiLocaleId = uiLocaleId;
             GamePlatformId = gamePlatformId;
+            AcquisitionProfileId = acquisitionProfileId;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -25,11 +27,18 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
         public long RequestedByProfileId { get; }
 
+        [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
+        public long RequestedByAccountId { get; }
+
         [DataField(typeof(UiLocaleFields), nameof(UiLocaleFields.Id))]
         public long UiLocaleId { get; }
 
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
         public long? GamePlatformId { get; }
+
+        // A quality the requester's rule offers; without one the defaults apply.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
+        public long? AcquisitionProfileId { get; }
     }
 
     internal sealed class AcquisitionRequestData : BaseData

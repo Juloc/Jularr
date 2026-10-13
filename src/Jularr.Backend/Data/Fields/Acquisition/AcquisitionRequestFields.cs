@@ -12,6 +12,10 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly DateTimeField CreatedAt = new();
         public static readonly BoolField IsGame = new();
         public static readonly BoolField IsPlatformListed = new();
+        public static readonly BoolField IsOwner = new();
+        public static readonly BoolField IsBlocked = new();
+        public static readonly BoolField IsProfileAllowed = new();
+        public static readonly LongField RecentCount = new() { Minimum = 0 };
     }
 
     public static class WantedItemFields

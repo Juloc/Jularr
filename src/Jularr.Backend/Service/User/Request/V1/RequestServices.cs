@@ -98,6 +98,39 @@ namespace Jularr.Backend.Service.User.Request.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/request-profiles")]
+    public sealed class ReadRequestProfilesV1 : UserService<CreateRequestParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<RequestProfileOptionV1>>()];
+        protected override ModuleRequirement GetInstanceModules(CreateRequestParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(CreateRequestParametersV1 parameters, Type resultType) => new("profile.requests.update");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The qualities the account's rule offers for this Work's type and subtype.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id",
+                    profile."Name"
+                FROM
+                    "EffectiveRequestRules" AS rule
+                    JOIN "AcquisitionProfiles" AS profile ON profile."Id" = ANY(rule."AcquisitionProfileIds")
+                    JOIN "WorkClasses" AS class ON class."MediaTypeId" = profile."MediaTypeId" AND class."MediaSubtypeId" IS NOT DISTINCT FROM profile."MediaSubtypeId"
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = class."WorkId" AND visible."ProfileId" = @ProfileId
+                WHERE
+                    rule."AccountId" = @AccountId
+                    AND class."WorkId" = @WorkId
+                ORDER BY
+                    profile."Name";
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new AccountProfileData(Auth.AccountId!.Value, Auth.ProfileId!.Value));
+            return new BaseDataList<RequestProfileOptionV1>(await Context.ReadSql.ReadListAsync<RequestProfileOptionV1>(sql, CancellationToken));
+        }
+    }
+
     [ServiceEndpoint("POST", "/api/v1/works/{workId:long}/requests")]
     public sealed class CreateRequestV1 : UserService<CreateRequestParametersV1, CreateRequestDataV1>
     {
@@ -108,7 +141,7 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var request = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Data.UiLocaleId, Data.GamePlatformId), CancellationToken);
+            var request = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId), CancellationToken);
             return new CreateRequestResultV1(request.Id);
         }
     }

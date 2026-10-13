@@ -164,7 +164,7 @@ focused import contract. Connections, library paths, background scans, inventory
 manual identification and stored availability are implemented; see
 [Storage runtime](STORAGE_RUNTIME.md).
 
-1. Requests per language/quality: requests keep their locale, but Wanted holds one target per Work and platform with one quality profile.
+1. Additional versions per Work (owner decision 13 Oct): by default one version and one quality profile per Work, as in Sonarr; an advanced switch, off by default, will let a request that an existing version does not satisfy (other language or quality) add as many versions as needed.
 2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.
 3. NAS health/capacity probes and real-host SMB/NFS deployment verification. The
    owner approved a separate Linux mount helper; `ffprobe` is used within the

@@ -66,21 +66,44 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(data.GamePlatformId), "unknown_reference");
             }
 
-            // Repeated submissions share intent.
+            // Repeated submissions share intent; new ones follow the account's request rule.
+            var policy = await ctx.ReadRequestPolicyAsync(data, ct);
+            if (policy.ActiveRequestId is null)
+            {
+                if (policy.IsBlocked)
+                {
+                    throw new DataValidationException(nameof(data.WorkId), "request_media_blocked");
+                }
+
+                if (!policy.IsProfileAllowed)
+                {
+                    throw new DataValidationException(nameof(data.AcquisitionProfileId), "unknown_reference");
+                }
+
+                if (policy.RequestLimit is { } limit && policy.RecentCount >= limit)
+                {
+                    throw new DataValidationException(nameof(data.WorkId), "request_limit");
+                }
+            }
+
             sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO "AcquisitionRequests" (
                     "WorkId",
                     "RequestedByProfileId",
+                    "RequestedByAccountId",
                     "UiLocaleId",
-                    "GamePlatformId"
+                    "GamePlatformId",
+                    "AcquisitionProfileId"
                 )
                 VALUES (
                     @WorkId,
                     @RequestedByProfileId,
+                    @RequestedByAccountId,
                     @UiLocaleId,
-                    @GamePlatformId
+                    @GamePlatformId,
+                    @AcquisitionProfileId
                 )
                 ON CONFLICT ("RequestedByProfileId", "WorkId", "UiLocaleId", "GamePlatformId")
                     WHERE "AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5)
@@ -92,7 +115,15 @@ namespace Jularr.Backend.Logic.Acquisition
                     "GamePlatformId";
                 """;
             sql.Parameters.Add(data);
-            return await ctx.ReadRequiredAsync<AcquisitionRequestData>(sql, ct);
+            var request = await ctx.ReadRequiredAsync<AcquisitionRequestData>(sql, ct);
+
+            // The Owner and automatic rules approve the new request at once, through the same transition as moderation.
+            if (policy.ActiveRequestId is null && (policy.IsOwner || policy.IsAutomaticApproval))
+            {
+                await ctx.UpdateAcquisitionRequestAsync(new AcquisitionRequestUpdateData(request.Id, AcquisitionRequestStatusType.Approved, 1, data.RequestedByAccountId), ct);
+            }
+
+            return request;
         }
 
         public static async Task UpdateAcquisitionRequestAsync(this LogicContext ctx, AcquisitionRequestUpdateData data, CancellationToken ct)

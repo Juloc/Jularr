@@ -123,9 +123,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.BadRequest, foreign.StatusCode);
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + work.Id + "/requests", new CreateRequestDataV1(1, nsw.Id));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
-            var request = (await requested.Content.ReadFromJsonAsync<CreateRequestResultV1>())!;
-            using var approved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/requests/" + request.Id, new UpdateRequestDataV1(AcquisitionRequestStatusType.Approved, 1));
-            Assert.AreEqual(HttpStatusCode.OK, approved.StatusCode, await approved.Content.ReadAsStringAsync());
+            // The Owner's own request needs no approval.
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
             Assert.AreEqual(nsw.Id, (long)(await host.ScalarAsync("SELECT \"GamePlatformId\" FROM \"WantedItems\""))!);
 
             // Only the wanted platform's release is taken; the best form wins.

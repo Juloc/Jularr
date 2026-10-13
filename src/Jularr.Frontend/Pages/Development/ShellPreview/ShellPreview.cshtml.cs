@@ -54,7 +54,7 @@ namespace Jularr.Frontend.Pages.Development.ShellPreview
                 "watchlist" => ActivatorUtilities.CreateInstance<WatchlistModel>(HttpContext.RequestServices),
                 "settings" => ActivatorUtilities.CreateInstance<SettingsModel>(HttpContext.RequestServices),
                 "admin-requests" => ActivatorUtilities.CreateInstance<RequestsModel>(HttpContext.RequestServices),
-                "admin-rules" => new RulesModel(),
+                "admin-rules" => ActivatorUtilities.CreateInstance<RulesModel>(HttpContext.RequestServices),
                 "admin-users" => ActivatorUtilities.CreateInstance<UsersModel>(HttpContext.RequestServices),
                 "admin-wanted" => ActivatorUtilities.CreateInstance<WantedModel>(HttpContext.RequestServices),
                 "admin-works" => ActivatorUtilities.CreateInstance<WorksModel>(HttpContext.RequestServices),

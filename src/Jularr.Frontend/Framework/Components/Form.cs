@@ -91,7 +91,8 @@ namespace Jularr.Frontend.Framework
         {
             // Several values under one name.
             var field = Declare(selector, FieldControl.MultiSelect, labelKey);
-            var selected = (_data is null ? null : field.ReadValue(_data) as IEnumerable<string>)?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+            var selected = (_data is null ? null : field.ReadValue(_data) as System.Collections.IEnumerable)?.Cast<object>()
+                .Select(item => Convert.ToString(item, CultureInfo.InvariantCulture)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
             var choices = options.Select(option =>
             {
                 var input = new Input().Attribute("type", "checkbox").Attribute("name", field.Name).Attribute("value", option.Value);

@@ -136,6 +136,34 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new DataValidationException(nameof(data.Version), "outdated_version");
             }
+
+            // Request rules stop offering it.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "RequestRules" AS rule
+                SET
+                    "AcquisitionProfileIds" = array_remove(rule."AcquisitionProfileIds", @Id),
+                    "Version" = rule."Version" + 1
+                WHERE
+                    @Id = ANY(rule."AcquisitionProfileIds");
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountRequestRules" AS assignment
+                SET
+                    "AcquisitionProfileIds" = array_remove(assignment."AcquisitionProfileIds", @Id)
+                WHERE
+                    @Id = ANY(assignment."AcquisitionProfileIds");
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         private static async Task ClearDefaultProfileAsync(this LogicContext ctx, AcquisitionProfileRowData row, CancellationToken ct)
