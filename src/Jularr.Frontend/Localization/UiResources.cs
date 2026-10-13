@@ -241,6 +241,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.memberKey", "Member key"),
             new("source.assistance.title", "Complete download"),
             new("source.assistance.description", "This source needs your confirmation before Jularr can continue."),
+            new("source.assistance.captchaDisabled", "Automatic CAPTCHA handling is disabled for security reasons."),
             new("source.assistance.step1", "1. Open the source and complete the requested confirmation."),
             new("source.assistance.step2", "2. Copy the HTTPS file link into the field below and continue."),
             new("source.assistance.open", "Show steps"),
