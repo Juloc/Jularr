@@ -29,7 +29,7 @@ namespace Jularr.Backend.Logic.Library
                         ? new MediaPathInfo(title, year, WorkUnitType.Episode, Number(episode.Groups["number"]), season)
                         : new MediaPathInfo(title, year, null, null, null);
 
-                case MediaType.Book or MediaType.Manga or MediaType.LightNovel:
+                case MediaType.Book:
                     var volume = Volume().Match(fileName) is { Success: true } volumeMatch ? Number(volumeMatch.Groups["number"]) : (decimal?)null;
                     if (Chapter().Match(fileName) is { Success: true } chapter)
                     {

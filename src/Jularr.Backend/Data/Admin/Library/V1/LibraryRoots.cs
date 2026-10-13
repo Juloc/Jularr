@@ -55,11 +55,12 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class LibraryRootDetailsV1 : BaseResponse
     {
-        public LibraryRootDetailsV1(long id, string name, MediaType mediaTypeId, long storageMountId, string storageMountName, string relativePath, long fileCount, long version)
+        public LibraryRootDetailsV1(long id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long storageMountId, string storageMountName, string relativePath, long fileCount, long version)
         {
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             StorageMountId = storageMountId;
             StorageMountName = storageMountName;
             RelativePath = relativePath;
@@ -75,6 +76,9 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
@@ -94,10 +98,11 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class CreateLibraryRootDataV1 : BaseData
     {
-        public CreateLibraryRootDataV1(string name, MediaType mediaTypeId, long storageMountId, string relativePath)
+        public CreateLibraryRootDataV1(string name, MediaType mediaTypeId, long storageMountId, string relativePath, MediaSubtype? mediaSubtypeId = null)
         {
             Name = name;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             StorageMountId = storageMountId;
             RelativePath = relativePath;
         }
@@ -108,11 +113,24 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
 
+        // A subtype library receives that subtype's Works first.
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
         public string RelativePath { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+            if (!MediaSubtypes.Fits(MediaTypeId, MediaSubtypeId))
+            {
+                throw new DataValidationException(nameof(MediaSubtypeId), "unknown_catalog_value");
+            }
+        }
     }
 
     public sealed class RenameLibraryRootDataV1 : BaseData

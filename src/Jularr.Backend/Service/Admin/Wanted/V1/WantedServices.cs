@@ -28,11 +28,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted."Id",
                         wanted."WorkId",
                         work."MediaTypeId",
+                        work."MediaSubtypeId",
                         work."CanonicalTitle",
                         wanted."IsPaused",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
                         wanted."AcquisitionProfileId",
+                        wanted."LibraryRootId",
                         wanted."GamePlatformId",
                         wanted."Version"
                     FROM
@@ -48,6 +50,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."Id",
                     wanted_page."WorkId",
                     wanted_page."MediaTypeId",
+                    wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
                     wanted_page."Version",
@@ -97,6 +100,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."LastSearchedAt",
                     wanted_page."LastOutcomeKey" AS "OutcomeKey",
                     wanted_page."AcquisitionProfileId",
+                    wanted_page."LibraryRootId",
                     (SELECT platform."Name" FROM "GamePlatforms" AS platform WHERE platform."Id" = wanted_page."GamePlatformId") AS "PlatformName",
                     ARRAY(
                         SELECT DISTINCT
@@ -151,11 +155,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted."Id",
                         wanted."WorkId",
                         work."MediaTypeId",
+                        work."MediaSubtypeId",
                         work."CanonicalTitle",
                         wanted."IsPaused",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
                         wanted."AcquisitionProfileId",
+                        wanted."LibraryRootId",
                         wanted."GamePlatformId",
                         wanted."Version"
                     FROM
@@ -169,6 +175,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."Id",
                     wanted_page."WorkId",
                     wanted_page."MediaTypeId",
+                    wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
                     wanted_page."Version",
@@ -218,6 +225,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."LastSearchedAt",
                     wanted_page."LastOutcomeKey" AS "OutcomeKey",
                     wanted_page."AcquisitionProfileId",
+                    wanted_page."LibraryRootId",
                     (SELECT platform."Name" FROM "GamePlatforms" AS platform WHERE platform."Id" = wanted_page."GamePlatformId") AS "PlatformName",
                     ARRAY(
                         SELECT DISTINCT
@@ -255,6 +263,38 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/admin/wanted/{wantedItemId:long}/libraries")]
+    public sealed class ReadWantedLibrariesV1 : AdminService<WantedItemParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WantedLibraryV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WantedItemParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(WantedItemParametersV1 parameters, Type resultType) => new("wanted.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Libraries of the Work's type that accept its subtype.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    root."Id",
+                    root."Name"
+                FROM
+                    "WantedItems" AS wanted
+                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                    JOIN "LibraryRoots" AS root ON root."MediaTypeId" = work."MediaTypeId"
+                WHERE
+                    wanted."Id" = @WantedItemId
+                    AND (root."MediaSubtypeId" IS NULL OR root."MediaSubtypeId" = work."MediaSubtypeId")
+                ORDER BY
+                    root."Name",
+                    root."Id";
+                """;
+            sql.Parameters.Add(Parameters);
+            return new BaseDataList<WantedLibraryV1>(await Context.ReadSql.ReadListAsync<WantedLibraryV1>(sql, CancellationToken));
+        }
+    }
+
     [ServiceEndpoint("PUT", "/api/v1/admin/wanted/{wantedItemId:long}")]
     public sealed class UpdateWantedV1 : AdminService<UpdateWantedParametersV1, UpdateWantedDataV1>
     {
@@ -265,7 +305,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.Version), CancellationToken);
+            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.LibraryRootId, Data.Version), CancellationToken);
             return new UpdateResult(true);
         }
     }

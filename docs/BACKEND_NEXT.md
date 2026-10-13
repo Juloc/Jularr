@@ -56,6 +56,22 @@ and commit together. No migration, active-database installation or extra server.
   same unified Arr+ search, planner, download and import as every media type; only
   presentation and genuine game specifics differ. Tables stay few: entities with the
   same responsibility share one table (for example WorkUnits for all structure units).
+- Owner decisions of 13 October 2026 ([completion plan](COMPLETION_PLAN.md)): Anime
+  (Series and Movies, one switch), Manga and Light Novels are subtypes of Series/Movie
+  and Book, never separate Works. Classification: heuristic proposal, AniList confirms,
+  manual choice wins. Anime maps to TMDB through a community mapping list with a title
+  fallback; uncertain matches go to review, never automatic Works. Every active type
+  and subtype needs at least one library; several are allowed and a Work may name its
+  library. The Owner restricts media types per profile; profiles may also hide types.
+  Provider sync (AniList, Plex, Jellyfin, Emby): progress takes the maximum except an
+  explicit rewatch, status/rating the newest change, Jularr wins ties. Offline PWA copies
+  follow a device check (server rendition or original), original download optional,
+  behind a profile permission. The mini-player uses a small own navigation script with a
+  full-page fallback. Translation uses Bergamot models (optional owner). Retro games play
+  through EmulatorJS (commercially usable cores only), other platforms are downloads.
+  E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
+  a Jularr backup restore; migration stays with the stopped Phase B; the AI step waits
+  for its own package.
 - Jularr is a standalone Arr system. Sonarr/Radarr/Prowlarr are optional one-time
   takeover sources only: preserve monitoring state, roots, naming and indexer
   settings where supported, preview unsupported mappings and require explicit

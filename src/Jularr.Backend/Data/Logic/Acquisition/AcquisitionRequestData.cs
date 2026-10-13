@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Localization;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Profile;
@@ -75,11 +76,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedItemUpdateData : BaseData
     {
-        public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long version)
+        public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long? libraryRootId, long version)
         {
             Id = id;
             IsPaused = isPaused;
             AcquisitionProfileId = acquisitionProfileId;
+            LibraryRootId = libraryRootId;
             Version = version;
         }
 
@@ -91,6 +93,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
         public long? AcquisitionProfileId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
+        public long? LibraryRootId { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }

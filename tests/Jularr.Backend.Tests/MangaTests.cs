@@ -35,12 +35,12 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
 
             // AniList names the series, both titles and its volumes.
-            using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", new SearchMetadataDataV1(MediaType.Manga, "Example Manga"));
+            using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/metadata/search", new SearchMetadataDataV1(MediaType.Book, "Example Manga", mediaSubtypeId: MediaSubtype.Manga));
             Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
             var result = (await found.Content.ReadFromJsonAsync<BaseDataList<MetadataSearchResultV1>>())!.Single();
             Assert.AreEqual("101", result.ExternalId);
             Assert.AreEqual("Mika Example", result.Author);
-            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Manga, result.ExternalId));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, result.ExternalId, MediaSubtype.Manga));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             Assert.AreEqual("Example Manga", work.CanonicalTitle);
@@ -52,6 +52,19 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (800, {work.Id});
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
                 """);
+
+            // Both libraries accept Manga; a Light Novel profile does not fit, a Book profile does.
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/800/libraries");
+            var libraries = (await listed.Content.ReadFromJsonAsync<BaseDataList<WantedLibraryV1>>())!;
+            CollectionAssert.AreEqual(new[] { "Books", "Manga" }, libraries.Select(library => library.Name).ToArray());
+            var novels = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Light Novels'"))!;
+            var books = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'Books'"))!;
+            using var wrong = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 1, novels));
+            Assert.AreEqual(HttpStatusCode.BadRequest, wrong.StatusCode);
+            using var chosen = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 1, books, libraries.Single(library => library.Name == "Manga").Id));
+            Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
+            using var reset = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 2, null, libraries.Single(library => library.Name == "Manga").Id));
+            Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode);
 
             // The first missing volumes come as a pack, the rest alone; claimed volumes are not searched again.
             await RunAsync<SearchDueWantedV1>(host);
@@ -122,8 +135,8 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "FR" }, Judge("Example Manga (French) (Digital)").Languages!.ToArray());
 
             // A file holding several volumes is no single volume.
-            Assert.AreEqual(0, ImportPlacementLogic.Plan(MediaType.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow)]).Count);
-            Assert.AreEqual(1, ImportPlacementLogic.Plan(MediaType.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow),
+            Assert.AreEqual(0, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow)]).Count);
+            Assert.AreEqual(1, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow),
                 new("Example Manga v04.cbz", 1000, DateTime.UtcNow)]).Count);
 
             static ReleaseJudgement<MangaIdentityMatch> Judge(string title) => MangaReleaseJudge.Judge(["Example Manga"], null,
@@ -153,11 +166,14 @@ namespace Jularr.Backend.Tests
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
             });
 
-            // A writable Manga library, one indexer and one client.
+            // Writable libraries, one indexer and one client.
             var mountId = await LibraryTests.CreateMountAsync(host);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");
+            // The Books library comes first; Manga still lands in its own.
+            Directory.CreateDirectory(Path.Combine(storage, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Books"));
             Directory.CreateDirectory(Path.Combine(storage, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Manga"));
-            await LibraryTests.CreateRootAsync(host, mountId, "Manga", MediaType.Manga);
+            await LibraryTests.CreateRootAsync(host, mountId, "Books", MediaType.Book);
+            await LibraryTests.CreateRootAsync(host, mountId, "Manga", MediaType.Book, MediaSubtype.Manga);
             foreach (var data in new[]
             {
                 new SaveAcquisitionConnectionDataV1("Indexer", AcquisitionConnectionType.Newznab, "https://indexer.example.test/", "indexer-key", true, 10, [7030], null, null, null),

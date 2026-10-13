@@ -33,10 +33,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Series searches may target one season or episode, Manga searches one volume.
             UnitScope? scope = null;
-            if (target.MediaTypeId == MediaType.Series && Data.ParentUnitNumber is not null || target.MediaTypeId == MediaType.Manga && Data.UnitNumber is not null)
+            if (target.MediaTypeId == MediaType.Series && Data.ParentUnitNumber is not null || target.MediaSubtypeId == MediaSubtype.Manga && Data.UnitNumber is not null)
             {
                 var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
-                scope = AcquisitionSelectionLogic.ReadUnitScope(units, target.MediaTypeId == MediaType.Manga ? null : Data.ParentUnitNumber, Data.UnitNumber);
+                scope = AcquisitionSelectionLogic.ReadUnitScope(units, target.MediaSubtypeId == MediaSubtype.Manga ? null : Data.ParentUnitNumber, Data.UnitNumber);
             }
             else if (Data.UnitNumber is not null)
             {
@@ -94,7 +94,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");
             }
 
-            var quality = AcquisitionSelectionLogic.QualityKey(target.MediaTypeId, offer.Title, target.PlatformIgdbId);
+            var quality = AcquisitionSelectionLogic.QualityKey(AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), offer.Title, target.PlatformIgdbId);
             await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken);
             return new UpdateResult(true);
         }

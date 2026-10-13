@@ -49,7 +49,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Poster", Value = MusicBrainzClient.CoverUrl(album.Id), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var tracks = details.Tracks.Select(track => new { Track = track.Number, track.Title });
-            var data = new WorkMetadataData(MediaType.Music, Namespace, album.Id, album.Title, null, album.Year is >= 1800 and <= 2200 ? album.Year : null, "[]", JsonSerializer.Serialize(tracks),
+            var data = new WorkMetadataData(MediaType.Music, null, Namespace, album.Id, album.Title, null, album.Year is >= 1800 and <= 2200 ? album.Year : null, "[]", JsonSerializer.Serialize(tracks),
                 JsonSerializer.Serialize(facts), Namespace);
             return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
         }

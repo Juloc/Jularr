@@ -42,10 +42,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     public sealed class SaveAcquisitionProfileDataV1 : BaseData
     {
         public SaveAcquisitionProfileDataV1(string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality, int? minimumSizeMb,
-            int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version = null)
+            int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version = null, MediaSubtype? mediaSubtypeId = null)
         {
             Name = name;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             IsDefault = isDefault;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
@@ -62,6 +63,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
         public bool IsDefault { get; }
@@ -93,12 +97,13 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class AcquisitionProfileDetailsV1 : BaseResponse
     {
-        public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
+        public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
             int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, int wantedCount, long version)
         {
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             IsDefault = isDefault;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
@@ -119,6 +124,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
         public bool IsDefault { get; }

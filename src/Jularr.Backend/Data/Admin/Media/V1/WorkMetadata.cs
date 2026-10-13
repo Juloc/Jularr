@@ -11,15 +11,19 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class SearchMetadataDataV1 : BaseData
     {
-        public SearchMetadataDataV1(MediaType mediaTypeId, string query, int? releaseYear = null)
+        public SearchMetadataDataV1(MediaType mediaTypeId, string query, int? releaseYear = null, MediaSubtype? mediaSubtypeId = null)
         {
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             Query = query;
             ReleaseYear = releaseYear;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query))]
         public string Query { get; }
@@ -31,10 +35,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         {
             base.Validate();
 
-            // TMDB covers movies and series, Open Library books, AniList Manga, MusicBrainz albums, IGDB games.
-            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Manga or MediaType.LightNovel or MediaType.Music or MediaType.Game))
+            if (!MediaSubtypes.Fits(MediaTypeId, MediaSubtypeId))
             {
-                throw new DataValidationException(nameof(MediaTypeId), "unknown_catalog_value");
+                throw new DataValidationException(nameof(MediaSubtypeId), "unknown_catalog_value");
             }
         }
     }
@@ -77,14 +80,18 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class ImportMetadataWorkDataV1 : BaseData
     {
-        public ImportMetadataWorkDataV1(MediaType mediaTypeId, string externalId)
+        public ImportMetadataWorkDataV1(MediaType mediaTypeId, string externalId, MediaSubtype? mediaSubtypeId = null)
         {
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             ExternalId = externalId;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
         public string ExternalId { get; }
@@ -93,9 +100,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         {
             // TMDB, AniList and IGDB ids are numbers; books use Open Library ids, albums MusicBrainz ids.
             base.Validate();
-            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Manga or MediaType.LightNovel or MediaType.Music or MediaType.Game))
+            if (!MediaSubtypes.Fits(MediaTypeId, MediaSubtypeId))
             {
-                throw new DataValidationException(nameof(MediaTypeId), "unknown_catalog_value");
+                throw new DataValidationException(nameof(MediaSubtypeId), "unknown_catalog_value");
             }
 
             if (MediaTypeId is MediaType.Movie or MediaType.Series && !int.TryParse(ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out _))

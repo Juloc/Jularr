@@ -25,7 +25,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
-            var root = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadImportRootAsync(download.WorkId, token), ct);
+            var root = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadImportRootAsync(download.WantedItemId, token), ct);
             if (root is null)
             {
                 await AttentionAsync(context, download.OperationId, "import_no_library", null, ct);
@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Ebooks and comics must be what their names say.
-            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author, download.TrackCount, download.PlatformName)
+            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author, download.TrackCount, download.PlatformName)
                 .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
                 .ToArray();
             if (placements.Length == 0)

@@ -72,7 +72,8 @@ namespace Jularr.Backend.Service.User.Library.V1
                         WHERE
                             wanted."WorkId" = work."Id"
                     ))
-                    AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
+                    AND (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR work."MediaSubtypeId" IS NULL))
+                    AND (@MediaSubtypeId::smallint IS NULL OR work."MediaSubtypeId" = @MediaSubtypeId)
                     AND (@Query::text IS NULL OR EXISTS (
                         SELECT
                             1
@@ -90,7 +91,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new LibraryFilterData(Parameters.MediaTypeId, Parameters.Query, Parameters.LibrarySortTypeId));
+            sql.Parameters.Add(new LibraryFilterData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, Parameters.Query, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
