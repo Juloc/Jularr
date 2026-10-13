@@ -13,6 +13,7 @@ namespace Jularr.Frontend.Framework
                     new Span(new Text("source.assistance.open")).Class("source-assistance__indicator")).Class("source-assistance__summary"),
                 new Div(
                     new P(new Text("source.assistance.description")),
+                    new P(new Text("source.assistance.captchaDisabled")).Class("source-assistance__step"),
                     new P(new Text("source.assistance.step1")).Class("source-assistance__step"),
                     new Div(openSource).Class("source-assistance__open"),
                     new P(new Text("source.assistance.step2")).Class("source-assistance__step"),
