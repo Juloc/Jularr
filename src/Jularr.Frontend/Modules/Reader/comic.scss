@@ -1,0 +1,57 @@
+// Pages fill the screen; the bars stay small.
+.comic {
+    min-height: 100dvh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    background: #0d0d0f;
+    color: #e6e3dc;
+
+    &__top,
+    &__bottom {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+    }
+
+    &__bottom {
+        justify-content: space-between;
+    }
+
+    &__title {
+        flex: 1;
+        margin: 0;
+        overflow: hidden;
+        font-size: 16px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &__position {
+        font-variant-numeric: tabular-nums;
+    }
+
+    &__stage {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 0;
+        cursor: pointer;
+        user-select: none;
+
+        &[data-direction="rtl"] {
+            flex-direction: row-reverse;
+        }
+
+        // The bars above and below keep their height.
+        img {
+            max-width: 100%;
+            max-height: calc(100dvh - 112px);
+            object-fit: contain;
+        }
+
+        &[data-spread="true"] img {
+            max-width: 50%;
+        }
+    }
+}

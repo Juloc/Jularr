@@ -131,18 +131,20 @@ namespace Jularr.Frontend.Pages.User.Details
                 return new Span();
             }
 
-            var resume = item.MediaAssetTypeId != MediaAssetType.Ebook && item.ResumePositionMs is > 0 && !item.IsCompleted
+            var resume = !IsReadable(item) && item.ResumePositionMs is > 0 && !item.IsCompleted
                 ? TimeSpan.FromMilliseconds(item.ResumePositionMs.Value).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : null;
             var label = resume is null ? new Text(PlayKey(item)) : (IUiComponent)new Span(new Text("details.resume"), new ValueText(" " + resume));
             return new A(label).Class("button").Attribute("href", PlayHref(item));
         }
 
-        private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (item.MediaAssetTypeId == MediaAssetType.Ebook ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true);
+        private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (IsReadable(item) ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true);
 
-        private static string PlayKey(WorkAvailabilityV1 item) => item.MediaAssetTypeId == MediaAssetType.Ebook ? "details.read"
+        private static string PlayKey(WorkAvailabilityV1 item) => IsReadable(item) ? "details.read"
             : item.IsCompleted ? "details.playAgain" : item.ResumePositionMs is > 0 ? "media.continue" : "details.play";
 
-        private static string PlayHref(WorkAvailabilityV1 item) => (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.Id.ToString(CultureInfo.InvariantCulture);
+        private static string PlayHref(WorkAvailabilityV1 item) => (IsReadable(item) ? "/Read/" : "/Player/") + item.Id.ToString(CultureInfo.InvariantCulture);
+
+        private static bool IsReadable(WorkAvailabilityV1 item) => ReadableMedia.IsReadable(item.MediaAssetTypeId);
 
         public async Task<IActionResult> OnGetAsync()
         {

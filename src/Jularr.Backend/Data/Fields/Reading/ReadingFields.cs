@@ -28,6 +28,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly IntField Level = new() { Minimum = 0, Maximum = 10 };
         public static readonly StringField Anchor = new() { MaximumLength = 256, Required = false };
         public static readonly StringField Locator = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false };
+        public static readonly BoolField IsRightToLeft = new();
         public static readonly DecimalField Progression = new() { Minimum = 0, Maximum = 1, Scale = 4 };
         public static readonly LongField CacheBudgetBytes = new() { Minimum = 0 };
         public static readonly IntField CacheBudgetWorks = new() { Minimum = 0, Maximum = 10_000 };

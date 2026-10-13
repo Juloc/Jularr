@@ -27,7 +27,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // The newest readable EPUB of the asset; a matching prepared document is reused.
+            // The newest readable EPUB or comic of the asset; a matching prepared document is reused.
             var source = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -58,7 +58,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 "StoredFiles" AS candidate
                             WHERE
                                 candidate."MediaAssetId" = asset."Id"
-                                AND lower(candidate."RelativePath") LIKE '%.epub'
+                                AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7)$'
                             ORDER BY
                                 candidate."MissingSince" IS NULL DESC,
                                 candidate."ModifiedAt" DESC,
@@ -77,7 +77,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 prepared."StoredFileId" = file."Id"
                                 AND prepared."SourceSizeBytes" = file."SizeBytes"
                                 AND prepared."SourceModifiedAt" = file."ModifiedAt"
-                                AND prepared."AnalyzerVersion" = @AnalyzerVersion
+                                AND prepared."AnalyzerVersion" = CASE WHEN prepared."ReadingFormatTypeId" = 4 THEN @ComicAnalyzerVersion ELSE @AnalyzerVersion END
                             ORDER BY
                                 prepared."CacheCompletedAt" IS NOT NULL DESC,
                                 prepared."Id" DESC
@@ -85,9 +85,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         ) AS document ON TRUE
                     WHERE
                         asset."Id" = @MediaAssetId
-                        AND asset."MediaAssetTypeId" = 3;
+                        AND asset."MediaAssetTypeId" IN (3, 4);
                     """;
-                sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion));
+                sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion, ComicPages.AnalyzerVersion));
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 return ctx.ReadSql.ReadOptionalAsync<ReadingSourceData>(sql, ct);
             }, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
@@ -106,7 +106,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         jsonb_array_length(document."Structure" -> 'Sections') AS "SectionCount",
                         document."CacheCompletedAt" IS NOT NULL AS "IsCached",
                         progress."Locator",
-                        progress."Progression"
+                        progress."Progression",
+                        coalesce(visible."MediaSubtypeId" = 2, FALSE) AS "IsRightToLeft"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "MediaAssets" AS asset ON asset."Id" = @MediaAssetId

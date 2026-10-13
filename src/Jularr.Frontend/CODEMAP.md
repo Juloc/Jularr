@@ -33,7 +33,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Library](Pages/User/Library/Library.cshtml.cs), [Watchlist](Pages/User/Watchlist/Watchlist.cshtml.cs): real bounded catalogs.
 - [Details](Pages/User/Details/Details.cshtml.cs): Work, paged versions, personal actions and capability-based Play/Read links.
 - [Player](Pages/User/Player/Player.cshtml.cs), [chrome](Framework/Components/Player.cs), [client](Modules/Player/player.entry.ts): PlaybackPlan, transport, HLS and progress.
-- [Reader](Pages/User/Reader/Reader.cshtml.cs), [client](Modules/Reader/reader.entry.ts): sanitized sections, device settings, semantic locators and end-of-content completion.
+- [Reader](Pages/User/Reader/Reader.cshtml.cs), [client](Modules/Reader/reader.entry.ts): sanitized sections, device settings, semantic locators and end-of-content completion. Comics use the [comic client](Modules/Reader/comic.entry.ts): one page or a spread (cover and wide pages alone), reading direction (Manga right to left), three pages preloaded, `p<page>` as locator; without script, page links.
 - [Progress transport](Modules/Tracking/Progress.ts): serialized acknowledged writes, finite transient retries and visible unsaved state for Reader/Player.
 - [Requests](Pages/User/Requests/Requests.cshtml.cs): profile queue and authorized source confirmation.
 - [Settings](Pages/User/Settings/Settings.cshtml.cs): profile settings, appearance and granted administration links.
@@ -57,7 +57,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 ## Verification and open work
 
 - [Asset tests](Tools/asset-manifest.test.mjs), [appearance tests](Tools/appearance.test.mjs), [structure tests](Tools/shell-login.test.mjs).
-- [Discover tests](Tools/discover.test.mjs), [progress tests](Tools/progress.test.mjs), [Reader/Player tests](Tools/reader.test.mjs), [UI-key verification](Tools/verify-ui-resources.mjs).
+- [Discover tests](Tools/discover.test.mjs), [progress tests](Tools/progress.test.mjs), [Reader/Player tests](Tools/reader.test.mjs), [comic tests](Tools/comic.test.mjs), [UI-key verification](Tools/verify-ui-resources.mjs).
 - Backend tests: FrontendAuthenticationTests, DiscoverTests, MediaTests, LibraryTests, ReadingTests and PlaybackTests; isolated PostgreSQL only.
 - [Design lab](Pages/Development/Design/Design.cshtml.cs), [ShellPreview](Pages/Development/ShellPreview/ShellPreview.cshtml.cs): Development-only; browser verification is separate.
 - Remaining: persistent shell/miniplayer, previous/next playback targets, AniList Discover, provider facets, complete episode details, profile media visibility/order, metadata-locale policy, Setup backup/restore, PIN/quota/rules.

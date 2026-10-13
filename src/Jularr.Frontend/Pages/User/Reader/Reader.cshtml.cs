@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Service.User.Reading.V1;
 using Jularr.Frontend.Framework;
@@ -21,11 +22,21 @@ namespace Jularr.Frontend.Pages.User.Reader
         [BindProperty(SupportsGet = true, Name = "s")]
         public int? SectionIndex { get; set; }
 
+        [BindProperty(SupportsGet = true, Name = "p")]
+        public int? PageIndex { get; set; }
+
         protected override void Define(Page page)
         {
             page.Title("reader.title");
-            page.Asset("Modules/Reader/reader.entry.ts");
             page.Shell = false;
+            if (_document is { ReadingFormatTypeId: ReadingFormatType.Comic } comic)
+            {
+                page.Asset("Modules/Reader/comic.entry.ts");
+                page.Content.Add(ComicView(comic));
+                return;
+            }
+
+            page.Asset("Modules/Reader/reader.entry.ts");
             if (_document is not { } document || _section is not { } current)
             {
                 // Offline storage and an uncached book say so.
@@ -88,6 +99,47 @@ namespace Jularr.Frontend.Pages.User.Reader
             }
         }
 
+        // One page at a time with links that work without the script; the script adds spreads, direction and preloading.
+        private IUiComponent ComicView(ReadingDocumentV1 document)
+        {
+            var count = Math.Max(1, document.SectionCount);
+            var index = Math.Clamp(PageIndex ?? (document.Locator is { } locator && locator.StartsWith('p')
+                && int.TryParse(locator[1..], NumberStyles.None, CultureInfo.InvariantCulture, out var saved) ? saved : 0), 0, count - 1);
+            var pages = "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=";
+            string Page(int number) => "?p=" + number.ToString(CultureInfo.InvariantCulture);
+            var top = new Div(
+                new A(new Text("common.back")).Class("button").Attribute("href", "/Details/" + document.WorkId.ToString(CultureInfo.InvariantCulture)),
+                new H1(new ValueText(document.Title)).Class("comic__title"),
+                new Button(new Text("reader.comic.direction")).Class("button").Attribute("data-action", "direction"),
+                new Button(new Text("reader.comic.spread")).Class("button").Attribute("data-action", "spread").Attribute("aria-pressed", "false")
+            ).Class("comic__top");
+            var previous = new A(new Text("reader.previous")).Class("button").Attribute("href", Page(Math.Max(0, index - 1))).Attribute("data-role", "previous");
+            var next = new A(new Text("reader.next")).Class("button button--primary").Attribute("href", Page(Math.Min(count - 1, index + 1))).Attribute("data-role", "next");
+            if (index == 0) previous.Attribute("hidden", "hidden");
+            if (index + 1 >= count) next.Attribute("hidden", "hidden");
+            var bottom = new Div(
+                previous,
+                new Span(new ValueText((index + 1).ToString(CultureInfo.InvariantCulture) + " / " + count.ToString(CultureInfo.InvariantCulture))).Class("comic__position")
+                    .Attribute("data-role", "position").Attribute("aria-live", "polite"),
+                next
+            ).Class("comic__bottom");
+            var stage = new Div(new Img().Attribute("src", pages + Uri.EscapeDataString(PagePath(index))).Attribute("alt", texts["reader.comic.page"] + " " + (index + 1).ToString(CultureInfo.InvariantCulture)))
+                .Class("comic__stage").Attribute("data-role", "stage");
+
+            var note = document.IsCached ? (IUiComponent)new Span() : new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status");
+            return new Div(top, stage, new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"), note, bottom)
+                .Class("comic")
+                .Attribute("data-progress-url", "/api/v1/reading/assets/" + Id.ToString(CultureInfo.InvariantCulture) + "/progress")
+                .Attribute("data-antiforgery", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "")
+                .Attribute("data-pages", pages)
+                .Attribute("data-page", index.ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-count", count.ToString(CultureInfo.InvariantCulture))
+                .Attribute("data-direction", document.IsRightToLeft ? "rtl" : "ltr")
+                .Attribute("data-page-label", texts["reader.comic.page"]);
+        }
+
+        private static string PagePath(int index) => ":page/" + index.ToString("D5", CultureInfo.InvariantCulture);
+
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
@@ -99,6 +151,10 @@ namespace Jularr.Frontend.Pages.User.Reader
         {
             var ct = HttpContext.RequestAborted;
             _document = await open.ExecuteAsync<ReadingDocumentV1>(new ReadingAssetParametersV1(Id), default, ct);
+            if (_document.ReadingFormatTypeId == ReadingFormatType.Comic)
+            {
+                return;
+            }
 
             // Without a section in the address, continue where this profile stopped.
             var index = SectionIndex ?? (_document.Locator is { } locator && locator.StartsWith('s') && int.TryParse(locator[1..].Split('/')[0], NumberStyles.None, CultureInfo.InvariantCulture, out var saved)

@@ -4,6 +4,7 @@ namespace Jularr.Backend.Data.Enums.Reading
     {
         Epub = 1,
         Pdf = 2,
-        Smart = 3
+        Smart = 3,
+        Comic = 4
     }
 }
