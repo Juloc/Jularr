@@ -59,8 +59,9 @@ and commit together. No migration, active-database installation or extra server.
 - Owner decisions of 13 October 2026 ([completion plan](COMPLETION_PLAN.md)): Anime
   (Series and Movies, one switch), Manga and Light Novels are subtypes of Series/Movie
   and Book, never separate Works. Classification: heuristic proposal, AniList confirms,
-  manual choice wins. Anime maps to TMDB through a community mapping list with a title
-  fallback; uncertain matches go to review, never automatic Works. Every active type
+  manual choice wins. Anime maps to AniList by title, year, format and episode counts
+  along the sequel chain (the community mapping lists carry no license); uncertain
+  matches go to review, never automatic Works. Every active type
   and subtype needs at least one library; several are allowed and a Work may name its
   library. The Owner restricts media types per profile; profiles may also hide types.
   Provider sync (AniList, Plex, Jellyfin, Emby): progress takes the maximum except an

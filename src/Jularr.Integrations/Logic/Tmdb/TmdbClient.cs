@@ -78,8 +78,14 @@ namespace Jularr.Integrations.Logic.Tmdb
                     .Select(season => new TmdbSeason(Int(season, "season_number")!.Value, Text(season, "name"), Date(season, "air_date"), Int(season, "episode_count") ?? 0))
                     .ToArray()
                 : [];
+            var genres = root.TryGetProperty("genres", out var genreList) && genreList.ValueKind == JsonValueKind.Array
+                ? genreList.EnumerateArray().Select(genre => Int(genre, "id")).OfType<int>().ToArray()
+                : [];
+            var countries = root.TryGetProperty("origin_country", out var countryList) && countryList.ValueKind == JsonValueKind.Array
+                ? countryList.EnumerateArray().Where(country => country.ValueKind == JsonValueKind.String).Select(country => country.GetString()!).ToArray()
+                : [];
             return new TmdbWork(kind, result.Id, result.Title, result.OriginalTitle, result.Year, result.Overview, result.PosterPath, result.BackdropPath,
-                Text(externalIds, "imdb_id") ?? Text(root, "imdb_id"), Int(externalIds, "tvdb_id"), seasons);
+                Text(externalIds, "imdb_id") ?? Text(root, "imdb_id"), Int(externalIds, "tvdb_id"), seasons, genres, Text(root, "original_language"), countries);
         }
 
         public async Task<IReadOnlyList<TmdbEpisode>> ReadSeasonAsync(TmdbConnection connection, int seriesId, int seasonNumber, CancellationToken ct)

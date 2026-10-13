@@ -166,12 +166,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     public sealed class RefreshWantedMetadataV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private readonly WorkMetadata _metadata;
-        private readonly MangaMetadata _manga;
+        private readonly AniListMetadata _aniList;
 
-        internal RefreshWantedMetadataV1(WorkMetadata metadata, MangaMetadata manga)
+        internal RefreshWantedMetadataV1(WorkMetadata metadata, AniListMetadata aniList)
         {
             _metadata = metadata;
-            _manga = manga;
+            _aniList = aniList;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -193,7 +193,17 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         identity."WorkId"
                     FROM
                         "WantedItems" AS wanted
-                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = wanted."WorkId" AND identity."Namespace" IN ('tmdb_tv', 'anilist')
+                        JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                        JOIN "WorkExternalIdentities" AS identity ON identity."WorkId" = work."Id"
+                            AND (identity."Namespace" = 'tmdb_tv' OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3 AND NOT EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "WorkExternalIdentities" AS book
+                                WHERE
+                                    book."WorkId" = work."Id"
+                                    AND book."Namespace" = 'openlibrary'
+                            ))
                     WHERE
                         NOT wanted."IsPaused"
                         AND identity."UpdatedAt" < now() - interval '1 day'
@@ -211,11 +221,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             // Without a reachable provider the Works keep their known units.
             try
             {
-                foreach (var identity in stale.Where(identity => identity.Namespace == MangaMetadata.Namespace))
+                foreach (var identity in stale.Where(identity => identity.Namespace == AniListMetadata.Namespace))
                 {
                     try
                     {
-                        await _manga.ImportAsync(Context, identity.Value, CancellationToken);
+                        await _aniList.ImportAsync(Context, identity.Value, CancellationToken);
                     }
                     catch (KeyNotFoundException)
                     {
@@ -227,10 +237,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                 }
 
-                if (stale.Any(identity => identity.Namespace != MangaMetadata.Namespace))
+                if (stale.Any(identity => identity.Namespace != AniListMetadata.Namespace))
                 {
                     var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                    foreach (var identity in stale.Where(identity => identity.Namespace != MangaMetadata.Namespace))
+                    foreach (var identity in stale.Where(identity => identity.Namespace != AniListMetadata.Namespace))
                     {
                         await _metadata.ImportAsync(Context, connection, MediaType.Series, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
                     }

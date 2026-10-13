@@ -21,6 +21,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizePage("/Admin/Sources/Sources", ServiceApi.AcquisitionManagePolicyName);
     options.Conventions.AuthorizePage("/Admin/Works/Works", ServiceApi.MediaReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Work/Work", ServiceApi.MediaReadPolicyName);
+    options.Conventions.AuthorizePage("/Admin/Matches/Matches", ServiceApi.MediaReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Library/Library", ServiceApi.MediaReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Rules/Rules", ServiceApi.RulesReadPolicyName);
     options.Conventions.AuthorizePage("/Admin/Users/Users", ServiceApi.RulesReadPolicyName);

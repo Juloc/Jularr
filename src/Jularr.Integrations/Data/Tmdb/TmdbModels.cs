@@ -79,8 +79,11 @@ namespace Jularr.Integrations.Data.Tmdb
     internal sealed class TmdbWork
     {
         public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,
-            IReadOnlyList<TmdbSeason> seasons)
+            IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries)
         {
+            GenreIds = genreIds;
+            OriginalLanguage = originalLanguage;
+            OriginCountries = originCountries;
             BackdropPath = backdropPath;
             Kind = kind;
             Id = id;
@@ -105,6 +108,9 @@ namespace Jularr.Integrations.Data.Tmdb
         public string? ImdbId { get; }
         public int? TvdbId { get; }
         public IReadOnlyList<TmdbSeason> Seasons { get; }
+        public IReadOnlyList<int> GenreIds { get; }
+        public string? OriginalLanguage { get; }
+        public IReadOnlyList<string> OriginCountries { get; }
     }
 
     // Ranked lists; Upcoming exists for movies only.

@@ -15,15 +15,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
-        private readonly MangaMetadata _manga;
+        private readonly AniListMetadata _aniList;
         private readonly MusicMetadata _music;
         private readonly GameMetadata _games;
 
-        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music, GameMetadata games)
+        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games)
         {
             _metadata = metadata;
             _books = books;
-            _manga = manga;
+            _aniList = aniList;
             _music = music;
             _games = games;
         }
@@ -54,10 +54,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 results = [.. (await _music.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.Id, result.Title, null,
                     result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist))];
             }
-            else if (MangaMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
+            else if (AniListMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
             {
-                results = [.. (await _manga.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.Id.ToString(CultureInfo.InvariantCulture),
-                    Limit(MangaMetadata.Title(result), 500)!, Limit(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Description, 4000), null,
+                results = [.. (await _aniList.SearchMangaAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.Id.ToString(CultureInfo.InvariantCulture),
+                    Limit(AniListMetadata.Title(result), 500)!, Limit(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Description, 4000), null,
                     Limit(string.Join(", ", result.Authors), 4000)))];
             }
             else
@@ -84,7 +84,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         identity."Namespace" = @Namespace
                         AND identity."Value" IN (SELECT jsonb_array_elements_text(@Values::jsonb));
                     """;
-                var space = BookMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId) ? BookMetadata.Namespace : MangaMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId) ? MangaMetadata.Namespace
+                var space = BookMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId) ? BookMetadata.Namespace : AniListMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId) ? AniListMetadata.Namespace
                     : MusicMetadata.Handles(Data.MediaTypeId) ? MusicMetadata.Namespace
                     : GameMetadata.Handles(Data.MediaTypeId) ? GameMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
                 sql.Parameters.Add(new WorkIdentityLookupData(space, JsonSerializer.Serialize(results.Select(result => result.ExternalId))));
@@ -103,15 +103,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
-        private readonly MangaMetadata _manga;
+        private readonly AniListMetadata _aniList;
         private readonly MusicMetadata _music;
         private readonly GameMetadata _games;
 
-        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music, GameMetadata games)
+        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games)
         {
             _metadata = metadata;
             _books = books;
-            _manga = manga;
+            _aniList = aniList;
             _music = music;
             _games = games;
         }
@@ -129,9 +129,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 workId = await _books.ImportAsync(Context, Data.MediaSubtypeId, Data.ExternalId, CancellationToken);
             }
-            else if (MangaMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
+            else if (AniListMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
             {
-                workId = await _manga.ImportAsync(Context, Data.ExternalId, CancellationToken);
+                workId = await _aniList.ImportAsync(Context, Data.ExternalId, CancellationToken);
             }
             else if (MusicMetadata.Handles(Data.MediaTypeId))
             {
@@ -156,15 +156,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         private readonly WorkMetadata _metadata;
         private readonly BookMetadata _books;
-        private readonly MangaMetadata _manga;
+        private readonly AniListMetadata _aniList;
         private readonly MusicMetadata _music;
         private readonly GameMetadata _games;
 
-        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music, GameMetadata games)
+        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books, AniListMetadata aniList, MusicMetadata music, GameMetadata games)
         {
             _metadata = metadata;
             _books = books;
-            _manga = manga;
+            _aniList = aniList;
             _music = music;
             _games = games;
         }
@@ -188,9 +188,9 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 await _books.ImportAsync(Context, work.MediaSubtypeId, identity.Value, CancellationToken);
             }
-            else if (identity.Namespace == MangaMetadata.Namespace)
+            else if (identity.Namespace == AniListMetadata.Namespace)
             {
-                await _manga.ImportAsync(Context, identity.Value, CancellationToken);
+                await _aniList.ImportAsync(Context, identity.Value, CancellationToken);
             }
             else if (identity.Namespace == MusicMetadata.Namespace)
             {
@@ -244,9 +244,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     identity."WorkId"
                 FROM
                     "WorkExternalIdentities" AS identity
+                    JOIN "Works" AS work ON work."Id" = identity."WorkId"
                 WHERE
                     identity."WorkId" = @Id
-                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'anilist', 'musicbrainz', 'igdb');
+                    AND (identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'musicbrainz', 'igdb') OR identity."Namespace" = 'anilist' AND work."MediaTypeId" = 3)
+                ORDER BY
+                    identity."Namespace" = 'anilist'
+                LIMIT 1;
                 """;
             sql.Parameters.Add(new WorkIdData(workId));
             return ctx.ReadSql.ReadOptionalAsync<WorkIdentityData>(sql, ct);
