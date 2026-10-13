@@ -283,7 +283,9 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task SimulatedGates_PassOnlyForAllowedTestTargets()
         {
-            // The override lives in the tests; it knows only its own simulated challenge and allowed hosts.
+            // Test knobs: FakeSources.Challenge enables the fake challenge; the resolver's
+            // allowedHosts, expectedToken and enabled settings control the simulated outcome.
+            // Requests are handled by FakeSources only; no external website is contacted.
             var sources = new FakeSources { Challenge = true };
             var resolver = new TestGateResolver(["annas.example.test"], FakeSources.ChallengeToken);
             var client = new AnnasArchiveClient(new HttpClient(sources), resolver);
@@ -301,6 +303,24 @@ namespace Jularr.Backend.Tests
             await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
                 wrong.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None));
             Assert.IsFalse(new DirectCredentials(new Uri("https://opds.example.test/opds"), "Basic x").Covers(new Uri("https://cdn.example.test/file")));
+        }
+
+        [TestMethod]
+        public async Task SimulatedGates_DisabledOrExternalHosts_AreRejected()
+        {
+            // Only mock objects are exercised here. Never run test credentials against a live host.
+            var gate = new SourceGate(new Uri("https://annas.example.test/search"), 503, FakeSources.ChallengeToken);
+            var disabled = new TestGateResolver(["annas.example.test"], FakeSources.ChallengeToken, enabled: false);
+            Assert.IsNull(await disabled.ResolveAsync(gate, CancellationToken.None));
+
+            var notAllowed = new TestGateResolver(["other.example.test"], FakeSources.ChallengeToken);
+            Assert.IsNull(await notAllowed.ResolveAsync(gate, CancellationToken.None));
+
+            var external = new SourceGate(new Uri("https://annas.example.org/search"), 503, FakeSources.ChallengeToken);
+            var foreign = new TestGateResolver(["annas.example.org"], FakeSources.ChallengeToken);
+            Assert.IsNull(await foreign.ResolveAsync(external, CancellationToken.None));
+
+            Assert.IsNull(await new Integrations.Logic.Common.NoSourceGateResolver().ResolveAsync(gate, CancellationToken.None));
         }
 
         private static async Task GrabAnnaAsync(Host host, long wantedId)
@@ -363,11 +383,17 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
         }
 
-        // Test-only override: passes the simulated challenge of explicitly allowed test hosts.
-        private sealed class TestGateResolver(string[] allowedHosts, string expectedToken) : ISourceGateResolver
+        // CONFIGURE TESTS HERE, not in ServiceApi:
+        // - allowedHosts: exact mocked *.test hostnames; a non-test host is always rejected.
+        // - expectedToken: mock token for a successful cookie; a wrong value tests rejection.
+        // - enabled: false simulates assistance being unavailable (manual fallback).
+        // This is deliberately private to tests and cannot be selected by an instance setting.
+        private sealed class TestGateResolver(string[] allowedHosts, string expectedToken, bool enabled = true) : ISourceGateResolver
         {
             public Task<string?> ResolveAsync(SourceGate gate, CancellationToken ct) => Task.FromResult(
-                gate.Uri.Host.EndsWith(".test", StringComparison.Ordinal) && allowedHosts.Contains(gate.Uri.Host) && gate.ChallengeToken == FakeSources.ChallengeToken
+                enabled && gate.Uri.Host.EndsWith(".test", StringComparison.OrdinalIgnoreCase)
+                    && allowedHosts.Contains(gate.Uri.Host, StringComparer.OrdinalIgnoreCase)
+                    && gate.ChallengeToken == FakeSources.ChallengeToken
                     ? "gate=" + expectedToken
                     : null);
         }
@@ -379,6 +405,9 @@ namespace Jularr.Backend.Tests
             public const string MemberKey = "member-secret-key";
             public const string ChallengeToken = "simulated-challenge";
 
+            // Configure synthetic scenarios here. FakeSources never makes a network request.
+            // Challenge: fake browser gate; SlowGate: fake slow-download gate.
+            // SlowWaitSeconds: simulated countdown; RedirectFileToLocal: safety regression.
             public bool Challenge { get; set; }
             public bool SlowGate { get; set; }
             public bool RedirectFileToLocal { get; set; }
