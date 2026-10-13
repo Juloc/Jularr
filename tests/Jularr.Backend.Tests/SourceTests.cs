@@ -157,11 +157,44 @@ namespace Jularr.Backend.Tests
             await RunAsync<MonitorDownloadsV1>(host);
             Assert.AreEqual(asked, sources.Requests.Count(request => request.StartsWith("annas.example.test/slow_download/", StringComparison.Ordinal)));
             var operationId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"))!;
+            // The optional module hides the wizard and rejects submissions, without losing the waiting job.
+            using var modulesResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/instance/modules");
+            var assistance = (await modulesResponse.Content.ReadFromJsonAsync<BaseDataList<InstanceModuleDetailsV1>>())!.Single(module => module.Key == "SourceAssistance");
+            using (var disabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + assistance.Id,
+                new UpdateInstanceModuleDataV1(false, assistance.Version)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, disabled.StatusCode, await disabled.Content.ReadAsStringAsync());
+            }
+
+            using (var hidden = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo"))
+            {
+                var row = (await hidden.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId);
+                Assert.IsNull(row.ManualUrl);
+            }
+
+            using (var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link",
+                new SaveActivitySourceLinkDataV1("https://files.example.test/0123.epub")))
+            {
+                Assert.AreNotEqual(HttpStatusCode.OK, blocked.StatusCode);
+            }
+
+            using (var enabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/" + assistance.Id,
+                new UpdateInstanceModuleDataV1(true, assistance.Version + 1)))
+            {
+                Assert.AreEqual(HttpStatusCode.OK, enabled.StatusCode, await enabled.Content.ReadAsStringAsync());
+            }
+
             using var todo = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity?activityTabTypeId=ToDo");
             Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0",
                 (await todo.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId).ManualUrl);
             using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link", new SaveActivitySourceLinkDataV1("http://files.example.test/0123.epub"));
             Assert.AreEqual(HttpStatusCode.BadRequest, plain.StatusCode);
+            using var local = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link",
+                new SaveActivitySourceLinkDataV1("https://127.0.0.1/private.epub"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, local.StatusCode);
+            using var internalHost = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link",
+                new SaveActivitySourceLinkDataV1("https://printer.local/file.epub"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, internalHost.StatusCode);
 
             // Users see and confirm only while the instance and their account allow it.
             using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
@@ -197,6 +230,9 @@ namespace Jularr.Backend.Tests
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "handler=SourceLink");
+            StringAssert.Contains(html, "source-assistance");
+            StringAssert.Contains(html, "data-source-paste");
+            StringAssert.Contains(html, "type=\"url\"");
             using var confirmed = await host.SendAsync(HttpMethod.Post, "/api/v1/requests/710/source-link", link);
             Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
 
@@ -216,6 +252,32 @@ namespace Jularr.Backend.Tests
                 client.SlowDownloadAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", Path.Combine(target.Path, "book.epub"), TimeSpan.FromSeconds(90), CancellationToken.None));
             Assert.AreEqual(Integrations.Data.AnnasArchive.AnnasArchiveFailure.WaitTooLong, failure.Failure);
             Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("files.example.test", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
+        public void PublicDownloadAddress_PrivateNetworks_AreRejected()
+        {
+            foreach (var address in new[] { "127.0.0.1", "10.0.0.2", "192.168.1.2", "172.16.1.1", "169.254.169.254", "100.64.0.1", "::1", "fc00::1", "2001:db8::1" })
+            {
+                Assert.IsFalse(Integrations.Logic.Common.DirectDownload.IsPublicAddress(IPAddress.Parse(address)), address);
+            }
+
+            Assert.IsTrue(Integrations.Logic.Common.DirectDownload.IsPublicAddress(IPAddress.Parse("1.1.1.1")));
+            Assert.IsFalse(Integrations.Logic.Common.DirectDownload.IsPublicFileUri(new Uri("https://localhost/file")));
+            Assert.IsFalse(Integrations.Logic.Common.DirectDownload.IsPublicFileUri(new Uri("https://printer.internal/file")));
+        }
+
+        [TestMethod]
+        public async Task AnnasArchive_FileRedirectToLocalHost_IsRejected()
+        {
+            var sources = new FakeSources { RedirectFileToLocal = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new Integrations.Logic.Common.NoSourceGateResolver());
+            using var target = new TemporaryDirectory();
+
+            await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
+                client.DownloadFileAsync(new Uri("https://files.example.test/0123.epub"), Path.Combine(target.Path, "book.epub"), CancellationToken.None));
+            Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("files.example.test/", StringComparison.Ordinal)));
+            Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("127.0.0.1/", StringComparison.Ordinal)));
         }
 
         [TestMethod]
@@ -319,6 +381,7 @@ namespace Jularr.Backend.Tests
 
             public bool Challenge { get; set; }
             public bool SlowGate { get; set; }
+            public bool RedirectFileToLocal { get; set; }
             public int SlowWaitSeconds { get; set; } = 1;
             public int SignedHits { get; private set; }
             public ConcurrentBag<string> AuthorizationSeenBy { get; } = [];
@@ -338,6 +401,7 @@ namespace Jularr.Backend.Tests
                     "opds.example.test" => Opds(request),
                     "cdn.example.test" => Signed(uri),
                     "annas.example.test" or "other.example.test" => Annas(request),
+                    "files.example.test" when RedirectFileToLocal => new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://127.0.0.1/secret") } },
                     "files.example.test" => Bytes(ReadingTests.BuildEpub("Pride and Prejudice")),
                     _ => Text("""{"queue":{"paused":false,"slots":[]},"history":{"slots":[]},"version":"4.5.0"}""", "application/json")
                 });

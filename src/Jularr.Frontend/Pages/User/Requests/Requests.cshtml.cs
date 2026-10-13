@@ -21,6 +21,8 @@ namespace Jularr.Frontend.Pages.User.Requests
         {
             page.Title("requests.title");
             page.Navigation("nav.home");
+            page.Asset("Pages/User/Requests/Requests.entry.scss");
+            page.Asset("Pages/User/Requests/Requests.entry.ts");
 
             // Active-profile requests only.
             if (_requests is { } requests)
@@ -47,12 +49,12 @@ namespace Jularr.Frontend.Pages.User.Requests
         }
 
         // The user passes the source's check in their own browser; the server takes the file link from there.
-        private IUiComponent ManualLink(long requestId, long operationId, string manual, string? csrf) => new Div(
+        private IUiComponent ManualLink(long requestId, long operationId, string manual, string? csrf) => new SourceConfirmation(
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveRequestSourceLinkDataV1>(form =>
             {
                 form.Hidden(data => data.OperationId);
-                form.Text(data => data.SourceUrl, "activity.fileLink");
+                form.Url(data => data.SourceUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, "/Requests?handler=SourceLink&requestId=" + requestId.ToString(CultureInfo.InvariantCulture), csrf, new SaveRequestSourceLinkDataV1(operationId, ""),
                 Error?.Field == nameof(SaveRequestSourceLinkDataV1.SourceUrl) ? Error : null));

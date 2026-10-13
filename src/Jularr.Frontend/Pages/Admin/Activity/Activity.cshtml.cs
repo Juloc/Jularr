@@ -26,6 +26,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             page.Title("admin.activity.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Activity/Activity.entry.scss");
+            page.Asset("Pages/Admin/Activity/Activity.entry.ts");
             page.Content.Add(new NavigationTabs(Enum.GetValues<ActivityTabType>()
                 .Select(tab => new NavigationTab("activity.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.activity.title"));
 
@@ -68,11 +69,11 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             new(form => form.Submit(labelKey), Address(handler: handler) + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new ActivityOperationParametersV1(item.Id));
 
         // The person passes the source's check in their own browser; the server takes the file link from there.
-        private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new Div(
+        private IUiComponent ManualLink(ActivityItemV1 item, string manual, string? csrf) => new SourceConfirmation(
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveActivitySourceLinkDataV1>(form =>
             {
-                form.Text(data => data.SourceUrl, "activity.fileLink");
+                form.Url(data => data.SourceUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
                 Error?.Field == nameof(SaveActivitySourceLinkDataV1.SourceUrl) ? Error : null));

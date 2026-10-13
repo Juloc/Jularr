@@ -98,7 +98,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
             try
             {
-                using var file = await DirectDownload.SendAsync(http, target, null, gates, ct);
+                using var file = await DirectDownload.SendAsync(http, target, null, gates, ct, publicNetworkOnly: true);
                 await DirectDownload.SaveAsync(file, destination, MaximumBytes, ct);
             }
             catch (DirectDownloadException exception)
@@ -165,7 +165,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
         {
             try
             {
-                using var response = await DirectDownload.SendAsync(http, file, null, gates, ct);
+                using var response = await DirectDownload.SendAsync(http, file, null, gates, ct, publicNetworkOnly: true);
                 await DirectDownload.SaveAsync(response, destination, MaximumBytes, ct);
             }
             catch (DirectDownloadException exception)

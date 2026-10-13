@@ -37,6 +37,7 @@ namespace Jularr.Frontend.Framework
         }
 
         public Form<TData> Text<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Text, labelKey, autocomplete);
+        public Form<TData> Url<TValue>(Expression<Func<TData, TValue>> field, string labelKey) => Add(field, FieldControl.Text, labelKey, "url", "url");
         public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Password, labelKey, autocomplete);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey) => Add(field, FieldControl.Number, labelKey, "off");
 
@@ -147,11 +148,11 @@ namespace Jularr.Frontend.Framework
             form.WriteTo(writer, encoder, texts);
         }
 
-        private Form<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete)
+        private Form<TData> Add<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, string autocomplete, string? htmlType = null)
         {
             var field = Declare(selector, control, labelKey);
             var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name)
-                .Attribute("type", control == FieldControl.Password ? "password" : control == FieldControl.Number ? "number" : "text").Attribute("autocomplete", autocomplete);
+                .Attribute("type", htmlType ?? (control == FieldControl.Password ? "password" : control == FieldControl.Number ? "number" : "text")).Attribute("autocomplete", autocomplete);
 
             // Never render submitted passwords.
             if (control != FieldControl.Password && Value(field) is { } value)

@@ -8,6 +8,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Backend.Service.Admin.Activity.V1
 {
@@ -41,7 +42,28 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."RemainingBytes",
                     operation."EtaSeconds",
                     operation."DownloadStateTypeId",
-                    CASE WHEN operation."AttentionKey" = 'source_manual_link' THEN replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0' END AS "ManualUrl"
+                    CASE
+                        WHEN operation."AttentionKey" = 'source_manual_link'
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "InstanceModules" AS assistance
+                                WHERE
+                                    assistance."Key" = 'SourceAssistance'
+                                    AND assistance."IsEnabled"
+                                    AND EXISTS (
+                                        SELECT
+                                            1
+                                        FROM
+                                            "InstanceModules" AS acquisition
+                                        WHERE
+                                            acquisition."Key" = 'Acquisition'
+                                            AND acquisition."IsEnabled"
+                                    )
+                            )
+                        THEN replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0'
+                    END AS "ManualUrl"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -91,13 +113,13 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ModuleRequirement GetInstanceModules(ActivityOperationParametersV1 parameters) => ModuleRequirement.All("Acquisition", "SourceAssistance");
         protected override ServicePermission GetPermission(ActivityOperationParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Files are fetched over HTTPS only.
-            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || link.Scheme != Uri.UriSchemeHttps)
+            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || !DirectDownload.IsPublicFileUri(link))
             {
                 throw new DataValidationException(nameof(SaveActivitySourceLinkDataV1.SourceUrl), "invalid_url");
             }
