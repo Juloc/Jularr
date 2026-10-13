@@ -17,6 +17,8 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             MediaType.Movie => AcquisitionKind.Movie,
             MediaType.Series => AcquisitionKind.Tv,
+            MediaType.Book => AcquisitionKind.Book,
+            MediaType.LightNovel => AcquisitionKind.LightNovel,
             _ => null
         };
 
@@ -36,6 +38,11 @@ namespace Jularr.Backend.Logic.Acquisition
             return profile;
         }
 
+        // The quality a release is stored with.
+        public static string? QualityKey(MediaType mediaType, string title) => mediaType is MediaType.Book or MediaType.LightNovel
+            ? ReleaseQuality.GetKey(BookReleaseJudge.Parse(title))
+            : ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null;
+
         public static SearchIntent ReadIntent(WantedTargetData target, AcquisitionKind kind, EpisodeScope? episodes)
         {
             // Provider mappings in the planner's key space.
@@ -45,12 +52,26 @@ namespace Jularr.Backend.Logic.Acquisition
                 ids[pair[0].StartsWith("tmdb", StringComparison.Ordinal) ? "tmdb" : pair[0]] = pair[1];
             }
 
-            return new SearchIntent(kind, target.CanonicalTitle) { Aliases = target.Titles, Year = target.ReleaseYear, ExternalIds = ids, Season = episodes?.SeasonNumber, Episode = episodes?.EpisodeNumber };
+            return new SearchIntent(kind, target.CanonicalTitle)
+            {
+                Aliases = target.Titles, Year = target.ReleaseYear, Creator = target.Author, ExternalIds = ids, Season = episodes?.SeasonNumber, Episode = episodes?.EpisodeNumber
+            };
         }
 
-        public static int[] ReadCategories(AcquisitionKind kind, int[] configured, NewznabCapabilities? capabilities) =>
-            (configured.Length > 0 ? configured : kind switch { AcquisitionKind.Movie => [2000], AcquisitionKind.Tv or AcquisitionKind.Anime => [5000], _ => [] })
-                .Where(category => capabilities?.Offers(category) ?? true).ToArray();
+        public static int[] ReadCategories(AcquisitionKind kind, int[] configured, NewznabCapabilities? capabilities)
+        {
+            // Configured categories count for their own Newznab range only.
+            var range = kind switch
+            {
+                AcquisitionKind.Movie => 2000,
+                AcquisitionKind.Tv or AcquisitionKind.Anime => 5000,
+                AcquisitionKind.Book or AcquisitionKind.LightNovel or AcquisitionKind.Manga => 7000,
+                AcquisitionKind.Audiobook => 3000,
+                _ => 0
+            };
+            var own = configured.Where(category => category / 1000 * 1000 == range).ToArray();
+            return (own.Length > 0 ? own : range == 0 ? [] : [range]).Where(category => capabilities?.Offers(category) ?? true).ToArray();
+        }
 
         // Equal releases from several queries are one candidate with every stage that found it.
         public static ReleaseOffer Merge(ReleaseOffer existing, ReleaseOffer found) =>
@@ -61,16 +82,17 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             // Failed and blocked releases stay visible but are never taken.
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
-            return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer =>
-            {
-                var judgement = VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, episodes?.Unit, episodes?.Units ?? VideoUnitScope.Empty, offer);
-                return new SelectionCandidate(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
+            return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind is AcquisitionKind.Book or AcquisitionKind.LightNovel
+                ? Candidate(offer, BookReleaseJudge.Judge(target.CanonicalTitle, target.Author, offer))
+                : Candidate(offer, VideoReleaseJudge.Judge(kind, target.CanonicalTitle, target.ReleaseYear, episodes?.Unit, episodes?.Units ?? VideoUnitScope.Empty, offer)))]);
+
+            SelectionCandidate Candidate<TMatch>(ReleaseOffer offer, ReleaseJudgement<TMatch> judgement) =>
+                new(offer.Identity, judgement.Parsed, offer.SizeBytes, offer.ConnectionName, offer.ConnectionPriority, offer.PublishedAt, judgement.Evidence, judgement.Coverage)
                 {
                     SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection,
                     ContextScore = judgement.ContextScore,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? []
                 };
-            })]);
         }
 
         // The outcome a target remembers for the next automatic search.

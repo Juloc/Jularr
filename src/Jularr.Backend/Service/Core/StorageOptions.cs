@@ -10,6 +10,9 @@ namespace Jularr.Backend.Service.Core
         // Linux helper destinations.
         public string MountRoot { get; set; } = "/mnt/jularr";
 
+        // Staging for files Jularr downloads itself; never a library.
+        public string DirectDownloadPath { get; set; } = Path.Combine(Path.GetTempPath(), "jularr", "downloads");
+
         // Compose paths the Owner may select.
         public string[] LocalPaths { get; set; } = [];
 

@@ -453,10 +453,10 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(result.WorkId);
 
             // Import maps identities and the episode catalog; a repeat updates the same Work.
-            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.TmdbId));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId));
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
-            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.TmdbId));
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, result.ExternalId));
             Assert.AreEqual(work.Id, (await again.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));

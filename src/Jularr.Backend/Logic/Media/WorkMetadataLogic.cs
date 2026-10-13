@@ -64,7 +64,7 @@ namespace Jularr.Backend.Logic.Media
                     FROM
                         "Providers"
                     WHERE
-                        "Key" = 'tmdb'
+                        "Key" = @ProviderKey
                 ), removed AS (
                     DELETE FROM
                         "WorkTitles" AS title
@@ -103,9 +103,10 @@ namespace Jularr.Backend.Logic.Media
                 WHERE
                     fact."WorkId" = @Id
                     AND fact."ProviderId" = provider."Id"
-                    AND provider."Key" = 'tmdb'
+                    AND provider."Key" = @ProviderKey
                     AND NOT fact."IsManual";
                 """;
+            sql.Parameters.Add(data);
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
@@ -125,7 +126,7 @@ namespace Jularr.Backend.Logic.Media
                     CROSS JOIN "Providers" AS provider
                     CROSS JOIN "InstanceSettings" AS settings
                 WHERE
-                    provider."Key" = 'tmdb'
+                    provider."Key" = @ProviderKey
                     AND length(btrim(item."Value")) > 0;
                 """;
             sql.Parameters.Add(data);

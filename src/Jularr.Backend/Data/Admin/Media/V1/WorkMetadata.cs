@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
@@ -31,7 +32,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             base.Validate();
 
             // TMDB covers movies and series.
-            if (MediaTypeId is not (MediaType.Movie or MediaType.Series))
+            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.LightNovel))
             {
                 throw new DataValidationException(nameof(MediaTypeId), "unknown_catalog_value");
             }
@@ -40,9 +41,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class MetadataSearchResultV1 : BaseResponse
     {
-        public MetadataSearchResultV1(int tmdbId, string title, string? originalTitle, int? releaseYear, string? overview, long? workId)
+        public MetadataSearchResultV1(string externalId, string title, string? originalTitle, int? releaseYear, string? overview, long? workId, string? author = null)
         {
-            TmdbId = tmdbId;
+            ExternalId = externalId;
+            Author = author;
             Title = title;
             OriginalTitle = originalTitle;
             ReleaseYear = releaseYear;
@@ -50,11 +52,15 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             WorkId = workId;
         }
 
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TmdbId))]
-        public int TmdbId { get; }
+        // TMDB id for video, Open Library work id for books.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string Title { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Author))]
+        public string? Author { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.OriginalTitle))]
         public string? OriginalTitle { get; }
@@ -71,24 +77,30 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class ImportMetadataWorkDataV1 : BaseData
     {
-        public ImportMetadataWorkDataV1(MediaType mediaTypeId, int tmdbId)
+        public ImportMetadataWorkDataV1(MediaType mediaTypeId, string externalId)
         {
             MediaTypeId = mediaTypeId;
-            TmdbId = tmdbId;
+            ExternalId = externalId;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
 
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TmdbId))]
-        public int TmdbId { get; }
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
 
         public override void Validate()
         {
+            // TMDB ids are numbers; books use Open Library ids.
             base.Validate();
-            if (MediaTypeId is not (MediaType.Movie or MediaType.Series))
+            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.LightNovel))
             {
                 throw new DataValidationException(nameof(MediaTypeId), "unknown_catalog_value");
+            }
+
+            if (MediaTypeId is MediaType.Movie or MediaType.Series && !int.TryParse(ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            {
+                throw new DataValidationException(nameof(ExternalId), "invalid_type");
             }
         }
     }

@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class WorkMetadataData : BaseData
     {
         public WorkMetadataData(MediaType mediaTypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,
-            string units, string facts)
+            string units, string facts, string providerKey = "tmdb")
         {
+            ProviderKey = providerKey;
             Facts = facts;
             MediaTypeId = mediaTypeId;
             Namespace = @namespace;
@@ -49,6 +50,10 @@ namespace Jularr.Backend.Data.Logic.Media
         // JSON rows of Key, Value and whether the value is in the instance language.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Facts))]
         public string Facts { get; }
+
+        // Titles and facts belong to this provider.
+        [DataField(typeof(ProviderFields), nameof(ProviderFields.Key))]
+        public string ProviderKey { get; }
     }
 
     internal sealed class WorkIdentityData : BaseData
