@@ -319,7 +319,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             CancellationToken ct)
         {
             // Provider titles that already are Works carry their viewer state.
-            var ids = JsonSerializer.Serialize(tmdbIds.Select(id => id.ToString(CultureInfo.InvariantCulture)));
+            var ids = JsonSerializer.Serialize(tmdbIds.Select(id => new { Namespace = WorkMetadata.Namespace(mediaType), Value = id.ToString(CultureInfo.InvariantCulture) }));
             var rows = await context.ExecuteBatchAsync((ctx, token) =>
             {
                 var sql = new SqlStatement();
@@ -378,11 +378,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     FROM
                         "WorkExternalIdentities" AS identity
                         JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId" AND visible."ProfileId" = @ProfileId
-                    WHERE
-                        identity."Namespace" = @Namespace
-                        AND identity."Value" IN (SELECT jsonb_array_elements_text(@Values::jsonb));
+                        JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value";
                     """;
-                sql.Parameters.Add(new WorkIdentityLookupData(WorkMetadata.Namespace(mediaType), ids));
+                sql.Parameters.Add(new WorkIdentityLookupData(ids));
                 sql.Parameters.Add(new ProfileParameters(profileId));
                 return ctx.ReadSql.ReadListAsync<DiscoverOverlayData>(sql, token);
             }, ct);
