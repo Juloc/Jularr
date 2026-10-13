@@ -26,17 +26,9 @@ namespace Jularr.Frontend.Framework
             if (Items.Count(x => x.Selected) != 1)
                 throw new InvalidOperationException("Exactly one tab must be selected.");
 
-            var links = Items.Select(item =>
-            {
-                var anchor = new A(new Text(item.Key)).Attribute("href", item.Href)
-                    .Class(item.Selected ? "tabs__link tabs__link--active" : "tabs__link");
-                if (item.Selected) anchor.Attribute("aria-current", "page");
-                return (IUiComponent)anchor;
-            }).ToArray();
-
             var selected = Items.Single(item => item.Selected);
             new Div(
-                new Nav(links).Class("tabs__nav").Attribute("aria-label", texts["nav.tabs"]),
+                new NavigationTabs(Items.Select(item => new NavigationTab(item.Key, item.Href, item.Selected)).ToArray(), "nav.tabs"),
                 new Section([.. selected.Content]).Class("tabs__panel")
             ).Class("tabs").WriteTo(writer, encoder, texts);
         }

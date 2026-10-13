@@ -2,6 +2,14 @@
 @use "../../Framework/Components/Icon";
 @use "../../Framework/Components/Button";
 @use "../../Framework/Components/SearchBox";
+@use "../../Framework/Components/Form";
+@use "../../Framework/Components/Table";
+@use "../../Framework/Components/Tag";
+@use "../../Framework/Components/Split";
+@use "../../Framework/Components/Section";
+@use "../../Framework/Components/ItemList";
+@use "../../Framework/Components/Tabs";
+@use "../../Framework/Components/NavigationTabs";
 @use "../../Modules/Appearance/Theme";
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -21,8 +29,8 @@ button, input, select, textarea { font: inherit; }
 a { color: inherit; }
 button, a, input { -webkit-tap-highlight-color: transparent; }
 :focus-visible {
-    outline: 3px solid var(--focus);
-    outline-offset: 3px;
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
 }
 .skip-link {
     position: fixed;
@@ -67,12 +75,8 @@ button, a, input { -webkit-tap-highlight-color: transparent; }
 }
 
 
-/* Shared page structure only. Feature/component styles are separate Vite entries. */
+// Base components load once.
 .page-screen { display: grid; align-content: start; gap: 20px; min-width: 0; }
-.page-subnav { display: flex; gap: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.page-subnav a { color: var(--muted); padding: 9px 13px; border-bottom: 2px solid transparent; text-decoration: none; }
-.page-subnav a:hover { color: var(--text); }
-.page-subnav a.is-active { color: var(--accent-text); border-bottom-color: var(--accent); }
 .page-section h2 { font-size: 18px; margin: 0 0 12px; }
 .preview-screen-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .preview-screen-links a { text-decoration: none; border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; }

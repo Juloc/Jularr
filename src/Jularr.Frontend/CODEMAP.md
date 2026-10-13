@@ -36,7 +36,7 @@ Shared conventions and Backend ownership:
   switching is driven by server-selected state, not a second component.
 - [Tabs.cs](Framework/Components/Tabs.cs): actual SSR tab navigation
   with exactly one selected pane. [NavigationTabs.cs](Framework/Components/NavigationTabs.cs)
-  is for navigation-only lists with no local tab content.
+  is the shared capsule renderer for tabs and subsection navigation, without local tab content.
 - [Section.cs](Framework/Components/Section.cs) and
   [ItemList.cs](Framework/Components/ItemList.cs): reusable localized
   grouping and read-only lists, used by Settings instead of `SettingsGroup`.
@@ -58,7 +58,8 @@ Shared conventions and Backend ownership:
   markup, field errors and local antiforgery POSTs using canonical backend
   `DataField` metadata, including minimum/maximum string lengths. Metadata and property
   getters are cached by property, not compiled per field/row. Unbound forms remain disabled.
-  Outlined labels stay associated with their controls; `Form.Toggle` binds canonical Boolean
+  Outlined labels use a native fieldset/legend cutout without a painted background
+  and stay associated with their controls; `Form.Toggle` binds canonical Boolean
   metadata with native checkbox posting. [Toggle](Framework/Components/Toggle.cs) owns switch
   states; [Tag](Framework/Components/Tag.cs) owns neutral/accent badges.
 - [Shell.cs](Pages/Shared/Shell.cs) and
@@ -117,9 +118,9 @@ Shared conventions and Backend ownership:
 - [Shared shell SCSS](Assets/Shared/shell.entry.scss),
   [appearance module](Modules/Appearance/theme.entry.ts),
   [Discover CSS entry](Pages/User/Discover/Index.entry.scss),
-  [Settings CSS entry](Pages/User/Settings/Settings.entry.scss),
   [Player entry](Modules/Player/player.entry.ts): currently declared
-  page/module assets; component Sass imported only by their owners.
+  page/module assets. Base Form/Table/layout/navigation Sass loads once through the shell;
+  optional media/player/reader assets remain entry-scoped.
 - [Theme tokens](Modules/Appearance/Theme.scss): Clean purple and Original ink/paper
   skins over the same components; Original reuses artwork from the former Web project.
 - [Palette.ts](Modules/Appearance/Palette.ts): one accent-seed calculation for both
@@ -127,9 +128,7 @@ Shared conventions and Backend ownership:
 - [Appearance](Modules/Appearance/Appearance.cs) and [styles](Modules/Appearance/appearance.entry.scss):
   shared Original/Clean, System/Light/Dark and free-accent controls in Login, Settings and preview.
   The appearance script stores device-local choices and updates shared tokens and pressed states.
-  Glass transparency defaults to opaque, affects chrome/secondary controls only and respects
-  reduced-transparency preferences where supported. [Material mixins](Modules/Appearance/_Material.scss)
-  own shared control depth and the opaque blur fallback for Button, Shell and Player.
+  Controls and navigation are flat and opaque; there is no glass or 3D effect layer.
   Instance defaults/profile override policy are not implemented here.
 - [SVG sources](Assets/Icons), [SVG sprite build](Tools/build-icons.mjs):
   deduplicated hashed sprite, with icons also allowed beside modules/pages.

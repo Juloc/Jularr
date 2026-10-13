@@ -41,7 +41,6 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
         {
             page.Title("admin.accounts.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Accounts/Accounts.entry.scss");
 
             // Responsive list and editor.
             page.Content.Add(new Split(split =>

@@ -32,7 +32,6 @@ namespace Jularr.Frontend.Pages.Admin.Library
         {
             page.Title("admin.library.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Library/Library.entry.scss");
             page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>()
                 .Select(tab => new NavigationTab("library.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.library.title"));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;

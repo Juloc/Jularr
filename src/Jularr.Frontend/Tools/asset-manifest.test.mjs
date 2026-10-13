@@ -22,7 +22,6 @@ test("shared asset and page/module entries have separate manifests", () => {
         "Modules/Appearance/theme.entry.ts",
         "Modules/Appearance/appearance.entry.scss",
         "Pages/User/Discover/Index.entry.scss",
-        "Pages/User/Settings/Settings.entry.scss",
         "Pages/Account/Login/Login.entry.scss",
         "Pages/Development/Design/Design.entry.scss",
         "Modules/Player/player.entry.ts"
@@ -50,6 +49,15 @@ test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
     for (const id of Object.values(icons.symbols)) {
         assert.ok(sprite.includes('id="' + id + '"'), "missing sprite symbol " + id);
     }
+});
+
+test("shared base styles cover forms, tables and capsule navigation on every page", () => {
+    const css = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    for (const selector of [".ui-form", ".ui-field__control>legend", ".page-table", ".navigation-tabs__link--active", ".toggle", ".tag"]) {
+        assert.ok(css.includes(selector), selector);
+    }
+    assert.doesNotMatch(css, /backdrop-filter|--glass|box-shadow:inset/);
+    assert.ok(!manifest["Pages/User/Settings/Settings.entry.scss"], "base-only pages need no duplicate bundle");
 });
 
 test("manifest URLs are relative and cannot escape the asset root", () => {

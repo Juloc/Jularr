@@ -1,8 +1,7 @@
 @use "./Brand";
-@use "../../Modules/Appearance/Material";
 
 .app-header {
-    @include Material.glass;
+    background: var(--surface);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -29,7 +28,7 @@
 }
 
 .app-sidebar {
-    @include Material.glass;
+    background: var(--surface);
     position: sticky;
     top: 0;
     display: flex;
@@ -81,13 +80,13 @@ html[data-skin="original"] .app-sidebar {
     font-weight: 550;
 }
 .nav-link:hover { background-color: var(--surface-hover); color: var(--text); }
-.nav-link.is-active { @include Material.control; background-color: var(--accent); color: var(--accent-contrast); }
+.nav-link.is-active { background-color: var(--accent); color: var(--accent-contrast); }
 @media (max-width: 780px) { .app-sidebar { display: none; } }
 
 .mobile-navigation { display: none; }
 @media (max-width: 780px) {
     .mobile-navigation {
-        @include Material.glass;
+        background: var(--surface);
         position: fixed;
         z-index: 20;
         right: 0;
@@ -108,7 +107,7 @@ html[data-skin="original"] .app-sidebar {
         font-size: 10px;
         color: var(--muted);
     }
-    .mobile-link.is-active { @include Material.control; background-color: var(--accent); color: var(--accent-contrast); }
+    .mobile-link.is-active { background-color: var(--accent); color: var(--accent-contrast); }
 }
 
 .app-layout {

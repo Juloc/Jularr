@@ -25,7 +25,6 @@ namespace Jularr.Frontend.Pages.Setup.Start
         protected override void Define(Page page)
         {
             page.Title("setup.start.title");
-            page.Asset("Pages/Setup/Start/Start.entry.scss");
 
             // Render only available setup.
             if (!_requiresOwner)

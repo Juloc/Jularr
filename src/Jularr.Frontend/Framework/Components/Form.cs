@@ -212,8 +212,9 @@ namespace Jularr.Frontend.Framework
             // Label stays on the outline.
             var content = new List<IUiComponent>
             {
-                field.Control == FieldControl.Checkbox ? input : new Div(
-                    new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), input).Class("ui-field__control")
+                field.Control == FieldControl.Checkbox ? input : new HtmlFieldset(
+                    new HtmlLegend(new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name)),
+                    input).Class("ui-field__control")
             };
             if (_error?.Field == field.Name)
             {

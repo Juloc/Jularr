@@ -23,7 +23,6 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         {
             page.Title("admin.providers.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Providers/Providers.entry.scss");
             page.Content.Add(new P(new Text("admin.providers.scope")));
 
             var options = new[] { new SelectOption("True", texts["admin.providers.enabled"]), new SelectOption("False", texts["admin.providers.disabled"]) };

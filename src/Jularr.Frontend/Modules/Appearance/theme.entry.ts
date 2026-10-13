@@ -20,12 +20,6 @@ let accent = "";
 try { accent = localStorage.getItem("jularr-ui-accent") ?? ""; } catch { /* Storage is optional. */ }
 if (!/^#[a-f\d]{6}$/i.test(accent)) accent = "";
 accent = accent.toLowerCase();
-let transparency = 0;
-try {
-    const saved = localStorage.getItem("jularr-ui-transparency");
-    const value = Number(saved);
-    if (saved !== null && saved !== "" && Number.isFinite(value) && value >= 0 && value <= 60) transparency = value;
-} catch { /* Storage is optional. */ }
 let palette: ReturnType<typeof buildPalette>;
 
 function applyPalette(): void {
@@ -60,18 +54,9 @@ function refreshControls(): void {
     document.querySelectorAll<HTMLButtonElement>("[data-set-accent]").forEach(button => {
         button.setAttribute("aria-pressed", String(button.dataset.setAccent === root.dataset.accent));
     });
-    document.querySelectorAll<HTMLInputElement>("[data-transparency-input]").forEach(input => { input.value = String(transparency); });
-    document.querySelectorAll<HTMLElement>("[data-transparency-value]").forEach(label => { label.textContent = transparency + "%"; });
-}
-
-// Opaque unless explicitly selected.
-function applyTransparency(): void {
-    root.style.setProperty("--glass-opacity-setting", (100 - transparency) + "%");
-    root.style.setProperty("--glass-blur-setting", transparency > 0 ? "14px" : "0px");
 }
 
 applyPalette();
-applyTransparency();
 refreshControls();
 
 // Update shared controls.
@@ -105,14 +90,6 @@ document.addEventListener("click", event => {
 document.addEventListener("input", event => {
     if (!(event.target instanceof HTMLInputElement)) return;
     if (event.target.dataset.accentInput !== undefined) setAccent(event.target.value);
-    if (event.target.dataset.transparencyInput === undefined) return;
-
-    const value = Number(event.target.value);
-    if (!Number.isFinite(value) || value < 0 || value > 60) return;
-    transparency = value;
-    try { localStorage.setItem("jularr-ui-transparency", String(value)); } catch { /* Storage is optional. */ }
-    applyTransparency();
-    refreshControls();
 });
 
 function setAccent(value: string): void {

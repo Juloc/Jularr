@@ -56,7 +56,7 @@ the task and URL. Do not kill unrelated dotnet processes or remove other D: fold
 
 Use `/Design` on this same Development host. The workshop renders the canonical
 components, labeled samples and disabled Player chrome; it does not start playback.
-Appearance controls adjust Original/Clean, brightness, accent and glass transparency
+Appearance controls adjust Original/Clean, brightness and accent
 immediately in this browser. Shared component changes apply to real pages as well.
 Review one component group at a time, then desktop/mobile and light/dark. Server
 updates continue to follow green, integrated `clean-start` commits; there is no separate

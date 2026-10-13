@@ -8,15 +8,8 @@ namespace Jularr.Frontend.Framework
     {
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var links = items.Select(item =>
-            {
-                var link = new A(new Text(item.Key)).Attribute("href", item.Href);
-                // Routing remains server-side; no JS navigation and no duplicate state.
-                return (IUiComponent)link;
-            }).ToArray();
-
-            new Nav(links).Class("page-subnav")
-                .Attribute("aria-label", texts["nav.primary"]).WriteTo(writer, encoder, texts);
+            new NavigationTabs(items.Select(item => new NavigationTab(item.Key, item.Href, false)).ToArray(), "nav.primary")
+                .WriteTo(writer, encoder, texts);
         }
     }
 }

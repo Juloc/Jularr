@@ -24,7 +24,6 @@ namespace Jularr.Frontend.Pages.User.Settings
         {
             page.Title("settings.title");
             page.Navigation("nav.settings");
-            page.Asset("Pages/User/Settings/Settings.entry.scss");
             page.Asset("Modules/Appearance/appearance.entry.scss");
             page.Content.Add(new UiSection("appearance.title", [new Appearance()]));
 

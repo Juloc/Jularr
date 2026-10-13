@@ -12,7 +12,6 @@ namespace Jularr.Frontend.Pages.Account.Logout
         protected override void Define(Page page)
         {
             page.Title("account.logout.title");
-            page.Asset("Pages/User/Settings/Settings.entry.scss");
             page.Content.Add(new Form<SessionParametersV1>(form => form.Submit("account.logout.submit"), Url.Page("/Account/Logout/Logout"),
                 antiforgery.GetAndStoreTokens(HttpContext).RequestToken, error: Error));
         }

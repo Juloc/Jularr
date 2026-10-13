@@ -1,19 +1,30 @@
 .navigation-tabs {
-    display: flex;
+    display: inline-flex;
+    justify-self: start;
+    max-width: 100%;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface-hover);
 
     &__link {
         padding: 8px 14px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
+        min-height: 40px;
+        border-radius: var(--radius-control);
         color: var(--muted);
         text-decoration: none;
+        overflow-wrap: anywhere;
+
+        &:hover { background: var(--surface); color: var(--text); }
 
         &--active {
-            border-color: var(--accent);
-            color: var(--accent-text);
+            background: var(--accent);
+            color: var(--accent-contrast);
+
+            &:hover { background: var(--accent-hover); color: var(--accent-contrast); }
         }
     }
 }

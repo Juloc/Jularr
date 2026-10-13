@@ -35,7 +35,7 @@
 
         &::after { inset-inline-start: 22px; background: var(--accent-contrast); }
     }
-    & > input:focus-visible + &__track { outline: 3px solid var(--focus); outline-offset: 3px; }
+    & > input:focus-visible + &__track { outline: 2px solid var(--focus); outline-offset: 2px; }
     & > input:disabled ~ span { opacity: .6; cursor: not-allowed; }
     & > input[aria-invalid="true"] + &__track { border-color: var(--danger); }
 }
