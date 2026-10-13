@@ -94,10 +94,10 @@ namespace Jularr.Backend.Tests
         public void Music_Placement_KeepsNaturalOrderAndTiesTracksOnlyWhenCountsAgree()
         {
             var files = new[] { "10 - Ten.flac", "2 - Two.flac", "1 - One.flac" }.Select(name => new Jularr.Integrations.Data.Storage.StorageFile(name, 1000, DateTime.UtcNow)).ToArray();
-            var tied = ImportPlacementLogic.Plan(MediaType.Music, "Album", 2019, "FLAC", files, "Artist", 3);
+            var tied = ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, "Artist", 3);
             CollectionAssert.AreEqual(new[] { "Artist/Album (2019)/01 - One", "Artist/Album (2019)/02 - Two", "Artist/Album (2019)/03 - Ten" }, tied.Select(placement => placement.TargetStem).ToArray());
             Assert.IsTrue(tied.All(placement => placement.WorkUnitTypeId == WorkUnitType.Track));
-            Assert.IsTrue(ImportPlacementLogic.Plan(MediaType.Music, "Album", 2019, "FLAC", files, "Artist", 4).All(placement => placement.WorkUnitTypeId is null));
+            Assert.IsTrue(ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, "Artist", 4).All(placement => placement.WorkUnitTypeId is null));
         }
 
         [TestMethod]

@@ -9,12 +9,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // Editor values; regex and score rules stay in the stored definition.
     internal sealed class AcquisitionProfileInputData
     {
-        public AcquisitionProfileInputData(long? id, string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
+        public AcquisitionProfileInputData(long? id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
             int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version)
         {
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             IsDefault = isDefault;
             AllowedQualities = allowedQualities;
             UpgradeAllowed = upgradeAllowed;
@@ -29,6 +30,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long? Id { get; }
         public string Name { get; }
         public MediaType MediaTypeId { get; }
+        public MediaSubtype? MediaSubtypeId { get; }
         public bool IsDefault { get; }
         public string[] AllowedQualities { get; }
         public bool UpgradeAllowed { get; }
@@ -42,11 +44,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionProfileRowData : BaseData
     {
-        public AcquisitionProfileRowData(long? id, string name, MediaType mediaTypeId, bool isDefault, string definition, long? version)
+        public AcquisitionProfileRowData(long? id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string definition, long? version)
         {
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             IsDefault = isDefault;
             Definition = definition;
             Version = version;
@@ -61,6 +64,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
 
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
         public bool IsDefault { get; }
 
@@ -73,10 +79,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class AcquisitionProfileStateData : BaseData
     {
-        public AcquisitionProfileStateData(long id, MediaType mediaTypeId, bool isDefault, string definition, long version)
+        public AcquisitionProfileStateData(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string definition, long version)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             IsDefault = isDefault;
             Definition = definition;
             Version = version;
@@ -87,6 +94,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.IsDefault))]
         public bool IsDefault { get; }

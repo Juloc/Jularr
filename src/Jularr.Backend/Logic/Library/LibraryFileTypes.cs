@@ -13,13 +13,13 @@ namespace Jularr.Backend.Logic.Library
         private static readonly FrozenSet<string> Game = FrozenSet.Create(".iso", ".chd", ".cue", ".zip", ".7z", ".rar", ".nsp", ".xci", ".nds", ".3ds", ".gba", ".gb", ".gbc",
             ".nes", ".sfc", ".smc", ".n64", ".z64", ".gcm", ".rvz", ".wbfs");
 
+        private static readonly FrozenSet<string> MangaExtensions = Comic.Union(Ebook).ToFrozenSet();
+
         private static readonly FrozenDictionary<MediaType, FrozenSet<string>> ScanExtensions = new Dictionary<MediaType, FrozenSet<string>>
         {
             [MediaType.Movie] = Video.Union(Subtitle).ToFrozenSet(),
             [MediaType.Series] = Video.Union(Subtitle).ToFrozenSet(),
-            [MediaType.Book] = Ebook.Union(Audio).ToFrozenSet(),
-            [MediaType.Manga] = Comic.Union(Ebook).ToFrozenSet(),
-            [MediaType.LightNovel] = Ebook,
+            [MediaType.Book] = Ebook.Union(Audio).Union(Comic).ToFrozenSet(),
             [MediaType.Music] = Audio,
             [MediaType.Game] = Game
         }.ToFrozenDictionary();
@@ -37,10 +37,15 @@ namespace Jularr.Backend.Logic.Library
         public static (string Container, string ContentType) GetStream(string relativePath) =>
             Streams.TryGetValue(Path.GetExtension(relativePath).ToLowerInvariant(), out var stream) ? stream : ("unknown", "application/octet-stream");
 
-        public static IReadOnlySet<string> GetScanExtensions(MediaType mediaType) => ScanExtensions[mediaType];
+        public static IReadOnlySet<string> GetScanExtensions(MediaType mediaType, MediaSubtype? subtype) => subtype switch
+        {
+            MediaSubtype.Manga => MangaExtensions,
+            MediaSubtype.LightNovel => Ebook,
+            _ => ScanExtensions[mediaType]
+        };
 
         // A game release is imported whole; installers and data files belong to it.
-        public static IReadOnlySet<string>? GetImportExtensions(MediaType mediaType) => mediaType == MediaType.Game ? null : ScanExtensions[mediaType];
+        public static IReadOnlySet<string>? GetImportExtensions(MediaType mediaType, MediaSubtype? subtype) => mediaType == MediaType.Game ? null : GetScanExtensions(mediaType, subtype);
 
         public static bool IsSubtitle(string relativePath) => Subtitle.Contains(Path.GetExtension(relativePath).ToLowerInvariant());
 

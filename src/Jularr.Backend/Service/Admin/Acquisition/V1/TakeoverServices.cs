@@ -118,7 +118,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 }
                 else
                 {
-                    var workId = await _metadata.ImportAsync(Context, connection, mediaType, tmdbId, CancellationToken);
+                    var workId = await _metadata.ImportAsync(Context, connection, mediaType, null, tmdbId, CancellationToken);
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
                         await ctx.EnsureWantedItemAsync(new WorkIdData(workId), ct);

@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 
@@ -14,16 +15,22 @@ namespace Jularr.Backend.Logic.Media
                 """
                 INSERT INTO "Works" (
                     "MediaTypeId",
+                    "MediaSubtypeId",
+                    "IsMediaSubtypeManual",
                     "CanonicalTitle",
                     "ReleaseYear"
                 ) VALUES (
                     @MediaTypeId,
+                    @MediaSubtypeId,
+                    @IsMediaSubtypeManual,
                     @CanonicalTitle,
                     @ReleaseYear
                 )
                 RETURNING
                     "Id",
                     "MediaTypeId",
+                    "MediaSubtypeId",
+                    "IsMediaSubtypeManual",
                     "CanonicalTitle",
                     "ReleaseYear"::integer AS "ReleaseYear",
                     "Version";
@@ -38,19 +45,46 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task UpdateWorkAsync(this LogicContext ctx, WorkUpdateData data, CancellationToken ct)
         {
-            // Reject stale edits atomically.
+            // The subtype must belong to the Work's type.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                UPDATE "Works"
+                SELECT
+                    work."Id",
+                    work."MediaTypeId",
+                    work."MediaSubtypeId",
+                    work."IsMediaSubtypeManual",
+                    work."CanonicalTitle",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    work."Version"
+                FROM
+                    "Works" AS work
+                WHERE
+                    work."Id" = @Id
+                FOR UPDATE;
+                """;
+            sql.Parameters.Add(data);
+            var work = await ctx.ReadOptionalAsync<WorkData>(sql, ct) ?? throw new KeyNotFoundException("The work was not found.");
+            if (!MediaSubtypes.Fits(work.MediaTypeId, data.MediaSubtypeId))
+            {
+                throw new DataValidationException(nameof(data.MediaSubtypeId), "unknown_catalog_value");
+            }
+
+            // Reject stale edits; a changed subtype becomes a manual choice.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE "Works" AS work
                 SET
                     "CanonicalTitle" = @CanonicalTitle,
                     "ReleaseYear" = @ReleaseYear,
-                    "Version" = "Version" + 1,
+                    "IsMediaSubtypeManual" = work."IsMediaSubtypeManual" OR work."MediaSubtypeId" IS DISTINCT FROM @MediaSubtypeId,
+                    "MediaSubtypeId" = @MediaSubtypeId,
+                    "Version" = work."Version" + 1,
                     "UpdatedAt" = now()
                 WHERE
-                    "Id" = @Id
-                    AND "Version" = @Version;
+                    work."Id" = @Id
+                    AND work."Version" = @Version;
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)

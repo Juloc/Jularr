@@ -103,13 +103,14 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class StoredFileLockData : BaseData
     {
-        public StoredFileLockData(long id, long libraryRootId, string relativePath, long? mediaAssetId, MediaType mediaTypeId)
+        public StoredFileLockData(long id, long libraryRootId, string relativePath, long? mediaAssetId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId)
         {
             Id = id;
             LibraryRootId = libraryRootId;
             RelativePath = relativePath;
             MediaAssetId = mediaAssetId;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
         }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
@@ -126,6 +127,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
     }
 
     internal sealed class StoredFileAssignmentData : BaseData

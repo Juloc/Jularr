@@ -28,12 +28,15 @@ namespace Jularr.Frontend.Pages.Admin.Works
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
+            SelectOption[] subtypes = [new SelectOption("", texts["media.subtype.none"]), .. Enum.GetValues<MediaSubtype>()
+                .Select(subtype => new SelectOption(((byte)subtype).ToString(CultureInfo.InvariantCulture), texts["media.subtype." + subtype]))];
 
             // TMDB lookup creates Works with their provider identity and episodes.
-            var metadataTypes = new[] { MediaType.Movie, MediaType.Series, MediaType.Book, MediaType.LightNovel }.Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
+            var metadataTypes = new[] { MediaType.Movie, MediaType.Series, MediaType.Book }.Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
             page.Content.Add(new Form<SearchMetadataDataV1>(form =>
             {
                 form.Select(item => item.MediaTypeId, "media.type", metadataTypes);
+                form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
                 form.Text(item => item.Query, "media.title");
                 form.Number(item => item.ReleaseYear, "media.year");
                 form.Submit("admin.works.searchMetadata");
@@ -51,15 +54,17 @@ namespace Jularr.Frontend.Pages.Admin.Works
                         : new Form<ImportMetadataWorkDataV1>(form =>
                         {
                             form.Hidden(data => data.MediaTypeId);
+                            form.Hidden(data => data.MediaSubtypeId);
                             form.Hidden(data => data.ExternalId);
                             form.Submit("admin.works.import");
-                        }, "/Admin/Works?handler=Import", csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId))));
+                        }, "/Admin/Works?handler=Import", csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId, searched.MediaSubtypeId))));
             }
 
             // Manual canonical creation.
             page.Content.Add(new Form<CreateWorkDataV1>(form =>
             {
                 form.Select(item => item.MediaTypeId, "media.type", mediaTypes);
+                form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
                 form.Text(item => item.CanonicalTitle, "media.title");
                 form.Number(item => item.ReleaseYear, "media.year");
                 form.Submit("media.create");
@@ -70,7 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             {
                 page.Content.Add(new Table<WorkDetailsV1>(works.Items)
                     .Text(item => item.CanonicalTitle, "media.title")
-                    .Resource(item => item.MediaTypeId, "media.type", type => "media.type." + type)
+                    .Content("media.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
                     .Link(item => item.Id, "common.open", id => "/Admin/Works/" + id.ToString(CultureInfo.InvariantCulture), "common.open"));
 
                 if (works.Items.Count == 0) page.Content.Add(new P(new Text("media.empty")));
@@ -86,26 +91,26 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, string? canonicalTitle, int? releaseYear)
+        public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? canonicalTitle, int? releaseYear)
         {
-            _input = new CreateWorkDataV1(mediaTypeId, canonicalTitle ?? "", releaseYear);
+            _input = new CreateWorkDataV1(mediaTypeId, canonicalTitle ?? "", releaseYear, mediaSubtypeId);
             var work = await create.ExecuteAsync<WorkDetailsV1>(_input, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = work.Id });
         }
 
-        public async Task<IActionResult> OnPostSearchAsync([BindRequired] MediaType mediaTypeId, string? query, int? releaseYear)
+        public async Task<IActionResult> OnPostSearchAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? query, int? releaseYear)
         {
             // Results belong to this response.
-            _search = new SearchMetadataDataV1(mediaTypeId, query ?? "", releaseYear);
+            _search = new SearchMetadataDataV1(mediaTypeId, query ?? "", releaseYear, mediaSubtypeId);
             await LoadDataAsync();
             _results = await search.ExecuteAsync<BaseDataList<MetadataSearchResultV1>>(_search, HttpContext.RequestAborted);
             PreparePage();
             return Page();
         }
 
-        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, string? externalId)
+        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? externalId)
         {
-            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, externalId ?? ""), HttpContext.RequestAborted);
+            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, externalId ?? "", mediaSubtypeId), HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = work.Id });
         }
 

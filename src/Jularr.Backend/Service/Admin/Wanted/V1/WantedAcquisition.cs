@@ -46,11 +46,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public async Task<WantedSearchResult> SearchAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, CancellationToken ct, UnitScope? scope = null)
         {
-            // Only supported media types with a profile can be ranked.
-            if (AcquisitionSelectionLogic.GetKind(target.MediaTypeId) is not { } kind || target.Definition is null)
+            // Only targets with a profile can be ranked.
+            if (target.Definition is null)
             {
                 throw new DataValidationException(nameof(WantedItemParameters.WantedItemId), "invalid_transition");
             }
+
+            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
 
             var profile = AcquisitionSelectionLogic.ReadProfile(target);
             var intent = AcquisitionSelectionLogic.ReadIntent(target, kind, scope);
@@ -142,7 +144,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Reserve first so concurrent grabs cannot start a second download.
             var client = clients[0];
-            var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(target.MediaTypeId, offer.Title);
+            var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), offer.Title);
             var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end);
             var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
 
