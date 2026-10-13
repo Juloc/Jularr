@@ -10,12 +10,12 @@ namespace Jularr.Integrations.Logic.Common
         private const int MaximumRedirects = 5;
         private static readonly string[] GateMarkers = ["cf-challenge", "challenge-platform", "ddos-guard", "g-recaptcha", "h-captcha", "captcha"];
 
-        public static async Task<HttpResponseMessage> SendAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct)
+        public static async Task<HttpResponseMessage> SendAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct, bool publicNetworkOnly = false)
         {
             // Expired signed links are renewed once from the stable address.
             for (var attempt = 0; ; attempt++)
             {
-                var (response, final) = await FollowAsync(http, uri, credentials, gates, ct);
+                var (response, final) = await FollowAsync(http, uri, credentials, gates, ct, publicNetworkOnly);
                 if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Gone && final != uri && attempt == 0)
                 {
                     response.Dispose();
@@ -68,12 +68,17 @@ namespace Jularr.Integrations.Logic.Common
             }
         }
 
-        private static async Task<(HttpResponseMessage Response, Uri Final)> FollowAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct)
+        private static async Task<(HttpResponseMessage Response, Uri Final)> FollowAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct, bool publicNetworkOnly)
         {
             string? cookie = null;
             var resolved = false;
             for (var redirect = 0; ; redirect++)
             {
+                if (publicNetworkOnly && !IsPublicFileUri(uri))
+                {
+                    throw new DirectDownloadException(DirectDownloadFailure.ForbiddenRedirect, "A file download must use a public HTTPS endpoint.");
+                }
+
                 using var request = new HttpRequestMessage(HttpMethod.Get, uri);
                 if (credentials?.Covers(uri) == true)
                 {
@@ -130,6 +135,39 @@ namespace Jularr.Integrations.Logic.Common
 
                 return (response, uri);
             }
+        }
+
+        // Reject local addresses at input and at every redirect. The transport must also enforce DNS/IP restrictions.
+        public static bool IsPublicFileUri(Uri uri)
+        {
+            if (uri.Scheme != Uri.UriSchemeHttps || uri.UserInfo.Length > 0 || uri.IsLoopback || uri.Port != 443
+                || uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase)
+                || uri.Host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (IPAddress.TryParse(uri.IdnHost, out var address))
+            {
+                if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
+                if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                {
+                    var bytes = address.GetAddressBytes();
+                    return (bytes[0] & 0xe0) == 0x20 && !(bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8);
+                }
+
+                var octets = address.GetAddressBytes();
+                return octets[0] is >= 1 and < 224 && octets[0] != 10 && octets[0] != 127
+                    && !(octets[0] == 100 && octets[1] is >= 64 and <= 127)
+                    && !(octets[0] == 169 && octets[1] == 254)
+                    && !(octets[0] == 172 && octets[1] is >= 16 and <= 31)
+                    && !(octets[0] == 192 && octets[1] == 168)
+                    && !(octets[0] == 198 && octets[1] is 18 or 19);
+            }
+
+            return uri.HostNameType == UriHostNameType.Dns && uri.IdnHost.Contains('.');
         }
 
         private static async Task<SourceGate?> ReadGateAsync(HttpResponseMessage response, Uri uri, CancellationToken ct)
