@@ -29,6 +29,70 @@ The auditor **does not** use fake source providers in its normal operation. It i
 
 Constraints: explicit owned-host acknowledgement, single exact origin, HTTPS except localhost, at most five target paths, one-second delay by default, bounded read length (64 KiB), no redirect following and verified TLS.
 
+## Real-browser test mode (modern browser-based bots)
+
+The original CLI above checks HTTP-level protection. The additional **browser audit** executes
+actual Chromium/Firefox/WebKit JavaScript, observes the rendered page, tests an in-page
+same-origin file/API request, reloads with the cookies generated during the visit,
+then repeats in a second **fresh browser profile**. It can also run a mobile viewport.
+It never supplies a valid CAPTCHA clearance and never clicks or solves a challenge.
+**Live mode uses your actual Jularr domain and routes; there is no fake source backend.**
+
+Playwright is an **optional external audit-only dependency**. It is not included in
+Jularr's ASP.NET/NPM production requirements, and no browser is hosted by Jularr.
+
+```sh
+python3 -m pip install playwright
+python3 -m playwright install chromium
+
+python3 tools/source_gate_browser_audit.py \
+  --base-url https://your-jularr.example.org \
+  --path /an-actual-protected-page \
+  --proof "UNIQUE_TEXT_FROM_PROTECTED_RESPONSE" \
+  --wait 5 \
+  --confirm-owned \
+  --json browser-audit.json
+```
+
+If you have a system Chromium already installed, use
+`--browser-executable /usr/bin/chromium` rather than installing one.
+Run the same checks with `--browser firefox` or `--browser webkit --mobile` after installing those Playwright browser builds.
+
+The browser audit tests three meaningful stages without a human response:
+1. **First visit**: does JavaScript immediately or after the configured wait reveal protected content?
+2. **Request with browser cookies**: after initial page execution, can `fetch()` read up to 64 KiB of the protected API/file?
+3. **Reload with same cookies and a second clean profile**: does a reused or new browser gain unauthorized access?
+
+If a separate login is required before the CAPTCHA, set `JULARR_AUDIT_COOKIE` to a *legitimate
+login-only session cookie*. Do not include clearance cookies or secrets in command-line arguments.
+This cookie is attached independently to each test browser; cookie **values** and protected bytes
+are never included in report JSON. Browser sessions are discarded after the run.
+
+### Limits and interpretation
+
+A verified `EXPOSED` means the provided **known protected proof** was read by an
+automated browser without anyone completing the CAPTCHA. This is a real finding.
+`BLOCKED` proves only that those particular scenarios were blocked.
+Login pages, 404s and HTTP 200 responses without proof do **not** prove CAPTCHA resistance.
+
+This is deliberately **not** a CAPTCHA-solving, fingerprint-spoofing, stealth,
+rotating-proxy, or CAPTCHA-farm emulator; it cannot be equated with every sophisticated
+commercial bot. Use your vendor's official test keys/staging mode and server-side
+monitoring to evaluate challenge difficulty, false positives and IP-based throttling.
+
+Focused tests (no external hosts contacted):
+
+```sh
+cd tools
+python3 -m unittest -v test_source_gate_audit.py test_source_gate_browser_audit.py
+```
+
+Optional local Chromium JavaScript smoke test:
+```sh
+cd tools
+JULARR_AUDIT_BROWSER=/usr/bin/chromium python3 -m unittest -v test_source_gate_browser_audit.py
+```
+
 ## Interpretation
 
 | Result | Meaning |
