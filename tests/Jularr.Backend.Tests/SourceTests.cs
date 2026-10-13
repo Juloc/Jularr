@@ -189,6 +189,12 @@ namespace Jularr.Backend.Tests
                 (await todo.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId).ManualUrl);
             using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link", new SaveActivitySourceLinkDataV1("http://files.example.test/0123.epub"));
             Assert.AreEqual(HttpStatusCode.BadRequest, plain.StatusCode);
+            using var local = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link",
+                new SaveActivitySourceLinkDataV1("https://127.0.0.1/private.epub"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, local.StatusCode);
+            using var internalHost = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link",
+                new SaveActivitySourceLinkDataV1("https://printer.local/file.epub"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, internalHost.StatusCode);
 
             // Users see and confirm only while the instance and their account allow it.
             using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
