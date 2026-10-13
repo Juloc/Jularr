@@ -63,7 +63,10 @@ Media.sql also installs the shared logical chain: WorkUnits (seasons, episodes,
 volumes, chapters and tracks in one table with a same-Work parent), WorkEditions,
 WorkVersions and MediaAssets. Composite foreign keys keep every level on one Work.
 A duplicate copy of the same unit becomes another version, never a second asset in
-the same version. Metadata policy, image cache and monitoring are not installed.
+the same version. GamePlatforms are Jularr's platform identities (GameReleases per
+owned version, WorkPlatforms per provider listing); GameRomCatalogs and GameRoms keep
+the imported libretro No-Intro DATs (SHA-1 to dump name, CC BY-SA 4.0) per platform.
+Metadata policy, image cache and monitoring are not installed.
 
 `Playback.sql` follows Library. MediaProgress keeps one current position per profile
 and exact Work/unit target; completion is explicit and sticky, and a completed item
@@ -72,7 +75,7 @@ UUID; ended sessions are the playback history. Instance.sql seeds the Playback m
 
 `Library.sql` follows Media, Acquisition and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative
-inventory with probe facts (former MediaTechnicalAnalyses columns), MediaTracks hold
+inventory with probe facts (former MediaTechnicalAnalyses columns, the SHA-1 of game ROMs), MediaTracks hold
 probed streams, and Operations/OperationTypes/OperationStatusTypes are the shared
 background-operation owner, starting with library scans. Offline storage never
 deletes inventory; only complete scans mark assigned files missing.

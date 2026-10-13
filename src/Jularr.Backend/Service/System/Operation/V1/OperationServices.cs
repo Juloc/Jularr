@@ -65,11 +65,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private const int CandidateBatchSize = 100;
         private readonly StorageOptions _options;
         private readonly MediaProbeClient _probe;
+        private readonly GameRomIdentification _roms;
 
-        internal ExecuteLibraryScanV1(IOptions<StorageOptions> options, MediaProbeClient probe)
+        internal ExecuteLibraryScanV1(IOptions<StorageOptions> options, MediaProbeClient probe, GameRomIdentification roms)
         {
             _options = options.Value;
             _probe = probe;
+            _roms = roms;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -144,6 +146,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
             if (_probe.IsAvailable)
             {
                 await ProbeAsync(root.Id, directory);
+            }
+
+            // Verified game dumps name their game.
+            if (root.MediaTypeId == MediaType.Game)
+            {
+                await _roms.IdentifyAsync(Context, root.Id, directory, CancellationToken);
             }
 
             // Folders already identified keep growing.

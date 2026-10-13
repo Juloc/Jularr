@@ -37,7 +37,8 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     file."MissingSince",
                     file."MediaAssetId",
                     work."Id" AS "WorkId",
-                    work."CanonicalTitle" AS "WorkTitle"
+                    work."CanonicalTitle" AS "WorkTitle",
+                    (SELECT rom."Name" FROM "GameRoms" AS rom WHERE rom."Sha1" = file."Sha1" ORDER BY rom."GameRomCatalogId" LIMIT 1) AS "RomName"
                 FROM
                     "StoredFiles" AS file
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
@@ -57,8 +58,10 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             sql.Page = Page;
             var rows = await Context.ReadSql.ReadPageAsync<LibraryFileRowData>(sql, CancellationToken);
 
-            // Suggest identity from the path.
-            var paths = rows.Items.ToDictionary(row => row.Id, row => MediaPathParser.Parse(row.RelativePath, row.MediaTypeId));
+            // Suggest identity from the verified dump, else from the path.
+            var paths = rows.Items.ToDictionary(row => row.Id, row => row.RomName is { } rom
+                ? new MediaPathInfo(GameRomMatching.Title(rom), null, null, null, null)
+                : MediaPathParser.Parse(row.RelativePath, row.MediaTypeId));
             var titles = paths.Values.Select(path => Limit(path.Title).ToLowerInvariant()).Distinct(StringComparer.Ordinal).ToArray();
             sql = new SqlStatement();
             sql.Statement =

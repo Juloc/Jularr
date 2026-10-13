@@ -58,7 +58,7 @@ namespace Jularr.Backend.Logic.Media
 
         public static async Task TagGameReleaseAsync(this LogicContext ctx, GameReleaseData data, CancellationToken ct)
         {
-            // The version a game file starts runs on the given platform, else on the one its folder names.
+            // The version a game file starts runs on the given platform, else on the one its verified dump or its folder names.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -69,14 +69,27 @@ namespace Jularr.Backend.Logic.Media
                     platform."Id"
                 FROM
                     "MediaAssets" AS asset
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            catalog."GamePlatformId"
+                        FROM
+                            "StoredFiles" AS file
+                            JOIN "GameRoms" AS rom ON rom."Sha1" = file."Sha1"
+                            JOIN "GameRomCatalogs" AS catalog ON catalog."Id" = rom."GameRomCatalogId"
+                        WHERE
+                            file."MediaAssetId" = asset."Id"
+                        ORDER BY
+                            catalog."Id"
+                        LIMIT 1
+                    ) AS dump ON TRUE
                     CROSS JOIN LATERAL (
                         SELECT
                             candidate."Id"
                         FROM
                             "GamePlatforms" AS candidate
                         WHERE
-                            candidate."Id" = @GamePlatformId
-                            OR @GamePlatformId::bigint IS NULL AND (lower(candidate."Name") = lower(@Folder) OR lower(candidate."Abbreviation") = lower(@Folder))
+                            candidate."Id" = COALESCE(@GamePlatformId, dump."GamePlatformId")
+                            OR COALESCE(@GamePlatformId, dump."GamePlatformId") IS NULL AND (lower(candidate."Name") = lower(@Folder) OR lower(candidate."Abbreviation") = lower(@Folder))
                         ORDER BY
                             candidate."Id"
                         LIMIT 1

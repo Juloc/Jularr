@@ -32,6 +32,7 @@ CREATE TABLE "StoredFiles" (
     "Container" varchar(64) NULL,
     "DurationMs" bigint NULL CHECK ("DurationMs" >= 0),
     "BitRate" bigint NULL CHECK ("BitRate" >= 0),
+    "Sha1" varchar(40) NULL CHECK ("Sha1" ~ '^[0-9a-f]{40}$'),
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("LibraryRootId", "RelativePath")
 );
