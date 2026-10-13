@@ -22,6 +22,7 @@ using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
@@ -55,7 +56,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         {
             var now = _time.GetUtcNow().UtcDateTime;
             var (due, indexers, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadDueWantedItemsAsync(new WantedDueData(now, BatchSize), ct),
-                await ctx.ReadEnabledSearchConnectionsAsync(ct), await ctx.ReadEnabledAcquisitionConnectionsAsync(AcquisitionConnectionType.Sabnzbd, ct)),
+                await ctx.ReadEnabledSearchConnectionsAsync(ct), await ctx.ReadDownloadClientsAsync(ct)),
                 CancellationToken);
             if (indexers.Count == 0)
             {
@@ -244,6 +245,105 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         }
     }
 
+    // Jularr's own Usenet downloader: one job per call for a bounded time; Success tells the worker that work remains.
+    public sealed class DownloadUsenetV1 : SystemService<AcquisitionCycleParametersV1, NoData>
+    {
+        private static readonly TimeSpan PassLength = TimeSpan.FromSeconds(45);
+        private static readonly TimeSpan InterruptedRetry = TimeSpan.FromMinutes(30);
+        private readonly UsenetJob _jobs;
+        private readonly DownloadImport _import;
+        private readonly StorageOptions _options;
+        private readonly TimeProvider _time;
+
+        internal DownloadUsenetV1(UsenetJob jobs, DownloadImport import, IOptions<StorageOptions> options, TimeProvider time)
+        {
+            _jobs = jobs;
+            _import = import;
+            _options = options.Value;
+            _time = time;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(AcquisitionCycleParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(AcquisitionCycleParametersV1 parameters, Type resultType) => new("system.acquisition");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The oldest job of a news server goes first.
+            var downloads = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadActiveDownloadsAsync(ct), CancellationToken);
+            foreach (var download in downloads.Where(download => download.ExternalId == UsenetJob.ExternalId).OrderBy(download => download.StartedAt))
+            {
+                var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(download.AcquisitionConnectionId, ct), CancellationToken);
+                if (connection.AcquisitionConnectionTypeId != AcquisitionConnectionType.Usenet)
+                {
+                    continue;
+                }
+
+                await RunAsync(download, connection);
+                return new UpdateResult(true);
+            }
+
+            return new UpdateResult(false);
+        }
+
+        private async Task RunAsync(DownloadData download, AcquisitionConnectionData connection)
+        {
+            var staging = WantedAcquisition.Staging(_options, download.OperationId);
+            UsenetPassResult pass;
+            try
+            {
+                pass = await _jobs.RunAsync(connection, staging, _time.GetUtcNow() + PassLength, CancellationToken);
+            }
+            catch (UsenetException exception) when (exception.Failure == UsenetFailure.Unauthorized)
+            {
+                await _import.AttentionAsync(Context, download.OperationId, "acquisition_authentication_failed", null, CancellationToken);
+                return;
+            }
+            catch (Exception exception) when (exception is UsenetException or IOException)
+            {
+                // A lost NZB or an unreachable server retries the release later.
+                await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
+                return;
+            }
+
+            switch (pass.State)
+            {
+                case UsenetPassState.Downloading:
+                    var progress = new[]
+                    {
+                        new
+                        {
+                            download.OperationId, pass.ProgressPercent, pass.SizeBytes, pass.RemainingBytes, EtaSeconds = (int?)null, DownloadStateTypeId = (byte)DownloadStateType.Downloading
+                        }
+                    };
+                    await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        await ctx.UpdateDownloadProgressAsync(new DownloadProgressData(JsonSerializer.Serialize(progress)), ct);
+                        return true;
+                    }, CancellationToken);
+                    return;
+                case UsenetPassState.Waiting:
+                    await _import.AttentionAsync(Context, download.OperationId, pass.ReasonKey!, null, CancellationToken);
+                    return;
+                case UsenetPassState.Failed:
+                    await _import.FailAsync(Context, download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime, CancellationToken);
+                    break;
+                default:
+                    var state = new StorageScanState();
+                    var files = StorageFileSystem.EnumerateFiles(pass.OutputPath!, LibraryFileTypes.GetScanExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
+                    await _import.PlaceAsync(Context, download, pass.OutputPath!, files, state.IsComplete, CancellationToken);
+                    break;
+            }
+
+            // Staging is kept only while the import waits for the Owner.
+            if (await Context.ExecuteBatchAsync((ctx, ct) => ctx.IsDownloadFinishedAsync(new DownloadOperationParameters(download.OperationId), ct), CancellationToken))
+            {
+                Directory.Delete(staging, recursive: true);
+            }
+        }
+    }
+
     public sealed class MonitorDownloadsV1 : SystemService<AcquisitionCycleParametersV1, NoData>
     {
         private static readonly TimeSpan LostAfter = TimeSpan.FromMinutes(15);
@@ -254,14 +354,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         private readonly IDataProtector _protector;
         private readonly StorageOptions _options;
         private readonly TimeProvider _time;
-        private readonly PlexServer _plex;
+        private readonly DownloadImport _import;
         private readonly DirectSources _direct;
 
-        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, DirectSources direct, PlexServer plex, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
+        internal MonitorDownloadsV1(SabnzbdClient sabnzbd, DirectSources direct, DownloadImport import, IDataProtectionProvider protection, IOptions<StorageOptions> options, TimeProvider time)
         {
             _direct = direct;
             _sabnzbd = sabnzbd;
-            _plex = plex;
+            _import = import;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
             _options = options.Value;
             _time = time;
@@ -286,6 +386,12 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         await DownloadDirectAsync(download, connection);
                     }
 
+                    continue;
+                }
+
+                // Jularr's own Usenet downloads run in DownloadUsenetV1.
+                if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet)
+                {
                     continue;
                 }
 
@@ -376,7 +482,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
             else if (age > LostAfter)
             {
-                await FailAsync(download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry);
+                await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
             }
         }
 
@@ -389,7 +495,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 // A job the client no longer knows is retried later.
                 if (now - download.StartedAt > LostAfter)
                 {
-                    await FailAsync(download.OperationId, DownloadLogic.InterruptedReasonKey, now + InterruptedRetry);
+                    await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey, now + InterruptedRetry, CancellationToken);
                 }
 
                 return;
@@ -398,7 +504,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             if (finished.IsFailed)
             {
                 var releaseFault = SabnzbdFailureKinds.IsReleaseFault(finished.FailureKind);
-                await FailAsync(download.OperationId, releaseFault ? DownloadLogic.FailedReasonKey : DownloadLogic.InterruptedReasonKey, releaseFault ? now : now + InterruptedRetry);
+                await _import.FailAsync(Context, download.OperationId, releaseFault ? DownloadLogic.FailedReasonKey : DownloadLogic.InterruptedReasonKey, releaseFault ? now : now + InterruptedRetry, CancellationToken);
                 return;
             }
 
@@ -423,7 +529,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             if (storagePath is null || connection.RemotePath is null || connection.LocalPath is null
                 || ImportPlacementLogic.MapRemotePath(storagePath, connection.RemotePath) is not { } relative)
             {
-                await AttentionAsync(download.OperationId, "import_path_unmapped");
+                await _import.AttentionAsync(Context, download.OperationId, "import_path_unmapped", null, CancellationToken);
                 return;
             }
 
@@ -449,102 +555,11 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
             catch (NasMountException)
             {
-                await AttentionAsync(download.OperationId, "import_source_unavailable");
+                await _import.AttentionAsync(Context, download.OperationId, "import_source_unavailable", null, CancellationToken);
                 return;
             }
 
-            await PlaceAsync(download, source, files, state.IsComplete);
-        }
-
-        // Shared by every client: plan, check, link or copy and assign.
-        internal async Task PlaceAsync(DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete)
-        {
-            var root = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadImportRootAsync(download.WorkId, ct), CancellationToken);
-            if (root is null)
-            {
-                await AttentionAsync(download.OperationId, "import_no_library");
-                return;
-            }
-
-            // Ebooks and comics must be what their names say.
-            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author)
-                .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
-                .ToArray();
-            if (placements.Length == 0)
-            {
-                if (isComplete)
-                {
-                    await FailAsync(download.OperationId, DownloadLogic.FailedReasonKey, _time.GetUtcNow().UtcDateTime);
-                }
-
-                return;
-            }
-
-            // Link or copy outside transactions; an existing library file is never taken over.
-            // An offline library keeps the download waiting instead of writing elsewhere.
-            string directory;
-            try
-            {
-                directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
-            }
-            catch (NasMountException)
-            {
-                await AttentionAsync(download.OperationId, "import_library_unavailable");
-                return;
-            }
-
-            var imported = new List<ImportedFile>();
-            var media = new List<(string RelativePath, ImportPlacementData Placement)>();
-            foreach (var group in placements.GroupBy(placement => placement.Group))
-            {
-                var stem = Enumerable.Range(1, 99).Select(attempt => ImportPlacementLogic.Alternative(group.First().TargetStem, attempt))
-                    .First(candidate => group.All(placement => !File.Exists(Path.Combine(directory, (candidate + placement.Extension).Replace('/', Path.DirectorySeparatorChar)))));
-                foreach (var placement in group)
-                {
-                    var relativePath = stem + placement.Extension;
-                    var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
-                    Directory.CreateDirectory(Path.Combine(directory, folder));
-                    var destination = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
-                    var sourceFile = StorageFileSystem.ResolveFile(source, placement.SourcePath);
-                    await Task.Run(() => StorageFileTransfer.HardlinkOrCopy(sourceFile, destination), CancellationToken);
-
-                    var info = new FileInfo(destination);
-                    imported.Add(new ImportedFile(relativePath, info.Length, Truncate(info.LastWriteTimeUtc)));
-                    if (placement.IsMedia)
-                    {
-                        media.Add((relativePath, placement));
-                    }
-                }
-            }
-
-            await Context.ExecuteBatchAsync(async (ctx, ct) =>
-            {
-                await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, Truncate(DateTime.UtcNow), JsonSerializer.Serialize(imported)), ct);
-                foreach (var (relativePath, placement) in media)
-                {
-                    if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), ct) is { } file)
-                    {
-                        await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber, placement.ParentUnitNumber), ct);
-                    }
-                }
-
-                await ctx.CompleteDownloadAsync(new DownloadOperationParameters(download.OperationId), ct);
-
-                // The scan analyses the new streams.
-                await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), ct);
-                return true;
-            }, CancellationToken);
-
-            // A connected Plex shows the title right away.
-            await _plex.RefreshAsync(Context, download.MediaTypeId, CancellationToken);
-        }
-
-        private static bool IsDocument(string source, ImportPlacementData placement)
-        {
-            var header = new byte[128];
-            using var stream = File.OpenRead(StorageFileSystem.ResolveFile(source, placement.SourcePath));
-            var read = stream.ReadAtLeast(header, header.Length, throwOnEndOfStream: false);
-            return LibraryFileTypes.IsDocumentContent(placement.Extension, header.AsSpan(0, read));
+            await _import.PlaceAsync(Context, download, source, files, state.IsComplete, CancellationToken);
         }
 
         // Jularr downloads direct-source books itself into staging, then imports them like any other job.
@@ -565,19 +580,19 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 catch (DirectSourceException exception) when (exception.ErrorKey is "source_gate" or DirectSources.ManualLinkKey)
                 {
                     // A login or challenge waits for a person; nothing is bypassed.
-                    await AttentionAsync(download.OperationId, exception.ErrorKey, exception.ManualUrl?.ToString());
+                    await _import.AttentionAsync(Context, download.OperationId, exception.ErrorKey, exception.ManualUrl?.ToString(), CancellationToken);
                     return;
                 }
                 catch (Exception exception) when (exception is DirectSourceException or IOException)
                 {
                     File.Delete(path + ".part");
-                    await FailAsync(download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry);
+                    await _import.FailAsync(Context, download.OperationId, DownloadLogic.InterruptedReasonKey, _time.GetUtcNow().UtcDateTime + InterruptedRetry, CancellationToken);
                     return;
                 }
             }
 
             var file = new FileInfo(path);
-            await PlaceAsync(download, staging, [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true);
+            await _import.PlaceAsync(Context, download, staging, [new StorageFile(name, file.Length, file.LastWriteTimeUtc)], true, CancellationToken);
 
             // Staging is kept only while the import waits for the Owner.
             var finished = await Context.ExecuteBatchAsync((ctx, ct) => ctx.IsDownloadFinishedAsync(new DownloadOperationParameters(download.OperationId), ct), CancellationToken);
@@ -585,36 +600,6 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             {
                 Directory.Delete(staging, recursive: true);
             }
-        }
-
-        private Task AttentionAsync(long operationId, string attentionKey, string? attentionUrl = null) =>
-            Context.ExecuteBatchAsync(async (ctx, ct) =>
-            {
-                await ctx.SetDownloadAttentionAsync(new DownloadAttentionData(operationId, attentionKey, attentionUrl), ct);
-                return true;
-            }, CancellationToken);
-
-        private Task FailAsync(long operationId, string reasonKey, DateTime nextSearchAt) =>
-            Context.ExecuteBatchAsync(async (ctx, ct) =>
-            {
-                await ctx.FailDownloadAsync(new DownloadFailureData(operationId, reasonKey, nextSearchAt), ct);
-                return true;
-            }, CancellationToken);
-
-        private static DateTime Truncate(DateTime value) => DateTime.UnixEpoch.AddTicks((value.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
-
-        private sealed class ImportedFile
-        {
-            public ImportedFile(string relativePath, long sizeBytes, DateTime modifiedAt)
-            {
-                RelativePath = relativePath;
-                SizeBytes = sizeBytes;
-                ModifiedAt = modifiedAt;
-            }
-
-            public string RelativePath { get; }
-            public long SizeBytes { get; }
-            public DateTime ModifiedAt { get; }
         }
     }
 }

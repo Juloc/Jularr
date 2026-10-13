@@ -26,6 +26,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."RemotePath",
                     connection."LocalPath",
                     connection."Username",
+                    connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version"
                 FROM
@@ -37,9 +38,9 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(sql, ct);
         }
 
-        public static Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledAcquisitionConnectionsAsync(this LogicContext ctx, AcquisitionConnectionType type, CancellationToken ct)
+        public static Task<IReadOnlyList<AcquisitionConnectionData>> ReadDownloadClientsAsync(this LogicContext ctx, CancellationToken ct)
         {
-            // Best priority first.
+            // SABnzbd and Jularr's own news servers, best priority first.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -56,18 +57,18 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."RemotePath",
                     connection."LocalPath",
                     connection."Username",
+                    connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
-                    connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId
+                    connection."AcquisitionConnectionTypeId" IN (2, 6)
                     AND connection."IsEnabled"
                 ORDER BY
                     connection."Priority",
                     connection."Id";
                 """;
-            sql.Parameters.Add(new AcquisitionConnectionTypeParameters(type));
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
@@ -90,6 +91,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."RemotePath",
                     connection."LocalPath",
                     connection."Username",
+                    connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version"
                 FROM
@@ -104,10 +106,17 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
-        // The Anna's Archive member key travels in the address; it is only sent over HTTPS.
+        // News servers are reached over NNTP, everything else over HTTP; the Anna's Archive member key travels in the address and only over HTTPS.
         private static void ValidateAddress(AcquisitionConnectionSaveData data)
         {
-            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive && !data.BaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            var address = new Uri(data.BaseUrl);
+            var valid = data.AcquisitionConnectionTypeId switch
+            {
+                AcquisitionConnectionType.Usenet => address.Scheme is "nntp" or "nntps" && address.AbsolutePath == "/",
+                AcquisitionConnectionType.AnnasArchive => address.Scheme == "https",
+                _ => address.Scheme is "http" or "https"
+            };
+            if (!valid)
             {
                 throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
             }
@@ -123,9 +132,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories", "DownloadCategory",
-                        "RemotePath", "LocalPath", "Username")
+                        "RemotePath", "LocalPath", "Username", "MaxConnections")
                 VALUES
-                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath, @LocalPath, @Username)
+                    (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath, @LocalPath, @Username,
+                        @MaxConnections)
                 RETURNING
                     "Id";
                 """;
@@ -155,6 +165,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "RemotePath" = @RemotePath,
                     "LocalPath" = @LocalPath,
                     "Username" = @Username,
+                    "MaxConnections" = @MaxConnections,
                     "Capabilities" = CASE
                         WHEN connection."BaseUrl" = @BaseUrl AND connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId AND @ProtectedApiKey IS NULL
                             THEN connection."Capabilities"
