@@ -8,6 +8,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Backend.Service.Admin.Activity.V1
 {
@@ -109,7 +110,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Files are fetched over HTTPS only.
-            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || link.Scheme != Uri.UriSchemeHttps)
+            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || !DirectDownload.IsPublicFileUri(link))
             {
                 throw new DataValidationException(nameof(SaveActivitySourceLinkDataV1.SourceUrl), "invalid_url");
             }
