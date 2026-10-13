@@ -26,6 +26,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     root."Id",
                     root."Name",
                     root."MediaTypeId",
+                    root."MediaSubtypeId",
                     root."StorageMountId",
                     mount."Name" AS "StorageMountName",
                     root."RelativePath",
@@ -65,6 +66,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     root."Id",
                     root."Name",
                     root."MediaTypeId",
+                    root."MediaSubtypeId",
                     root."StorageMountId",
                     mount."Name" AS "StorageMountName",
                     root."RelativePath",
@@ -91,7 +93,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var data = new LibraryRootCreationData(Data.Name, Data.MediaTypeId, Data.StorageMountId, Data.RelativePath);
+            var data = new LibraryRootCreationData(Data.Name, Data.MediaTypeId, Data.MediaSubtypeId, Data.StorageMountId, Data.RelativePath);
             return new CreateLibraryRootResultV1(await Context.CreateLibraryRootAsync(data, CancellationToken));
         }
     }

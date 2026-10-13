@@ -14,6 +14,8 @@ namespace Jularr.Backend.Logic.Media
                 SELECT
                     work."Id",
                     work."MediaTypeId",
+                    work."MediaSubtypeId",
+                    work."IsMediaSubtypeManual",
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Version"

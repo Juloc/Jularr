@@ -24,6 +24,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     wanted."Id" AS "WantedItemId",
                     work."Id" AS "WorkId",
                     work."MediaTypeId",
+                    work."MediaSubtypeId",
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     ARRAY(
@@ -79,7 +80,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                         WHERE
                             unit."WorkId" = work."Id"
-                            AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaTypeId" = 4)
+                            AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                             AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                             AND NOT EXISTS (
                                 SELECT
@@ -148,7 +149,10 @@ namespace Jularr.Backend.Logic.Acquisition
                             "AcquisitionProfiles" AS candidate
                         WHERE
                             candidate."MediaTypeId" = work."MediaTypeId"
-                            AND (candidate."Id" = wanted."AcquisitionProfileId" OR (wanted."AcquisitionProfileId" IS NULL AND candidate."IsDefault"))
+                            AND (candidate."Id" = wanted."AcquisitionProfileId"
+                                OR wanted."AcquisitionProfileId" IS NULL AND candidate."IsDefault" AND (candidate."MediaSubtypeId" IS NULL OR candidate."MediaSubtypeId" = work."MediaSubtypeId"))
+                        ORDER BY
+                            candidate."MediaSubtypeId" IS NULL
                         LIMIT 1
                     ) AS profile ON TRUE
                 WHERE
@@ -173,7 +177,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     NOT wanted."IsPaused"
                     AND (wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now)
                     AND (
-                        work."MediaTypeId" IN (1, 3, 4, 5, 6, 7)
+                        work."MediaTypeId" IN (1, 3, 6, 7)
                         AND NOT EXISTS (
                             SELECT
                                 1
@@ -182,7 +186,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             WHERE
                                 volume."WorkId" = work."Id"
                                 AND volume."WorkUnitTypeId" = 3
-                                AND work."MediaTypeId" = 4
+                                AND work."MediaSubtypeId" = 2
                         )
                         AND NOT EXISTS (
                             SELECT
@@ -215,7 +219,7 @@ namespace Jularr.Backend.Logic.Acquisition
                                 release."WantedItemId" = wanted."Id"
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
-                        OR work."MediaTypeId" IN (2, 4)
+                        OR (work."MediaTypeId" = 2 OR work."MediaSubtypeId" = 2)
                         AND EXISTS (
                             SELECT
                                 1
@@ -224,7 +228,7 @@ namespace Jularr.Backend.Logic.Acquisition
                                 LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                             WHERE
                                 unit."WorkId" = work."Id"
-                                AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaTypeId" = 4)
+                                AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                                 AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                                 AND NOT EXISTS (
                                     SELECT
@@ -311,7 +315,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     wanted."Id" = @WantedItemId
                     AND operation."OperationStatusTypeId" IN (1, 2)
                     AND (
-                        work."MediaTypeId" NOT IN (2, 4)
+                        work."MediaTypeId" <> 2 AND work."MediaSubtypeId" IS DISTINCT FROM 2
                         OR release."ParentUnitNumber" IS NULL AND release."UnitStart" IS NULL
                         OR @ParentUnitNumber::integer IS NULL AND @UnitStart::integer IS NULL
                         OR release."ParentUnitNumber" IS NOT DISTINCT FROM @ParentUnitNumber::integer
@@ -466,7 +470,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                 WHERE
                     wanted."Id" = @WantedItemId
-                    AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaTypeId" = 4)
+                    AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                     AND unit."Number" = trunc(unit."Number")
                 ORDER BY
                     parent."Number" NULLS FIRST,
@@ -487,6 +491,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     release."WantedItemId",
                     work."Id" AS "WorkId",
                     work."MediaTypeId",
+                    work."MediaSubtypeId",
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     operation."AcquisitionConnectionId",
@@ -796,7 +801,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                         WHERE
                             work."Id" = wanted."WorkId"
-                            AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaTypeId" = 4)
+                            AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                             AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                             AND NOT EXISTS (
                                 SELECT
@@ -816,31 +821,36 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        public static Task<LibraryRootLocationData?> ReadImportRootAsync(this LogicContext ctx, long workId, CancellationToken ct)
+        public static Task<LibraryRootLocationData?> ReadImportRootAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
         {
-            // The first library of the media type receives downloads.
+            // The target's chosen library, else the first one of its subtype, else of its parent type.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     root."Id",
                     root."MediaTypeId",
+                    root."MediaSubtypeId",
                     root."StorageMountId",
                     mount."StorageProtocolTypeId",
                     mount."SharePath",
                     root."RelativePath"
                 FROM
-                    "Works" AS work
+                    "WantedItems" AS wanted
+                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                     JOIN "LibraryRoots" AS root ON root."MediaTypeId" = work."MediaTypeId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                 WHERE
-                    work."Id" = @Id
+                    wanted."Id" = @WantedItemId
                     AND NOT mount."IsReadOnly"
+                    AND (root."Id" = wanted."LibraryRootId" OR root."MediaSubtypeId" IS NULL OR root."MediaSubtypeId" = work."MediaSubtypeId")
                 ORDER BY
+                    root."Id" = wanted."LibraryRootId" DESC NULLS LAST,
+                    root."MediaSubtypeId" = work."MediaSubtypeId" DESC NULLS LAST,
                     root."Id"
                 LIMIT 1;
                 """;
-            sql.Parameters.Add(new WorkIdData(workId));
+            sql.Parameters.Add(new WantedItemParameters(wantedItemId));
             return ctx.ReadSql.ReadOptionalAsync<LibraryRootLocationData>(sql, ct);
         }
 

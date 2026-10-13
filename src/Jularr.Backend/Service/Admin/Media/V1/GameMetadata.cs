@@ -92,7 +92,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Overview", Value = Limit(game.Summary, 4000), Localized = false },
                 new { Key = "Poster", Value = game.CoverImageId is { } cover ? IgdbClient.CoverUrl(cover) : null, Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
-            var data = new WorkMetadataData(MediaType.Game, Namespace, game.Id.ToString(CultureInfo.InvariantCulture), game.Name, game.AlternativeNames.FirstOrDefault(),
+            var data = new WorkMetadataData(MediaType.Game, null, Namespace, game.Id.ToString(CultureInfo.InvariantCulture), game.Name, game.AlternativeNames.FirstOrDefault(),
                 game.Year is >= 1950 and <= 2200 ? game.Year : null, "[]", "[]", JsonSerializer.Serialize(facts), Namespace);
             var platforms = JsonSerializer.Serialize(game.Platforms.Select(platform => new { platform.Id, platform.Name, platform.Abbreviation }));
             return await context.ExecuteBatchAsync(async (ctx, token) =>

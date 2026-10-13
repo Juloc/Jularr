@@ -8,12 +8,13 @@ namespace Jularr.Backend.Data.Logic.Media
 {
     internal sealed class WorkMetadataData : BaseData
     {
-        public WorkMetadataData(MediaType mediaTypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,
+        public WorkMetadataData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,
             string units, string facts, string providerKey)
         {
             ProviderKey = providerKey;
             Facts = facts;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             Namespace = @namespace;
             Value = value;
             CanonicalTitle = canonicalTitle;
@@ -25,6 +26,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        // A provider classification never clears an existing or manual one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
         public string Namespace { get; }
@@ -127,15 +132,19 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class LibraryFilterData : BaseData
     {
-        public LibraryFilterData(MediaType? mediaTypeId, string? query, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
+        public LibraryFilterData(MediaType? mediaTypeId, MediaSubtype? mediaSubtypeId, string? query, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
         {
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             Query = query;
             LibrarySortTypeId = librarySortTypeId;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
         public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query), false)]
         public string? Query { get; }

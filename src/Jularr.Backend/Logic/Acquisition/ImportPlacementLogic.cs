@@ -31,16 +31,12 @@ namespace Jularr.Backend.Logic.Acquisition
             return rest.Split('/').Any(segment => segment is "." or "..") ? null : rest;
         }
 
-        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files, string? author = null, int trackCount = 0, string? platform = null)
+        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files,
+            string? author = null, int trackCount = 0, string? platform = null)
         {
-            if (mediaType is MediaType.Book or MediaType.LightNovel)
+            if (mediaType == MediaType.Book)
             {
-                return PlanBook(title, year, author, files);
-            }
-
-            if (mediaType == MediaType.Manga)
-            {
-                return PlanManga(title, files);
+                return subtype == MediaSubtype.Manga ? PlanManga(title, files) : PlanBook(title, year, author, files);
             }
 
             if (mediaType == MediaType.Music)

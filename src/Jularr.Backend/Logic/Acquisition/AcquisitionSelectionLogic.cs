@@ -13,16 +13,17 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         internal static readonly JsonSerializerOptions DefinitionOptions = new() { Converters = { new JsonStringEnumConverter() } };
 
-        public static AcquisitionKind? GetKind(MediaType mediaType) => mediaType switch
+        public static AcquisitionKind GetKind(MediaType mediaType, MediaSubtype? subtype) => (mediaType, subtype) switch
         {
-            MediaType.Movie => AcquisitionKind.Movie,
-            MediaType.Series => AcquisitionKind.Tv,
-            MediaType.Book => AcquisitionKind.Book,
-            MediaType.Manga => AcquisitionKind.Manga,
-            MediaType.Music => AcquisitionKind.Music,
-            MediaType.Game => AcquisitionKind.Game,
-            MediaType.LightNovel => AcquisitionKind.LightNovel,
-            _ => null
+            (MediaType.Movie, _) => AcquisitionKind.Movie,
+            (MediaType.Series, MediaSubtype.Anime) => AcquisitionKind.Anime,
+            (MediaType.Series, _) => AcquisitionKind.Tv,
+            (MediaType.Book, MediaSubtype.Manga) => AcquisitionKind.Manga,
+            (MediaType.Book, MediaSubtype.LightNovel) => AcquisitionKind.LightNovel,
+            (MediaType.Book, _) => AcquisitionKind.Book,
+            (MediaType.Music, _) => AcquisitionKind.Music,
+            (MediaType.Game, _) => AcquisitionKind.Game,
+            _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
         };
 
         public static QualityProfile ReadProfile(WantedTargetData target)
@@ -42,12 +43,12 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         // The quality a release is stored with.
-        public static string? QualityKey(MediaType mediaType, string title, int? igdbPlatform = null) => mediaType switch
+        public static string? QualityKey(AcquisitionKind kind, string title, int? igdbPlatform = null) => kind switch
         {
-            MediaType.Book or MediaType.LightNovel => ReleaseQuality.GetKey(BookReleaseJudge.Parse(title)),
-            MediaType.Manga => ReleaseQuality.GetKey(MangaReleaseJudge.Parse(title)),
-            MediaType.Music => ReleaseQuality.GetKey(MusicReleaseJudge.Parse(title)),
-            MediaType.Game => ReleaseQuality.GetKey(GameReleaseJudge.Parse(title, igdbPlatform)),
+            AcquisitionKind.Book or AcquisitionKind.LightNovel => ReleaseQuality.GetKey(BookReleaseJudge.Parse(title)),
+            AcquisitionKind.Manga => ReleaseQuality.GetKey(MangaReleaseJudge.Parse(title)),
+            AcquisitionKind.Music => ReleaseQuality.GetKey(MusicReleaseJudge.Parse(title)),
+            AcquisitionKind.Game => ReleaseQuality.GetKey(GameReleaseJudge.Parse(title, igdbPlatform)),
             _ => ReleaseParser.TryParse(title, out var parsed) ? ReleaseQuality.GetKey(parsed) : null
         };
 
@@ -149,10 +150,10 @@ namespace Jularr.Backend.Logic.Acquisition
             return ReadUnitScope(states, parentNumber, firstAttempt && group.All(state => state.IsMissing) ? null : next.Number);
         }
 
-        public static IReadOnlyList<UnitStateData> Claim(IReadOnlyList<UnitStateData> states, UnitScope scope, MediaType mediaType, ReleaseInfo? parsed)
+        public static IReadOnlyList<UnitStateData> Claim(IReadOnlyList<UnitStateData> states, UnitScope scope, AcquisitionKind kind, ReleaseInfo? parsed)
         {
             // A grabbed release claims its group or unit range for the rest of the pass.
-            var (start, end, pack) = ReadRange(mediaType, parsed);
+            var (start, end, pack) = ReadRange(kind, parsed);
             var first = start ?? scope.Unit.Number;
             var last = end ?? first;
             return states.Select(state => state.IsMissing && state.ParentNumber == scope.ParentNumber && (parsed is null || pack || state.Number >= first && state.Number <= last)
@@ -160,25 +161,25 @@ namespace Jularr.Backend.Logic.Acquisition
                 : state).ToArray();
         }
 
-        public static (int? Parent, int? Start, int? End) ReadCoverage(MediaType mediaType, string title)
+        public static (int? Parent, int? Start, int? End) ReadCoverage(AcquisitionKind kind, string title)
         {
             // Series releases claim a season or an episode range, Manga releases a volume range or the whole Work.
-            if (mediaType == MediaType.Manga)
+            if (kind == AcquisitionKind.Manga)
             {
-                var (start, end, _) = ReadRange(mediaType, MangaReleaseJudge.Parse(title));
+                var (start, end, _) = ReadRange(kind, MangaReleaseJudge.Parse(title));
                 return (null, start, end);
             }
 
-            if (mediaType != MediaType.Series || !ReleaseParser.TryParse(title, out var parsed) || parsed.SeasonNumber is not { } season)
+            if (kind is not (AcquisitionKind.Tv or AcquisitionKind.Anime) || !ReleaseParser.TryParse(title, out var parsed) || parsed.SeasonNumber is not { } season)
             {
                 return (null, null, null);
             }
 
-            var (first, last, pack) = ReadRange(mediaType, parsed);
+            var (first, last, pack) = ReadRange(kind, parsed);
             return pack || first is null ? (season, null, null) : (season, first, last);
         }
 
-        private static (int? Start, int? End, bool Pack) ReadRange(MediaType mediaType, ReleaseInfo? parsed) => mediaType == MediaType.Manga
+        private static (int? Start, int? End, bool Pack) ReadRange(AcquisitionKind kind, ReleaseInfo? parsed) => kind == AcquisitionKind.Manga
             ? (parsed?.VolumeStart, parsed?.VolumeStart is { } volume ? Math.Max(volume, parsed.VolumeEnd ?? volume) : null, parsed?.VolumeStart is null)
             : (parsed?.EpisodeStart, parsed?.EpisodeStart is { } episode ? Math.Max(episode, parsed.EpisodeEnd ?? episode) : null, parsed?.IsSeasonPack == true);
     }

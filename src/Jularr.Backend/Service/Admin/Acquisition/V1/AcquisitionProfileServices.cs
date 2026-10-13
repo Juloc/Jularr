@@ -26,6 +26,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."Id",
                     profile."Name",
                     profile."MediaTypeId",
+                    profile."MediaSubtypeId",
                     profile."IsDefault",
                     ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'AllowedQualities')) AS "AllowedQualities",
                     coalesce((profile."Definition" ->> 'UpgradeAllowed')::boolean, FALSE) AS "UpgradeAllowed",
@@ -47,6 +48,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     "AcquisitionProfiles" AS profile
                 ORDER BY
                     profile."MediaTypeId",
+                    profile."MediaSubtypeId" NULLS FIRST,
                     profile."IsDefault" DESC,
                     profile."Name",
                     profile."Id";
@@ -71,6 +73,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."Id",
                     profile."Name",
                     profile."MediaTypeId",
+                    profile."MediaSubtypeId",
                     profile."IsDefault",
                     ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'AllowedQualities')) AS "AllowedQualities",
                     coalesce((profile."Definition" ->> 'UpgradeAllowed')::boolean, FALSE) AS "UpgradeAllowed",
@@ -148,7 +151,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     internal static class AcquisitionProfileInput
     {
         public static AcquisitionProfileInputData Create(long? id, SaveAcquisitionProfileDataV1 data) =>
-            new(id, data.Name, data.MediaTypeId, data.IsDefault, data.AllowedQualities, data.UpgradeAllowed, data.UpgradeCutoffQuality, data.MinimumSizeMb, data.MaximumSizeMb,
+            new(id, data.Name, data.MediaTypeId, data.MediaSubtypeId, data.IsDefault, data.AllowedQualities, data.UpgradeAllowed, data.UpgradeCutoffQuality, data.MinimumSizeMb, data.MaximumSizeMb,
                 data.MustContain, data.MustNotContain, data.Version);
     }
 }

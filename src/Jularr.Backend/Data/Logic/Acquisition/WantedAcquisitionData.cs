@@ -23,7 +23,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedTargetData : BaseData
     {
-        public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
+        public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
             string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId)
         {
@@ -33,6 +33,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             WantedItemId = wantedItemId;
             WorkId = workId;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             CanonicalTitle = canonicalTitle;
             ReleaseYear = releaseYear;
             Titles = titles;
@@ -56,6 +57,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
@@ -244,7 +248,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class DownloadData : BaseData
     {
-        public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
+        public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
             string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName)
         {
@@ -259,6 +263,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             WantedItemId = wantedItemId;
             WorkId = workId;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             CanonicalTitle = canonicalTitle;
             ReleaseYear = releaseYear;
             AcquisitionConnectionId = acquisitionConnectionId;
@@ -278,6 +283,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }

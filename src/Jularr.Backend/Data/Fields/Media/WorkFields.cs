@@ -8,6 +8,8 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly IntField TrackCount = new() { Minimum = 0 };
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly EnumField MediaTypeId = new(typeof(MediaType));
+        public static readonly EnumField MediaSubtypeId = new(typeof(MediaSubtype)) { Required = false };
+        public static readonly BoolField IsMediaSubtypeManual = new();
         public static readonly StringField CanonicalTitle = new(NpgsqlDbType.Varchar) { AllowBlank = false, Trim = true, MaximumLength = 500 };
         public static readonly IntField ReleaseYear = new() { Minimum = 1800, Maximum = 2200, Required = false };
         public static readonly LongField Version = new() { Minimum = 1 };

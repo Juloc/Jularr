@@ -265,8 +265,8 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         [DataRow("Show (2020)/Season 2/Show.S02E05.1080p.WEB-DL.mkv", MediaType.Series, "Show", WorkUnitType.Episode, "5", "2")]
         [DataRow("Anime Name/Anime Name - 012 [1080p].mkv", MediaType.Series, "Anime Name", WorkUnitType.Episode, "12", "1")]
-        [DataRow("Manga Title/Manga Title v03 c012.5.cbz", MediaType.Manga, "Manga Title", WorkUnitType.Chapter, "12.5", "3")]
-        [DataRow("Novel/Novel Vol. 4.epub", MediaType.LightNovel, "Novel", WorkUnitType.Volume, "4", null)]
+        [DataRow("Manga Title/Manga Title v03 c012.5.cbz", MediaType.Book, "Manga Title", WorkUnitType.Chapter, "12.5", "3")]
+        [DataRow("Novel/Novel Vol. 4.epub", MediaType.Book, "Novel", WorkUnitType.Volume, "4", null)]
         [DataRow("Album (1999)/03 - Song.flac", MediaType.Music, "Album", WorkUnitType.Track, "3", null)]
         [DataRow("Movie.Name.2010.2160p.BluRay.x265.mkv", MediaType.Movie, "Movie Name", null, null, null)]
         public void Parser_CommonLayouts_SuggestTitleAndUnit(string path, MediaType mediaType, string title, WorkUnitType? unitType, string? number, string? parent)
@@ -313,9 +313,9 @@ namespace Jularr.Backend.Tests
             return (await created.Content.ReadFromJsonAsync<CreateStorageMountResultV1>())!.Id;
         }
 
-        internal static async Task<long> CreateRootAsync(Host host, long mountId, string path, MediaType mediaType)
+        internal static async Task<long> CreateRootAsync(Host host, long mountId, string path, MediaType mediaType, MediaSubtype? subtype = null)
         {
-            using var created = await host.SendAsync(HttpMethod.Post, Roots, new CreateLibraryRootDataV1(path, mediaType, mountId, path));
+            using var created = await host.SendAsync(HttpMethod.Post, Roots, new CreateLibraryRootDataV1(path, mediaType, mountId, path, subtype));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
             return (await created.Content.ReadFromJsonAsync<CreateLibraryRootResultV1>())!.Id;
         }

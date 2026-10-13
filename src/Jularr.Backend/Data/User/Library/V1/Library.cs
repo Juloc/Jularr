@@ -6,17 +6,23 @@ namespace Jularr.Backend.Data.User.Library.V1
 {
     public sealed class ReadLibraryParametersV1 : BaseParameters
     {
-        public ReadLibraryParametersV1(MediaType? mediaTypeId = null, string? query = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded, int page = 1, int pageSize = 48)
+        public ReadLibraryParametersV1(MediaType? mediaTypeId = null, string? query = null, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded, int page = 1, int pageSize = 48,
+            MediaSubtype? mediaSubtypeId = null)
         {
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             Query = query;
             LibrarySortTypeId = librarySortTypeId;
             Page = page;
             PageSize = pageSize;
         }
 
+        // A type alone lists its Works without subtype; a subtype lists that subtype across types.
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
         public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query), false)]
         public string? Query { get; }

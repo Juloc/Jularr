@@ -123,7 +123,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
+        public async Task<long> ImportAsync(LogicContext context, TmdbConnection connection, MediaType mediaType, MediaSubtype? subtype, int tmdbId, CancellationToken ct)
         {
             // Read everything before the short write batch.
             TmdbWork work;
@@ -163,7 +163,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Poster", Value = TmdbClient.PosterUrl(work.PosterPath), Localized = false },
                 new { Key = "Backdrop", Value = TmdbClient.BackdropUrl(work.BackdropPath), Localized = false }
             }.Where(fact => fact.Value is not null);
-            var data = new WorkMetadataData(mediaType, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), Limit(work.Title)!,
+            var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), Limit(work.Title)!,
                 work.OriginalTitle == work.Title ? null : Limit(work.OriginalTitle), work.Year is >= 1800 and <= 2200 ? work.Year : null,
                 JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tmdb");
             return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);

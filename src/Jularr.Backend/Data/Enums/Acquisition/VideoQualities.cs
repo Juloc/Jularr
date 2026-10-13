@@ -42,11 +42,10 @@ namespace Jularr.Backend.Data.Enums.Acquisition
     public static class ProfileQualities
     {
         // Media types with release qualities; empty means no profiles.
-        public static IReadOnlyList<string> For(MediaType mediaType) => mediaType switch
+        public static IReadOnlyList<string> For(MediaType mediaType, MediaSubtype? subtype) => mediaType switch
         {
             MediaType.Movie or MediaType.Series => VideoQualities.Order,
-            MediaType.Book or MediaType.LightNovel => BookQualities.Order,
-            MediaType.Manga => MangaQualities.Order,
+            MediaType.Book => subtype == MediaSubtype.Manga ? MangaQualities.Order : BookQualities.Order,
             MediaType.Music => MusicQualities.Order,
             MediaType.Game => GameQualities.Order,
             _ => []
