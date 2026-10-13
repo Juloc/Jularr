@@ -48,7 +48,7 @@ Do not show if Jularr already has a valid preferred/default choice.
 
 `Continue` should normally resolve from the save/recent-play state.
 
-If the selected Save State or normal save is bound to one specific GameRelease/runtime-compatible path, use that automatically.
+If the selected Save State or normal save is bound to one specific WorkVersion/GameRelease-extension/runtime-compatible path, use that automatically.
 
 Do not ask the user to reselect a release that is already implied by the save.
 
@@ -211,7 +211,7 @@ Conceptually:
 
 ```text
 PlayOptions
-- GameId
+- WorkId
 - Origin: Play | Continue
 - SaveContext?
 - ReleaseChoices[]

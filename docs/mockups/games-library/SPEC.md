@@ -62,7 +62,7 @@ Home may independently surface a smaller shared `Continue Playing` row.
 
 Default view is cover/grid-first.
 
-One card represents one canonical `Game`, not one ROM/file.
+One card represents one canonical Game `Work`, not one ROM/file or provider record.
 
 Show only glanceable information:
 - cover/artwork;
@@ -126,7 +126,7 @@ GamesPage
 - availablePlatforms[]
 
 GameCard
-- GameId
+- WorkId
 - Title
 - Artwork
 - PlatformSummary
@@ -135,8 +135,8 @@ GameCard
 - OptionalRecentPlay
 
 ContinueGameCard
-- GameId
-- GameReleaseId
+- WorkId
+- WorkVersionId
 - Title
 - Artwork
 - Platform
@@ -163,7 +163,7 @@ Flow:
 ```text
 Games page
  -> Play/Continue
- -> Games application service resolves GameRelease
+ -> Games application service resolves WorkVersion + GameRelease extension
  -> runtime capability resolver
  -> LaunchPlan
  -> Game Player

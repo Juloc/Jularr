@@ -510,7 +510,7 @@ Required:
 Games reuses the existing Metadata provider family. Do not create a separate Games Provider settings product.
 
 A Game metadata adapter may declare capabilities such as:
-- canonical Game search/metadata;
+- canonical Game Work search/metadata;
 - platform identity/mappings;
 - release date/year;
 - developer/publisher;
@@ -520,7 +520,7 @@ A Game metadata adapter may declare capabilities such as:
 - region/release/revision evidence where the provider actually exposes it;
 - discovery/trending/recommendation evidence where supported.
 
-Provider IDs remain provenance/mapping evidence. They never replace Jularr's canonical `Game`, `GamePlatform` or `GameRelease` IDs.
+Provider IDs remain provenance/mapping evidence. Title-level Game provider IDs map to canonical `WorkExternalIdentity`/Work metadata. They never replace `WorkId`, `WorkVersionId` or the Games-owned `GamePlatform` identity.
 
 The Games module consumes normalized provider contracts. Admin Provider Settings owns:
 - adapter configuration;
@@ -530,10 +530,10 @@ The Games module consumes normalized provider contracts. Admin Provider Settings
 - health/test/logs/rate limits.
 
 Games owns:
-- canonical matching;
+- Game-specific matching evidence interpretation on top of canonical Work identity;
 - platform/release interpretation;
-- import identity;
-- Game library behavior.
+- WorkVersion/GameRelease-extension import semantics;
+- Game library/play behavior.
 
 Do not put emulator/runtime/BIOS configuration into Metadata providers.
 

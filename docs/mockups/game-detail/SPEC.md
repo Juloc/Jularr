@@ -11,7 +11,7 @@ Browser runtime plan: #771.
 
 ## Purpose
 
-Canonical consumer detail page for one Game.
+Canonical consumer detail page for one Game `Work` (`WorkMediaType.Game`).
 
 It answers:
 - what is this Game;
@@ -63,7 +63,7 @@ Do not show:
 - EmulatorJS core names;
 - downloader/indexer data.
 
-The visual mockups may use an illustrative fictional game; implementation uses canonical Jularr Game metadata.
+The visual mockups may use an illustrative fictional game; implementation uses canonical Work metadata plus Games-specific WorkVersion/GameRelease extension data.
 
 ## Primary action rules
 
@@ -141,7 +141,7 @@ No technical runtime/file information belongs here.
 
 ## Versions / releases
 
-One canonical Game may have multiple `GameRelease` entries.
+One canonical Game Work may have multiple `WorkVersion` entries; each game-specific version may carry a `GameRelease` extension for platform/region/revision semantics.
 
 Version cards/rows may show:
 - artwork/cover variation where available;
@@ -382,7 +382,7 @@ GET Game Detail
  -> runtime capability service
 
 Play / Continue
- -> ResolveLaunch(GameId, optional GameReleaseId, optional SaveStateId)
+ -> ResolveLaunch(WorkId, optional WorkVersionId, optional SaveStateId)
  -> LaunchPlan
  -> Game Player
 ```

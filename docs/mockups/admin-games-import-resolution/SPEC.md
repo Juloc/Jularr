@@ -9,7 +9,7 @@ Acquisition/import foundations: #389, #697, #715.
 
 ## Purpose
 
-Resolve the exceptional case where a completed Game import cannot safely determine its canonical Game/platform/release target automatically.
+Resolve the exceptional case where a completed Game import cannot safely determine its canonical Game Work/platform/WorkVersion target automatically.
 
 This is not a normal import step.
 
@@ -121,7 +121,7 @@ Do not present every recognized value as an editable form field.
 
 ## Candidate Game matching
 
-When canonical Game identity is unresolved, show a compact candidate section.
+When canonical Game Work identity is unresolved, show a compact candidate section.
 
 Candidate row may include:
 - cover;
@@ -280,7 +280,7 @@ Resolution
  -> validate against staged import
  -> Games importer
  -> final Games LibraryRoot placement
- -> Game/GameRelease create or link
+ -> Work/WorkVersion create or link, with GameRelease extension where required
  -> Operation/Activity completed
 ```
 
@@ -386,8 +386,8 @@ GameImportResolution
 - SourceSummary
 - DetectedFiles[]
 - Evidence[]
-- CandidateGames[]
-- SelectedGameId?
+- CandidateGameWorks[]
+- SelectedWorkId?
 - Platform
 - Region?
 - Revision?

@@ -10,7 +10,7 @@ Acquisition/import foundations: #389, #697, #715.
 
 Games is a consumer-facing library/play area backed by a strongly isolated Games module.
 
-Shared Jularr infrastructure may search, acquire, download and hand off a completed download. Game-specific identity, releases, platforms, import, runtimes, BIOS/firmware, saves and play behavior remain inside Games.
+Shared Jularr infrastructure may search, acquire, download and hand off a completed download. Canonical title identity remains in MediaCore as a `Work` with media type Game. Games owns only genuinely game-specific platform/release, import, runtime, BIOS/firmware, save and play behavior.
 
 ## Consumer navigation
 
@@ -79,16 +79,26 @@ Game-specific surfaces may deep-link to these areas.
 
 ## Core identity
 
-Consumer UX may expose:
-- Game
-- Platform
-- GameRelease
-- region/revision/language where useful
-- local availability
-- runtime/play availability
-- per-profile save state
+A Game is canonically a MediaCore `Work` whose media type is Game.
 
-Do not expose provider-native IDs as product identity.
+Binding ownership:
+- `WorkId` is the stable Game identity everywhere;
+- `WorkTitle`, Work metadata/provenance, Work provider identities and shared artwork own title-level facts;
+- `WorkVersion` is the concrete acquirable/playable release identity;
+- `GameRelease` is a Games-owned extension of that `WorkVersion`, not a competing root;
+- `GamePlatform` remains a genuine Games-owned platform identity;
+- ordered/multi-disc membership references canonical `StoredFile` rows instead of creating a second file identity.
+
+Consumer UX may still call the product object a Game and may expose:
+- Game title/metadata from Work;
+- Platform;
+- release/version details from WorkVersion + GameRelease extension;
+- region/revision/language where useful;
+- local availability;
+- runtime/play availability;
+- per-profile save state.
+
+Provider-native IDs are evidence on the Work/WorkVersion mapping path, never product identity.
 
 ## TV and controller direction
 
@@ -109,8 +119,8 @@ This capability is planned architecture, not a V1 implementation blocker. Actual
 ## Play contract
 
 ```text
-Game detail
- -> choose playable release/runtime only when needed
+Game detail (WorkId)
+ -> choose playable WorkVersion/GameRelease runtime only when needed
  -> Games creates LaunchPlan
  -> Browser/approved runtime receives only required game assets
  -> current profile save scope
