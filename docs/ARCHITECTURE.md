@@ -704,11 +704,9 @@ Provider records are discovery/metadata inputs, never parallel domain identities
 
 For watch/read/listen media, Search and recommendation adapters resolve provider hits through canonical Work identity before normal presentation. Series/Anime remain `Work -> Season -> Episode`; one Work can have multiple provider mappings, including AniList entries for seasons/parts/specials.
 
-For Games, Search/Discover resolves through the isolated Games module to canonical `Game` identity and optional GameRelease/platform presentation context. A Game is not converted into a Work.
+For Games, Search/Discover resolves to the same canonical `Work` identity used by other media, with media type Game. The Games module owns only game-specific platform/release/runtime behavior layered below that Work. A concrete playable release is a `WorkVersion` with a Games-specific GameRelease extension.
 
-The shared presentation contract is therefore conceptually a **typed canonical target + optional provider/presentation target**:
-- Media target -> Work;
-- Games target -> Game.
+The shared presentation contract is therefore conceptually **canonical Work + optional structure/version/presentation context** for every media type, including Games.
 
 Default surfaces deduplicate by the owning domain's canonical identity. Provider-native views may expose individual provider entries, but durable actions first resolve back to the canonical target. This rule is shared by Search, Discover, Home and Requests; Library/Calendar use only the target kinds they explicitly support.
 

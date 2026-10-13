@@ -66,16 +66,18 @@ Anime/Series provider season/part splits remain mappings/presentation targets ov
 
 ## 5. Games identity boundary — aligned
 
-Games is deliberately outside MediaCore.
+Games uses canonical MediaCore Work identity.
 
-Shared Search/Discover/Home/Request uses a typed canonical target:
+Shared Search/Discover/Home/Request therefore use one title-level target:
+- every media title, including Games -> `Work`.
 
-- normal media -> `Work`;
-- Games -> Games-owned `Game`.
+Games remains behaviorally isolated only for genuine game-specific concerns:
+- `GamePlatform`;
+- `WorkVersion` + GameRelease extension semantics;
+- multi-file/multi-disc release membership;
+- runtime/BIOS/controller/save behavior.
 
-The shared UI/pipeline does not force Game/GameRelease into Work/Edition merely to reuse Search or Request.
-
-Collections remain Work-based in V1. Games is therefore not silently inserted into `CollectionEntry(WorkId)`; adding cross-domain Collections later requires an explicit typed target contract.
+Collections remain Work-based and can reference Game Works through the same `CollectionEntry(WorkId)`. No independent Games-owned title root is part of the target.
 
 ## 6. Discovery / provider persistence — aligned
 

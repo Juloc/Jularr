@@ -28,7 +28,7 @@ A Collection may contain any supported media types together:
 
 Cross-media is therefore a normal capability, **not a Collection kind**.
 
-Games is not part of V1 Work Collections. Games owns canonical `Game` identity outside MediaCore while `CollectionEntry` stores `WorkId`. Adding Games later requires an explicit typed cross-domain collection contract; do not force Game into Work merely to reuse Collections.
+Games uses the same canonical `WorkId` as other media. A Game Work may therefore participate in Work Collections without a second cross-domain identity contract. Collection membership remains title-level; platform/release/runtime details stay in Games/WorkVersion extensions and are not duplicated into `CollectionEntry`.
 
 V1 has exactly three persisted Collection modes:
 

@@ -31,10 +31,10 @@ The dialog never contains media search/title selection.
 The calling surface must provide a safely resolved canonical request target before Request opens.
 
 Target kinds:
-- watch/read/listen media -> canonical Work plus optional structure/Edition intent;
-- Games -> canonical Game target owned by the Games module.
+- every title-level request, including Games -> canonical Work;
+- optional structure/Edition/WorkVersion intent only where the media type genuinely requires it.
 
-The shared Request UI does not make Game a Work.
+For Games, the Work has media type Game. Platform/region/language/release preferences are request intent below that Work, not a second canonical Game identity.
 
 If a provider result is not yet resolved, canonical identity resolution happens before the dialog opens.
 
@@ -166,7 +166,7 @@ A failed direct provider may fall through to another eligible provider or the sh
 Games uses the same one-page Request and approval semantics.
 
 V1 Games Request is normally a simple target request:
-- canonical Game identity;
+- canonical Game Work identity;
 - platform/region/language preference only when the Games acquisition contract genuinely requires it;
 - no Season/Volume/Chapter Scope tree;
 - no emulator/runtime/BIOS choices in Request.
@@ -357,7 +357,7 @@ AniList/MAL never owns the canonical Request or Jularr personal-state model.
 A Request stores user intent around canonical media:
 
 - requester/profile;
-- typed canonical target (`Work` for normal media, `Game` for Games);
+- canonical `Work` target for every media type, including Games;
 - optional canonical structural/Edition target(s) for media where applicable;
 - Scope;
 - included units when Custom;
