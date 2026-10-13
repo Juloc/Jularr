@@ -26,6 +26,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             page.Title("admin.activity.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Activity/Activity.entry.scss");
+            page.Asset("Pages/Admin/Activity/Activity.entry.ts");
             page.Content.Add(new NavigationTabs(Enum.GetValues<ActivityTabType>()
                 .Select(tab => new NavigationTab("activity.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.activity.title"));
 
