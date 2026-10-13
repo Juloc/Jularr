@@ -43,38 +43,32 @@ namespace Jularr.Backend.Logic.Acquisition
             var viaId = offer.Stages.Contains("id");
             if (wanted.Count == 0 || !wanted.All(words.Contains))
             {
-                var evidence = viaId ? ReleaseIdentityEvidence.Ambiguous("AmbiguousTitle", parsed.SeriesTitle) : ReleaseIdentityEvidence.Conflict("WrongTitle", parsed.SeriesTitle);
-                return new ReleaseJudgement<BookIdentityMatch>(viaId ? BookIdentityMatch.AmbiguousTitle : BookIdentityMatch.WrongTitle, parsed, evidence, SelectionCoverage.Single, null)
-                {
-                    Languages = languages
-                };
+                return viaId
+                    ? Result(BookIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("AmbiguousTitle", parsed.SeriesTitle))
+                    : Result(BookIdentityMatch.WrongTitle, ReleaseIdentityEvidence.Conflict("WrongTitle", parsed.SeriesTitle));
             }
 
             // A named author confirms the work; a missing one leaves it to a person.
-            var surnames = (author ?? "").Split([',', '&', ';'], StringSplitOptions.RemoveEmptyEntries)
-                .Select(name => name.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.ToLowerInvariant())
-                .OfType<string>()
-                .Where(name => name.Length > 1)
-                .ToArray();
+            var surnames = Authors(author).Select(name => name.Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.ToLowerInvariant()).OfType<string>().Where(name => name.Length > 1).ToArray();
             if (surnames.Length > 0)
             {
                 return surnames.Any(words.Contains) || viaId
-                    ? new ReleaseJudgement<BookIdentityMatch>(BookIdentityMatch.Matches, parsed, ReleaseIdentityEvidence.Exact("MatchesTitleAndAuthor"), SelectionCoverage.Single, null) { Languages = languages }
-                    : new ReleaseJudgement<BookIdentityMatch>(BookIdentityMatch.AmbiguousTitle, parsed, ReleaseIdentityEvidence.Ambiguous("AuthorMissing", author), SelectionCoverage.Single, null)
-                    {
-                        Languages = languages
-                    };
+                    ? Result(BookIdentityMatch.Matches, ReleaseIdentityEvidence.Exact("MatchesTitleAndAuthor"))
+                    : Result(BookIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("AuthorMissing", author));
             }
 
             // Without an author, more words than the title mean another book of the same name.
             var extra = words.Where(word => !wanted.Contains(word) && !YearToken().IsMatch(word)).ToArray();
             return extra.Length > 0 && !viaId
-                ? new ReleaseJudgement<BookIdentityMatch>(BookIdentityMatch.AmbiguousTitle, parsed, ReleaseIdentityEvidence.Ambiguous("ExtraTitleWords", string.Join(' ', extra)), SelectionCoverage.Single, null)
-                {
-                    Languages = languages
-                }
-                : new ReleaseJudgement<BookIdentityMatch>(BookIdentityMatch.Matches, parsed, ReleaseIdentityEvidence.Strong("Matches"), SelectionCoverage.Single, null) { Languages = languages };
+                ? Result(BookIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("ExtraTitleWords", string.Join(' ', extra)))
+                : Result(BookIdentityMatch.Matches, ReleaseIdentityEvidence.Strong("Matches"));
+
+            ReleaseJudgement<BookIdentityMatch> Result(BookIdentityMatch match, ReleaseIdentityEvidence evidence) =>
+                new(match, parsed, evidence, SelectionCoverage.Single, null) { Languages = languages };
         }
+
+        // Authors listed with commas, ampersands or semicolons.
+        public static string[] Authors(string? author) => (author ?? "").Split([',', '&', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         // Book names carry the format as a word; scene video fields stay empty.
         public static ReleaseInfo Parse(string title)

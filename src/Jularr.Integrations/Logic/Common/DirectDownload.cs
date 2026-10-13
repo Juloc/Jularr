@@ -10,12 +10,12 @@ namespace Jularr.Integrations.Logic.Common
         private const int MaximumRedirects = 5;
         private static readonly string[] GateMarkers = ["cf-challenge", "challenge-platform", "ddos-guard", "g-recaptcha", "h-captcha", "captcha"];
 
-        public static async Task<HttpResponseMessage> SendAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct)
+        public static async Task<HttpResponseMessage> SendAsync(HttpClient http, Uri uri, DirectCredentials? credentials, CancellationToken ct)
         {
             // Expired signed links are renewed once from the stable address.
             for (var attempt = 0; ; attempt++)
             {
-                var (response, final) = await FollowAsync(http, uri, credentials, gates, ct);
+                var (response, final) = await FollowAsync(http, uri, credentials, ct);
                 if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Gone && final != uri && attempt == 0)
                 {
                     response.Dispose();
@@ -68,21 +68,14 @@ namespace Jularr.Integrations.Logic.Common
             }
         }
 
-        private static async Task<(HttpResponseMessage Response, Uri Final)> FollowAsync(HttpClient http, Uri uri, DirectCredentials? credentials, ISourceGateResolver gates, CancellationToken ct)
+        private static async Task<(HttpResponseMessage Response, Uri Final)> FollowAsync(HttpClient http, Uri uri, DirectCredentials? credentials, CancellationToken ct)
         {
-            string? cookie = null;
-            var resolved = false;
             for (var redirect = 0; ; redirect++)
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, uri);
                 if (credentials?.Covers(uri) == true)
                 {
                     request.Headers.TryAddWithoutValidation("Authorization", credentials.Authorization);
-                }
-
-                if (cookie is not null)
-                {
-                    request.Headers.TryAddWithoutValidation("Cookie", cookie);
                 }
 
                 HttpResponseMessage response;
@@ -95,18 +88,11 @@ namespace Jularr.Integrations.Logic.Common
                     throw new DirectDownloadException(DirectDownloadFailure.Unavailable, "The source could not be reached.", exception);
                 }
 
-                // Gates go to the resolver once; production resolvers never pass them.
-                if (await ReadGateAsync(response, uri, ct) is { } gate)
+                // A check is never passed; a person confirms on the source's site.
+                if (await IsGateAsync(response, ct))
                 {
                     response.Dispose();
-                    if (resolved || await gates.ResolveAsync(gate, ct) is not { } granted)
-                    {
-                        throw new DirectDownloadException(DirectDownloadFailure.Gate, "The source asks for a manual confirmation.");
-                    }
-
-                    cookie = granted;
-                    resolved = true;
-                    continue;
+                    throw new DirectDownloadException(DirectDownloadFailure.Gate, "The source asks for a manual confirmation.");
                 }
 
                 if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location)
@@ -118,12 +104,6 @@ namespace Jularr.Integrations.Logic.Common
                         throw new DirectDownloadException(DirectDownloadFailure.ForbiddenRedirect, "The source redirected too often or to an insecure address.");
                     }
 
-                    // A cookie never follows to another host.
-                    if (!string.Equals(next.Host, uri.Host, StringComparison.OrdinalIgnoreCase))
-                    {
-                        cookie = null;
-                    }
-
                     uri = next;
                     continue;
                 }
@@ -132,33 +112,26 @@ namespace Jularr.Integrations.Logic.Common
             }
         }
 
-        private static async Task<SourceGate?> ReadGateAsync(HttpResponseMessage response, Uri uri, CancellationToken ct)
+        private static async Task<bool> IsGateAsync(HttpResponseMessage response, CancellationToken ct)
         {
-            // Challenges announce themselves by header or by a recognizable page.
-            var status = (int)response.StatusCode;
-            if (status is not (401 or 403 or 429 or 503))
+            // Checks announce themselves by header or by a recognizable page.
+            if ((int)response.StatusCode is not (401 or 403 or 429 or 503))
             {
-                return null;
+                return false;
             }
 
-            var token = response.Headers.TryGetValues("X-Challenge-Token", out var tokens) ? tokens.FirstOrDefault() : null;
-            if (response.Headers.TryGetValues("cf-mitigated", out var mitigated) && mitigated.Contains("challenge", StringComparer.OrdinalIgnoreCase) || token is not null)
+            if (response.Headers.TryGetValues("cf-mitigated", out var mitigated) && mitigated.Contains("challenge", StringComparer.OrdinalIgnoreCase))
             {
-                return new SourceGate(uri, status, token);
+                return true;
             }
 
             if (response.Content.Headers.ContentType?.MediaType != "text/html")
             {
-                return null;
+                return false;
             }
 
             var page = await response.Content.ReadAsStringAsync(ct);
-            return GateMarkers.Any(marker => page.Contains(marker, StringComparison.OrdinalIgnoreCase)) ? new SourceGate(uri, status, null) : null;
+            return GateMarkers.Any(marker => page.Contains(marker, StringComparison.OrdinalIgnoreCase));
         }
-    }
-
-    internal sealed class NoSourceGateResolver : ISourceGateResolver
-    {
-        public Task<string?> ResolveAsync(SourceGate gate, CancellationToken ct) => Task.FromResult<string?>(null);
     }
 }

@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Gutenberg;
+using Jularr.Integrations.Logic.Common;
 
 namespace Jularr.Integrations.Logic.Gutenberg
 {
@@ -68,25 +70,13 @@ namespace Jularr.Integrations.Logic.Gutenberg
         {
             // Redirects stay on gutenberg.org over HTTPS; the size is bounded.
             using var response = await SendAsync(EpubUri(bookId), ct);
-            if (response.Content.Headers.ContentLength > MaximumBytes)
+            try
             {
-                throw new GutenbergException("The book is too large.");
+                await DirectDownload.SaveAsync(response, destination, MaximumBytes, ct);
             }
-
-            await using var source = await response.Content.ReadAsStreamAsync(ct);
-            await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-            var buffer = new byte[81920];
-            long total = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, ct)) > 0)
+            catch (DirectDownloadException exception)
             {
-                total += read;
-                if (total > MaximumBytes)
-                {
-                    throw new GutenbergException("The book is too large.");
-                }
-
-                await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                throw new GutenbergException("The book is too large.", exception);
             }
         }
 

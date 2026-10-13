@@ -89,7 +89,7 @@ namespace Jularr.Backend.Data.User.Request.V1
         [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
         public long? OperationId { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), false)]
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl), false)]
         public string? ManualUrl { get; }
     }
 
@@ -106,16 +106,16 @@ namespace Jularr.Backend.Data.User.Request.V1
 
     public sealed class SaveRequestSourceLinkDataV1 : BaseData
     {
-        public SaveRequestSourceLinkDataV1(long operationId, string sourceUrl)
+        public SaveRequestSourceLinkDataV1(long operationId, string sourceLinkUrl)
         {
             OperationId = operationId;
-            SourceUrl = sourceUrl;
+            SourceLinkUrl = sourceLinkUrl;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
         public long OperationId { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
-        public string SourceUrl { get; }
+        [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl), true)]
+        public string SourceLinkUrl { get; }
     }
 }

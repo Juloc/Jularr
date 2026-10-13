@@ -234,9 +234,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class DownloadData : BaseData
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
-            string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl)
+            string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
+            string? sourceLinkUrl)
         {
             SourceUrl = sourceUrl;
+            SourceLinkUrl = sourceLinkUrl;
             Author = author;
             QualityKey = qualityKey;
             OperationId = operationId;
@@ -289,6 +291,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl))]
         public string? SourceUrl { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl))]
+        public string? SourceLinkUrl { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData
@@ -380,10 +385,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class DownloadAttentionData : BaseData
     {
-        public DownloadAttentionData(long operationId, string? attentionKey)
+        public DownloadAttentionData(long operationId, string? attentionKey, string? attentionUrl)
         {
             OperationId = operationId;
             AttentionKey = attentionKey;
+            AttentionUrl = attentionUrl;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
@@ -391,6 +397,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionKey))]
         public string? AttentionKey { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl))]
+        public string? AttentionUrl { get; }
     }
 
     internal sealed class DownloadFinishedData : BaseData
@@ -404,45 +413,31 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public bool IsFinished { get; }
     }
 
-    internal sealed class DownloadSourceLinkData : BaseData
+    internal sealed class SourceLinkData : BaseData
     {
-        public DownloadSourceLinkData(long operationId, string sourceUrl)
+        public SourceLinkData(long operationId, string sourceLinkUrl, long? acquisitionRequestId, long? profileId, long? accountId)
         {
             OperationId = operationId;
-            SourceUrl = sourceUrl;
-        }
-
-        [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
-        public long OperationId { get; }
-
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
-        public string SourceUrl { get; }
-    }
-
-    internal sealed class RequestSourceLinkData : BaseData
-    {
-        public RequestSourceLinkData(long acquisitionRequestId, long profileId, long accountId, long operationId, string sourceUrl)
-        {
+            SourceLinkUrl = sourceLinkUrl;
             AcquisitionRequestId = acquisitionRequestId;
             ProfileId = profileId;
             AccountId = accountId;
-            OperationId = operationId;
-            SourceUrl = sourceUrl;
         }
-
-        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.Id))]
-        public long AcquisitionRequestId { get; }
-
-        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
-        public long ProfileId { get; }
-
-        [DataField(typeof(AccountFields), nameof(AccountFields.Id))]
-        public long AccountId { get; }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
         public long OperationId { get; }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
-        public string SourceUrl { get; }
+        [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl), true)]
+        public string SourceLinkUrl { get; }
+
+        // A user confirms only their own request; the Owner's Activity leaves these empty.
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.Id), false)]
+        public long? AcquisitionRequestId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id), false)]
+        public long? ProfileId { get; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.Id), false)]
+        public long? AccountId { get; }
     }
 }

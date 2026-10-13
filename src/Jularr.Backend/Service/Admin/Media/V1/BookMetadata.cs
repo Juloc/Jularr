@@ -49,7 +49,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Poster", Value = OpenLibraryClient.CoverUrl(work.CoverId), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var data = new WorkMetadataData(mediaType, Namespace, work.WorkId, Limit(work.Title, 500)!, null, work.Year is >= 1800 and <= 2200 ? work.Year : null, "[]", "[]",
-                JsonSerializer.Serialize(facts), "openlibrary");
+                JsonSerializer.Serialize(facts), Namespace);
             return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
         }
 

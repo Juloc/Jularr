@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
                     operation."RemainingBytes",
                     operation."EtaSeconds",
                     operation."DownloadStateTypeId",
-                    CASE WHEN operation."AttentionKey" = 'source_manual_link' THEN replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0' END AS "ManualUrl"
+                    operation."AttentionUrl" AS "ManualUrl"
                 FROM
                     "Operations" AS operation
                     LEFT JOIN "LibraryRoots" AS root ON root."Id" = operation."LibraryRootId"
@@ -96,15 +96,9 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Files are fetched over HTTPS only.
-            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || link.Scheme != Uri.UriSchemeHttps)
-            {
-                throw new DataValidationException(nameof(SaveActivitySourceLinkDataV1.SourceUrl), "invalid_url");
-            }
-
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.SetDownloadSourceLinkAsync(new DownloadSourceLinkData(Parameters.OperationId, link.ToString()), ct);
+                await ctx.SetSourceLinkAsync(new SourceLinkData(Parameters.OperationId, Data.SourceLinkUrl, null, null, null), ct);
                 return true;
             }, CancellationToken);
             return new UpdateResult(true);

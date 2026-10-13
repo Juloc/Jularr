@@ -71,7 +71,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             var name = SafeName(title);
             var folder = year is { } value ? $"{name} ({value.ToString(CultureInfo.InvariantCulture)})" : name;
-            var writer = author?.Split([',', '&', ';'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() is { Length: > 0 } first ? SafeName(first) + "/" : "";
+            var writer = BookReleaseJudge.Authors(author).FirstOrDefault() is { } first ? SafeName(first) + "/" : "";
             var placements = new List<ImportPlacementData>();
             foreach (var book in files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook)
                 .GroupBy(file => Path.GetExtension(file.RelativePath).ToLowerInvariant())

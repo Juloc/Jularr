@@ -4,6 +4,7 @@ using System.Text;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Integrations.Data.AnnasArchive;
 using Jularr.Integrations.Data.Common;
@@ -49,7 +50,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         public async Task<IReadOnlyList<ReleaseOffer>?> SearchAsync(AcquisitionConnectionData source, WantedTargetData target, CancellationToken ct)
         {
             // Named like book releases so the shared judge decides.
-            var query = string.Join(' ', new[] { target.CanonicalTitle, target.Author?.Split(',')[0] }.Where(part => !string.IsNullOrWhiteSpace(part)));
+            var query = string.Join(' ', new[] { target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }.Where(part => !string.IsNullOrWhiteSpace(part)));
             try
             {
                 switch (source.AcquisitionConnectionTypeId)
@@ -83,7 +84,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public async Task DownloadAsync(AcquisitionConnectionData source, DownloadData download, string destination, CancellationToken ct)
         {
-            var address = download.SourceUrl is { } url ? new Uri(url) : throw new DirectSourceException("acquisition_grab_failed");
+            if (!Uri.TryCreate(download.SourceUrl, UriKind.Absolute, out var address))
+            {
+                throw new DirectSourceException("acquisition_grab_failed");
+            }
+
             try
             {
                 switch (source.AcquisitionConnectionTypeId)
@@ -98,26 +103,29 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         await _opds.DownloadAsync(Opds(source), address, destination, ct);
                         break;
                     case AcquisitionConnectionType.AnnasArchive:
-                        // A record needs the member key or a person; a file link from that person is fetched plainly.
-                        if (AnnasArchiveClient.ReadMd5(address) is not { } md5)
+                        var site = Catalog(source);
+                        var md5 = AnnasArchiveClient.ReadMd5(address) ?? throw new DirectSourceException("acquisition_grab_failed");
+                        if (source.ProtectedApiKey is { } memberKey)
                         {
-                            await _annas.DownloadFileAsync(address, destination, ct);
+                            await _annas.DownloadAsync(site, AcquisitionConnectionInput.Unprotect(_protector, memberKey), md5, destination, ct);
+                            break;
                         }
-                        else if (source.ProtectedApiKey is null)
+
+                        // Without a key: the person's file link, else the slow download; checks, long waits and dead links go to a person.
+                        try
                         {
-                            // Without a key the public slow download is used; checks and long waits go to a person.
-                            try
+                            if (download.SourceLinkUrl is { } link)
                             {
-                                await _annas.SlowDownloadAsync(Catalog(source), md5, destination, SlowWait, ct);
+                                await _annas.DownloadFileAsync(new Uri(link), destination, ct);
                             }
-                            catch (AnnasArchiveException exception) when (exception.Failure is AnnasArchiveFailure.Gate or AnnasArchiveFailure.WaitTooLong)
+                            else
                             {
-                                throw new DirectSourceException(ManualLinkKey);
+                                await _annas.SlowDownloadAsync(site, md5, destination, SlowWait, ct);
                             }
                         }
-                        else
+                        catch (AnnasArchiveException exception) when (download.SourceLinkUrl is not null || exception.Failure is AnnasArchiveFailure.Gate or AnnasArchiveFailure.WaitTooLong)
                         {
-                            await _annas.DownloadAsync(Catalog(source), AcquisitionConnectionInput.Unprotect(_protector, source.ProtectedApiKey), md5, destination, ct);
+                            throw new DirectSourceException(ManualLinkKey, AnnasArchiveClient.SlowPageUri(site, md5));
                         }
 
                         break;
@@ -165,8 +173,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..32];
     }
 
-    internal sealed class DirectSourceException(string errorKey) : Exception("The direct source failed.")
+    internal sealed class DirectSourceException(string errorKey, Uri? manualUrl = null) : Exception("The direct source failed.")
     {
         public string ErrorKey { get; } = errorKey;
+
+        // The page a person opens to pass the source's check.
+        public Uri? ManualUrl { get; } = manualUrl;
     }
 }

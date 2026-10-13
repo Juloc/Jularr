@@ -43,7 +43,7 @@ namespace Jularr.Backend.Service.User.Request.V1
                 LEFT JOIN LATERAL (
                     SELECT
                         operation."Id" AS "OperationId",
-                        replace(release."SourceUrl", '/md5/', '/slow_download/') || '/0/0' AS "ManualUrl"
+                        operation."AttentionUrl" AS "ManualUrl"
                     FROM
                         "RequestTargets" AS target
                     INNER JOIN
@@ -57,7 +57,7 @@ namespace Jularr.Backend.Service.User.Request.V1
                     WHERE
                         target."AcquisitionRequestId" = request."Id"
                         AND operation."OperationStatusTypeId" IN (1, 2)
-                        AND operation."AttentionKey" = 'source_manual_link'
+                        AND operation."AttentionUrl" IS NOT NULL
                     ORDER BY
                         operation."Id" DESC
                     LIMIT 1
@@ -87,15 +87,9 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Files are fetched over HTTPS only.
-            if (!Uri.TryCreate(Data.SourceUrl, UriKind.Absolute, out var link) || link.Scheme != Uri.UriSchemeHttps)
-            {
-                throw new DataValidationException(nameof(SaveRequestSourceLinkDataV1.SourceUrl), "invalid_url");
-            }
-
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.SetRequestSourceLinkAsync(new RequestSourceLinkData(Parameters.AcquisitionRequestId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.OperationId, link.ToString()), ct);
+                await ctx.SetSourceLinkAsync(new SourceLinkData(Data.OperationId, Data.SourceLinkUrl, Parameters.AcquisitionRequestId, Auth.ProfileId!.Value, Auth.AccountId!.Value), ct);
                 return true;
             }, CancellationToken);
             return new UpdateResult(true);

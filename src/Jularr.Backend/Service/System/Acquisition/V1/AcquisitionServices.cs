@@ -539,7 +539,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 catch (DirectSourceException exception) when (exception.ErrorKey is "source_gate" or DirectSources.ManualLinkKey)
                 {
                     // A login or challenge waits for a person; nothing is bypassed.
-                    await AttentionAsync(download.OperationId, exception.ErrorKey);
+                    await AttentionAsync(download.OperationId, exception.ErrorKey, exception.ManualUrl?.ToString());
                     return;
                 }
                 catch (Exception exception) when (exception is DirectSourceException or IOException)
@@ -561,10 +561,10 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
         }
 
-        private Task AttentionAsync(long operationId, string attentionKey) =>
+        private Task AttentionAsync(long operationId, string attentionKey, string? attentionUrl = null) =>
             Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.SetDownloadAttentionAsync(new DownloadAttentionData(operationId, attentionKey), ct);
+                await ctx.SetDownloadAttentionAsync(new DownloadAttentionData(operationId, attentionKey, attentionUrl), ct);
                 return true;
             }, CancellationToken);
 

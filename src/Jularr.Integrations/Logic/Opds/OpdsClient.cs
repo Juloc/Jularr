@@ -9,7 +9,7 @@ using Jularr.Integrations.Logic.Common;
 namespace Jularr.Integrations.Logic.Opds
 {
     // OPDS 1 catalogs (Calibre-Web, Standard Ebooks, Kavita and others) through their OpenSearch description.
-    internal sealed class OpdsClient(HttpClient http, ISourceGateResolver gates)
+    internal sealed class OpdsClient(HttpClient http)
     {
         public const long MaximumBytes = 500L * 1024 * 1024;
         private const long MaximumFeedBytes = 8L * 1024 * 1024;
@@ -56,7 +56,7 @@ namespace Jularr.Integrations.Logic.Opds
 
         public async Task DownloadAsync(OpdsConnection connection, Uri source, string destination, CancellationToken ct)
         {
-            using var response = await DirectDownload.SendAsync(http, source, Credentials(connection), gates, ct);
+            using var response = await DirectDownload.SendAsync(http, source, Credentials(connection), ct);
             await DirectDownload.SaveAsync(response, destination, MaximumBytes, ct);
         }
 
@@ -91,7 +91,7 @@ namespace Jularr.Integrations.Logic.Opds
             HttpResponseMessage response;
             try
             {
-                response = await DirectDownload.SendAsync(http, uri, Credentials(connection), gates, ct);
+                response = await DirectDownload.SendAsync(http, uri, Credentials(connection), ct);
             }
             catch (DirectDownloadException exception)
             {
