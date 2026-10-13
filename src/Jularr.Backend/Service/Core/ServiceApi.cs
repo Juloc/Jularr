@@ -128,7 +128,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<BookMetadata>();
-            services.TryAddTransient<MangaMetadata>();
+            services.TryAddTransient<AniListMetadata>();
+            services.TryAddTransient<AniListMatcher>();
             services.TryAddTransient<MusicMetadata>();
             services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();

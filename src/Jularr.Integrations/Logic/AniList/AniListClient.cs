@@ -6,33 +6,40 @@ using Jularr.Integrations.Data.AniList;
 
 namespace Jularr.Integrations.Logic.AniList
 {
-    // AniList: keyless Manga metadata through its public GraphQL endpoint.
+    // AniList: keyless anime and manga metadata through its public GraphQL endpoint.
     internal sealed partial class AniListClient(HttpClient http)
     {
         private static readonly Uri Endpoint = new("https://graphql.anilist.co");
+        private static readonly TimeSpan Spacing = TimeSpan.FromMilliseconds(700);
+        private static readonly SemaphoreSlim Pace = new(1, 1);
+        private static DateTimeOffset _last = DateTimeOffset.MinValue;
+        private static long _blockedUntilTicks;
 
         private const string Fields =
-            "id title { romaji english native } startDate { year } volumes description(asHtml: false) coverImage { large } "
-            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { name { full } } } }";
+            "id type format title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } "
+            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { name { full } } } } relations { edges { relationType node { id type } } }";
 
-        public async Task<IReadOnlyList<AniListManga>> SearchAsync(string query, CancellationToken ct)
+        public async Task<IReadOnlyList<AniListMedia>> SearchAsync(AniListMediaType type, IReadOnlyCollection<string> formats, string query, CancellationToken ct)
         {
-            using var document = await PostAsync("query ($search: String) { Page(perPage: 20) { media(search: $search, type: MANGA, format_in: [MANGA, ONE_SHOT]) { " + Fields + " } } }",
-                new Dictionary<string, object> { ["search"] = query }, ct);
+            using var document = await PostAsync("query ($search: String, $type: MediaType, $formats: [MediaFormat]) { Page(perPage: 20) { media(search: $search, type: $type, format_in: $formats) { "
+                + Fields + " } } }", new Dictionary<string, object> { ["search"] = query, ["type"] = Name(type), ["formats"] = formats }, ct);
             return Child(Child(document.RootElement, "data"), "Page") is { } page && page.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array
-                ? [.. media.EnumerateArray().Select(Read).OfType<AniListManga>()]
+                ? [.. media.EnumerateArray().Select(Read).OfType<AniListMedia>()]
                 : [];
         }
 
-        public async Task<AniListManga> ReadAsync(int id, CancellationToken ct)
+        public async Task<AniListMedia> ReadAsync(AniListMediaType type, int id, CancellationToken ct)
         {
-            using var document = await PostAsync("query ($id: Int) { Media(id: $id, type: MANGA) { " + Fields + " } }", new Dictionary<string, object> { ["id"] = id }, ct);
-            return Child(Child(document.RootElement, "data"), "Media") is { } media && Read(media) is { } manga
-                ? manga
-                : throw new AniListException(AniListFailure.NotFound, "AniList does not know this Manga.");
+            using var document = await PostAsync("query ($id: Int, $type: MediaType) { Media(id: $id, type: $type) { " + Fields + " } }",
+                new Dictionary<string, object> { ["id"] = id, ["type"] = Name(type) }, ct);
+            return Child(Child(document.RootElement, "data"), "Media") is { } media && Read(media) is { } result
+                ? result
+                : throw new AniListException(AniListFailure.NotFound, "AniList does not know this title.");
         }
 
-        private static AniListManga? Read(JsonElement media)
+        private static string Name(AniListMediaType type) => type == AniListMediaType.Anime ? "ANIME" : "MANGA";
+
+        private static AniListMedia? Read(JsonElement media)
         {
             if (media.ValueKind != JsonValueKind.Object || !media.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.Number || !id.TryGetInt32(out var mediaId)
                 || Child(media, "title") is not { } title || Text(title, "romaji") is not { } romaji)
@@ -40,42 +47,78 @@ namespace Jularr.Integrations.Logic.AniList
                 return null;
             }
 
-            // Story and art staff name the work like book authors.
+            // Story and art staff name the work like book authors; sequels of the same type continue it.
             var authors = Child(media, "staff") is { } staff && staff.TryGetProperty("edges", out var edges) && edges.ValueKind == JsonValueKind.Array
                 ? edges.EnumerateArray()
                     .Where(edge => Text(edge, "role") is { } role && (role.Contains("Story", StringComparison.OrdinalIgnoreCase) || role.Contains("Art", StringComparison.OrdinalIgnoreCase)))
                     .Select(edge => Child(Child(edge, "node"), "name") is { } name ? Text(name, "full") : null)
                     .OfType<string>().Distinct(StringComparer.Ordinal).Take(3).ToArray()
                 : [];
+            var sequels = Child(media, "relations") is { } relations && relations.TryGetProperty("edges", out var links) && links.ValueKind == JsonValueKind.Array
+                ? links.EnumerateArray()
+                    .Where(link => Text(link, "relationType") == "SEQUEL" && Child(link, "node") is { } node && Text(node, "type") == Type(media))
+                    .Select(link => Child(link, "node")!.Value.TryGetProperty("id", out var sequel) && sequel.TryGetInt32(out var sequelId) ? sequelId : 0)
+                    .Where(sequelId => sequelId > 0).Distinct().ToArray()
+                : [];
+            var synonyms = media.TryGetProperty("synonyms", out var names) && names.ValueKind == JsonValueKind.Array
+                ? names.EnumerateArray().Where(name => name.ValueKind == JsonValueKind.String).Select(name => name.GetString()!.Trim()).Where(name => name.Length > 0).Take(20).ToArray()
+                : [];
             var year = Child(media, "startDate") is { } start && start.TryGetProperty("year", out var value) && value.ValueKind == JsonValueKind.Number ? value.GetInt32() : (int?)null;
-            var volumes = media.TryGetProperty("volumes", out var count) && count.ValueKind == JsonValueKind.Number && count.GetInt32() is > 0 and <= 500 ? count.GetInt32() : (int?)null;
             var description = Text(media, "description") is { } text ? Markup().Replace(text, " ").Trim() : null;
             var cover = Child(media, "coverImage") is { } image ? Text(image, "large") : null;
-            return new AniListManga(mediaId, romaji, Text(title, "english"), Text(title, "native"), year, volumes, description,
-                cover is not null && cover.StartsWith("https://", StringComparison.Ordinal) ? cover : null, authors);
+            return new AniListMedia(mediaId, Text(media, "format"), romaji, Text(title, "english"), Text(title, "native"), synonyms, year, Count(media, "episodes", 5000),
+                Count(media, "volumes", 500), description, cover is not null && cover.StartsWith("https://", StringComparison.Ordinal) ? cover : null, authors, sequels);
         }
 
         private async Task<JsonDocument> PostAsync(string query, Dictionary<string, object> variables, CancellationToken ct)
         {
+            // A rate limit holds every caller until AniList allows requests again.
+            if (Interlocked.Read(ref _blockedUntilTicks) > DateTimeOffset.UtcNow.UtcTicks)
+            {
+                throw new AniListException(AniListFailure.RateLimited, "AniList limits requests.");
+            }
+
             HttpResponseMessage response;
+            await Pace.WaitAsync(ct);
             try
             {
+                var wait = _last + Spacing - DateTimeOffset.UtcNow;
+                if (wait > TimeSpan.Zero)
+                {
+                    await Task.Delay(wait, ct);
+                }
+
+                _last = DateTimeOffset.UtcNow;
                 response = await http.PostAsJsonAsync(Endpoint, new Dictionary<string, object> { ["query"] = query, ["variables"] = variables }, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
             {
                 throw new AniListException(AniListFailure.Unavailable, "AniList could not be reached.", exception);
             }
+            finally
+            {
+                Pace.Release();
+            }
 
             using (response)
             {
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
-                    throw new AniListException(AniListFailure.NotFound, "AniList does not know this Manga.");
+                    throw new AniListException(AniListFailure.NotFound, "AniList does not know this title.");
                 }
 
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
+                    var delay = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(1);
+                    var until = (DateTimeOffset.UtcNow + (delay > TimeSpan.FromMinutes(5) ? TimeSpan.FromMinutes(5) : delay)).UtcTicks;
+                    for (var current = Interlocked.Read(ref _blockedUntilTicks); current < until; current = Interlocked.Read(ref _blockedUntilTicks))
+                    {
+                        if (Interlocked.CompareExchange(ref _blockedUntilTicks, until, current) == current)
+                        {
+                            break;
+                        }
+                    }
+
                     throw new AniListException(AniListFailure.RateLimited, "AniList limits requests.");
                 }
 
@@ -111,10 +154,15 @@ namespace Jularr.Integrations.Logic.AniList
         private static JsonElement? Child(JsonElement? element, string property) =>
             element is { ValueKind: JsonValueKind.Object } parent && parent.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object ? value : null;
 
+        private static string? Type(JsonElement media) => Text(media, "type");
+
         private static string? Text(JsonElement element, string property) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && value.GetString()!.Trim() is { Length: > 0 } text
                 ? text
                 : null;
+
+        private static int? Count(JsonElement element, string property, int maximum) =>
+            element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var count) && count > 0 && count <= maximum ? count : null;
 
         [GeneratedRegex("<[^>]*>")]
         private static partial Regex Markup();

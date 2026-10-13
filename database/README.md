@@ -51,7 +51,9 @@ another Work identity; Works, LibraryRoots and AcquisitionProfiles reference the
 pair. A manual subtype, also none, is kept by provider refreshes. MediaTypes and
 MediaSubtypes carry the instance switches; ProfileMediaRules hold Owner blocks and
 profile hiding. The views MediaCategories, WorkClasses, ProfileMediaCategories and
-ProfileWorks are the one effective classification every reader uses. A manually created Work has
+ProfileWorks are the one effective classification every reader uses. AniList is a
+mapping only: WorkExternalIdentities for films and books, WorkUnitExternalIdentities
+for series seasons with an episode offset, WorkIdentityMatches for the matching state. A manually created Work has
 one neutral manual title source and a managed CanonicalTitle projection. Updates
 check Version atomically and preserve other localized/provider title sources.
 Watchlist identity is the composite ProfileId/WorkId key; it never changes

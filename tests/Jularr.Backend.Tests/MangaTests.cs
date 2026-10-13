@@ -156,12 +156,12 @@ namespace Jularr.Backend.Tests
         public async Task AniList_NullFields_ReadAsMissing()
         {
             var sources = new FakeMangaSources { Manga = """{"id":102,"title":{"romaji":"Reidai","english":null,"native":null},"startDate":null,"volumes":null,"description":null,"coverImage":null,"staff":null}""" };
-            var manga = await new AniListClient(new HttpClient(sources)).ReadAsync(102, CancellationToken.None);
+            var manga = await new AniListClient(new HttpClient(sources)).ReadAsync(Jularr.Integrations.Data.AniList.AniListMediaType.Manga, 102, CancellationToken.None);
             Assert.AreEqual("Reidai", manga.RomajiTitle);
             Assert.IsNull(manga.Volumes);
             Assert.AreEqual(0, manga.Authors.Count);
             sources.Manga = "null";
-            await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.AniList.AniListException>(() => new AniListClient(new HttpClient(sources)).ReadAsync(102, CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.AniList.AniListException>(() => new AniListClient(new HttpClient(sources)).ReadAsync(Jularr.Integrations.Data.AniList.AniListMediaType.Manga, 102, CancellationToken.None));
         }
 
         private static byte[] Archive(string header, int length) => [.. Encoding.Latin1.GetBytes(header), .. new byte[length - header.Length]];
@@ -205,7 +205,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeMangaSources : HttpMessageHandler
         {
             public string Manga { get; set; } = """
-                {"id":101,"title":{"romaji":"Reidai Manga","english":"Example Manga","native":"例題漫画"},"synonyms":[],"startDate":{"year":2019},"volumes":3,"status":"FINISHED",
+                {"id":101,"type":"MANGA","format":"MANGA","title":{"romaji":"Reidai Manga","english":"Example Manga","native":"例題漫画"},"synonyms":[],"startDate":{"year":2019},"volumes":3,"status":"FINISHED",
                  "description":"A <i>test</i> series.","coverImage":{"large":"https://img.example.test/101.jpg"},
                  "staff":{"edges":[{"role":"Story & Art","node":{"name":{"full":"Mika Example"}}},{"role":"Translator","node":{"name":{"full":"Somebody Else"}}}]}}
                 """;

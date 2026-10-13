@@ -163,6 +163,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Poster", Value = TmdbClient.PosterUrl(work.PosterPath), Localized = false },
                 new { Key = "Backdrop", Value = TmdbClient.BackdropUrl(work.BackdropPath), Localized = false }
             }.Where(fact => fact.Value is not null);
+            // Japanese animation is proposed as Anime unless a subtype was chosen.
+            subtype ??= AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null;
             var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), Limit(work.Title)!,
                 work.OriginalTitle == work.Title ? null : Limit(work.OriginalTitle), work.Year is >= 1800 and <= 2200 ? work.Year : null,
                 JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tmdb");
