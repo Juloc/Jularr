@@ -90,6 +90,16 @@ test("shared base styles cover forms, tables and capsule navigation on every pag
     assert.ok(!manifest["Pages/User/Settings/Settings.entry.scss"], "base-only pages need no duplicate bundle");
 });
 
+test("appearance choices wrap at their natural width and search retains an accessible target", () => {
+    const appearance = readFileSync(join(build, manifest["Modules/Appearance/appearance.entry.scss"].file), "utf8");
+    assert.match(appearance, /\.appearance__choices>\.button\{[^}]*flex:1 0 auto;[^}]*max-width:100%;overflow-wrap:anywhere/);
+    assert.match(appearance, /\.appearance__color input\{[^}]*height:44px/);
+
+    const shell = readFileSync(join(build, manifest["Assets/Shared/shell.entry.scss"].file), "utf8");
+    assert.match(shell, /\.search-box__input\{[^}]*min-width:0;min-height:44px/);
+    assert.match(shell, /\.search-box__input:focus-visible\{outline:none;border-color:var\(--accent\)/);
+});
+
 test("manifest URLs are relative and cannot escape the asset root", () => {
     for (const file of [...files, icons.file]) {
         assert.ok(!file.startsWith("/") && !file.includes("..") && !file.includes("?"), file);

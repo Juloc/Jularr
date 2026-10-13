@@ -40,6 +40,8 @@ referenced inside CSS. Do not add a parallel `/assets/` endpoint.
   Wanted, Activity, language and translation administration.
 - Original and Clean share tokens/components, with independent brightness and
   accent controls stored optionally on the device.
+  Appearance choices wrap as whole controls on narrow screens; search and color
+  inputs use the same 44px minimum control height.
 - Original restores Washi paper, blossom framing, ink landscapes and the mascot;
   the shared Hero uses Fuji/mascot artwork only when a real media backdrop is absent.
   Clean remains undecorated. The [original assets](Modules/Appearance/Original/README.md)
