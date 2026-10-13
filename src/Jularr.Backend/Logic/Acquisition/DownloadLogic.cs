@@ -109,7 +109,19 @@ namespace Jularr.Backend.Logic.Acquisition
                         WHERE
                             target."WantedItemId" = wanted."Id"
                             AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
-                    ) AS "RequestedLocales"
+                    ) AS "RequestedLocales",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Author'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "Author"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -147,7 +159,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     NOT wanted."IsPaused"
                     AND (wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now)
                     AND (
-                        work."MediaTypeId" = 1
+                        work."MediaTypeId" IN (1, 3, 5)
                         AND NOT EXISTS (
                             SELECT
                                 1
@@ -443,7 +455,19 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."ExternalId",
                     release."Title",
                     operation."StartedAt",
-                    release."QualityKey"
+                    release."QualityKey",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Author'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "Author"
                 FROM
                     "Operations" AS operation
                     JOIN "AcquisitionReleases" AS release ON release."Id" = operation."AcquisitionReleaseId"
@@ -590,6 +614,22 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new DataValidationException(nameof(data.AcquisitionReleaseStatusTypeId), "invalid_transition");
             }
+        }
+
+        public static async Task<bool> IsDownloadFinishedAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    operation."OperationStatusTypeId" IN (3, 4) AS "IsFinished"
+                FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."Id" = @OperationId;
+                """;
+            sql.Parameters.Add(data);
+            return (await ctx.ReadSql.ReadOptionalAsync<DownloadFinishedData>(sql, ct))?.IsFinished ?? true;
         }
 
         public static async Task CompleteDownloadAsync(this LogicContext ctx, DownloadOperationParameters data, CancellationToken ct)

@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
             var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
 
             // TMDB lookup creates Works with their provider identity and episodes.
-            var metadataTypes = new[] { MediaType.Movie, MediaType.Series }.Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
+            var metadataTypes = new[] { MediaType.Movie, MediaType.Series, MediaType.Book, MediaType.LightNovel }.Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
             page.Content.Add(new Form<SearchMetadataDataV1>(form =>
             {
                 form.Select(item => item.MediaTypeId, "media.type", metadataTypes);
@@ -44,15 +44,16 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 else page.Content.Add(new Table<MetadataSearchResultV1>(results)
                     .Text(item => item.Title, "media.title")
                     .Text(item => item.OriginalTitle, "admin.works.originalTitle")
+                    .Text(item => item.Author, "media.author")
                     .Text(item => item.ReleaseYear, "media.year")
                     .Content("common.actions", item => item.WorkId is { } workId
                         ? new A(new Text("common.open")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture))
                         : new Form<ImportMetadataWorkDataV1>(form =>
                         {
                             form.Hidden(data => data.MediaTypeId);
-                            form.Hidden(data => data.TmdbId);
+                            form.Hidden(data => data.ExternalId);
                             form.Submit("admin.works.import");
-                        }, "/Admin/Works?handler=Import", csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.TmdbId))));
+                        }, "/Admin/Works?handler=Import", csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId))));
             }
 
             // Manual canonical creation.
@@ -102,9 +103,9 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return Page();
         }
 
-        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, [BindRequired] int tmdbId)
+        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, string? externalId)
         {
-            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, tmdbId), HttpContext.RequestAborted);
+            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, externalId ?? ""), HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = work.Id });
         }
 

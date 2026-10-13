@@ -23,8 +23,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
-            string[] requestedLocales)
+            string[] requestedLocales, string? author)
         {
+            Author = author;
             WantedItemId = wantedItemId;
             WorkId = workId;
             MediaTypeId = mediaTypeId;
@@ -91,6 +92,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.RequestedLanguages))]
         public string[] RequestedLocales { get; }
+
+        // Book authors confirm a release; empty for other media.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? Author { get; }
     }
 
     internal sealed class EpisodeStateData : BaseData
@@ -222,8 +227,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class DownloadData : BaseData
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
-            string? externalId, string title, DateTime startedAt, string? qualityKey)
+            string? externalId, string title, DateTime startedAt, string? qualityKey, string? author)
         {
+            Author = author;
             QualityKey = qualityKey;
             OperationId = operationId;
             WantedItemId = wantedItemId;
@@ -269,6 +275,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.QualityKey))]
         public string? QualityKey { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? Author { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData
@@ -371,5 +380,16 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionKey))]
         public string? AttentionKey { get; }
+    }
+
+    internal sealed class DownloadFinishedData : BaseData
+    {
+        public DownloadFinishedData(bool isFinished)
+        {
+            IsFinished = isFinished;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.IsFinished))]
+        public bool IsFinished { get; }
     }
 }

@@ -27,8 +27,13 @@ namespace Jularr.Backend.Logic.Acquisition
             return rest.Split('/').Any(segment => segment is "." or "..") ? null : rest;
         }
 
-        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files)
+        public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files, string? author = null)
         {
+            if (mediaType is MediaType.Book or MediaType.LightNovel)
+            {
+                return PlanBook(title, year, author, files);
+            }
+
             var videos = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video && !MediaPathParser.IsSample(file.RelativePath)).ToArray();
             var name = SafeName(title);
             var quality = qualityKey is { Length: > 0 } ? " [" + SafeName(qualityKey) + "]" : "";
@@ -56,6 +61,28 @@ namespace Jularr.Backend.Logic.Acquisition
                 var seasonText = season.ToString("00", CultureInfo.InvariantCulture);
                 AddGroup(placements, files, video, $"{name}/Season {seasonText}/{name} - S{seasonText}E{episode.ToString("00", CultureInfo.InvariantCulture)}{quality}", WorkUnitType.Episode,
                     episode, season);
+            }
+
+            return placements;
+        }
+
+        // One file per ebook format, the largest; the author names the folder.
+        private static IReadOnlyList<ImportPlacementData> PlanBook(string title, int? year, string? author, IReadOnlyList<StorageFile> files)
+        {
+            var name = SafeName(title);
+            var folder = year is { } value ? $"{name} ({value.ToString(CultureInfo.InvariantCulture)})" : name;
+            var writer = author?.Split([',', '&', ';'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() is { Length: > 0 } first ? SafeName(first) + "/" : "";
+            var placements = new List<ImportPlacementData>();
+            foreach (var book in files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook)
+                .GroupBy(file => Path.GetExtension(file.RelativePath).ToLowerInvariant())
+                .Select(format => format.MaxBy(file => file.SizeBytes)!))
+            {
+                var extension = Path.GetExtension(book.RelativePath).ToLowerInvariant();
+                var stem = $"{writer}{folder}/{name}";
+                if (IsStorable(stem + extension))
+                {
+                    placements.Add(new ImportPlacementData(placements.Count, book.RelativePath, stem, extension, true, null, null, null));
+                }
             }
 
             return placements;

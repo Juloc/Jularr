@@ -11,8 +11,7 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         private const long Megabyte = 1024L * 1024L;
 
-        // Video profiles only until other media have their own qualities.
-        public static bool SupportsProfiles(MediaType mediaType) => mediaType is MediaType.Movie or MediaType.Series;
+        public static bool SupportsProfiles(MediaType mediaType) => ProfileQualities.For(mediaType).Count > 0;
 
         public static string BuildDefinition(AcquisitionProfileInputData input, string? existing)
         {
@@ -22,7 +21,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(input.MediaTypeId), "unknown_catalog_value");
             }
 
-            var allowed = VideoQualities.Order.Where(quality => input.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var order = ProfileQualities.For(input.MediaTypeId);
+            var allowed = order.Where(quality => input.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
             if (allowed.Length == 0 || allowed.Length != input.AllowedQualities.Distinct(StringComparer.OrdinalIgnoreCase).Count())
             {
                 throw new DataValidationException(nameof(input.AllowedQualities), allowed.Length == 0 ? "required" : "unknown_catalog_value");
@@ -40,7 +40,7 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             var stored = existing is null ? null : JsonSerializer.Deserialize<AcquisitionProfileDefinition>(existing, AcquisitionSelectionLogic.DefinitionOptions);
-            var definition = new AcquisitionProfileDefinition(allowed, [.. VideoQualities.Order], input.UpgradeAllowed, cutoff, input.MinimumSizeMb * Megabyte, input.MaximumSizeMb * Megabyte,
+            var definition = new AcquisitionProfileDefinition(allowed, [.. order], input.UpgradeAllowed, cutoff, input.MinimumSizeMb * Megabyte, input.MaximumSizeMb * Megabyte,
                 Terms(input.MustContain), Terms(input.MustNotContain), stored?.RequiredRegex ?? [], stored?.RejectedRegex ?? [], stored?.ScoreRules ?? []);
             var profile = new QualityProfile("0", input.Name, definition.AllowedQualities, definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality,
                 definition.MinimumSizeBytes, definition.MaximumSizeBytes, definition.MustContain, definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules);

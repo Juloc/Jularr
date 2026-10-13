@@ -69,6 +69,38 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
+        public static Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledSearchConnectionsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            // Every enabled source that searches: indexers and catalogs.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    connection."Id",
+                    connection."Name",
+                    connection."AcquisitionConnectionTypeId",
+                    connection."BaseUrl",
+                    connection."ProtectedApiKey",
+                    connection."IsEnabled",
+                    connection."Priority",
+                    connection."Categories",
+                    connection."DownloadCategory",
+                    connection."RemotePath",
+                    connection."LocalPath",
+                    connection."Capabilities"::text AS "Capabilities",
+                    connection."Version"
+                FROM
+                    "AcquisitionConnections" AS connection
+                WHERE
+                    connection."AcquisitionConnectionTypeId" IN (1, 3)
+                    AND connection."IsEnabled"
+                ORDER BY
+                    connection."Priority",
+                    connection."Id";
+                """;
+            return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
+        }
+
         public static async Task<long> CreateAcquisitionConnectionAsync(this LogicContext ctx, AcquisitionConnectionSaveData data, CancellationToken ct)
         {
             // Store protected configuration.
