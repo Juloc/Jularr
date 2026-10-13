@@ -54,6 +54,8 @@ namespace Jularr.Backend.Service.User.Request.V1
                     INNER JOIN
                         "InstanceModules" AS assistance ON assistance."Key" = 'SourceAssistance' AND assistance."IsEnabled"
                     INNER JOIN
+                        "InstanceModules" AS acquisition ON acquisition."Key" = 'Acquisition' AND acquisition."IsEnabled"
+                    INNER JOIN
                         "InstanceSettings" AS settings ON settings."UsersConfirmSources"
                     INNER JOIN
                         "Accounts" AS account ON account."Id" = @AccountId AND account."MayConfirmSources"
