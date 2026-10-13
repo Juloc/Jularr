@@ -48,7 +48,10 @@ disposable fixture. [Runtime](../docs/STORAGE_RUNTIME.md) and
 Media types are Movie, Series, Book, Music and Game. Anime (Movie/Series), Manga
 and Light Novel (Book) are MediaSubtypes of their parents (MediaSubtypeParents), never
 another Work identity; Works, LibraryRoots and AcquisitionProfiles reference the
-pair. A manual subtype, also none, is kept by provider refreshes. A manually created Work has
+pair. A manual subtype, also none, is kept by provider refreshes. MediaTypes and
+MediaSubtypes carry the instance switches; ProfileMediaRules hold Owner blocks and
+profile hiding. The views MediaCategories, WorkClasses, ProfileMediaCategories and
+ProfileWorks are the one effective classification every reader uses. A manually created Work has
 one neutral manual title source and a managed CanonicalTitle projection. Updates
 check Version atomically and preserve other localized/provider title sources.
 Watchlist identity is the composite ProfileId/WorkId key; it never changes

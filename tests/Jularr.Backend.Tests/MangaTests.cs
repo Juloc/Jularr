@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
+using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
@@ -65,6 +66,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
             using var reset = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/800", new UpdateWantedDataV1(false, 2, null, libraries.Single(library => library.Name == "Manga").Id));
             Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode);
+
+            // A switched-off type is not searched.
+            using var off = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/media", new UpdateInstanceMediaDataV1("Book", false, 1));
+            Assert.AreEqual(HttpStatusCode.OK, off.StatusCode, await off.Content.ReadAsStringAsync());
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, sources.Grabbed.Count);
+            using var on = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/media", new UpdateInstanceMediaDataV1("Book", true, 2));
+            Assert.AreEqual(HttpStatusCode.OK, on.StatusCode);
 
             // The first missing volumes come as a pack, the rest alone; claimed volumes are not searched again.
             await RunAsync<SearchDueWantedV1>(host);

@@ -2,16 +2,21 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
+using Jularr.Backend.Data.User.Profile.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.User.Discover.V1;
 using Jularr.Backend.Service.User.Library.V1;
+using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Discover
 {
-    public sealed class IndexModel(ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search, ReadContinueV1 continuation, ReadLibraryV1 library, UiText texts) : JularrPage
+    public sealed class IndexModel(ReadAuthenticationV1 authentication, ReadProfileMediaV1 readMedia, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search, ReadContinueV1 continuation,
+        ReadLibraryV1 library, UiText texts) : JularrPage
     {
         // Only types with a real discovery provider; Books, Manga and Light Novels follow with their providers.
         private static readonly (string Slug, MediaType Type, DiscoverFeedType[] Feeds)[] Types =
@@ -25,9 +30,15 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IReadOnlyList<ContinueItemV1> _continue = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
         private bool _providerUnavailable;
+        private HashSet<MediaType>? _listed;
 
         [BindProperty(SupportsGet = true, Name = "type")]
         public string? TypeSlug { get; set; }
+
+        // The profile's listed types only.
+        private IEnumerable<(string Slug, MediaType Type, DiscoverFeedType[] Feeds)> Listed => Types.Where(type => _listed?.Contains(type.Type) is true);
+
+        private (string Slug, MediaType Type, DiscoverFeedType[] Feeds) Selected => Listed.FirstOrDefault(type => type.Slug == TypeSlug);
 
         [BindProperty(SupportsGet = true, Name = "view")]
         public DiscoverFeedType? View { get; set; }
@@ -60,10 +71,10 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private void DefineContent(Page page)
         {
-            var selected = Types.FirstOrDefault(type => type.Slug == TypeSlug);
+            var selected = Selected;
 
             // Media type, then browse view; filters stay separate.
-            page.Content.Add(new NavigationTabs([new NavigationTab("discover.all", Address(null, null, 1), selected.Slug is null), .. Types.Select(type =>
+            page.Content.Add(new NavigationTabs([new NavigationTab("discover.all", Address(null, null, 1), selected.Slug is null), .. Listed.Select(type =>
                 new NavigationTab("discover.type." + type.Slug, Address(type.Slug, null, 1), type.Slug == selected.Slug))], "discover.mediaTypes", "media"));
             if (selected.Slug is not null && string.IsNullOrWhiteSpace(Query))
             {
@@ -134,7 +145,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private void DefineRecommendations(Page page)
         {
-            var selected = Types.FirstOrDefault(type => type.Slug == TypeSlug);
+            var selected = Selected;
             if (_providerUnavailable) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
             foreach (var group in _shelves.GroupBy(shelf => shelf.Type))
             {
@@ -196,7 +207,9 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            var selected = Types.FirstOrDefault(type => type.Slug == TypeSlug);
+            await LoadListedAsync();
+
+            var selected = Selected;
             try
             {
                 if (!string.IsNullOrWhiteSpace(Query))
@@ -227,10 +240,24 @@ namespace Jularr.Frontend.Pages.User.Discover
             _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected.Slug is null ? null : selected.Type, pageSize: 20), HttpContext.RequestAborted)).Items;
         }
 
+        private async Task LoadListedAsync()
+        {
+            if (_listed is not null)
+            {
+                return;
+            }
+
+            var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted)).ProfileId
+                ?? throw new UnauthorizedAccessException("An active profile is required.");
+            var media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), HttpContext.RequestAborted);
+            _listed = [.. media.Where(item => !item.IsSubtype && !item.IsHidden).Select(item => Enum.Parse<MediaType>(item.Key))];
+        }
+
         private async Task LoadRecommendationsAsync()
         {
-            var selected = Types.FirstOrDefault(type => type.Slug == TypeSlug);
-            foreach (var (_, type, typeFeeds) in Types.Where(type => selected.Slug is null || type.Slug == selected.Slug))
+            await LoadListedAsync();
+            var selected = Selected;
+            foreach (var (_, type, typeFeeds) in Listed.Where(type => selected.Slug is null || type.Slug == selected.Slug))
             {
                 foreach (var feed in typeFeeds)
                 {

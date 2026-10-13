@@ -72,6 +72,15 @@ namespace Jularr.Backend.Logic.Playback
                     session."PublicId" = @PlaybackSessionId
                     AND session."ProfileId" = @ProfileId
                     AND session."EndedAt" IS NULL
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = session."ProfileId"
+                        WHERE
+                            asset."Id" = session."MediaAssetId"
+                    )
                 RETURNING
                     session."MediaAssetId" AS "Id";
                 """;

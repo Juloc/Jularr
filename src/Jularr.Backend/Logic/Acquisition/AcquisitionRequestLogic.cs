@@ -30,7 +30,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
             }
 
-            // A game names one of its platforms; nothing else names one.
+            // Only Works the profile may open; a game names one of its platforms, nothing else names one.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -46,12 +46,15 @@ namespace Jularr.Backend.Logic.Acquisition
                             AND listed."GamePlatformId" = @GamePlatformId
                     ) AS "IsPlatformListed"
                 FROM
-                    "Works" AS work
+                    "ProfileWorks" AS visible
+                    JOIN "Works" AS work ON work."Id" = visible."WorkId"
                 WHERE
-                    work."Id" = @WorkId;
+                    visible."ProfileId" = @RequestedByProfileId
+                    AND work."Id" = @WorkId;
                 """;
             sql.Parameters.Add(data);
             var work = await ctx.ReadOptionalAsync<RequestPlatformCheckData>(sql, ct) ?? throw new KeyNotFoundException("The requested work was not found.");
+
             // A game is requested for one of its platforms; other media name none.
             if (work.IsGame && data.GamePlatformId is null)
             {

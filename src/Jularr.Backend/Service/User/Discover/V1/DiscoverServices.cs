@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Discover.V1;
+using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
@@ -39,6 +40,12 @@ namespace Jularr.Backend.Service.User.Discover.V1
             if (Data.MediaTypeId is not (MediaType.Movie or MediaType.Series) || Data.MediaTypeId == MediaType.Series && Data.DiscoverFeedTypeId == DiscoverFeedType.Upcoming)
             {
                 throw new DataValidationException(nameof(ReadDiscoverFeedDataV1.DiscoverFeedTypeId), "unknown_catalog_value");
+            }
+
+            // Only types the profile lists.
+            if (!(await DiscoverQueries.ReadTypesAsync(Context, Auth.ProfileId!.Value, CancellationToken)).Listed.Contains(Data.MediaTypeId))
+            {
+                return new BaseDataList<DiscoverItemV1>([]);
             }
 
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
@@ -129,7 +136,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
                                 AND plex."Namespace" = 'plex'
                         ) AS "PlexUrl"
                     FROM
-                        "Works" AS work
+                        "ProfileWorks" AS visible
+                        JOIN "Works" AS work ON work."Id" = visible."WorkId"
                         LEFT JOIN "WorkExternalIdentities" AS tmdb ON tmdb."WorkId" = work."Id" AND tmdb."Namespace" IN ('tmdb_movie', 'tmdb_tv')
                         LEFT JOIN LATERAL (
                             SELECT
@@ -168,7 +176,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
                             LIMIT 1
                         ) AS backdrop ON TRUE
                     WHERE
-                        (@MediaTypeId::smallint IS NULL OR work."MediaTypeId" = @MediaTypeId)
+                        visible."ProfileId" = @ProfileId
+                        AND NOT visible."IsHidden"
+                        AND (@MediaTypeId::smallint IS NULL OR visible."MediaTypeId" = @MediaTypeId AND visible."MediaSubtypeId" IS NULL)
                         AND EXISTS (
                             SELECT
                                 1
@@ -195,9 +205,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
             try
             {
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
+                var listed = (await DiscoverQueries.ReadTypesAsync(Context, Auth.ProfileId!.Value, CancellationToken)).Listed;
                 foreach (var mediaType in Data.MediaTypeId is { } selected ? [selected] : new[] { MediaType.Movie, MediaType.Series })
                 {
-                    if (mediaType is not (MediaType.Movie or MediaType.Series))
+                    if (mediaType is not (MediaType.Movie or MediaType.Series) || !listed.Contains(mediaType))
                     {
                         continue;
                     }
@@ -233,7 +244,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // A provider title before it becomes a Work.
+            // A provider title before it becomes a Work, of a type the profile may use.
+            await DiscoverQueries.RequireTypeAsync(Context, Parameters.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var work = await _metadata.ReadWorkAsync(connection, Parameters.MediaTypeId, Parameters.TmdbId, CancellationToken);
             var overlay = await DiscoverQueries.ReadOverlayAsync(Context, Parameters.MediaTypeId, [work.Id], Auth.ProfileId!.Value, CancellationToken);
@@ -260,6 +272,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // The provider identity resolves to one canonical Work before the request exists.
+            await DiscoverQueries.RequireTypeAsync(Context, Parameters.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, null, Parameters.TmdbId, CancellationToken);
             var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Data.UiLocaleId, null), ct),
@@ -270,6 +283,38 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
     internal static class DiscoverQueries
     {
+        public static async Task<(IReadOnlySet<MediaType> Usable, IReadOnlySet<MediaType> Listed)> ReadTypesAsync(LogicContext context, long profileId, CancellationToken ct)
+        {
+            var categories = await context.ExecuteBatchAsync((ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        category."Key",
+                        category."MediaSubtypeId" IS NOT NULL AS "IsSubtype",
+                        category."IsHidden"
+                    FROM
+                        "ProfileMediaCategories" AS category
+                    WHERE
+                        category."ProfileId" = @ProfileId
+                        AND category."MediaSubtypeId" IS NULL;
+                    """;
+                sql.Parameters.Add(new ProfileParameters(profileId));
+                return ctx.ReadSql.ReadListAsync<ProfileMediaV1>(sql, token);
+            }, ct);
+            return (categories.Select(category => Enum.Parse<MediaType>(category.Key)).ToHashSet(),
+                categories.Where(category => !category.IsHidden).Select(category => Enum.Parse<MediaType>(category.Key)).ToHashSet());
+        }
+
+        public static async Task RequireTypeAsync(LogicContext context, MediaType mediaType, long profileId, CancellationToken ct)
+        {
+            if (!(await ReadTypesAsync(context, profileId, ct)).Usable.Contains(mediaType))
+            {
+                throw new KeyNotFoundException("The media type is not available.");
+            }
+        }
+
         public static async Task<IReadOnlyDictionary<int, DiscoverOverlayData>> ReadOverlayAsync(LogicContext context, MediaType mediaType, IEnumerable<int> tmdbIds, long profileId,
             CancellationToken ct)
         {
@@ -332,6 +377,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         ) AS "PlexUrl"
                     FROM
                         "WorkExternalIdentities" AS identity
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId" AND visible."ProfileId" = @ProfileId
                     WHERE
                         identity."Namespace" = @Namespace
                         AND identity."Value" IN (SELECT jsonb_array_elements_text(@Values::jsonb));

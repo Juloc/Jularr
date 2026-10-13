@@ -39,6 +39,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     progress."PositionMs" AS "ResumePositionMs"
                 FROM
                     "MediaAssets" AS asset
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                     JOIN "Works" AS work ON work."Id" = asset."WorkId"
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
@@ -95,6 +96,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         progress."PositionMs" AS "ResumePositionMs"
                     FROM
                         "MediaAssets" AS asset
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
                         JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                         JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"

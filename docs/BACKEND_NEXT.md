@@ -135,8 +135,8 @@ after green checks. Collect unresolved questions while progressing independent
 work; framework limitations and new dependencies require discussion, not workarounds.
 Instance settings, Library configuration, User capabilities and public name/language
 consumption are connected. Library gates actual Services through their existing
-context/transaction. MediaTypes is separate; per-media/profile preferences,
-Arr+/Playback/Tracking module implementations and full branding remain open.
+context/transaction. Media types and subtypes switch per instance and per profile
+(Owner blocks, profile hides); Arr+/Playback/Tracking module implementations and full branding remain open.
 
 The agreed functional module catalog is Library, Requests, Arr+, Playback,
 Readers and Tracking. Requests has a whole-Work slice: active-profile language
@@ -188,7 +188,7 @@ The first media slice now provides canonical Works/WorkTitles and profile-keyed
 WatchlistEntries. Admin Works/Work and User Details/Watchlist consume typed
 services; manual title edits protect revisions and retain other title sources.
 The Request Users page reads the existing account directory without duplicating
-account management. Media module/profile visibility, localized metadata policy,
+account management. Localized metadata policy,
 inventory, monitoring, complete Requests/Wanted lifecycle, quotas, storage roles and playback remain open;
 these pages are not the completed media/Arr feature set.
 

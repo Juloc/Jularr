@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -48,6 +49,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         coalesce(document."CacheCompletedAt" IS NOT NULL, FALSE) AS "IsCached"
                     FROM
                         "MediaAssets" AS asset
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         JOIN "Works" AS work ON work."Id" = asset."WorkId"
                         JOIN LATERAL (
                             SELECT
@@ -86,6 +88,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         AND asset."MediaAssetTypeId" = 3;
                     """;
                 sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion));
+                sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 return ctx.ReadSql.ReadOptionalAsync<ReadingSourceData>(sql, ct);
             }, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
 
@@ -107,6 +110,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "MediaAssets" AS asset ON asset."Id" = @MediaAssetId
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
                         JOIN "Works" AS work ON work."Id" = asset."WorkId"
                         LEFT JOIN "MediaProgress" AS progress ON progress."ProfileId" = @ProfileId
                             AND progress."WorkId" = asset."WorkId"
@@ -144,11 +148,22 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     CROSS JOIN LATERAL jsonb_array_elements(document."Structure" -> 'Toc') WITH ORDINALITY AS toc (entry, position)
                 WHERE
                     document."Id" = @DocumentId
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "StoredFiles" AS file
+                            JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        WHERE
+                            file."Id" = document."StoredFileId"
+                    )
                 ORDER BY
                     toc.position
                 LIMIT 2000;
                 """;
             sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return new BaseDataList<ReadingTocEntryV1>(await Context.ReadSql.ReadListAsync<ReadingTocEntryV1>(sql, CancellationToken));
         }
     }
@@ -186,9 +201,20 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     JOIN "ReadingResources" AS resource ON resource."ReadingDocumentId" = document."Id"
                         AND resource."Path" = ':section/' || lpad(@SectionIndex::text, 5, '0')
                 WHERE
-                    document."Id" = @DocumentId;
+                    document."Id" = @DocumentId
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "StoredFiles" AS file
+                            JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        WHERE
+                            file."Id" = document."StoredFileId"
+                    );
                 """;
             sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingSectionV1>(sql, CancellationToken) ?? throw new ServiceUnavailableException("reading_unavailable");
         }
     }
@@ -211,12 +237,24 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     resource."MediaType" AS "ContentType"
                 FROM
                     "ReadingResources" AS resource
+                    JOIN "ReadingDocuments" AS document ON document."Id" = resource."ReadingDocumentId"
                 WHERE
                     resource."ReadingDocumentId" = @DocumentId
                     AND resource."Path" = @Path
-                    AND resource."MediaType" LIKE 'image/%';
+                    AND resource."MediaType" LIKE 'image/%'
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "StoredFiles" AS file
+                            JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        WHERE
+                            file."Id" = document."StoredFileId"
+                    );
                 """;
             sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingResourceV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The resource was not found.");
         }
     }
