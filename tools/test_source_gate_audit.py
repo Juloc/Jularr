@@ -6,7 +6,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-from source_gate_audit import allowed_base, run_audit, target_url
+from source_gate_audit import allowed_base, classify, run_audit, target_url
 
 
 class LocalGate(BaseHTTPRequestHandler):
@@ -90,6 +90,16 @@ class GateAuditTests(unittest.TestCase):
     def test_direct_file_response_proves_exposure(self):
         report = run_audit(self.base, ["/download"], bytes.fromhex("25504446"), None, delay=0, timeout=2)
         self.assertEqual("EXPOSED", report["conclusion"])
+
+    def test_protected_proof_takes_precedence_over_captcha_mentions(self):
+        status, reason = classify(200, {"Content-Type": "text/html"},
+                                  b"<p>captcha details: OWNED_SECRET_PROTECTED_TEXT</p>",
+                                  "GET", b"OWNED_SECRET_PROTECTED_TEXT")
+        self.assertEqual("EXPOSED", status)
+
+    def test_missing_route_is_not_mistaken_for_protection(self):
+        report = run_audit(self.base, ["/absent"], b"OWNED_SECRET_PROTECTED_TEXT", None, delay=0, timeout=2)
+        self.assertEqual("INCONCLUSIVE", report["conclusion"])
 
     def test_redirect_does_not_leave_origin(self):
         report = run_audit(self.base, ["/redirect"], b"OWNED_SECRET_PROTECTED_TEXT", None, delay=0, timeout=2)
