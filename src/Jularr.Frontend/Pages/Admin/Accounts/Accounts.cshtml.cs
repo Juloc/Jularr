@@ -68,9 +68,11 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         form.Text(item => item.DisplayName, "admin.accounts.name");
                         form.Select(item => item.AccountRoleTypeId, "admin.accounts.role", roles);
                         form.Select(item => item.IsEnabled, "admin.accounts.status", states);
+                        form.Select(item => item.MayConfirmSources, "admin.accounts.mayConfirmSources",
+                            [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                         form.Submit("common.save");
                     }, Address(_selected.Id), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled), _input is null ? null : Error));
+                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.MayConfirmSources), _input is null ? null : Error));
                     split.Secondary.Add(new P(new Text("admin.accounts.sessionWarning")));
 
                     // Assign existing profile access.
@@ -136,9 +138,9 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? displayName, AccountRoleType accountRoleTypeId, [BindRequired] bool isEnabled)
+        public async Task<IActionResult> OnPostAsync(string? displayName, AccountRoleType accountRoleTypeId, [BindRequired] bool isEnabled, bool? mayConfirmSources)
         {
-            _input = new UpdateAccountDataV1(displayName ?? "", accountRoleTypeId, isEnabled);
+            _input = new UpdateAccountDataV1(displayName ?? "", accountRoleTypeId, isEnabled, mayConfirmSources);
             await update.ExecuteAsync<UpdateResult>(SelectedParameters(), _input, HttpContext.RequestAborted);
             TempData["AccountSaved"] = true;
             return LocalRedirect(Address(AccountId));

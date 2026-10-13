@@ -81,6 +81,7 @@ CREATE TABLE "Accounts" (
     "DisplayName" text NOT NULL,
     "AccountRoleTypeId" smallint NOT NULL,
     "IsEnabled" boolean NOT NULL DEFAULT TRUE,
+    "MayConfirmSources" boolean NOT NULL DEFAULT FALSE,
     "EmailVerifiedAt" timestamptz,
     "CredentialRevision" bigint NOT NULL DEFAULT 1,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),

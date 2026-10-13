@@ -57,7 +57,7 @@ CREATE TABLE "AcquisitionConnections" (
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     CHECK (("RemotePath" IS NULL) = ("LocalPath" IS NULL)),
     CHECK ("AcquisitionConnectionTypeId" = 2 OR ("DownloadCategory" IS NULL AND "RemotePath" IS NULL)),
-    CHECK ("AcquisitionConnectionTypeId" IN (3, 4) OR "ProtectedApiKey" IS NOT NULL),
+    CHECK ("AcquisitionConnectionTypeId" IN (3, 4, 5) OR "ProtectedApiKey" IS NOT NULL),
     CHECK ("AcquisitionConnectionTypeId" = 4 OR "Username" IS NULL)
 );
 

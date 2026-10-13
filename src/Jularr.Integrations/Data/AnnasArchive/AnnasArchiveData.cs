@@ -5,7 +5,8 @@ namespace Jularr.Integrations.Data.AnnasArchive
         Unavailable,
         Refused,
         Gate,
-        InvalidResponse
+        InvalidResponse,
+        WaitTooLong
     }
 
     internal sealed class AnnasArchiveException : Exception

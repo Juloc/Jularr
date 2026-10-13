@@ -441,7 +441,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static Task<IReadOnlyList<DownloadData>> ReadActiveDownloadsAsync(this LogicContext ctx, CancellationToken ct)
         {
-            // Grouped by client for one queue and history read each.
+            // Grouped by client for one queue and history read each; a source that waits for a person is not asked again.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -479,6 +479,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."OperationTypeId" = 2
                     AND operation."OperationStatusTypeId" IN (1, 2)
                     AND operation."AcquisitionConnectionId" IS NOT NULL
+                    AND operation."AttentionKey" IS DISTINCT FROM 'source_manual_link'
                 ORDER BY
                     operation."AcquisitionConnectionId",
                     operation."Id";
@@ -615,6 +616,92 @@ namespace Jularr.Backend.Logic.Acquisition
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.AcquisitionReleaseStatusTypeId), "invalid_transition");
+            }
+        }
+
+        public static async Task SetDownloadSourceLinkAsync(this LogicContext ctx, DownloadSourceLinkData data, CancellationToken ct)
+        {
+            // Only a download that waits for a person takes a file link; the monitor continues.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH waiting AS (
+                    UPDATE
+                        "Operations" AS operation
+                    SET
+                        "AttentionKey" = NULL
+                    WHERE
+                        operation."Id" = @OperationId
+                        AND operation."OperationTypeId" = 2
+                        AND operation."OperationStatusTypeId" IN (1, 2)
+                        AND operation."AttentionKey" IN ('source_manual_link', 'source_gate')
+                    RETURNING
+                        operation."AcquisitionReleaseId"
+                )
+                UPDATE
+                    "AcquisitionReleases" AS release
+                SET
+                    "SourceUrl" = @SourceUrl,
+                    "UpdatedAt" = now()
+                FROM
+                    waiting
+                WHERE
+                    release."Id" = waiting."AcquisitionReleaseId";
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.OperationId), "invalid_transition");
+            }
+        }
+
+        public static async Task SetRequestSourceLinkAsync(this LogicContext ctx, RequestSourceLinkData data, CancellationToken ct)
+        {
+            // A user confirms only a download of their own request, and only while instance and account allow it.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                WITH waiting AS (
+                    UPDATE
+                        "Operations" AS operation
+                    SET
+                        "AttentionKey" = NULL
+                    FROM
+                        "AcquisitionReleases" AS release,
+                        "RequestTargets" AS target,
+                        "AcquisitionRequests" AS request,
+                        "InstanceSettings" AS settings,
+                        "Accounts" AS account
+                    WHERE
+                        operation."Id" = @OperationId
+                        AND operation."OperationTypeId" = 2
+                        AND operation."OperationStatusTypeId" IN (1, 2)
+                        AND operation."AttentionKey" = 'source_manual_link'
+                        AND release."Id" = operation."AcquisitionReleaseId"
+                        AND target."WantedItemId" = release."WantedItemId"
+                        AND target."AcquisitionRequestId" = @AcquisitionRequestId
+                        AND request."Id" = target."AcquisitionRequestId"
+                        AND request."RequestedByProfileId" = @ProfileId
+                        AND settings."UsersConfirmSources"
+                        AND account."Id" = @AccountId
+                        AND account."MayConfirmSources"
+                    RETURNING
+                        operation."AcquisitionReleaseId"
+                )
+                UPDATE
+                    "AcquisitionReleases" AS release
+                SET
+                    "SourceUrl" = @SourceUrl,
+                    "UpdatedAt" = now()
+                FROM
+                    waiting
+                WHERE
+                    release."Id" = waiting."AcquisitionReleaseId";
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new KeyNotFoundException("No waiting download of this request may be confirmed.");
             }
         }
 
