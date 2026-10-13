@@ -184,7 +184,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     LIMIT @PageSize
                     OFFSET @Offset;
                     """;
-                sql.Parameters.Add(new LibraryFilterData(Data.MediaTypeId, Data.Query));
+                sql.Parameters.Add(new LibraryFilterData(Data.MediaTypeId, null, Data.Query));
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 sql.Page = new PageRequest(Data.Page, LocalLimit);
                 return ctx.ReadSql.ReadListAsync<DiscoverItemV1>(sql, ct);
@@ -261,7 +261,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             // The provider identity resolves to one canonical Work before the request exists.
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-            var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, Parameters.TmdbId, CancellationToken);
+            var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, null, Parameters.TmdbId, CancellationToken);
             var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Data.UiLocaleId, null), ct),
                 CancellationToken);
             return new CreateRequestResultV1(request.Id);

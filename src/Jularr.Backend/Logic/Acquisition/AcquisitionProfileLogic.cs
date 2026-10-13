@@ -11,17 +11,17 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         private const long Megabyte = 1024L * 1024L;
 
-        public static bool SupportsProfiles(MediaType mediaType) => ProfileQualities.For(mediaType).Count > 0;
+        public static bool SupportsProfiles(MediaType mediaType, MediaSubtype? subtype) => MediaSubtypes.Fits(mediaType, subtype) && ProfileQualities.For(mediaType, subtype).Count > 0;
 
         public static string BuildDefinition(AcquisitionProfileInputData input, string? existing)
         {
             // Editor values on top of the stored rules.
-            if (!SupportsProfiles(input.MediaTypeId))
+            if (!SupportsProfiles(input.MediaTypeId, input.MediaSubtypeId))
             {
                 throw new DataValidationException(nameof(input.MediaTypeId), "unknown_catalog_value");
             }
 
-            var order = ProfileQualities.For(input.MediaTypeId);
+            var order = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId);
             var allowed = order.Where(quality => input.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
             if (allowed.Length == 0 || allowed.Length != input.AllowedQualities.Distinct(StringComparer.OrdinalIgnoreCase).Count())
             {
@@ -54,15 +54,15 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task<long> CreateAcquisitionProfileAsync(this LogicContext ctx, AcquisitionProfileInputData input, CancellationToken ct)
         {
-            var row = new AcquisitionProfileRowData(null, input.Name, input.MediaTypeId, input.IsDefault, BuildDefinition(input, null), null);
+            var row = new AcquisitionProfileRowData(null, input.Name, input.MediaTypeId, input.MediaSubtypeId, input.IsDefault, BuildDefinition(input, null), null);
             await ctx.ClearDefaultProfileAsync(row, ct);
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
-                    "AcquisitionProfiles" ("Name", "MediaTypeId", "IsDefault", "Definition")
+                    "AcquisitionProfiles" ("Name", "MediaTypeId", "MediaSubtypeId", "IsDefault", "Definition")
                 VALUES
-                    (@Name, @MediaTypeId, @IsDefault, @Definition::jsonb)
+                    (@Name, @MediaTypeId, @MediaSubtypeId, @IsDefault, @Definition::jsonb)
                 RETURNING
                     "Id",
                     "Version";
@@ -73,19 +73,24 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task UpdateAcquisitionProfileAsync(this LogicContext ctx, AcquisitionProfileInputData input, CancellationToken ct)
         {
-            // The media type stays; a default is replaced, never removed.
+            // Type and subtype stay; a default is replaced, never removed.
             var state = await ctx.ReadAcquisitionProfileStateAsync(input.Id!.Value, ct);
             if (state.Version != input.Version)
             {
                 throw new DataValidationException(nameof(input.Version), "outdated_version");
             }
 
-            if (state.MediaTypeId != input.MediaTypeId || state.IsDefault && !input.IsDefault)
+            if (state.MediaTypeId != input.MediaTypeId || state.MediaSubtypeId != input.MediaSubtypeId)
             {
-                throw new DataValidationException(state.MediaTypeId != input.MediaTypeId ? nameof(input.MediaTypeId) : nameof(input.IsDefault), "invalid_transition");
+                throw new DataValidationException(nameof(input.MediaTypeId), "invalid_transition");
             }
 
-            var row = new AcquisitionProfileRowData(state.Id, input.Name, input.MediaTypeId, input.IsDefault, BuildDefinition(input, state.Definition), state.Version);
+            if (state.IsDefault && !input.IsDefault)
+            {
+                throw new DataValidationException(nameof(input.IsDefault), "invalid_transition");
+            }
+
+            var row = new AcquisitionProfileRowData(state.Id, input.Name, input.MediaTypeId, input.MediaSubtypeId, input.IsDefault, BuildDefinition(input, state.Definition), state.Version);
             await ctx.ClearDefaultProfileAsync(row, ct);
             var sql = new SqlStatement();
             sql.Statement =
@@ -135,7 +140,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         private static async Task ClearDefaultProfileAsync(this LogicContext ctx, AcquisitionProfileRowData row, CancellationToken ct)
         {
-            // One default per media type.
+            // One default per media type and subtype.
             if (!row.IsDefault)
             {
                 return;
@@ -151,6 +156,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "Version" = profile."Version" + 1
                 WHERE
                     profile."MediaTypeId" = @MediaTypeId
+                    AND profile."MediaSubtypeId" IS NOT DISTINCT FROM @MediaSubtypeId
                     AND profile."IsDefault"
                     AND profile."Id" IS DISTINCT FROM @Id;
                 """;
@@ -166,6 +172,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SELECT
                     profile."Id",
                     profile."MediaTypeId",
+                    profile."MediaSubtypeId",
                     profile."IsDefault",
                     profile."Definition"::text AS "Definition",
                     profile."Version"

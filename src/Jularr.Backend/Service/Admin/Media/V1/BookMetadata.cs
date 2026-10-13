@@ -14,7 +14,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         public const string Namespace = "openlibrary";
 
-        public static bool Handles(MediaType mediaType) => mediaType is MediaType.Book or MediaType.LightNovel;
+        public static bool Handles(MediaType mediaType, MediaSubtype? subtype) => mediaType == MediaType.Book && subtype != MediaSubtype.Manga;
 
         public async Task<IReadOnlyList<OpenLibraryResult>> SearchAsync(string query, int? year, CancellationToken ct)
         {
@@ -29,7 +29,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<long> ImportAsync(LogicContext context, MediaType mediaType, string workId, CancellationToken ct)
+        public async Task<long> ImportAsync(LogicContext context, MediaSubtype? subtype, string workId, CancellationToken ct)
         {
             // Read before the short write batch.
             OpenLibraryWork work;
@@ -48,7 +48,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Overview", Value = Limit(work.Description, 4000), Localized = false },
                 new { Key = "Poster", Value = OpenLibraryClient.CoverUrl(work.CoverId), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
-            var data = new WorkMetadataData(mediaType, Namespace, work.WorkId, Limit(work.Title, 500)!, null, work.Year is >= 1800 and <= 2200 ? work.Year : null, "[]", "[]",
+            var data = new WorkMetadataData(MediaType.Book, subtype, Namespace, work.WorkId, Limit(work.Title, 500)!, null, work.Year is >= 1800 and <= 2200 ? work.Year : null, "[]", "[]",
                 JsonSerializer.Serialize(facts), Namespace);
             return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
         }

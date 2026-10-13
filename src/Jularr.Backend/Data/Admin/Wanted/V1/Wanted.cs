@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 
 namespace Jularr.Backend.Data.Admin.Wanted.V1
@@ -31,11 +32,12 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class UpdateWantedDataV1 : BaseData
     {
-        public UpdateWantedDataV1(bool isPaused, long version, long? acquisitionProfileId = null)
+        public UpdateWantedDataV1(bool isPaused, long version, long? acquisitionProfileId = null, long? libraryRootId = null)
         {
             IsPaused = isPaused;
             Version = version;
             AcquisitionProfileId = acquisitionProfileId;
+            LibraryRootId = libraryRootId;
         }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
@@ -44,17 +46,23 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
         public long? AcquisitionProfileId { get; }
 
+        // Without a choice the first library of the subtype, then of the type, receives imports.
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
+        public long? LibraryRootId { get; }
+
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
     }
 
     public sealed class WantedDetailsV1 : BaseResponse
     {
-        public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, string canonicalTitle, string? platformName, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId)
+        public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId)
         {
+            LibraryRootId = libraryRootId;
             PlatformName = platformName;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             Id = id;
             WorkId = workId;
             CanonicalTitle = canonicalTitle;
@@ -77,6 +85,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
@@ -111,6 +122,24 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
         public long? AcquisitionProfileId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
+        public long? LibraryRootId { get; }
+    }
+
+    public sealed class WantedLibraryV1 : BaseResponse
+    {
+        public WantedLibraryV1(long id, string name)
+        {
+            Id = id;
+            Name = name;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Name))]
+        public string Name { get; }
     }
 
     public sealed class WantedItemParametersV1 : BaseParameters

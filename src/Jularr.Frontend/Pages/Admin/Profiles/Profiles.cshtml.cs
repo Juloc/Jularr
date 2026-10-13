@@ -16,7 +16,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // Media types with release qualities.
-        private static readonly MediaType[] MediaTypes = [MediaType.Movie, MediaType.Series, MediaType.Book, MediaType.LightNovel];
+        private static readonly (MediaType Type, MediaSubtype? Subtype)[] Kinds = [(MediaType.Movie, null), (MediaType.Series, null), (MediaType.Book, null), (MediaType.Book, MediaSubtype.LightNovel)];
 
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private AcquisitionProfileDetailsV1? _selected;
@@ -27,6 +27,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         [BindProperty(SupportsGet = true)]
         public MediaType? NewFor { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public MediaSubtype? NewForSubtype { get; set; }
 
         protected override void Define(Page page)
         {
@@ -40,13 +43,13 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             {
                 split.Primary.Add(new Table<AcquisitionProfileDetailsV1>(_profiles)
                     .Text(item => item.Name, "profile.name")
-                    .Resource(item => item.MediaTypeId, "table.type", type => "media.type." + type)
+                    .Content("table.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
                     .Content("profile.qualities", item => new ValueText(string.Join(", ", item.AllowedQualities)))
                     .Content("profile.usage", item => item.IsDefault ? new Text("profile.default") : new ValueText(item.WantedCount.ToString(CultureInfo.InvariantCulture)))
                     .Link(item => item.Id, "common.actions", id => Address(id), "common.edit"));
-                foreach (var type in MediaTypes)
+                foreach (var (type, subtype) in Kinds)
                 {
-                    split.Primary.Add(new A(new Text("profile.add." + type)).Class("button").Attribute("href", Address(newFor: type)));
+                    split.Primary.Add(new A(new Text("profile.add." + (subtype?.ToString() ?? type.ToString()))).Class("button").Attribute("href", Address(newFor: type, newForSubtype: subtype)));
                 }
 
                 if (editing)
@@ -70,13 +73,14 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionProfileDataV1(selected.Name, selected.MediaTypeId, selected.IsDefault, selected.AllowedQualities, selected.UpgradeAllowed, selected.UpgradeCutoffQuality,
-                    selected.MinimumSizeMb, selected.MaximumSizeMb, selected.MustContain, selected.MustNotContain, selected.Version)
-                : NewProfile(NewFor!.Value));
-            var qualities = ProfileQualities.For(input.MediaTypeId).Select(quality => new SelectOption(quality, quality)).ToArray();
+                    selected.MinimumSizeMb, selected.MaximumSizeMb, selected.MustContain, selected.MustNotContain, selected.Version, selected.MediaSubtypeId)
+                : NewProfile(NewFor!.Value, NewForSubtype));
+            var qualities = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId).Select(quality => new SelectOption(quality, quality)).ToArray();
 
             return new Form<SaveAcquisitionProfileDataV1>(form =>
             {
                 form.Hidden(item => item.MediaTypeId);
+                form.Hidden(item => item.MediaSubtypeId);
                 form.Hidden(item => item.Version);
                 form.Text(item => item.Name, "profile.name");
                 form.Select(item => item.IsDefault, "profile.isDefault", YesNo());
@@ -88,13 +92,13 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 form.Text(item => item.MustContain, "profile.mustContain");
                 form.Text(item => item.MustNotContain, "profile.mustNotContain");
                 form.Submit("common.save");
-            }, Address(AcquisitionProfileId, NewFor), csrf, input, _input is null ? null : FormError);
+            }, Address(AcquisitionProfileId, NewFor, NewForSubtype), csrf, input, _input is null ? null : FormError);
         }
 
         // Sensible starting points per kind.
-        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType mediaType) => mediaType is MediaType.Movie or MediaType.Series
-            ? new SaveAcquisitionProfileDataV1("", mediaType, false, ["WEB-1080p", "BLURAY-1080p"], true, "WEB-1080p", null, null, [], [])
-            : new SaveAcquisitionProfileDataV1("", mediaType, false, ["EPUB"], false, null, null, null, [], []);
+        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType mediaType, MediaSubtype? subtype) => mediaType is MediaType.Movie or MediaType.Series
+            ? new SaveAcquisitionProfileDataV1("", mediaType, false, ["WEB-1080p", "BLURAY-1080p"], true, "WEB-1080p", null, null, [], [], null, subtype)
+            : new SaveAcquisitionProfileDataV1("", mediaType, false, ["EPUB"], false, null, null, null, [], [], null, subtype);
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -103,11 +107,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, string? name, [BindRequired] bool isDefault, string[]? allowedQualities, [BindRequired] bool upgradeAllowed,
+        public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? name, [BindRequired] bool isDefault, string[]? allowedQualities, [BindRequired] bool upgradeAllowed,
             string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, string? mustContain, string? mustNotContain, long? version)
         {
             _input = new SaveAcquisitionProfileDataV1(name ?? "", mediaTypeId, isDefault, allowedQualities ?? [], upgradeAllowed, Blank(upgradeCutoffQuality), minimumSizeMb, maximumSizeMb,
-                Terms(mustContain), Terms(mustNotContain), version);
+                Terms(mustContain), Terms(mustNotContain), version, mediaSubtypeId);
             if (AcquisitionProfileId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionProfileParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -131,7 +135,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), HttpContext.RequestAborted);
             _selected = AcquisitionProfileId is { } id ? _profiles.FirstOrDefault(profile => profile.Id == id) ?? throw new KeyNotFoundException("The profile was not found.") : null;
-            if (NewFor is { } type && !MediaTypes.Contains(type)) NewFor = null;
+            if (NewFor is { } type && !Kinds.Contains((type, NewForSubtype))) NewFor = null;
         }
 
         private SelectOption[] YesNo() => [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])];
@@ -140,11 +144,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         private static string[] Terms(string? value) => value is null ? [] : [.. value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
 
-        private static string Address(long? id = null, MediaType? newFor = null, string? handler = null)
+        private static string Address(long? id = null, MediaType? newFor = null, MediaSubtype? newForSubtype = null, string? handler = null)
         {
             var address = "/Admin/Acquisition/Profiles";
             if (id is { } profileId) address += "?AcquisitionProfileId=" + profileId.ToString(CultureInfo.InvariantCulture);
-            else if (newFor is { } type) address += "?NewFor=" + type;
+            else if (newFor is { } type) address += "?NewFor=" + type + (newForSubtype is { } subtype ? "&NewForSubtype=" + subtype : "");
             return handler is null ? address : address + (address.Contains('?') ? "&" : "?") + "handler=" + handler;
         }
     }

@@ -15,7 +15,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         public const string Namespace = "anilist";
 
-        public static bool Handles(MediaType mediaType) => mediaType == MediaType.Manga;
+        public static bool Handles(MediaType mediaType, MediaSubtype? subtype) => mediaType == MediaType.Book && subtype == MediaSubtype.Manga;
 
         public async Task<IReadOnlyList<AniListManga>> SearchAsync(string query, int? year, CancellationToken ct)
         {
@@ -52,7 +52,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Poster", Value = manga.CoverUrl, Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var volumes = Enumerable.Range(1, manga.Volumes ?? 0).Select(volume => new { Volume = volume });
-            var data = new WorkMetadataData(MediaType.Manga, Namespace, manga.Id.ToString(CultureInfo.InvariantCulture), Limit(title, 500)!,
+            var data = new WorkMetadataData(MediaType.Book, MediaSubtype.Manga, Namespace, manga.Id.ToString(CultureInfo.InvariantCulture), Limit(title, 500)!,
                 Limit(manga.EnglishTitle is null ? manga.NativeTitle : manga.RomajiTitle, 500), manga.Year is >= 1800 and <= 2200 ? manga.Year : null, "[]", JsonSerializer.Serialize(volumes),
                 JsonSerializer.Serialize(facts), Namespace);
             return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);

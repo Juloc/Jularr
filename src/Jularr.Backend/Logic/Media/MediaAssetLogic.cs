@@ -20,7 +20,7 @@ namespace Jularr.Backend.Logic.Media
             }
 
             ValidateUnit(file.MediaTypeId, data);
-            var workId = await ctx.ResolveWorkAsync(file.MediaTypeId, data, ct);
+            var workId = await ctx.ResolveWorkAsync(file.MediaTypeId, file.MediaSubtypeId, data, ct);
 
             // The default edition serializes assignments per Work; the upsert always returns it.
             var sql = new SqlStatement();
@@ -193,7 +193,7 @@ namespace Jularr.Backend.Logic.Media
             }
         }
 
-        private static async Task<long> ResolveWorkAsync(this LogicContext ctx, MediaType mediaType, StoredFileAssignmentData data, CancellationToken ct)
+        private static async Task<long> ResolveWorkAsync(this LogicContext ctx, MediaType mediaType, MediaSubtype? subtype, StoredFileAssignmentData data, CancellationToken ct)
         {
             // Exactly one Work source.
             if ((data.WorkId is null) == (data.Title is null))
@@ -203,7 +203,7 @@ namespace Jularr.Backend.Logic.Media
 
             if (data.Title is { } title)
             {
-                return (await ctx.CreateWorkAsync(new WorkCreationData(mediaType, title), ct)).Id;
+                return (await ctx.CreateWorkAsync(new WorkCreationData(mediaType, subtype, false, title), ct)).Id;
             }
 
             var sql = new SqlStatement();
@@ -251,7 +251,8 @@ namespace Jularr.Backend.Logic.Media
                     file."LibraryRootId",
                     file."RelativePath",
                     file."MediaAssetId",
-                    root."MediaTypeId"
+                    root."MediaTypeId",
+                    root."MediaSubtypeId"
                 FROM
                     "StoredFiles" AS file
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"

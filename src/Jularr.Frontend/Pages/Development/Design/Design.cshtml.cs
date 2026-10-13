@@ -83,11 +83,11 @@ namespace Jularr.Frontend.Pages.Development.Design
             // Typed table and layouts.
             var rows = new[]
             {
-                new WorkDetailsV1(1, MediaType.Movie, texts["design.exampleTitle"], 2026, 1),
-                new WorkDetailsV1(2, MediaType.Book, texts["design.exampleOtherTitle"], 2025, 1)
+                new WorkDetailsV1(1, MediaType.Movie, null, false, texts["design.exampleTitle"], 2026, 1),
+                new WorkDetailsV1(2, MediaType.Book, MediaSubtype.Manga, false, texts["design.exampleOtherTitle"], 2025, 1)
             };
             var table = new Table<WorkDetailsV1>(rows).Text(item => item.CanonicalTitle, "media.title")
-                .Resource(item => item.MediaTypeId, "media.type", type => "media.type." + type).Text(item => item.ReleaseYear, "media.year");
+                .Content("media.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))).Text(item => item.ReleaseYear, "media.year");
             page.Content.Add(new Div(new UiSection("design.layouts", [
                 new Tabs(tabs =>
                 {

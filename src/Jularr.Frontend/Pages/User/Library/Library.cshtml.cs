@@ -10,10 +10,10 @@ namespace Jularr.Frontend.Pages.User.Library
 {
     public sealed class LibraryModel(ReadLibraryV1 read, UiText texts) : JularrPage
     {
-        private static readonly (string Slug, MediaType? Type)[] Scopes =
+        private static readonly (string Slug, MediaType? Type, MediaSubtype? Subtype)[] Scopes =
         [
-            ("all", null), ("movies", MediaType.Movie), ("series", MediaType.Series), ("books", MediaType.Book), ("manga", MediaType.Manga),
-            ("lightnovels", MediaType.LightNovel), ("music", MediaType.Music), ("games", MediaType.Game)
+            ("all", null, null), ("movies", MediaType.Movie, null), ("series", MediaType.Series, null), ("anime", null, MediaSubtype.Anime), ("books", MediaType.Book, null),
+            ("manga", null, MediaSubtype.Manga), ("lightnovels", null, MediaSubtype.LightNovel), ("music", MediaType.Music, null), ("games", MediaType.Game, null)
         ];
 
         private PageResult<LibraryItemV1>? _items;
@@ -80,9 +80,9 @@ namespace Jularr.Frontend.Pages.User.Library
                 return;
             }
 
-            var type = Scopes.FirstOrDefault(item => item.Slug == TypeSlug).Type;
-            _items = await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(type, string.IsNullOrWhiteSpace(Query) ? null : Query.Trim(), Sort, Math.Max(1, PageNumber)),
-                HttpContext.RequestAborted);
+            var scope = Scopes.FirstOrDefault(item => item.Slug == TypeSlug);
+            _items = await read.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(scope.Type, string.IsNullOrWhiteSpace(Query) ? null : Query.Trim(), Sort,
+                Math.Max(1, PageNumber), mediaSubtypeId: scope.Subtype), HttpContext.RequestAborted);
         }
 
         private static string Address(string scope, string? query, LibrarySortType sort, int page) =>
