@@ -39,6 +39,9 @@ namespace Jularr.Backend.Logic.Library
 
         public static IReadOnlySet<string> GetScanExtensions(MediaType mediaType) => ScanExtensions[mediaType];
 
+        // A game release is imported whole; installers and data files belong to it.
+        public static IReadOnlySet<string>? GetImportExtensions(MediaType mediaType) => mediaType == MediaType.Game ? null : ScanExtensions[mediaType];
+
         public static bool IsSubtitle(string relativePath) => Subtitle.Contains(Path.GetExtension(relativePath).ToLowerInvariant());
 
         public static bool IsProbeable(string relativePath) => GetAssetType(relativePath) is MediaAssetType.Video or MediaAssetType.Audio;

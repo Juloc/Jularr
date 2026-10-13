@@ -349,7 +349,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     break;
                 default:
                     var state = new StorageScanState();
-                    var files = StorageFileSystem.EnumerateFiles(pass.OutputPath!, LibraryFileTypes.GetScanExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
+                    var files = StorageFileSystem.EnumerateFiles(pass.OutputPath!, LibraryFileTypes.GetImportExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
                     await _import.PlaceAsync(Context, download, pass.OutputPath!, files, state.IsComplete, CancellationToken);
                     break;
             }
@@ -578,7 +578,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 else
                 {
                     source = StorageFileSystem.ResolveDirectory(mapped, relative);
-                    files = StorageFileSystem.EnumerateFiles(source, LibraryFileTypes.GetScanExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
+                    files = StorageFileSystem.EnumerateFiles(source, LibraryFileTypes.GetImportExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
                 }
             }
             catch (NasMountException)

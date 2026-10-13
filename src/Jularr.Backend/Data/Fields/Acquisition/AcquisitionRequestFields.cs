@@ -10,6 +10,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly EnumField AcquisitionRequestStatusTypeId = new(typeof(AcquisitionRequestStatusType));
         public static readonly LongField Version = new() { Minimum = 1 };
         public static readonly DateTimeField CreatedAt = new();
+        public static readonly BoolField IsGame = new();
+        public static readonly BoolField IsPlatformListed = new();
     }
 
     public static class WantedItemFields

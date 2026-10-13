@@ -10,11 +10,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionRequestCreationData : BaseData
     {
-        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long uiLocaleId)
+        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long uiLocaleId, long? gamePlatformId)
         {
             WorkId = workId;
             RequestedByProfileId = requestedByProfileId;
             UiLocaleId = uiLocaleId;
+            GamePlatformId = gamePlatformId;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -25,14 +26,18 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(UiLocaleFields), nameof(UiLocaleFields.Id))]
         public long UiLocaleId { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
+        public long? GamePlatformId { get; }
     }
 
     internal sealed class AcquisitionRequestData : BaseData
     {
-        public AcquisitionRequestData(long id, long workId)
+        public AcquisitionRequestData(long id, long workId, long? gamePlatformId)
         {
             Id = id;
             WorkId = workId;
+            GamePlatformId = gamePlatformId;
         }
 
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.Id))]
@@ -40,6 +45,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
+        public long? GamePlatformId { get; }
     }
 
     internal sealed class AcquisitionRequestUpdateData : BaseData
@@ -86,5 +94,20 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
+    }
+
+    internal sealed class RequestPlatformCheckData : BaseData
+    {
+        public RequestPlatformCheckData(bool isGame, bool isPlatformListed)
+        {
+            IsGame = isGame;
+            IsPlatformListed = isPlatformListed;
+        }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsGame))]
+        public bool IsGame { get; }
+
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsPlatformListed))]
+        public bool IsPlatformListed { get; }
     }
 }

@@ -50,9 +50,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class WantedDetailsV1 : BaseResponse
     {
-        public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, string canonicalTitle, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
+        public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, string canonicalTitle, string? platformName, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
             bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId)
         {
+            PlatformName = platformName;
             MediaTypeId = mediaTypeId;
             Id = id;
             WorkId = workId;
@@ -79,6 +80,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
+
+        // The platform a game is wanted for.
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name), false)]
+        public string? PlatformName { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsPaused))]
         public bool IsPaused { get; }

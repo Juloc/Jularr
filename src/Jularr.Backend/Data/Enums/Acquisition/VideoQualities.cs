@@ -33,6 +33,12 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         public static IReadOnlyList<string> Order { get; } = ["FLAC-24", "FLAC", "ALAC", "MP3-320", "MP3-V0", "MP3", "AAC", "AUDIO"];
     }
 
+    // Game release forms, best first; GAME is a release that does not name its form.
+    public static class GameQualities
+    {
+        public static IReadOnlyList<string> Order { get; } = ["GOG", "NSP", "XCI", "ISO", "ROM", "GAME"];
+    }
+
     public static class ProfileQualities
     {
         // Media types with release qualities; empty means no profiles.
@@ -42,6 +48,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             MediaType.Book or MediaType.LightNovel => BookQualities.Order,
             MediaType.Manga => MangaQualities.Order,
             MediaType.Music => MusicQualities.Order,
+            MediaType.Game => GameQualities.Order,
             _ => []
         };
     }

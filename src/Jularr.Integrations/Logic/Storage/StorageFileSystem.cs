@@ -105,7 +105,8 @@ namespace Jularr.Integrations.Logic.Storage
             }
         }
 
-        public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string> extensions, StorageScanState state, CancellationToken ct)
+        // Without extensions every file counts.
+        public static IEnumerable<StorageFile> EnumerateFiles(string directory, IReadOnlySet<string>? extensions, StorageScanState state, CancellationToken ct)
         {
             var pending = new Stack<string>();
             pending.Push("");
@@ -137,7 +138,7 @@ namespace Jularr.Integrations.Logic.Storage
                     {
                         pending.Push(path);
                     }
-                    else if (entry is FileInfo file && extensions.Contains(file.Extension.ToLowerInvariant()))
+                    else if (entry is FileInfo file && (extensions is null || extensions.Contains(file.Extension.ToLowerInvariant())))
                     {
                         yield return new StorageFile(path, file.Length, file.LastWriteTimeUtc);
                     }

@@ -101,6 +101,21 @@ namespace Jularr.Backend.Data.Logic.Media
         public string Platforms { get; }
     }
 
+    internal sealed class GameReleaseData : BaseData
+    {
+        public GameReleaseData(long mediaAssetId, long gamePlatformId)
+        {
+            MediaAssetId = mediaAssetId;
+            GamePlatformId = gamePlatformId;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id))]
+        public long GamePlatformId { get; }
+    }
+
     internal sealed class WorkLookupData : BaseData
     {
         public WorkLookupData(long workId, MediaType mediaTypeId)

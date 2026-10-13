@@ -30,6 +30,26 @@ namespace Jularr.Backend.Data.User.Media.V1
         public long WorkId { get; }
     }
 
+    // A platform a game can be requested for.
+    public sealed class GamePlatformV1 : BaseResponse
+    {
+        public GamePlatformV1(long id, string name, string? abbreviation)
+        {
+            Id = id;
+            Name = name;
+            Abbreviation = abbreviation;
+        }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Abbreviation))]
+        public string? Abbreviation { get; }
+    }
+
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,

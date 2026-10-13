@@ -25,9 +25,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
-            string[] requestedLocales, string? author)
+            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId)
         {
             Author = author;
+            PlatformAbbreviation = platformAbbreviation;
+            PlatformIgdbId = platformIgdbId;
             WantedItemId = wantedItemId;
             WorkId = workId;
             MediaTypeId = mediaTypeId;
@@ -98,6 +100,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Book authors confirm a release; empty for other media.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
         public string? Author { get; }
+
+        // The platform a game is wanted for.
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Abbreviation), false)]
+        public string? PlatformAbbreviation { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.IgdbId), false)]
+        public int? PlatformIgdbId { get; }
     }
 
     internal sealed class UnitStateData : BaseData
@@ -237,8 +246,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public DownloadData(long operationId, long wantedItemId, long workId, MediaType mediaTypeId, string canonicalTitle, int? releaseYear, long acquisitionConnectionId,
             string? externalId, string title, DateTime startedAt, string? qualityKey, string? author, string? sourceUrl,
-            string? sourceLinkUrl, int trackCount)
+            string? sourceLinkUrl, int trackCount, long? gamePlatformId, string? platformName)
         {
+            GamePlatformId = gamePlatformId;
+            PlatformName = platformName;
             SourceUrl = sourceUrl;
             SourceLinkUrl = sourceLinkUrl;
             TrackCount = trackCount;
@@ -301,6 +312,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Tracks the album's edition names; files are tied to them only when the counts agree.
         [DataField(typeof(WorkFields), nameof(WorkFields.TrackCount))]
         public int TrackCount { get; }
+
+        // The platform a game download is for; its files land below it.
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
+        public long? GamePlatformId { get; }
+
+        [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Name), false)]
+        public string? PlatformName { get; }
     }
 
     internal sealed class DownloadProgressData : BaseData

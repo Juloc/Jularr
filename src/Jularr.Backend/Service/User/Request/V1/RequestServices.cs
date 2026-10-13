@@ -106,7 +106,7 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var request = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Data.UiLocaleId), CancellationToken);
+            var request = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Data.UiLocaleId, Data.GamePlatformId), CancellationToken);
             return new CreateRequestResultV1(request.Id);
         }
     }

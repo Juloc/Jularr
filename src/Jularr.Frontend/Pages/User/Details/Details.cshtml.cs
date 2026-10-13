@@ -16,11 +16,12 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Details
 {
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadWorkPlatformsV1 readPlatforms, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private WorkDetailsV1? _work;
         private PageResult<WorkAvailabilityV1>? _availability;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
+        private BaseDataList<GamePlatformV1>? _platforms;
         private CreateRequestDataV1? _requestInput;
 
         [BindProperty(SupportsGet = true)]
@@ -70,6 +71,14 @@ namespace Jularr.Frontend.Pages.User.Details
                     actions.Add(new Form<CreateRequestDataV1>(form =>
                     {
                         form.Select(item => item.UiLocaleId, "request.language", options);
+
+                        // A game is requested for one of its platforms.
+                        if (_platforms is { Count: > 0 } platforms)
+                        {
+                            form.Select(item => item.GamePlatformId, "request.platform",
+                                platforms.Select(platform => new SelectOption(platform.Id.ToString(CultureInfo.InvariantCulture), platform.Name)));
+                        }
+
                         form.Submit("request.create");
                     }, "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Request", csrf,
                         _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : Error));
@@ -146,12 +155,16 @@ namespace Jularr.Frontend.Pages.User.Details
             if (texts.Capabilities?.CanRequest is true)
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
+                if (_work.MediaTypeId == MediaType.Game)
+                {
+                    _platforms = await readPlatforms.ExecuteAsync<BaseDataList<GamePlatformV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+                }
             }
         }
 
-        public async Task<IActionResult> OnPostRequestAsync([BindRequired] long uiLocaleId)
+        public async Task<IActionResult> OnPostRequestAsync([BindRequired] long uiLocaleId, long? gamePlatformId)
         {
-            _requestInput = new CreateRequestDataV1(uiLocaleId);
+            _requestInput = new CreateRequestDataV1(uiLocaleId, gamePlatformId);
             await request.ExecuteAsync<CreateRequestResultV1>(new CreateRequestParametersV1(Id), _requestInput, HttpContext.RequestAborted);
             return RedirectToPage("/User/Requests/Requests");
         }
