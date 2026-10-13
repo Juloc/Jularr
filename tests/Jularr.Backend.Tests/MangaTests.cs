@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.System.Acquisition.V1;
@@ -97,6 +98,9 @@ namespace Jularr.Backend.Tests
         [DataRow("Example.Manga.Vol.3.cbr", "Example Manga", 3, null, "CBR")]
         [DataRow("Example Manga Volume 12 [EPUB]", "Example Manga", 12, null, "EPUB")]
         [DataRow("Example Manga (Complete) (Digital) cbz", "Example Manga", null, null, "CBZ")]
+        [DataRow("Example Manga v01 - 2019 (Digital)", "Example Manga", 1, null, "COMIC")]
+        [DataRow("[Group] (Digital) Example Manga v02", "Example Manga", 2, null, "COMIC")]
+        [DataRow("Example Manga (c2c) (Digital)", "Example Manga", null, null, "COMIC")]
         public void Manga_ReleaseNames_NameSeriesVolumesAndFormat(string title, string series, int? start, int? end, string format)
         {
             var parsed = MangaReleaseJudge.Parse(title);
@@ -104,6 +108,38 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(start, parsed.VolumeStart);
             Assert.AreEqual(end, parsed.VolumeEnd);
             Assert.AreEqual(format, Jularr.Backend.Logic.Acquisition.ReleaseQuality.GetKey(parsed));
+        }
+
+        [TestMethod]
+        public void Manga_WithoutKnownVolumes_OnlyUnnumberedReleasesFillTheSeries()
+        {
+            // Chapters never fill volumes; a numbered volume cannot complete a series of unknown length.
+            Assert.AreEqual("ChaptersOnly", Judge("Example Manga c001-010 (Digital)").Evidence.Code);
+            var numbered = Judge("Example Manga v03 (Digital)");
+            Assert.AreEqual(MangaIdentityMatch.AmbiguousTitle, numbered.Match);
+            Assert.AreEqual("VolumesUnknown", numbered.Evidence.Code);
+            Assert.AreEqual(MangaIdentityMatch.Matches, Judge("Example Manga (c2c) (Digital)").Match);
+            CollectionAssert.AreEqual(new[] { "FR" }, Judge("Example Manga (French) (Digital)").Languages!.ToArray());
+
+            // A file holding several volumes is no single volume.
+            Assert.AreEqual(0, ImportPlacementLogic.Plan(MediaType.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow)]).Count);
+            Assert.AreEqual(1, ImportPlacementLogic.Plan(MediaType.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow),
+                new("Example Manga v04.cbz", 1000, DateTime.UtcNow)]).Count);
+
+            static ReleaseJudgement<MangaIdentityMatch> Judge(string title) => MangaReleaseJudge.Judge(["Example Manga"], null,
+                new ReleaseOffer(title, 1, "Indexer", 25, "guid", new Uri("https://indexer.example.test/guid"), null, 1_000_000, DateTimeOffset.UtcNow, ["title"]));
+        }
+
+        [TestMethod]
+        public async Task AniList_NullFields_ReadAsMissing()
+        {
+            var sources = new FakeMangaSources { Manga = """{"id":102,"title":{"romaji":"Reidai","english":null,"native":null},"startDate":null,"volumes":null,"description":null,"coverImage":null,"staff":null}""" };
+            var manga = await new AniListClient(new HttpClient(sources)).ReadAsync(102, CancellationToken.None);
+            Assert.AreEqual("Reidai", manga.RomajiTitle);
+            Assert.IsNull(manga.Volumes);
+            Assert.AreEqual(0, manga.Authors.Count);
+            sources.Manga = "null";
+            await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.AniList.AniListException>(() => new AniListClient(new HttpClient(sources)).ReadAsync(102, CancellationToken.None));
         }
 
         private static byte[] Archive(string header, int length) => [.. Encoding.Latin1.GetBytes(header), .. new byte[length - header.Length]];
@@ -143,11 +179,12 @@ namespace Jularr.Backend.Tests
 
         private sealed class FakeMangaSources : HttpMessageHandler
         {
-            private const string Manga = """
+            public string Manga { get; set; } = """
                 {"id":101,"title":{"romaji":"Reidai Manga","english":"Example Manga","native":"例題漫画"},"synonyms":[],"startDate":{"year":2019},"volumes":3,"status":"FINISHED",
                  "description":"A <i>test</i> series.","coverImage":{"large":"https://img.example.test/101.jpg"},
                  "staff":{"edges":[{"role":"Story & Art","node":{"name":{"full":"Mika Example"}}},{"role":"Translator","node":{"name":{"full":"Somebody Else"}}}]}}
                 """;
+
 
             public List<string> Grabbed { get; } = [];
             public string History { get; set; } = """{"history":{"slots":[]}}""";

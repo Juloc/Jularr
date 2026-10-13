@@ -98,6 +98,10 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Book_RulesForNamesCategoriesAndContent()
         {
+            var german = BookReleaseJudge.Judge("Pride and Prejudice", "Jane Austen",
+                new ReleaseOffer("Jane.Austen.Pride.and.Prejudice.German.EPUB", 1, "Indexer", 25, "de", new Uri("https://indexer.example.test/de"), null, 1_000_000, DateTimeOffset.UtcNow, ["title"]));
+            CollectionAssert.AreEqual(new[] { "DE" }, german.Languages!.ToArray());
+
             Assert.AreEqual("AZW3", BookReleaseJudge.Parse("Author - Title (2019) [azw3]").DocumentFormat);
             Assert.AreEqual(BookReleaseJudge.UnknownFormat, BookReleaseJudge.Parse("Author - Title (2019) retail").DocumentFormat);
             CollectionAssert.AreEqual(new[] { 7020 }, AcquisitionSelectionLogic.ReadCategories(AcquisitionKind.Book, [2040, 5040, 7020], null));

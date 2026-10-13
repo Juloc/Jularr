@@ -188,7 +188,8 @@ namespace Jularr.Backend.Logic.Acquisition
                                 release."WantedItemId" = wanted."Id"
                                 AND operation."OperationStatusTypeId" IN (1, 2)
                         )
-                        OR EXISTS (
+                        OR work."MediaTypeId" IN (2, 4)
+                        AND EXISTS (
                             SELECT
                                 1
                             FROM

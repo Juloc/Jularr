@@ -93,12 +93,14 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
-        // One file per volume, the largest; a single unnumbered file is the whole series.
+        // One file per volume, the largest; a single unnumbered file is the whole series. A file holding a range is no single volume.
         private static IReadOnlyList<ImportPlacementData> PlanManga(string title, IReadOnlyList<StorageFile> files)
         {
             var name = SafeName(title);
             var documents = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Comic or MediaAssetType.Ebook)
-                .Select(file => (File: file, Volume: MangaReleaseJudge.Parse(Path.GetFileNameWithoutExtension(file.RelativePath)).VolumeStart))
+                .Select(file => (File: file, Parsed: MangaReleaseJudge.Parse(Path.GetFileNameWithoutExtension(file.RelativePath))))
+                .Where(document => document.Parsed.VolumeEnd is null || document.Parsed.VolumeEnd == document.Parsed.VolumeStart)
+                .Select(document => (document.File, Volume: document.Parsed.VolumeStart))
                 .ToArray();
             var placements = new List<ImportPlacementData>();
             foreach (var volume in documents.Where(document => document.Volume is not null).GroupBy(document => document.Volume!.Value).Select(group => group.MaxBy(document => document.File.SizeBytes)))

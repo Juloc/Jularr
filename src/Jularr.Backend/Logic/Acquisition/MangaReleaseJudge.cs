@@ -21,14 +21,16 @@ namespace Jularr.Backend.Logic.Acquisition
             "the", "a", "an", "of", "and", "digital", "complete", "completed", "manga", "comic", "comics", "english", "eng", "scan", "scans", "cbz", "cbr", "epub", "pdf", "proper", "repack"
         };
 
-        [GeneratedRegex(@"(?<![a-z])v(?:ol(?:ume)?s?)?\.?\s?(\d{1,4})(?:\s?-\s?(?:v(?:ol(?:ume)?)?\.?\s?)?(\d{1,4}))?(?!\d)", RegexOptions.IgnoreCase)]
+        // A range end is never a year.
+        [GeneratedRegex(@"(?<![a-z])v(?:ol(?:ume)?s?)?\.?\s?(\d{1,4})(?:\s?-\s?(?:v(?:ol(?:ume)?)?\.?\s?)?(?!(?:19|20)\d{2}(?!\d))(\d{1,4}))?(?!\d)", RegexOptions.IgnoreCase)]
         private static partial Regex Volumes();
 
-        [GeneratedRegex(@"(?<![a-z])(?:c|ch|chapter)\.?\s?\d{1,4}(?!\d)", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"(?<![a-z])(?:c|ch|chapter)\.?\s?\d{1,4}(?![a-z\d])", RegexOptions.IgnoreCase)]
         private static partial Regex Chapter();
 
-        [GeneratedRegex(@"^(?:19|20)\d{2}$")]
-        private static partial Regex YearToken();
+        // Group and source tags in front of the series name.
+        [GeneratedRegex(@"^\s*(?:[\[(][^\])]*[\])]\s*)+")]
+        private static partial Regex LeadingTags();
 
         public static ReleaseJudgement<MangaIdentityMatch> Judge(IReadOnlyList<string> titles, UnitScope? scope, ReleaseOffer offer)
         {
@@ -39,10 +41,10 @@ namespace Jularr.Backend.Logic.Acquisition
 
             // The series name before the volume marker must be one of the Work's titles; more words may be another series.
             var parsed = Parse(offer.Title);
-            var name = Words(parsed.SeriesTitle);
-            var languages = new[] { offer.Title.Contains("german", StringComparison.OrdinalIgnoreCase) || offer.Title.Contains("deutsch", StringComparison.OrdinalIgnoreCase) ? "DE" : "EN" };
+            var name = ReleaseWords.Words(parsed.SeriesTitle, Noise);
+            var languages = ReleaseWords.ReadLanguages(offer.Title);
             var viaId = offer.Stages.Contains("id");
-            var wanted = titles.Select(Words).Where(words => words.Count > 0).ToArray();
+            var wanted = titles.Select(title => ReleaseWords.Words(title, Noise)).Where(words => words.Count > 0).ToArray();
             if (!wanted.Any(words => words.All(name.Contains)))
             {
                 return Result(MangaIdentityMatch.WrongTitle, ReleaseIdentityEvidence.Conflict("WrongTitle", parsed.SeriesTitle), SelectionCoverage.Single);
@@ -51,12 +53,8 @@ namespace Jularr.Backend.Logic.Acquisition
             var exact = wanted.Any(words => words.SetEquals(name));
             var title = exact ? viaId ? ReleaseIdentityEvidence.Exact("MatchesTitle") : ReleaseIdentityEvidence.Strong("MatchesTitle") : ReleaseIdentityEvidence.Ambiguous("ExtraTitleWords", parsed.SeriesTitle);
             var match = exact ? MangaIdentityMatch.Matches : MangaIdentityMatch.AmbiguousTitle;
-            if (scope is null)
-            {
-                return Result(match, title, SelectionCoverage.Single);
-            }
 
-            // Chapter releases do not fill volumes; a release without volume numbers holds the whole series.
+            // Chapter releases never fill volumes.
             if (parsed.VolumeStart is not { } start)
             {
                 if (Chapter().IsMatch(offer.Title))
@@ -64,8 +62,15 @@ namespace Jularr.Backend.Logic.Acquisition
                     return Result(MangaIdentityMatch.WrongVolume, ReleaseIdentityEvidence.Conflict("ChaptersOnly"), SelectionCoverage.Single);
                 }
 
-                var all = scope.Units.Wanted.Count;
-                return Result(exact ? MangaIdentityMatch.ContainsTarget : match, title, new SelectionCoverage(all, all, Math.Max(0, scope.Units.All.Count - all)));
+                // A release without volume numbers holds the whole series.
+                var all = scope?.Units.Wanted.Count ?? 1;
+                return Result(exact && scope is not null ? MangaIdentityMatch.ContainsTarget : match, title, new SelectionCoverage(all, all, Math.Max(0, (scope?.Units.All.Count ?? 1) - all)));
+            }
+
+            // Without known volumes a numbered release cannot complete the series; a person decides.
+            if (scope is null)
+            {
+                return Result(MangaIdentityMatch.AmbiguousTitle, ReleaseIdentityEvidence.Ambiguous("VolumesUnknown", start.ToString(CultureInfo.InvariantCulture)), SelectionCoverage.Single);
             }
 
             var end = Math.Max(start, parsed.VolumeEnd ?? start);
@@ -84,12 +89,13 @@ namespace Jularr.Backend.Logic.Acquisition
         // Manga names carry the series, a volume or range and the format; video fields stay empty.
         public static ReleaseInfo Parse(string title)
         {
-            var volumes = Volumes().Match(title);
-            var cut = new[] { volumes.Success ? volumes.Index : -1, Chapter().Match(title) is { Success: true } chapter ? chapter.Index : -1, title.IndexOfAny(['(', '[']) }
-                .Where(index => index > 0).DefaultIfEmpty(title.Length).Min();
-            var tokens = Tokens(title);
+            var body = LeadingTags().Replace(title, "");
+            var volumes = Volumes().Match(body);
+            var cut = new[] { volumes.Success ? volumes.Index : -1, Chapter().Match(body) is { Success: true } chapter ? chapter.Index : -1, body.IndexOfAny(['(', '[']) }
+                .Where(index => index > 0).DefaultIfEmpty(body.Length).Min();
+            var tokens = ReleaseWords.Tokens(title);
             var format = tokens.Select(token => Formats.GetValueOrDefault(token)).OfType<string>().FirstOrDefault() ?? UnknownFormat;
-            var name = string.Join(' ', Tokens(title[..cut]).Where(token => !Formats.ContainsKey(token) && !YearToken().IsMatch(token)));
+            var name = string.Join(' ', ReleaseWords.Tokens(body[..cut]).Where(token => !Formats.ContainsKey(token) && !ReleaseWords.YearToken().IsMatch(token)));
             return new ReleaseInfo(title, name, null, null, null, null, null, null, false, false, null, ReleaseSource.Unknown, ReleaseVideoCodec.Unknown, null, ReleaseHdrFormat.None,
                 ReleaseAudioCodec.Unknown, null, [], [], false, false, null, 1, tokens.Contains("proper", StringComparer.OrdinalIgnoreCase),
                 tokens.Contains("repack", StringComparer.OrdinalIgnoreCase), null, title.ToLowerInvariant(), 1, [])
@@ -99,11 +105,5 @@ namespace Jularr.Backend.Logic.Acquisition
                 VolumeEnd = volumes.Success && volumes.Groups[2].Success ? int.Parse(volumes.Groups[2].Value, CultureInfo.InvariantCulture) : null
             };
         }
-
-        private static HashSet<string> Words(string value) =>
-            Tokens(value).Select(word => word.ToLowerInvariant()).Where(word => !Noise.Contains(word)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        private static string[] Tokens(string value) =>
-            value.Split([' ', '.', '_', '-', ':', ',', '(', ')', '[', ']', '{', '}', '\'', '"', '!', '?', '&', '/', '#', '+', '~'], StringSplitOptions.RemoveEmptyEntries);
     }
 }

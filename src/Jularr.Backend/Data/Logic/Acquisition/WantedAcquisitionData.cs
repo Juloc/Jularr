@@ -122,7 +122,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart), true)]
         public int Number { get; }
 
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsAired))]
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsAvailable))]
         public bool IsAvailable { get; }
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]

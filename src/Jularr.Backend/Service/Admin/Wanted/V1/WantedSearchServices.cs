@@ -40,7 +40,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
             else if (Data.UnitNumber is not null)
             {
-                throw new DataValidationException(nameof(SearchWantedDataV1.ParentUnitNumber), "required");
+                // An episode needs its season; other Works have no units.
+                throw target.MediaTypeId == MediaType.Series
+                    ? new DataValidationException(nameof(SearchWantedDataV1.ParentUnitNumber), "required")
+                    : new DataValidationException(nameof(SearchWantedDataV1.UnitNumber), "invalid_transition");
             }
 
             // A manual search shows every candidate and keeps the automatic schedule.

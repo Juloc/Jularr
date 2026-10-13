@@ -258,5 +258,23 @@ namespace Jularr.Backend.Logic.Media
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
             return workId.Value;
         }
+
+        public static async Task TouchWorkIdentityAsync(this LogicContext ctx, WorkIdentityData data, CancellationToken ct)
+        {
+            // A provider entry that is gone waits for the next refresh like any other.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WorkExternalIdentities" AS identity
+                SET
+                    "UpdatedAt" = now()
+                WHERE
+                    identity."WorkId" = @WorkId
+                    AND identity."Namespace" = @Namespace;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
     }
 }

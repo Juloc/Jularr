@@ -20,17 +20,14 @@ namespace Jularr.Integrations.Data.AniList
 
     internal sealed class AniListManga
     {
-        public AniListManga(int id, string romajiTitle, string? englishTitle, string? nativeTitle, IReadOnlyList<string> synonyms, int? year, int? volumes, string? status,
-            string? description, string? coverUrl, IReadOnlyList<string> authors)
+        public AniListManga(int id, string romajiTitle, string? englishTitle, string? nativeTitle, int? year, int? volumes, string? description, string? coverUrl, IReadOnlyList<string> authors)
         {
             Id = id;
             RomajiTitle = romajiTitle;
             EnglishTitle = englishTitle;
             NativeTitle = nativeTitle;
-            Synonyms = synonyms;
             Year = year;
             Volumes = volumes;
-            Status = status;
             Description = description;
             CoverUrl = coverUrl;
             Authors = authors;
@@ -40,12 +37,10 @@ namespace Jularr.Integrations.Data.AniList
         public string RomajiTitle { get; }
         public string? EnglishTitle { get; }
         public string? NativeTitle { get; }
-        public IReadOnlyList<string> Synonyms { get; }
         public int? Year { get; }
 
         // Released volumes; unknown while a series runs.
         public int? Volumes { get; }
-        public string? Status { get; }
         public string? Description { get; }
         public string? CoverUrl { get; }
         public IReadOnlyList<string> Authors { get; }

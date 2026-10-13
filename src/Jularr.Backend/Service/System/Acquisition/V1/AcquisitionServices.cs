@@ -212,7 +212,18 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             {
                 foreach (var identity in stale.Where(identity => identity.Namespace == MangaMetadata.Namespace))
                 {
-                    await _manga.ImportAsync(Context, identity.Value, CancellationToken);
+                    try
+                    {
+                        await _manga.ImportAsync(Context, identity.Value, CancellationToken);
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                        {
+                            await ctx.TouchWorkIdentityAsync(identity, ct);
+                            return true;
+                        }, CancellationToken);
+                    }
                 }
 
                 if (stale.Any(identity => identity.Namespace != MangaMetadata.Namespace))
