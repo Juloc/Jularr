@@ -231,6 +231,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "handler=SourceLink");
             StringAssert.Contains(html, "source-assistance");
+            StringAssert.Contains(html, "type=\\"url\\"");
             using var confirmed = await host.SendAsync(HttpMethod.Post, "/api/v1/requests/710/source-link", link);
             Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
 
