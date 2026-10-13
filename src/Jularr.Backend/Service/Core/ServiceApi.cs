@@ -122,6 +122,8 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<BookMetadata>();
             services.TryAddTransient<DirectSources>();
+            // Live instances always fail closed on source challenges. The configurable fake
+            // challenge resolver is private to SourceTests; do not register it for production.
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddTransient<ReadingContent>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
