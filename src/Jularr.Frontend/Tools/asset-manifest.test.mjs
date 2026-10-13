@@ -118,6 +118,13 @@ test("media shelf snap alignment includes its focus padding without visible scro
     assert.match(css, /\.media-shelf__items::-webkit-scrollbar\{display:none\}/);
 });
 
+test("icon hints remain painted on closed summaries and language hints open above the shelf edge", () => {
+    const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
+    assert.match(css, /content:attr\(aria-label\)/);
+    assert.match(css, /\.icon-info\[open\]>.icon-info__trigger:{1,2}after\{display:none\}/);
+    assert.match(css, /\.media-card__languages \.icon-info \.icon-info__trigger:{1,2}after\{top:auto;bottom:100%\}/);
+});
+
 test("manifest URLs are relative and cannot escape the asset root", () => {
     for (const file of [...files, icons.file]) {
         assert.ok(!file.startsWith("/") && !file.includes("..") && !file.includes("?"), file);

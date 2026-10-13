@@ -63,7 +63,14 @@
     }
 
     &__language { display: inline-flex; align-items: center; gap: 6px; }
-    &__languages .icon-info:last-child .icon-info__label { left: auto; right: 0; }
+    &__languages .icon-info {
+        .icon-info__label,
+        .icon-info__trigger::after { top: auto; bottom: 100%; }
+    }
+    &__languages .icon-info:last-child {
+        .icon-info__label,
+        .icon-info__trigger::after { left: auto; right: 0; }
+    }
 
     &__genres .tag { padding: 2px 7px; font-size: 11px; }
 

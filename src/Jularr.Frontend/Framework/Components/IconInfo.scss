@@ -21,7 +21,8 @@
         .ui-icon { width: 18px; height: 18px; flex: 0 0 auto; }
     }
 
-    &__label {
+    &__label,
+    &__trigger::after {
         display: none;
         position: absolute;
         z-index: 5;
@@ -40,7 +41,12 @@
         box-shadow: var(--shadow);
     }
 
+    // Summary remains painted when closed.
+    &__trigger::after { content: attr(aria-label); }
+
     &[open] > &__label,
-    &:hover > &__label,
-    &:focus-within > &__label { display: block; }
+    &:hover > &__trigger::after,
+    &:focus-within > &__trigger::after { display: block; }
+
+    &[open] > &__trigger::after { display: none; }
 }

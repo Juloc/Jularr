@@ -20,5 +20,6 @@
 
     &__track { color: var(--border); }
     .icon-info__trigger { color: inherit; }
-    .icon-info__label { left: auto; right: 0; }
+    .icon-info__label,
+    .icon-info__trigger::after { left: auto; right: 0; }
 }
