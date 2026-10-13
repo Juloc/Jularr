@@ -94,12 +94,19 @@ namespace Jularr.Backend.Tests
             using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + id);
             Assert.AreEqual(HttpStatusCode.OK, editor.StatusCode, await editor.Content.ReadAsStringAsync());
             StringAssert.Contains(await editor.Content.ReadAsStringAsync(), "&lt;unsafe&gt;");
+            StringAssert.Contains(await editor.Content.ReadAsStringAsync(), "name=\"__Invariant\" value=\"Version\"");
             using var edited = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + id, new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = csrf, ["CanonicalTitle"] = "<edited>", ["Version"] = "1"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, edited.StatusCode, await edited.Content.ReadAsStringAsync());
             Assert.AreEqual("<edited>", await host.ScalarAsync("SELECT \"CanonicalTitle\" FROM \"Works\""));
+            using var rejected = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + id, new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = csrf, ["CanonicalTitle"] = "Stale", ["Version"] = "1"
+            });
+            Assert.AreEqual(HttpStatusCode.BadRequest, rejected.StatusCode);
+            StringAssert.Contains(await rejected.Content.ReadAsStringAsync(), "class=\"field-error\" role=\"alert\"");
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + id);
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
             using var saved = await host.SendAsync(HttpMethod.Post, "/Details/" + id, new Dictionary<string, string>

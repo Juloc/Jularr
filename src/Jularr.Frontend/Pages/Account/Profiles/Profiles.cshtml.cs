@@ -21,7 +21,7 @@ namespace Jularr.Frontend.Pages.Account.Profiles
             page.Title("account.profile.title");
             page.Asset("Pages/Account/Login/Login.entry.scss");
             var content = new List<IUiComponent> { new Brand(assets, login: true), new H1(new Text("account.profile.title")) };
-            if (Error is not null) content.Add(new P(new Text(Error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+            if (FormError is not null) content.Add(new P(new Text(FormError.ResourceKey)).Class("field-error").Attribute("role", "alert"));
 
             // Render authorized profile choices.
             if (_profiles is not null)

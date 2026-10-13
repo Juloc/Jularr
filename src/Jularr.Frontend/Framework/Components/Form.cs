@@ -11,6 +11,7 @@ namespace Jularr.Frontend.Framework
         private static long _nextId;
         private readonly List<IUiComponent> _content = [];
         private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _hiddenFields = new(StringComparer.Ordinal);
         private readonly string _id = "form-" + typeof(TData).FullName + "-" + Interlocked.Increment(ref _nextId).ToString(CultureInfo.InvariantCulture);
         private readonly string? _action;
         private readonly TData? _data;
@@ -115,6 +116,7 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Hidden<TValue>(Expression<Func<TData, TValue>> selector)
         {
             var field = Declare(selector, FieldControl.Text, "");
+            _hiddenFields.Add(field.Name);
             _content.Add(new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", Value(field) ?? ""));
             return this;
         }
@@ -133,7 +135,7 @@ namespace Jularr.Frontend.Framework
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
             var content = new List<IUiComponent>(_content);
-            if (_error is not null && (_error.Field is null || !_fields.Contains(_error.Field)))
+            if (_error is not null && (_error.Field is null || !_fields.Contains(_error.Field) || _hiddenFields.Contains(_error.Field)))
             {
                 content.Insert(0, new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             }
@@ -170,6 +172,13 @@ namespace Jularr.Frontend.Framework
             if (!_fields.Add(field.Name))
             {
                 throw new InvalidOperationException("A form field cannot be declared twice.");
+            }
+
+            // ASP.NET invariant form binding.
+            var valueType = Nullable.GetUnderlyingType(field.ValueType) ?? field.ValueType;
+            if (_action is not null && (field.Minimum.HasValue || valueType == typeof(DateTime) || valueType == typeof(DateTimeOffset)))
+            {
+                _content.Add(new Input().Attribute("type", "hidden").Attribute("name", "__Invariant").Attribute("value", field.Name));
             }
 
             return field;

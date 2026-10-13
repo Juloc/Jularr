@@ -71,7 +71,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     new NavigationTab("discover.feed." + feed, Address(selected.Slug, feed, 1), View == feed))], "discover.browseViews", "browse"));
             }
 
-            if (_providerUnavailable)
+            if (_providerUnavailable && _results is not null)
             {
                 page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
             }
@@ -99,20 +99,43 @@ namespace Jularr.Frontend.Pages.User.Discover
                 return;
             }
 
-            // Landing: featured title, continue, library news and the ranked shelves.
+            // Local content arrives first.
+            var featured = new Page();
+            DefineFeatured(featured);
+            page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
+
+            page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Where(item => (selected.Slug is null || item.MediaTypeId == selected.Type)
+                && (item.MediaAssetTypeId == MediaAssetType.Ebook ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true)).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
+                item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
+                (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture)))]));
+            page.Content.Add(new MediaShelf("discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
+                item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]));
+
+            var recommendations = new Page();
+            DefineRecommendations(recommendations);
+            if (_shelves.Count == 0 && !_providerUnavailable)
+            {
+                recommendations.Content.Add(new A(new Text("discover.loadRecommendations")).Class("button").Attribute("data-discover-recommendations", "true")
+                    .Attribute("href", Address(selected.Slug, null, 1) + (selected.Slug is null ? "?" : "&") + "handler=Recommendations"));
+            }
+            page.Content.Add(new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations"));
+        }
+
+        private void DefineFeatured(Page page)
+        {
+            // Provider chooses the featured title.
             if (_shelves.SelectMany(shelf => shelf.Items).FirstOrDefault(item => item.BackdropUrl is not null) is { } featured)
             {
                 var (actionKey, actionHref) = Action(featured);
                 page.Content.Add(new MediaHero(featured.Title, featured.BackdropUrl, featured.ReleaseYear?.ToString(CultureInfo.InvariantCulture), featured.Overview,
                     actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured)));
             }
+        }
 
-            page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Where(item => (selected.Slug is null || item.MediaTypeId == selected.Type)
-                && (item.MediaAssetTypeId != MediaAssetType.Ebook || texts.Capabilities?.CanRead is true)).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
-                item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
-                (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture)))]));
-            page.Content.Add(new MediaShelf("discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
-                item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]));
+        private void DefineRecommendations(Page page)
+        {
+            var selected = Types.FirstOrDefault(type => type.Slug == TypeSlug);
+            if (_providerUnavailable) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
             foreach (var group in _shelves.GroupBy(shelf => shelf.Type))
             {
                 var slug = Types.First(type => type.Type == group.Key).Slug;
@@ -142,6 +165,28 @@ namespace Jularr.Frontend.Pages.User.Discover
             await LoadDataAsync();
             PreparePage();
             return Partial("_UiComponent", Definition.Content[0]);
+        }
+
+        public async Task<IActionResult> OnGetRecommendationsAsync()
+        {
+            if (texts.Capabilities?.CanReadMedia is not true) return Forbid();
+            await LoadRecommendationsAsync();
+
+            // Native navigation keeps full SSR.
+            if (Request.Headers["X-Jularr-Fragment"] != "recommendations")
+            {
+                await LoadDataAsync();
+                PreparePage();
+                return Page();
+            }
+
+            var featured = new Page();
+            var recommendations = new Page();
+            DefineFeatured(featured);
+            DefineRecommendations(recommendations);
+            return Partial("_UiComponent", new Div(
+                new Div([.. featured.Content]).Attribute("id", "discover-featured"),
+                new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations")));
         }
 
         protected override async Task LoadDataAsync()
@@ -174,12 +219,17 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             // Local shelves never wait for the provider.
-            if (texts.Capabilities?.CanPlay is true)
+            if (texts.Capabilities?.CanPlay is true || texts.Capabilities?.CanRead is true)
             {
                 _continue = await continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted);
             }
 
             _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected.Slug is null ? null : selected.Type, pageSize: 20), HttpContext.RequestAborted)).Items;
+        }
+
+        private async Task LoadRecommendationsAsync()
+        {
+            var selected = Types.FirstOrDefault(type => type.Slug == TypeSlug);
             foreach (var (_, type, typeFeeds) in Types.Where(type => selected.Slug is null || type.Slug == selected.Slug))
             {
                 foreach (var feed in typeFeeds)

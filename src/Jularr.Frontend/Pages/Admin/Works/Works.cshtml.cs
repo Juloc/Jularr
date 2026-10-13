@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 form.Text(item => item.Query, "media.title");
                 form.Number(item => item.ReleaseYear, "media.year");
                 form.Submit("admin.works.searchMetadata");
-            }, "/Admin/Works?handler=Search", csrf, _search, _search is null ? null : Error));
+            }, "/Admin/Works?handler=Search", csrf, _search, _search is null ? null : FormError));
             if (_results is { } results && _search is { } searched)
             {
                 if (results.Count == 0) page.Content.Add(new P(new Text("admin.works.noMetadata")).Attribute("role", "status"));
@@ -63,7 +63,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 form.Text(item => item.CanonicalTitle, "media.title");
                 form.Number(item => item.ReleaseYear, "media.year");
                 form.Submit("media.create");
-            }, "/Admin/Works", csrf, _input, _search is null ? Error : null));
+            }, "/Admin/Works", csrf, _input, _search is null ? FormError : null));
 
             // Real catalog rows.
             if (_works is { } works)

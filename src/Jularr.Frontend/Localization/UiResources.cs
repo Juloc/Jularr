@@ -8,6 +8,8 @@ namespace Jularr.Frontend.Localization
     {
         public static IReadOnlyList<UiTextResource> English { get; } =
         [
+            new("progress.saveFailed", "Progress could not be saved. Jularr will retry temporary failures."),
+            new("discover.loadRecommendations", "Load recommendations"),
             new("appearance.accent", "Accent color"),
             new("appearance.jularrRed", "Jularr red"),
             new("appearance.jularrPurple", "Jularr purple"),

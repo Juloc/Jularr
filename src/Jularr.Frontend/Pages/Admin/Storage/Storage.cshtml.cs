@@ -38,6 +38,9 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         public int PageNumber { get; set; } = 1;
 
         [BindProperty(SupportsGet = true)]
+        public int RootPageNumber { get; set; } = 1;
+
+        [BindProperty(SupportsGet = true)]
         public long? StorageMountId { get; set; }
 
         [BindProperty(SupportsGet = true)]
@@ -91,7 +94,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
 
                     if (TempData["StorageWoken"] is true) content.Secondary.Add(new P(new Text("storage.wake.sent")).Attribute("role", "status"));
                     if (TempData["StorageScanQueued"] is true) content.Secondary.Add(new P(new Text("storage.paths.scanQueued")).Attribute("role", "status"));
-                    if (Error is not null && _failedSection is not ("Save" or "Root")) content.Secondary.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+                    if (FormError is not null && _failedSection is not ("Save" or "Root")) content.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                     content.Secondary.Add(new UiSection("storage.paths", Paths(mount, csrf)));
                 }
             });
@@ -142,7 +145,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                     new SelectOption("False", texts["storage.wake.ownerOnly"]), new SelectOption("True", texts["storage.wake.onDemand"])
                 ]);
                 form.Submit("common.save");
-            }, Address(StorageMountId), csrf, input, _failedSection == "Save" ? Error : null);
+            }, Address(StorageMountId), csrf, input, _failedSection == "Save" ? FormError : null);
         }
 
         private IEnumerable<IUiComponent> ConnectionActions(StorageMountDetailsV1 mount, string? csrf)
@@ -197,6 +200,13 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 items.Add(new P(new Text("storage.paths.removeHint")));
             }
 
+            // Paths have independent paging.
+            if (_roots is { } rootPage)
+            {
+                if (rootPage.Page > 1) items.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(mount.Id, rootPageNumber: rootPage.Page - 1)));
+                if (rootPage.Items.Count == rootPage.PageSize) items.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(mount.Id, rootPageNumber: rootPage.Page + 1)));
+            }
+
             // Rename keeps location and media type.
             if (roots.FirstOrDefault(root => root.Id == LibraryRootId) is { } selected)
             {
@@ -205,7 +215,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                     form.Text(item => item.Name, "storage.name");
                     form.Hidden(item => item.Version);
                     form.Submit("common.save");
-                }, Address(mount.Id, handler: "RenameRoot", libraryRootId: selected.Id), csrf, new RenameLibraryRootDataV1(selected.Name, selected.Version), _failedSection == "Root" ? Error : null));
+                }, Address(mount.Id, handler: "RenameRoot", libraryRootId: selected.Id), csrf, new RenameLibraryRootDataV1(selected.Name, selected.Version), _failedSection == "Root" ? FormError : null));
                 return items;
             }
 
@@ -239,7 +249,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 form.Text(item => item.Name, "storage.name");
                 form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
                 form.Submit("storage.paths.add");
-            }, Address(mount.Id, handler: "Root", browse: path), csrf, _rootInput ?? new CreateLibraryRootDataV1("", MediaType.Movie, mount.Id, path), _failedSection == "Root" ? Error : null));
+            }, Address(mount.Id, handler: "Root", browse: path), csrf, _rootInput ?? new CreateLibraryRootDataV1("", MediaType.Movie, mount.Id, path), _failedSection == "Root" ? FormError : null));
             return items;
         }
 
@@ -330,7 +340,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             }
 
             _mount = await readMount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(id), ct);
-            _roots = await readRoots.ExecuteAsync<PageResult<LibraryRootDetailsV1>>(new ReadLibraryRootsParametersV1(id, pageSize: PageRequest.MaximumPageSize), ct);
+            _roots = await readRoots.ExecuteAsync<PageResult<LibraryRootDetailsV1>>(new ReadLibraryRootsParametersV1(id, RootPageNumber), ct);
 
             // Storage I/O only on explicit browsing.
             if (Request.Query.ContainsKey("browse"))
@@ -340,11 +350,12 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             }
         }
 
-        private string Address(long? storageMountId = null, StorageProtocolType? protocol = null, int? pageNumber = null, string? handler = null, string? browse = null, long? libraryRootId = null)
+        private string Address(long? storageMountId = null, StorageProtocolType? protocol = null, int? pageNumber = null, string? handler = null, string? browse = null, long? libraryRootId = null, int? rootPageNumber = null)
         {
             var query = new Dictionary<string, string?>
             {
                 ["pageNumber"] = (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture),
+                ["rootPageNumber"] = (rootPageNumber ?? (storageMountId == StorageMountId ? RootPageNumber : 1)).ToString(CultureInfo.InvariantCulture),
                 ["storageMountId"] = storageMountId?.ToString(CultureInfo.InvariantCulture),
                 ["protocol"] = protocol?.ToString(),
                 ["handler"] = handler,

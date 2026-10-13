@@ -72,7 +72,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                             [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                         form.Submit("common.save");
                     }, Address(_selected.Id), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.MayConfirmSources), _input is null ? null : Error));
+                        _input ?? new UpdateAccountDataV1(_selected.DisplayName, _selected.AccountRoleTypeId, _selected.IsEnabled, _selected.MayConfirmSources), _input is null ? null : FormError));
                     split.Secondary.Add(new P(new Text("admin.accounts.sessionWarning")));
 
                     // Assign existing profile access.
@@ -82,7 +82,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                         form.Number(item => item.ProfileId, "admin.accounts.profileId");
                         form.Submit("admin.accounts.profileAdd");
                     }, Address(_selected.Id) + "&handler=AddProfile", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                        _removingProfile ? null : _assignment, _assignment is null || _removingProfile ? null : Error));
+                        _removingProfile ? null : _assignment, _assignment is null || _removingProfile ? null : FormError));
 
                     foreach (var profile in _profiles?.Items ?? [])
                     {
@@ -98,7 +98,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                                 form.Hidden(item => item.ProfileId);
                                 form.Submit("admin.accounts.profileRemove");
                             }, Address(_selected.Id) + "&handler=RemoveProfile", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                                new AccountProfileParametersV1(_selected.Id, profile.ProfileId), _removingProfile && _assignment?.ProfileId == profile.ProfileId ? Error : null));
+                                new AccountProfileParametersV1(_selected.Id, profile.ProfileId), _removingProfile && _assignment?.ProfileId == profile.ProfileId ? FormError : null));
                         }
                     }
 
@@ -120,11 +120,11 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
 
                     if (SessionPageNumber > 1) split.Secondary.Add(new A(new Text("common.previous")).Attribute("href", Address(_selected.Id) + "&SessionPageNumber=" + (SessionPageNumber - 1)));
                     if (_sessions is { } && _sessions.Items.Count == _sessions.PageSize) split.Secondary.Add(new A(new Text("common.next")).Attribute("href", Address(_selected.Id) + "&SessionPageNumber=" + (SessionPageNumber + 1)));
-                    if (_revocation is not null && Error is not null) split.Secondary.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+                    if (_revocation is not null && FormError is not null) split.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                 }
-                else if (Error is not null)
+                else if (FormError is not null)
                 {
-                    split.Primary.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+                    split.Primary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                 }
             }).MasterDetail(_selected is not null, Address()));
 

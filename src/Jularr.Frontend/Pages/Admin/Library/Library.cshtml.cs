@@ -54,7 +54,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 Paging(page, files.Page, files.Items.Count == files.PageSize);
             }
 
-            if (Error is not null && _failedFileId is null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null && _failedFileId is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         private Form<AssignLibraryFileDataV1> Assignment(LibraryFileDetailsV1 file, string? csrf)
@@ -82,7 +82,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 }
 
                 form.Submit(file.SuggestedWorkId is null ? "library.createAndAssign" : "library.assignExisting");
-            }, Address(handler: "Assign") + "&storedFileId=" + file.Id.ToString(CultureInfo.InvariantCulture), csrf, input, _failedFileId == file.Id ? Error : null);
+            }, Address(handler: "Assign") + "&storedFileId=" + file.Id.ToString(CultureInfo.InvariantCulture), csrf, input, _failedFileId == file.Id ? FormError : null);
         }
 
         private Form<StoredFileParametersV1> Release(LibraryFileDetailsV1 file, string? csrf) =>

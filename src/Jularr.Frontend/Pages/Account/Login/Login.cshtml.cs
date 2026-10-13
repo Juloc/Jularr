@@ -41,7 +41,7 @@ namespace Jularr.Frontend.Pages.Account.Login
                     form.Text(x => x.Email, "account.field.email", "username");
                     form.Password(x => x.Password, "account.field.password", "current-password");
                     form.Submit("account.login.submit");
-                }, action, token, new LoginDataV1(_email, ""), Error)
+                }, action, token, new LoginDataV1(_email, ""), FormError)
             ).Class("auth-card"));
             page.Content.Add(new Appearance(collapsible: true));
 

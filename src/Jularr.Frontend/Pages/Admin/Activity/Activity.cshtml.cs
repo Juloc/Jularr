@@ -61,7 +61,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 if (items.Items.Count == items.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(items.Page + 1)));
             }
 
-            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         private Form<ActivityOperationParametersV1> Action(ActivityItemV1 item, string handler, string labelKey, string? csrf) =>
@@ -75,7 +75,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
                 form.Text(data => data.SourceLinkUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
-                Error?.Field == nameof(SaveActivitySourceLinkDataV1.SourceLinkUrl) ? Error : null));
+                FormError?.Field == nameof(SaveActivitySourceLinkDataV1.SourceLinkUrl) ? FormError : null));
 
         // Scans report service errors; downloads report acquisition outcomes.
         private static string Reason(OperationType type, string key) => type == OperationType.LibraryScan ? "errors." + key : "acquisition.outcome." + key;

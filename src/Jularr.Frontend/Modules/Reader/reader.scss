@@ -7,8 +7,8 @@
     --reader-line: #e4e0d8;
 
     min-height: 100dvh;
-    display: grid;
-    grid-template-rows: auto auto auto 1fr auto;
+    display: flex;
+    flex-direction: column;
     background: var(--reader-paper);
     color: var(--reader-ink);
 
@@ -33,6 +33,7 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        flex-shrink: 0;
         padding: 10px 16px;
         background: var(--reader-paper);
     }
@@ -41,8 +42,8 @@
     &__bottom { bottom: 0; justify-content: space-between; border-top: 1px solid var(--reader-line); }
 
     &__heading { flex: 1; min-width: 0; }
-    &__title { margin: 0; font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    &__chapter { margin: 0; color: var(--reader-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    &__title { margin: 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+    &__chapter { margin: 0; color: var(--reader-muted); font-size: 13px; overflow-wrap: anywhere; }
     &__position { color: var(--reader-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 
     &__panel {
@@ -88,9 +89,11 @@
     }
 
     // Paged mode lays the section out in screen-wide columns.
+    &[data-mode="paged"] { height: 100dvh; min-height: 0; }
     &[data-mode="paged"] &__content {
         width: 100%;
-        height: calc(100dvh - 120px);
+        flex: 1;
+        min-height: 0;
         padding: 32px 0;
         columns: min(42rem, calc(100vw - 32px)) 1;
         column-gap: 32px;

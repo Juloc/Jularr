@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.User.Watchlist
                 if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", "/Watchlist?pageNumber=" + (works.Page + 1)));
             }
 
-            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         public async Task<IActionResult> OnGetAsync()

@@ -83,7 +83,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 }
             }).MasterDetail(_selected is not null, Address(PageNumber)));
 
-            if (Error is not null) page.Content.Add(new P(new Text(Error.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         public async Task<IActionResult> OnGetAsync()

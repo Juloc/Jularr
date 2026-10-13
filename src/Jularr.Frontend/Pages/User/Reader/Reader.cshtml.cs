@@ -30,7 +30,7 @@ namespace Jularr.Frontend.Pages.User.Reader
             {
                 // Offline storage and an uncached book say so.
                 page.Content.Add(new Div(
-                    new P(new Text(Error?.ResourceKey ?? "reader.notFound")).Attribute("role", "alert"),
+                    new P(new Text(FormError?.ResourceKey ?? "reader.notFound")).Attribute("role", "alert"),
                     new A(new Text("common.back")).Class("button").Attribute("href", "/Library")
                 ).Class("reader__status"));
                 return;
@@ -70,6 +70,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 contents,
                 settings,
                 new ReaderSection(current),
+                new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"),
                 new Div([.. navigation]).Class("reader__bottom")
             ).Class("reader")
                 .Attribute("data-progress-url", "/api/v1/reading/assets/" + asset + "/progress")
