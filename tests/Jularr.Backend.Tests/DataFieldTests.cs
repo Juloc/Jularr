@@ -144,6 +144,17 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ServiceInput_Normalization_TrimsAndTreatsBlankOptionalTextAsAbsent()
+        {
+            var input = (Data.Admin.Provider.V1.SaveProviderSecretDataV1)new Data.Admin.Provider.V1.SaveProviderSecretDataV1("  secret  ", "   ").Normalized();
+
+            Assert.AreEqual("secret", input.Secret);
+            Assert.IsNull(input.ClientId);
+            var unchanged = new Data.Admin.Provider.V1.SaveProviderSecretDataV1("secret", "client");
+            Assert.AreSame(unchanged, unchanged.Normalized());
+        }
+
+        [TestMethod]
         [DataRow(0)]
         [DataRow(1)]
         [DataRow(2)]

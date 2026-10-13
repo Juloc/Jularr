@@ -23,6 +23,7 @@ namespace Jularr.Backend.Data.Common
     public abstract class BaseData
     {
         private static readonly ConcurrentDictionary<Type, (PropertyInfo Property, DataFieldAttribute Field)[]> Fields = new();
+        private static readonly ConcurrentDictionary<Type, ConstructorInfo?> Constructors = new();
         private HashSet<string>? _provided;
 
         protected BaseData(bool trackChanges = false)
@@ -111,6 +112,62 @@ namespace Jularr.Backend.Data.Common
 
             Validate();
         }
+
+        // Every service input passes its fields' normalization once; optional blank text counts as absent.
+        internal BaseData Normalized()
+        {
+            var values = new Dictionary<PropertyInfo, object?>();
+            foreach (var (property, field) in GetFields(GetType()))
+            {
+                var value = property.GetValue(this);
+                var normalized = field.Field.Normalize(value);
+                if (normalized is string text && !field.Required && string.IsNullOrWhiteSpace(text))
+                {
+                    normalized = null;
+                }
+
+                if (!Equals(value, normalized))
+                {
+                    values[property] = normalized;
+                }
+            }
+
+            if (values.Count == 0)
+            {
+                return this;
+            }
+
+            // Partial data keeps its provided fields; immutable data is rebuilt through its constructor.
+            if (_provided is not null)
+            {
+                var copy = Copy();
+                foreach (var (property, value) in values)
+                {
+                    property.SetValue(copy, value);
+                }
+
+                return copy;
+            }
+
+            var constructor = GetNormalizingConstructor(GetType()) ?? throw new InvalidOperationException($"{GetType().Name} needs a constructor over its properties to normalize its input.");
+            var arguments = constructor.GetParameters().Select(parameter =>
+            {
+                var property = GetType().GetProperty(parameter.Name!, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)!;
+                return values.TryGetValue(property, out var value) ? value : property.GetValue(this);
+            }).ToArray();
+            return (BaseData)constructor.Invoke(arguments);
+        }
+
+        // The widest constructor whose parameters all name a property.
+        internal static ConstructorInfo? GetNormalizingConstructor(Type type) => Constructors.GetOrAdd(type, dataType =>
+        {
+            var properties = dataType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            return dataType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Where(candidate => candidate.GetParameters().Length > 0
+                    && candidate.GetParameters().All(parameter => properties.Count(property => string.Equals(property.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)) == 1))
+                .OrderByDescending(candidate => candidate.GetParameters().Length)
+                .FirstOrDefault();
+        });
 
         public virtual void Validate()
         {

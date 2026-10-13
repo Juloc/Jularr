@@ -95,16 +95,20 @@ namespace Jularr.Backend.Service.Core
             parameters ??= BaseParameters.CreateEmpty<TParameters>();
             ArgumentNullException.ThrowIfNull(data);
 
-            var modules = GetInstanceModules(parameters) ?? throw new InvalidOperationException("The module requirement cannot be null.");
+            // Normalize once for API and Razor callers, then validate.
             if (parameters is BaseData parameterData)
             {
-                parameterData.Validate();
+                parameters = (TParameters)(object)parameterData.Normalized();
+                ((BaseData)(object)parameters).Validate();
             }
 
             if (data is BaseData inputData)
             {
-                inputData.Validate();
+                data = (TData)(object)inputData.Normalized();
+                ((BaseData)(object)data).Validate();
             }
+
+            var modules = GetInstanceModules(parameters) ?? throw new InvalidOperationException("The module requirement cannot be null.");
 
             var page = GetPageRequest(parameters);
             ValidateParameters(parameters);

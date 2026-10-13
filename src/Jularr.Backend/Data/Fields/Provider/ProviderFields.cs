@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.Fields.Provider
         public static readonly BoolField IsEnabled = new();
         public static readonly ByteArrayField ProtectedSecret = new() { Required = false };
         public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.HttpUrl };
-        public static readonly StringField ExternalId = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false };
+        public static readonly StringField ExternalId = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false, Trim = true };
         public static readonly DateTimeField SyncedAt = new() { Required = false };
     }
 

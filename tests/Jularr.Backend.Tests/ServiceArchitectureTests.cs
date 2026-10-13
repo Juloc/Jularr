@@ -92,6 +92,32 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public void ServiceInputs_CanBeRebuiltWithNormalizedFields()
+        {
+            // Inputs are immutable or partial; immutable ones are rebuilt through a constructor over their properties.
+            var inputs = typeof(Service.Core.Service).Assembly.GetTypes()
+                .Where(type => !type.IsAbstract && typeof(Service.Core.Service).IsAssignableFrom(type))
+                .SelectMany(type =>
+                {
+                    var current = type;
+                    while (current is not null && !(current.IsGenericType && current.GetGenericArguments().Length == 2))
+                    {
+                        current = current.BaseType;
+                    }
+
+                    return current?.GetGenericArguments() ?? [];
+                })
+                .Where(type => typeof(BaseData).IsAssignableFrom(type) && BaseData.GetFields(type).Length > 0)
+                .Distinct();
+            foreach (var input in inputs)
+            {
+                var isPartial = input.GetCustomAttribute<System.Text.Json.Serialization.JsonConverterAttribute>()?.ConverterType is { IsGenericType: true } converter
+                    && converter.GetGenericTypeDefinition() == typeof(PartialDataJsonConverter<>);
+                Assert.IsTrue(isPartial || BaseData.GetNormalizingConstructor(input) is not null, input.Name);
+            }
+        }
+
+        [TestMethod]
         public void OperationType_UsesOnlyTheFiveApprovedKinds()
         {
             CollectionAssert.AreEqual(
