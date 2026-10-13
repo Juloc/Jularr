@@ -409,7 +409,7 @@ Conceptually:
 
 ```text
 GameDetail
-- GameId
+- WorkId
 - Title
 - AlternateTitle?
 - Tagline?
@@ -430,7 +430,7 @@ GameDetail
 - Screenshots[]
 
 GameReleaseSummary
-- GameReleaseId
+- WorkVersionId
 - Platform
 - Region
 - Revision
