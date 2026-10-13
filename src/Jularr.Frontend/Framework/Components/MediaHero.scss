@@ -44,9 +44,50 @@
 
     &__actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         margin-top: 8px;
     }
 
     &--placeholder &__body { background: var(--surface-hover); color: var(--text); }
+}
+
+// Original's fallback composition.
+html[data-skin="original"] .media-hero--placeholder {
+    isolation: isolate;
+
+    &::before, &::after {
+        content: "";
+        position: absolute;
+        pointer-events: none;
+        z-index: -1;
+    }
+    &::before {
+        inset: 0;
+        background: url("../../Modules/Appearance/Original/hero-fuji.webp") 70% 40% / cover no-repeat;
+        filter: var(--art-night-filter) hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+    }
+    &::after {
+        inset: 0 2% -8% auto;
+        width: 42%;
+        background: url("../../Modules/Appearance/Original/heroine.webp") right bottom / contain no-repeat;
+        filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+    }
+    .media-hero__body {
+        max-width: none;
+        background: linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 95%, transparent) 48%, transparent 85%);
+
+        & > * { max-width: 55%; }
+    }
+
+    @media (max-width: 600px) {
+        &::after { inset: 0 0 35% auto; width: 45%; }
+        .media-hero__body {
+            min-height: 320px;
+            padding-top: 120px;
+            background: linear-gradient(0deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 95%, transparent) 60%, transparent);
+
+            & > * { max-width: 100%; }
+        }
+    }
 }

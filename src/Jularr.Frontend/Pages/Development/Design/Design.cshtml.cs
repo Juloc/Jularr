@@ -36,12 +36,19 @@ namespace Jularr.Frontend.Pages.Development.Design
             ], "nav.tabs"));
 
             // Live brand and artwork.
+            var originalArtwork = new (string File, string Key, int Width, int Height)[]
+            {
+                ("washi.webp", "design.art.washi", 1024, 1024),
+                ("blossom-branch.webp", "design.art.blossom", 600, 900),
+                ("hero-fuji.webp", "design.art.fuji", 2000, 667),
+                ("hero-torii.webp", "design.art.torii", 2000, 667),
+                ("heroine.webp", "design.art.mascot", 720, 900)
+            };
             page.Content.Add(new UiSection("design.branding", [
                 new Brand(assets, login: true),
-                new Div(
-                    new Div().Class("design-lab__art design-lab__art--landscape"),
-                    new Div().Class("design-lab__art design-lab__art--mascot"))
-                    .Class("design-lab__artwork").Attribute("aria-hidden", "true")
+                new Div(originalArtwork.Select(art => (IUiComponent)new Div(
+                    new MediaImage(assets.ImageUrl("Modules/Appearance/Original/" + art.File), texts[art.Key], art.Width, art.Height),
+                    new P(new Text(art.Key))).Class("design-lab__art")).ToArray()).Class("design-lab__artwork")
             ]));
 
             // Button and icon states.
@@ -106,7 +113,7 @@ namespace Jularr.Frontend.Pages.Development.Design
 
             // Labeled media examples.
             page.Content.Add(new Div(new UiSection("design.media", [
-                new MediaHero(texts["design.exampleTitle"], assets.ImageUrl("Modules/Appearance/Original/hero-fuji.webp"), texts["design.exampleContext"],
+                new MediaHero(texts["design.exampleTitle"], assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), texts["design.exampleContext"],
                     texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
                 new MediaShelf("design.media", null, [

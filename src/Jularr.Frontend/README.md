@@ -25,6 +25,8 @@ dotnet publish -c Release
 Production publishing requires built, fingerprinted assets. The host reads private
 manifests from `Assets/Generated`; it does not compile assets on a request.
 Rebuild after asset edits; an asset watch mode is not implemented.
+Vite and the HTML renderer use the same `/build/` public root, including images
+referenced inside CSS. Do not add a parallel `/assets/` endpoint.
 
 ## Current frontend
 
@@ -38,6 +40,10 @@ Rebuild after asset edits; an asset watch mode is not implemented.
   Wanted, Activity, language and translation administration.
 - Original and Clean share tokens/components, with independent brightness and
   accent controls stored optionally on the device.
+- Original restores Washi paper, blossom framing, ink landscapes and the mascot;
+  the shared Hero uses Fuji/mascot artwork only when a real media backdrop is absent.
+  Clean remains undecorated. The [original assets](Modules/Appearance/Original/README.md)
+  are compressed WebP files; controls stay opaque and flat in both skins.
 - UI language uses the verified profile locale, then the instance default.
   PostgreSQL owns translations/descriptions and exact/parent/English fallback.
 - Forms use Backend field metadata and invariant wire values. Shared handling

@@ -54,6 +54,14 @@ namespace Jularr.Backend.Tests
             // Real components, no playback client.
             var html = await response.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "data-accent-input=\"true\"");
+
+            // Original artwork uses real assets.
+            foreach (var artwork in new[] { "washi", "blossom-branch", "hero-fuji", "hero-torii", "heroine" })
+            {
+                var image = Regex.Match(html, "src=\"(/build/assets/" + artwork + "-[^\"]+\\.webp)\"");
+                Assert.IsTrue(image.Success, artwork);
+            }
+
             Assert.IsFalse(html.Contains("data-transparency-", StringComparison.Ordinal));
             StringAssert.Contains(html, "aria-invalid=\"true\"");
             StringAssert.Contains(html, "media-hero--placeholder");

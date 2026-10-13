@@ -18,6 +18,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [FrontendAssets.cs](Framework/FrontendAssets.cs), [Vite](vite.config.ts), [build tools](Tools): fingerprinted, entry-scoped assets and SVG sprite.
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
 - [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
+- [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
 - [MediaCard](Framework/Components/MediaCard.cs), [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
 
 ## User and account pages

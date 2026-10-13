@@ -10,6 +10,11 @@ namespace Jularr.Frontend.Localization
         [
             new("progress.saveFailed", "Progress could not be saved. Jularr will retry temporary failures."),
             new("discover.loadRecommendations", "Load recommendations"),
+            new("design.art.washi", "Washi paper"),
+            new("design.art.blossom", "Blossom branch"),
+            new("design.art.fuji", "Fuji landscape"),
+            new("design.art.torii", "Torii landscape"),
+            new("design.art.mascot", "Jularr mascot"),
             new("appearance.accent", "Accent color"),
             new("appearance.jularrRed", "Jularr red"),
             new("appearance.jularrPurple", "Jularr purple"),

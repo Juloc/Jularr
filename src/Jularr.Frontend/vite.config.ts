@@ -31,6 +31,8 @@ if (!("Assets/Shared/shell.entry.scss" in input) || !("Modules/Appearance/theme.
 
 export default defineConfig({
     root,
+    // Match the host asset root.
+    base: "/build/",
     publicDir: false,
     build: {
         outDir: resolve(root, "wwwroot/build"),

@@ -24,15 +24,22 @@
     --suzume-poster: url("./Images/suzume-poster.jpg");
     --your-name-backdrop: url("./Images/your-name-backdrop.jpg");
 
-    &__artwork { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+    &__artwork { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 16px; }
     &__art {
-        height: 280px;
+        min-width: 0;
+        padding: 12px;
+        border: 1px solid var(--border);
         border-radius: var(--radius-panel);
-        background: center / cover no-repeat;
-        filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+        background: var(--field);
+        text-align: center;
 
-        &--landscape { background-image: url("../../../Modules/Appearance/Original/hero-fuji.webp"); }
-        &--mascot { background-image: url("../../../Modules/Appearance/Original/heroine.webp"); background-size: contain; }
+        .media-image {
+            width: 100%;
+            height: 160px;
+            object-fit: contain;
+            filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+        }
+        p { margin: 10px 0 0; overflow-wrap: anywhere; }
     }
 
     &__player {
@@ -53,7 +60,3 @@
 }
 
 html[data-skin="clean"] .design-lab__artwork { display: none; }
-@media (max-width: 600px) {
-    .design-lab__artwork { grid-template-columns: 1fr; }
-    .design-lab__art { height: 220px; }
-}

@@ -45,6 +45,12 @@ html[data-skin="original"] {
     --accent-text: light-dark(#b30e29, #ff9d9d);
     --accent-hover: #a90d26;
     --shadow: 0 3px 14px light-dark(rgb(70 35 30 / 6%), rgb(0 0 0 / 20%));
+    --paper-opacity: .55;
+    --paper-blend: multiply;
+    --paper-filter: none;
+    --landscape-opacity: .28;
+    --blossom-opacity: .55;
+    --art-night-filter: brightness(1);
 }
 
 html[data-skin="original"] body::before {
@@ -54,7 +60,9 @@ html[data-skin="original"] body::before {
     z-index: -1;
     pointer-events: none;
     background: url("./Original/washi.webp") center / cover;
-    opacity: .18;
+    opacity: var(--paper-opacity);
+    mix-blend-mode: var(--paper-blend);
+    filter: var(--paper-filter);
 }
 
 // Blossom trees frame Original.
@@ -65,8 +73,8 @@ html[data-skin="original"] body:not(.player-page)::after {
     z-index: -1;
     pointer-events: none;
     background: url("./Original/hero-torii.webp") center / cover no-repeat;
-    opacity: .34;
-    filter: hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
+    opacity: var(--landscape-opacity);
+    filter: var(--art-night-filter) hue-rotate(var(--art-hue-rotate)) saturate(var(--art-saturate));
 }
 
 // Mascot remains theme artwork.
@@ -87,6 +95,20 @@ html[data-skin="original"] .auth-main::before {
 }
 
 @media (prefers-color-scheme: dark) {
-    html[data-skin="original"][data-mode="system"] body::after { opacity: .16; }
+    html[data-skin="original"][data-mode="system"] {
+        --paper-opacity: .06;
+        --paper-blend: screen;
+        --paper-filter: invert(1);
+        --landscape-opacity: .3;
+        --blossom-opacity: .5;
+        --art-night-filter: invert(1) hue-rotate(180deg) brightness(.72);
+    }
 }
-html[data-skin="original"][data-mode="dark"] body::after { opacity: .16; }
+html[data-skin="original"][data-mode="dark"] {
+    --paper-opacity: .06;
+    --paper-blend: screen;
+    --paper-filter: invert(1);
+    --landscape-opacity: .3;
+    --blossom-opacity: .5;
+    --art-night-filter: invert(1) hue-rotate(180deg) brightness(.72);
+}
