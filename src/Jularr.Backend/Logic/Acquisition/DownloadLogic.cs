@@ -116,7 +116,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             "WorkMetadataFacts" AS fact
                         WHERE
                             fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Author'
+                            AND fact."FactKey" IN ('Author', 'Artist')
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
@@ -158,7 +158,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     NOT wanted."IsPaused"
                     AND (wanted."NextSearchAt" IS NULL OR wanted."NextSearchAt" <= @Now)
                     AND (
-                        work."MediaTypeId" IN (1, 3, 4, 5)
+                        work."MediaTypeId" IN (1, 3, 4, 5, 6)
                         AND NOT EXISTS (
                             SELECT
                                 1
@@ -476,7 +476,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             "WorkMetadataFacts" AS fact
                         WHERE
                             fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Author'
+                            AND fact."FactKey" IN ('Author', 'Artist')
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1

@@ -27,6 +27,12 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         public static IReadOnlyList<string> Order { get; } = ["CBZ", "CBR", "EPUB", "PDF", "COMIC"];
     }
 
+    // Music formats, best first; AUDIO is a release that does not name its format.
+    public static class MusicQualities
+    {
+        public static IReadOnlyList<string> Order { get; } = ["FLAC-24", "FLAC", "ALAC", "MP3-320", "MP3-V0", "MP3", "AAC", "AUDIO"];
+    }
+
     public static class ProfileQualities
     {
         // Media types with release qualities; empty means no profiles.
@@ -35,6 +41,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             MediaType.Movie or MediaType.Series => VideoQualities.Order,
             MediaType.Book or MediaType.LightNovel => BookQualities.Order,
             MediaType.Manga => MangaQualities.Order,
+            MediaType.Music => MusicQualities.Order,
             _ => []
         };
     }
