@@ -60,7 +60,7 @@ namespace Jularr.Backend.Tests
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
             StringAssert.Contains(html, "&lt;Title&gt;");
-            StringAssert.Contains(html, "class=\"media-card__series\">" + texts["media.series.Continuing"]);
+            StringAssert.Contains(html, "class=\"media-card__series\"><span class=\"tag\">" + texts["media.series.Continuing"]);
             StringAssert.Contains(html, "stroke-dasharray=\"75 100\"");
             StringAssert.Contains(html, "#icon-flag-de");
             StringAssert.Contains(html, "aria-label=\"" + string.Format(CultureInfo.CurrentCulture, texts["media.languagePreferred"], texts["media.dubs"], texts["design.languageGerman"]) + "\"");
@@ -76,6 +76,25 @@ namespace Jularr.Backend.Tests
             writer.GetStringBuilder().Clear();
             new MediaCard("Book", "/Details/1", null, null, "media.state.InProgress").Continue(30000, null).WriteTo(writer, HtmlEncoder.Default, texts);
             Assert.IsFalse(writer.ToString().Contains("<progress", StringComparison.Ordinal));
+
+            // Both tags, ordinary fallback links.
+            writer.GetStringBuilder().Clear();
+            card.Preview("preview-test").WriteTo(writer, HtmlEncoder.Default, texts);
+            html = writer.ToString();
+            Assert.AreEqual(2, Regex.Matches(html, "data-preview-open=\"preview-test\"").Count);
+            Assert.AreEqual(2, Regex.Matches(html, "aria-haspopup=\"dialog\"").Count);
+            Assert.IsFalse(Regex.IsMatch(html, "<a[^>]*>[^<]*<a"));
+
+            // Inert artwork, no embedded player.
+            writer.GetStringBuilder().Clear();
+            new MediaPreview("preview-test", assets, "<Title>", null, null, null, "<Overview>")
+                .Trailer("ayi6VfCKBcA").WriteTo(writer, HtmlEncoder.Default, texts);
+            html = writer.ToString();
+            StringAssert.Contains(html, "<template id=\"preview-test\">");
+            StringAssert.Contains(html, "&lt;Overview&gt;");
+            StringAssert.Contains(html, "data-trailer-id=\"ayi6VfCKBcA\"");
+            Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
+            Assert.ThrowsExactly<ArgumentException>(() => new MediaPreview("test", assets, "Title", null, null, null, null).Trailer("../../bad"));
         }
 
         [TestMethod]
@@ -119,6 +138,13 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"media-shelf__items\" tabindex=\"0\" role=\"region\"");
             foreach (var state in Enum.GetValues<MediaAvailabilityState>())
                 StringAssert.Contains(html, "media-availability--" + state.ToString().ToLowerInvariant());
+            Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
+            Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);
+            StringAssert.Contains(html, "data-preview-open=\"preview-series-Continuing\"");
+            StringAssert.Contains(html, "data-trailer-id=\"ayi6VfCKBcA\"");
+            Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
+            StringAssert.Contains(html, "Request status");
+            StringAssert.Contains(html, "Download status");
             StringAssert.Contains(html, "<progress max=\"6360000\" value=\"3000000\"");
             StringAssert.Contains(html, "poster=\"/build/assets/your-name-backdrop-");
             StringAssert.Contains(html, "class=\"player__audio\"");

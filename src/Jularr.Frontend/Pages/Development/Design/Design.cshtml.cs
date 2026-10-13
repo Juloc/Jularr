@@ -23,6 +23,7 @@ namespace Jularr.Frontend.Pages.Development.Design
             page.Title("design.title");
             page.Asset("Pages/Development/Design/Design.entry.scss");
             page.Asset("Framework/Components/MediaShelf.entry.ts");
+            page.Asset("Framework/Components/MediaPreview.entry.ts");
             page.Asset("Modules/Appearance/appearance.entry.scss");
 
             // Shared appearance controls.
@@ -57,7 +58,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new Div(new Button(new Icon("home", assets), new Text("design.primary")).Primary(),
                     new Button(new Text("design.secondary")), new Button(new Text("design.disabled")).Disabled(),
                     new Button(new Text("design.selected")).Attribute("aria-pressed", "true")).Class("design-lab__buttons"),
-                new Div(new Tag(new Text("design.tagGenre")), new Tag(new Icon("subtitles", assets), new Text("design.tagSubtitles")),
+                new Div(new Tag(new Icon("library", assets), new Text("media.type.Movie")), new Tag(new Text("design.tagGenre")), new Tag(new Icon("subtitles", assets), new Text("design.tagSubtitles")),
                     new Tag(new Icon("star", assets), new Text("design.selected")).Accent()).Class("design-lab__buttons"),
                 new P(new Text("design.toggleNotice")),
                 new Div(new Toggle("design.toggleOff"), new Toggle("design.toggleOn", true),
@@ -113,6 +114,11 @@ namespace Jularr.Frontend.Pages.Development.Design
             ])).Attribute("id", "layouts"));
 
             // Labeled media examples.
+            var previews = new List<IUiComponent>();
+            AddPreview("preview-your-name-library", "Your Name.", "your-name-poster.jpg", "2016", "request.status.Completed", MediaAvailabilityState.Available);
+            AddPreview("preview-suzume-library", "Suzume", "suzume-poster.jpg", "2022", "request.status.Completed", MediaAvailabilityState.Available);
+            AddPreview("preview-your-name-discover", "Your Name.", "your-name-poster.jpg", "2016", "media.state.NotRequested", MediaAvailabilityState.Missing);
+            AddPreview("preview-suzume-discover", "Suzume", "suzume-poster.jpg", "2022", "request.status.Approved", MediaAvailabilityState.Downloading);
             page.Content.Add(new Div(new UiSection("design.media", [
                 new MediaHero(texts["design.exampleTitle"], assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), texts["design.exampleContext"],
                     texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
@@ -126,10 +132,12 @@ namespace Jularr.Frontend.Pages.Development.Design
                 ]),
                 new MediaShelf(assets, "design.mediaLibrary", null, [
                     new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.Available")
+                        .Preview("preview-your-name-library")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available))
                         .Genres(new Text("design.genreDrama"), new Text("design.genreRomance"))
                         .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 3, new MediaLanguage("flag-de", "design.languageGerman"), 8),
                     new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Available")
+                        .Preview("preview-suzume-library")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available))
                         .Genres(new Text("design.tagGenre"), new Text("design.genreAdventure")).Languages(assets, null, 2, null, 6),
                     SeriesExample("Continuing", MediaAvailabilityState.Partial, 18, 24),
@@ -140,13 +148,19 @@ namespace Jularr.Frontend.Pages.Development.Design
                 ]),
                 new MediaShelf(assets, "design.mediaDiscover", null, [
                     new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested", "request.create")
+                        .Preview("preview-your-name-discover")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Missing)).Genres(new Text("design.genreDrama")),
                     new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Requested")
+                        .Preview("preview-suzume-discover")
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Downloading)).Genres(new Text("design.tagGenre"))
                 ]),
                 new P(new Text("design.imageCredit"), new ValueText(" "),
-                    new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images"))
+                    new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images")),
+                new P(new Text("design.trailerCredit"), new ValueText(" "),
+                    new A(new ValueText("Crunchyroll")).Attribute("href", "https://www.youtube.com/watch?v=ayi6VfCKBcA"))
             ])).Attribute("id", "media"));
+            page.Content.Add(MediaPreview.Host(assets, texts));
+            page.Content.AddRange(previews);
 
             // Read-only playback chrome.
             var source = new PlayerSource("Your Name.", texts["design.exampleContext"], "/Design#player", "", "", "",
@@ -166,11 +180,40 @@ namespace Jularr.Frontend.Pages.Development.Design
             ]));
 
             // Explicitly illustrative series states.
-            MediaCard SeriesExample(string status, MediaAvailabilityState availability, int available = 0, int monitored = 0) =>
-                new MediaCard(texts["design.exampleTitle"], "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), null, "design.exampleStatus")
+            MediaCard SeriesExample(string status, MediaAvailabilityState availability, int available = 0, int monitored = 0)
+            {
+                var id = "preview-series-" + status;
+                var requestStatus = availability == MediaAvailabilityState.Missing ? "media.state.NotRequested" : "request.status.Approved";
+                AddPreview(id, texts["design.exampleTitle"], "suzume-poster.jpg", texts["design.exampleContext"], requestStatus, availability, "media.series." + status);
+                return new MediaCard(texts["design.exampleTitle"], "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), null, "design.exampleStatus")
+                    .Preview(id)
                     .SeriesStatus("media.series." + status).Availability(new MediaAvailability(assets, availability, available, monitored))
                     .Genres(new Text("design.tagGenre"), new Text("design.genreAdventure"))
                     .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 2, null, 6);
+            }
+
+            void AddPreview(string id, string title, string poster, string meta, string requestStatus, MediaAvailabilityState availability, string? seriesStatus = null)
+            {
+                // Separate request and acquisition.
+                var statuses = new List<IUiComponent>();
+                if (seriesStatus is not null) statuses.Add(Status("media.preview.seriesStatus", new Tag(new Text(seriesStatus))));
+                statuses.Add(Status("media.preview.availability", new MediaAvailability(assets, availability, availability == MediaAvailabilityState.Partial ? 18 : 0, 24)));
+                statuses.Add(Status("media.preview.requestStatus", new Tag(new Icon("requests", assets), new Text(requestStatus))));
+                var downloading = availability == MediaAvailabilityState.Downloading;
+                statuses.Add(Status("media.preview.downloadStatus", new Tag(new Icon("download", assets), new Text(downloading ? "request.status.Downloading" : "media.preview.noDownload"))));
+
+                var preview = new MediaPreview(id, assets, title, assets.ImageUrl("Pages/Development/Design/Images/" + poster),
+                    assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), meta, texts["design.exampleOverview"])
+                    .Content(new P(new Text("design.exampleStatus")), new Div([.. statuses]).Class("media-preview__statuses"))
+                    .Actions(new Button(new Icon("requests", assets), new Text("request.create")).Primary().Disabled(),
+                        new Button(new Icon("bookmark", assets), new Text("media.watchlist.add")).Disabled(),
+                        new A(new Text("media.details")).Class("button").Attribute("href", "/Design#media"));
+                if (title == "Your Name.") preview.Trailer("ayi6VfCKBcA");
+                previews.Add(preview);
+            }
+
+            static IUiComponent Status(string labelKey, IUiComponent value) =>
+                new Div(new Span(new Text(labelKey)).Class("media-preview__label"), value).Class("media-preview__status");
 
             Form<CreateWorkDataV1> WorkForm(CreateWorkDataV1 example, ServiceError? failure = null) => new(form =>
                 form.Text(item => item.CanonicalTitle, "media.title").Select(item => item.MediaTypeId, "media.type", options)

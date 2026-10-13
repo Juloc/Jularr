@@ -16,6 +16,7 @@
         color: var(--text);
         cursor: pointer;
         list-style: none;
+        text-decoration: none;
 
         &::-webkit-details-marker { display: none; }
         .ui-icon { width: 18px; height: 18px; flex: 0 0 auto; }

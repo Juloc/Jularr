@@ -3,14 +3,14 @@
     align-items: center;
     gap: 6px;
     padding: 5px 12px;
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--accent-text) 28%, var(--border));
     border-radius: var(--radius-control);
-    background: var(--surface);
-    color: var(--muted);
+    background: var(--accent-soft);
+    color: var(--accent-text);
     font-size: 12px;
     font-weight: 600;
     overflow-wrap: anywhere;
 
-    &--accent { background: var(--accent-soft); border-color: var(--accent-text); color: var(--accent-text); }
+    &--accent { border-color: color-mix(in srgb, var(--accent-text) 55%, var(--border)); }
     .ui-icon { width: 16px; height: 16px; }
 }

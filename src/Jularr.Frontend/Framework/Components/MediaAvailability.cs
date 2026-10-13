@@ -15,6 +15,16 @@ namespace Jularr.Frontend.Framework
 
     public sealed class MediaAvailability(FrontendAssets assets, MediaAvailabilityState state, int availableUnits = 0, int monitoredUnits = 0) : IUiComponent
     {
+        private string? _previewId;
+        private string? _href;
+
+        public MediaAvailability Preview(string id, string href)
+        {
+            _previewId = id;
+            _href = href;
+            return this;
+        }
+
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
             var percentage = state == MediaAvailabilityState.Partial
@@ -43,7 +53,9 @@ namespace Jularr.Frontend.Framework
             if (state == MediaAvailabilityState.Partial)
                 label = string.Format(CultureInfo.CurrentCulture, label, availableUnits, monitoredUnits);
 
-            new Div(new IconInfo(new Span([.. symbol]).Class("media-availability__symbol"), label))
+            var info = new IconInfo(new Span([.. symbol]).Class("media-availability__symbol"), label);
+            if (_previewId is not null) info.Preview(_previewId, _href!);
+            new Div(info)
                 .Class("media-availability media-availability--" + state.ToString().ToLowerInvariant()).WriteTo(writer, encoder, texts);
         }
 

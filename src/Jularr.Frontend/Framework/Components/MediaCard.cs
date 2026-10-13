@@ -12,6 +12,13 @@ namespace Jularr.Frontend.Framework
         private IUiComponent? _languages;
         private long? _positionMs;
         private long? _durationMs;
+        private string? _previewId;
+
+        public MediaCard Preview(string id)
+        {
+            _previewId = id;
+            return this;
+        }
 
         public MediaCard Continue(long positionMs, long? durationMs)
         {
@@ -57,8 +64,19 @@ namespace Jularr.Frontend.Framework
             // Artwork overlays, separate links.
             var content = new List<IUiComponent> { link };
             var overlays = new List<IUiComponent>();
-            if (_seriesStatusKey is not null) overlays.Add(new Span(new Text(_seriesStatusKey)).Class("media-card__series"));
-            if (_availability is not null) overlays.Add(new Div(_availability).Class("media-card__availability"));
+            if (_seriesStatusKey is not null)
+            {
+                IUiComponent series = _previewId is null
+                    ? new Span(new Tag(new Text(_seriesStatusKey))).Class("media-card__series")
+                    : new A(new Tag(new Text(_seriesStatusKey))).Class("media-card__series media-card__series--link").Attribute("href", href)
+                        .Attribute("aria-haspopup", "dialog").Attribute("data-preview-open", _previewId);
+                overlays.Add(series);
+            }
+            if (_availability is not null)
+            {
+                if (_previewId is not null) _availability.Preview(_previewId, href);
+                overlays.Add(new Div(_availability).Class("media-card__availability"));
+            }
             if (actionKey is not null)
             {
                 IUiComponent action = actionHref is null

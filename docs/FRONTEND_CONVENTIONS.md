@@ -314,8 +314,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   and semantic status colors do not. Current choices are device-local; do not
   imply implemented instance/profile policy or persistence.
 - Development-only design workshops may show explicitly labeled sample data and
-  disabled component states. They must not start playback or pretend to perform
-  business actions. Reuse real components and approved references, not copies.
+  disabled component states. They must not start library playback or pretend to
+  perform business actions. An explicitly requested promotional trailer may load
+  its official provider embed after Play, without a playback session or progress.
+  Reuse real components and approved references, not copies.
 - Before completing a change, check the
   [CODEMAP](../src/Jularr.Frontend/CODEMAP.md),
   verify every displayed key is in the canonical English declaration,
