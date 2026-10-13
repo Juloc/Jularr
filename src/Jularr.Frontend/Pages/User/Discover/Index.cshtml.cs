@@ -116,10 +116,10 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
 
             page.Content.Add(new MediaShelf(assets, "discover.continue", null, [.. _continue.Where(item => (selected.Slug is null || item.MediaTypeId == selected.Type)
-                && (item.MediaAssetTypeId == MediaAssetType.Ebook ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true)).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
+                && (ReadableMedia.IsReadable(item.MediaAssetTypeId) ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true)).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
-                (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
-                .Continue(item.PositionMs, item.MediaAssetTypeId == MediaAssetType.Ebook ? null : item.DurationMs))]));
+                (ReadableMedia.IsReadable(item.MediaAssetTypeId) ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
+                .Continue(item.PositionMs, ReadableMedia.IsReadable(item.MediaAssetTypeId) ? null : item.DurationMs))]));
             page.Content.Add(new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]));
 

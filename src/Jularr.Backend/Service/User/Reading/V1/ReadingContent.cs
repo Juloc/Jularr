@@ -11,20 +11,23 @@ using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
+using Jularr.Integrations.Logic.Usenet;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Reading.V1
 {
-    // Prepares books from storage into the shared reading cache; I/O stays outside transactions.
+    // Prepares books and comics from storage into the shared reading cache; I/O stays outside transactions.
     internal sealed class ReadingContent
     {
         private const long BatchBytes = 8L * 1024 * 1024;
         private readonly StorageOptions _options;
+        private readonly ArchiveTools _archives;
         private readonly TimeProvider _time;
 
-        public ReadingContent(IOptions<StorageOptions> options, TimeProvider time)
+        public ReadingContent(IOptions<StorageOptions> options, ArchiveTools archives, TimeProvider time)
         {
             _options = options.Value;
+            _archives = archives;
             _time = time;
         }
 
@@ -63,6 +66,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
             await using (file)
             {
+                if (ComicPages.IsComic(source.RelativePath))
+                {
+                    return await OpenComicAsync(context, source, file, ct);
+                }
+
                 var hash = await SHA256.HashDataAsync(file, ct);
                 file.Position = 0;
                 EpubPackage package;
@@ -104,55 +112,202 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var indexes = package.Spine.Select((item, index) => (item.Path, index)).ToDictionary(pair => pair.Path, pair => pair.index, StringComparer.Ordinal);
             var sections = new List<ReadingStructureSection>();
             var images = new HashSet<string>(StringComparer.Ordinal);
-            var batch = new List<ReadingResourceData>();
-            long batchBytes = 0;
+            var writer = new ResourceWriter(context, ct);
             for (var index = 0; index < package.Spine.Count; index++)
             {
                 var item = package.Spine[index];
                 var prepared = ReadingHtml.Prepare(EpubReader.ReadText(archive.GetEntry(item.Path)!), item.Path, documentId, indexes, package.Manifest);
                 var title = package.Toc.FirstOrDefault(entry => entry.Path == item.Path)?.Title;
                 sections.Add(new ReadingStructureSection(item.Path, title, prepared.Characters, prepared.Blocks));
-                await AddAsync(new ReadingResourceData(documentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Html)));
+                await writer.AddAsync(new ReadingResourceData(documentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Html)));
                 foreach (var image in prepared.Resources.Where(images.Add))
                 {
                     if (archive.GetEntry(image) is { } entry)
                     {
-                        await AddAsync(new ReadingResourceData(documentId, image, package.Manifest[image], EpubReader.ReadBytes(entry)));
+                        await writer.AddAsync(new ReadingResourceData(documentId, image, package.Manifest[image], EpubReader.ReadBytes(entry)));
                     }
                 }
             }
 
-            await FlushAsync();
+            await writer.FlushAsync();
             var toc = package.Toc.Where(entry => indexes.ContainsKey(entry.Path)).Select(entry => new ReadingStructureEntry(entry.Title, indexes[entry.Path], entry.Level, entry.Anchor)).ToArray();
             var structure = JsonSerializer.Serialize(new ReadingStructure([.. sections], toc));
-            var complete = new ReadingDocumentCompleteData(documentId, package.Title, package.Language, structure, sections.Sum(section => section.Characters));
+            await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, package.Title, package.Language, structure, sections.Sum(section => section.Characters)), ct);
+        }
+
+        private async Task<long> OpenComicAsync(LogicContext context, ReadingSourceData source, FileStream file, CancellationToken ct)
+        {
+            var hash = await SHA256.HashDataAsync(file, ct);
+            file.Position = 0;
+            var save = new ReadingDocumentSaveData(source.StoredFileId, source.SizeBytes, source.ModifiedAt, hash, ComicPages.AnalyzerVersion, ReadingFormatType.Comic, null, null,
+                JsonSerializer.Serialize(new ReadingStructure([], [])), 0);
+            var state = await context.ExecuteBatchAsync((ctx, token) => ctx.CreateReadingDocumentAsync(save, token), ct);
+            if (state.IsCached)
+            {
+                return state.DocumentId;
+            }
+
+            // CBZ is read in place; CBR, CB7 and mislabelled archives are unpacked once by the approved 7-Zip into a private folder.
+            if (ComicPages.IsZip(source.RelativePath))
+            {
+                ZipArchive? archive = null;
+                try
+                {
+                    archive = new ZipArchive(file, ZipArchiveMode.Read, leaveOpen: true);
+                }
+                catch (InvalidDataException)
+                {
+                    file.Position = 0;
+                }
+
+                if (archive is not null)
+                {
+                    using (archive)
+                    {
+                        await PrepareComicAsync(context, state.DocumentId,
+                            [.. archive.Entries.Where(entry => ComicPages.IsPage(entry.FullName)).Select(entry => new ComicPage(entry.FullName, entry.Length, entry.Open))], ct);
+                    }
+
+                    return state.DocumentId;
+                }
+            }
+
+            if (!_archives.CanExtract)
+            {
+                throw new ServiceUnavailableException("reading_unsupported");
+            }
+
+            var folder = Directory.CreateTempSubdirectory("jularr-comic-").FullName;
+            try
+            {
+                if (!await _archives.ExtractAsync(file.Name, folder, ct))
+                {
+                    throw new ServiceUnavailableException("reading_invalid_file");
+                }
+
+                // Links never lead out of the unpacked folder.
+                var pages = new DirectoryInfo(folder).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint })
+                    .Where(info => ComicPages.IsPage(Path.GetRelativePath(folder, info.FullName)))
+                    .Select(info => new ComicPage(Path.GetRelativePath(folder, info.FullName), info.Length, info.OpenRead));
+                await PrepareComicAsync(context, state.DocumentId, [.. pages], ct);
+                return state.DocumentId;
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(folder, true);
+                }
+                catch (IOException)
+                {
+                    // A busy temporary folder must not hide the outcome.
+                }
+            }
+        }
+
+        private async Task PrepareComicAsync(LogicContext context, long documentId, ComicPage[] candidates, CancellationToken ct)
+        {
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(documentId), token);
+                return true;
+            }, ct);
+
+            // Pages in natural order; each one is an image by its bytes, not its name; unreadable entries are skipped.
+            var pages = new List<ReadingStructureSection>();
+            var writer = new ResourceWriter(context, ct);
+            long total = 0;
+            foreach (var candidate in candidates.OrderBy(page => ComicPages.SortKey(page.Path), StringComparer.Ordinal).ThenBy(page => page.Path, StringComparer.Ordinal))
+            {
+                if (pages.Count == ComicPages.MaximumPages)
+                {
+                    break;
+                }
+
+                if (candidate.Length is <= 0 or > ComicPages.MaximumPageBytes)
+                {
+                    continue;
+                }
+
+                total += candidate.Length;
+                if (total > ComicPages.MaximumVolumeBytes)
+                {
+                    throw new ServiceUnavailableException("reading_invalid_file");
+                }
+
+                byte[] bytes;
+                string? contentType;
+                try
+                {
+                    await using var stream = candidate.Open();
+                    var header = new byte[16];
+                    var read = await stream.ReadAtLeastAsync(header, header.Length, false, ct);
+                    contentType = ComicPages.ContentType(header.AsSpan(0, read));
+                    if (contentType is null)
+                    {
+                        continue;
+                    }
+
+                    bytes = new byte[candidate.Length];
+                    header.AsSpan(0, read).CopyTo(bytes);
+                    await stream.ReadExactlyAsync(bytes.AsMemory(read), ct);
+                }
+                catch (Exception exception) when (exception is InvalidDataException or NotSupportedException or EndOfStreamException or IOException)
+                {
+                    continue;
+                }
+
+                await writer.AddAsync(new ReadingResourceData(documentId, ComicPages.PagePath(pages.Count), contentType, bytes));
+                pages.Add(new ReadingStructureSection(candidate.Path, null, 0, 1));
+            }
+
+            if (pages.Count == 0)
+            {
+                throw new ServiceUnavailableException("reading_invalid_file");
+            }
+
+            await writer.FlushAsync();
+            await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. pages], [])), 0), ct);
+        }
+
+        private async Task CompleteAsync(LogicContext context, ReadingDocumentCompleteData complete, CancellationToken ct)
+        {
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 await ctx.CompleteReadingDocumentAsync(complete, token);
                 await ctx.EvictReadingCacheAsync(await ReadBudgetAsync(ctx, token), token);
                 return true;
             }, ct);
+        }
 
-            async Task AddAsync(ReadingResourceData resource)
+        private sealed record ComicPage(string Path, long Length, Func<Stream> Open);
+
+        // Resources reach the cache in bounded batches.
+        private sealed class ResourceWriter(LogicContext context, CancellationToken ct)
+        {
+            private readonly List<ReadingResourceData> _batch = [];
+            private long _bytes;
+
+            public async Task AddAsync(ReadingResourceData resource)
             {
-                batch.Add(resource);
-                batchBytes += resource.Bytes.Length;
-                if (batchBytes >= BatchBytes)
+                _batch.Add(resource);
+                _bytes += resource.Bytes.Length;
+                if (_bytes >= BatchBytes)
                 {
                     await FlushAsync();
                 }
             }
 
-            async Task FlushAsync()
+            public async Task FlushAsync()
             {
-                if (batch.Count == 0)
+                if (_batch.Count == 0)
                 {
                     return;
                 }
 
-                var rows = batch.ToArray();
-                batch.Clear();
-                batchBytes = 0;
+                var rows = _batch.ToArray();
+                _batch.Clear();
+                _bytes = 0;
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     foreach (var row in rows)

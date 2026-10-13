@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Instance.V1;
 using Jularr.Backend.Data.User.Reading.V1;
@@ -96,6 +97,57 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(document.DocumentId, other.DocumentId);
             Assert.IsNull(other.Locator);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+        }
+
+        [TestMethod]
+        public async Task Comic_PagesInNaturalOrderTypedByBytesResumeOnTheExactPage()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Manga", "Example Manga");
+            Directory.CreateDirectory(folder);
+            byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 16, 74, 70, 73, 70, 0];
+            using (var archive = ZipFile.Open(Path.Combine(folder, "Example Manga v01.cbz"), ZipArchiveMode.Create))
+            {
+                foreach (var (name, bytes) in new[] { ("pages/p10.png", jpeg), ("pages/p2.png", Png), ("pages/p1.jpg", Png), ("pages/fake.png", "not an image"u8.ToArray()),
+                    ("__MACOSX/pages/._p1.jpg", Png), ("notes.txt", "notes"u8.ToArray()) })
+                {
+                    await using var entry = archive.CreateEntry(name).Open();
+                    await entry.WriteAsync(bytes);
+                }
+            }
+
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Manga", MediaType.Book, MediaSubtype.Manga);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%.cbz'"))!;
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, "Example Manga", null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            var asset = (long)(await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId))!;
+
+            // Three real pages, p1 before p2 before p10; the bytes decide the type, Manga reads right to left.
+            var document = await OpenAsync(host, asset);
+            Assert.AreEqual(ReadingFormatType.Comic, document.ReadingFormatTypeId);
+            Assert.AreEqual(3, document.SectionCount);
+            Assert.IsTrue(document.IsCached);
+            Assert.IsTrue(document.IsRightToLeft);
+            var prefix = "/api/v1/reading/documents/" + document.DocumentId + "/resource?path=";
+            using var first = await host.SendAsync(HttpMethod.Get, prefix + Uri.EscapeDataString(":page/00000"));
+            Assert.AreEqual("image/png", first.Content.Headers.ContentType!.MediaType);
+            using var last = await host.SendAsync(HttpMethod.Get, prefix + Uri.EscapeDataString(":page/00002"));
+            Assert.AreEqual("image/jpeg", last.Content.Headers.ContentType!.MediaType);
+            CollectionAssert.AreEqual(jpeg, await last.Content.ReadAsByteArrayAsync());
+
+            // The exact page is the progress; the reader opens there again.
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + asset + "/progress", new SaveReadingProgressDataV1("p2", 1m, true));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual("p2", (await OpenAsync(host, asset)).Locator);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + asset);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "data-page=\"2\"");
+            StringAssert.Contains(html, "data-direction=\"rtl\"");
+            StringAssert.Contains(html, "%3Apage%2F00002");
         }
 
         [TestMethod]

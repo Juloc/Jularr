@@ -61,7 +61,8 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
     public sealed class ReadingDocumentV1 : BaseResponse
     {
-        public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression)
+        public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
+            bool isRightToLeft)
         {
             DocumentId = documentId;
             WorkId = workId;
@@ -71,6 +72,7 @@ namespace Jularr.Backend.Data.User.Reading.V1
             IsCached = isCached;
             Locator = locator;
             Progression = progression;
+            IsRightToLeft = isRightToLeft;
         }
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
@@ -97,6 +99,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.Progression), false)]
         public decimal? Progression { get; }
+
+        // Manga read right to left; comic pages are the sections.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsRightToLeft))]
+        public bool IsRightToLeft { get; }
     }
 
     public sealed class ReadingTocEntryV1 : BaseResponse
