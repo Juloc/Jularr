@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Service.Admin.Instance.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
@@ -24,10 +25,13 @@ namespace Jularr.Frontend.Pages.Admin.Instance
         private IReadOnlyList<InstanceMediaDetailsV1> _media = [];
         private UpdateInstanceMediaDataV1? _mediaInput;
 
+        private string Home => SetupWizard.Address(Request, SetupStepType.Instance, "/Admin/Instance");
+
         protected override void Define(Page page)
         {
             page.Title("admin.instance.title");
             page.Navigation("nav.admin");
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Instance, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
 
             // Edit supported settings only.
             if (_settings is { } settings)
@@ -43,7 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Select(item => item.UsersConfirmSources, "admin.instance.usersConfirmSources",
                         [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                     form.Submit("common.save");
-                }, Url.Page("/Admin/Instance/Instance"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources), _moduleId is null && _mediaInput is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
@@ -67,7 +71,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Hidden(item => item.Version);
                     form.Select(item => item.IsEnabled, "admin.instance.module.state", stateOptions);
                     form.Submit("common.save");
-                }, Url.Page("/Admin/Instance/Instance", "Module", new { instanceModuleId = module.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                }, Home + "?handler=Module&instanceModuleId=" + module.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _moduleId == module.Id ? _moduleInput : new UpdateInstanceModuleDataV1(module.IsEnabled, module.Version), _moduleId == module.Id ? FormError : null));
             }
 
@@ -85,7 +89,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Hidden(item => item.Version);
                     form.Select(item => item.IsEnabled, "admin.instance.media.state", stateOptions);
                     form.Submit("common.save");
-                }, Url.Page("/Admin/Instance/Instance", "Media"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                }, Home + "?handler=Media", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _mediaInput?.Key == media.Key ? _mediaInput : new UpdateInstanceMediaDataV1(media.Key, media.IsEnabled, media.Version), _mediaInput?.Key == media.Key ? FormError : null));
             }
 
@@ -106,7 +110,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             TempData["InstanceSaved"] = true;
-            return RedirectToPage("/Admin/Instance/Instance");
+            return LocalRedirect(Home);
         }
 
         protected override async Task LoadDataAsync()
@@ -123,14 +127,14 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             _moduleId = instanceModuleId;
             _moduleInput = new UpdateInstanceModuleDataV1(isEnabled, version);
             await updateModule.ExecuteAsync<UpdateResult>(new UpdateInstanceModuleParametersV1(instanceModuleId), _moduleInput, HttpContext.RequestAborted);
-            return RedirectToPage("/Admin/Instance/Instance");
+            return LocalRedirect(Home);
         }
 
         public async Task<IActionResult> OnPostMediaAsync(string? key, [BindRequired] bool isEnabled, long version)
         {
             _mediaInput = new UpdateInstanceMediaDataV1(key ?? "", isEnabled, version);
             await updateMedia.ExecuteAsync<UpdateResult>(new UpdateInstanceMediaParametersV1(), _mediaInput, HttpContext.RequestAborted);
-            return RedirectToPage("/Admin/Instance/Instance");
+            return LocalRedirect(Home);
         }
     }
 }

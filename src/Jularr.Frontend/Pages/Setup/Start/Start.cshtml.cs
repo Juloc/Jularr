@@ -50,7 +50,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
-            if (!_requiresOwner) return RedirectToPage("/Account/Login/Login");
+            if (!_requiresOwner) return User.Identity?.IsAuthenticated is true ? LocalRedirect("/Setup/Progress") : RedirectToPage("/Account/Login/Login");
 
             PreparePage();
             return Page();
@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
 
             // Continue authenticated configuration.
-            return RedirectToPage("/Setup/Storage/Storage");
+            return LocalRedirect("/Setup/Progress");
         }
 
         protected override async Task LoadDataAsync()

@@ -81,7 +81,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - [Data/Fields/Account](../src/Jularr.Backend/Data/Fields/Account): Account, AccountProfile, credential, challenge and external-login fields; names match the singular schema entity.
 - [Data/Enums](../src/Jularr.Backend/Data/Enums): enums grouped by Account, Service and Sql owner.
 - [UiLocaleFields.cs](../src/Jularr.Backend/Data/Fields/Localization/UiLocaleFields.cs), [ProviderFields.cs](../src/Jularr.Backend/Data/Fields/Provider/ProviderFields.cs): required locale/provider catalog fields.
-- [InstanceSetupStateFields.cs](../src/Jularr.Backend/Data/Fields/Setup/InstanceSetupStateFields.cs): canonical singleton bootstrap fields; Account Logic owns their transactional closure.
+- [InstanceSetupStateFields.cs](../src/Jularr.Backend/Data/Fields/Setup/InstanceSetupStateFields.cs): canonical singleton bootstrap fields; Account Logic owns their transactional closure. Wizard step, checks and completion: [SetupProgressServices.cs](../src/Jularr.Backend/Service/Admin/Instance/V1/SetupProgressServices.cs) and [SetupLogic.cs](../src/Jularr.Backend/Logic/Instance/SetupLogic.cs).
 - [BaseData.cs](../src/Jularr.Backend/Data/Common/BaseData.cs): cached field validation, same-name property merging, Id-based list merging and partial/list JSON binding.
 - [DataField.cs](../src/Jularr.Backend/Data/Fields/DataField.cs): C#-named field classes and their PostgreSQL types; [DataFieldAttribute.cs](../src/Jularr.Backend/Data/Common/DataFieldAttribute.cs): required/optional and length overrides.
 - [Service.cs](../src/Jularr.Backend/Service/Core/Service.cs): invocation lifecycle, operation hooks and shared transaction.
@@ -105,7 +105,7 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 - Owner account updates, last-Owner concurrency, session invalidation and Razor editor: `AdminAccountTests.cs`; catalog authorization, stale edits and encoded Razor forms: `AdminLocalizationTests.cs`.
 - Account assignments and Owner session revocation: `AdminAccountTests.cs`; language creation/editing/fallback and Razor: `AdminLocaleTests.cs`; provider enablement/auth availability and forms: `AdminProviderTests.cs`.
 - Login/cookies, pending registration, Plex grants, browser proof, expiry/replay, renewal and deployment-root persistence: `AuthenticationTests.cs` (isolated PostgreSQL and controlled provider responses).
-- First-Owner form, rollback, concurrency, session issuance and permanent bootstrap closure: `SetupTests.cs`.
+- First-Owner form, rollback, concurrency, session issuance, permanent bootstrap closure, wizard resume, blockers and completion: `SetupTests.cs`.
 - Manual catalog/title edits, role restriction, stale updates, personal list isolation and real Razor forms: `MediaTests.cs`.
 - Instance settings, Owner-only access, enabled locales, stale edits and real Razor forms: `InstanceSettingsTests.cs`.
 - Real module gating, data retention, All/Any/write locks, public branding/default locale and capability-driven Razor navigation: `InstanceCapabilitiesTests.cs`.
@@ -120,7 +120,7 @@ All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
 
 ## Not integrated
 
-Remaining Setup steps, Anime absolute numbering, ROM identification and artwork for Games, a Manga reader, profile editing, NAS probes/reconnect/Synology, email verification, 2FA/WebAuthn completion,
+Setup backup/restore, Anime absolute numbering, ROM identification and artwork for Games, a Manga reader, profile editing, NAS probes/reconnect/Synology, email verification, 2FA/WebAuthn completion,
 PIN selection, old Android/TV consumers, full Profile management, further module capabilities and full custom branding.
 This reference backend does not complete Phase B or replace an active installation.
 
