@@ -53,7 +53,7 @@ namespace Jularr.Frontend.Pages.User.Requests
             new Form<SaveRequestSourceLinkDataV1>(form =>
             {
                 form.Hidden(data => data.OperationId);
-                form.Text(data => data.SourceUrl, "activity.fileLink");
+                form.Url(data => data.SourceUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, "/Requests?handler=SourceLink&requestId=" + requestId.ToString(CultureInfo.InvariantCulture), csrf, new SaveRequestSourceLinkDataV1(operationId, ""),
                 Error?.Field == nameof(SaveRequestSourceLinkDataV1.SourceUrl) ? Error : null));
