@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Security;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Session;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Profile;
 
 namespace Jularr.Backend.Logic.Session
 {
@@ -56,7 +58,7 @@ namespace Jularr.Backend.Logic.Session
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        public static async Task<SessionCredentialsData> SelectSessionProfileAsync(this LogicContext ctx, SessionParameters proof, AccountProfileData target, CancellationToken ct)
+        public static async Task<SessionCredentialsData?> SelectSessionProfileAsync(this LogicContext ctx, SessionParameters proof, AccountProfileData target, string? pin, CancellationToken ct)
         {
             // Lock the account/profile link.
             var sql = new SqlStatement();
@@ -65,6 +67,7 @@ namespace Jularr.Backend.Logic.Session
                 SELECT
                     profile."Id" AS "ProfileId",
                     profile."PinHash",
+                    COALESCE(profile."PinLockedUntil" > statement_timestamp(), FALSE) AS "IsPinLocked",
                     session."ExpiresAt",
                     session."CredentialRevision"
                 FROM
@@ -85,8 +88,23 @@ namespace Jularr.Backend.Logic.Session
             var profile = await ctx.ReadRequiredAsync<SessionProfileData>(sql, ct);
             if (profile.PinHash is not null)
             {
-                // PIN access remains fail-closed.
-                throw new SecurityException("The profile requires PIN verification.");
+                // PIN access remains fail-closed; a locked profile verifies nothing.
+                if (pin is null)
+                {
+                    throw new SecurityException("The profile requires PIN verification.");
+                }
+
+                if (profile.IsPinLocked)
+                {
+                    throw new DataValidationException("Pin", "pin_locked");
+                }
+
+                var isValid = ProfilePinLogic.VerifyPin(profile.PinHash, pin);
+                await ctx.RecordPinAttemptAsync(profile.ProfileId, isValid, ct);
+                if (!isValid)
+                {
+                    return null;
+                }
             }
 
             // Replace both identifier and secret.

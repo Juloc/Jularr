@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.User.Settings
 {
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
-        ReadUiLocalesV1 readLocales, IAntiforgery antiforgery, UiText texts) : JularrPage
+        UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private AuthenticationResultV1? _authentication;
         private ReadProfileResultV1? _profile;
@@ -22,6 +22,7 @@ namespace Jularr.Frontend.Pages.User.Settings
         private UpdateProfileDataV1? _input;
         private IReadOnlyList<ProfileMediaV1> _media = [];
         private bool _savingMedia;
+        private bool _savingPin;
 
         protected override void Define(Page page)
         {
@@ -43,7 +44,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Submit("profile.settings.save");
-                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia ? null : FormError));
+                    }, Url.Page("/User/Settings/Settings"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, data, _savingMedia || _savingPin ? null : FormError));
 
                     // Hidden types leave the profile's lists; they stay reachable.
                     if (_media.Count > 0)
@@ -54,6 +55,18 @@ namespace Jularr.Frontend.Pages.User.Settings
                             form.Submit("profile.settings.save");
                         }, Url.Page("/User/Settings/Settings", "Media"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                             new UpdateProfileMediaDataV1([.. _media.Where(item => item.IsHidden).Select(item => item.Key)]), _savingMedia ? FormError : null));
+                    }
+
+                    // A PIN guards switching to this profile.
+                    content.Add(new Form<UpdateProfilePinDataV1>(form =>
+                    {
+                        form.Pin(x => x.Pin, "account.profile.pin");
+                        form.Submit("profile.pin.save");
+                    }, Url.Page("/User/Settings/Settings", "Pin"), antiforgery.GetAndStoreTokens(HttpContext).RequestToken, null, _savingPin ? FormError : null));
+                    if (_profile.HasPin)
+                    {
+                        content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.pin.remove"), Url.Page("/User/Settings/Settings", "PinRemove"),
+                            antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
                     }
                 }
                 else
@@ -146,6 +159,28 @@ namespace Jularr.Frontend.Pages.User.Settings
             await updateMedia.ExecuteAsync<UpdateResult>(new UpdateProfileParametersV1(profileId), new UpdateProfileMediaDataV1(hiddenKeys ?? []), HttpContext.RequestAborted);
             TempData["ProfileSaved"] = true;
             return RedirectToPage("/User/Settings/Settings");
+        }
+
+        public async Task<IActionResult> OnPostPinAsync(string? pin)
+        {
+            _savingPin = true;
+            await updatePin.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), new UpdateProfilePinDataV1(pin ?? ""), HttpContext.RequestAborted);
+            TempData["ProfileSaved"] = true;
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
+        public async Task<IActionResult> OnPostPinRemoveAsync()
+        {
+            _savingPin = true;
+            await removePin.ExecuteAsync<UpdateResult>(await ActiveProfileAsync(), default, HttpContext.RequestAborted);
+            TempData["ProfileSaved"] = true;
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
+        private async Task<UpdateProfileParametersV1> ActiveProfileAsync()
+        {
+            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            return new UpdateProfileParametersV1(_authentication!.ProfileId ?? throw new UnauthorizedAccessException("An active profile is required."));
         }
 
         protected override async Task LoadDataAsync()

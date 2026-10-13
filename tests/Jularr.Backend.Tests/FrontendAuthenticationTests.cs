@@ -410,11 +410,11 @@ namespace Jularr.Backend.Tests
             using var foreign = await host.SendAsync(HttpMethod.Post, "/Account/Profiles", Form(html, ("ProfileId", "202")));
             Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
 
-            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = 'selection-guard' WHERE \"Id\" = 303");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = 'selection-guard', \"PinLength\" = 4 WHERE \"Id\" = 303");
             using var locked = await host.SendAsync(HttpMethod.Post, "/Account/Profiles", Form(html, ("ProfileId", "303")));
             Assert.AreEqual(HttpStatusCode.Forbidden, locked.StatusCode);
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"RotationRevision\" = 1"));
-            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = NULL WHERE \"Id\" = 303");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = NULL, \"PinLength\" = NULL WHERE \"Id\" = 303");
 
             using var selected = await host.SendAsync(HttpMethod.Post, "/Account/Profiles?returnUrl=%2FSettings", Form(html, ("ProfileId", "303")));
             Assert.AreEqual(HttpStatusCode.Redirect, selected.StatusCode);

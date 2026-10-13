@@ -49,6 +49,7 @@ namespace Jularr.Backend.Tests
             {
                 ["int8"] = NpgsqlDbType.Bigint,
                 ["int2"] = NpgsqlDbType.Smallint,
+                ["int4"] = NpgsqlDbType.Integer,
                 ["text"] = NpgsqlDbType.Text,
                 ["varchar"] = NpgsqlDbType.Varchar,
                 ["citext"] = NpgsqlDbType.Citext,

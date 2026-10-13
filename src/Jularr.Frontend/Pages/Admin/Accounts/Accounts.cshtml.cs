@@ -14,7 +14,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
 {
     public sealed class AccountsModel(ReadAccountsV1 accounts, ReadAccountV1 account, UpdateAccountV1 update, ReadAccountProfilesV1 profiles,
         AddAccountProfileV1 addProfile, RemoveAccountProfileV1 removeProfile, ReadAccountSessionsV1 sessions, RevokeAccountSessionV1 revokeSession,
-        ReadProfileMediaAccessV1 readMedia, UpdateProfileMediaAccessV1 updateMedia, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadProfileMediaAccessV1 readMedia, UpdateProfileMediaAccessV1 updateMedia, ResetProfilePinV1 resetPin, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<AccountDetailsV1>? _accounts;
         private AccountDetailsV1? _selected;
@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
         private bool _removingProfile;
         private ILookup<long, ProfileMediaAccessV1> _media = Array.Empty<ProfileMediaAccessV1>().ToLookup(item => item.ProfileId);
         private long? _mediaProfileId;
+        private long? _pinProfileId;
         private PageResult<AccountSessionDetailsV1>? _sessions;
         private RevokeAccountSessionParametersV1? _revocation;
 
@@ -98,6 +99,17 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                                 form.Submit("common.save");
                             }, Address(_selected.Id) + "&handler=ProfileMedia&profileId=" + profile.ProfileId.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                                 new UpdateProfileMediaAccessDataV1([.. media.Where(item => item.IsBlocked).Select(item => item.Key)]), _mediaProfileId == profile.ProfileId ? FormError : null));
+                        }
+
+                        // A forgotten PIN is reset here.
+                        if (profile.HasPin)
+                        {
+                            split.Secondary.Add(new Form<ProfilePinParametersV1>(form =>
+                            {
+                                form.Hidden(item => item.ProfileId);
+                                form.Submit("admin.accounts.profilePinReset");
+                            }, Address(_selected.Id) + "&handler=ResetPin", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                                new ProfilePinParametersV1(profile.ProfileId), _pinProfileId == profile.ProfileId ? FormError : null));
                         }
 
                         if (profile.OwnerAccountId == _selected.Id)
@@ -180,6 +192,13 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
         {
             _mediaProfileId = profileId;
             await updateMedia.ExecuteAsync<UpdateResult>(new ProfileMediaAccessParametersV1(profileId), new UpdateProfileMediaAccessDataV1(blockedKeys ?? []), HttpContext.RequestAborted);
+            return LocalRedirect(Address(AccountId));
+        }
+
+        public async Task<IActionResult> OnPostResetPinAsync(long profileId)
+        {
+            _pinProfileId = profileId;
+            await resetPin.ExecuteAsync<UpdateResult>(new ProfilePinParametersV1(profileId), default, HttpContext.RequestAborted);
             return LocalRedirect(Address(AccountId));
         }
 

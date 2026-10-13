@@ -138,7 +138,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void PageResponse_InvalidItem_UsesCanonicalFieldValidation()
         {
-            var result = new PageResult<ReadProfileResultV1>([new ReadProfileResultV1(0, "Name", 1)], new PageRequest());
+            var result = new PageResult<ReadProfileResultV1>([new ReadProfileResultV1(0, "Name", 1, false)], new PageRequest());
 
             Assert.ThrowsExactly<DataValidationException>(result.Validate);
         }
@@ -149,7 +149,7 @@ namespace Jularr.Backend.Tests
         [DataRow(2)]
         public void PageResponse_JsonRoundTrip_PreservesWireContract(int itemCount)
         {
-            var items = Enumerable.Range(1, itemCount).Select(id => new ReadProfileResultV1(id, "Profile " + id, 1)).ToArray();
+            var items = Enumerable.Range(1, itemCount).Select(id => new ReadProfileResultV1(id, "Profile " + id, 1, false)).ToArray();
             var original = new PageResult<ReadProfileResultV1>(items, new PageRequest(2, 2));
             var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
             var json = JsonSerializer.Serialize(original, options);

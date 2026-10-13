@@ -30,7 +30,8 @@ namespace Jularr.Frontend.Pages.Account.Profiles
                 {
                     if (profile.IsLocked)
                     {
-                        content.Add(new Div(new P(new ValueText(profile.DisplayName)), new P(new Text("account.profile.locked"))).Class("profile-locked"));
+                        content.Add(new A(new ValueText(profile.DisplayName), new Icon("key", assets), new Span(new Text("account.profile.locked")).Class("visually-hidden"))
+                            .Attribute("href", Url.Page("/Account/ProfilePin/ProfilePin", new { profileId = profile.Id, returnUrl = _returnUrl })!).Class("button profile-locked"));
                         continue;
                     }
 

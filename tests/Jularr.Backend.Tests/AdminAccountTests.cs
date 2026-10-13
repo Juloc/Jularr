@@ -8,6 +8,8 @@ using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Enums.Sql;
 using Jularr.Backend.Data.Logic.Account;
+using Jularr.Backend.Data;
+using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Account;
 using Jularr.Backend.Service.Core;
@@ -227,6 +229,60 @@ namespace Jularr.Backend.Tests
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);
+        }
+
+        [TestMethod]
+        public async Task ProfilePin_FailuresLockAcrossErrorsAndTheOwnerResets()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await SignInAsync(host);
+            using var selected = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/101");
+            Assert.AreEqual(HttpStatusCode.OK, selected.StatusCode, await selected.Content.ReadAsStringAsync());
+            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/pin", new UpdateProfilePinDataV1("12a4"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/pin", new UpdateProfilePinDataV1("1234"));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.IsFalse(((string)(await host.ScalarAsync("SELECT \"PinHash\" FROM \"Profiles\" WHERE \"Id\" = 101"))!).Contains("1234", StringComparison.Ordinal));
+
+            // The picker announces the length; selection without the PIN stays closed.
+            using var profiles = await host.SendAsync(HttpMethod.Get, "/api/v1/profiles");
+            var listed = (await profiles.Content.ReadFromJsonAsync<PageResult<ProfileSelectionDetailsV1>>())!.Items.Single(profile => profile.Id == 101);
+            Assert.IsTrue(listed.IsLocked);
+            Assert.AreEqual(4, listed.PinLength);
+            using var closed = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/101");
+            Assert.AreEqual(HttpStatusCode.Forbidden, closed.StatusCode);
+            using var admin = await host.SendAsync(HttpMethod.Get, "/Admin/Accounts?AccountId=41");
+            StringAssert.Contains(await admin.Content.ReadAsStringAsync(), "Reset PIN");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Account/Profiles/Pin?profileId=101");
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "data-pin-length=\"4\"");
+
+            // Failures count across error responses; the fifth locks for a minute, even the right PIN.
+            for (var attempt = 1; attempt <= 5; attempt++)
+            {
+                using var wrong = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/profile/101/pin", new VerifyProfilePinDataV1("0000"));
+                Assert.AreEqual(HttpStatusCode.BadRequest, wrong.StatusCode);
+                StringAssert.Contains(await wrong.Content.ReadAsStringAsync(), "invalid_pin");
+                Assert.AreEqual(attempt % 5, await host.ScalarAsync("SELECT \"PinFailedCount\" FROM \"Profiles\" WHERE \"Id\" = 101"));
+            }
+
+            using var locked = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/profile/101/pin", new VerifyProfilePinDataV1("1234"));
+            StringAssert.Contains(await locked.Content.ReadAsStringAsync(), "pin_locked");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinLockedUntil\" = now() - interval '1 second' WHERE \"Id\" = 101");
+            using var unlocked = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/profile/101/pin", new VerifyProfilePinDataV1("1234"));
+            Assert.AreEqual(HttpStatusCode.OK, unlocked.StatusCode, await unlocked.Content.ReadAsStringAsync());
+            Assert.AreEqual(0, await host.ScalarAsync("SELECT \"PinFailedCount\" FROM \"Profiles\" WHERE \"Id\" = 101"));
+            using var settings = await host.SendAsync(HttpMethod.Get, "/Settings");
+            StringAssert.Contains(await settings.Content.ReadAsStringAsync(), "Remove PIN");
+
+            // The profile removes its PIN explicitly; the Owner removes a forgotten one.
+            using var removed = await host.SendAsync(HttpMethod.Delete, "/api/v1/profiles/101/pin");
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"PinLength\" FROM \"Profiles\" WHERE \"Id\" = 101"));
+            using var again = await host.SendAsync(HttpMethod.Put, "/api/v1/profiles/101/pin", new UpdateProfilePinDataV1("567890"));
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+            using var reset = await host.SendAsync(HttpMethod.Delete, "/api/v1/admin/profiles/101/pin");
+            Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode, await reset.Content.ReadAsStringAsync());
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"PinHash\" FROM \"Profiles\" WHERE \"Id\" = 101"));
         }
 
         [TestMethod]

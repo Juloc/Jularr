@@ -114,12 +114,17 @@ CREATE TABLE "Profiles" (
     "DisplayName" text NOT NULL,
     "UiLocaleId" bigint NOT NULL,
     "PinHash" text,
+    "PinLength" integer NULL,
+    "PinFailedCount" integer NOT NULL DEFAULT 0,
+    "PinLockedUntil" timestamptz NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_Profiles" PRIMARY KEY ("Id"),
     CONSTRAINT "FK_Profiles_Accounts" FOREIGN KEY ("OwnerAccountId") REFERENCES "Accounts" ("Id") ON DELETE RESTRICT,
     CONSTRAINT "FK_Profiles_UiLocales" FOREIGN KEY ("UiLocaleId") REFERENCES "UiLocales" ("Id") ON DELETE RESTRICT,
-    CONSTRAINT "CK_Profiles_DisplayName" CHECK (length(btrim("DisplayName")) > 0)
+    CONSTRAINT "CK_Profiles_DisplayName" CHECK (length(btrim("DisplayName")) > 0),
+    CONSTRAINT "CK_Profiles_Pin" CHECK (("PinHash" IS NULL) = ("PinLength" IS NULL) AND ("PinLength" IS NULL OR "PinLength" BETWEEN 3 AND 6)),
+    CONSTRAINT "CK_Profiles_PinFailedCount" CHECK ("PinFailedCount" BETWEEN 0 AND 4)
 );
 CREATE INDEX "IX_Profiles_OwnerAccountId" ON "Profiles" ("OwnerAccountId", "Id");
 

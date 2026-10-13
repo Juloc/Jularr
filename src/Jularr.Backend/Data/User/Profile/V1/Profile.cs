@@ -56,13 +56,25 @@ namespace Jularr.Backend.Data.User.Profile.V1
         }
     }
 
+    public sealed class UpdateProfilePinDataV1 : BaseData
+    {
+        public UpdateProfilePinDataV1(string pin)
+        {
+            Pin = pin;
+        }
+
+        [DataField(typeof(ProfilePinFields), nameof(ProfilePinFields.Pin))]
+        public string Pin { get; }
+    }
+
     public sealed class ReadProfileResultV1 : BaseResponse
     {
-        public ReadProfileResultV1(long id, string displayName, long uiLocaleId)
+        public ReadProfileResultV1(long id, string displayName, long uiLocaleId, bool hasPin)
         {
             Id = id;
             DisplayName = displayName;
             UiLocaleId = uiLocaleId;
+            HasPin = hasPin;
         }
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
@@ -73,5 +85,7 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
         public long UiLocaleId { get; }
+
+        public bool HasPin { get; }
     }
 }
