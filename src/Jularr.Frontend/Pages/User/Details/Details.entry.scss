@@ -1,1 +1,25 @@
 @use "../../../Framework/Components/MediaHero";
+
+.details-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 16px 24px;
+    margin-bottom: 24px;
+
+    .ui-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 12px;
+    }
+
+    .ui-field { margin: 0; }
+}
+
+.details-paging {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 24px;
+}

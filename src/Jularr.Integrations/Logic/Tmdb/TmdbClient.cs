@@ -9,9 +9,14 @@ namespace Jularr.Integrations.Logic.Tmdb
     // TMDB API v3 reads; the base address is configured by the host.
     internal sealed class TmdbClient(HttpClient httpClient)
     {
-        public async Task<IReadOnlyList<TmdbSearchResult>> SearchAsync(TmdbConnection connection, TmdbMediaKind kind, string query, int? year, CancellationToken ct)
+        public async Task<IReadOnlyList<TmdbSearchResult>> SearchAsync(TmdbConnection connection, TmdbMediaKind kind, string query, int? year, CancellationToken ct, int page = 1)
         {
-            var parameters = new List<KeyValuePair<string, string>> { new("query", query), new("include_adult", "false") };
+            var parameters = new List<KeyValuePair<string, string>>
+            {
+                new("query", query),
+                new("include_adult", "false"),
+                new("page", page.ToString(CultureInfo.InvariantCulture))
+            };
             if (year is { } value)
             {
                 parameters.Add(new(kind == TmdbMediaKind.Movie ? "year" : "first_air_date_year", value.ToString(CultureInfo.InvariantCulture)));
@@ -30,16 +35,26 @@ namespace Jularr.Integrations.Logic.Tmdb
             {
                 TmdbFeed.Trending => "trending/" + type + "/week",
                 TmdbFeed.Top => type + "/top_rated",
-                TmdbFeed.New => kind == TmdbMediaKind.Movie ? "movie/now_playing" : "tv/on_the_air",
+                TmdbFeed.New => "discover/" + type,
                 TmdbFeed.Upcoming when kind == TmdbMediaKind.Movie => "movie/upcoming",
                 _ => throw new ArgumentOutOfRangeException(nameof(feed))
             };
 
             // Regional lists only use a real region.
             var parameters = new List<KeyValuePair<string, string>> { new("page", Math.Clamp(page, 1, 500).ToString(CultureInfo.InvariantCulture)) };
-            if (region is { Length: 2 } && feed is TmdbFeed.New or TmdbFeed.Upcoming)
+            if (region is { Length: 2 } && feed == TmdbFeed.Upcoming)
             {
                 parameters.Add(new("region", region));
+            }
+
+            // New means first release.
+            if (feed == TmdbFeed.New)
+            {
+                var dateField = kind == TmdbMediaKind.Movie ? "primary_release_date" : "first_air_date";
+                parameters.Add(new("sort_by", dateField + ".desc"));
+                parameters.Add(new(dateField + ".lte", DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                parameters.Add(new("include_adult", "false"));
+                if (kind == TmdbMediaKind.Series) parameters.Add(new("include_null_first_air_dates", "false"));
             }
 
             using var document = await ReadAsync(connection, path, parameters, ct);

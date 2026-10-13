@@ -48,12 +48,24 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             page.Asset("Pages/User/Discover/Index.entry.scss");
+            page.Asset("Pages/User/Discover/Index.entry.ts");
+
+            // One server-rendered result region.
+            var body = new Page();
+            DefineContent(body);
+            body.Content.Add(new P().Class("discover-feedback").Attribute("role", "status"));
+            page.Content.Add(new Div([.. body.Content]).Attribute("id", "discover-results")
+                .Attribute("data-load-error", texts["discover.loadFailed"]).Attribute("data-provider-unavailable", _providerUnavailable ? "true" : "false"));
+        }
+
+        private void DefineContent(Page page)
+        {
             var selected = Types.FirstOrDefault(type => type.Slug == TypeSlug);
 
             // Media type, then browse view; filters stay separate.
-            page.Content.Add(new NavigationTabs([new NavigationTab("discover.all", "/", selected.Slug is null), .. Types.Select(type =>
-                new NavigationTab("discover.type." + type.Slug, "/?type=" + type.Slug, type.Slug == selected.Slug))], "discover.mediaTypes", "media"));
-            if (selected.Slug is not null && Query is null)
+            page.Content.Add(new NavigationTabs([new NavigationTab("discover.all", Address(null, null, 1), selected.Slug is null), .. Types.Select(type =>
+                new NavigationTab("discover.type." + type.Slug, Address(type.Slug, null, 1), type.Slug == selected.Slug))], "discover.mediaTypes", "media"));
+            if (selected.Slug is not null && string.IsNullOrWhiteSpace(Query))
             {
                 page.Content.Add(new NavigationTabs([new NavigationTab("discover.overview", "/?type=" + selected.Slug, View is null), .. selected.Feeds.Select(feed =>
                     new NavigationTab("discover.feed." + feed, Address(selected.Slug, feed, 1), View == feed))], "discover.browseViews", "browse"));
@@ -69,15 +81,20 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 if (results.Count == 0)
                 {
-                    page.Content.Add(new P(new Text(Query is null ? "discover.empty" : "discover.noResults")).Attribute("role", "status"));
+                    page.Content.Add(new P(new Text(string.IsNullOrWhiteSpace(Query) ? "discover.empty" : "discover.noResults")).Attribute("role", "status"));
+                    if (PageNumber > 1) page.Content.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected.Slug, View, PageNumber - 1)));
                     return;
                 }
 
                 page.Content.Add(new Div([.. results.Select(Card)]).Class("media-grid"));
-                if (Query is null && View is { } view && results.Count >= 20)
+                var paging = new List<IUiComponent>();
+                if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected.Slug, View, PageNumber - 1)));
+                if (!_providerUnavailable && PageNumber < 500 && results.Count >= 20)
                 {
-                    page.Content.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(selected.Slug!, view, PageNumber + 1)));
+                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("href", Address(selected.Slug, View, PageNumber + 1)));
                 }
+
+                page.Content.Add(new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]));
 
                 return;
             }
@@ -90,7 +107,8 @@ namespace Jularr.Frontend.Pages.User.Discover
                     actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured)));
             }
 
-            page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Where(item => item.MediaAssetTypeId != MediaAssetType.Ebook || texts.Capabilities?.CanRead is true).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
+            page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Where(item => (selected.Slug is null || item.MediaTypeId == selected.Type)
+                && (item.MediaAssetTypeId != MediaAssetType.Ebook || texts.Capabilities?.CanRead is true)).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
                 (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture)))]));
             page.Content.Add(new MediaShelf("discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
@@ -117,6 +135,15 @@ namespace Jularr.Frontend.Pages.User.Discover
             return Page();
         }
 
+        public async Task<IActionResult> OnGetResultsAsync()
+        {
+            if (texts.Capabilities?.CanReadMedia is not true) return Forbid();
+
+            await LoadDataAsync();
+            PreparePage();
+            return Partial("_UiComponent", Definition.Content[0]);
+        }
+
         protected override async Task LoadDataAsync()
         {
             if (texts.Capabilities?.CanReadMedia is not true)
@@ -129,13 +156,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 if (!string.IsNullOrWhiteSpace(Query))
                 {
-                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query.Trim(), selected.Slug is null ? null : selected.Type), HttpContext.RequestAborted);
+                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query.Trim(), selected.Slug is null ? null : selected.Type, PageNumber), HttpContext.RequestAborted);
                     return;
                 }
 
                 if (selected.Slug is not null && View is { } view && selected.Feeds.Contains(view))
                 {
-                    _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.Type, view, Math.Clamp(PageNumber, 1, 500)), HttpContext.RequestAborted);
+                    _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.Type, view, PageNumber), HttpContext.RequestAborted);
                     return;
                 }
             }
@@ -164,7 +191,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     catch (ServiceUnavailableException)
                     {
                         _providerUnavailable = true;
-                        return;
+                        // Other shelves remain useful.
                     }
                 }
             }
@@ -189,7 +216,14 @@ namespace Jularr.Frontend.Pages.User.Discover
             ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
             : "/Discover/" + Types.First(type => type.Type == item.MediaTypeId).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture);
 
-        private static string Address(string slug, DiscoverFeedType feed, int page) =>
-            "/?type=" + slug + "&view=" + feed + (page > 1 ? "&p=" + page.ToString(CultureInfo.InvariantCulture) : "");
+        private string Address(string? slug, DiscoverFeedType? feed, int page)
+        {
+            var values = new List<string>();
+            if (slug is not null) values.Add("type=" + Uri.EscapeDataString(slug));
+            if (feed is not null && string.IsNullOrWhiteSpace(Query)) values.Add("view=" + feed);
+            if (!string.IsNullOrWhiteSpace(Query)) values.Add("q=" + Uri.EscapeDataString(Query.Trim()));
+            if (page > 1) values.Add("p=" + page.ToString(CultureInfo.InvariantCulture));
+            return values.Count == 0 ? "/" : "/?" + string.Join('&', values);
+        }
     }
 }

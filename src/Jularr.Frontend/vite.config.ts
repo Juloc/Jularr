@@ -17,14 +17,15 @@ function findEntries(folder: string): Record<string, string> {
             }
         } else if (/\.entry\.(?:ts|scss)$/.test(entry.name)) {
             const relativeName = relative(root, full).split(sep).join("/");
-            result[relativeName.replace(/\.entry\.(?:ts|scss)$/, "")] = full;
+            // Keep CSS/TS pairs distinct.
+            result[relativeName] = full;
         }
     }
     return result;
 }
 
 const input = findEntries(root);
-if (!("Assets/Shared/shell" in input) || !("Modules/Appearance/theme" in input)) {
+if (!("Assets/Shared/shell.entry.scss" in input) || !("Modules/Appearance/theme.entry.ts" in input)) {
     throw new Error("Shared shell CSS and appearance script entries are required.");
 }
 

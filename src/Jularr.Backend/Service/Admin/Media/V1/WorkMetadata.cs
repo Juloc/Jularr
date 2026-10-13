@@ -77,11 +77,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<IReadOnlyList<TmdbSearchResult>> SearchAsync(TmdbConnection connection, MediaType mediaType, string query, int? year, CancellationToken ct)
+        public async Task<IReadOnlyList<TmdbSearchResult>> SearchAsync(TmdbConnection connection, MediaType mediaType, string query, int? year, CancellationToken ct, int page = 1)
         {
             try
             {
-                return await _tmdb.SearchAsync(connection, Kind(mediaType), query, year, ct);
+                return await _tmdb.SearchAsync(connection, Kind(mediaType), query, year, ct, page);
             }
             catch (TmdbException exception)
             {
@@ -93,7 +93,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             // Ranked lists change slowly; a short shared cache spares the provider.
             var region = connection.Language.Split('-') is [_, { Length: 2 } country] ? country.ToUpperInvariant() : null;
-            var key = $"metadata.feed.{mediaType}.{feed}.{page}.{connection.Language}";
+            var key = $"metadata.feed.{mediaType}.{feed}.{page}.{connection.Language}.{DateTime.UtcNow:yyyy-MM-dd}";
             if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
             {
                 return cached!;

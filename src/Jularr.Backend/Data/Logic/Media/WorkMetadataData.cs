@@ -127,7 +127,7 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class LibraryFilterData : BaseData
     {
-        public LibraryFilterData(MediaType? mediaTypeId, string? query, LibrarySortType librarySortTypeId)
+        public LibraryFilterData(MediaType? mediaTypeId, string? query, LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
         {
             MediaTypeId = mediaTypeId;
             Query = query;
