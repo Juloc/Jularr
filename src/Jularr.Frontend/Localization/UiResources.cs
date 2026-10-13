@@ -112,7 +112,7 @@ namespace Jularr.Frontend.Localization
             new("request.rule.override", "Override the rule's values"),
             new("request.rule.inheritDefault", "Default ({0})"),
             new("account.profile.create", "Create profile"),
-            new("profile.delete.warning", "Deleting removes this profile's progress, lists and requests. This cannot be undone."),
+            new("profile.delete.warning", "Deleting removes this profile's progress and lists and cancels its open requests. This cannot be undone."),
             new("profile.delete.confirm", "Delete permanently"),
             new("profile.pin.remove", "Remove PIN"),
             new("admin.accounts.profilePinReset", "Reset PIN"),

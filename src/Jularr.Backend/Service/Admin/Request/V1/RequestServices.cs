@@ -28,7 +28,7 @@ namespace Jularr.Backend.Service.Admin.Request.V1
                     request."WorkId",
                     work."CanonicalTitle",
                     work."MediaTypeId",
-                    profile."DisplayName" AS "RequesterName",
+                    COALESCE(profile."DisplayName", account."DisplayName") AS "RequesterName",
                     locale."Name" AS "RequestedLanguage",
                     request."AcquisitionRequestStatusTypeId",
                     request."Version",
@@ -38,6 +38,8 @@ namespace Jularr.Backend.Service.Admin.Request.V1
                 INNER JOIN
                     "Works" AS work ON work."Id" = request."WorkId"
                 INNER JOIN
+                    "Accounts" AS account ON account."Id" = request."RequestedByAccountId"
+                LEFT JOIN
                     "Profiles" AS profile ON profile."Id" = request."RequestedByProfileId"
                 INNER JOIN
                     "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
