@@ -22,7 +22,7 @@ public sealed class OfflinePackageContractTests
     }
 
     [TestMethod]
-    public void GameTargetIsFirstClassAndDoesNotRequireMediaCoreWork()
+    public void PreCutoverGameTargetRemainsWireCompatibleUntilWorkCutover()
     {
         var target = new ClientOfflinePackageTarget(
             ClientApiOfflinePackageContract.GameTarget,
