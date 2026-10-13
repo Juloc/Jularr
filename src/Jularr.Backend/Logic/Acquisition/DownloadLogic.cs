@@ -339,6 +339,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     "ProcessedCount" = 0,
                     "ErrorKey" = NULL,
                     "AttentionKey" = NULL,
+                    "AttentionUrl" = NULL,
+                    "SourceLinkUrl" = NULL,
                     "DismissedAt" = NULL,
                     "StartedAt" = now(),
                     "FinishedAt" = NULL
@@ -458,6 +460,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."StartedAt",
                     release."QualityKey",
                     release."SourceUrl",
+                    operation."SourceLinkUrl",
                     (
                         SELECT
                             fact."Value"
@@ -479,7 +482,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     operation."OperationTypeId" = 2
                     AND operation."OperationStatusTypeId" IN (1, 2)
                     AND operation."AcquisitionConnectionId" IS NOT NULL
-                    AND operation."AttentionKey" IS DISTINCT FROM 'source_manual_link'
+                    AND operation."AttentionUrl" IS NULL
                 ORDER BY
                     operation."AcquisitionConnectionId",
                     operation."Id";
@@ -537,7 +540,9 @@ namespace Jularr.Backend.Logic.Acquisition
                         "OperationStatusTypeId" = 4,
                         "ErrorKey" = @ReasonKey,
                         "FinishedAt" = now(),
-                        "AttentionKey" = NULL
+                        "AttentionKey" = NULL,
+                        "AttentionUrl" = NULL,
+                        "SourceLinkUrl" = NULL
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2
@@ -574,19 +579,25 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task SetDownloadAttentionAsync(this LogicContext ctx, DownloadAttentionData data, CancellationToken ct)
         {
-            // A waiting import tells the Owner why; unchanged reasons are not rewritten.
+            // A waiting import or source tells the Owner why; unchanged reasons are not rewritten.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
                     "Operations" AS operation
                 SET
-                    "AttentionKey" = @AttentionKey
+                    "AttentionKey" = @AttentionKey,
+                    "AttentionUrl" = @AttentionUrl,
+                    "SourceLinkUrl" = NULL
                 WHERE
                     operation."Id" = @OperationId
                     AND operation."OperationTypeId" = 2
                     AND operation."OperationStatusTypeId" IN (1, 2)
-                    AND operation."AttentionKey" IS DISTINCT FROM @AttentionKey;
+                    AND (
+                        operation."AttentionKey" IS DISTINCT FROM @AttentionKey
+                        OR operation."AttentionUrl" IS DISTINCT FROM @AttentionUrl
+                        OR operation."SourceLinkUrl" IS NOT NULL
+                    );
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -619,89 +630,51 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        public static async Task SetDownloadSourceLinkAsync(this LogicContext ctx, DownloadSourceLinkData data, CancellationToken ct)
+        public static async Task SetSourceLinkAsync(this LogicContext ctx, SourceLinkData data, CancellationToken ct)
         {
-            // Only a download that waits for a person takes a file link; the monitor continues.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                WITH waiting AS (
-                    UPDATE
-                        "Operations" AS operation
-                    SET
-                        "AttentionKey" = NULL
-                    WHERE
-                        operation."Id" = @OperationId
-                        AND operation."OperationTypeId" = 2
-                        AND operation."OperationStatusTypeId" IN (1, 2)
-                        AND operation."AttentionKey" IN ('source_manual_link', 'source_gate')
-                    RETURNING
-                        operation."AcquisitionReleaseId"
-                )
-                UPDATE
-                    "AcquisitionReleases" AS release
-                SET
-                    "SourceUrl" = @SourceUrl,
-                    "UpdatedAt" = now()
-                FROM
-                    waiting
-                WHERE
-                    release."Id" = waiting."AcquisitionReleaseId";
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            // Files are fetched over HTTPS only.
+            if (!Uri.TryCreate(data.SourceLinkUrl, UriKind.Absolute, out var link) || link.Scheme != Uri.UriSchemeHttps)
             {
-                throw new DataValidationException(nameof(data.OperationId), "invalid_transition");
+                throw new DataValidationException(nameof(data.SourceLinkUrl), "invalid_url");
             }
-        }
 
-        public static async Task SetRequestSourceLinkAsync(this LogicContext ctx, RequestSourceLinkData data, CancellationToken ct)
-        {
-            // A user confirms only a download of their own request, and only while instance and account allow it.
+            // Only a download that waits for a person takes a link; a user only for their own request while instance and account allow it.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH waiting AS (
-                    UPDATE
-                        "Operations" AS operation
-                    SET
-                        "AttentionKey" = NULL
-                    FROM
-                        "AcquisitionReleases" AS release,
-                        "RequestTargets" AS target,
-                        "AcquisitionRequests" AS request,
-                        "InstanceSettings" AS settings,
-                        "Accounts" AS account
-                    WHERE
-                        operation."Id" = @OperationId
-                        AND operation."OperationTypeId" = 2
-                        AND operation."OperationStatusTypeId" IN (1, 2)
-                        AND operation."AttentionKey" = 'source_manual_link'
-                        AND release."Id" = operation."AcquisitionReleaseId"
-                        AND target."WantedItemId" = release."WantedItemId"
-                        AND target."AcquisitionRequestId" = @AcquisitionRequestId
-                        AND request."Id" = target."AcquisitionRequestId"
-                        AND request."RequestedByProfileId" = @ProfileId
-                        AND settings."UsersConfirmSources"
-                        AND account."Id" = @AccountId
-                        AND account."MayConfirmSources"
-                    RETURNING
-                        operation."AcquisitionReleaseId"
-                )
                 UPDATE
-                    "AcquisitionReleases" AS release
+                    "Operations" AS operation
                 SET
-                    "SourceUrl" = @SourceUrl,
-                    "UpdatedAt" = now()
-                FROM
-                    waiting
+                    "AttentionKey" = NULL,
+                    "AttentionUrl" = NULL,
+                    "SourceLinkUrl" = @SourceLinkUrl
                 WHERE
-                    release."Id" = waiting."AcquisitionReleaseId";
+                    operation."Id" = @OperationId
+                    AND operation."OperationTypeId" = 2
+                    AND operation."OperationStatusTypeId" IN (1, 2)
+                    AND operation."AttentionUrl" IS NOT NULL
+                    AND (
+                        @AcquisitionRequestId::bigint IS NULL
+                        OR EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "AcquisitionReleases" AS release
+                                JOIN "RequestTargets" AS target ON target."WantedItemId" = release."WantedItemId"
+                                JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
+                                JOIN "InstanceSettings" AS settings ON settings."UsersConfirmSources"
+                                JOIN "Accounts" AS account ON account."Id" = @AccountId AND account."MayConfirmSources"
+                            WHERE
+                                release."Id" = operation."AcquisitionReleaseId"
+                                AND request."Id" = @AcquisitionRequestId
+                                AND request."RequestedByProfileId" = @ProfileId
+                        )
+                    );
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
-                throw new KeyNotFoundException("No waiting download of this request may be confirmed.");
+                throw data.AcquisitionRequestId is null ? new DataValidationException(nameof(data.OperationId), "invalid_transition") : new KeyNotFoundException("No waiting download may be confirmed.");
             }
         }
 
@@ -733,7 +706,9 @@ namespace Jularr.Backend.Logic.Acquisition
                         "OperationStatusTypeId" = 3,
                         "ProgressPercent" = 100,
                         "FinishedAt" = now(),
-                        "AttentionKey" = NULL
+                        "AttentionKey" = NULL,
+                        "AttentionUrl" = NULL,
+                        "SourceLinkUrl" = NULL
                     WHERE
                         operation."Id" = @OperationId
                         AND operation."OperationTypeId" = 2

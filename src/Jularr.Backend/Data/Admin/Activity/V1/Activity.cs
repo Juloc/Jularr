@@ -102,18 +102,18 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
         public DownloadStateType? DownloadStateTypeId { get; }
 
         // The source page where a person passes the check and copies the file link.
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), false)]
+        [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl), false)]
         public string? ManualUrl { get; }
     }
 
     public sealed class SaveActivitySourceLinkDataV1 : BaseData
     {
-        public SaveActivitySourceLinkDataV1(string sourceUrl)
+        public SaveActivitySourceLinkDataV1(string sourceLinkUrl)
         {
-            SourceUrl = sourceUrl;
+            SourceLinkUrl = sourceLinkUrl;
         }
 
-        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SourceUrl), true)]
-        public string SourceUrl { get; }
+        [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl), true)]
+        public string SourceLinkUrl { get; }
     }
 }

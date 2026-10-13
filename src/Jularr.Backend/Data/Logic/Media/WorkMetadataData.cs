@@ -9,7 +9,7 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class WorkMetadataData : BaseData
     {
         public WorkMetadataData(MediaType mediaTypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,
-            string units, string facts, string providerKey = "tmdb")
+            string units, string facts, string providerKey)
         {
             ProviderKey = providerKey;
             Facts = facts;

@@ -85,6 +85,8 @@ CREATE TABLE "Operations" (
     "ProcessedCount" bigint NOT NULL DEFAULT 0 CHECK ("ProcessedCount" >= 0),
     "ErrorKey" varchar(64) NULL,
     "AttentionKey" varchar(64) NULL,
+    "AttentionUrl" varchar(2048) NULL CHECK ("AttentionUrl" ~ '^https://'),
+    "SourceLinkUrl" varchar(2048) NULL CHECK ("SourceLinkUrl" ~ '^https://'),
     "DismissedAt" timestamptz NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "StartedAt" timestamptz NULL,
@@ -94,6 +96,8 @@ CREATE TABLE "Operations" (
     CHECK (("OperationStatusTypeId" IN (3, 4)) = ("FinishedAt" IS NOT NULL)),
     CHECK ("OperationStatusTypeId" = 4 OR "ErrorKey" IS NULL),
     CHECK ("OperationStatusTypeId" IN (1, 2) OR "AttentionKey" IS NULL),
+    CHECK ("AttentionUrl" IS NULL OR "AttentionKey" IS NOT NULL),
+    CHECK ("OperationStatusTypeId" IN (1, 2) OR "SourceLinkUrl" IS NULL),
     CHECK ("DismissedAt" IS NULL OR "OperationStatusTypeId" = 4),
     CHECK ("OperationTypeId" = 2 OR ("SizeBytes" IS NULL AND "DownloadStateTypeId" IS NULL))
 );

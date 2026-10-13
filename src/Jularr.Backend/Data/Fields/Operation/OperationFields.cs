@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Field;
 using Jularr.Backend.Data.Enums.Operation;
 using NpgsqlTypes;
 
@@ -11,6 +12,8 @@ namespace Jularr.Backend.Data.Fields.Operation
         public static readonly LongField ProcessedCount = new() { Minimum = 0 };
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly StringField AttentionKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
+        public static readonly StringField AttentionUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
+        public static readonly StringField SourceLinkUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
         public static readonly DateTimeField DismissedAt = new() { Required = false };
         public static readonly BoolField IsFinished = new();
         public static readonly EnumField ActivityTabTypeId = new(typeof(ActivityTabType));
