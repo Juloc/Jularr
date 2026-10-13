@@ -42,6 +42,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 - `InstanceModules.SourceAssistance` toggles the manual source-link workflow without disabling the `Acquisition` module. The source-link services require both module gates; Activity/Requests hide manual links when disabled. Account/profile permissions and `UsersConfirmSources` remain required for ordinary users.
 - `SourceConfirmation` is a native disclosure-based two-step confirmation UI shared by Admin Activity and User Requests, with server-rendered forms and antiforgery. External checks are completed in the user's own browser; Jularr does not bypass source challenges.
 - `DirectDownload` validates manual public-file URLs and redirects. Anna's Archive connects through `PublicNetworkConnection`, which validates every resolved IP and connects to that specific address to prevent DNS rebinding. This typed client does not use OS proxy settings; other providers retain their previous HTTP transport.
+- Mock challenge test configuration: [SourceTests.cs](../tests/Jularr.Backend.Tests/SourceTests.cs), `SimulatedGates_*`, `TestGateResolver` and `FakeSources`. Adjust its local `enabled`, allowed `.test` hosts, expected token, and simulated challenge/countdown flags. Run with `dotnet test Jularr.sln --filter FullyQualifiedName~SimulatedGates`. Live DI remains `NoSourceGateResolver`; no test resolver or fake token may be wired to production.
 
 ## Contracts and persistence
 
