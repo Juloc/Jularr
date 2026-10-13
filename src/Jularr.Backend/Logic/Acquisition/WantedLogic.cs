@@ -1,6 +1,7 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Acquisition
@@ -39,6 +40,23 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 throw new InvalidOperationException("The request target was not recorded.");
             }
+        }
+
+        public static async Task EnsureWantedItemAsync(this LogicContext ctx, WorkIdData data, CancellationToken ct)
+        {
+            // A taken-over title becomes a target once.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO "WantedItems" (
+                    "WorkId"
+                ) VALUES (
+                    @Id
+                )
+                ON CONFLICT ("WorkId") DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static async Task UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)

@@ -136,8 +136,8 @@ catalog. Wanted series are searched per season: a fully aired, empty season as a
 pack, otherwise episode by episode, several downloads in parallel; requests complete
 once every aired regular episode exists. Books and Light Novels come through Open Library and
 direct sources; Manga through AniList with volumes as units on the same unit pass as series
-episodes; Music through MusicBrainz with the album as the Work and its tracks as units. The other media types, profile editing,
-Prowlarr/Sonarr/Radarr one-time import follow. The
+episodes; Music through MusicBrainz with the album as the Work and its tracks as units. Prowlarr, Sonarr and Radarr can be taken over once (indexers, clients, missing
+titles). Games and the remaining profile editing follow. The
 remaining modules are not advertised as available. Tracking must be rebuilt from
 the desired progress/resume/history behavior, not copied from the buggy legacy
 implementation. Library's physical scanning/import integration still needs its

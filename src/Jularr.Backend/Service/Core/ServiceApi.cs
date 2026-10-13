@@ -25,6 +25,7 @@ using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Logic.Usenet;
 using Jularr.Backend.Service.Core.Localization;
@@ -201,6 +202,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true);
             AddClient<AniListClient>(services, 15, 4, agent: true);
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true);
+            AddClient<ServarrApiClient>(services, 60, 32);
             AddClient<PlexServerClient>(services, 20, 16);
             AddClient<NewznabClient>(services, 30, 16);
             AddClient<TmdbClient>(services, 15, 4, baseAddress: new Uri("https://api.themoviedb.org/3/"));

@@ -228,4 +228,16 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(Fields.Provider.ProviderFields), nameof(Fields.Provider.ProviderFields.IsEnabled))]
         public bool IsEnabled { get; }
     }
+
+    // The address of a configured connection; a takeover skips what already exists.
+    internal sealed class AcquisitionConnectionUrlData : BaseData
+    {
+        public AcquisitionConnectionUrlData(string baseUrl)
+        {
+            BaseUrl = baseUrl;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
+        public string BaseUrl { get; }
+    }
 }

@@ -353,5 +353,6 @@ Downloader wie SABnzbd verwenden dieselbe Pipeline. Der native Downloader nutzt
 News-Server (`nntp://` oder `nntps://`, Login, Verbindungen) unter `/Admin/Acquisition`;
 Reparatur und Entpacken übernehmen `Usenet:Par2Path` (par2) und `Usenet:SevenZipPath`
 (7-Zip). Ohne diese Programme warten beschädigte oder gepackte Downloads mit Hinweis. Sonarr/Radarr/Prowlarr dienen
-nur einer ausdrücklich gewählten einmaligen Übernahme, nicht dem laufenden Betrieb.
+nur einer ausdrücklich gewählten einmaligen Übernahme (`/Admin/Acquisition/Takeover`:
+Vorschau, dann Übernahme von Indexern, SABnzbd und fehlenden Titeln), nicht dem laufenden Betrieb.
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.
