@@ -5,6 +5,7 @@ using Jularr.Frontend.Localization;
 using Jularr.Frontend.Pages.Shared;
 using Jularr.Workers;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.StaticFiles;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Globalization;
@@ -31,8 +32,12 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+// EmulatorJS cores are .data files.
+var contentTypes = new FileExtensionContentTypeProvider();
+contentTypes.Mappings[".data"] = "application/octet-stream";
 app.UseStaticFiles(new StaticFileOptions
 {
+    ContentTypeProvider = contentTypes,
     OnPrepareResponse = context =>
     {
         // Content fingerprints make these public assets immutable across releases.

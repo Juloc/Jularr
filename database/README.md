@@ -77,6 +77,9 @@ Metadata policy, image cache and monitoring are not installed.
 and exact Work/unit target; completion is explicit and sticky, and a completed item
 restarts at zero. PlaybackSessions record active and ended playback with a public
 UUID; ended sessions are the playback history. Instance.sql seeds the Playback module.
+GameSaves keep a profile's save memory and one save state per game file, opaque to the
+server; a game's play time is its MediaProgress of type Game. Instance.sql seeds the
+Emulation module for them.
 
 `Library.sql` follows Media, Acquisition and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative

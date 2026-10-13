@@ -2,3 +2,4 @@
 /wwwroot/build/
 /Assets/Generated/
 *.tsbuildinfo
+/wwwroot/emulator/

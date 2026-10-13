@@ -28,6 +28,24 @@ CREATE TABLE "MediaProgress" (
 CREATE UNIQUE INDEX "UX_MediaProgress_Target" ON "MediaProgress" ("ProfileId", "WorkId", "WorkUnitId") NULLS NOT DISTINCT;
 CREATE INDEX "IX_MediaProgress_Recent" ON "MediaProgress" ("ProfileId", "UpdatedAt" DESC, "Id" DESC);
 
+-- A profile's saves of a game file, opaque to the server: the console's own save memory and one save state.
+-- Play time is the game's MediaProgress (type Game, PositionMs played).
+CREATE TABLE "GameSaveTypes" (
+    "Id" smallint PRIMARY KEY,
+    "Key" varchar(32) NOT NULL UNIQUE
+);
+INSERT INTO "GameSaveTypes" ("Id", "Key") VALUES (1, 'Memory'), (2, 'State');
+
+CREATE TABLE "GameSaves" (
+    "ProfileId" bigint NOT NULL REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
+    "MediaAssetId" bigint NOT NULL REFERENCES "MediaAssets" ("Id") ON DELETE CASCADE,
+    "GameSaveTypeId" smallint NOT NULL REFERENCES "GameSaveTypes" ("Id"),
+    "Data" bytea NOT NULL CHECK (octet_length("Data") BETWEEN 1 AND 16777216),
+    "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY ("ProfileId", "MediaAssetId", "GameSaveTypeId")
+);
+CREATE INDEX "IX_GameSaves_MediaAsset" ON "GameSaves" ("MediaAssetId");
+
 -- Active and ended playback; ended sessions are the playback history.
 CREATE TABLE "PlaybackModeTypes" (
     "Id" smallint PRIMARY KEY,

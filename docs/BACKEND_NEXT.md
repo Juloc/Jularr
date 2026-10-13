@@ -51,6 +51,12 @@ and commit together. No migration, active-database installation or extra server.
   Integrations, not additional Backend projects or canonical media systems.
 - Conversions are delivered as HLS; the owner approved `hls.js` (light build, loaded
   only for conversions) for browsers without native HLS.
+- Retro games play in EmulatorJS 4.2.3 (GPL-3.0), approved by the owner on
+  13 October 2026 with all its cores (Jularr is non-commercial, so non-commercial
+  core licenses such as snes9x apply), self-hosted and pinned by npm integrity in
+  [emulator-assets.mjs](../src/Jularr.Frontend/Tools/emulator-assets.mjs). Only the
+  browser files of the loader and 13 cores are kept; the npm packages themselves
+  would pull every core and the EmulatorJS server tooling.
 - Owner decisions of 12 October 2026: the Owner sets per NAS connection whether
   Wake-on-LAN is Owner-only or automatic when a profile opens media. Games use the
   same unified Arr+ search, planner, download and import as every media type; only

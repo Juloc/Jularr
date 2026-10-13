@@ -23,7 +23,7 @@ audit before integration. Each package lists its acceptance; tests stay focused.
 | P2 | Email verification (SMTP), TOTP/WebAuthn/passkeys (library needs approval), branding | |
 
 Done: K1a, K1b, K2, K3 (without backup/restore), K4a (platform in details and per file), K4b (ROM
-identification through libretro DATs), K7 (profile PIN with lockout and Owner reset; up to ten own profiles, deletion with their requests), request rules (limits, approval, allowed media, offered qualities, per-account overrides), K6 (comic reader for CBZ/CBR/CB7 in the shared reading cache), K8 (audio and subtitle choice, mini player, Continue Watching/Listening/Reading shelves and the Continue Reading bar). ScreenScraper waits for an owner developer account.
+identification through libretro DATs), K4c (retro play in self-hosted EmulatorJS with saves and play time per profile; offline play follows with K12), K7 (profile PIN with lockout and Owner reset; up to ten own profiles, deletion with their requests), request rules (limits, approval, allowed media, offered qualities, per-account overrides), K6 (comic reader for CBZ/CBR/CB7 in the shared reading cache), K8 (audio and subtitle choice, mini player, Continue Watching/Listening/Reading shelves and the Continue Reading bar). ScreenScraper waits for an owner developer account.
 
 Risks: K1 touches most reads; the community anime mapping and EmulatorJS cores need a
 license check before use; backup needs `pg_dump` in the container; offline video is

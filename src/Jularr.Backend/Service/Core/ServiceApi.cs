@@ -317,7 +317,9 @@ namespace Jularr.Backend.Service.Core
                 // Bind the shared HTTP adapter.
                 var factory = typeof(ServiceApi).GetMethod(noData ? nameof(CreateParameterHandler) : nameof(CreateBodyHandler), BindingFlags.Static | BindingFlags.NonPublic)!;
                 var handler = (Delegate)factory.MakeGenericMethod([type, .. arguments]).Invoke(null, null)!;
-                var route = endpoints.MapMethods(endpoint.Route, [method], handler)
+                // Files also answer HEAD, so clients can check them against their own cache.
+                string[] methods = method == "GET" && typeof(IFileOutput).IsAssignableFrom(definition.DefaultResultType) ? ["GET", "HEAD"] : [method];
+                var route = endpoints.MapMethods(endpoint.Route, methods, handler)
                     .WithName(type.FullName!)
                     .WithMetadata(endpoint)
                     .Produces(StatusCodes.Status200OK, definition.DefaultResultType)

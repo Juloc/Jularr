@@ -14,6 +14,8 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Data.User.Discover.V1;
+using Jularr.Backend.Data.User.Game.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Logic.Acquisition;
@@ -221,6 +223,107 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Game_PlaysInTheBrowserWithSavesAndPlayTimeOfTheProfile()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var rom = new byte[1024];
+            Encoding.ASCII.GetBytes("example quest cartridge").CopyTo(rom, 0);
+            var libretro = new FakeLibretro($$"""
+                clrmamepro (
+                	name "Nintendo - Super Nintendo Entertainment System"
+                	version "2026.10.07"
+                )
+
+                game (
+                	name "Example Quest, The (USA)"
+                	rom ( name "Example Quest, The (USA).sfc" size 1024 crc 00000000 md5 00 sha1 {{Convert.ToHexString(SHA1.HashData(rom))}} )
+                )
+                """);
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<LibretroClient>().ConfigurePrimaryHttpMessageHandler(() => libretro));
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var retro = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Games", "Retro");
+            Directory.CreateDirectory(retro);
+            File.WriteAllBytes(Path.Combine(retro, "eq.sfc"), rom);
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Games", MediaType.Game);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (7, 'The Example Quest') RETURNING "Id")
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") SELECT "Id", 'The Example Quest', TRUE FROM work
+                """);
+            await LibraryTests.ScanAsync(host, rootId);
+            var asset = (long)(await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%eq.sfc'"))!;
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"MediaAssets\" WHERE \"Id\" = " + asset))!;
+            var api = "/api/v1/games/assets/" + asset;
+
+            // The SNES platform plays in snes9x; the file keeps its name for the emulator.
+            var game = await ReadAsync<GameV1>(host, api);
+            Assert.AreEqual("snes9x", game.Emulator);
+            Assert.AreEqual("eq.sfc", game.FileName);
+            Assert.AreEqual(0L, game.PlayedMs);
+            using var file = await host.SendAsync(HttpMethod.Get, api + "/files/eq.sfc");
+            Assert.AreEqual(HttpStatusCode.OK, file.StatusCode);
+            CollectionAssert.AreEqual(rom, await file.Content.ReadAsByteArrayAsync());
+            using var head = await host.SendAsync(HttpMethod.Head, api + "/files/eq.sfc");
+            Assert.AreEqual(HttpStatusCode.OK, head.StatusCode);
+            Assert.AreEqual(rom.Length, head.Content.Headers.ContentLength);
+            using var otherName = await host.SendAsync(HttpMethod.Get, api + "/files/other.sfc");
+            Assert.AreEqual(HttpStatusCode.NotFound, otherName.StatusCode);
+
+            // Save memory and the state belong to the profile and come back unchanged.
+            using var noSave = await host.SendAsync(HttpMethod.Get, api + "/saves/Memory");
+            Assert.AreEqual(HttpStatusCode.NotFound, noSave.StatusCode);
+            byte[] memory = [1, 2, 3, 4];
+            byte[] state = [.. Enumerable.Range(0, 4096).Select(index => (byte)index)];
+            using var savedMemory = await host.SendAsync(HttpMethod.Put, api + "/saves/Memory", new UpdateGameSaveDataV1(memory));
+            Assert.AreEqual(HttpStatusCode.OK, savedMemory.StatusCode, await savedMemory.Content.ReadAsStringAsync());
+            using var savedState = await host.SendAsync(HttpMethod.Put, api + "/saves/State", new UpdateGameSaveDataV1(state));
+            Assert.AreEqual(HttpStatusCode.OK, savedState.StatusCode, await savedState.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(memory, (await ReadAsync<GameSaveV1>(host, api + "/saves/Memory")).Data);
+            CollectionAssert.AreEqual(state, (await ReadAsync<GameSaveV1>(host, api + "/saves/State")).Data);
+            using var emptySave = await host.SendAsync(HttpMethod.Put, api + "/saves/Memory", new UpdateGameSaveDataV1([]));
+            Assert.AreEqual(HttpStatusCode.BadRequest, emptySave.StatusCode);
+
+            // Play time adds up in the game's progress, never as a resume position or a Continue entry.
+            foreach (var seconds in new[] { 60, 45 })
+            {
+                using var played = await host.SendAsync(HttpMethod.Post, api + "/play-time", new RecordGamePlayDataV1(seconds));
+                Assert.AreEqual(HttpStatusCode.OK, played.StatusCode, await played.Content.ReadAsStringAsync());
+            }
+
+            using var tooLong = await host.SendAsync(HttpMethod.Post, api + "/play-time", new RecordGamePlayDataV1(301));
+            Assert.AreEqual(HttpStatusCode.BadRequest, tooLong.StatusCode);
+            game = await ReadAsync<GameV1>(host, api);
+            Assert.AreEqual(105_000L, game.PlayedMs);
+            Assert.IsFalse((await ReadAsync<BaseDataList<ContinueItemV1>>(host, "/api/v1/continue")).Any(item => item.MediaAssetId == asset));
+
+            // Details offers the game; its page starts EmulatorJS from Jularr only.
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            var detailsHtml = await details.Content.ReadAsStringAsync();
+            StringAssert.Contains(detailsHtml, "href=\"/Game/" + asset + "\"");
+            Assert.IsFalse(detailsHtml.Contains("/Player/" + asset, StringComparison.Ordinal));
+            using var page = await host.SendAsync(HttpMethod.Get, "/Game/" + asset);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "data-emulator=\"snes9x\"");
+            StringAssert.Contains(html, string.Format(System.Globalization.CultureInfo.CurrentCulture, "Played {0} min", 1));
+            StringAssert.Contains(html, "data-file=\"" + api + "/files/eq.sfc\"");
+            StringAssert.Contains(page.Headers.GetValues("Content-Security-Policy").Single(), "connect-src 'self'");
+
+            // Switched off, nothing plays and Details offers nothing.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Emulation'");
+            using var disabled = await host.SendAsync(HttpMethod.Get, api + "/files/eq.sfc");
+            Assert.AreEqual(HttpStatusCode.Forbidden, disabled.StatusCode);
+            using var detailsOff = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            Assert.IsFalse((await detailsOff.Content.ReadAsStringAsync()).Contains("/Game/" + asset, StringComparison.Ordinal));
+        }
+
+        private static async Task<T> ReadAsync<T>(Host host, string path)
+        {
+            using var response = await host.SendAsync(HttpMethod.Get, path);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
+            return (await response.Content.ReadFromJsonAsync<T>())!;
+        }
+
+        [TestMethod]
         public void Game_RomNames_NameTheirGame()
         {
             Assert.AreEqual("The Legend of Zelda - A Link to the Past", GameRomMatching.Title("Legend of Zelda, The - A Link to the Past (USA) [b]"));
@@ -228,6 +331,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(GameRomMatching.Key("The Legend of Zelda: A Link to the Past"), GameRomMatching.Key("The Legend of Zelda - A Link to the Past"));
             Assert.AreEqual("Nintendo - Game Boy Color", GameRomMatching.System("Retro/Game.GBC")!.Dat);
             Assert.IsNull(GameRomMatching.System("PC/setup.iso"));
+
+            // Every emulated platform starts a bundled core; Mega Drive is named by system because its core also serves Master System.
+            Assert.AreEqual("segaMD", GameRomMatching.Emulated(29)!.Emulator);
+            Assert.AreEqual("genesis_plus_gx", GameRomMatching.Emulated(64)!.Emulator);
+            Assert.IsNull(GameRomMatching.Emulated(6));
+            Assert.AreEqual(GameRomMatching.Systems.Count, GameRomMatching.EmulatedPlatforms.Distinct().Count());
         }
 
         [TestMethod]

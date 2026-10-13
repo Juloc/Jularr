@@ -137,12 +137,14 @@ namespace Jularr.Frontend.Pages.User.Details
             return new A(label).Class("button").Attribute("href", PlayHref(item));
         }
 
-        private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (IsReadable(item) ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true);
+        private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (item.MediaAssetTypeId == MediaAssetType.Game ? item.IsEmulated && texts.Capabilities?.CanPlayGames is true
+            : IsReadable(item) ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true);
 
         private static string PlayKey(WorkAvailabilityV1 item) => IsReadable(item) ? "details.read"
             : item.IsCompleted ? "details.playAgain" : item.ResumePositionMs is > 0 ? "media.continue" : "details.play";
 
-        private static string PlayHref(WorkAvailabilityV1 item) => (IsReadable(item) ? "/Read/" : "/Player/") + item.Id.ToString(CultureInfo.InvariantCulture);
+        private static string PlayHref(WorkAvailabilityV1 item) => (item.MediaAssetTypeId == MediaAssetType.Game ? "/Game/" : IsReadable(item) ? "/Read/" : "/Player/")
+            + item.Id.ToString(CultureInfo.InvariantCulture);
 
         private static bool IsReadable(WorkAvailabilityV1 item) => ReadableMedia.IsReadable(item.MediaAssetTypeId);
 

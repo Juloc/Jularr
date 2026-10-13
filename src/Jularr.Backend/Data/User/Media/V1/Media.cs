@@ -135,8 +135,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkAvailabilityV1 : BaseResponse
     {
         public WorkAvailabilityV1(long id, long workVersionId, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
-            long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages, long? resumePositionMs, bool isCompleted)
+            long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages, long? resumePositionMs, bool isCompleted, bool isEmulated)
         {
+            IsEmulated = isEmulated;
             Id = id;
             WorkVersionId = workVersionId;
             MediaAssetTypeId = mediaAssetTypeId;
@@ -198,5 +199,9 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
         public bool IsCompleted { get; }
+
+        // A game of a platform the browser plays.
+        [DataField(typeof(GameFields), nameof(GameFields.IsEmulated))]
+        public bool IsEmulated { get; }
     }
 }

@@ -2,6 +2,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -164,8 +165,19 @@ namespace Jularr.Backend.Service.User.Media.V1
                     tracks."Height",
                     tracks."AudioLanguages",
                     tracks."SubtitleLanguages",
-                    progress."PositionMs" AS "ResumePositionMs",
-                    coalesce(progress."IsCompleted", FALSE) AS "IsCompleted"
+                    CASE WHEN progress."ProgressPositionTypeId" = 1 THEN progress."PositionMs" END AS "ResumePositionMs",
+                    coalesce(progress."IsCompleted", FALSE) AS "IsCompleted",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "GameReleases" AS release
+                            JOIN "GamePlatforms" AS platform ON platform."Id" = release."GamePlatformId"
+                        WHERE
+                            release."WorkVersionId" = asset."WorkVersionId"
+                            AND asset."MediaAssetTypeId" = 5
+                            AND platform."IgdbId" = ANY(@EmulatedPlatforms)
+                    ) AS "IsEmulated"
                 FROM
                     "MediaAssets" AS asset
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
@@ -209,6 +221,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 """;
             sql.Parameters.Add(new WorkParametersV1(Parameters.WorkId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.Parameters.Add(new EmulatedPlatformsData(GameRomMatching.EmulatedPlatforms));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkAvailabilityV1>(sql, CancellationToken);
         }
