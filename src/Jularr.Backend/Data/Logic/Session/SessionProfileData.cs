@@ -7,10 +7,11 @@ namespace Jularr.Backend.Data.Logic.Session
 {
     public sealed class SessionProfileData : BaseData
     {
-        public SessionProfileData(long profileId, string? pinHash, DateTime expiresAt, long credentialRevision)
+        public SessionProfileData(long profileId, string? pinHash, bool isPinLocked, DateTime expiresAt, long credentialRevision)
         {
             ProfileId = profileId;
             PinHash = pinHash;
+            IsPinLocked = isPinLocked;
             ExpiresAt = expiresAt;
             CredentialRevision = credentialRevision;
         }
@@ -21,6 +22,9 @@ namespace Jularr.Backend.Data.Logic.Session
         [JsonIgnore]
         [DataField(typeof(ProfileFields), nameof(ProfileFields.PinHash))]
         public string? PinHash { get; }
+
+        // Five failed PINs lock the profile for a minute.
+        public bool IsPinLocked { get; }
 
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ExpiresAt))]
         public DateTime ExpiresAt { get; }

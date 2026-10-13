@@ -31,11 +31,12 @@ namespace Jularr.Backend.Data.User.Profile.V1
 
     public sealed class ProfileSelectionDetailsV1 : BaseResponse
     {
-        public ProfileSelectionDetailsV1(long id, string displayName, bool isLocked)
+        public ProfileSelectionDetailsV1(long id, string displayName, bool isLocked, int? pinLength)
         {
             Id = id;
             DisplayName = displayName;
             IsLocked = isLocked;
+            PinLength = pinLength;
         }
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
@@ -45,6 +46,21 @@ namespace Jularr.Backend.Data.User.Profile.V1
         public string DisplayName { get; }
 
         public bool IsLocked { get; }
+
+        // A PIN confirms itself once this many digits are entered.
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.PinLength))]
+        public int? PinLength { get; }
+    }
+
+    public sealed class VerifyProfilePinDataV1 : BaseData
+    {
+        public VerifyProfilePinDataV1(string pin)
+        {
+            Pin = pin;
+        }
+
+        [DataField(typeof(ProfilePinFields), nameof(ProfilePinFields.Pin))]
+        public string Pin { get; }
     }
 
     public sealed class SelectProfileResultV1 : BaseResponse, ISessionResult

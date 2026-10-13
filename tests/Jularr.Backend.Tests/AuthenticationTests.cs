@@ -144,7 +144,7 @@ namespace Jularr.Backend.Tests
         public async Task Logout_AccountSessionWithoutProfile_RevokesCookieAndDatabaseSession()
         {
             await using var host = await Host.CreateAsync();
-            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = 'selection-guard' WHERE \"Id\" = 101");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = 'selection-guard', \"PinLength\" = 4 WHERE \"Id\" = 101");
             await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
             var result = (await login.Content.ReadFromJsonAsync<LoginResultV1>())!;
@@ -244,7 +244,7 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await Host.CreateAsync();
             await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
-            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = 'selection-guard' WHERE \"Id\" = 101");
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"PinHash\" = 'selection-guard', \"PinLength\" = 4 WHERE \"Id\" = 101");
 
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", Password));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode);

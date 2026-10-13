@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Account;
+using Jularr.Backend.Logic.Profile;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Account.V1
@@ -26,7 +27,8 @@ namespace Jularr.Backend.Service.Admin.Account.V1
                 SELECT
                     profile."Id" AS "ProfileId",
                     profile."DisplayName",
-                    profile."OwnerAccountId"
+                    profile."OwnerAccountId",
+                    (profile."PinHash" IS NOT NULL) AS "HasPin"
                 FROM
                     "AccountProfiles" AS accountProfile
                 INNER JOIN
@@ -71,6 +73,22 @@ namespace Jularr.Backend.Service.Admin.Account.V1
         protected override async Task<IServiceOutput> OnDelete()
         {
             await Context.RemoveAccountProfileAsync(new AccountProfileData(Parameters.AccountId, Parameters.ProfileId), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("DELETE", "/api/v1/admin/profiles/{profileId:long}/pin")]
+    public sealed class ResetProfilePinV1 : AdminService<ProfilePinParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(ProfilePinParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ProfilePinParametersV1 parameters, Type resultType) => new("accounts.update");
+
+        protected override async Task<IServiceOutput> OnDelete()
+        {
+            // The Owner recovers a forgotten PIN by removing it.
+            await Context.UpdateProfilePinAsync(Parameters.ProfileId, null, CancellationToken);
             return new UpdateResult(true);
         }
     }

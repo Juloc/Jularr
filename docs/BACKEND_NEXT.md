@@ -164,7 +164,7 @@ focused import contract. Connections, library paths, background scans, inventory
 manual identification and stored availability are implemented; see
 [Storage runtime](STORAGE_RUNTIME.md).
 
-1. Profile PIN recovery and profile creation limits when those operations are built.
+1. Profile creation limits when profile creation is built (a forgotten PIN is reset by the Owner, per the login/profile-selection spec).
 2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.
 3. NAS health/capacity probes and real-host SMB/NFS deployment verification. The
    owner approved a separate Linux mount helper; `ffprobe` is used within the
