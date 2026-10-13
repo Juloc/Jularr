@@ -8,10 +8,11 @@ namespace Jularr.Backend.Data.Logic.Library
 {
     internal sealed class LibraryRootCreationData : BaseData
     {
-        public LibraryRootCreationData(string name, MediaType mediaTypeId, long storageMountId, string relativePath)
+        public LibraryRootCreationData(string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long storageMountId, string relativePath)
         {
             Name = name;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             StorageMountId = storageMountId;
             RelativePath = relativePath;
         }
@@ -21,6 +22,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
@@ -68,10 +72,11 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class LibraryRootLocationData : BaseData
     {
-        public LibraryRootLocationData(long id, MediaType mediaTypeId, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string relativePath)
+        public LibraryRootLocationData(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string relativePath)
         {
             Id = id;
             MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
             StorageMountId = storageMountId;
             StorageProtocolTypeId = storageProtocolTypeId;
             SharePath = sharePath;
@@ -83,6 +88,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }

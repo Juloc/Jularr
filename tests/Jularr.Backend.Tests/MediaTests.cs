@@ -51,6 +51,47 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Work_Subtype_FitsItsTypeAndBecomesManualOnlyWhenChanged()
+        {
+            await using var host = await CreateHostAsync();
+            using var invalid = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Movie, "Wrong", null, MediaSubtype.Manga));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Series, "Show", null, MediaSubtype.Anime));
+            var work = (await created.Content.ReadFromJsonAsync<AdminWork>())!;
+            Assert.AreEqual(MediaSubtype.Anime, work.MediaSubtypeId);
+            Assert.IsTrue(work.IsMediaSubtypeManual);
+
+            // Title edits keep a provider classification; changing it makes it manual.
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"IsMediaSubtypeManual\" = FALSE");
+            using var renamed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + work.Id, new UpdateWorkDataV1("Show!", 1, null, MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsMediaSubtypeManual\" FROM \"Works\""));
+            using var cleared = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + work.Id, new UpdateWorkDataV1("Show!", 2));
+            Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsMediaSubtypeManual\" AND \"MediaSubtypeId\" IS NULL FROM \"Works\""));
+            using var mismatch = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + work.Id, new UpdateWorkDataV1("Show!", 3, null, MediaSubtype.Manga));
+            Assert.AreEqual(HttpStatusCode.BadRequest, mismatch.StatusCode);
+        }
+
+        [TestMethod]
+        [DataRow("mediaTypeId=2", new long[] { 10 })]
+        [DataRow("mediaSubtypeId=1", new long[] { 20, 40 })]
+        [DataRow("mediaTypeId=3", new long[] { 30 })]
+        [DataRow("mediaSubtypeId=2", new long[] { 50 })]
+        [DataRow("", new long[] { 10, 20, 30, 40, 50 })]
+        public async Task Library_Subtypes_LeaveTheirParentList(string filter, long[] expected)
+        {
+            await using var host = await CreateHostAsync();
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "MediaSubtypeId", "CanonicalTitle") VALUES (10, 2, NULL, 'Series'), (20, 2, 1, 'Anime'), (30, 3, NULL, 'Book'), (40, 1, 1, 'Anime Movie'), (50, 3, 2, 'Manga');
+                INSERT INTO "WantedItems" ("WorkId") SELECT "Id" FROM "Works";
+                """);
+            using var library = await host.SendAsync(HttpMethod.Get, "/api/v1/library?" + filter);
+            var page = (await library.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!;
+            CollectionAssert.AreEquivalent(expected, page.Items.Select(item => item.Id).ToArray());
+        }
+
+        [TestMethod]
         public async Task Watchlist_RepeatedUpdatesAndPaging_StayProfileScoped()
         {
             await using var host = await CreateHostAsync();

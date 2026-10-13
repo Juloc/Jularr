@@ -28,7 +28,7 @@ creates its Wanted link, atomically in the same transaction. Owner/MediaManager
 moderate Open requests and pause/resume Wanted. Language intent uses UiLocaleId.
 The Arr+ core adds AcquisitionConnections (Newznab indexers and SABnzbd clients in
 one table, protected API keys, cached capabilities, client path mapping),
-AcquisitionProfiles (one default per media type, JSON definition for the shared
+AcquisitionProfiles (one default per media type and subtype, JSON definition for the shared
 selection engine), search state on WantedItems and AcquisitionReleases (grabbed,
 imported, failed and blocked releases of a target: history and blocklist in one
 table; series releases record the season and episode range they claim). Downloads
@@ -45,8 +45,10 @@ operation, not application-startup SQL. Tests install this baseline only in thei
 disposable fixture. [Runtime](../docs/STORAGE_RUNTIME.md) and
 [original schema alignment](../docs/SCHEMA_SNAPSHOT_ALIGNMENT.md) describe its scope.
 
-The seven seeded media types follow the original table snapshot. Anime remains a
-Movie/Series classification, not another media type. A manually created Work has
+Media types are Movie, Series, Book, Music and Game. Anime (Movie/Series), Manga
+and Light Novel (Book) are MediaSubtypes of their parents (MediaSubtypeParents), never
+another Work identity; Works, LibraryRoots and AcquisitionProfiles reference the
+pair. A manual subtype, also none, is kept by provider refreshes. A manually created Work has
 one neutral manual title source and a managed CanonicalTitle projection. Updates
 check Version atomically and preserve other localized/provider title sources.
 Watchlist identity is the composite ProfileId/WorkId key; it never changes
@@ -63,7 +65,7 @@ and exact Work/unit target; completion is explicit and sticky, and a completed i
 restarts at zero. PlaybackSessions record active and ended playback with a public
 UUID; ended sessions are the playback history. Instance.sql seeds the Playback module.
 
-`Library.sql` follows Media and Storage. LibraryRoots place logical libraries below
+`Library.sql` follows Media, Acquisition and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative
 inventory with probe facts (former MediaTechnicalAnalyses columns), MediaTracks hold
 probed streams, and Operations/OperationTypes/OperationStatusTypes are the shared

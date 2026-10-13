@@ -63,7 +63,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task UpdateWantedItemAsync(this LogicContext ctx, WantedItemUpdateData data, CancellationToken ct)
         {
-            // Do not alter request decisions; a chosen profile fits the media type.
+            // Do not alter request decisions; a chosen profile and library fit the type and subtype.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -72,6 +72,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "IsPaused" = @IsPaused,
                     "AcquisitionProfileId" = @AcquisitionProfileId,
+                    "LibraryRootId" = @LibraryRootId,
                     "UpdatedAt" = now(),
                     "Version" = wanted."Version" + 1
                 FROM
@@ -88,6 +89,17 @@ namespace Jularr.Backend.Logic.Acquisition
                         WHERE
                             profile."Id" = @AcquisitionProfileId
                             AND profile."MediaTypeId" = work."MediaTypeId"
+                            AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                    ))
+                    AND (@LibraryRootId::bigint IS NULL OR EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "LibraryRoots" AS root
+                        WHERE
+                            root."Id" = @LibraryRootId
+                            AND root."MediaTypeId" = work."MediaTypeId"
+                            AND (root."MediaSubtypeId" IS NULL OR root."MediaSubtypeId" = work."MediaSubtypeId")
                     ));
                 """;
             sql.Parameters.Add(data);

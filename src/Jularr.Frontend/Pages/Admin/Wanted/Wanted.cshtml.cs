@@ -15,7 +15,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Wanted
 {
     public sealed class WantedModel(ReadWantedV1 read, ReadWantedItemV1 readItem, UpdateWantedV1 update, SearchWantedV1 search, GrabWantedReleaseV1 grab,
-        ReadWantedReleasesV1 releases, MarkWantedReleaseV1 mark, ReadAcquisitionProfilesV1 profiles, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadWantedReleasesV1 releases, MarkWantedReleaseV1 mark, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string SearchTab = "search";
         private const string CurrentTab = "current";
@@ -26,6 +26,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         private SearchWantedDataV1? _search;
         private BaseDataList<WantedReleaseV1>? _history;
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
+        private IReadOnlyList<WantedLibraryV1> _libraries = [];
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -58,8 +59,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                             form.Hidden(data => data.IsPaused);
                             form.Hidden(data => data.Version);
                             form.Hidden(data => data.AcquisitionProfileId);
+                            form.Hidden(data => data.LibraryRootId);
                             form.Submit(item.IsPaused ? "wanted.resume" : "wanted.pause");
-                        }, Address(PageNumber, item.Id, SelectedTab), csrf, new UpdateWantedDataV1(!item.IsPaused, item.Version, item.AcquisitionProfileId))));
+                        }, Address(PageNumber, item.Id, SelectedTab), csrf, new UpdateWantedDataV1(!item.IsPaused, item.Version, item.AcquisitionProfileId, item.LibraryRootId))));
 
                     if (wanted.Items.Count == 0) split.Primary.Add(new P(new Text("wanted.empty")));
                     if (wanted.Page > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(wanted.Page - 1)));
@@ -93,9 +95,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId)
+        public async Task<IActionResult> OnPostAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId)
         {
-            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(SelectedId()), new UpdateWantedDataV1(isPaused, version, acquisitionProfileId), HttpContext.RequestAborted);
+            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(SelectedId()), new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId),
+                HttpContext.RequestAborted);
             return LocalRedirect(Address(PageNumber, WantedItemId, SelectedTab));
         }
 
@@ -136,6 +139,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 else if (SelectedTab == CurrentTab && CanAcquire)
                 {
                     _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), HttpContext.RequestAborted);
+                    _libraries = await libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(id), HttpContext.RequestAborted);
                 }
             }
         }
@@ -150,7 +154,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                     form.Number(data => data.ParentUnitNumber, "wanted.search.season");
                     form.Number(data => data.UnitNumber, "wanted.search.episode");
                 }
-                else if (selected.MediaTypeId == MediaType.Manga)
+                else if (selected.MediaSubtypeId == MediaSubtype.Manga)
                 {
                     form.Number(data => data.UnitNumber, "wanted.search.volume");
                 }
@@ -196,9 +200,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 content.Add(new P(new Text("wanted.lastSearch"), new ValueText(": " + searchedAt.ToString("u", CultureInfo.InvariantCulture))));
             }
 
-            // Without a choice the media type default applies.
-            var options = _profiles.Where(profile => profile.MediaTypeId == selected.MediaTypeId).ToArray();
-            if (options.Length > 0)
+            // Without a choice the defaults of the subtype, then of the type apply.
+            var options = _profiles.Where(profile => profile.MediaTypeId == selected.MediaTypeId && (profile.MediaSubtypeId is null || profile.MediaSubtypeId == selected.MediaSubtypeId)).ToArray();
+            if (options.Length > 0 || _libraries.Count > 0)
             {
                 content.Add(new Form<UpdateWantedDataV1>(form =>
                 {
@@ -206,8 +210,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                     form.Hidden(data => data.Version);
                     form.Select(data => data.AcquisitionProfileId, "wanted.profile", [new SelectOption("", texts["wanted.profile.default"]),
                         .. options.Select(profile => new SelectOption(profile.Id.ToString(CultureInfo.InvariantCulture), profile.Name))]);
+                    form.Select(data => data.LibraryRootId, "wanted.library", [new SelectOption("", texts["wanted.library.default"]),
+                        .. _libraries.Select(library => new SelectOption(library.Id.ToString(CultureInfo.InvariantCulture), library.Name))]);
                     form.Submit("common.save");
-                }, Address(PageNumber, selected.Id, CurrentTab), csrf, new UpdateWantedDataV1(selected.IsPaused, selected.Version, selected.AcquisitionProfileId)));
+                }, Address(PageNumber, selected.Id, CurrentTab), csrf, new UpdateWantedDataV1(selected.IsPaused, selected.Version, selected.AcquisitionProfileId, selected.LibraryRootId)));
             }
         }
 

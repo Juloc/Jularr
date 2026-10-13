@@ -54,9 +54,9 @@ namespace Jularr.Backend.Logic.Library
             sql.Statement =
                 """
                 INSERT INTO
-                    "LibraryRoots" ("Name", "MediaTypeId", "StorageMountId", "RelativePath")
+                    "LibraryRoots" ("Name", "MediaTypeId", "MediaSubtypeId", "StorageMountId", "RelativePath")
                 VALUES
-                    (@Name, @MediaTypeId, @StorageMountId, @RelativePath)
+                    (@Name, @MediaTypeId, @MediaSubtypeId, @StorageMountId, @RelativePath)
                 RETURNING
                     "Id";
                 """;

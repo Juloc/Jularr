@@ -15,7 +15,7 @@ namespace Jularr.Backend.Data.Enums.Media
         public static IReadOnlyList<WorkUnitType> For(MediaType mediaType) => mediaType switch
         {
             MediaType.Series => [WorkUnitType.Episode],
-            MediaType.Book or MediaType.Manga or MediaType.LightNovel => [WorkUnitType.Volume, WorkUnitType.Chapter],
+            MediaType.Book => [WorkUnitType.Volume, WorkUnitType.Chapter],
             MediaType.Music => [WorkUnitType.Track],
             _ => []
         };

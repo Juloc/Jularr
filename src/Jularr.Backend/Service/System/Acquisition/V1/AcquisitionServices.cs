@@ -66,14 +66,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             foreach (var item in due)
             {
                 var target = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWantedTargetAsync(item.WantedItemId, ct), CancellationToken);
-                if (target.Definition is null || AcquisitionSelectionLogic.GetKind(target.MediaTypeId) is null)
+                if (target.Definition is null)
                 {
                     await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1));
                     continue;
                 }
 
                 // Series and Manga with volumes are searched by their missing units.
-                if (target.MediaTypeId is MediaType.Series or MediaType.Manga)
+                if (target.MediaTypeId == MediaType.Series || target.MediaSubtypeId == MediaSubtype.Manga)
                 {
                     var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
                     if (target.MediaTypeId == MediaType.Series || units.Count > 0)
@@ -139,7 +139,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
 
                     grabbed++;
-                    units = AcquisitionSelectionLogic.Claim(units, scope, target.MediaTypeId, winner.Candidate.Parsed);
+                    units = AcquisitionSelectionLogic.Claim(units, scope, AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), winner.Candidate.Parsed);
                 }
             }
 
@@ -232,7 +232,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     var connection = await _metadata.ConnectAsync(Context, CancellationToken);
                     foreach (var identity in stale.Where(identity => identity.Namespace != MangaMetadata.Namespace))
                     {
-                        await _metadata.ImportAsync(Context, connection, MediaType.Series, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
+                        await _metadata.ImportAsync(Context, connection, MediaType.Series, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
                     }
                 }
             }
@@ -349,7 +349,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     break;
                 default:
                     var state = new StorageScanState();
-                    var files = StorageFileSystem.EnumerateFiles(pass.OutputPath!, LibraryFileTypes.GetImportExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
+                    var files = StorageFileSystem.EnumerateFiles(pass.OutputPath!, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), state, CancellationToken).ToArray();
                     await _import.PlaceAsync(Context, download, pass.OutputPath!, files, state.IsComplete, CancellationToken);
                     break;
             }
@@ -578,7 +578,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 else
                 {
                     source = StorageFileSystem.ResolveDirectory(mapped, relative);
-                    files = StorageFileSystem.EnumerateFiles(source, LibraryFileTypes.GetImportExtensions(download.MediaTypeId), state, CancellationToken).ToArray();
+                    files = StorageFileSystem.EnumerateFiles(source, LibraryFileTypes.GetImportExtensions(download.MediaTypeId, download.MediaSubtypeId), state, CancellationToken).ToArray();
                 }
             }
             catch (NasMountException)

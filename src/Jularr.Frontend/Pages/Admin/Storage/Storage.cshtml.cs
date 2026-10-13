@@ -181,7 +181,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             {
                 items.Add(new Table<LibraryRootDetailsV1>(roots)
                     .Text(item => item.Name, "storage.name")
-                    .Resource(item => item.MediaTypeId, "table.type", type => "media.type." + type)
+                    .Content("table.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
                     .Content("storage.paths.path", item => new ValueText("/" + item.RelativePath))
                     .Text(item => item.FileCount, "storage.paths.files")
                     .Content("common.actions", item => new Div(
@@ -242,12 +242,15 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             }
 
             var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
+            SelectOption[] subtypes = [new SelectOption("", texts["media.subtype.none"]), .. Enum.GetValues<MediaSubtype>()
+                .Select(subtype => new SelectOption(((byte)subtype).ToString(CultureInfo.InvariantCulture), texts["media.subtype." + subtype]))];
             items.Add(new Form<CreateLibraryRootDataV1>(form =>
             {
                 form.Hidden(item => item.StorageMountId);
                 form.Hidden(item => item.RelativePath);
                 form.Text(item => item.Name, "storage.name");
                 form.Select(item => item.MediaTypeId, "table.type", mediaTypes);
+                form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
                 form.Submit("storage.paths.add");
             }, Address(mount.Id, handler: "Root", browse: path), csrf, _rootInput ?? new CreateLibraryRootDataV1("", MediaType.Movie, mount.Id, path), _failedSection == "Root" ? FormError : null));
             return items;
@@ -300,10 +303,10 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostRootAsync([BindRequired] long storageMountId, string? name, [BindRequired] MediaType mediaTypeId, string? relativePath)
+        public async Task<IActionResult> OnPostRootAsync([BindRequired] long storageMountId, string? name, [BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? relativePath)
         {
             _failedSection = "Root";
-            _rootInput = new CreateLibraryRootDataV1(name ?? "", mediaTypeId, storageMountId, relativePath ?? "");
+            _rootInput = new CreateLibraryRootDataV1(name ?? "", mediaTypeId, storageMountId, relativePath ?? "", mediaSubtypeId);
             await createRoot.ExecuteAsync<CreateLibraryRootResultV1>(_rootInput, HttpContext.RequestAborted);
             return LocalRedirect(Address(storageMountId));
         }

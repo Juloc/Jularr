@@ -88,6 +88,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                     SELECT
                         root."Id",
                         root."MediaTypeId",
+                        root."MediaSubtypeId",
                         root."StorageMountId",
                         mount."StorageProtocolTypeId",
                         mount."SharePath",
@@ -109,7 +110,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
             var processed = 0L;
             var batch = new List<ScannedFile>(BatchSize);
             var state = new StorageScanState();
-            foreach (var file in StorageFileSystem.EnumerateFiles(directory, LibraryFileTypes.GetScanExtensions(root.MediaTypeId), state, CancellationToken))
+            foreach (var file in StorageFileSystem.EnumerateFiles(directory, LibraryFileTypes.GetScanExtensions(root.MediaTypeId, root.MediaSubtypeId), state, CancellationToken))
             {
                 if (MediaPathParser.IsSample(file.RelativePath) || !IsStorablePath(file.RelativePath))
                 {
