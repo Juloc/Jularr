@@ -78,7 +78,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         {
             // Protect before persistence.
             var secret = Data.Secret is { Length: > 0 } value ? _protector.Protect(Encoding.UTF8.GetBytes(value)) : null;
-            await Context.SaveProviderSecretAsync(new ProviderSecretData(Parameters.ProviderId, secret), CancellationToken);
+            await Context.SaveProviderSecretAsync(new ProviderSecretData(Parameters.ProviderId, secret, Data.ClientId is { Length: > 0 } clientId ? clientId.Trim() : null), CancellationToken);
             return new UpdateResult(true);
         }
     }

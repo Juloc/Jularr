@@ -85,6 +85,22 @@ namespace Jularr.Backend.Data.Logic.Media
         public long Id { get; }
     }
 
+    internal sealed class WorkPlatformsData : BaseData
+    {
+        public WorkPlatformsData(long workId, string platforms)
+        {
+            WorkId = workId;
+            Platforms = platforms;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        // JSON list of the provider's platforms.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Platforms))]
+        public string Platforms { get; }
+    }
+
     internal sealed class WorkLookupData : BaseData
     {
         public WorkLookupData(long workId, MediaType mediaTypeId)

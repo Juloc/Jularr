@@ -133,7 +133,7 @@ namespace Jularr.Backend.Logic.Media
             sql.Parameters.Add(new WorkIdData(workId.Value));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
 
-            // Mappings refresh unless corrected by hand; a mapping owned by another Work is left alone.
+            // The provider's own id and its mappings refresh unless corrected by hand; a mapping owned by another Work is left alone.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -143,6 +143,10 @@ namespace Jularr.Backend.Logic.Media
                         "Value"
                     FROM
                         jsonb_to_recordset(@ExternalIdentities::jsonb) AS item ("Namespace" text, "Value" text)
+                    UNION
+                    SELECT
+                        @Namespace,
+                        @Value
                 ), updated AS (
                     UPDATE
                         "WorkExternalIdentities" AS identity

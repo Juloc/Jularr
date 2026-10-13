@@ -39,13 +39,18 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 }, "/Admin/Providers?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? Error : null));
 
-                // Metadata providers need a key; it is never shown again.
-                if (provider.Key == "tmdb")
+                // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id.
+                if (provider.Key is "tmdb" or "igdb")
                 {
                     page.Content.Add(new P(new Text(provider.HasSecret ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
                     page.Content.Add(new Form<SaveProviderSecretDataV1>(form =>
                     {
-                        form.Password(item => item.Secret, "admin.providers.secret", "new-password");
+                        if (provider.Key == "igdb")
+                        {
+                            form.Text(item => item.ClientId, "admin.providers.clientId");
+                        }
+
+                        form.Password(item => item.Secret, provider.Key == "igdb" ? "admin.providers.clientSecret" : "admin.providers.secret", "new-password");
                         form.Submit("common.save");
                     }, "/Admin/Providers?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture) + "&handler=Secret", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                         new SaveProviderSecretDataV1(null)));
@@ -101,11 +106,11 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             await update.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), _input, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Providers/Providers");
         }
-        public async Task<IActionResult> OnPostSecretAsync(long providerId, string? secret)
+        public async Task<IActionResult> OnPostSecretAsync(long providerId, string? secret, string? clientId)
         {
             _providerId = providerId;
-            await saveSecret.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), new SaveProviderSecretDataV1(string.IsNullOrWhiteSpace(secret) ? null : secret),
-                HttpContext.RequestAborted);
+            await saveSecret.ExecuteAsync<UpdateResult>(new UpdateProviderParametersV1(providerId), new SaveProviderSecretDataV1(string.IsNullOrWhiteSpace(secret) ? null : secret,
+                string.IsNullOrWhiteSpace(clientId) ? null : clientId), HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Providers/Providers");
         }
 

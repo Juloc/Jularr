@@ -172,7 +172,7 @@ CREATE TABLE "Providers" (
     CONSTRAINT "PK_Providers" PRIMARY KEY ("Id"),
     CONSTRAINT "UX_Providers_Key" UNIQUE ("Key")
 );
-INSERT INTO "Providers" ("Key") VALUES ('plex'), ('tmdb'), ('openlibrary'), ('anilist'), ('musicbrainz');
+INSERT INTO "Providers" ("Key") VALUES ('plex'), ('tmdb'), ('openlibrary'), ('anilist'), ('musicbrainz'), ('igdb');
 
 CREATE TABLE "AccountPasswords" (
     "AccountId" bigint NOT NULL,
