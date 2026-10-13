@@ -17,13 +17,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly BookMetadata _books;
         private readonly MangaMetadata _manga;
         private readonly MusicMetadata _music;
+        private readonly GameMetadata _games;
 
-        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music)
+        internal SearchMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music, GameMetadata games)
         {
             _metadata = metadata;
             _books = books;
             _manga = manga;
             _music = music;
+            _games = games;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -39,6 +41,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 results = [.. (await _books.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.WorkId, Limit(result.Title, 500)!,
                     null, result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, Limit(string.Join(", ", result.Authors), 4000)))];
+            }
+            else if (GameMetadata.Handles(Data.MediaTypeId))
+            {
+                var connection = await _games.ConnectAsync(Context, CancellationToken);
+                results = [.. (await _games.SearchAsync(connection, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(
+                    result.Id.ToString(CultureInfo.InvariantCulture), result.Name, null, result.Year is >= 1950 and <= 2200 ? result.Year : null,
+                    Limit(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, Limit(string.Join(", ", result.Developers), 4000)))];
             }
             else if (MusicMetadata.Handles(Data.MediaTypeId))
             {
@@ -76,7 +85,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         AND identity."Value" IN (SELECT jsonb_array_elements_text(@Values::jsonb));
                     """;
                 var space = BookMetadata.Handles(Data.MediaTypeId) ? BookMetadata.Namespace : MangaMetadata.Handles(Data.MediaTypeId) ? MangaMetadata.Namespace
-                    : MusicMetadata.Handles(Data.MediaTypeId) ? MusicMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
+                    : MusicMetadata.Handles(Data.MediaTypeId) ? MusicMetadata.Namespace
+                    : GameMetadata.Handles(Data.MediaTypeId) ? GameMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
                 sql.Parameters.Add(new WorkIdentityLookupData(space, JsonSerializer.Serialize(results.Select(result => result.ExternalId))));
                 return ctx.ReadSql.ReadListAsync<WorkIdentityData>(sql, ct);
             }, CancellationToken);
@@ -95,13 +105,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly BookMetadata _books;
         private readonly MangaMetadata _manga;
         private readonly MusicMetadata _music;
+        private readonly GameMetadata _games;
 
-        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music)
+        internal ImportMetadataWorkV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music, GameMetadata games)
         {
             _metadata = metadata;
             _books = books;
             _manga = manga;
             _music = music;
+            _games = games;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -125,6 +137,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 workId = await _music.ImportAsync(Context, Data.ExternalId, CancellationToken);
             }
+            else if (GameMetadata.Handles(Data.MediaTypeId))
+            {
+                workId = await _games.ImportAsync(Context, await _games.ConnectAsync(Context, CancellationToken), Data.ExternalId, CancellationToken);
+            }
             else
             {
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
@@ -142,13 +158,15 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         private readonly BookMetadata _books;
         private readonly MangaMetadata _manga;
         private readonly MusicMetadata _music;
+        private readonly GameMetadata _games;
 
-        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music)
+        internal RefreshWorkMetadataV1(WorkMetadata metadata, BookMetadata books, MangaMetadata manga, MusicMetadata music, GameMetadata games)
         {
             _metadata = metadata;
             _books = books;
             _manga = manga;
             _music = music;
+            _games = games;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -158,7 +176,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Only Works mapped to TMDB, Open Library, AniList or MusicBrainz can be refreshed.
+            // Only Works mapped to TMDB, Open Library, AniList, MusicBrainz or IGDB can be refreshed.
             var (work, identity) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct),
                 await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, Parameters.WorkId, ct)), CancellationToken);
             if (identity is null)
@@ -177,6 +195,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             else if (identity.Namespace == MusicMetadata.Namespace)
             {
                 await _music.ImportAsync(Context, identity.Value, CancellationToken);
+            }
+            else if (identity.Namespace == GameMetadata.Namespace)
+            {
+                await _games.ImportAsync(Context, await _games.ConnectAsync(Context, CancellationToken), identity.Value, CancellationToken);
             }
             else
             {
@@ -222,7 +244,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     "WorkExternalIdentities" AS identity
                 WHERE
                     identity."WorkId" = @Id
-                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'anilist', 'musicbrainz');
+                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'openlibrary', 'anilist', 'musicbrainz', 'igdb');
                 """;
             sql.Parameters.Add(new WorkIdData(workId));
             return ctx.ReadSql.ReadOptionalAsync<WorkIdentityData>(sql, ct);

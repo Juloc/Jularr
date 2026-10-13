@@ -77,7 +77,8 @@ namespace Jularr.Backend.Logic.Provider
                 UPDATE
                     "Providers" AS provider
                 SET
-                    "ProtectedSecret" = @ProtectedSecret
+                    "ProtectedSecret" = @ProtectedSecret,
+                    "ExternalId" = COALESCE(@ExternalId, provider."ExternalId")
                 WHERE
                     provider."Id" = @Id;
                 """;
@@ -96,7 +97,8 @@ namespace Jularr.Backend.Logic.Provider
                 SELECT
                     provider."Id",
                     provider."IsEnabled",
-                    provider."ProtectedSecret"
+                    provider."ProtectedSecret",
+                    provider."ExternalId"
                 FROM
                     "Providers" AS provider
                 WHERE

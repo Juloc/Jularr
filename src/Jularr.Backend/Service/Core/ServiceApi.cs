@@ -15,6 +15,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.AnnasArchive;
+using Jularr.Integrations.Logic.Igdb;
 using Jularr.Integrations.Logic.MusicBrainz;
 using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Gutenberg;
@@ -129,6 +130,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<BookMetadata>();
             services.TryAddTransient<MangaMetadata>();
             services.TryAddTransient<MusicMetadata>();
+            services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
@@ -202,6 +204,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true);
             AddClient<AniListClient>(services, 15, 4, agent: true);
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true);
+            AddClient<IgdbClient>(services, 20, 8, agent: true);
             AddClient<ServarrApiClient>(services, 60, 32);
             AddClient<PlexServerClient>(services, 20, 16);
             AddClient<NewznabClient>(services, 30, 16);

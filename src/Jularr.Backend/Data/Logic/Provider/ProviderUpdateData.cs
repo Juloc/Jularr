@@ -25,10 +25,11 @@ namespace Jularr.Backend.Data.Logic.Provider
 
     internal sealed class ProviderSecretData : BaseData
     {
-        public ProviderSecretData(long id, byte[]? protectedSecret)
+        public ProviderSecretData(long id, byte[]? protectedSecret, string? externalId)
         {
             Id = id;
             ProtectedSecret = protectedSecret;
+            ExternalId = externalId;
         }
 
         [DataField(typeof(ProviderFields), nameof(ProviderFields.Id))]
@@ -37,15 +38,20 @@ namespace Jularr.Backend.Data.Logic.Provider
         [JsonIgnore]
         [DataField(typeof(ProviderFields), nameof(ProviderFields.ProtectedSecret))]
         public byte[]? ProtectedSecret { get; }
+
+        // The public application id of providers that pair it with the secret.
+        [DataField(typeof(ProviderFields), nameof(ProviderFields.ExternalId))]
+        public string? ExternalId { get; }
     }
 
     internal sealed class ProviderCredentialData : BaseData
     {
-        public ProviderCredentialData(long id, bool isEnabled, byte[]? protectedSecret)
+        public ProviderCredentialData(long id, bool isEnabled, byte[]? protectedSecret, string? externalId)
         {
             Id = id;
             IsEnabled = isEnabled;
             ProtectedSecret = protectedSecret;
+            ExternalId = externalId;
         }
 
         [DataField(typeof(ProviderFields), nameof(ProviderFields.Id))]
@@ -57,5 +63,8 @@ namespace Jularr.Backend.Data.Logic.Provider
         [JsonIgnore]
         [DataField(typeof(ProviderFields), nameof(ProviderFields.ProtectedSecret))]
         public byte[]? ProtectedSecret { get; }
+
+        [DataField(typeof(ProviderFields), nameof(ProviderFields.ExternalId))]
+        public string? ExternalId { get; }
     }
 }

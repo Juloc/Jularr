@@ -31,8 +31,8 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         {
             base.Validate();
 
-            // TMDB covers movies and series, Open Library books, AniList Manga, MusicBrainz albums.
-            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Manga or MediaType.LightNovel or MediaType.Music))
+            // TMDB covers movies and series, Open Library books, AniList Manga, MusicBrainz albums, IGDB games.
+            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Manga or MediaType.LightNovel or MediaType.Music or MediaType.Game))
             {
                 throw new DataValidationException(nameof(MediaTypeId), "unknown_catalog_value");
             }
@@ -91,9 +91,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         public override void Validate()
         {
-            // TMDB and AniList ids are numbers; books use Open Library ids, albums MusicBrainz ids.
+            // TMDB, AniList and IGDB ids are numbers; books use Open Library ids, albums MusicBrainz ids.
             base.Validate();
-            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Manga or MediaType.LightNovel or MediaType.Music))
+            if (MediaTypeId is not (MediaType.Movie or MediaType.Series or MediaType.Book or MediaType.Manga or MediaType.LightNovel or MediaType.Music or MediaType.Game))
             {
                 throw new DataValidationException(nameof(MediaTypeId), "unknown_catalog_value");
             }

@@ -51,13 +51,18 @@ namespace Jularr.Backend.Data.Admin.Provider.V1
 
     public sealed class SaveProviderSecretDataV1 : BaseData
     {
-        public SaveProviderSecretDataV1(string? secret)
+        public SaveProviderSecretDataV1(string? secret, string? clientId = null)
         {
             Secret = secret;
+            ClientId = clientId;
         }
 
         [DataField(typeof(ProviderCredentialFields), nameof(ProviderCredentialFields.Secret))]
         public string? Secret { get; }
+
+        // IGDB pairs the secret with the Twitch application's public id; empty keeps the stored one.
+        [DataField(typeof(ProviderFields), nameof(ProviderFields.ExternalId))]
+        public string? ClientId { get; }
     }
 
     public sealed class UpdateProviderDataV1 : BaseData
