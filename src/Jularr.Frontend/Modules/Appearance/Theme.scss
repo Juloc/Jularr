@@ -15,7 +15,7 @@
     --accent-hover: #692aca;
     --danger: light-dark(#b12b3c, #ff9aa7);
     --shadow: 0 2px 8px light-dark(rgb(32 19 58 / 4%), rgb(0 0 0 / 14%));
-    --radius-control: 8px;
+    --radius-control: 999px;
     --radius-panel: 12px;
     --focus: var(--accent-text);
     --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));

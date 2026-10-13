@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Text.Encodings.Web;
 using System.Xml.Linq;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Frontend.Framework;
@@ -37,6 +38,19 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "media-hero--placeholder");
             StringAssert.Contains(html, "appearance-approved-");
             StringAssert.Contains(html, "data-start-url=\"\"");
+            StringAssert.Contains(html, "class=\"tag tag--accent\"");
+            StringAssert.Contains(html, "role=\"switch\"");
+            StringAssert.Contains(html, "class=\"ui-field__label\"");
+            StringAssert.Contains(html, "your-name-poster-");
+            StringAssert.Contains(html, "suzume-poster-");
+            StringAssert.Contains(html, "poster=\"/build/assets/your-name-backdrop-");
+            StringAssert.Contains(html, "class=\"player__audio\"");
+            StringAssert.Contains(html, "class=\"player__options\"");
+            Assert.AreEqual(1, Regex.Matches(html, "<video\\b").Count);
+            var transport = Regex.Match(html, "<div class=\"player__transport\">(.*?)</div>", RegexOptions.Singleline).Groups[1].Value;
+            CollectionAssert.AreEqual(new[] { "previous", "back", "toggle", "forward", "next" },
+                Regex.Matches(transport, "data-action=\"([^\"]+)\"").Select(match => match.Groups[1].Value).ToArray());
+            Assert.AreEqual(2, Regex.Matches(transport, "disabled=\"disabled\"").Count);
             Assert.IsFalse(Regex.IsMatch(html, "<script[^>]*player-[^>]*\\.js"));
             Assert.IsTrue(response.Headers.CacheControl!.NoStore);
         }
@@ -120,6 +134,42 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "aria-invalid=\"true\"");
             StringAssert.Contains(html, texts["errors.validation.too_short"]);
             Assert.IsFalse(html.Contains("value=\"short\"", StringComparison.Ordinal));
+            var fieldId = Regex.Match(html, "<input[^>]*\\sid=\"([^\"]+)\"").Groups[1].Value;
+            StringAssert.Contains(html, "for=\"" + fieldId + "\"");
+            StringAssert.Contains(html, "aria-describedby=\"" + fieldId + "-error\"");
+        }
+
+        [TestMethod]
+        [DataRow(false, false)]
+        [DataRow(false, true)]
+        [DataRow(true, false)]
+        [DataRow(true, true)]
+        public async Task Form_Toggle_UsesCanonicalMetadataAndNativeBooleanPosting(bool editable, bool isChecked)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var scope = host.Services.CreateScope();
+            var http = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().HttpContext = http;
+            var texts = scope.ServiceProvider.GetRequiredService<UiText>();
+            await texts.InitializeAsync(http);
+
+            // Shared Boolean form binding.
+            var form = new Form<UpdateInstanceModuleDataV1>(fields => fields.Toggle(item => item.IsEnabled, "design.selected"),
+                editable ? "/Settings" : null, editable ? "test-antiforgery-token" : null, new UpdateInstanceModuleDataV1(isChecked, 1));
+            using var writer = new StringWriter();
+            form.WriteTo(writer, HtmlEncoder.Default, texts);
+            var html = writer.ToString();
+            var inputs = Regex.Matches(html, "<input[^>]*name=\"IsEnabled\"[^>]*>").Select(match => match.Value).ToArray();
+            Assert.AreEqual(editable ? 2 : 1, inputs.Length);
+            StringAssert.Contains(inputs[0], "role=\"switch\"");
+            Assert.AreEqual(isChecked, inputs[0].Contains("checked=\"checked\"", StringComparison.Ordinal));
+            Assert.AreEqual(!editable, inputs[0].Contains("disabled=\"disabled\"", StringComparison.Ordinal));
+            Assert.IsFalse(inputs[0].Contains("required=", StringComparison.Ordinal));
+            if (editable)
+            {
+                StringAssert.Contains(inputs[0], "value=\"true\"");
+                StringAssert.Contains(inputs[1], "value=\"false\"");
+            }
         }
 
         [TestMethod]

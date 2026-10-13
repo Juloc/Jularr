@@ -1,0 +1,41 @@
+.toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    gap: 12px;
+    cursor: pointer;
+
+    // Native checkbox owns state.
+    & > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    &__label { font-weight: 600; overflow-wrap: anywhere; }
+    &__track {
+        position: relative;
+        flex: 0 0 46px;
+        height: 28px;
+        border: 1px solid var(--muted);
+        border-radius: 999px;
+        background: var(--surface-hover);
+
+        &::after {
+            content: "";
+            position: absolute;
+            inset-block-start: 4px;
+            inset-inline-start: 4px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--muted);
+        }
+    }
+
+    & > input:checked + &__track {
+        border-color: var(--accent);
+        background: var(--accent);
+
+        &::after { inset-inline-start: 22px; background: var(--accent-contrast); }
+    }
+    & > input:focus-visible + &__track { outline: 3px solid var(--focus); outline-offset: 3px; }
+    & > input:disabled ~ span { opacity: .6; cursor: not-allowed; }
+    & > input[aria-invalid="true"] + &__track { border-color: var(--danger); }
+}

@@ -24,7 +24,7 @@
         position: absolute;
         inset: 0;
         display: grid;
-        grid-template-rows: auto 1fr auto;
+        grid-template-rows: auto 1fr;
         pointer-events: none;
         transition: opacity 200ms ease;
 
@@ -58,17 +58,17 @@
     }
 
     &__transport {
-        align-self: center;
-        justify-self: center;
         display: flex;
         align-items: center;
-        gap: 28px;
+        justify-content: center;
+        gap: 8px;
         pointer-events: none;
 
         > * { pointer-events: auto; }
     }
 
     &__bottom {
+        align-self: end;
         display: grid;
         gap: 8px;
         padding: 12px 20px 18px;
@@ -85,18 +85,26 @@
     }
 
     &__timeline,
-    &__volume { accent-color: #fff; }
+    &__volume { accent-color: var(--accent); }
 
     &__timeline { width: 100%; }
     &__volume { width: 96px; }
 
     &__actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+    }
+
+    &__audio,
+    &__options {
         display: flex;
         align-items: center;
         gap: 6px;
     }
 
-    &__spacer { flex: 1; }
+    &__options { justify-content: end; }
 
     &__button {
         @include Material.control;
@@ -115,6 +123,7 @@
         &:hover { background-color: #38383e; }
         &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         &[hidden] { display: none; }
+        &:disabled { opacity: .45; cursor: not-allowed; }
 
         .ui-icon { width: 24px; height: 24px; }
     }
@@ -159,7 +168,7 @@
         @include Material.control;
         min-height: 40px;
         border: 0;
-        border-radius: 8px;
+        border-radius: var(--radius-control);
         background-color: #242428;
         color: inherit;
         font: inherit;
@@ -187,9 +196,17 @@
     }
 }
 
+@media (max-width: 900px) {
+    .player__actions { grid-template-columns: minmax(0, 1fr) auto; }
+    .player__transport { grid-column: 1 / -1; grid-row: 1; }
+}
+
 @media (max-width: 600px) {
+    .player__bottom { padding: 12px; }
     .player__volume { display: none; }
-    .player__transport { gap: 16px; }
+    .player__transport { gap: 8px; }
+    .player__actions { gap: 8px; }
+    .player__options { gap: 2px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -58,6 +58,9 @@ Shared conventions and Backend ownership:
   markup, field errors and local antiforgery POSTs using canonical backend
   `DataField` metadata, including minimum/maximum string lengths. Metadata and property
   getters are cached by property, not compiled per field/row. Unbound forms remain disabled.
+  Outlined labels stay associated with their controls; `Form.Toggle` binds canonical Boolean
+  metadata with native checkbox posting. [Toggle](Framework/Components/Toggle.cs) owns switch
+  states; [Tag](Framework/Components/Tag.cs) owns neutral/accent badges.
 - [Shell.cs](Pages/Shared/Shell.cs) and
   [Shell.scss](Pages/Shared/Shell.scss): Jularr-specific Header, Sidebar,
   Mobile navigation and their private helpers in **one** shell owner.
@@ -65,6 +68,7 @@ Shared conventions and Backend ownership:
 - [Brand.cs](Pages/Shared/Brand.cs): shared Jularr brand for Shell and Login;
   Original and Clean marks fit a shared square viewport, use the fingerprinted SVG sprite and inherit skin colors.
   [Icon.cs](Framework/Components/Icon.cs): generic fingerprinted SVG primitive.
+  Shared SVGs retain the original Jularr outline shapes; the Design lab shows the catalog.
 - [AdminNavigation.cs](Framework/AdminNavigation.cs):
   Requests/Rules/Users section links; Requests hides configuration links using verified service grants.
 - [Shared layout](Pages/Shared/_Layout.cshtml):
@@ -164,6 +168,8 @@ in `Modules/<Module>/`.
   component workshop with labeled examples, disabled playback chrome and the earlier
   approved Appearance/Library references. [Styles](Pages/Development/Design/Design.entry.scss)
   import the actual component owners; no playback JS or business mutations.
+  Local TMDB [sample artwork](Pages/Development/Design/Images/README.md) is fingerprinted and attributed.
+  Player transport includes disabled previous/next episode controls until real targets are available.
   Same-host review and optional LAN configuration: [Local preview](../../docs/LOCAL_PREVIEW.md).
 
 ## Verification and integration gaps

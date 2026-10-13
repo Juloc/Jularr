@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
@@ -48,9 +49,22 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new Div(new Button(new Icon("home", assets), new Text("design.primary")).Primary(),
                     new Button(new Text("design.secondary")), new Button(new Text("design.disabled")).Disabled(),
                     new Button(new Text("design.selected")).Attribute("aria-pressed", "true")).Class("design-lab__buttons"),
-                new Div(new[] { "home", "library", "bookmark", "calendar", "settings", "user", "search", "bell" }
-                    .Select(name => (IUiComponent)new Icon(name, assets)).ToArray()).Class("design-lab__icons")
+                new Div(new Tag(new Text("design.tagGenre")), new Tag(new Icon("subtitles", assets), new Text("design.tagSubtitles")),
+                    new Tag(new Icon("star", assets), new Text("design.selected")).Accent()).Class("design-lab__buttons"),
+                new P(new Text("design.toggleNotice")),
+                new Div(new Toggle("design.toggleOff"), new Toggle("design.toggleOn", true),
+                    new Toggle("design.disabled", true, true)).Class("design-lab__buttons")
             ])).Attribute("id", "controls"));
+
+            // Original Jularr icon shapes.
+            var iconNames = new[] { "home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "copy", "star",
+                "delete", "reading", "books", "admin", "users", "requests", "download", "folder", "link", "subtitles", "sync",
+                "activity", "scan", "logs", "spark", "globe", "key", "server", "palette", "history", "devices", "sign-out",
+                "pulse", "theme-system", "theme-light", "theme-dark", "providers", "chevron-down", "chevron-left", "chevron-up", "headphones" };
+            page.Content.Add(new UiSection("design.icons", [
+                new Div(iconNames.Select(name => (IUiComponent)new Div(new Icon(name, assets), new Span(new ValueText(name)))
+                    .Class("design-lab__icon")).ToArray()).Class("design-lab__icons")
+            ]));
 
             // Canonical field metadata.
             var data = new CreateWorkDataV1(MediaType.Movie, texts["design.exampleTitle"], 2026);
@@ -60,6 +74,8 @@ namespace Jularr.Frontend.Pages.Development.Design
             {
                 split.Primary.Add(WorkForm(data));
                 split.Primary.Add(new Form<LoginDataV1>(form => form.Password(item => item.Password, "account.field.password").Submit("account.login.submit")));
+                split.Primary.Add(new Form<UpdateInstanceModuleDataV1>(form => form.Toggle(item => item.IsEnabled, "design.selected"),
+                    data: new UpdateInstanceModuleDataV1(true, 1)));
                 split.Secondary.Add(new H3(new Text("design.validationExample")));
                 split.Secondary.Add(WorkForm(new CreateWorkDataV1(MediaType.Movie, ""), error));
             })])).Attribute("id", "forms"));
@@ -94,13 +110,16 @@ namespace Jularr.Frontend.Pages.Development.Design
                     texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
                 new MediaShelf("design.media", null, [
-                    new MediaCard(texts["design.exampleTitle"], "/Design#media", null, texts["design.exampleContext"], "design.exampleStatus"),
-                    new MediaCard(texts["design.exampleOtherTitle"], "/Design#media", null, texts["design.exampleContext"], "design.exampleStatus", "media.details", "/Design#media")
-                ])
+                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "design.exampleStatus"),
+                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "design.exampleStatus", "media.details", "/Design#media")
+                ]),
+                new P(new Text("design.imageCredit"), new ValueText(" "),
+                    new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images"))
             ])).Attribute("id", "media"));
 
             // Read-only playback chrome.
-            var source = new PlayerSource(texts["design.exampleTitle"], texts["design.exampleContext"], "/Design#player", "", "", "");
+            var source = new PlayerSource("Your Name.", texts["design.exampleContext"], "/Design#player", "", "", "",
+                assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"));
             page.Content.Add(new Div(new UiSection("design.player", [
                 new P(new Text("design.playerNotice")),
                 new Fieldset(new UiPlayer(source, assets)).Attribute("disabled", "disabled").Attribute("aria-label", texts["design.playerNotice"])

@@ -77,6 +77,12 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   classes into each page. Do not activate submission, provider buttons,
   session persistence or password reveal actions without a real, authorized
   backend operation and antiforgery handling.
+- Buttons and single-line fields use the shared pill radius. Form labels sit
+  on the input outline, remain associated through `for`/id and wrap without
+  truncation. Reuse `Tag` and native-checkbox `Toggle`; bind editable switches
+  through `Form.Toggle` so Backend field metadata and POST values stay central.
+- Control depth remains subtle: a light edge and small shadow from the shared
+  Material mixin, not independent per-page gradients or heavy neon effects.
 - Settings is a page, not a special `SettingsGroup` renderer.
   Reuse semantic `UiSection` and generic `ItemList` while actual
   settings operations are not connected.

@@ -1,4 +1,5 @@
 @use "../../../Framework/Components/Form";
+@use "../../../Framework/Components/Tag";
 @use "../../../Framework/Components/Table";
 @use "../../../Framework/Components/Split";
 @use "../../../Framework/Components/Section";
@@ -11,9 +12,25 @@
 @use "../../../Modules/Player/player";
 
 .design-lab {
-    &__buttons,
-    &__icons { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-    &__icons { margin-top: 20px; color: var(--accent-text); }
+    &__buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+    &__icons { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; color: var(--accent-text); }
+    &__icon {
+        display: grid;
+        justify-items: center;
+        gap: 8px;
+        padding: 16px 8px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+
+        .ui-icon { width: 28px; height: 28px; }
+    }
+
+    // Emit local sample artwork.
+    --your-name-poster: url("./Images/your-name-poster.jpg");
+    --suzume-poster: url("./Images/suzume-poster.jpg");
+    --your-name-backdrop: url("./Images/your-name-backdrop.jpg");
 
     &__artwork { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
     &__art {

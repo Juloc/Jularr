@@ -97,6 +97,21 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
+        public Form<TData> Toggle(Expression<Func<TData, bool>> selector, string labelKey)
+        {
+            // Bind a canonical Boolean field.
+            var field = Declare(selector, FieldControl.Checkbox, labelKey);
+            var toggle = new Toggle(labelKey, _data is not null && field.ReadValue(_data) is true);
+            toggle.Control.Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name);
+            Configure(field, toggle.Control);
+
+            // First value wins when checked.
+            IUiComponent control = _action is null ? toggle : new Div(toggle,
+                new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", "false"));
+            AddField(field, control);
+            return this;
+        }
+
         public Form<TData> Hidden<TValue>(Expression<Func<TData, TValue>> selector)
         {
             var field = Declare(selector, FieldControl.Text, "");
@@ -180,7 +195,7 @@ namespace Jularr.Frontend.Framework
         {
             // Use canonical field metadata.
             if (_action is null) input.Attribute("disabled", "disabled");
-            if (field.Required) input.Attribute("required", "required");
+            if (field.Required && field.Control != FieldControl.Checkbox) input.Attribute("required", "required");
             if (field.MinimumLength is { } minimumLength) input.Attribute("minlength", minimumLength.ToString(CultureInfo.InvariantCulture));
             if (field.MaximumLength is { } length && !field.ValueType.IsArray) input.Attribute("maxlength", length.ToString(CultureInfo.InvariantCulture));
             if (field.Minimum is { } minimum) input.Attribute("min", minimum.ToString(CultureInfo.InvariantCulture));
@@ -192,9 +207,14 @@ namespace Jularr.Frontend.Framework
             }
         }
 
-        private void AddField(BaseField field, HtmlElement input)
+        private void AddField(BaseField field, IUiComponent input)
         {
-            var content = new List<IUiComponent> { new HtmlLabel(new Text(field.LabelKey)).Attribute("for", _id + "-" + field.Name), input };
+            // Label stays on the outline.
+            var content = new List<IUiComponent>
+            {
+                field.Control == FieldControl.Checkbox ? input : new Div(
+                    new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name), input).Class("ui-field__control")
+            };
             if (_error?.Field == field.Name)
             {
                 content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("id", _id + "-" + field.Name + "-error").Attribute("role", "alert"));

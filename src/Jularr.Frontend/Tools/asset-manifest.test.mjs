@@ -32,13 +32,16 @@ test("shared asset and page/module entries have separate manifests", () => {
 
 test("design references and Original artwork have fingerprinted image entries", () => {
     for (const image of ["Modules/Appearance/Original/hero-torii.webp", "Modules/Appearance/Original/heroine.webp",
-        "Pages/Development/Design/References/appearance-approved.png", "Pages/Development/Design/References/library-approved.png"]) {
+        "Pages/Development/Design/References/appearance-approved.png", "Pages/Development/Design/References/library-approved.png",
+        "Pages/Development/Design/Images/your-name-poster.jpg", "Pages/Development/Design/Images/suzume-poster.jpg",
+        "Pages/Development/Design/Images/your-name-backdrop.jpg"]) {
         assert.ok(manifest[image]?.file, image);
     }
 });
 
 test("SVG sprite contains every compiled icon and no unhashed sprite", () => {
-    for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-clean", "brand-original"]) {
+    for (const key of ["home", "library", "bookmark", "calendar", "settings", "user", "search", "bell", "brand-clean", "brand-original",
+        "books", "reading", "folder", "subtitles", "providers", "theme-system", "player-previous", "player-next"]) {
         assert.equal(icons.symbols[key], "icon-" + key);
     }
     assert.ok(!readdirSync(join(build, "assets")).includes("icons.svg"));

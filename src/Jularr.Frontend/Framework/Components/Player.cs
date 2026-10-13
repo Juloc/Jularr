@@ -3,7 +3,7 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // Server-rendered player chrome; Modules/Player owns the client behavior.
-    public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken);
+    public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null);
 
     public sealed class UiPlayer(PlayerSource source, FrontendAssets assets) : IUiComponent
     {
@@ -15,20 +15,17 @@ namespace Jularr.Frontend.Framework
             var title = new List<IUiComponent> { new H1(new ValueText(source.Title)).Class("player__title") };
             if (source.Context is { } context) title.Add(new P(new ValueText(context)).Class("player__context"));
 
+            // Preserve one video element.
+            var video = new Video().Class("player__video").Attribute("playsinline", "playsinline").Attribute("preload", "none").Attribute("aria-label", source.Title);
+            if (source.PosterUrl is { } poster) video.Attribute("poster", poster);
+
             new Div(
-                new Video().Class("player__video").Attribute("playsinline", "playsinline").Attribute("preload", "none").Attribute("aria-label", source.Title),
+                video,
                 new Div(
                     new Div(
                         new A(Icon("close")).Class("player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
                         new Div([.. title]).Class("player__heading")
                     ).Class("player__top"),
-                    new Div(
-                        Action("back", "player.back10", "back-10"),
-                        new Button(Icon("play"), Icon("pause")).Class("player__button player__button--primary")
-                            .Attribute("data-action", "toggle").Attribute("aria-label", texts["player.play"])
-                            .Attribute("data-label-play", texts["player.play"]).Attribute("data-label-pause", texts["player.pause"]),
-                        Action("forward", "player.forward30", "forward-30")
-                    ).Class("player__transport"),
                     new Div(
                         new Div(
                             new Span(new ValueText("0:00")).Attribute("data-role", "time"),
@@ -37,16 +34,28 @@ namespace Jularr.Frontend.Framework
                             new Span(new ValueText("0:00")).Attribute("data-role", "duration")
                         ).Class("player__progress"),
                         new Div(
-                            new Button(Icon("volume"), Icon("muted")).Class("player__button").Attribute("data-action", "mute")
-                                .Attribute("aria-label", texts["player.mute"]).Attribute("aria-pressed", "false"),
-                            new Input().Class("player__volume").Attribute("type", "range").Attribute("min", "0").Attribute("max", "1").Attribute("step", "0.05")
-                                .Attribute("value", "1").Attribute("data-role", "volume").Attribute("aria-label", texts["player.volume"]),
-                            new Span().Class("player__spacer"),
-                            new Button(new Span(new ValueText("1×")).Attribute("data-role", "speed-label")).Class("player__button")
-                                .Attribute("data-action", "speed").Attribute("aria-label", texts["player.speed"]).Attribute("aria-expanded", "false"),
-                            Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
-                            Action("fullscreen", "player.fullscreen", "fullscreen"),
-                            Action("more", "player.more", "more").Attribute("aria-expanded", "false")
+                            new Div(
+                                new Button(Icon("volume"), Icon("muted")).Class("player__button").Attribute("data-action", "mute")
+                                    .Attribute("aria-label", texts["player.mute"]).Attribute("aria-pressed", "false"),
+                                new Input().Class("player__volume").Attribute("type", "range").Attribute("min", "0").Attribute("max", "1").Attribute("step", "0.05")
+                                    .Attribute("value", "1").Attribute("data-role", "volume").Attribute("aria-label", texts["player.volume"])
+                            ).Class("player__audio"),
+                            new Div(
+                                Action("previous", "player.previousEpisode", "previous").Attribute("disabled", "disabled"),
+                                Action("back", "player.back10", "back-10"),
+                                new Button(Icon("play"), Icon("pause")).Class("player__button player__button--primary")
+                                    .Attribute("data-action", "toggle").Attribute("aria-label", texts["player.play"])
+                                    .Attribute("data-label-play", texts["player.play"]).Attribute("data-label-pause", texts["player.pause"]),
+                                Action("forward", "player.forward30", "forward-30"),
+                                Action("next", "player.nextEpisode", "next").Attribute("disabled", "disabled")
+                            ).Class("player__transport"),
+                            new Div(
+                                new Button(new Span(new ValueText("1×")).Attribute("data-role", "speed-label")).Class("player__button")
+                                    .Attribute("data-action", "speed").Attribute("aria-label", texts["player.speed"]).Attribute("aria-expanded", "false"),
+                                Action("pip", "player.pip", "pip").Attribute("hidden", "hidden"),
+                                Action("fullscreen", "player.fullscreen", "fullscreen"),
+                                Action("more", "player.more", "more").Attribute("aria-expanded", "false")
+                            ).Class("player__options")
                         ).Class("player__actions")
                     ).Class("player__bottom"),
                     new Div([.. Speeds.Select(speed => new Button(new ValueText(speed + "×")).Class("player__option")
