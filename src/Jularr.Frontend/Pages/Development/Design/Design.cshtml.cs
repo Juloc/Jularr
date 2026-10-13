@@ -170,15 +170,6 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new Fieldset(new UiPlayer(source, assets)).Attribute("disabled", "disabled").Attribute("aria-label", texts["design.playerNotice"])
             ])).Class("design-lab__player").Attribute("id", "player"));
 
-            // Earlier approved references.
-            page.Content.Add(new UiSection("design.references", [
-                new P(new Text("design.referenceNotice")),
-                new Div(
-                    new MediaImage(assets.ImageUrl("Pages/Development/Design/References/appearance-approved.png"), texts["design.appearanceReference"], 1536, 1024),
-                    new MediaImage(assets.ImageUrl("Pages/Development/Design/References/library-approved.png"), texts["design.libraryReference"], 1448, 1086))
-                    .Class("design-lab__references")
-            ]));
-
             // Explicitly illustrative series states.
             MediaCard SeriesExample(string status, MediaAvailabilityState availability, int available = 0, int monitored = 0)
             {

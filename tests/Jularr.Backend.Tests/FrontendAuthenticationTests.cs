@@ -122,7 +122,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("data-transparency-", StringComparison.Ordinal));
             StringAssert.Contains(html, "aria-invalid=\"true\"");
             StringAssert.Contains(html, "media-hero--placeholder");
-            StringAssert.Contains(html, "appearance-approved-");
+            Assert.IsFalse(html.Contains("appearance-approved-", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("library-approved-", StringComparison.Ordinal));
             StringAssert.Contains(html, "data-start-url=\"\"");
             StringAssert.Contains(html, "class=\"tag tag--accent\"");
             StringAssert.Contains(html, "role=\"switch\"");

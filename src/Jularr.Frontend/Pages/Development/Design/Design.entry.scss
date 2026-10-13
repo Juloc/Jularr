@@ -49,15 +49,6 @@
         .player__video { height: 360px; }
     }
 
-    &__references {
-        display: grid;
-        gap: 24px;
-        // Emit private-source image entries.
-        --appearance-reference: url("./References/appearance-approved.png");
-        --library-reference: url("./References/library-approved.png");
-
-        .media-image { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-panel); }
-    }
 }
 
 html[data-skin="clean"] .design-lab__artwork { display: none; }

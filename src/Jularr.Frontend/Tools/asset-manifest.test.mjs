@@ -41,14 +41,17 @@ test("a page's CSS and TypeScript entries both survive discovery and publish", (
     assert.ok(css.includes(".media-grid") && css.includes(".discover-paging"));
 });
 
-test("design references and Original artwork have fingerprinted image entries", () => {
+test("design media and Original artwork have fingerprinted image entries", () => {
     for (const image of ["Modules/Appearance/Original/hero-torii.webp", "Modules/Appearance/Original/heroine.webp",
         "Modules/Appearance/Original/washi.webp", "Modules/Appearance/Original/blossom-branch.webp", "Modules/Appearance/Original/hero-fuji.webp",
-        "Pages/Development/Design/References/appearance-approved.png", "Pages/Development/Design/References/library-approved.png",
         "Pages/Development/Design/Images/your-name-poster.jpg", "Pages/Development/Design/Images/suzume-poster.jpg",
         "Pages/Development/Design/Images/your-name-backdrop.jpg"]) {
         assert.ok(manifest[image]?.file, image);
     }
+});
+
+test("obsolete design references are not published as current assets", () => {
+    for (const key of Object.keys(manifest)) assert.ok(!key.includes('/Design/References/'), key);
 });
 
 test("CSS image URLs use the host build root and resolve to published assets", () => {
