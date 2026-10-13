@@ -28,7 +28,12 @@ namespace Jularr.Frontend.Framework
                 new Div(
                     new Div(
                         new A(Icon("close")).Class("player__button").Attribute("href", source.BackHref).Attribute("aria-label", texts["common.back"]).Attribute("data-action", "close"),
-                        new Div([.. title]).Class("player__heading")
+                        new Button(new Icon("chevron-down", assets)).Class("player__button").Attribute("data-action", "minimize").Attribute("aria-label", texts["player.minimize"])
+                            .Attribute("hidden", "hidden"),
+                        new Div([.. title]).Class("player__heading"),
+                        new Button(new Icon("chevron-up", assets)).Class("player__button player__mini-only").Attribute("data-action", "expand")
+                            .Attribute("aria-label", texts["player.expand"]),
+                        new Button(Icon("close")).Class("player__button player__mini-only").Attribute("data-action", "stop").Attribute("aria-label", texts["player.stop"])
                     ).Class("player__top"),
                     new Div(
                         new Div(

@@ -1,5 +1,6 @@
 import "./player.scss";
 import { progressReporter } from "../Tracking/Progress";
+import { disableNavigation, enableNavigation, navigate } from "../Navigation/Navigation";
 
 // Playback client: capability probe, server PlaybackPlan, transport and progress reporting.
 interface PlaybackPlan {
@@ -42,6 +43,11 @@ async function start(player: HTMLElement): Promise<void> {
     plan = await requestPlan(null);
     if (!plan) return;
     await attach(plan, plan.resumePositionMs / 1000);
+    document.body.classList.add("player-active");
+    const minimizeButton = player.querySelector<HTMLButtonElement>("[data-action=minimize]");
+    if (minimizeButton) minimizeButton.hidden = false;
+    const playerAddress = location.pathname + location.search;
+    const backHref = player.querySelector<HTMLAnchorElement>("[data-action=close]")?.href ?? "/";
 
     // Save acknowledged progress only; each plan has its own session.
     const report = (ended: boolean, completed = ended) => {
@@ -179,7 +185,10 @@ async function start(player: HTMLElement): Promise<void> {
         audio: () => panel("audio"),
         subtitles: () => panel("subtitles"),
         more: () => panel("more"),
-        close: () => report(true, false)
+        close: () => report(true, false),
+        minimize: () => void minimize(),
+        expand: () => expand(true),
+        stop
     };
     player.addEventListener("click", event => {
         const target = event.target as Element;
@@ -212,9 +221,10 @@ async function start(player: HTMLElement): Promise<void> {
     });
     video.addEventListener("dblclick", actions.fullscreen);
 
-    // Keyboard baseline from the Player specification.
+    // Keyboard baseline from the Player specification; the mini player leaves the page's keys alone.
     document.addEventListener("keydown", event => {
         if (event.target instanceof HTMLInputElement && event.target.type !== "range") return;
+        if (player.classList.contains("player--mini") && !player.contains(event.target as Node)) return;
         const keys: Record<string, () => void> = {
             " ": actions.toggle, k: actions.toggle, ArrowLeft: () => seek(-10), j: () => seek(-10), ArrowRight: () => seek(30), l: () => seek(30),
             ArrowUp: () => { video.volume = Math.min(1, video.volume + 0.05); }, ArrowDown: () => { video.volume = Math.max(0, video.volume - 0.05); },
@@ -232,6 +242,39 @@ async function start(player: HTMLElement): Promise<void> {
     player.addEventListener("focusin", wake);
     wake();
 
+    // Minimize keeps the same session in a bar while the app is browsed around it.
+    async function minimize(): Promise<void> {
+        panel(null);
+        player.classList.add("player--mini");
+        document.body.classList.add("player-mini");
+        document.body.classList.remove("player-page");
+        enableNavigation(url => {
+            if (url.pathname + url.search !== playerAddress) return false;
+            expand(false);
+            return true;
+        });
+        if (!document.querySelector(".app-layout")) await navigate(backHref, true);
+    }
+
+    function expand(push: boolean): void {
+        player.classList.remove("player--mini");
+        document.body.classList.remove("player-mini");
+        document.body.classList.add("player-page");
+        if (push) history.pushState(null, "", playerAddress);
+    }
+
+    // Stop ends the session and leaves the app as it is; progress stays.
+    function stop(): void {
+        report(true, false);
+        video.pause();
+        hls?.destroy();
+        video.removeAttribute("src");
+        video.load();
+        disableNavigation();
+        document.body.classList.remove("player-active", "player-mini");
+        player.closest(".player-main")?.remove();
+    }
+
     function seek(seconds: number): void {
         video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
     }
@@ -246,7 +289,9 @@ async function start(player: HTMLElement): Promise<void> {
         player.classList.remove("player--idle");
         clearTimeout(idle);
         idle = window.setTimeout(() => {
-            if (!video.paused && !player.querySelector(".player__panel:not([hidden])") && !player.contains(document.activeElement)) player.classList.add("player--idle");
+            if (!video.paused && !player.classList.contains("player--mini") && !player.querySelector(".player__panel:not([hidden])") && !player.contains(document.activeElement)) {
+                player.classList.add("player--idle");
+            }
         }, IdleDelay);
     }
 

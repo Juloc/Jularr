@@ -233,6 +233,7 @@ namespace Jularr.Backend.Tests
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "data-action=\"audio\"");
+            StringAssert.Contains(html, "data-action=\"minimize\" aria-label=\"Minimize\" hidden=\"hidden\"");
             StringAssert.Contains(html, "Deutsch &#xB7; Kommentar &#xB7; Stereo");
             StringAssert.Contains(html, "data-subtitle=\"" + sidecar.Key + "\"");
         }

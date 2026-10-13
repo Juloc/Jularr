@@ -220,3 +220,92 @@
 @media (prefers-reduced-motion: reduce) {
     .player__chrome { transition: none; }
 }
+
+// The app stays hidden behind the full player; the mini player is a bar above it.
+.player-active:not(.player-mini) .app-layout { display: none; }
+.player__mini-only { display: none; }
+
+.player-mini {
+    .player-main {
+        position: fixed;
+        inset: auto 12px calc(12px + env(safe-area-inset-bottom)) auto;
+        z-index: 40;
+        width: min(560px, calc(100% - 24px));
+        min-height: 0;
+    }
+
+    .app-main { padding-bottom: 96px; }
+
+    @media (max-width: 780px) {
+        .player-main { inset-block-end: calc(84px + env(safe-area-inset-bottom)); }
+    }
+}
+
+.player--mini {
+    display: flex;
+    align-items: center;
+    min-height: 0;
+    height: 72px;
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow);
+
+    .player__video {
+        flex: none;
+        width: 128px;
+        height: 72px;
+    }
+
+    .player__chrome {
+        position: static;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding-inline: 8px;
+        background: #121214;
+        opacity: 1;
+    }
+
+    .player__top {
+        flex: 1;
+        min-width: 0;
+        order: 2;
+        padding: 0;
+        background: none;
+    }
+
+    .player__title {
+        overflow: hidden;
+        font-size: 0.9rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .player__context { display: none; }
+
+    .player__bottom {
+        order: 1;
+        padding: 0;
+        background: none;
+    }
+
+    // The timeline runs as a thin line along the top edge.
+    .player__progress {
+        position: absolute;
+        inset: 0 0 auto;
+
+        > span { display: none; }
+    }
+
+    .player__actions { display: block; }
+    .player__mini-only { display: inline-grid; }
+
+    .player__audio,
+    .player__options,
+    .player__panel,
+    [data-action=close],
+    [data-action=minimize],
+    [data-action=previous],
+    [data-action=next] { display: none; }
+}
