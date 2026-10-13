@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Backend.Logic.Library
 {
@@ -10,8 +11,8 @@ namespace Jularr.Backend.Logic.Library
         private static readonly FrozenSet<string> Ebook = FrozenSet.Create(".epub", ".pdf", ".mobi", ".azw3");
         private static readonly FrozenSet<string> Comic = FrozenSet.Create(".cbz", ".cbr", ".cb7");
         private static readonly FrozenSet<string> Subtitle = FrozenSet.Create(".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx", ".sup");
-        private static readonly FrozenSet<string> Game = FrozenSet.Create(".iso", ".chd", ".cue", ".zip", ".7z", ".rar", ".nsp", ".xci", ".nds", ".3ds", ".gba", ".gb", ".gbc",
-            ".nes", ".sfc", ".smc", ".n64", ".z64", ".gcm", ".rvz", ".wbfs");
+        private static readonly FrozenSet<string> Game = FrozenSet.Create(".iso", ".chd", ".cue", ".zip", ".7z", ".rar", ".nsp", ".xci", ".3ds", ".gcm", ".rvz", ".wbfs")
+            .Union(GameRomMatching.FileExtensions).ToFrozenSet();
 
         private static readonly FrozenSet<string> MangaExtensions = Comic.Union(Ebook).ToFrozenSet();
 

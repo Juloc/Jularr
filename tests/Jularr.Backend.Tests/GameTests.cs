@@ -1,5 +1,7 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
@@ -17,7 +19,9 @@ using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Logic.Igdb;
+using Jularr.Integrations.Logic.Libretro;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Microsoft.Extensions.DependencyInjection;
@@ -152,6 +156,82 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Game_ScannedRoms_AreIdentifiedByTheirVerifiedDump()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var rom = new byte[1024];
+            Encoding.ASCII.GetBytes("example quest cartridge").CopyTo(rom, 0);
+            var unknown = Encoding.ASCII.GetBytes("unknown adventure cartridge");
+            var libretro = new FakeLibretro($$"""
+                clrmamepro (
+                	name "Nintendo - Super Nintendo Entertainment System"
+                	version "2026.10.07"
+                )
+
+                game (
+                	name "Example Quest, The (USA) (Rev 1)"
+                	rom ( name "Example Quest, The (USA) (Rev 1).sfc" size 1024 crc 00000000 md5 00 sha1 {{Convert.ToHexString(SHA1.HashData(rom))}} )
+                )
+                game (
+                	name "Unknown Adventure (Japan)"
+                	rom ( name "Unknown Adventure (Japan).sfc" size 27 crc 00000000 md5 00 sha1 {{Convert.ToHexString(SHA1.HashData(unknown))}} )
+                )
+                """);
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, services: services => services.AddHttpClient<LibretroClient>().ConfigurePrimaryHttpMessageHandler(() => libretro));
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var retro = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Games", "Retro");
+            Directory.CreateDirectory(retro);
+            File.WriteAllBytes(Path.Combine(retro, "eq.sfc"), rom);
+            File.WriteAllBytes(Path.Combine(retro, "eq-copier.smc"), [.. new byte[512], .. rom]);
+            File.WriteAllText(Path.Combine(retro, "README.md"), "notes");
+            File.WriteAllBytes(Path.Combine(retro, "ua.sfc"), unknown);
+            File.WriteAllBytes(Path.Combine(retro, "homebrew.sfc"), Encoding.ASCII.GetBytes("homebrew"));
+            using (var archive = ZipFile.Open(Path.Combine(retro, "eq-copy.zip"), ZipArchiveMode.Create))
+            {
+                await using var entry = archive.CreateEntry("eq.smc").Open();
+                await entry.WriteAsync(rom);
+            }
+
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Games", MediaType.Game);
+            await host.Fixture.RunSqlAsync("""
+                WITH work AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (7, 'The Example Quest') RETURNING "Id")
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") SELECT "Id", 'The Example Quest', TRUE FROM work
+                """);
+
+            // The platform's DAT names every copy, also behind a copier header or in an archive; their title finds the single game and the DAT its platform.
+            await LibraryTests.ScanAsync(host, rootId);
+            Assert.AreEqual(1, libretro.Requests);
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%.md'"));
+            Assert.AreEqual(Convert.ToHexStringLower(SHA1.HashData(rom)), await host.ScalarAsync("SELECT \"Sha1\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%eq-copy.zip'"));
+            Assert.AreEqual("SNES", await host.ScalarAsync("""
+                SELECT DISTINCT platform."Abbreviation" FROM "GameReleases" AS release JOIN "GamePlatforms" AS platform ON platform."Id" = release."GamePlatformId"
+                """));
+            Assert.AreEqual(19, await host.ScalarAsync("SELECT \"IgdbId\" FROM \"GamePlatforms\""));
+
+            // A dump without its game suggests the verified title; unknown files keep their path.
+            using var unmatched = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/files?onlyUnmatched=true");
+            var files = (await unmatched.Content.ReadFromJsonAsync<PageResult<LibraryFileDetailsV1>>())!.Items;
+            Assert.AreEqual("Unknown Adventure", files.Single(file => file.RelativePath.EndsWith("ua.sfc", StringComparison.Ordinal)).SuggestedTitle);
+            Assert.AreEqual("Retro", files.Single(file => file.RelativePath.EndsWith("homebrew.sfc", StringComparison.Ordinal)).SuggestedTitle);
+
+            // A fresh DAT and unchanged files need no second pass.
+            await LibraryTests.ScanAsync(host, rootId);
+            Assert.AreEqual(1, libretro.Requests);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"ProbedAt\" IS NULL"));
+        }
+
+        [TestMethod]
+        public void Game_RomNames_NameTheirGame()
+        {
+            Assert.AreEqual("The Legend of Zelda - A Link to the Past", GameRomMatching.Title("Legend of Zelda, The - A Link to the Past (USA) [b]"));
+            Assert.AreEqual("Super Mario World", GameRomMatching.Title("Super Mario World (USA)"));
+            Assert.AreEqual(GameRomMatching.Key("The Legend of Zelda: A Link to the Past"), GameRomMatching.Key("The Legend of Zelda - A Link to the Past"));
+            Assert.AreEqual("Nintendo - Game Boy Color", GameRomMatching.System("Retro/Game.GBC")!.Dat);
+            Assert.IsNull(GameRomMatching.System("PC/setup.iso"));
+        }
+
+        [TestMethod]
         [DataRow("Example.Quest.Switch.NSP-GRP2", 130, "Matches")]
         [DataRow("Example.Quest.PS4-DUPLEX", 130, "WrongPlatform")]
         [DataRow("Example.Quest-CODEX", 130, "AmbiguousTitle")]
@@ -175,6 +255,18 @@ namespace Jularr.Backend.Tests
         {
             await using var scope = host.Services.CreateAsyncScope();
             await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
+        }
+
+        private sealed class FakeLibretro(string dat) : HttpMessageHandler
+        {
+            public int Requests { get; private set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Requests++;
+                Assert.AreEqual("/libretro/libretro-database/master/metadat/no-intro/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System.dat", request.RequestUri!.AbsolutePath);
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(dat) });
+            }
         }
 
         private sealed class FakeIgdb : HttpMessageHandler

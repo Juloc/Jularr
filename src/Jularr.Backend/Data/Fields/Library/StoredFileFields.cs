@@ -15,6 +15,7 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly StringField Container = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly LongField DurationMs = new() { Minimum = 0, Required = false };
         public static readonly LongField BitRate = new() { Minimum = 0, Required = false };
+        public static readonly StringField Sha1 = new(NpgsqlDbType.Varchar) { MaximumLength = 40, Required = false };
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField OnlyUnmatched = new();
         public static readonly LongField FileCount = new() { Minimum = 0 };

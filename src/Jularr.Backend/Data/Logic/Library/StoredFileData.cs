@@ -182,8 +182,9 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class LibraryFileRowData : BaseData
     {
         public LibraryFileRowData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, string relativePath, long sizeBytes, DateTime? missingSince,
-            long? mediaAssetId, long? workId, string? workTitle)
+            long? mediaAssetId, long? workId, string? workTitle, string? romName)
         {
+            RomName = romName;
             Id = id;
             LibraryRootId = libraryRootId;
             LibraryRootName = libraryRootName;
@@ -225,6 +226,10 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle), false)]
         public string? WorkTitle { get; }
+
+        // The verified dump a game file's hash names.
+        [DataField(typeof(GameRomFields), nameof(GameRomFields.Name), false)]
+        public string? RomName { get; }
     }
 
     internal sealed class LibraryFileFilterData : BaseData

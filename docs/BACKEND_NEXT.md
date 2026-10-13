@@ -154,9 +154,9 @@ pack, otherwise episode by episode, several downloads in parallel; requests comp
 once every aired regular episode exists. Books and Light Novels come through Open Library and
 direct sources; Manga through AniList with volumes as units on the same unit pass as series
 episodes; Music through MusicBrainz with the album as the Work and its tracks as units. Prowlarr, Sonarr and Radarr can be taken over once (indexers, clients, missing
-titles). Games: IGDB metadata with shared platforms (G1) and Arr+ per requested platform (G2) are connected;
-ROM identification through Libretro and ScreenScraper (G3) and artwork/PC enrichment
-(G4) follow, as does the remaining profile editing. The
+titles). Games: IGDB metadata with shared platforms (G1), Arr+ per requested platform (G2) and
+ROM identification by hash against the libretro No-Intro DATs (G3) are connected; ScreenScraper
+(developer account) and artwork/PC enrichment (G4) follow, as does the remaining profile editing. The
 remaining modules are not advertised as available. Tracking must be rebuilt from
 the desired progress/resume/history behavior, not copied from the buggy legacy
 implementation. Library's physical scanning/import integration still needs its

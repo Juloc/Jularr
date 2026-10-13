@@ -29,6 +29,9 @@ namespace Jularr.Backend.Logic.Library
                     "MissingSince" = NULL,
                     "ProbedAt" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."ProbedAt"
+                    END,
+                    "Sha1" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."Sha1"
                     END;
                 """;
             sql.Parameters.Add(data);
