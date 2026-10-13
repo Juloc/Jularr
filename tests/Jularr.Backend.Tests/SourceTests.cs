@@ -253,6 +253,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_FileRedirectToLocalHost_IsRejected()
+        {
+            var sources = new FakeSources { RedirectFileToLocal = true };
+            var client = new AnnasArchiveClient(new HttpClient(sources), new Integrations.Logic.Common.NoSourceGateResolver());
+            using var target = new TemporaryDirectory();
+
+            await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
+                client.DownloadFileAsync(new Uri("https://files.example.test/0123.epub"), Path.Combine(target.Path, "book.epub"), CancellationToken.None));
+            Assert.IsTrue(sources.Requests.Any(request => request.StartsWith("files.example.test/", StringComparison.Ordinal)));
+            Assert.IsFalse(sources.Requests.Any(request => request.StartsWith("127.0.0.1/", StringComparison.Ordinal)));
+        }
+
+        [TestMethod]
         public async Task SimulatedGates_PassOnlyForAllowedTestTargets()
         {
             // The override lives in the tests; it knows only its own simulated challenge and allowed hosts.
@@ -353,6 +366,7 @@ namespace Jularr.Backend.Tests
 
             public bool Challenge { get; set; }
             public bool SlowGate { get; set; }
+            public bool RedirectFileToLocal { get; set; }
             public int SlowWaitSeconds { get; set; } = 1;
             public int SignedHits { get; private set; }
             public ConcurrentBag<string> AuthorizationSeenBy { get; } = [];
@@ -372,6 +386,7 @@ namespace Jularr.Backend.Tests
                     "opds.example.test" => Opds(request),
                     "cdn.example.test" => Signed(uri),
                     "annas.example.test" or "other.example.test" => Annas(request),
+                    "files.example.test" when RedirectFileToLocal => new HttpResponseMessage(HttpStatusCode.Found) { Headers = { Location = new Uri("https://127.0.0.1/secret") } },
                     "files.example.test" => Bytes(ReadingTests.BuildEpub("Pride and Prejudice")),
                     _ => Text("""{"queue":{"paused":false,"slots":[]},"history":{"slots":[]},"version":"4.5.0"}""", "application/json")
                 });
