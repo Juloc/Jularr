@@ -8,8 +8,9 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
-        public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay)
+        public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead)
         {
+            CanRead = canRead;
             CanReadMedia = canReadMedia;
             CanManageMedia = canManageMedia;
             CanUpdateWatchlist = canUpdateWatchlist;
@@ -28,5 +29,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
         public bool CanManageWanted { get; }
         public bool CanAcquire { get; }
         public bool CanPlay { get; }
+
+        // Book processing and the reader are switched on.
+        public bool CanRead { get; }
     }
 }

@@ -80,10 +80,12 @@ namespace Jularr.Frontend.Pages.User.Details
 
         private IUiComponent Play(WorkAvailabilityV1 item)
         {
-            // Books open in the reader.
+            // Books open in the reader when book processing is on.
             if (item.MediaAssetTypeId == MediaAssetType.Ebook)
             {
-                return new A(new Text("details.read")).Attribute("href", "/Read/" + item.Id.ToString(CultureInfo.InvariantCulture));
+                return item.IsAvailable && texts.Capabilities?.CanRead is true
+                    ? new A(new Text("details.read")).Attribute("href", "/Read/" + item.Id.ToString(CultureInfo.InvariantCulture))
+                    : new Span();
             }
 
             // Continue where this profile stopped.

@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.User.Discover.V1;
+using Jularr.Backend.Data.User.Instance.V1;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Logic.Reading;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -119,6 +120,27 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(old.DocumentId, reopened.DocumentId);
             Assert.IsTrue(reopened.IsCached);
             Assert.AreEqual("s0/b2", reopened.Locator);
+        }
+
+        [TestMethod]
+        public async Task ReadingModule_Off_LeavesBooksAsFilesOnly()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (first, _) = await CreateBooksAsync(host, storage.Path, "Plain Book", "Other Book");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Reading'");
+
+            // No preparation, no cache and no reader entry.
+            using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + first + "/open");
+            Assert.AreEqual(HttpStatusCode.Forbidden, opened.StatusCode);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+            using var capabilities = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
+            Assert.IsFalse((await capabilities.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!.CanRead);
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"MediaAssets\" WHERE \"Id\" = " + first))!;
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            var html = await details.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, html);
+            Assert.IsFalse(html.Contains("/Read/", StringComparison.Ordinal));
         }
 
         [TestMethod]

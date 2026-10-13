@@ -90,7 +90,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     actionKey ?? "media.details", actionHref ?? DetailsHref(featured), actionKey is null ? null : DetailsHref(featured)));
             }
 
-            page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
+            page.Content.Add(new MediaShelf("discover.continue", null, [.. _continue.Where(item => item.MediaAssetTypeId != MediaAssetType.Ebook || texts.Capabilities?.CanRead is true).Select(item => new MediaCard(item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
                 (item.MediaAssetTypeId == MediaAssetType.Ebook ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture)))]));
             page.Content.Add(new MediaShelf("discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),

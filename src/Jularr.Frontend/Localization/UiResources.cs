@@ -601,6 +601,7 @@ namespace Jularr.Frontend.Localization
             new("media.asset.Comic", "Comic"),
             new("media.asset.Game", "Game"),
             new("instance.module.Playback", "Playback"),
+            new("instance.module.Reading", "Book processing and reader"),
             new("player.play", "Play"),
             new("player.pause", "Pause"),
             new("player.back10", "Back 10 seconds"),
