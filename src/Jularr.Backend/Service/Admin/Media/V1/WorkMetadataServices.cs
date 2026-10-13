@@ -128,7 +128,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             // Only Works mapped to TMDB or Open Library can be refreshed.
             var (work, identity) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct),
-                await WorkMetadataQueries.ReadTmdbIdentityAsync(ctx, Parameters.WorkId, ct)), CancellationToken);
+                await WorkMetadataQueries.ReadProviderIdentityAsync(ctx, Parameters.WorkId, ct)), CancellationToken);
             if (identity is null)
             {
                 throw new DataValidationException(nameof(WorkParametersV1.WorkId), "unknown_reference");
@@ -169,7 +169,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return ctx.ReadSql.ReadRequiredAsync<WorkDetailsV1>(sql, ct);
         }
 
-        public static Task<WorkIdentityData?> ReadTmdbIdentityAsync(LogicContext ctx, long workId, CancellationToken ct)
+        public static Task<WorkIdentityData?> ReadProviderIdentityAsync(LogicContext ctx, long workId, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =

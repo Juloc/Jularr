@@ -72,10 +72,10 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             new A(new Text("activity.openSource")).Class("button").Attribute("href", manual).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"),
             new Form<SaveActivitySourceLinkDataV1>(form =>
             {
-                form.Text(data => data.SourceUrl, "activity.fileLink");
+                form.Text(data => data.SourceLinkUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
-                Error?.Field == nameof(SaveActivitySourceLinkDataV1.SourceUrl) ? Error : null));
+                Error?.Field == nameof(SaveActivitySourceLinkDataV1.SourceLinkUrl) ? Error : null));
 
         // Scans report service errors; downloads report acquisition outcomes.
         private static string Reason(OperationType type, string key) => type == OperationType.LibraryScan ? "errors." + key : "acquisition.outcome." + key;
@@ -122,9 +122,9 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostSourceLinkAsync([BindRequired] long operationId, string? sourceUrl)
+        public async Task<IActionResult> OnPostSourceLinkAsync([BindRequired] long operationId, string? sourceLinkUrl)
         {
-            await sourceLink.ExecuteAsync<UpdateResult>(new ActivityOperationParametersV1(operationId), new SaveActivitySourceLinkDataV1(sourceUrl ?? ""), HttpContext.RequestAborted);
+            await sourceLink.ExecuteAsync<UpdateResult>(new ActivityOperationParametersV1(operationId), new SaveActivitySourceLinkDataV1(sourceLinkUrl ?? ""), HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
 

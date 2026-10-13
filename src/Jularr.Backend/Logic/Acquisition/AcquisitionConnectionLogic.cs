@@ -104,8 +104,19 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
+        // The Anna's Archive member key travels in the address; it is only sent over HTTPS.
+        private static void ValidateAddress(AcquisitionConnectionSaveData data)
+        {
+            if (data.AcquisitionConnectionTypeId == AcquisitionConnectionType.AnnasArchive && !data.BaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
+            }
+        }
+
         public static async Task<long> CreateAcquisitionConnectionAsync(this LogicContext ctx, AcquisitionConnectionSaveData data, CancellationToken ct)
         {
+            ValidateAddress(data);
+
             // Store protected configuration.
             var sql = new SqlStatement();
             sql.Statement =
@@ -124,6 +135,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task UpdateAcquisitionConnectionAsync(this LogicContext ctx, AcquisitionConnectionSaveData data, CancellationToken ct)
         {
+            ValidateAddress(data);
+
             // Preserve an omitted API key; a new address or type needs a new check.
             var sql = new SqlStatement();
             sql.Statement =

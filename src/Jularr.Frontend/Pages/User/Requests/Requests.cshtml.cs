@@ -52,14 +52,14 @@ namespace Jularr.Frontend.Pages.User.Requests
             new Form<SaveRequestSourceLinkDataV1>(form =>
             {
                 form.Hidden(data => data.OperationId);
-                form.Text(data => data.SourceUrl, "activity.fileLink");
+                form.Text(data => data.SourceLinkUrl, "activity.fileLink");
                 form.Submit("activity.continueDownload");
             }, "/Requests?handler=SourceLink&requestId=" + requestId.ToString(CultureInfo.InvariantCulture), csrf, new SaveRequestSourceLinkDataV1(operationId, ""),
-                Error?.Field == nameof(SaveRequestSourceLinkDataV1.SourceUrl) ? Error : null));
+                Error?.Field == nameof(SaveRequestSourceLinkDataV1.SourceLinkUrl) ? Error : null));
 
-        public async Task<IActionResult> OnPostSourceLinkAsync([BindRequired] long requestId, [BindRequired] long operationId, string? sourceUrl)
+        public async Task<IActionResult> OnPostSourceLinkAsync([BindRequired] long requestId, [BindRequired] long operationId, string? sourceLinkUrl)
         {
-            await sourceLink.ExecuteAsync<UpdateResult>(new RequestParametersV1(requestId), new SaveRequestSourceLinkDataV1(operationId, sourceUrl ?? ""), HttpContext.RequestAborted);
+            await sourceLink.ExecuteAsync<UpdateResult>(new RequestParametersV1(requestId), new SaveRequestSourceLinkDataV1(operationId, sourceLinkUrl ?? ""), HttpContext.RequestAborted);
             return LocalRedirect("/Requests");
         }
 

@@ -17,6 +17,7 @@ using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Logic.AnnasArchive;
+using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Opds;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -46,7 +47,13 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "gutenberg" }, result.Added);
             CollectionAssert.IsSubsetOf(new[] { "annasarchive", "standardebooks", "newznab" }, result.NeedsAccount);
             Assert.IsTrue((await ReadCatalogAsync(host)).Single(item => item.Key == "gutenberg").IsConfigured);
-            Assert.AreEqual(3L, await host.ScalarAsync("SELECT \"AcquisitionConnectionTypeId\"::bigint FROM \"AcquisitionConnections\""));
+            using var standard = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Standard Ebooks", AcquisitionConnectionType.Opds,
+                "https://standardebooks.org/feeds/opds", null, true, 50, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, standard.StatusCode, await standard.Content.ReadAsStringAsync());
+            var catalog = await ReadCatalogAsync(host);
+            Assert.IsTrue(catalog.Single(item => item.Key == "standardebooks").IsConfigured);
+            Assert.IsFalse(catalog.Single(item => item.Key == "opds").IsConfigured);
+            Assert.AreEqual(3L, await host.ScalarAsync("SELECT \"AcquisitionConnectionTypeId\"::bigint FROM \"AcquisitionConnections\" ORDER BY \"Id\" LIMIT 1"));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Sources");
             var html = await page.Content.ReadAsStringAsync();
@@ -122,6 +129,9 @@ namespace Jularr.Backend.Tests
             using var downloads = new TemporaryDirectory();
             var sources = new FakeSources();
             await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var plain = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "http://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.BadRequest, plain.StatusCode);
             using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
                 "https://annas.example.test", null, true, 60, [], null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
@@ -162,6 +172,14 @@ namespace Jularr.Backend.Tests
                 (await todo.Content.ReadFromJsonAsync<PageResult<ActivityItemV1>>())!.Items.Single(item => item.Id == operationId).ManualUrl);
             using var plain = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link", new SaveActivitySourceLinkDataV1("http://files.example.test/0123.epub"));
             Assert.AreEqual(HttpStatusCode.BadRequest, plain.StatusCode);
+
+            // An expired link goes back to the person; the record stays known.
+            using var expired = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + operationId + "/source-link", new SaveActivitySourceLinkDataV1("https://files.example.test/expired.epub"));
+            Assert.AreEqual(HttpStatusCode.OK, expired.StatusCode, await expired.Content.ReadAsStringAsync());
+            await RunAsync<MonitorDownloadsV1>(host);
+            Assert.AreEqual("https://annas.example.test/slow_download/0123456789abcdef0123456789abcdef/0/0",
+                await host.ScalarAsync("SELECT \"AttentionUrl\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"SourceLinkUrl\" FROM \"Operations\" WHERE \"OperationTypeId\" = 2"));
 
             // Users see and confirm only while the instance and their account allow it.
             using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
@@ -210,7 +228,7 @@ namespace Jularr.Backend.Tests
         public async Task AnnasArchive_LongCountdownWaitsForAPerson()
         {
             var sources = new FakeSources { SlowWaitSeconds = 600 };
-            var client = new AnnasArchiveClient(new HttpClient(sources), new Integrations.Logic.Common.NoSourceGateResolver());
+            var client = new AnnasArchiveClient(new HttpClient(sources), new NoSourceGateResolver());
             using var target = new TemporaryDirectory();
             var failure = await Assert.ThrowsExactlyAsync<Integrations.Data.AnnasArchive.AnnasArchiveException>(() =>
                 client.SlowDownloadAsync(new Uri("https://annas.example.test/"), "0123456789abcdef0123456789abcdef", Path.Combine(target.Path, "book.epub"), TimeSpan.FromSeconds(90), CancellationToken.None));
@@ -240,6 +258,22 @@ namespace Jularr.Backend.Tests
                 wrong.SearchAsync(new Uri("https://annas.example.test/"), "Pride and Prejudice Austen", CancellationToken.None));
             Assert.IsFalse(new DirectCredentials(new Uri("https://opds.example.test/opds"), "Basic x").Covers(new Uri("https://cdn.example.test/file")));
         }
+
+        [TestMethod]
+        [DataRow("127.0.0.1", false)]
+        [DataRow("10.1.2.3", false)]
+        [DataRow("172.20.0.1", false)]
+        [DataRow("192.168.1.10", false)]
+        [DataRow("169.254.1.1", false)]
+        [DataRow("100.64.0.1", false)]
+        [DataRow("::1", false)]
+        [DataRow("fd00::1", false)]
+        [DataRow("fe80::1", false)]
+        [DataRow("::ffff:192.168.1.10", false)]
+        [DataRow("93.184.216.34", true)]
+        [DataRow("2606:4700::1", true)]
+        public void PublicNetwork_ReachesPublicAddressesOnly(string address, bool expected) =>
+            Assert.AreEqual(expected, PublicNetwork.IsPublic(System.Net.IPAddress.Parse(address)));
 
         private static async Task GrabAnnaAsync(Host host, long wantedId)
         {
@@ -338,6 +372,7 @@ namespace Jularr.Backend.Tests
                     "opds.example.test" => Opds(request),
                     "cdn.example.test" => Signed(uri),
                     "annas.example.test" or "other.example.test" => Annas(request),
+                    "files.example.test" when uri.AbsolutePath == "/expired.epub" => new HttpResponseMessage(HttpStatusCode.Gone),
                     "files.example.test" => Bytes(ReadingTests.BuildEpub("Pride and Prejudice")),
                     _ => Text("""{"queue":{"paused":false,"slots":[]},"history":{"slots":[]},"version":"4.5.0"}""", "application/json")
                 });

@@ -17,6 +17,9 @@ namespace Jularr.Integrations.Logic.AnnasArchive
 
         public static Uri RecordUri(Uri site, string md5) => new(site, "md5/" + md5);
 
+        // The public waiting page of one download server.
+        public static Uri SlowPageUri(Uri site, string md5, int server = 0) => new(site, "slow_download/" + md5 + "/0/" + server.ToString(CultureInfo.InvariantCulture));
+
         public static string? ReadMd5(Uri record) => Md5Path().Match(record.AbsolutePath) is { Success: true } match ? match.Groups[1].Value : null;
 
         public async Task<IReadOnlyList<AnnasArchiveRecord>> SearchAsync(Uri site, string query, CancellationToken ct)
@@ -34,7 +37,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
             catch (DirectDownloadException exception)
             {
-                throw new AnnasArchiveException(exception.Failure == DirectDownloadFailure.Gate ? AnnasArchiveFailure.Gate : AnnasArchiveFailure.Unavailable, "Anna's Archive could not be searched.", exception);
+                throw new AnnasArchiveException(Failure(exception), "Anna's Archive could not be searched.", exception);
             }
 
             // Each record links to /md5/<hash>; its text names title, author and file facts.
@@ -96,15 +99,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "Anna's Archive returned invalid JSON.", exception);
             }
 
-            try
-            {
-                using var file = await DirectDownload.SendAsync(http, target, null, gates, ct);
-                await DirectDownload.SaveAsync(file, destination, MaximumBytes, ct);
-            }
-            catch (DirectDownloadException exception)
-            {
-                throw new AnnasArchiveException(exception.Failure == DirectDownloadFailure.Gate ? AnnasArchiveFailure.Gate : AnnasArchiveFailure.Unavailable, "The file could not be downloaded.", exception);
-            }
+            await DownloadFileAsync(target, destination, ct);
         }
 
         // The public slow download: the page's waiting time is kept, its check is never passed.
@@ -116,7 +111,7 @@ namespace Jularr.Integrations.Logic.AnnasArchive
                 string page;
                 try
                 {
-                    using var response = await DirectDownload.SendAsync(http, new Uri(site, "slow_download/" + md5 + "/0/" + server.ToString(CultureInfo.InvariantCulture)), null, gates, ct);
+                    using var response = await DirectDownload.SendAsync(http, SlowPageUri(site, md5, server), null, gates, ct);
                     if (response.Content.Headers.ContentLength > MaximumPageBytes)
                     {
                         throw new AnnasArchiveException(AnnasArchiveFailure.InvalidResponse, "The download page is too large.");
@@ -170,9 +165,11 @@ namespace Jularr.Integrations.Logic.AnnasArchive
             }
             catch (DirectDownloadException exception)
             {
-                throw new AnnasArchiveException(exception.Failure == DirectDownloadFailure.Gate ? AnnasArchiveFailure.Gate : AnnasArchiveFailure.Unavailable, "The file could not be downloaded.", exception);
+                throw new AnnasArchiveException(Failure(exception), "The file could not be downloaded.", exception);
             }
         }
+
+        private static AnnasArchiveFailure Failure(DirectDownloadException exception) => exception.Failure == DirectDownloadFailure.Gate ? AnnasArchiveFailure.Gate : AnnasArchiveFailure.Unavailable;
 
         private static bool IsSitePage(Uri site, Uri uri) => string.Equals(site.Host, uri.Host, StringComparison.OrdinalIgnoreCase)
             && (uri.AbsolutePath.StartsWith("/md5/", StringComparison.Ordinal) || uri.AbsolutePath.StartsWith("/slow_download/", StringComparison.Ordinal)

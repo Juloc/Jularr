@@ -68,15 +68,17 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
     internal sealed class SourceCatalogState(IReadOnlyList<SourceConnectionData> connections, IReadOnlyList<SourceProviderData> providers)
     {
-        // A source counts as set up when a connection of its kind points at its default address or a provider is on.
+        // A source counts as set up when a connection points at its default address, any other connection of its kind counts for the generic entries.
         public bool IsConfigured(SourceCatalogEntry entry) => entry switch
         {
             { ProviderKey: { } key } => providers.Any(provider => provider.Key == key && provider.IsEnabled),
-            { ConnectionType: { } type, DefaultBaseUrl: { } baseUrl } => connections.Any(connection => connection.AcquisitionConnectionTypeId == type
-                && connection.BaseUrl.StartsWith(baseUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)),
-            { ConnectionType: { } type } => connections.Any(connection => connection.AcquisitionConnectionTypeId == type),
+            { ConnectionType: { } type, DefaultBaseUrl: { } baseUrl } => connections.Any(connection => connection.AcquisitionConnectionTypeId == type && Points(connection, baseUrl)),
+            { ConnectionType: { } type } => connections.Any(connection => connection.AcquisitionConnectionTypeId == type
+                && !SourceCatalog.Entries.Any(known => known.DefaultBaseUrl is { } baseUrl && Points(connection, baseUrl))),
             _ => false
         };
+
+        private static bool Points(SourceConnectionData connection, string baseUrl) => connection.BaseUrl.StartsWith(baseUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase);
 
         public static async Task<SourceCatalogState> ReadAsync(SqlContext.SqlReadCommands sql, CancellationToken ct)
         {

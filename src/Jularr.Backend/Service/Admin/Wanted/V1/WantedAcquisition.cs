@@ -50,13 +50,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
             var failures = 0;
-            var selection = new SelectionResult([], null, null, SelectionOutcome.NoCandidates);
-            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel
-                ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray()
-                : [];
-            var sources = catalogs.Length + indexers.Count(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab);
-            indexers = [.. indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)];
-            var plans = indexers.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
+            var newznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
+            var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
+            var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
 
             // Direct book sources answer one title and author query.
             foreach (var catalog in catalogs)
@@ -73,7 +69,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 }
             }
 
-            selection = AcquisitionSelectionLogic.Select(profile, target, kind, episodes, offers.Values);
+            var selection = AcquisitionSelectionLogic.Select(profile, target, kind, episodes, offers.Values);
 
             // Expansion tiers only run while too few releases are usable.
             for (var tier = 0; tier <= budget.MaxTier && offers.Count < budget.MaxResults; tier++)
@@ -84,7 +80,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     continue;
                 }
 
-                await Parallel.ForEachAsync(indexers, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
+                await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
                 {
                     if (!await SearchIndexerAsync(indexer, kind, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, token))
                     {
@@ -103,6 +99,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
             var cached = offers.Where(pair => grabbable.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal);
             _offers.Set(CacheKey(target.WantedItemId), cached, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = OfferLifetime, Size = Math.Max(1, cached.Count) });
+            var sources = catalogs.Length + newznab.Length;
             var unavailable = sources > 0 && failures >= sources && offers.IsEmpty;
             return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable));
         }

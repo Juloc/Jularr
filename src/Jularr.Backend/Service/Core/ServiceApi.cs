@@ -182,63 +182,16 @@ namespace Jularr.Backend.Service.Core
                 options.Cookie.SameSite = SameSiteMode.Strict;
             });
 
-            // Bound external communication.
-            services.AddHttpClient<PlexClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(10);
-                http.MaxResponseContentBufferSize = 1024 * 1024;
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<GutenbergClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(60);
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<OpdsClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(60);
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<AnnasArchiveClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(60);
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<OpenLibraryClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(15);
-                http.MaxResponseContentBufferSize = 4 * 1024 * 1024;
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<PlexServerClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(20);
-                http.MaxResponseContentBufferSize = 16 * 1024 * 1024;
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<NewznabClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(30);
-                http.MaxResponseContentBufferSize = 16 * 1024 * 1024;
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<TmdbClient>(http =>
-            {
-                http.BaseAddress = new Uri("https://api.themoviedb.org/3/");
-                http.Timeout = TimeSpan.FromSeconds(15);
-                http.MaxResponseContentBufferSize = 4 * 1024 * 1024;
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
-            services.AddHttpClient<SabnzbdClient>(http =>
-            {
-                http.Timeout = TimeSpan.FromSeconds(15);
-                http.MaxResponseContentBufferSize = 16 * 1024 * 1024;
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
-                .RemoveAllLoggers();
+            // Bound external communication; pasted source links reach public addresses only.
+            AddClient<PlexClient>(services, 10, 1);
+            AddClient<GutenbergClient>(services, 60, null, agent: true);
+            AddClient<OpdsClient>(services, 60, null, agent: true);
+            AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
+            AddClient<OpenLibraryClient>(services, 15, 4, agent: true);
+            AddClient<PlexServerClient>(services, 20, 16);
+            AddClient<NewznabClient>(services, 30, 16);
+            AddClient<TmdbClient>(services, 15, 4, baseAddress: new Uri("https://api.themoviedb.org/3/"));
+            AddClient<SabnzbdClient>(services, 15, 16);
 
             // Throttle public requests.
             services.AddRateLimiter(options =>
@@ -357,6 +310,24 @@ namespace Jularr.Backend.Service.Core
 
             return endpoints;
         }
+
+        // No automatic redirects, cookies or request logs.
+        private static void AddClient<TClient>(IServiceCollection services, int timeoutSeconds, int? bufferMegabytes, bool agent = false, Func<HttpMessageHandler>? handler = null,
+            Uri? baseAddress = null) where TClient : class =>
+            services.AddHttpClient<TClient>(http =>
+            {
+                http.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+                http.BaseAddress = baseAddress;
+                if (bufferMegabytes is { } megabytes)
+                {
+                    http.MaxResponseContentBufferSize = megabytes * 1024L * 1024;
+                }
+
+                if (agent)
+                {
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
+                }
+            }).ConfigurePrimaryHttpMessageHandler(handler ?? (() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })).RemoveAllLoggers();
 
         private static Delegate CreateParameterHandler<TService, TParameters, TData>() where TService : Service<TParameters, TData> =>
             async ([AsParameters] TParameters parameters, [FromServices] TService service, HttpContext http,
