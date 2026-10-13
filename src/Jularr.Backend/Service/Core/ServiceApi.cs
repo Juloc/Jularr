@@ -205,7 +205,13 @@ namespace Jularr.Backend.Service.Core
             {
                 http.Timeout = TimeSpan.FromSeconds(60);
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("Jularr/1.0 (+https://github.com/Juloc/Jularr)");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+            }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                UseProxy = false,
+                ConnectCallback = PublicNetworkConnection.ConnectAsync
+            })
                 .RemoveAllLoggers();
             services.AddHttpClient<OpenLibraryClient>(http =>
             {
