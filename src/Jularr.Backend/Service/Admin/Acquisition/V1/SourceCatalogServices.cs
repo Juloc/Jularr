@@ -51,7 +51,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     }
                     else if (entry is { Availability: SourceAvailability.Ready, ConnectionType: { } type, DefaultBaseUrl: { } baseUrl })
                     {
-                        await ctx.CreateAcquisitionConnectionAsync(new AcquisitionConnectionSaveData(null, entry.Name, type, baseUrl, null, true, 50, [], null, null, null, null), ct);
+                        await ctx.CreateAcquisitionConnectionAsync(new AcquisitionConnectionSaveData(null, entry.Name, type, baseUrl, null, true, 50, [], null, null, null, null, null), ct);
                         added.Add(entry.Key);
                     }
                     else if (entry is { Availability: SourceAvailability.Ready, ProviderKey: { } provider })

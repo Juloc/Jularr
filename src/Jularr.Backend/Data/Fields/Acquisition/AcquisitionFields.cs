@@ -9,7 +9,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly EnumField AcquisitionConnectionTypeId = new(typeof(AcquisitionConnectionType));
-        public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Trim = true, Format = StringFormat.HttpUrl };
+        public static readonly StringField BaseUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, AllowBlank = false, Trim = true, Format = StringFormat.ServiceUrl };
         public static readonly StringField ApiKey = new() { MaximumLength = 256, Required = false, Format = StringFormat.SingleLine };
         public static readonly StringField Username = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly ByteArrayField ProtectedApiKey = new();
@@ -20,6 +20,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField DownloadCategory = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField RemotePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField LocalPath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
+        public static readonly IntField MaxConnections = new() { Minimum = 1, Maximum = 50, Required = false };
         public static readonly StringField Capabilities = new() { Required = false };
         public static readonly StringArrayField SearchModes = new();
         public static readonly StringField ServerVersion = new() { MaximumLength = 64, Required = false };

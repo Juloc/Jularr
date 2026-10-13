@@ -25,11 +25,13 @@ using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Tmdb;
+using Jularr.Integrations.Logic.Usenet;
 using Jularr.Backend.Service.Core.Localization;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.User.Reading.V1;
 using Jularr.Backend.Service.Admin.Wanted.V1;
+using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Microsoft.AspNetCore.Antiforgery;
@@ -94,6 +96,7 @@ namespace Jularr.Backend.Service.Core
             services.Configure<MediaOptions>(configuration.GetSection("Media"));
             services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
             services.AddSingleton(new MediaTranscoder { ExecutablePath = configuration["Media:FfmpegPath"] });
+            services.AddSingleton(new ArchiveTools { Par2Path = configuration["Usenet:Par2Path"], SevenZipPath = configuration["Usenet:SevenZipPath"] });
             return RegisterServices(services, [typeof(Service).Assembly]);
         }
 
@@ -124,6 +127,9 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<BookMetadata>();
             services.TryAddTransient<MangaMetadata>();
             services.TryAddTransient<DirectSources>();
+            services.TryAddTransient<DownloadImport>();
+            services.TryAddSingleton<UsenetDownloader>();
+            services.TryAddTransient<UsenetJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddTransient<ReadingContent>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
