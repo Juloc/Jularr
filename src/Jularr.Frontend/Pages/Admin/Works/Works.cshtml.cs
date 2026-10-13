@@ -47,6 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Works
                 if (results.Count == 0) page.Content.Add(new P(new Text("admin.works.noMetadata")).Attribute("role", "status"));
                 else page.Content.Add(new Table<MetadataSearchResultV1>(results)
                     .Text(item => item.Title, "media.title")
+                    .Resource(item => item.Namespace, "admin.works.source", source => "admin.works.source." + source)
                     .Text(item => item.OriginalTitle, "admin.works.originalTitle")
                     .Text(item => item.Author, "media.author")
                     .Text(item => item.ReleaseYear, "media.year")
@@ -56,9 +57,10 @@ namespace Jularr.Frontend.Pages.Admin.Works
                         {
                             form.Hidden(data => data.MediaTypeId);
                             form.Hidden(data => data.MediaSubtypeId);
+                            form.Hidden(data => data.Namespace);
                             form.Hidden(data => data.ExternalId);
                             form.Submit("admin.works.import");
-                        }, "/Admin/Works?handler=Import", csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId, searched.MediaSubtypeId))));
+                        }, "/Admin/Works?handler=Import", csrf, new ImportMetadataWorkDataV1(searched.MediaTypeId, item.ExternalId, searched.MediaSubtypeId, item.Namespace))));
             }
 
             // Manual canonical creation.
@@ -109,9 +111,9 @@ namespace Jularr.Frontend.Pages.Admin.Works
             return Page();
         }
 
-        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? externalId)
+        public async Task<IActionResult> OnPostImportAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? @namespace, string? externalId)
         {
-            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, externalId ?? "", mediaSubtypeId), HttpContext.RequestAborted);
+            var work = await import.ExecuteAsync<WorkDetailsV1>(new ImportMetadataWorkDataV1(mediaTypeId, externalId ?? "", mediaSubtypeId, @namespace), HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = work.Id });
         }
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
@@ -35,37 +36,51 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Books come from Open Library, Manga from AniList, albums from MusicBrainz, video from TMDB.
-            IReadOnlyList<MetadataSearchResultV1> results;
-            if (BookMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
+            // Books come from Open Library, Manga and Light Novels also from AniList, albums from MusicBrainz, games from IGDB, video from TMDB.
+            var results = new List<MetadataSearchResultV1>();
+            if (BookMetadata.Handles(Data.MediaTypeId))
             {
-                results = [.. (await _books.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.WorkId, Limit(result.Title, 500)!,
-                    null, result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, Limit(string.Join(", ", result.Authors), 4000)))];
+                // One unreachable provider leaves the other's results.
+                ServiceUnavailableException? failure = null;
+                try
+                {
+                    results.AddRange((await _books.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(BookMetadata.Namespace, result.WorkId,
+                        Limit(result.Title, 500)!, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, Limit(string.Join(", ", result.Authors), 4000))));
+                }
+                catch (ServiceUnavailableException exception)
+                {
+                    failure = exception;
+                }
+
+                if (Data.MediaSubtypeId is MediaSubtype.Manga or MediaSubtype.LightNovel)
+                {
+                    results.AddRange((await _aniList.SearchBooksAsync(Data.MediaSubtypeId.Value, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(
+                        AniListMetadata.Namespace, result.Id.ToString(CultureInfo.InvariantCulture), Limit(AniListMetadata.Title(result), 500)!, Limit(result.RomajiTitle, 500),
+                        result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Description, 4000), null, Limit(string.Join(", ", result.Authors), 4000))));
+                }
+                else if (failure is not null)
+                {
+                    throw failure;
+                }
             }
             else if (GameMetadata.Handles(Data.MediaTypeId))
             {
                 var connection = await _games.ConnectAsync(Context, CancellationToken);
-                results = [.. (await _games.SearchAsync(connection, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(
+                results.AddRange((await _games.SearchAsync(connection, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(GameMetadata.Namespace,
                     result.Id.ToString(CultureInfo.InvariantCulture), result.Name, null, result.Year is >= 1950 and <= 2200 ? result.Year : null,
-                    Limit(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, Limit(string.Join(", ", result.Developers), 4000)))];
+                    Limit(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, Limit(string.Join(", ", result.Developers), 4000))));
             }
             else if (MusicMetadata.Handles(Data.MediaTypeId))
             {
-                results = [.. (await _music.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.Id, result.Title, null,
-                    result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist))];
-            }
-            else if (AniListMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
-            {
-                results = [.. (await _aniList.SearchMangaAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(result.Id.ToString(CultureInfo.InvariantCulture),
-                    Limit(AniListMetadata.Title(result), 500)!, Limit(result.RomajiTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Description, 4000), null,
-                    Limit(string.Join(", ", result.Authors), 4000)))];
+                results.AddRange((await _music.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(MusicMetadata.Namespace, result.Id,
+                    result.Title, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, result.PrimaryType, null, result.Artist)));
             }
             else
             {
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
-                results = [.. (await _metadata.SearchAsync(connection, Data.MediaTypeId, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result =>
-                    new MetadataSearchResultV1(result.Id.ToString(CultureInfo.InvariantCulture), Limit(result.Title, 500)!, Limit(result.OriginalTitle, 500),
-                        result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Overview, 4000), null))];
+                results.AddRange((await _metadata.SearchAsync(connection, Data.MediaTypeId, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result =>
+                    new MetadataSearchResultV1(WorkMetadata.Namespace(Data.MediaTypeId), result.Id.ToString(CultureInfo.InvariantCulture), Limit(result.Title, 500)!,
+                        Limit(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Overview, 4000), null)));
             }
 
             // Mark results that already are Works.
@@ -80,19 +95,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                         identity."WorkId"
                     FROM
                         "WorkExternalIdentities" AS identity
-                    WHERE
-                        identity."Namespace" = @Namespace
-                        AND identity."Value" IN (SELECT jsonb_array_elements_text(@Values::jsonb));
+                        JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value";
                     """;
-                var space = BookMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId) ? BookMetadata.Namespace : AniListMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId) ? AniListMetadata.Namespace
-                    : MusicMetadata.Handles(Data.MediaTypeId) ? MusicMetadata.Namespace
-                    : GameMetadata.Handles(Data.MediaTypeId) ? GameMetadata.Namespace : WorkMetadata.Namespace(Data.MediaTypeId);
-                sql.Parameters.Add(new WorkIdentityLookupData(space, JsonSerializer.Serialize(results.Select(result => result.ExternalId))));
+                sql.Parameters.Add(new WorkIdentityLookupData(JsonSerializer.Serialize(results.Select(result => new { result.Namespace, Value = result.ExternalId }))));
                 return ctx.ReadSql.ReadListAsync<WorkIdentityData>(sql, ct);
             }, CancellationToken);
-            var works = known.ToDictionary(identity => identity.Value, identity => identity.WorkId, StringComparer.Ordinal);
-            return new BaseDataList<MetadataSearchResultV1>(results.Select(result => new MetadataSearchResultV1(result.ExternalId, result.Title, result.OriginalTitle, result.ReleaseYear,
-                result.Overview, works.TryGetValue(result.ExternalId, out var workId) ? workId : null, result.Author)).ToArray());
+            var works = known.ToDictionary(identity => (identity.Namespace, identity.Value), identity => identity.WorkId);
+            return new BaseDataList<MetadataSearchResultV1>(results.Select(result => new MetadataSearchResultV1(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle,
+                result.ReleaseYear, result.Overview, works.TryGetValue((result.Namespace, result.ExternalId), out var workId) ? workId : null, result.Author)).ToArray());
         }
 
         private static string? Limit(string? value, int length) => value is null ? null : value.Length <= length ? value : value[..length];
@@ -125,13 +135,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
         {
             // Importing an existing mapping refreshes the same Work.
             long workId;
-            if (BookMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
-            {
-                workId = await _books.ImportAsync(Context, Data.MediaSubtypeId, Data.ExternalId, CancellationToken);
-            }
-            else if (AniListMetadata.Handles(Data.MediaTypeId, Data.MediaSubtypeId))
+            if (BookMetadata.Handles(Data.MediaTypeId) && Data.Namespace == AniListMetadata.Namespace)
             {
                 workId = await _aniList.ImportAsync(Context, Data.ExternalId, CancellationToken);
+            }
+            else if (BookMetadata.Handles(Data.MediaTypeId))
+            {
+                workId = await _books.ImportAsync(Context, Data.MediaSubtypeId, Data.ExternalId, CancellationToken);
             }
             else if (MusicMetadata.Handles(Data.MediaTypeId))
             {

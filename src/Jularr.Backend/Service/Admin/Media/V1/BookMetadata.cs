@@ -14,7 +14,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
     {
         public const string Namespace = "openlibrary";
 
-        public static bool Handles(MediaType mediaType, MediaSubtype? subtype) => mediaType == MediaType.Book && subtype != MediaSubtype.Manga;
+        public static bool Handles(MediaType mediaType) => mediaType == MediaType.Book;
 
         public async Task<IReadOnlyList<OpenLibraryResult>> SearchAsync(string query, int? year, CancellationToken ct)
         {
