@@ -92,6 +92,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.outdated_version", "The data has changed. Please reload and try again."),
             new("errors.validation.invalid_transition", "This change is not available."),
             new("errors.validation.invalid_file_type", "This kind of file is not accepted here."),
+            new("errors.validation.invalid_value", "This value cannot be used here."),
             new("errors.validation.unknown_language", "Use two-letter language codes such as de or en."),
             new("errors.validation.backup_passphrase", "The passphrase does not open this backup's key ring."),
             new("errors.validation.naming_unknown_token", "The pattern uses an unknown placeholder."),
