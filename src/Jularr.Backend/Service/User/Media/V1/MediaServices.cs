@@ -177,7 +177,19 @@ namespace Jularr.Backend.Service.User.Media.V1
                             release."WorkVersionId" = asset."WorkVersionId"
                             AND asset."MediaAssetTypeId" = 5
                             AND platform."IgdbId" = ANY(@EmulatedPlatforms)
-                    ) AS "IsEmulated"
+                    ) AS "IsEmulated",
+                    (
+                        SELECT
+                            unitGroup."Name"
+                        FROM
+                            "WorkUnitGroups" AS unitGroup
+                            JOIN "InstanceModules" AS module ON module."Key" = 'UnitGroups' AND module."IsEnabled"
+                        WHERE
+                            unitGroup."WorkId" = asset."WorkId"
+                            AND (coalesce(parent."Number", 0), unit."Number") >= (coalesce(unitGroup."FirstParentNumber", 0), unitGroup."FirstNumber")
+                            AND (coalesce(parent."Number", 0), unit."Number") <= (coalesce(unitGroup."LastParentNumber", 0), unitGroup."LastNumber")
+                        LIMIT 1
+                    ) AS "GroupName"
                 FROM
                     "MediaAssets" AS asset
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"

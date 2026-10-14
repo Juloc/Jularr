@@ -76,6 +76,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.pin_locked", "Too many incorrect PINs. Please try again in a minute."),
             new("errors.validation.duplicate_value", "This value is already in use."),
             new("errors.validation.collection_limit", "A profile keeps at most 100 collections."),
+            new("errors.validation.overlapping_group", "These units already belong to another section."),
+            new("errors.validation.group_limit", "A title keeps at most 100 sections."),
             new("errors.validation.utc_required", "The timestamp must use UTC."),
             new("errors.validation.unknown_catalog_value", "The selection is invalid."),
             new("errors.validation.unknown_reference", "The referenced resource is unavailable."),

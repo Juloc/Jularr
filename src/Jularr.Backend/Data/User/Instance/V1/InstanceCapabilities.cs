@@ -9,8 +9,10 @@ namespace Jularr.Backend.Data.User.Instance.V1
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
         public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
-            bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect, bool canSeeCalendar, bool canSeeStatistics, bool canAdminister, bool canManageStorage)
+            bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect, bool canSeeCalendar, bool canSeeStatistics, bool canAdminister, bool canManageStorage,
+            bool canGroupUnits)
         {
+            CanGroupUnits = canGroupUnits;
             CanAdminister = canAdminister;
             CanManageStorage = canManageStorage;
             CanSeeStatistics = canSeeStatistics;
@@ -65,5 +67,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
         // Library files move on the storage, e.g. through renames.
         public bool CanManageStorage { get; }
+
+        // Staff name sections of a Work's units.
+        public bool CanGroupUnits { get; }
     }
 }

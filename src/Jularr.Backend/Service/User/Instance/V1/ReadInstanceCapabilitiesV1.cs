@@ -23,9 +23,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
                     module."Key",
                     module."IsEnabled"
                 FROM
-                    "InstanceModules" AS module
-                WHERE
-                    module."Key" IN ('Library', 'Requests', 'Acquisition', 'Playback', 'Reading', 'Profiles', 'Emulation', 'Notifications', 'Collections', 'Calendar', 'Statistics');
+                    "InstanceModules" AS module;
                 """;
             var modules = await Context.ReadSql.ReadListAsync<InstanceModuleData>(sql, CancellationToken);
             var library = modules.Any(module => module.Key == "Library" && module.IsEnabled);
@@ -39,6 +37,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
             var collections = modules.Any(module => module.Key == "Collections" && module.IsEnabled);
             var calendar = modules.Any(module => module.Key == "Calendar" && module.IsEnabled);
             var statistics = modules.Any(module => module.Key == "Statistics" && module.IsEnabled);
+            var unitGroups = modules.Any(module => module.Key == "UnitGroups" && module.IsEnabled);
 
             // Reuse verified central grants.
             var permissions = ServiceGate.GetPermissions(Auth.AccountId, Auth.ProfileId, Auth.ProfileOwnerAccountId, Auth.AccountRoleTypeId);
@@ -59,7 +58,8 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 library && calendar && permissions.Contains("profile.media.read", StringComparer.Ordinal),
                 library && statistics && permissions.Contains("profile.media.read", StringComparer.Ordinal),
                 permissions.Contains("instance.settings.read", StringComparer.Ordinal),
-                library && permissions.Contains("storage.update", StringComparer.Ordinal));
+                library && permissions.Contains("storage.update", StringComparer.Ordinal),
+                library && unitGroups && permissions.Contains("media.manual.update", StringComparer.Ordinal));
         }
     }
 }

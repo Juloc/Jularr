@@ -99,18 +99,24 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
 
-                // Stored inventory, no storage access.
+                // Stored inventory, no storage access; named sections split it where staff defined them.
                 if (_availability is { Items.Count: > 0 } availability)
                 {
-                    page.Content.Add(new UiSection("details.versions", [new Table<WorkAvailabilityV1>(availability.Items)
-                        .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber) ?? texts["details.wholeWork"]))
-                        .Resource(item => item.MediaAssetTypeId, "table.type", type => "media.asset." + type)
-                        .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
-                        .Content("details.audio", item => new ValueText(string.Join(", ", item.AudioLanguages)))
-                        .Content("details.subtitles", item => new ValueText(string.Join(", ", item.SubtitleLanguages)))
-                        .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? TimeSpan.FromMilliseconds(duration).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : ""))
-                        .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))
-                        .Content("common.actions", Play)]));
+                    var sections = new List<IUiComponent>();
+                    var start = 0;
+                    for (var index = 1; index <= availability.Items.Count; index++)
+                    {
+                        if (index < availability.Items.Count && availability.Items[index].GroupName == availability.Items[start].GroupName)
+                        {
+                            continue;
+                        }
+
+                        if (availability.Items[start].GroupName is { } name) sections.Add(new H3(new ValueText(name)));
+                        sections.Add(Versions(availability.Items.Skip(start).Take(index - start).ToArray()));
+                        start = index;
+                    }
+
+                    page.Content.Add(new UiSection("details.versions", [.. sections]));
                 }
 
                 // One bounded inventory page.
@@ -136,6 +142,16 @@ namespace Jularr.Frontend.Pages.User.Details
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
+
+        private Table<WorkAvailabilityV1> Versions(IReadOnlyList<WorkAvailabilityV1> items) => new Table<WorkAvailabilityV1>(items)
+            .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber) ?? texts["details.wholeWork"]))
+            .Resource(item => item.MediaAssetTypeId, "table.type", type => "media.asset." + type)
+            .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
+            .Content("details.audio", item => new ValueText(string.Join(", ", item.AudioLanguages)))
+            .Content("details.subtitles", item => new ValueText(string.Join(", ", item.SubtitleLanguages)))
+            .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? TimeSpan.FromMilliseconds(duration).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : ""))
+            .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))
+            .Content("common.actions", Play);
 
         private IUiComponent Play(WorkAvailabilityV1 item)
         {
