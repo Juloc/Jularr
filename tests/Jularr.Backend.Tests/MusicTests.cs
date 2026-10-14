@@ -33,8 +33,8 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
             await host.Fixture.RunSqlAsync("""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 6, 'Album'), (20, 6, 'Other Album');
-                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (10, 'Artist', 'Artist A & Artist B', TRUE), (20, 'Artist', 'artist a', TRUE);
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 6, 'Album'), (20, 6, 'Other Album'), (30, 3, 'Shared Book');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (10, 'Artist', 'Earth, Wind & Fire', TRUE), (20, 'Author', 'earth, wind & fire', TRUE), (30, 'Author', 'Ann Lee, Bo Ray', TRUE);
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "Title") VALUES (101, 10, 5, 1, 'One'), (102, 10, 5, 2, 'Two'), (103, 10, 5, 3, 'Three');
                 INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (1, 10);
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (1, 10, 1);
@@ -44,10 +44,10 @@ namespace Jularr.Backend.Tests
             var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Music", MediaType.Music);
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince")
-                VALUES ({rootId}, 'Album/01.flac', 1, now(), now(), 1, NULL), ({rootId}, 'Album/02.flac', 1, now(), now(), 2, now()), ({rootId}, 'Album/03.flac', 1, now(), now(), 3, NULL);
+                VALUES ({rootId}, 'Album/01.flac', 1, now(), now(), 1, NULL), ({rootId}, 'Album/02.srt', 1, now(), now(), 2, NULL), ({rootId}, 'Album/03.flac', 1, now(), now(), 3, NULL);
                 """);
 
-            // A missing track is skipped; the first and last have one neighbour.
+            // A track with only a subtitle file is skipped; the first and last have one neighbour.
             using var first = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/1");
             var opening = (await first.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Playback.V1.PlaybackItemV1>())!;
             Assert.AreEqual("One", opening.UnitTitle);
@@ -63,13 +63,16 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-href=\"/Player/3\"");
             StringAssert.Contains(html, "Track 1 &#xB7; One");
 
-            // Each artist leads to everything of theirs the profile may see.
+            // An artist's name stays whole; author lists split at commas; each leads to everything credited to it.
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/10");
-            var page = await details.Content.ReadAsStringAsync();
-            StringAssert.Contains(page, "href=\"/Creator?name=Artist%20B\"");
-            using var creator = await host.SendAsync(HttpMethod.Get, "/api/v1/creators/works?name=ARTIST%20A");
-            CollectionAssert.AreEquivalent(new[] { 10L, 20L }, (await creator.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
-            using var creatorPage = await host.SendAsync(HttpMethod.Get, "/Creator?name=Artist%20A");
+            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "href=\"/Creator?name=Earth%2C%20Wind%20%26%20Fire\"");
+            using var book = await host.SendAsync(HttpMethod.Get, "/Details/30");
+            StringAssert.Contains(await book.Content.ReadAsStringAsync(), "href=\"/Creator?name=Bo%20Ray\"");
+            using var creator = await host.SendAsync(HttpMethod.Get, "/api/v1/creators/works?name=EARTH%2C%20WIND%20%26%20FIRE");
+            CollectionAssert.AreEquivalent(new[] { 10L }, (await creator.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
+            using var author = await host.SendAsync(HttpMethod.Get, "/api/v1/creators/works?name=earth");
+            CollectionAssert.AreEquivalent(new[] { 20L }, (await author.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
+            using var creatorPage = await host.SendAsync(HttpMethod.Get, "/Creator?name=earth");
             Assert.AreEqual(HttpStatusCode.OK, creatorPage.StatusCode);
             StringAssert.Contains(await creatorPage.Content.ReadAsStringAsync(), "Other Album");
         }
