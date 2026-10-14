@@ -71,6 +71,17 @@ function inspect(directory) {
 
 inspect(frontend);
 
+// Release decisions name their reason in the Backend; each one is shown as "acquisition.reason.<code>".
+const acquisition = path.resolve(frontend, "..", "Jularr.Backend", "Logic", "Acquisition");
+for (const name of fs.readdirSync(acquisition).filter(file => file.endsWith(".cs"))) {
+  const source = fs.readFileSync(path.join(acquisition, name), "utf8");
+  for (const match of source.matchAll(/\b(?:Conflict|Ambiguous|Exact|Strong|Weak|ReleaseReason|Reason)\("([A-Z][A-Za-z]+)"/g)) {
+    if (!declared.has("acquisition.reason." + match[1])) {
+      errors.push(`Jularr.Backend/Logic/Acquisition/${name}: reason ${match[1]} has no acquisition.reason text`);
+    }
+  }
+}
+
 if (errors.length > 0) {
   for (const error of errors) console.error(error);
   process.exitCode = 1;

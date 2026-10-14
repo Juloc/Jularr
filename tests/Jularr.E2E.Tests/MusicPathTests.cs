@@ -1,0 +1,86 @@
+using Microsoft.Playwright;
+
+namespace Jularr.E2E.Tests
+{
+    // An album from MusicBrainz through request, download and import to playing a track and continuing it after signing in anew.
+    [TestClass]
+    public sealed class MusicPathTests
+    {
+        [ClassInitialize]
+        public static void InstallBrowser(TestContext _)
+        {
+            if (Microsoft.Playwright.Program.Main(["install", "chromium"]) != 0)
+            {
+                JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
+            }
+        }
+
+        [TestMethod]
+        [Timeout(600_000)]
+        public async Task Album_FromMetadataToRequestDownloadImportPlayAndResume()
+        {
+            var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
+            using var folders = new Folders("Music");
+            var tracks = await Steps.WriteAlbumAsync(ffmpeg, Path.Combine(folders.Fixtures, "album"), "Opening", "Middle Song", "Closing");
+            var album = new FakeRelease("Example Artist - Example Album (2019) [FLAC]", "flac", 3040, tracks);
+            var otherArtist = new FakeRelease("Other Artist - Example Album (2019) [FLAC]", "other", 3040, tracks);
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:MusicBrainz"] = fakes.MusicBrainz.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library,
+                ["Media:FfmpegPath"] = ffmpeg ?? "",
+                ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
+            });
+            using var playwright = await Playwright.CreateAsync();
+            await using var browser = await playwright.Chromium.LaunchAsync();
+            var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
+            await Steps.KeepLocalAsync(context);
+            var page = await context.NewPageAsync();
+            var problems = Steps.Watch(page);
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(context, page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Music", "Music"));
+                await Steps.AddUsenetAsync(page, fakes, "3000,3040");
+
+                // The album comes from MusicBrainz through the Works page; the Owner requests it on its details.
+                await Steps.ImportAndRequestAsync(page, "Music", null, FakeServices.AlbumTitle);
+                fakes.Offer(album, otherArtist);
+
+                // Only the requested artist's release is eligible.
+                await Steps.OpenWantedAsync(page, FakeServices.AlbumTitle);
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = otherArtist.Title }).InnerTextAsync(), "Different artist");
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = album.Title }).InnerTextAsync(), "Eligible");
+                await Steps.GrabAsync(page, album);
+
+                // All three tracks land in the music library.
+                var details = await Steps.WaitForAvailableAsync(page, FakeServices.AlbumTitle);
+                Assert.AreEqual(3, Directory.EnumerateFiles(Path.Combine(folders.Library, "Music"), "*.flac", SearchOption.AllDirectories).Count(), "The album was not imported once.");
+
+                // Playing needs real files; FFmpeg makes them.
+                if (ffmpeg is null)
+                {
+                    JularrInstance.Unavailable("JULARR_TEST_FFMPEG is not configured; playback was not checked.");
+                }
+
+                await page.GotoAsync(details);
+                await Steps.PlayAndPauseAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First);
+                await Steps.SignOutAndInAsync(page);
+                await page.GotoAsync(details);
+                var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
+                Assert.IsTrue(resumed >= 4.5, "The track started at " + resumed + " s instead of continuing.");
+
+                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "music-path");
+                throw;
+            }
+        }
+    }
+}

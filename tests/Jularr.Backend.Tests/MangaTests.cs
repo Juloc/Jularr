@@ -85,6 +85,12 @@ namespace Jularr.Backend.Tests
             using var on = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/media", new UpdateInstanceMediaDataV1("Book", true, 2));
             Assert.AreEqual(HttpStatusCode.OK, on.StatusCode);
 
+            // A manual search without a volume looks at every missing one, as the automatic search does.
+            using var whole = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/800/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, whole.StatusCode, await whole.Content.ReadAsStringAsync());
+            var offered = (await whole.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.ToArray();
+            Assert.AreEqual(ReleaseDecisionType.Eligible, offered.Single(candidate => candidate.Title.StartsWith("Example Manga v01-02", StringComparison.Ordinal)).ReleaseDecisionTypeId);
+
             // The first missing volumes come as a pack, the rest alone; claimed volumes are not searched again.
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/v12", "https://indexer.example.test/getnzb/v3" }, sources.Grabbed);

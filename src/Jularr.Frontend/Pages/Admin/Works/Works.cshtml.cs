@@ -32,11 +32,10 @@ namespace Jularr.Frontend.Pages.Admin.Works
             SelectOption[] subtypes = [new SelectOption("", texts["media.subtype.none"]), .. Enum.GetValues<MediaSubtype>()
                 .Select(subtype => new SelectOption(((byte)subtype).ToString(CultureInfo.InvariantCulture), texts["media.subtype." + subtype]))];
 
-            // TMDB lookup creates Works with their provider identity and episodes.
-            var metadataTypes = new[] { MediaType.Movie, MediaType.Series, MediaType.Book }.Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));
+            // Each type's provider creates Works with their identity and units.
             page.Content.Add(new Form<SearchMetadataDataV1>(form =>
             {
-                form.Select(item => item.MediaTypeId, "media.type", metadataTypes);
+                form.Select(item => item.MediaTypeId, "media.type", mediaTypes);
                 form.Select(item => item.MediaSubtypeId, "media.subtype", subtypes);
                 form.Text(item => item.Query, "media.title");
                 form.Number(item => item.ReleaseYear, "media.year");

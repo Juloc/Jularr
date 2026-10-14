@@ -14,21 +14,18 @@ through the UI). A row is done only at e2e. Tests name classes in `tests/Jularr.
 
 | Step | Status | Owner | Tests | Missing | Acceptance |
 | --- | --- | --- | --- | --- | --- |
-| Setup: Owner, sign-in, menu pages | e2e | `Pages/Setup`, Account services | FirstRunTests | Storage, library, provider and download steps not driven | A fresh instance is set up through the UI alone, modules switched on the Instance page |
-| Storage/NAS connection, library root | tested | Storage, Library services | StorageTests, LibraryTests | Browser test; Samba stack | A connected share is browsable; an outage keeps browsing |
+| Setup: Owner, sign-in, menu pages | e2e | `Pages/Setup`, Account services | FirstRunTests, FilmPathTests | Setup wizard steps after the Owner; modules switched in the browser | A fresh instance is set up through the UI alone, modules switched on the Instance page |
+| Storage/NAS connection, library root | e2e (local path) | Storage, Library services | StorageTests, LibraryTests, FilmPathTests, MusicPathTests, ReadingPathTests | SMB/NFS in the browser (Samba stack) | A connected share is browsable; an outage keeps browsing |
 | Scan and metadata match | tested | Library scan, `WorkMetadata` | LibraryTests, MediaTests | Automatic TMDB identification of unknown folders; E2E | Scanned files appear under the right Work without manual steps where the name is clear |
-| Discover, details, request | tested | Discover, Request services | DiscoverTests, RequestTests | Discover for music, books, manga, games, anime (AniList); E2E | Each enabled type can be found and requested by a user |
-| Wanted, search, release choice | tested | Acquisition (Wanted, SearchPlanner, judges) | AcquisitionTests | E2E against fake indexer | A request becomes Wanted, finds and grabs the best allowed release |
-| Download (SABnzbd, native usenet) | tested | `SabnzbdClient`, Usenet | AcquisitionTests, UsenetTests | E2E fake SABnzbd/NNTP | Failure retries, then blocklists and searches again |
-| Import, library | tested | DownloadImport, ImportPlacement | AcquisitionTests | E2E with real files | The file lands in the right library and folder, the request reads available |
-| Play / read, progress | tested | Playback, Reading | PlaybackTests, ReadingTests, progress.test.mjs | Media fixtures, FFmpeg on the E2E runner | Playback and reading start, seek and save progress |
-| Sign out, sign in, resume | tested | Sessions, Progress | AuthenticationTests, progress.test.mjs | Browser test | Progress resumes on another session and device |
+| Discover, details, request | e2e (films, series; other types requested on details after an administrator added them) | Discover, Request services | DiscoverTests, RequestTests, FilmPathTests, MusicPathTests, ReadingPathTests | Discover for music, books, manga, light novels, games, anime (C4) | Each enabled type can be found and requested by a user |
+| Wanted, search, release choice | e2e (films, episodes, albums, books, manga, light novels) | Acquisition (Wanted, SearchPlanner, judges) | AcquisitionTests, MangaTests, path tests | Games and anime in the browser | A request becomes Wanted, finds and grabs the best allowed release |
+| Download (SABnzbd, native usenet) | e2e (SABnzbd) | `SabnzbdClient`, Usenet | AcquisitionTests, UsenetTests, path tests | Native downloader in the browser (NNTP fake) | Failure retries, then blocklists and searches again |
+| Import, library | e2e | DownloadImport, ImportPlacement | AcquisitionTests, path tests | – | The file lands in the right library and folder, the request reads available |
+| Play / read, progress | e2e (film, episode, album track with FFmpeg in CI; EPUB, comic) | Playback, Reading | PlaybackTests, ReadingTests, progress.test.mjs, path tests | Transcoding and track choice in the browser | Playback and reading start, seek and save progress |
+| Sign out, sign in, resume | e2e | Sessions, Progress | AuthenticationTests, path tests | Another device | Progress resumes on another session and device |
 | Failure cases (database restart, NAS offline, download retry, restart mid-operation, missing metadata, ambiguous release, permissions, subtitles/audio, transcoding errors, upgrades, 5xx/JS errors) | tested (parts) | as above | LibraryTests (resume operations), AcquisitionTests, PlaybackTests, StorageTests | Browser scenarios, restart of the E2E host | Each case ends in a visible, recoverable state without data loss |
 
-Needed for these browser tests (Phase B): fake TMDB/Newznab/SABnzbd servers reachable from
-the separately started host, configurable provider base addresses, a trigger for worker
-cycles, small lawful media fixtures (MP4/MKV with SRT, EPUB, CBZ, FLAC/MP3), FFmpeg on the
-runner, a UI-driven setup helper, a restartable `JularrInstance`.
+The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader, a restartable instance and the failure cases (B4).
 
 ## Arr+ core
 
