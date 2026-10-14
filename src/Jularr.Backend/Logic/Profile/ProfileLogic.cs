@@ -1,10 +1,9 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Account;
-using Jularr.Backend.Data.Logic.Localization;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Infrastructure.Sql;
-using Jularr.Backend.Logic.Localization;
 using Jularr.Backend.Logic.Account;
+using Jularr.Backend.Logic.Localization;
 
 namespace Jularr.Backend.Logic.Profile
 {
