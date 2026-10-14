@@ -38,43 +38,18 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(sql, ct);
         }
 
-        public static Task<IReadOnlyList<AcquisitionConnectionData>> ReadDownloadClientsAsync(this LogicContext ctx, CancellationToken ct)
-        {
-            // SABnzbd and Jularr's own news servers, best priority first.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    connection."Id",
-                    connection."Name",
-                    connection."AcquisitionConnectionTypeId",
-                    connection."BaseUrl",
-                    connection."ProtectedApiKey",
-                    connection."IsEnabled",
-                    connection."Priority",
-                    connection."Categories",
-                    connection."DownloadCategory",
-                    connection."RemotePath",
-                    connection."LocalPath",
-                    connection."Username",
-                    connection."MaxConnections",
-                    connection."Capabilities"::text AS "Capabilities",
-                    connection."Version"
-                FROM
-                    "AcquisitionConnections" AS connection
-                WHERE
-                    connection."AcquisitionConnectionTypeId" IN (2, 6)
-                    AND connection."IsEnabled"
-                ORDER BY
-                    connection."Priority",
-                    connection."Id";
-                """;
-            return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
-        }
+        // SABnzbd and Jularr's own news servers, best priority first.
+        public static async Task<IReadOnlyList<AcquisitionConnectionData>> ReadDownloadClientsAsync(this LogicContext ctx, CancellationToken ct) =>
+            [.. (await ctx.ReadEnabledConnectionsAsync(ct)).Where(connection => IsDownloadClient(connection.AcquisitionConnectionTypeId))];
 
-        public static Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledSearchConnectionsAsync(this LogicContext ctx, CancellationToken ct)
+        // Every enabled source that searches: indexers and catalogs.
+        public static async Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledSearchConnectionsAsync(this LogicContext ctx, CancellationToken ct) =>
+            [.. (await ctx.ReadEnabledConnectionsAsync(ct)).Where(connection => !IsDownloadClient(connection.AcquisitionConnectionTypeId))];
+
+        private static bool IsDownloadClient(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Usenet;
+
+        private static Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledConnectionsAsync(this LogicContext ctx, CancellationToken ct)
         {
-            // Every enabled source that searches: indexers and catalogs.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -97,8 +72,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
-                    connection."AcquisitionConnectionTypeId" IN (1, 3, 4, 5)
-                    AND connection."IsEnabled"
+                    connection."IsEnabled"
                 ORDER BY
                     connection."Priority",
                     connection."Id";

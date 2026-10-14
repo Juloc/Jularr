@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Data.Logic.Localization;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Localization;
 
 namespace Jularr.Backend.Logic.Instance
 {
@@ -9,28 +10,10 @@ namespace Jularr.Backend.Logic.Instance
     {
         public static async Task UpdateInstanceSettingsAsync(this LogicContext ctx, InstanceSettingsUpdateData data, CancellationToken ct)
         {
-            // Hold the enabled locale.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    locale."Id"
-                FROM
-                    "UiLocales" AS locale
-                WHERE
-                    locale."Id" = @UiLocaleId
-                    AND locale."IsEnabled" = TRUE
-                FOR SHARE OF
-                    locale;
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<UiLocaleData>(sql, ct) is null)
-            {
-                throw new DataValidationException(nameof(data.UiLocaleId), "unknown_reference");
-            }
+            await ctx.RequireEnabledUiLocaleAsync(data.UiLocaleId, nameof(data.UiLocaleId), ct);
 
             // Reject concurrent edits.
-            sql = new SqlStatement();
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE

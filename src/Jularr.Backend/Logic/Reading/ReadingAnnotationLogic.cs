@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Profile;
 
 namespace Jularr.Backend.Logic.Reading
 {
@@ -16,22 +17,9 @@ namespace Jularr.Backend.Logic.Reading
             }
 
             // One profile adds one note at a time; 1000 per book keep every list complete.
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    profile."Id" AS "ProfileId"
-                FROM
-                    "Profiles" AS profile
-                WHERE
-                    profile."Id" = @ProfileId
-                FOR UPDATE OF
-                    profile;
-                """;
-            sql.Parameters.Add(data);
-            _ = await ctx.ReadRequiredAsync<ProfileParameters>(sql, ct);
+            await ctx.LockProfileAsync(data.ProfileId, ct);
 
-            sql = new SqlStatement();
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT

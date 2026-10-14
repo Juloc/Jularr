@@ -260,5 +260,28 @@ namespace Jularr.Backend.Logic.Localization
                 throw new DataValidationException(nameof(data.TranslationVersion), "outdated_version");
             }
         }
+
+        // A chosen language stays enabled until the choice is saved.
+        public static async Task RequireEnabledUiLocaleAsync(this LogicContext ctx, long uiLocaleId, string field, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    locale."Id"
+                FROM
+                    "UiLocales" AS locale
+                WHERE
+                    locale."Id" = @UiLocaleId
+                    AND locale."IsEnabled" = TRUE
+                FOR SHARE OF
+                    locale;
+                """;
+            sql.Parameters.Add(new UiLocaleParameters(uiLocaleId));
+            if (await ctx.ReadOptionalAsync<UiLocaleData>(sql, ct) is null)
+            {
+                throw new DataValidationException(field, "unknown_reference");
+            }
+        }
     }
 }

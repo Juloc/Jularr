@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Localization;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Localization;
 using Jularr.Backend.Logic.Account;
 
 namespace Jularr.Backend.Logic.Profile
@@ -183,30 +184,31 @@ namespace Jularr.Backend.Logic.Profile
             return ctx.ReadRequiredAsync<ProfileUpdateData>(sql, ct);
         }
 
-        public static async Task UpdateProfileAsync(this LogicContext ctx, ProfileUpdateData updateData, CancellationToken ct)
+        // One change per profile at a time where a limit or a whole list is checked.
+        public static async Task LockProfileAsync(this LogicContext ctx, long profileId, CancellationToken ct)
         {
-            // Lock the enabled language.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    locale."Id"
+                    profile."Id" AS "ProfileId"
                 FROM
-                    "UiLocales" AS locale
+                    "Profiles" AS profile
                 WHERE
-                    locale."Id" = @UiLocaleId
-                    AND locale."IsEnabled" = TRUE
-                FOR SHARE OF
-                    locale;
+                    profile."Id" = @ProfileId
+                FOR UPDATE OF
+                    profile;
                 """;
-            sql.Parameters.Add(updateData);
-            if (await ctx.ReadOptionalAsync<UiLocaleData>(sql, ct) is null)
-            {
-                throw new DataValidationException(nameof(updateData.UiLocaleId), "unknown_reference");
-            }
+            sql.Parameters.Add(new ProfileParameters(profileId));
+            _ = await ctx.ReadRequiredAsync<ProfileParameters>(sql, ct);
+        }
+
+        public static async Task UpdateProfileAsync(this LogicContext ctx, ProfileUpdateData updateData, CancellationToken ct)
+        {
+            await ctx.RequireEnabledUiLocaleAsync(updateData.UiLocaleId, nameof(updateData.UiLocaleId), ct);
 
             // Write the merged profile.
-            sql = new SqlStatement();
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
