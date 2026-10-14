@@ -1,6 +1,6 @@
-using Jularr.Backend.Data.Common;
 using System.Globalization;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.User.Session.V1;
 using Jularr.Backend.Service.User.Session.V1;
 using Jularr.Frontend.Framework;
@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
 
         public async Task<IActionResult> OnPostRenameAsync(Guid sessionPublicId, string? deviceName)
         {
-            await renameDevice.ExecuteAsync<UpdateResult>(new RevokeSessionParametersV1(sessionPublicId), new RenameSessionDeviceDataV1(deviceName ?? ""), HttpContext.RequestAborted);
+            await renameDevice.ExecuteAsync<UpdateResult>(new RevokeSessionParametersV1(sessionPublicId), new RenameSessionDeviceDataV1(DeviceNames.Store(deviceName ?? "", texts)), HttpContext.RequestAborted);
             return RedirectToPage("/Account/Sessions/Sessions");
         }
 

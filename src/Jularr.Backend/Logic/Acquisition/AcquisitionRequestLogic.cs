@@ -121,7 +121,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var request = await ctx.ReadRequiredAsync<AcquisitionRequestData>(sql, ct);
 
             // The Owner and automatic rules approve the new request at once, through the same transition as moderation.
-            if (policy.ActiveRequestId is null && (policy.IsOwner || policy.IsAutomaticApproval))
+            if (policy.ActiveRequestId is null && (data.IsOwner || policy.IsAutomaticApproval))
             {
                 await ctx.UpdateAcquisitionRequestAsync(new AcquisitionRequestUpdateData(request.Id, AcquisitionRequestStatusType.Approved, 1, data.RequestedByAccountId), ct);
             }

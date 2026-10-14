@@ -6,5 +6,7 @@ namespace Jularr.Frontend.Framework
     public static class DeviceNames
     {
         public static string Show(string name, UiText texts) => name == StartDevicePairingDataV1.BrowserName ? texts["devices.name.browser"] : name;
+
+        public static string Store(string name, UiText texts) => name == texts["devices.name.browser"] ? StartDevicePairingDataV1.BrowserName : name;
     }
 }

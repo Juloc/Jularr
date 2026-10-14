@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -275,7 +276,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
             await DiscoverQueries.RequireTypeAsync(Context, Parameters.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var connection = await _metadata.ConnectAsync(Context, CancellationToken);
             var workId = await _metadata.ImportAsync(Context, connection, Parameters.MediaTypeId, null, Parameters.TmdbId, CancellationToken);
-            var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null), ct),
+            var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct),
                 CancellationToken);
             return new CreateRequestResultV1(request.Id);
         }

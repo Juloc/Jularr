@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Profile;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -141,7 +142,7 @@ namespace Jularr.Backend.Service.User.Request.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var request = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId), CancellationToken);
+            var request = await Context.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(Parameters.WorkId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, Data.GamePlatformId, Data.AcquisitionProfileId, Auth.AccountRoleTypeId == AccountRoleType.Owner), CancellationToken);
             return new CreateRequestResultV1(request.Id);
         }
     }

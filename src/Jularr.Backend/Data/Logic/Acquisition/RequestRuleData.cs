@@ -164,11 +164,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // What the requesting account's rule says about one request.
     internal sealed class RequestPolicyData : BaseData
     {
-        public RequestPolicyData(int? requestLimit, bool isAutomaticApproval, bool isOwner, bool isBlocked, bool isProfileAllowed, long recentCount, long? activeRequestId)
+        public RequestPolicyData(int? requestLimit, bool isAutomaticApproval, bool isBlocked, bool isProfileAllowed, long recentCount, long? activeRequestId)
         {
             RequestLimit = requestLimit;
             IsAutomaticApproval = isAutomaticApproval;
-            IsOwner = isOwner;
             IsBlocked = isBlocked;
             IsProfileAllowed = isProfileAllowed;
             RecentCount = recentCount;
@@ -180,9 +179,6 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(RequestRuleFields), nameof(RequestRuleFields.IsAutomaticApproval))]
         public bool IsAutomaticApproval { get; }
-
-        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsOwner))]
-        public bool IsOwner { get; }
 
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsBlocked))]
         public bool IsBlocked { get; }

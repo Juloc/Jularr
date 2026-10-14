@@ -206,7 +206,6 @@ namespace Jularr.Backend.Logic.Acquisition
                 SELECT
                     rule."RequestLimit",
                     rule."IsAutomaticApproval",
-                    account."AccountRoleTypeId" = 1 AS "IsOwner",
                     category."Key" = ANY(rule."BlockedMediaKeys") AS "IsBlocked",
                     @AcquisitionProfileId::bigint IS NULL OR @AcquisitionProfileId = ANY(rule."AcquisitionProfileIds") AND EXISTS (
                         SELECT

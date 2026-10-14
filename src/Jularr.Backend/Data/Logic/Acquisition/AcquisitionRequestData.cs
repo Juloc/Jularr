@@ -11,7 +11,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 {
     internal sealed class AcquisitionRequestCreationData : BaseData
     {
-        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long requestedByAccountId, long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId)
+        public AcquisitionRequestCreationData(long workId, long requestedByProfileId, long requestedByAccountId, long uiLocaleId, long? gamePlatformId, long? acquisitionProfileId, bool isOwner)
         {
             WorkId = workId;
             RequestedByProfileId = requestedByProfileId;
@@ -19,6 +19,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             UiLocaleId = uiLocaleId;
             GamePlatformId = gamePlatformId;
             AcquisitionProfileId = acquisitionProfileId;
+            IsOwner = isOwner;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -39,6 +40,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // A quality the requester's rule offers; without one the defaults apply.
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
         public long? AcquisitionProfileId { get; }
+
+        // The session's role: a device paired to the Owner requests like a normal user.
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.IsOwner))]
+        public bool IsOwner { get; }
     }
 
     internal sealed class AcquisitionRequestData : BaseData

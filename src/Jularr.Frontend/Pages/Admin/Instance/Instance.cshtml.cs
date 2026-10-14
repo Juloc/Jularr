@@ -53,6 +53,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     if (texts.Can(null, "UnitGroups")) form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
                     if (texts.Can(null, "Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
                     if (texts.Can(null, "Devices")) form.Text(item => item.PublicUrl, "admin.instance.publicUrl");
+                    else form.Hidden(item => item.PublicUrl);
                     form.Submit("common.save");
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,

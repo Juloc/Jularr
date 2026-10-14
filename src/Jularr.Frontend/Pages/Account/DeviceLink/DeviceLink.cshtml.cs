@@ -82,9 +82,8 @@ namespace Jularr.Frontend.Pages.Account.DeviceLink
         {
             var started = await start.ExecuteAsync<DevicePairingStartedV1>(new StartDevicePairingParametersV1(),
                 new StartDevicePairingDataV1(StartDevicePairingDataV1.BrowserName, "Web", replaces), HttpContext.RequestAborted);
-            var options = CookieOptions();
-            options.Expires = started.ExpiresAt;
-            Response.Cookies.Append(ServiceApi.DevicePairingCookieName, started.PairingId.ToString("D") + "." + started.Code, options);
+            // A browser cookie: an expired code must still be found to be replaced.
+            Response.Cookies.Append(ServiceApi.DevicePairingCookieName, started.PairingId.ToString("D") + "." + started.Code, CookieOptions());
             return LocalRedirect("/Devices/Link");
         }
 

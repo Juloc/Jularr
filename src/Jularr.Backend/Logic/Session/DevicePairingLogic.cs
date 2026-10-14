@@ -66,7 +66,8 @@ namespace Jularr.Backend.Logic.Session
                 DELETE FROM
                     "DevicePairingAttempts" AS attempt
                 WHERE
-                    attempt."AttemptedAt" < statement_timestamp() - interval '10 minutes';
+                    attempt."AccountId" = @AccountId
+                    AND attempt."AttemptedAt" < statement_timestamp() - interval '10 minutes';
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -79,7 +80,14 @@ namespace Jularr.Backend.Logic.Session
                 SELECT
                     @AccountId
                 WHERE
-                    (SELECT count(*) FROM "DevicePairingAttempts" AS attempt WHERE attempt."AccountId" = @AccountId) < 5
+                    (
+                        SELECT
+                            count(*)
+                        FROM
+                            "DevicePairingAttempts" AS attempt
+                        WHERE
+                            attempt."AccountId" = @AccountId
+                    ) < 5
                 RETURNING
                     "Id";
                 """;

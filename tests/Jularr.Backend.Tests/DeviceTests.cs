@@ -106,6 +106,8 @@ namespace Jularr.Backend.Tests
             using var start = await host.SendAsync(HttpMethod.Post, "/Devices/Link", new Dictionary<string, string> { ["__RequestVerificationToken"] = token });
             Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode, await start.Content.ReadAsStringAsync());
             StringAssert.Contains(string.Join(";", start.Headers.GetValues("Set-Cookie")), "samesite=strict");
+            // A browser cookie, so an expired code is still found and replaced.
+            Assert.IsFalse(string.Join(";", start.Headers.GetValues("Set-Cookie")).Contains("expires=", StringComparison.OrdinalIgnoreCase));
             using var shown = await host.SendAsync(HttpMethod.Get, "/Devices/Link");
             var html = await shown.Content.ReadAsStringAsync();
             var code = Regex.Match(html, "aria-live=\"polite\">([0-9]{6})<").Groups[1].Value;
@@ -151,6 +153,12 @@ namespace Jularr.Backend.Tests
             using var renamed = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + deviceSession + "/device", new RenameSessionDeviceDataV1("Living room TV"));
             Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
             Assert.AreEqual("Living room TV", await host.ScalarAsync("SELECT \"DeviceName\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
+
+            // Paired to the Owner, its requests still wait for approval.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Device request')");
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/101/requests", new Jularr.Backend.Data.User.Request.V1.CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
         }
     }
 }
