@@ -115,6 +115,8 @@ namespace Jularr.Backend.Tests
             var id = (await created.Content.ReadFromJsonAsync<CreateReadingAnnotationResultV1>())!.Id;
             using var empty = await host.SendAsync(HttpMethod.Post, route, new CreateReadingAnnotationDataV1(0, 1, 4, 1, 4, "x", null, HighlightColorType.Yellow));
             StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "out_of_range");
+            using var blank = await host.SendAsync(HttpMethod.Put, route + "/" + id, new UpdateReadingAnnotationDataV1("   ", HighlightColorType.Pink));
+            Assert.AreEqual(HttpStatusCode.OK, blank.StatusCode, await blank.Content.ReadAsStringAsync());
             using var noted = await host.SendAsync(HttpMethod.Put, route + "/" + id, new UpdateReadingAnnotationDataV1("  Remember this.  ", HighlightColorType.Pink));
             Assert.AreEqual(HttpStatusCode.OK, noted.StatusCode, await noted.Content.ReadAsStringAsync());
 
@@ -162,20 +164,29 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0, (await missing.Content.ReadFromJsonAsync<BaseDataList<ReadingSearchHitV1>>())!.Count);
             using var tooShort = await host.SendAsync(HttpMethod.Get, route + "a");
             Assert.AreEqual(HttpStatusCode.BadRequest, tooShort.StatusCode);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first + "?s=0&q=second%20part");
+
+            // Entities count as the characters they stand for.
+            await host.Fixture.RunSqlAsync("UPDATE \"ReadingResources\" SET \"Bytes\" = convert_to('<p data-b=\"0\">Tom &amp; Jerry</p>', 'UTF8') WHERE \"Path\" = ':section/00001'");
+            using var entity = await host.SendAsync(HttpMethod.Get, route + "Tom%20%26%20Jerry");
+            Assert.AreEqual("Tom & Jerry", (await entity.Content.ReadFromJsonAsync<BaseDataList<ReadingSearchHitV1>>())!.Single().Snippet);
+            using var markup = await host.SendAsync(HttpMethod.Get, route + "amp");
+            Assert.AreEqual(0, (await markup.Content.ReadFromJsonAsync<BaseDataList<ReadingSearchHitV1>>())!.Count);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first + "?s=0&q=tom%20%26%20jerry");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "href=\"?s=1&amp;q=second%20part\"");
+            StringAssert.Contains(html, "href=\"?s=1&amp;q=tom%20%26%20jerry\"");
         }
 
         [TestMethod]
-        public async Task Pdf_OnlyBook_OpensInTheBrowsersViewer()
+        public async Task Pdf_OnlyPresentFile_OpensInTheBrowsersViewer()
         {
             using var storage = new TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
             var (first, second) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
             File.WriteAllText(Path.Combine(storage.Path, "1", "Books", "Second Book", "Second Book.pdf"), "%PDF-1.4 test");
-            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"RelativePath\" = 'Second Book/Second Book.pdf' WHERE \"MediaAssetId\" = " + second);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"MissingSince\" = now() WHERE \"MediaAssetId\" = " + second);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
+                + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', 13, now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
 
             // The format decides the reader; the PDF comes from its storage.
             using var epub = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + first + "/source");

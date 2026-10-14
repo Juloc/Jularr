@@ -115,6 +115,8 @@
     &__note { display: grid; gap: 4px; }
     &__note-quote { color: inherit; }
     &__note-text { margin: 0; color: var(--reader-muted); font-size: 14px; white-space: pre-wrap; }
+    &__snippet::before { content: "… "; }
+    &__snippet::after { content: " …"; }
 
     &__setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     &__choices { display: flex; gap: 8px; }

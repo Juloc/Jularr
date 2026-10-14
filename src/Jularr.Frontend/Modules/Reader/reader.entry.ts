@@ -13,8 +13,9 @@ const SettingsKey = "jularr.reader";
 const ReportDelay = 1500;
 const Defaults: ReaderSettings = { size: 1.1, theme: "light", mode: "scroll" };
 
+// The PDF view shares only the reader's look.
 const reader = document.querySelector<HTMLElement>(".reader");
-if (reader) {
+if (reader?.querySelector("[data-role=content]")) {
     const content = reader.querySelector<HTMLElement>("[data-role=content]")!;
     const position = reader.querySelector<HTMLElement>("[data-role=position]");
     const section = Number(reader.dataset.section);
@@ -33,8 +34,8 @@ if (reader) {
 
     apply();
     restore();
-    highlights(reader, content, section);
-    if (reader.dataset.query) findings(content, reader.dataset.query);
+    highlights(reader!, content, section);
+    if (reader!.dataset.query) findings(content, reader!.dataset.query);
 
     // Panels and settings.
     reader.querySelectorAll<HTMLButtonElement>("[data-action]").forEach(button => button.addEventListener("click", () => toggle(button)));
@@ -96,7 +97,8 @@ if (reader) {
 
     // A note's block, else the saved block of this section, unless the address names an anchor.
     function restore() {
-        const linked = new URLSearchParams(location.search).get("b");
+        const requested = new URLSearchParams(location.search).get("b");
+        const linked = requested && /^\d+$/.test(requested) ? requested : null;
         const match = /^s(\d+)\/b(\d+)$/.exec(reader!.dataset.locator ?? "");
         const block = linked ?? (match && Number(match[1]) === section ? match[2] : null);
         if (location.hash || block === null) return;

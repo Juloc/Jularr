@@ -139,7 +139,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // EPUB and comics are prepared; a book that is only a PDF opens as one.
+            // EPUB and comics are prepared; a book whose only present file is a PDF opens as one.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -147,9 +147,10 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     work."Id" AS "WorkId",
                     work."CanonicalTitle" AS "Title",
                     CASE
-                        WHEN bool_or(file."RelativePath" ~* '\.epub$') THEN 1
-                        WHEN bool_or(file."RelativePath" ~* '\.(cbz|cbr|cb7)$') THEN 4
-                        ELSE 2
+                        WHEN bool_or(file."RelativePath" ~* '\.pdf$' AND file."MissingSince" IS NULL)
+                            AND NOT bool_or(file."RelativePath" ~* '\.(epub|cbz|cbr|cb7)$' AND file."MissingSince" IS NULL) THEN 2
+                        WHEN bool_or(file."RelativePath" ~* '\.(cbz|cbr|cb7)$') AND NOT bool_or(file."RelativePath" ~* '\.epub$') THEN 4
+                        ELSE 1
                     END::smallint AS "ReadingFormatTypeId"
                 FROM
                     "MediaAssets" AS asset
@@ -330,30 +331,20 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // The cached sections' text without markup; the first 50 sections that contain the words.
+            // The cached sections of one book.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    section."SectionIndex",
-                    document."Structure" -> 'Sections' -> section."SectionIndex" ->> 'Title' AS "Title",
-                    btrim(substring(section."Text" FROM greatest(1, strpos(lower(section."Text"), lower(@Query)) - 120) FOR 300)) AS "Snippet",
-                    ((length(section."Text") - length(replace(lower(section."Text"), lower(@Query), ''))) / length(@Query))::integer AS "Matches"
+                    substring(resource."Path" FROM 10)::integer AS "SectionIndex",
+                    document."Structure" -> 'Sections' -> substring(resource."Path" FROM 10)::integer ->> 'Title' AS "Title",
+                    convert_from(resource."Bytes", 'UTF8') AS "Html"
                 FROM
                     "ReadingDocuments" AS document
-                    CROSS JOIN LATERAL (
-                        SELECT
-                            substring(resource."Path" FROM 10)::integer AS "SectionIndex",
-                            regexp_replace(regexp_replace(convert_from(resource."Bytes", 'UTF8'), '<[^>]*>', ' ', 'g'), '\s+', ' ', 'g') AS "Text"
-                        FROM
-                            "ReadingResources" AS resource
-                        WHERE
-                            resource."ReadingDocumentId" = document."Id"
-                            AND resource."Path" LIKE ':section/%'
-                    ) AS section
+                    JOIN "ReadingResources" AS resource ON resource."ReadingDocumentId" = document."Id"
                 WHERE
                     document."Id" = @DocumentId
-                    AND strpos(lower(section."Text"), lower(@Query)) > 0
+                    AND resource."Path" LIKE ':section/%'
                     AND EXISTS (
                         SELECT
                             1
@@ -365,12 +356,39 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             file."Id" = document."StoredFileId"
                     )
                 ORDER BY
-                    section."SectionIndex"
-                LIMIT 50;
+                    resource."Path";
                 """;
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
-            return new BaseDataList<ReadingSearchHitV1>(await Context.ReadSql.ReadListAsync<ReadingSearchHitV1>(sql, CancellationToken));
+            var sections = await Context.ReadSql.ReadListAsync<ReadingSectionTextData>(sql, CancellationToken);
+
+            // Words as read, entities decoded; the first 50 sections that contain them.
+            var query = string.Join(' ', Parameters.Query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            var hits = new List<ReadingSearchHitV1>();
+            foreach (var section in sections)
+            {
+                var text = ReadingHtml.Text(section.Html);
+                var first = text.IndexOf(query, StringComparison.CurrentCultureIgnoreCase);
+                if (first < 0)
+                {
+                    continue;
+                }
+
+                var matches = 0;
+                for (var index = first; index >= 0; index = text.IndexOf(query, index + query.Length, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    matches++;
+                }
+
+                var from = Math.Max(0, first - 120);
+                hits.Add(new ReadingSearchHitV1(section.SectionIndex, section.Title, text.Substring(from, Math.Min(300, text.Length - from)).Trim(), matches));
+                if (hits.Count == 50)
+                {
+                    break;
+                }
+            }
+
+            return new BaseDataList<ReadingSearchHitV1>(hits);
         }
     }
 

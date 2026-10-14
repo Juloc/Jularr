@@ -11,6 +11,9 @@ interface Annotation {
     highlightColorTypeId: number;
 }
 
+// Yellow, the first colour, when a note is saved without choosing one.
+const DefaultColor = 1;
+
 interface Point {
     block: number;
     offset: number;
@@ -60,7 +63,7 @@ export function highlights(reader: HTMLElement, content: HTMLElement, section: n
     }));
     popover.querySelector<HTMLButtonElement>("[data-role=save-note]")?.addEventListener("click", () => {
         if (open) void update(open, noteField.value, open.highlightColorTypeId);
-        else void create(1, noteField.value);
+        else void create(DefaultColor, noteField.value);
     });
     popover.querySelector<HTMLButtonElement>("[data-role=delete-note]")?.addEventListener("click", () => { if (open) void remove(open); });
     document.addEventListener("keydown", event => {
@@ -147,32 +150,51 @@ export function highlights(reader: HTMLElement, content: HTMLElement, section: n
         return { block: Number(block.dataset.b), offset: before.toString().length };
     }
 
-    // Wraps the text between both points block by block.
+    // The text position at a block's character offset.
+    function locate(block: number, offset: number): { node: Text; offset: number } | undefined {
+        const element = content.querySelector<HTMLElement>(`[data-b="${block}"]`);
+        if (!element) return undefined;
+        let count = 0;
+        let last: Text | undefined;
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        for (let text = walker.nextNode() as Text | null; text; text = walker.nextNode() as Text | null) {
+            if (count + text.length >= offset) return { node: text, offset: offset - count };
+            count += text.length;
+            last = text;
+        }
+
+        return last ? { node: last, offset: last.length } : undefined;
+    }
+
+    // Wraps exactly the saved range; a book that changed underneath keeps its text unmarked.
     function draw(annotation: Annotation) {
-        for (const block of Array.from(content.querySelectorAll<HTMLElement>("[data-b]"))) {
-            const number = Number(block.dataset.b);
-            if (number < annotation.startBlock || number > annotation.endBlock) continue;
-            const from = number === annotation.startBlock ? annotation.startOffset : 0;
-            const to = number === annotation.endBlock ? annotation.endOffset : Number.MAX_SAFE_INTEGER;
-            let count = 0;
-            const texts: Text[] = [];
-            const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-            for (let text = walker.nextNode(); text; text = walker.nextNode()) texts.push(text as Text);
-            for (const text of texts) {
-                const length = text.length;
-                const start = Math.max(from - count, 0);
-                const end = Math.min(to - count, length);
-                count += length;
-                if (start >= end) continue;
-                const target = start > 0 ? text.splitText(start) : text;
-                if (end - start < target.length) target.splitText(end - start);
-                const mark = document.createElement("mark");
-                mark.className = "reader__mark" + (annotation.note ? " has-note" : "");
-                mark.dataset.annotation = String(annotation.id);
-                mark.dataset.color = String(annotation.highlightColorTypeId);
-                target.replaceWith(mark);
-                mark.append(target);
-            }
+        const start = locate(annotation.startBlock, annotation.startOffset);
+        const end = locate(annotation.endBlock, annotation.endOffset);
+        if (!start || !end) return;
+        const range = document.createRange();
+        range.setStart(start.node, start.offset);
+        range.setEnd(end.node, end.offset);
+        const quote = annotation.quote.replace(/…$/, "");
+        if (!range.toString().replace(/\s+/g, " ").trim().startsWith(quote)) return;
+
+        const texts: Text[] = [];
+        const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+        for (let text = walker.nextNode() as Text | null; text; text = walker.nextNode() as Text | null) {
+            if (range.intersectsNode(text)) texts.push(text);
+        }
+
+        for (const text of texts) {
+            const from = text === start.node ? start.offset : 0;
+            const to = text === end.node ? end.offset : text.length;
+            if (from >= to) continue;
+            const target = from > 0 ? text.splitText(from) : text;
+            if (to - from < target.length) target.splitText(to - from);
+            const mark = document.createElement("mark");
+            mark.className = "reader__mark" + (annotation.note ? " has-note" : "");
+            mark.dataset.annotation = String(annotation.id);
+            mark.dataset.color = String(annotation.highlightColorTypeId);
+            target.replaceWith(mark);
+            mark.append(target);
         }
     }
 

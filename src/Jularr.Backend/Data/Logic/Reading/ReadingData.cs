@@ -405,4 +405,23 @@ namespace Jularr.Backend.Data.Logic.Reading
         // Archive paths of images the section shows.
         public IReadOnlyCollection<string> Resources { get; }
     }
+
+    internal sealed class ReadingSectionTextData : BaseData
+    {
+        public ReadingSectionTextData(int sectionIndex, string? title, string html)
+        {
+            SectionIndex = sectionIndex;
+            Title = title;
+            Html = html;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Html))]
+        public string Html { get; }
+    }
 }

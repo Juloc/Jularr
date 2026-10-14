@@ -15,6 +15,8 @@ namespace Jularr.Backend.Logic.Reading
         private static readonly string[] Blocks = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre", "figure", "table", "dt", "dd", "hr"];
         private static readonly HtmlParser Parser = new();
 
+        public static string Text(string html) => string.Join(' ', (Parser.ParseDocument(html).Body?.TextContent ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
         public static string ResourceUrl(long documentId, string path) =>
             "/api/v1/reading/documents/" + documentId.ToString(CultureInfo.InvariantCulture) + "/resource?path=" + Uri.EscapeDataString(path);
 

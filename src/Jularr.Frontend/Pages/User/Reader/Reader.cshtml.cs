@@ -194,7 +194,8 @@ namespace Jularr.Frontend.Pages.User.Reader
             var panel = new List<IUiComponent>();
             if (_notes is not { Items.Count: > 0 } notes)
             {
-                panel.Add(new P(new Text("reader.notesEmpty")));
+                // A later empty page leads back.
+                panel.Add(NotesPage > 1 ? new A(new Text("common.previous")).Attribute("href", NotesAddress(index, NotesPage - 1)) : new P(new Text("reader.notesEmpty")));
             }
             else
             {
@@ -226,7 +227,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                     : new Ul([.. hits.Select(hit => new Li(
                         new A(new ValueText(hit.Title ?? (hit.SectionIndex + 1).ToString(CultureInfo.InvariantCulture))).Attribute("href", "?s=" + hit.SectionIndex.ToString(CultureInfo.InvariantCulture)
                             + "&q=" + Uri.EscapeDataString(Query!)),
-                        new P(new ValueText("… " + hit.Snippet + " …")).Class("reader__note-text")).Class("reader__note"))]).Class("reader__notes"));
+                        new P(new ValueText(hit.Snippet)).Class("reader__note-text reader__snippet")).Class("reader__note"))]).Class("reader__notes"));
+                if (hits.Count == 50) content.Add(new P(new Text("reader.searchMore")));
             }
 
             var div = new Div([.. content]).Class("reader__panel").Attribute("data-panel", "search").Attribute("aria-label", texts["reader.search"]);
