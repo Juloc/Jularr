@@ -3,9 +3,11 @@ using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Device.V1;
 using Jularr.Backend.Data.User.Device.V1;
 using Jularr.Backend.Data.User.Session.V1;
+using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Tests
 {
@@ -38,16 +40,12 @@ namespace Jularr.Backend.Tests
             using var approved = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(pairing.Code));
             Assert.AreEqual(HttpStatusCode.OK, approved.StatusCode, await approved.Content.ReadAsStringAsync());
 
-            // The device fetches its session once; it carries the device and the confirming profile. This client stays the phone.
-            var phone = new Dictionary<string, string>(host.Cookies);
+            // The device fetches its session once, as a token instead of a cookie; it carries the device and the confirming profile.
             using var paired = await host.SendAsync(HttpMethod.Post, claimRoute);
             Assert.IsTrue((await paired.Content.ReadFromJsonAsync<DevicePairingClaimV1>())!.IsPaired);
+            Assert.IsFalse(paired.Headers.Contains("Set-Cookie"));
+            var token = paired.Headers.GetValues(ServiceApi.DeviceTokenHeader).Single();
             Assert.AreEqual(101L, await host.ScalarAsync("SELECT \"ActiveProfileId\" FROM \"AccountSessions\" WHERE \"DeviceName\" = 'Living room TV'"));
-            host.Cookies.Clear();
-            foreach (var (name, value) in phone)
-            {
-                host.Cookies[name] = value;
-            }
 
             using var again = await host.SendAsync(HttpMethod.Post, claimRoute);
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
@@ -56,6 +54,28 @@ namespace Jularr.Backend.Tests
             using var sessions = await host.SendAsync(HttpMethod.Get, "/api/v1/sessions?pageSize=100");
             var device = (await sessions.Content.ReadFromJsonAsync<PageResult<SessionDetailsV1>>())!.Items.Single(session => session.DeviceName is not null);
             Assert.AreEqual(("Living room TV", "AndroidTV"), (device.DeviceName, device.DevicePlatform));
+
+            // The app uses its token alone, without cookies or antiforgery token, as a normal user of the profile.
+            using var me = await host.SendAsAppAsync(HttpMethod.Get, "/api/v1/auth", token);
+            var auth = (await me.Content.ReadFromJsonAsync<AuthenticationResultV1>())!;
+            Assert.AreEqual(101L, auth.ProfileId);
+            CollectionAssert.DoesNotContain(auth.Permissions.ToArray(), "admin.access");
+            using var renamed = await host.SendAsAppAsync(HttpMethod.Put, "/api/v1/sessions/" + device.Id + "/device", token, new RenameSessionDeviceDataV1("Bedroom TV"));
+            Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
+            using var admin = await host.SendAsAppAsync(HttpMethod.Get, "/api/v1/admin/providers", token);
+            Assert.IsFalse(admin.IsSuccessStatusCode);
+
+            // Only device sessions sign in by token; a revoked device is out at once.
+            using var forged = await host.SendAsAppAsync(HttpMethod.Get, "/api/v1/sessions", token[..^1] + (token[^1] == 'A' ? "B" : "A"));
+            Assert.AreEqual(HttpStatusCode.Unauthorized, forged.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"DeviceName\" = NULL, \"DevicePlatform\" = NULL WHERE \"DeviceName\" = 'Bedroom TV'");
+            using var browserSession = await host.SendAsAppAsync(HttpMethod.Get, "/api/v1/sessions", token);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, browserSession.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"DeviceName\" = 'Bedroom TV', \"DevicePlatform\" = 'AndroidTV' WHERE \"PublicId\" = '" + device.Id + "'");
+            using var revoked = await host.SendAsync(HttpMethod.Delete, "/api/v1/sessions/" + device.Id);
+            Assert.AreEqual(HttpStatusCode.OK, revoked.StatusCode, await revoked.Content.ReadAsStringAsync());
+            using var gone = await host.SendAsAppAsync(HttpMethod.Get, "/api/v1/sessions", token);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, gone.StatusCode);
 
             // An expired code is gone, and guessing stops after five wrong codes, the right one included.
             using var late = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/pairings", new StartDevicePairingDataV1("Phone", "Android"));

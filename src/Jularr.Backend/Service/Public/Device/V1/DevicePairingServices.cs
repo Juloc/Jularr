@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Public.Device.V1
 {
-    [ServiceEndpoint("POST", "/api/v1/devices/pairings")]
+    [ServiceEndpoint("POST", "/api/v1/devices/pairings", ForApps = true)]
     public sealed class StartDevicePairingV1 : PublicService<StartDevicePairingParametersV1, StartDevicePairingDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
@@ -23,7 +23,7 @@ namespace Jularr.Backend.Service.Public.Device.V1
         }
     }
 
-    [ServiceEndpoint("POST", "/api/v1/devices/pairings/{pairingId:guid}/claim")]
+    [ServiceEndpoint("POST", "/api/v1/devices/pairings/{pairingId:guid}/claim", ForApps = true)]
     public sealed class ClaimDevicePairingV1 : PublicService<ClaimDevicePairingParametersV1, NoData>
     {
         private readonly AuthenticationOptions _options;

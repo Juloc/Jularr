@@ -63,6 +63,9 @@ namespace Jularr.Backend.Service.Core
         public const string DevicePairingCookieName = "jularr.device_pairing";
         public const string DevicePairingRateLimit = "device-pairing";
         public const string DeviceApprovalRateLimit = "device-approval";
+        public const string SessionScheme = "jularr.session";
+        public const string DeviceBearerScheme = "jularr.device";
+        public const string DeviceTokenHeader = "Jularr-Device-Token";
         public const string AdminPolicyName = "jularr.admin";
         public const string StorageReadPolicyName = "storage.read";
         public const string RulesReadPolicyName = "rules.read";
@@ -190,6 +193,13 @@ namespace Jularr.Backend.Service.Core
             services.AddScoped<IServiceGate, ServiceGate>();
             services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
+
+            // Browsers use the session cookie, apps their device token; a request with a token never reads cookies.
+            services.AddAuthentication()
+                .AddScheme<AuthenticationSchemeOptions, DeviceBearerHandler>(DeviceBearerScheme, null)
+                .AddPolicyScheme(SessionScheme, null, options => options.ForwardDefaultSelector = http =>
+                    http.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.Ordinal) ? DeviceBearerScheme : CookieAuthenticationDefaults.AuthenticationScheme);
+            services.PostConfigure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(options => options.DefaultScheme = SessionScheme);
             services.AddDataProtection().SetApplicationName("Jularr");
 
             // Razor consumes verified service grants.
@@ -430,7 +440,7 @@ namespace Jularr.Backend.Service.Core
             async ([AsParameters] TParameters parameters, [FromServices] TService service, HttpContext http,
                 [FromServices] IAntiforgery antiforgery, CancellationToken cancellationToken) =>
             {
-                if (service.OperationType != ServiceOperationType.Read)
+                if (service.OperationType != ServiceOperationType.Read && !IsAppRequest(http))
                 {
                     await antiforgery.ValidateRequestAsync(http);
                 }
@@ -470,7 +480,11 @@ namespace Jularr.Backend.Service.Core
             async ([AsParameters] TParameters parameters, [FromBody] TData data, [FromServices] TService service,
                 HttpContext http, [FromServices] IAntiforgery antiforgery, CancellationToken cancellationToken) =>
             {
-                await antiforgery.ValidateRequestAsync(http);
+                if (!IsAppRequest(http))
+                {
+                    await antiforgery.ValidateRequestAsync(http);
+                }
+
                 var result = await service.ExecuteAsync(parameters, data, cancellationToken);
                 await ApplyAuthenticationAsync(http, result, antiforgery);
                 return Results.Ok<object>(result);
@@ -479,7 +493,11 @@ namespace Jularr.Backend.Service.Core
         private static Delegate CreateUploadHandler<TService, TParameters, TData>() where TService : Service<TParameters, TData> =>
             async ([AsParameters] TParameters parameters, [FromServices] TService service, HttpContext http, [FromServices] IAntiforgery antiforgery, CancellationToken cancellationToken) =>
             {
-                await antiforgery.ValidateRequestAsync(http);
+                if (!IsAppRequest(http))
+                {
+                    await antiforgery.ValidateRequestAsync(http);
+                }
+
                 if (!http.Request.HasFormContentType)
                 {
                     throw new BadHttpRequestException("A form with the file is required.");
@@ -493,10 +511,25 @@ namespace Jularr.Backend.Service.Core
                 return Results.Ok<object>(result);
             };
 
+        // A device token is no cookie, so another site cannot send it along; app endpoints set no cookie that one could.
+        private static bool IsAppRequest(HttpContext http) =>
+            http.User.Identity?.AuthenticationType == DeviceBearerScheme || http.GetEndpoint()?.Metadata.GetMetadata<ServiceEndpointAttribute>()?.ForApps == true;
+
         // Razor shares committed auth effects.
         public static async Task ApplyAuthenticationAsync(HttpContext http, IServiceOutput result, IAntiforgery antiforgery)
         {
             http.Response.Headers.CacheControl = "no-store";
+
+            // Apps keep their session themselves.
+            if (IsAppRequest(http))
+            {
+                if (result is ISessionResult { Session: { } appSession })
+                {
+                    http.Response.Headers[DeviceTokenHeader] = DeviceBearerHandler.Token(appSession);
+                }
+
+                return;
+            }
 
             // Clear only after committed logout.
             if (result is ISessionEndResult { EndsCurrentSession: true })
