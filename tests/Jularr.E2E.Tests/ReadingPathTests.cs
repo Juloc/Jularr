@@ -79,7 +79,8 @@ namespace Jularr.E2E.Tests
                 await Steps.OpenReaderAsync(page, bookDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
                 await Steps.OpenReaderAsync(page, mangaDetails);
-                Assert.AreEqual("2 / 3", (await page.Locator("[data-role=position]").InnerTextAsync()).Trim());
+                // A wide window shows two pages side by side.
+                StringAssert.Matches((await page.Locator("[data-role=position]").InnerTextAsync()).Trim(), new System.Text.RegularExpressions.Regex("^2(–3)? / 3$"));
                 await Steps.OpenReaderAsync(page, novelDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
 
