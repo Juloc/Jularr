@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Storage;
@@ -74,5 +75,29 @@ namespace Jularr.Backend.Data.Logic.Storage
 
         [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.DelayMinutes))]
         public int DelayMinutes { get; }
+    }
+
+    internal sealed class StorageSynologyData : BaseData
+    {
+        public StorageSynologyData(long storageMountId, string? synologyUrl, string? synologyUsername, byte[]? synologyProtectedPassword)
+        {
+            StorageMountId = storageMountId;
+            SynologyUrl = synologyUrl;
+            SynologyUsername = synologyUsername;
+            SynologyProtectedPassword = synologyProtectedPassword;
+        }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyUrl))]
+        public string? SynologyUrl { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyUsername))]
+        public string? SynologyUsername { get; }
+
+        [JsonIgnore]
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.ProtectedPassword))]
+        public byte[]? SynologyProtectedPassword { get; }
     }
 }

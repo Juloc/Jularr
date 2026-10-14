@@ -47,6 +47,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Jularr.Integrations.Data.Database;
 using Jularr.Integrations.Logic.Database;
+using Jularr.Integrations.Logic.Synology;
 using Npgsql;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
@@ -229,6 +230,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true);
             AddClient<IgdbClient>(services, 20, 8, agent: true);
             AddClient<LibretroClient>(services, 60, 16, agent: true);
+            AddClient<SynologyClient>(services, 30, 4);
             AddClient<ServarrApiClient>(services, 60, 32);
             AddClient<PlexServerClient>(services, 20, 16);
             AddClient<NewznabClient>(services, 30, 16);

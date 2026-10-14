@@ -12,6 +12,7 @@ using Jularr.Backend.Data.System.Storage.V1;
 using Jularr.Backend.Service.System.Storage.V1;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Nas;
+using Jularr.Integrations.Logic.Synology;
 using Jularr.MountHelper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -303,6 +304,85 @@ namespace Jularr.Backend.Tests
                 await stop.CancelAsync();
                 await helper.ContinueWith(_ => { });
                 if (File.Exists(socketPath)) File.Delete(socketPath);
+            }
+        }
+
+        [TestMethod]
+        public async Task Synology_DsmAccess_ReadsHealthAndSendsPowerCommandsWithoutExposingThePassword()
+        {
+            var dsm = new FakeDsm();
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<SynologyClient>().ConfigurePrimaryHttpMessageHandler(() => dsm));
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var route = Route + "/" + mountId + "/synology";
+
+            // A new access needs its password, which is never returned.
+            using var noPassword = await host.SendAsync(HttpMethod.Put, route, new UpdateStorageSynologyDataV1("http://nas.test:5000", "admin", null));
+            Assert.AreEqual(HttpStatusCode.BadRequest, noPassword.StatusCode);
+            using var saved = await host.SendAsync(HttpMethod.Put, route, new UpdateStorageSynologyDataV1("http://nas.test:5000", "admin", "dsm-secret"));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            using var read = await host.SendAsync(HttpMethod.Get, Route + "/" + mountId);
+            var json = await read.Content.ReadAsStringAsync();
+            Assert.IsFalse(json.Contains("dsm-secret", StringComparison.Ordinal));
+            Assert.AreEqual("admin", (await read.Content.ReadFromJsonAsync<StorageMountDetailsV1>())!.SynologyUsername);
+
+            // Health in one session that is closed again; the password only in the login body.
+            using var health = await host.SendAsync(HttpMethod.Post, route + "/status");
+            Assert.AreEqual(HttpStatusCode.OK, health.StatusCode, await health.Content.ReadAsStringAsync());
+            var status = (await health.Content.ReadFromJsonAsync<SynologyStatusV1>())!;
+            Assert.AreEqual("DS920+", status.Model);
+            Assert.AreEqual(8_000_000_000_000L, status.Volumes.Single().TotalBytes);
+            Assert.AreEqual(36, status.Disks.Single().Temperature);
+            CollectionAssert.AreEqual(new[] { "login", "info", "load_info", "logout" }, dsm.Methods);
+            Assert.AreEqual("dsm-secret", dsm.Password);
+            Assert.IsTrue(dsm.Addresses.All(address => !address.Contains("dsm-secret", StringComparison.Ordinal)));
+
+            // Power commands and a rejected login.
+            dsm.Methods.Clear();
+            using var shutdown = await host.SendAsync(HttpMethod.Post, route + "/power", new PowerStorageSynologyDataV1(SynologyPowerType.Shutdown));
+            Assert.AreEqual(HttpStatusCode.OK, shutdown.StatusCode, await shutdown.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(new[] { "login", "shutdown" }, dsm.Methods);
+            dsm.RejectLogin = true;
+            using var rejected = await host.SendAsync(HttpMethod.Post, route + "/status");
+            StringAssert.Contains(await rejected.Content.ReadAsStringAsync(), "synology_login_failed");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId);
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Read NAS health");
+            using var confirm = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId + "&power=Shutdown");
+            StringAssert.Contains(await confirm.Content.ReadAsStringAsync(), "Shut down the NAS now?");
+
+            // The stored password never follows another address.
+            using var moved = await host.SendAsync(HttpMethod.Put, route, new UpdateStorageSynologyDataV1("http://elsewhere.test:5000", "admin", null));
+            Assert.AreEqual(HttpStatusCode.BadRequest, moved.StatusCode);
+
+            // No address removes the access.
+            using var removed = await host.SendAsync(HttpMethod.Put, route, new UpdateStorageSynologyDataV1(null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StorageMounts\" WHERE \"SynologyProtectedPassword\" IS NOT NULL"));
+        }
+
+        private sealed class FakeDsm : HttpMessageHandler
+        {
+            public List<string> Methods { get; } = [];
+            public List<string> Addresses { get; } = [];
+            public string? Password { get; private set; }
+            public bool RejectLogin { get; set; }
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Addresses.Add(request.RequestUri!.ToString());
+                var form = System.Web.HttpUtility.ParseQueryString(await request.Content!.ReadAsStringAsync(cancellationToken));
+                var method = form["method"]!;
+                Methods.Add(method);
+                if (method == "login") Password = form["passwd"];
+                var body = method switch
+                {
+                    "login" when RejectLogin => "{\"success\":false,\"error\":{\"code\":400}}",
+                    "login" => "{\"success\":true,\"data\":{\"sid\":\"session-1\"}}",
+                    "info" => "{\"success\":true,\"data\":{\"model\":\"DS920+\",\"firmware_ver\":\"DSM 7.2\",\"sys_temp\":41}}",
+                    "load_info" => "{\"success\":true,\"data\":{\"volumes\":[{\"vol_path\":\"/volume1\",\"status\":\"normal\",\"size\":{\"total\":\"8000000000000\",\"used\":\"2000000000000\"}}],\"disks\":[{\"name\":\"Drive 1\",\"model\":\"WD80EFZZ \",\"status\":\"normal\",\"temp\":36}]}}",
+                    _ => "{\"success\":true}"
+                };
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
             }
         }
 

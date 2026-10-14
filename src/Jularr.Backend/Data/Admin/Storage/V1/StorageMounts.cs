@@ -55,8 +55,10 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     {
         public StorageMountDetailsV1(long id, string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion, string? username, string? domain, bool isReadOnly,
             bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool canMount, long version, StorageHealthType? storageHealthTypeId = null,
-            string? diagnosticCode = null, DateTime? checkedAt = null, long? freeBytes = null, long? totalBytes = null)
+            string? diagnosticCode = null, DateTime? checkedAt = null, long? freeBytes = null, long? totalBytes = null, string? synologyUrl = null, string? synologyUsername = null)
         {
+            SynologyUrl = synologyUrl;
+            SynologyUsername = synologyUsername;
             StorageHealthTypeId = storageHealthTypeId;
             DiagnosticCode = diagnosticCode;
             CheckedAt = checkedAt;
@@ -139,6 +141,13 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
         [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.TotalBytes))]
         public long? TotalBytes { get; }
+
+        // DSM access for health and power; the password is never returned.
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyUrl))]
+        public string? SynologyUrl { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyUsername))]
+        public string? SynologyUsername { get; }
     }
 
     public sealed class SaveStorageMountDataV1 : BaseData
@@ -304,5 +313,116 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.DirectoryName))]
         public string Name { get; }
+    }
+
+    // No address removes the DSM access; an omitted password keeps the stored one for the same address and account.
+    public sealed class UpdateStorageSynologyDataV1 : BaseData
+    {
+        public UpdateStorageSynologyDataV1(string? synologyUrl, string? synologyUsername, string? password)
+        {
+            SynologyUrl = synologyUrl;
+            SynologyUsername = synologyUsername;
+            Password = password;
+        }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyUrl))]
+        public string? SynologyUrl { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyUsername))]
+        public string? SynologyUsername { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Password))]
+        public string? Password { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+            if (SynologyUrl is not null && SynologyUsername is null)
+            {
+                throw new DataValidationException(nameof(SynologyUsername), "required");
+            }
+        }
+    }
+
+    public sealed class PowerStorageSynologyDataV1 : BaseData
+    {
+        public PowerStorageSynologyDataV1(SynologyPowerType synologyPowerTypeId)
+        {
+            SynologyPowerTypeId = synologyPowerTypeId;
+        }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyPowerTypeId))]
+        public SynologyPowerType SynologyPowerTypeId { get; }
+    }
+
+    public sealed class SynologyStatusV1 : BaseResponse
+    {
+        public SynologyStatusV1(string? model, string? version, int? temperature, BaseDataList<SynologyVolumeV1> volumes, BaseDataList<SynologyDiskV1> disks)
+        {
+            Model = model;
+            Version = version;
+            Temperature = temperature;
+            Volumes = volumes;
+            Disks = disks;
+        }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Text))]
+        public string? Model { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Text))]
+        public string? Version { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Temperature))]
+        public int? Temperature { get; }
+
+        public BaseDataList<SynologyVolumeV1> Volumes { get; }
+
+        public BaseDataList<SynologyDiskV1> Disks { get; }
+    }
+
+    public sealed class SynologyVolumeV1 : BaseResponse
+    {
+        public SynologyVolumeV1(string? name, string? status, long? totalBytes, long? usedBytes)
+        {
+            Name = name;
+            Status = status;
+            TotalBytes = totalBytes;
+            UsedBytes = usedBytes;
+        }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Text))]
+        public string? Name { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Text))]
+        public string? Status { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Bytes))]
+        public long? TotalBytes { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Bytes))]
+        public long? UsedBytes { get; }
+    }
+
+    public sealed class SynologyDiskV1 : BaseResponse
+    {
+        public SynologyDiskV1(string? name, string? model, string? status, int? temperature)
+        {
+            Name = name;
+            Model = model;
+            Status = status;
+            Temperature = temperature;
+        }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Text))]
+        public string? Name { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Text))]
+        public string? Model { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Text))]
+        public string? Status { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.Temperature))]
+        public int? Temperature { get; }
     }
 }

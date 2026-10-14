@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
@@ -20,6 +21,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
     [Authorize(Policy = ServiceApi.StorageReadPolicyName)]
     public class StorageModel(ReadStorageMountsV1 read, ReadStorageMountV1 readMount, ReadStorageProtocolsV1 readProtocols, ReadStorageLocalPathsV1 readLocalPaths,
         CreateStorageMountV1 create, UpdateStorageMountV1 update, ExecuteStorageMountV1 execute, WakeStorageMountV1 wake, RemoveStorageMountV1 remove,
+        UpdateStorageSynologyV1 synology, ReadStorageSynologyStatusV1 synologyStatus, PowerStorageSynologyV1 synologyPower,
         ReadStorageDirectoriesV1 readDirectories, ReadLibraryRootsV1 readRoots, CreateLibraryRootV1 createRoot, RenameLibraryRootV1 renameRoot, DeleteLibraryRootV1 deleteRoot,
         QueueLibraryScanV1 queueScan, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
@@ -52,6 +54,10 @@ namespace Jularr.Frontend.Pages.Admin.Storage
 
         [BindProperty(SupportsGet = true)]
         public long? LibraryRootId { get; set; }
+
+        // A power command waiting for its confirmation.
+        [BindProperty(SupportsGet = true)]
+        public SynologyPowerType? Power { get; set; }
 
         protected override void Define(Page page)
         {
@@ -94,8 +100,9 @@ namespace Jularr.Frontend.Pages.Admin.Storage
 
                     if (TempData["StorageWoken"] is true) content.Secondary.Add(new P(new Text("storage.wake.sent")).Attribute("role", "status"));
                     if (TempData["StorageScanQueued"] is true) content.Secondary.Add(new P(new Text("storage.paths.scanQueued")).Attribute("role", "status"));
-                    if (FormError is not null && _failedSection is not ("Save" or "Root")) content.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+                    if (FormError is not null && _failedSection is not ("Save" or "Root" or "Synology")) content.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                     content.Secondary.Add(new UiSection("storage.paths", Paths(mount, csrf)));
+                    if (mount.CanMount) content.Secondary.Add(new UiSection("storage.synology.title", [.. Synology(mount, csrf)]));
                 }
             });
             var detailOpen = StorageMountId is not null || _input is not null || Request.Query.ContainsKey("protocol");
@@ -168,6 +175,55 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             parts.Add(string.Format(CultureInfo.CurrentCulture, texts["storage.checkedAt"], checkedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));
             return new P(new ValueText(string.Join(" · ", parts))).Class("storage__health").Attribute("role", "status");
         }
+
+        // DSM access, the NAS's own health and power; power asks once more.
+        private IEnumerable<IUiComponent> Synology(StorageMountDetailsV1 mount, string? csrf)
+        {
+            yield return new P(new Text("storage.synology.hint"));
+            yield return new Form<UpdateStorageSynologyDataV1>(form =>
+            {
+                form.Text(item => item.SynologyUrl, "storage.synology.url");
+                form.Text(item => item.SynologyUsername, "storage.synology.username");
+                form.Password(item => item.Password, "storage.synology.password", "new-password");
+                form.Submit("common.save");
+            }, Address(mount.Id, handler: "Synology"), csrf, new UpdateStorageSynologyDataV1(mount.SynologyUrl, mount.SynologyUsername, null), _failedSection == "Synology" ? FormError : null);
+            if (mount.SynologyUrl is null)
+            {
+                yield break;
+            }
+
+            yield return new Form<StorageMountParametersV1>(form => form.Submit("storage.synology.status"), Address(mount.Id, handler: "SynologyStatus"), csrf, new StorageMountParametersV1(mount.Id));
+            if (Power is { } power)
+            {
+                yield return new P(new Text("storage.synology.confirm." + power)).Attribute("role", "alert");
+                yield return new Form<PowerStorageSynologyDataV1>(form =>
+                {
+                    form.Hidden(item => item.SynologyPowerTypeId);
+                    form.Submit("storage.synology.power." + power);
+                }, Address(mount.Id, handler: "SynologyPower"), csrf, new PowerStorageSynologyDataV1(power));
+                yield return new A(new Text("storage.synology.keepRunning")).Class("button").Attribute("href", Address(mount.Id));
+            }
+            else
+            {
+                yield return new Div([.. Enum.GetValues<SynologyPowerType>().Select(type => new A(new Text("storage.synology.power." + type)).Class("button")
+                    .Attribute("href", Address(mount.Id) + "&power=" + type))]).Class("storage__actions");
+            }
+
+            if (TempData["SynologySent"] is true) yield return new P(new Text("storage.synology.sent")).Attribute("role", "status");
+            if (TempData["SynologyStatus"] is string json && JsonSerializer.Deserialize<SynologyStatusV1>(json) is { } status)
+            {
+                var lines = new List<IUiComponent>();
+                var device = string.Join(" · ", new[] { status.Model, status.Version, Temperature(status.Temperature) }.OfType<string>());
+                if (device.Length > 0) lines.Add(new Li(new ValueText(device)));
+                lines.AddRange(status.Volumes.Select(volume => new Li(new ValueText(string.Join(" · ", new[] { volume.Name, volume.Status,
+                    volume.UsedBytes is { } used && volume.TotalBytes is { } total ? string.Format(CultureInfo.CurrentCulture, texts["storage.synology.used"], ByteSize.Format(used), ByteSize.Format(total)) : null }
+                    .OfType<string>())))));
+                lines.AddRange(status.Disks.Select(disk => new Li(new ValueText(string.Join(" · ", new[] { disk.Name, disk.Model, disk.Status, Temperature(disk.Temperature) }.OfType<string>())))));
+                yield return new Ul([.. lines]).Class("storage__synology").Attribute("role", "status");
+            }
+        }
+
+        private string? Temperature(int? celsius) => celsius is { } value ? string.Format(CultureInfo.CurrentCulture, texts["storage.synology.temperature"], value) : null;
 
         private IEnumerable<IUiComponent> ConnectionActions(StorageMountDetailsV1 mount, string? csrf)
         {
@@ -307,6 +363,27 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             var result = await execute.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(storageMountId),
                 new ExecuteStorageMountDataV1(operationTypeId), HttpContext.RequestAborted);
             TempData["StorageCurrent"] = !result.IsMounted || result.IsCurrentConfiguration;
+            return LocalRedirect(Address(storageMountId));
+        }
+
+        public async Task<IActionResult> OnPostSynologyAsync([BindRequired] long storageMountId, string? synologyUrl, string? synologyUsername, string? password)
+        {
+            _failedSection = "Synology";
+            await synology.ExecuteAsync<UpdateResult>(new StorageMountParametersV1(storageMountId), new UpdateStorageSynologyDataV1(synologyUrl, synologyUsername, password), HttpContext.RequestAborted);
+            return LocalRedirect(Address(storageMountId));
+        }
+
+        public async Task<IActionResult> OnPostSynologyStatusAsync([BindRequired] long storageMountId)
+        {
+            var status = await synologyStatus.ExecuteAsync<SynologyStatusV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
+            TempData["SynologyStatus"] = JsonSerializer.Serialize(status);
+            return LocalRedirect(Address(storageMountId));
+        }
+
+        public async Task<IActionResult> OnPostSynologyPowerAsync([BindRequired] long storageMountId, [BindRequired] SynologyPowerType synologyPowerTypeId)
+        {
+            await synologyPower.ExecuteAsync<UpdateResult>(new StorageMountParametersV1(storageMountId), new PowerStorageSynologyDataV1(synologyPowerTypeId), HttpContext.RequestAborted);
+            TempData["SynologySent"] = true;
             return LocalRedirect(Address(storageMountId));
         }
 

@@ -148,7 +148,13 @@ imports completed downloads into the first writable library of the media type.
 Connection paths of SMB/NFS mounts must be actual mount points (`Storage:RequireMountPoint`,
 default on), so a stale empty mount point is never read as an empty library or
 written to; a scan that skipped unreadable folders fails as `scan_incomplete`
-without marking files missing. Synology management is a later package. One media type per library path is
+without marking files missing. A Synology NAS can also be managed through DSM: with an administrator account
+without two-step verification (address, account and an encrypted password per
+connection, never returned), the Owner reads model, DSM version, temperature,
+volumes and disks on request, and shuts the NAS down or restarts it after a
+confirmation. Every action opens one DSM session; nothing polls the NAS. A stored
+password is used only for the address and account it was saved with. Use HTTPS with a valid
+certificate, or HTTP only inside the home network. One media type per library path is
 the owner decision.
 
 References: [Docker bind propagation](https://docs.docker.com/engine/storage/bind-mounts/#configure-bind-propagation),

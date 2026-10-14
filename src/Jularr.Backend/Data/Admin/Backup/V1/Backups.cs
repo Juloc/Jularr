@@ -44,7 +44,7 @@ namespace Jularr.Backend.Data.Admin.Backup.V1
 
     public sealed class BackupsV1 : BaseResponse
     {
-        public BackupsV1(BackupV1[] items, bool isConfigured, bool isRunning, string? errorKey, bool canRestore)
+        public BackupsV1(BaseDataList<BackupV1> items, bool isConfigured, bool isRunning, string? errorKey, bool canRestore)
         {
             Items = items;
             IsConfigured = isConfigured;
@@ -53,7 +53,7 @@ namespace Jularr.Backend.Data.Admin.Backup.V1
             CanRestore = canRestore;
         }
 
-        public BackupV1[] Items { get; }
+        public BaseDataList<BackupV1> Items { get; }
 
         [DataField(typeof(BackupFields), nameof(BackupFields.IsConfigured))]
         public bool IsConfigured { get; }

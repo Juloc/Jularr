@@ -30,6 +30,9 @@ CREATE TABLE "StorageMounts" (
     "WakeMacAddress" varchar(17) NULL CHECK ("WakeMacAddress" ~ '^([0-9A-F]{2}:){5}[0-9A-F]{2}$'),
     "WakeBroadcastAddress" varchar(15) NULL,
     "WakeOnDemand" boolean NOT NULL DEFAULT FALSE,
+    "SynologyUrl" varchar(2048) NULL CHECK ("SynologyUrl" ~ '^https?://'),
+    "SynologyUsername" varchar(256) NULL CHECK (length("SynologyUsername") > 0),
+    "SynologyProtectedPassword" bytea NULL,
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
     "CreatedAt" timestamptz NOT NULL DEFAULT statement_timestamp(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT statement_timestamp(),
@@ -39,7 +42,8 @@ CREATE TABLE "StorageMounts" (
         OR ("StorageProtocolTypeId" = 2 AND "SharePath" LIKE '/%' AND "Host" IS NOT NULL AND "ProtocolVersion" IS NOT NULL AND "Username" IS NULL AND "Domain" IS NULL AND "ProtectedPassword" IS NULL)
         OR ("StorageProtocolTypeId" = 3 AND "Host" IS NULL AND "ProtocolVersion" IS NULL AND "Username" IS NULL AND "Domain" IS NULL AND "ProtectedPassword" IS NULL)
     ),
-    CHECK ("WakeMacAddress" IS NOT NULL OR ("WakeBroadcastAddress" IS NULL AND NOT "WakeOnDemand"))
+    CHECK ("WakeMacAddress" IS NOT NULL OR ("WakeBroadcastAddress" IS NULL AND NOT "WakeOnDemand")),
+    CHECK (("SynologyUrl" IS NULL) = ("SynologyUsername" IS NULL) AND ("SynologyUrl" IS NULL) = ("SynologyProtectedPassword" IS NULL))
 );
 CREATE UNIQUE INDEX "UX_StorageMounts_LocalPath" ON "StorageMounts" ("SharePath") WHERE "StorageProtocolTypeId" = 3;
 

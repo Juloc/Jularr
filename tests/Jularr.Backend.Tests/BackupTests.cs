@@ -64,7 +64,7 @@ namespace Jularr.Backend.Tests
             // Deleting removes the folder; pruning keeps the newest.
             using var deleted = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261002-120000/removal");
             Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
-            Assert.AreEqual(1, (await ReadAsync(host)).Items.Length);
+            Assert.AreEqual(1, (await ReadAsync(host)).Items.Count);
             await WriteBackupAsync(folder.Path, "jularr-20261004-120000", BackupFiles.SchemaFingerprint);
             BackupFiles.Prune(folder.Path, 1);
             CollectionAssert.AreEqual(new[] { "jularr-20261004-120000" }, (await ReadAsync(host)).Items.Select(item => item.Name).ToArray());

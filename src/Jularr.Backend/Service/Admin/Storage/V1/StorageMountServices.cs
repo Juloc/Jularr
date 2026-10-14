@@ -47,7 +47,9 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     health."DiagnosticCode",
                     health."CheckedAt",
                     health."FreeBytes",
-                    health."TotalBytes"
+                    health."TotalBytes",
+                    mount."SynologyUrl",
+                    mount."SynologyUsername"
                 FROM
                     "StorageMounts" AS mount
                     JOIN "StorageMountHealth" AS health ON health."StorageMountId" = mount."Id"

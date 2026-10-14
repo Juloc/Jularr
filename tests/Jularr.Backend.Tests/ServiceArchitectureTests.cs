@@ -1,3 +1,5 @@
+using Jularr.Backend.Service.Core.Localization;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Service;
 using System.Reflection;
 using Jularr.Backend.Infrastructure.Sql;
@@ -27,6 +29,36 @@ namespace Jularr.Backend.Tests
 
             var friends = typeof(ServiceApi).Assembly.GetCustomAttributes<System.Runtime.CompilerServices.InternalsVisibleToAttribute>();
             CollectionAssert.AreEquivalent(new[] { "Jularr.Backend.Tests" }, friends.Select(friend => friend.AssemblyName).ToArray());
+        }
+
+        [TestMethod]
+        public void ErrorCodes_ThrownBySourceCode_HaveTheirEnglishText()
+        {
+            var keys = ServiceErrorResources.English.Select(resource => resource.Key).ToHashSet(StringComparer.Ordinal);
+            var root = new DirectoryInfo(AppContext.BaseDirectory);
+            while (root.GetFiles("Jularr.sln").Length == 0)
+            {
+                root = root.Parent!;
+            }
+
+            var missing = new SortedSet<string>(StringComparer.Ordinal);
+            var files = new[] { "Jularr.Backend", "Jularr.Integrations" }.SelectMany(project => Directory.EnumerateFiles(Path.Combine(root.FullName, "src", project), "*.cs", SearchOption.AllDirectories))
+                .Where(file => !file.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+            foreach (var file in files)
+            {
+                var text = File.ReadAllText(file);
+                foreach (Match code in Regex.Matches(text, @"new (?:ServiceUnavailableException|NasMountException|SynologyException)\(\s*""([a-z0-9_]+)""\s*\)"))
+                {
+                    if (!keys.Contains("errors." + code.Groups[1].Value)) missing.Add(code.Groups[1].Value);
+                }
+
+                foreach (Match code in Regex.Matches(text, @"new DataValidationException\([^;]*?,\s*""([a-z0-9_]+)""\s*\)"))
+                {
+                    if (!keys.Contains("errors.validation." + code.Groups[1].Value)) missing.Add("validation." + code.Groups[1].Value);
+                }
+            }
+
+            Assert.AreEqual(0, missing.Count, "Missing error texts: " + string.Join(", ", missing));
         }
 
         [TestMethod]
