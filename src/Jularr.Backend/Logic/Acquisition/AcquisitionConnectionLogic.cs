@@ -42,7 +42,7 @@ namespace Jularr.Backend.Logic.Acquisition
         public static async Task<IReadOnlyList<AcquisitionConnectionData>> ReadDownloadClientsAsync(this LogicContext ctx, CancellationToken ct) =>
             [.. (await ctx.ReadEnabledConnectionsAsync(ct)).Where(connection => IsDownloadClient(connection.AcquisitionConnectionTypeId))];
 
-        // Every enabled source that searches: indexers and catalogs.
+        // Every enabled source that searches: indexers and catalogs, that is every type that is no download client.
         public static async Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledSearchConnectionsAsync(this LogicContext ctx, CancellationToken ct) =>
             [.. (await ctx.ReadEnabledConnectionsAsync(ct)).Where(connection => !IsDownloadClient(connection.AcquisitionConnectionTypeId))];
 

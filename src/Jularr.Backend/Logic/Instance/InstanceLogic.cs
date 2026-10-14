@@ -1,6 +1,5 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Instance;
-using Jularr.Backend.Data.Logic.Localization;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Localization;
 
