@@ -19,6 +19,7 @@ namespace Jularr.Frontend.Framework
         public static bool CanSeeStatistics(this UiText texts) => texts.Can("profile.media.read", "Library", "Statistics");
         public static bool CanAdminister(this UiText texts) => texts.Can("instance.settings.read");
         public static bool CanDiagnose(this UiText texts) => texts.Can("instance.settings.read", "Diagnostics");
+        public static bool CanUploadVolumes(this UiText texts) => texts.Can("media.manual.update", "Library", "Uploads");
         public static bool CanManageStorage(this UiText texts) => texts.Can("storage.update", "Library");
         public static bool CanGroupUnits(this UiText texts) => texts.Can("media.manual.update", "Library", "UnitGroups");
         public static bool CanArrangeHome(this UiText texts) => texts.Can("profile.self.update", "Library", "HomeLayout");

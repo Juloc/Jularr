@@ -10,9 +10,12 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Work
 {
+    [RequestSizeLimit(2_001_048_576)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 2_001_048_576)]
     public sealed class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
-        DeleteWorkUnitGroupV1 deleteGroup, IAntiforgery antiforgery, UiText texts) : JularrPage
+        DeleteWorkUnitGroupV1 deleteGroup, UploadVolumeV1 upload, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        private bool _uploading;
         private WorkDetailsV1? _work;
         private UpdateWorkDataV1? _input;
         private IReadOnlyList<WorkUnitGroupV1>? _groups;
@@ -45,7 +48,19 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     _input ?? new UpdateWorkDataV1(work.CanonicalTitle, work.Version, work.ReleaseYear, work.MediaSubtypeId), _input is null ? null : FormError));
                 page.Content.Add(new Form<WorkParametersV1>(form => form.Submit("admin.work.refreshMetadata"),
                     "/Admin/Works/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Refresh", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, new WorkParametersV1(work.Id)));
-                if (_input is null && _groupInput is null && FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+                // A manga volume from the Admin's own device.
+                if (work.MediaTypeId == MediaType.Book && work.MediaSubtypeId == MediaSubtype.Manga && texts.CanUploadVolumes())
+                {
+                    page.Content.Add(new UiSection("work.upload", [new Form<UploadVolumeDataV1>(form =>
+                    {
+                        form.File(item => item.File, "work.upload.file");
+                        form.Number(item => item.VolumeNumber, "work.upload.volume");
+                        form.Submit("work.upload.submit");
+                    }, Home + "?handler=Upload", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, null, _uploading ? FormError : null)]));
+                    if (TempData["VolumeUploaded"] is true) page.Content.Add(new P(new Text("work.upload.done")).Attribute("role", "status"));
+                }
+
+                if (_input is null && _groupInput is null && !_uploading && FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
 
                 // Named sections over the units; units and files stay as they are.
                 var units = WorkUnitTypes.For(work.MediaTypeId);
@@ -105,6 +120,15 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             await deleteGroup.ExecuteAsync<UpdateResult>(new WorkUnitGroupParametersV1(Id, workUnitGroupId), default, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = Id });
+        }
+
+        public async Task<IActionResult> OnPostUploadAsync(IFormFile? file, decimal? volumeNumber)
+        {
+            _uploading = true;
+            var data = new UploadVolumeDataV1(file is null ? null! : new UploadedFile(file.FileName, file.Length, file.OpenReadStream), volumeNumber);
+            await upload.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), data, HttpContext.RequestAborted);
+            TempData["VolumeUploaded"] = true;
+            return LocalRedirect(Home);
         }
 
         public async Task<IActionResult> OnPostRefreshAsync()

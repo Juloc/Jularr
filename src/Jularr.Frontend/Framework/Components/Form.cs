@@ -16,6 +16,7 @@ namespace Jularr.Frontend.Framework
         private readonly string? _action;
         private readonly TData? _data;
         private readonly ServiceError? _error;
+        private bool _isUpload;
 
         public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null)
         {
@@ -40,6 +41,18 @@ namespace Jularr.Frontend.Framework
         public Form<TData> Text<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Text, labelKey, autocomplete);
         public Form<TData> Password<TValue>(Expression<Func<TData, TValue>> field, string labelKey, string autocomplete = "off") => Add(field, FieldControl.Password, labelKey, autocomplete);
         public Form<TData> Number<TValue>(Expression<Func<TData, TValue>> field, string labelKey) => Add(field, FieldControl.Number, labelKey, "off");
+
+        // A file field makes the form a multipart upload.
+        public Form<TData> File<TValue>(Expression<Func<TData, TValue>> selector, string labelKey)
+        {
+            var field = Declare(selector, FieldControl.File, labelKey);
+            var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "file");
+            if (field.Accept is { } accept) input.Attribute("accept", accept);
+            Configure(field, input);
+            AddField(field, input);
+            _isUpload = true;
+            return this;
+        }
 
         // Digits on a numeric keypad; a PIN of a known length is entered first and confirms itself.
         public Form<TData> Pin<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, int? length = null)
@@ -162,6 +175,7 @@ namespace Jularr.Frontend.Framework
             if (_action is not null)
             {
                 form.Attribute("action", _action).Attribute("method", "post");
+                if (_isUpload) form.Attribute("enctype", "multipart/form-data");
             }
 
             form.WriteTo(writer, encoder, texts);

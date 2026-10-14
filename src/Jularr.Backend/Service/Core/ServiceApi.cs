@@ -348,7 +348,9 @@ namespace Jularr.Backend.Service.Core
                 }
 
                 // Bind the shared HTTP adapter.
-                var factory = typeof(ServiceApi).GetMethod(noData ? nameof(CreateParameterHandler) : nameof(CreateBodyHandler), BindingFlags.Static | BindingFlags.NonPublic)!;
+                var upload = !noData && FormDataBinder.HasFile(arguments[1]);
+                var factory = typeof(ServiceApi).GetMethod(noData ? nameof(CreateParameterHandler) : upload ? nameof(CreateUploadHandler) : nameof(CreateBodyHandler),
+                    BindingFlags.Static | BindingFlags.NonPublic)!;
                 var handler = (Delegate)factory.MakeGenericMethod([type, .. arguments]).Invoke(null, null)!;
                 // Files also answer HEAD, so clients can check them against their own cache.
                 string[] methods = method == "GET" && typeof(IFileOutput).IsAssignableFrom(definition.DefaultResultType) ? ["GET", "HEAD"] : [method];
@@ -364,6 +366,13 @@ namespace Jularr.Backend.Service.Core
                 if (definition.ServiceArea == ServiceArea.Public)
                 {
                     route.RequireRateLimiting("public").WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
+                }
+
+                // Uploads may be as large as their file field allows.
+                if (upload)
+                {
+                    var limit = FormDataBinder.RequestLimit(arguments[1]);
+                    route.WithMetadata(new RequestSizeLimitAttribute(limit), new RequestFormLimitsAttribute { MultipartBodyLengthLimit = limit });
                 }
             }
 
@@ -433,6 +442,21 @@ namespace Jularr.Backend.Service.Core
                 HttpContext http, [FromServices] IAntiforgery antiforgery, CancellationToken cancellationToken) =>
             {
                 await antiforgery.ValidateRequestAsync(http);
+                var result = await service.ExecuteAsync(parameters, data, cancellationToken);
+                await ApplyAuthenticationAsync(http, result, antiforgery);
+                return Results.Ok<object>(result);
+            };
+
+        private static Delegate CreateUploadHandler<TService, TParameters, TData>() where TService : Service<TParameters, TData> =>
+            async ([AsParameters] TParameters parameters, [FromServices] TService service, HttpContext http, [FromServices] IAntiforgery antiforgery, CancellationToken cancellationToken) =>
+            {
+                await antiforgery.ValidateRequestAsync(http);
+                if (!http.Request.HasFormContentType)
+                {
+                    throw new BadHttpRequestException("A form with the file is required.");
+                }
+
+                var data = FormDataBinder.Bind<TData>(await http.Request.ReadFormAsync(cancellationToken));
                 var result = await service.ExecuteAsync(parameters, data, cancellationToken);
                 await ApplyAuthenticationAsync(http, result, antiforgery);
                 return Results.Ok<object>(result);

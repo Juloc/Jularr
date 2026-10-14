@@ -53,6 +53,31 @@ namespace Jularr.Backend.Data.Fields
         }
     }
 
+    // An uploaded file: its size and the extensions it may have.
+    public sealed class FileField : DataField
+    {
+        public FileField() : base(typeof(UploadedFile), NpgsqlDbType.Unknown)
+        {
+        }
+
+        public long MaximumBytes { get; init; }
+        public IReadOnlyList<string> Extensions { get; init; } = [];
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+            var file = (UploadedFile)value;
+            if (file.Length <= 0 || file.Length > MaximumBytes)
+            {
+                throw new DataValidationException(name, "out_of_range");
+            }
+
+            if (!Extensions.Contains(Path.GetExtension(file.FileName).ToLowerInvariant(), StringComparer.Ordinal))
+            {
+                throw new DataValidationException(name, "invalid_file_type");
+            }
+        }
+    }
+
     public sealed class LongField : DataField
     {
         public LongField() : base(typeof(long), NpgsqlDbType.Bigint)

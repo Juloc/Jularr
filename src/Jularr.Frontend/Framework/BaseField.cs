@@ -14,7 +14,8 @@ namespace Jularr.Frontend.Framework
         Number,
         Checkbox,
         Select,
-        MultiSelect
+        MultiSelect,
+        File
     }
 
     public sealed record BaseField(
@@ -31,6 +32,9 @@ namespace Jularr.Frontend.Framework
 
         public int? MinimumLength { get; init; }
         public int? Scale { get; init; }
+
+        // File types a file field accepts.
+        public string? Accept { get; init; }
         internal Func<BaseData, object?> ReadValue { get; init; } = _ => throw new InvalidOperationException("Field access requires property metadata.");
 
         public static BaseField From<TData, TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string? labelKey = null)
@@ -79,7 +83,8 @@ namespace Jularr.Frontend.Framework
             {
                 ReadValue = cached.Read,
                 MinimumLength = field.Field is StringField text && text.MinimumLength > 0 ? text.MinimumLength : null,
-                Scale = field.Field is DecimalField fraction ? fraction.Scale : null
+                Scale = field.Field is DecimalField fraction ? fraction.Scale : null,
+                Accept = field.Field is FileField file ? string.Join(',', file.Extensions) : null
             };
         }
     }

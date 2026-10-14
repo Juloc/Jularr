@@ -1,0 +1,116 @@
+using System.Globalization;
+using System.Text.Json;
+using Jularr.Backend.Data.Admin.Media.V1;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Logic.Library;
+using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Library;
+using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Storage;
+using Microsoft.Extensions.Options;
+
+namespace Jularr.Backend.Service.Admin.Media.V1
+{
+    [ServiceEndpoint("POST", "/api/v1/admin/works/{workId:long}/volumes")]
+    public sealed class UploadVolumeV1 : AdminService<WorkParametersV1, UploadVolumeDataV1>
+    {
+        private readonly StorageOptions _storage;
+
+        internal UploadVolumeV1(IOptions<StorageOptions> storage)
+        {
+            _storage = storage.Value;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library", "Uploads");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // Manga volumes only, into the library the import would choose.
+            var target = await Context.ExecuteBatchAsync((ctx, ct) => ReadTargetAsync(ctx, ct), CancellationToken)
+                ?? throw new ServiceUnavailableException("import_no_library");
+            if (target.MediaSubtypeId != MediaSubtype.Manga)
+            {
+                throw new DataValidationException(nameof(WorkParametersV1.WorkId), "invalid_transition");
+            }
+
+            var relativePath = LibraryNaming.Volume(target.CanonicalTitle, Data.VolumeNumber) + Path.GetExtension(Data.File.FileName).ToLowerInvariant();
+            if (!LibraryNaming.IsStorable(relativePath))
+            {
+                throw new DataValidationException(nameof(UploadVolumeDataV1.File), "invalid_value");
+            }
+
+            // Written aside, then moved in; an existing volume stays.
+            var directory = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(target.StorageProtocolTypeId, target.StorageMountId, target.SharePath), target.RelativePath);
+            var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
+            Directory.CreateDirectory(Path.Combine(directory, folder));
+            var path = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
+            var partial = path + ".partial";
+            await using (var source = Data.File.OpenRead())
+            await using (var stream = new FileStream(partial, FileMode.Create, FileAccess.Write))
+            {
+                await source.CopyToAsync(stream, CancellationToken);
+            }
+
+            try
+            {
+                File.Move(partial, path, false);
+            }
+            catch (IOException)
+            {
+                File.Delete(partial);
+                throw new DataValidationException(nameof(UploadVolumeDataV1.File), "duplicate_value");
+            }
+
+            var info = new FileInfo(path);
+            var modifiedAt = DateTime.UnixEpoch.AddTicks((info.LastWriteTimeUtc.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
+            var files = JsonSerializer.Serialize(new[] { new { RelativePath = relativePath, SizeBytes = info.Length, ModifiedAt = modifiedAt, Revision = 1 } });
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(target.LibraryRootId, modifiedAt, files), ct);
+                var file = await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(target.LibraryRootId, relativePath), ct) ?? throw new KeyNotFoundException("The uploaded file was not found.");
+                await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, Parameters.WorkId, null, Data.VolumeNumber is null ? null : WorkUnitType.Volume, Data.VolumeNumber, null, null), ct);
+                return true;
+            }, CancellationToken);
+            return new UpdateResult(true);
+        }
+
+        private Task<UploadTargetData?> ReadTargetAsync(LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."CanonicalTitle",
+                    CASE WHEN class."WorkId" IS NULL THEN work."MediaSubtypeId" ELSE class."MediaSubtypeId" END AS "MediaSubtypeId",
+                    root."Id" AS "LibraryRootId",
+                    mount."Id" AS "StorageMountId",
+                    mount."StorageProtocolTypeId",
+                    mount."SharePath",
+                    root."RelativePath"
+                FROM
+                    "Works" AS work
+                    LEFT JOIN "WorkClasses" AS class ON class."WorkId" = work."Id"
+                    JOIN "LibraryRoots" AS root ON root."MediaTypeId" = work."MediaTypeId"
+                        AND root."MediaSubtypeId" IS NOT DISTINCT FROM CASE WHEN class."WorkId" IS NULL THEN work."MediaSubtypeId" ELSE class."MediaSubtypeId" END
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                WHERE
+                    work."Id" = @WorkId
+                    AND work."MediaTypeId" = 3
+                    AND NOT mount."IsReadOnly"
+                ORDER BY
+                    root."Id"
+                LIMIT 1;
+                """;
+            sql.Parameters.Add(Parameters);
+            return ctx.ReadSql.ReadOptionalAsync<UploadTargetData>(sql, ct);
+        }
+    }
+}

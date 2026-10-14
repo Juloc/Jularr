@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
@@ -133,5 +134,42 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id), false)]
         public long? StorageMountId { get; }
+    }
+
+    // Where a Work's own files go: its title and the first writable library of its type and subtype.
+    internal sealed class UploadTargetData : BaseData
+    {
+        public UploadTargetData(string canonicalTitle, MediaSubtype? mediaSubtypeId, long libraryRootId, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath,
+            string relativePath)
+        {
+            CanonicalTitle = canonicalTitle;
+            MediaSubtypeId = mediaSubtypeId;
+            LibraryRootId = libraryRootId;
+            StorageMountId = storageMountId;
+            StorageProtocolTypeId = storageProtocolTypeId;
+            SharePath = sharePath;
+            RelativePath = relativePath;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string CanonicalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long LibraryRootId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
+        public StorageProtocolType StorageProtocolTypeId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
+        public string SharePath { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
+        public string RelativePath { get; }
     }
 }

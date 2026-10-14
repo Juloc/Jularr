@@ -81,6 +81,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   classes into each page. Do not activate submission, provider buttons,
   session persistence or password reveal actions without a real, authorized
   backend operation and antiforgery handling.
+- `Form.File` adds a file field from a Backend `FileField` (accepted extensions) and makes the form a multipart upload; the page handler wraps `IFormFile` into `UploadedFile` and declares its request size.
 - Form transport values are invariant, independently of the display language.
   `Form<TData>` emits ASP.NET's `__Invariant` field markers; use normal framework
   binding, not per-page parsing or a parallel binder. Field validation remains
