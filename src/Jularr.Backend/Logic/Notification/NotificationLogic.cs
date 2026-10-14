@@ -108,7 +108,6 @@ namespace Jularr.Backend.Logic.Notification
                     JOIN "InstanceModules" AS module ON module."Key" = 'Notifications' AND module."IsEnabled"
                 WHERE
                     account."IsEnabled"
-                    AND profile."IsEnabled"
                     AND (account."AccountRoleTypeId" = 1 OR NOT @OwnersOnly AND account."AccountRoleTypeId" = 3)
                     AND NOT EXISTS (
                         SELECT
