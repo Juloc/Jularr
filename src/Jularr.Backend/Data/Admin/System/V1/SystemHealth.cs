@@ -111,4 +111,55 @@ namespace Jularr.Backend.Data.Admin.System.V1
         [DataField(typeof(RecentLogFields), nameof(RecentLogFields.Message))]
         public string Message { get; }
     }
+
+    public sealed class ReadPerformanceParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class ResourceSampleV1 : BaseResponse
+    {
+        public ResourceSampleV1(DateTime at, decimal processorPercent, long memoryBytes)
+        {
+            At = at;
+            ProcessorPercent = processorPercent;
+            MemoryBytes = memoryBytes;
+        }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.At))]
+        public DateTime At { get; }
+
+        // Share of all processors.
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.ProcessorPercent))]
+        public decimal ProcessorPercent { get; }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.MemoryBytes))]
+        public long MemoryBytes { get; }
+    }
+
+    public sealed class ServiceTimingV1 : BaseResponse
+    {
+        public ServiceTimingV1(string service, long count, long errors, int averageMilliseconds, int maximumMilliseconds)
+        {
+            Service = service;
+            Count = count;
+            Errors = errors;
+            AverageMilliseconds = averageMilliseconds;
+            MaximumMilliseconds = maximumMilliseconds;
+        }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Service))]
+        public string Service { get; }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Count))]
+        public long Count { get; }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Count))]
+        public long Errors { get; }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Milliseconds))]
+        public int AverageMilliseconds { get; }
+
+        [DataField(typeof(PerformanceFields), nameof(PerformanceFields.Milliseconds))]
+        public int MaximumMilliseconds { get; }
+    }
 }

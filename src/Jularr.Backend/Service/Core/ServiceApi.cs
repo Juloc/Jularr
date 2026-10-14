@@ -135,6 +135,9 @@ namespace Jularr.Backend.Service.Core
         {
             // Recent warnings and errors for the Owner's system page.
             services.TryAddSingleton<RecentLogs>();
+            services.TryAddSingleton<ServiceTimings>();
+            services.TryAddSingleton<ResourceHistory>();
+            services.AddHostedService(provider => provider.GetRequiredService<ResourceHistory>());
             services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, RecentLogs>(provider => provider.GetRequiredService<RecentLogs>()));
 
             // Discover concrete services.
@@ -266,7 +269,8 @@ namespace Jularr.Backend.Service.Core
             });
 
             // Bind each service runtime.
-            services.AddScoped(provider => new ServiceRuntime(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<IServiceGate>()));
+            services.AddScoped(provider => new ServiceRuntime(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<IServiceGate>(),
+                provider.GetRequiredService<ServiceTimings>()));
             foreach (var type in serviceTypes)
             {
                 // Compile internal constructor activation.

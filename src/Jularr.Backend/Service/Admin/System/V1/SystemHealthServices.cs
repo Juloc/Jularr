@@ -105,4 +105,43 @@ namespace Jularr.Backend.Service.Admin.System.V1
         protected override Task<IServiceOutput> OnRead() =>
             Task.FromResult<IServiceOutput>(new BaseDataList<RecentLogV1>(_logs.Read(100).Select(entry => new RecentLogV1(entry.At, entry.Level switch { LogLevel.Critical => RecentLogLevel.Critical, LogLevel.Error => RecentLogLevel.Error, _ => RecentLogLevel.Warning }, entry.Category, entry.Message))));
     }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/system/resources")]
+    public sealed class ReadResourceSamplesV1 : AdminService<ReadPerformanceParametersV1>
+    {
+        private readonly ResourceHistory _history;
+
+        internal ReadResourceSamplesV1(ResourceHistory history)
+        {
+            _history = history;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ResourceSampleV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ReadPerformanceParametersV1 parameters, Type resultType) => new("instance.settings.read");
+
+        // Oldest first, since the start.
+        protected override Task<IServiceOutput> OnRead() =>
+            Task.FromResult<IServiceOutput>(new BaseDataList<ResourceSampleV1>(_history.Read().Select(sample => new ResourceSampleV1(sample.At, sample.ProcessorPercent, sample.MemoryBytes))));
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/system/timings")]
+    public sealed class ReadServiceTimingsV1 : AdminService<ReadPerformanceParametersV1>
+    {
+        private readonly ServiceTimings _timings;
+
+        internal ReadServiceTimingsV1(ServiceTimings timings)
+        {
+            _timings = timings;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ServiceTimingV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ReadPerformanceParametersV1 parameters, Type resultType) => new("instance.settings.read");
+
+        // The 20 services that took the most time during the last hour.
+        protected override Task<IServiceOutput> OnRead() =>
+            Task.FromResult<IServiceOutput>(new BaseDataList<ServiceTimingV1>(_timings.Read(20).Select(timing => new ServiceTimingV1(timing.Service, timing.Count, timing.Errors,
+                (int)Math.Min(int.MaxValue, Math.Round(timing.TotalMilliseconds / timing.Count)), (int)Math.Min(int.MaxValue, Math.Round(timing.MaxMilliseconds))))));
+    }
 }

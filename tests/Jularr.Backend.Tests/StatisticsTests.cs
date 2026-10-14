@@ -71,6 +71,15 @@ namespace Jularr.Backend.Tests
             var html = await systemPage.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "Import of Film failed.");
             Assert.IsFalse(html.Contains("Routine work.", StringComparison.Ordinal));
+
+            // Every service call of the last hour counts, the slowest in total first.
+            using var timings = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/timings");
+            var timing = (await timings.Content.ReadFromJsonAsync<Jularr.Backend.Data.Common.BaseDataList<ServiceTimingV1>>())!.Single(item => item.Service == "ReadSystemHealthV1");
+            Assert.IsTrue(timing.Count >= 3);
+            Assert.AreEqual(0L, timing.Errors);
+            StringAssert.Contains(html, "ReadSystemHealthV1");
+            using var resources = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/resources");
+            Assert.AreEqual(HttpStatusCode.OK, resources.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
             Assert.AreEqual(HttpStatusCode.Forbidden, manager.StatusCode);

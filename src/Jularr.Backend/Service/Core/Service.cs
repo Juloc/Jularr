@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
@@ -90,7 +91,27 @@ namespace Jularr.Backend.Service.Core
             return (TOutput)await RunAsync(parameters, data, typeof(TOutput), definition, cancellationToken);
         }
 
+        // Every call counts towards the Owner's performance view; refused and invalid calls too.
         private async Task<IServiceOutput> RunAsync(TParameters parameters, TData data, Type resultType, ServiceDefinition definition, CancellationToken cancellationToken)
+        {
+            var started = Stopwatch.GetTimestamp();
+            var failed = false;
+            try
+            {
+                return await RunCoreAsync(parameters, data, resultType, definition, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failed = true;
+                throw;
+            }
+            finally
+            {
+                Runtime.Timings?.Record(GetType().Name, Stopwatch.GetElapsedTime(started), failed);
+            }
+        }
+
+        private async Task<IServiceOutput> RunCoreAsync(TParameters parameters, TData data, Type resultType, ServiceDefinition definition, CancellationToken cancellationToken)
         {
             parameters ??= BaseParameters.CreateEmpty<TParameters>();
             ArgumentNullException.ThrowIfNull(data);
