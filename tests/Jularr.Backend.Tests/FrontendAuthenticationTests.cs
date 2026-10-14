@@ -120,6 +120,23 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task SignedOut_BackgroundRequestsGet401_PageVisitsGoToSignIn()
+        {
+            // No cookies: a page visit is sent to sign in, a script's fetch only learns it is signed out.
+            await using var host = await Host.CreateAsync(razor: true);
+            using var visit = new HttpRequestMessage(HttpMethod.Get, "/Continue/Reading");
+            visit.Headers.Add("Sec-Fetch-Mode", "navigate");
+            using var visited = await host.Client.SendAsync(visit);
+            Assert.AreEqual(HttpStatusCode.Redirect, visited.StatusCode);
+            StringAssert.Contains(visited.Headers.Location!.OriginalString, "/Account/Login");
+            using var fetch = new HttpRequestMessage(HttpMethod.Get, "/Continue/Reading");
+            fetch.Headers.Add("Sec-Fetch-Mode", "cors");
+            using var fetched = await host.Client.SendAsync(fetch);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, fetched.StatusCode);
+            Assert.IsFalse(fetched.Headers.Contains("Set-Cookie"));
+        }
+
+        [TestMethod]
         [DataRow("Development", HttpStatusCode.OK)]
         [DataRow("Production", HttpStatusCode.NotFound)]
         public async Task Design_EnvironmentGate_OnlyRendersDevelopmentExamples(string environment, HttpStatusCode expected)

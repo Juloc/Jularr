@@ -30,7 +30,7 @@ namespace Jularr.E2E.Tests
             try
             {
                 // The first visit leads to setup, where the Owner is created, then signs in again.
-                await Owner.SetUpAndSignInAsync(context, page);
+                await Owner.SetUpAndSignInAsync(page);
 
                 // Every menu entry opens with its content and without server or script errors.
                 var links = await page.Locator("nav a[href^='/']").EvaluateAllAsync<string[]>("links => [...new Set(links.map(link => link.getAttribute('href')))]");

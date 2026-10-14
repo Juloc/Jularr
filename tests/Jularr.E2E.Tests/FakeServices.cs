@@ -33,6 +33,7 @@ namespace Jularr.E2E.Tests
         private readonly WebApplication _app;
         private readonly ConcurrentQueue<string> _grabbed = new();
         private readonly ConcurrentDictionary<string, FakeRelease> _completed = new();
+        private readonly ConcurrentDictionary<string, FakeRelease> _held = new();
         private volatile FakeRelease[] _offered = [];
 
         private FakeServices(WebApplication app, Uri address, string downloads)
@@ -56,6 +57,22 @@ namespace Jularr.E2E.Tests
         public string Downloads { get; }
 
         public IReadOnlyCollection<string> Grabbed => _grabbed;
+
+        // Grabbed jobs wait in the queue until finished.
+        public bool HoldDownloads { get; set; }
+
+        // Finished jobs report a broken download.
+        public bool FailDownloads { get; set; }
+
+        public void FinishDownloads()
+        {
+            foreach (var release in _held.Values)
+            {
+                Complete(release);
+            }
+
+            _held.Clear();
+        }
 
         public static async Task<FakeServices> StartAsync(string downloads)
         {
@@ -204,29 +221,47 @@ namespace Jularr.E2E.Tests
                     }
 
                     _grabbed.Enqueue(address);
-                    var folder = Directory.CreateDirectory(Path.Combine(Downloads, release.Title)).FullName;
-                    if (Directory.Exists(release.File))
+                    if (HoldDownloads)
                     {
-                        foreach (var file in Directory.EnumerateFiles(release.File))
-                        {
-                            File.Copy(file, Path.Combine(folder, Path.GetFileName(file)), overwrite: true);
-                        }
+                        _held[release.Guid] = release;
                     }
                     else
                     {
-                        File.Copy(release.File, Path.Combine(folder, release.Title + Path.GetExtension(release.File)), overwrite: true);
+                        Complete(release);
                     }
-                    _completed[release.Guid] = release;
+
                     return Json("{\"status\":true,\"nzo_ids\":[\"SABnzbd_nzo_" + release.Guid + "\"]}");
                 case "queue":
-                    return Json("""{"queue":{"paused":false,"slots":[]}}""");
+                    var queued = _held.Values.Select(waiting =>
+                        "{\"nzo_id\":\"SABnzbd_nzo_" + waiting.Guid + "\",\"filename\":\"" + waiting.Title + "\",\"percentage\":\"40\",\"timeleft\":\"0:01:00\",\"status\":\"Downloading\"}");
+                    return Json("{\"queue\":{\"paused\":false,\"slots\":[" + string.Join(',', queued) + "]}}");
                 case "history":
-                    var slots = _completed.Values.Select(done =>
-                        "{\"nzo_id\":\"SABnzbd_nzo_" + done.Guid + "\",\"name\":\"" + done.Title + "\",\"status\":\"Completed\",\"storage\":\"/downloads/" + done.Title + "\"}");
+                    var slots = _completed.Values.Select(done => FailDownloads
+                        ? "{\"nzo_id\":\"SABnzbd_nzo_" + done.Guid + "\",\"name\":\"" + done.Title + "\",\"status\":\"Failed\",\"fail_message\":\"Not enough articles\"}"
+                        : "{\"nzo_id\":\"SABnzbd_nzo_" + done.Guid + "\",\"name\":\"" + done.Title + "\",\"status\":\"Completed\",\"storage\":\"/downloads/" + done.Title + "\"}");
                     return Json("{\"history\":{\"slots\":[" + string.Join(',', slots) + "]}}");
                 default:
                     return Json("""{"version":"4.5.0"}""");
             }
+        }
+
+        // The job's files appear in the downloads folder.
+        private void Complete(FakeRelease release)
+        {
+            var folder = Directory.CreateDirectory(Path.Combine(Downloads, release.Title)).FullName;
+            if (Directory.Exists(release.File))
+            {
+                foreach (var file in Directory.EnumerateFiles(release.File))
+                {
+                    File.Copy(file, Path.Combine(folder, Path.GetFileName(file)), overwrite: true);
+                }
+            }
+            else
+            {
+                File.Copy(release.File, Path.Combine(folder, release.Title + Path.GetExtension(release.File)), overwrite: true);
+            }
+
+            _completed[release.Guid] = release;
         }
 
         private static IResult Json(string body) => Results.Text(body, "application/json");

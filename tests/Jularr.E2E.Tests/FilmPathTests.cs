@@ -30,7 +30,7 @@ namespace Jularr.E2E.Tests
             try
             {
                 // Setup, TMDB, the library with a film and a series path, indexer and download client.
-                await Owner.SetUpAndSignInAsync(session.Context, page);
+                await Owner.SetUpAndSignInAsync(page);
                 await Steps.SetTmdbKeyAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"), new LibraryPath("Series", "Series"));
                 await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5040");

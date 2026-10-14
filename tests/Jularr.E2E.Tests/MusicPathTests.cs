@@ -29,7 +29,7 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                await Owner.SetUpAndSignInAsync(session.Context, page);
+                await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Music", "Music"));
                 await Steps.AddUsenetAsync(page, fakes, "3000,3040");
 

@@ -29,7 +29,7 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                await Owner.SetUpAndSignInAsync(session.Context, page);
+                await Owner.SetUpAndSignInAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"), new LibraryPath("Manga", "Book", "Manga"),
                     new LibraryPath("Light Novels", "Book", "Light novel"));
                 await Steps.AddUsenetAsync(page, fakes, "7000,7020,7030");

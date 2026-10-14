@@ -15,7 +15,7 @@ namespace Jularr.E2E.Tests
             await using var browser = await playwright.Chromium.LaunchAsync();
             var phoneContext = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
             var phone = await phoneContext.NewPageAsync();
-            await Owner.SetUpAndSignInAsync(phoneContext, phone);
+            await Owner.SetUpAndSignInAsync(phone);
             await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Devices'");
 
             // The TV asks for a code and shows it with a QR code.
@@ -48,7 +48,7 @@ namespace Jularr.E2E.Tests
             await using var browser = await playwright.Chromium.LaunchAsync();
             var phoneContext = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
             var phone = await phoneContext.NewPageAsync();
-            await Owner.SetUpAndSignInAsync(phoneContext, phone);
+            await Owner.SetUpAndSignInAsync(phone);
             await jularr.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Devices'");
 
             // The app has no browser: it asks for a code over the API.

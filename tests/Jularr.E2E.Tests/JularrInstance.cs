@@ -13,6 +13,9 @@ namespace Jularr.E2E.Tests
         private readonly string _adminConnection;
         private readonly string _database = "jularr_e2e_" + Guid.NewGuid().ToString("N");
         private readonly string _storage = Directory.CreateTempSubdirectory("jularr-e2e-").FullName;
+
+        // Keys outlive a restart, so sign-ins do too.
+        private readonly string _keys = Directory.CreateTempSubdirectory("jularr-e2e-keys-").FullName;
         private Process? _process;
         private bool _created;
 
@@ -73,20 +76,7 @@ namespace Jularr.E2E.Tests
         {
             try
             {
-                if (_process is not null)
-                {
-                    try
-                    {
-                        _process.Kill(entireProcessTree: true);
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // Already gone.
-                    }
-
-                    await _process.WaitForExitAsync();
-                    _process.Dispose();
-                }
+                await StopHostAsync();
 
                 if (_created)
                 {
@@ -99,7 +89,26 @@ namespace Jularr.E2E.Tests
             finally
             {
                 Directory.Delete(_storage, true);
+                Directory.Delete(_keys, true);
             }
+        }
+
+        // Stops the host as a crash would and starts it again on the same database.
+        public async Task RestartAsync()
+        {
+            await StopHostAsync();
+            StartHost();
+            await WaitUntilReadyAsync();
+        }
+
+        // Ends every connection to the instance's database, as a PostgreSQL restart does.
+        public async Task DropConnectionsAsync()
+        {
+            await using var connection = new NpgsqlConnection(_adminConnection);
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand("SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname = @database AND pid <> pg_backend_pid()", connection);
+            command.Parameters.AddWithValue("database", _database);
+            await command.ExecuteScalarAsync();
         }
 
         public async Task RunSqlAsync(string sql)
@@ -108,6 +117,27 @@ namespace Jularr.E2E.Tests
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand(sql, connection);
             await command.ExecuteNonQueryAsync();
+        }
+
+        private async Task StopHostAsync()
+        {
+            if (_process is null)
+            {
+                return;
+            }
+
+            try
+            {
+                _process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // Already gone.
+            }
+
+            await _process.WaitForExitAsync();
+            _process.Dispose();
+            _process = null;
         }
 
         private string ConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database, Pooling = false }.ConnectionString;
@@ -147,6 +177,7 @@ namespace Jularr.E2E.Tests
             start.Environment["JULARR_DB"] = ConnectionString;
             start.Environment["Storage__MountRoot"] = _storage;
             start.Environment["Storage__RequireMountPoint"] = "false";
+            start.Environment["DataProtection__KeyDirectory"] = _keys;
             foreach (var (key, value) in _settings)
             {
                 start.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;
