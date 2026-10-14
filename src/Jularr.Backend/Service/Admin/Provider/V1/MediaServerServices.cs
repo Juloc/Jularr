@@ -35,7 +35,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
                 WHERE
                     provider."Key" = @ProviderKey;
                 """;
-            sql.Parameters.Add(new ProviderParameters(MediaServers.ProviderKey(Parameters.MediaServerTypeId)));
+            sql.Parameters.Add(new ProviderParameters(Parameters.MediaServerTypeId.ProviderKey()));
             return await Context.ReadSql.ReadRequiredAsync<MediaServerDetailsV1>(sql, CancellationToken);
         }
     }
@@ -58,23 +58,19 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Only a server that answers with this key is stored, also below a path of a reverse proxy; its users are proposed right away.
-            var baseUrl = new Uri(Data.BaseUrl.TrimEnd('/') + "/");
-            if (baseUrl.Query.Length > 0 || baseUrl.Fragment.Length > 0)
-            {
-                throw new DataValidationException(nameof(SaveMediaServerDataV1.BaseUrl), "invalid_url");
-            }
+            var baseUrl = ProviderLogic.ServerAddress(Data.BaseUrl, nameof(SaveMediaServerDataV1.BaseUrl));
 
             var type = Parameters.MediaServerTypeId;
             var apiKey = Data.ApiKey ?? (await _servers.ConnectAsync(Context, type, CancellationToken))?.ApiKey
                 ?? throw new DataValidationException(nameof(SaveMediaServerDataV1.ApiKey), "required");
             var connection = new MediaServerConnection(baseUrl, apiKey, MediaServers.Dialect(type));
             var server = await _servers.ReadServerAsync(connection, CancellationToken);
-            if (type == MediaServerType.Jellyfin && (!Version.TryParse(server.Version, out var version) || version < new Version(10, 9)))
+            if (!MediaServerLogic.IsSupported(type, server.Version))
             {
                 throw new ServiceUnavailableException("media_server_outdated");
             }
 
-            var data = new MediaServerSaveData(MediaServers.ProviderKey(type), baseUrl.AbsoluteUri, Data.ApiKey is null ? null : _servers.Protect(apiKey), server.Id);
+            var data = new MediaServerSaveData(type.ProviderKey(), baseUrl.AbsoluteUri, Data.ApiKey is null ? null : _servers.Protect(apiKey), server.Id);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SaveMediaServerAsync(data, ct);
@@ -96,7 +92,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         protected override async Task<IServiceOutput> OnDelete()
         {
             // Progress in Jularr stays; links and the agreed state go.
-            await Context.SaveMediaServerAsync(new MediaServerSaveData(MediaServers.ProviderKey(Parameters.MediaServerTypeId), null, null, null), CancellationToken);
+            await Context.SaveMediaServerAsync(new MediaServerSaveData(Parameters.MediaServerTypeId.ProviderKey(), null, null, null), CancellationToken);
             return new UpdateResult(true);
         }
     }
@@ -131,7 +127,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
                     lower(link."ExternalName"),
                     link."Id";
                 """;
-            sql.Parameters.Add(new ProviderParameters(MediaServers.ProviderKey(Parameters.MediaServerTypeId)));
+            sql.Parameters.Add(new ProviderParameters(Parameters.MediaServerTypeId.ProviderKey()));
             return new BaseDataList<MediaServerLinkV1>(await Context.ReadSql.ReadListAsync<MediaServerLinkV1>(sql, CancellationToken));
         }
     }
@@ -146,7 +142,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.SaveMediaServerLinkAsync(new MediaServerLinkSaveData(MediaServers.ProviderKey(Parameters.MediaServerTypeId), Parameters.LinkId, Data.ProfileId),
+            await Context.SaveMediaServerLinkAsync(new MediaServerLinkSaveData(Parameters.MediaServerTypeId.ProviderKey(), Parameters.LinkId, Data.ProfileId),
                 CancellationToken);
             return new UpdateResult(true);
         }

@@ -46,17 +46,10 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                         SELECT
                             1
                         FROM
-                            "MediaAssets" AS other
-                            JOIN "WorkVersions" AS otherVersion ON otherVersion."Id" = other."WorkVersionId"
-                            JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId" AND version."WorkEditionId" = otherVersion."WorkEditionId"
-                            JOIN "StoredFiles" AS present ON present."MediaAssetId" = other."Id" AND present."MissingSince" IS NULL AND NOT present."IsSubtitle"
+                            "MediaAssetSiblings" AS sibling
+                            JOIN "StoredFiles" AS present ON present."MediaAssetId" = sibling."SiblingMediaAssetId" AND present."MissingSince" IS NULL AND NOT present."IsSubtitle"
                         WHERE
-                            other."WorkId" = asset."WorkId"
-                            AND other."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
-                            AND other."MediaAssetTypeId" = asset."MediaAssetTypeId"
-                            AND other."Id" <> asset."Id"
-                            AND (asset."MediaAssetTypeId" IN (1, 2)
-                                OR lower(substring(present."RelativePath" FROM '\.[^./]+$')) = lower(substring(file."RelativePath" FROM '\.[^./]+$')))
+                            sibling."MediaAssetId" = asset."Id"
                     ) AS "HasOtherVersions"
                 FROM
                     "StoredFiles" AS file
@@ -127,11 +120,9 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            // Identified by hand, so imports leave it alone.
-            var data = new StoredFileAssignmentData(Parameters.StoredFileId, Data.WorkId, Data.Title, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, Data.GamePlatformId);
-            var asset = await Context.AssignStoredFileAsync(data, CancellationToken);
-            await Context.ProtectMediaAssetAsync(asset, CancellationToken);
-            return new AssignLibraryFileResultV1(asset.Id);
+            var data = new StoredFileAssignmentData(Parameters.StoredFileId, Data.WorkId, Data.Title, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, Data.GamePlatformId,
+                true);
+            return new AssignLibraryFileResultV1((await Context.AssignStoredFileAsync(data, CancellationToken)).Id);
         }
     }
 

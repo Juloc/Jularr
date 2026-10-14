@@ -8,9 +8,10 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Provider;
 using Jularr.Integrations.Data.MediaServer;
 using Jularr.Integrations.Logic.MediaServer;
+using Jularr.Backend.Service.Admin.Provider.V1;
 using Microsoft.AspNetCore.DataProtection;
 
-namespace Jularr.Backend.Service.Admin.Provider.V1
+namespace Jularr.Backend.Service.Core
 {
     // Connected Jellyfin and Emby servers; shared by Admin and the System sync.
     internal sealed class MediaServers
@@ -24,14 +25,12 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
             _protector = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose);
         }
 
-        public static string ProviderKey(MediaServerType type) => type.ToString().ToLowerInvariant();
-
         public byte[] Protect(string apiKey) => _protector.Protect(Encoding.UTF8.GetBytes(apiKey));
 
         // Null when the server is not connected or switched off.
         public async Task<MediaServerConnection?> ConnectAsync(LogicContext context, MediaServerType type, CancellationToken ct)
         {
-            var state = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadMediaServerAsync(new ProviderParameters(ProviderKey(type)), token), ct);
+            var state = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadMediaServerAsync(new ProviderParameters(type.ProviderKey()), token), ct);
             if (state is not { IsEnabled: true, BaseUrl: { } baseUrl, ProtectedSecret: { } secret })
             {
                 return null;
@@ -70,7 +69,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
             var rows = JsonSerializer.Serialize(users.Select(user => new { user.Id, user.Name }));
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.SaveMediaServerUsersAsync(new MediaServerUsersData(ProviderKey(type), rows), token);
+                await ctx.SaveMediaServerUsersAsync(new MediaServerUsersData(type.ProviderKey(), rows), token);
                 return true;
             }, ct);
             return users.Count;
@@ -80,7 +79,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         public async Task<(int Local, int Remote)> SyncAsync(LogicContext context, MediaServerType type, MediaServerConnection connection, CancellationToken ct)
         {
             await RefreshUsersAsync(context, type, connection, ct);
-            var key = new ProviderParameters(ProviderKey(type));
+            var key = new ProviderParameters(type.ProviderKey());
             var links = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadSyncLinksAsync(key, token), ct);
             var local = 0;
             var remote = 0;

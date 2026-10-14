@@ -41,7 +41,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             var options = new[] { new SelectOption("True", texts["admin.providers.enabled"]), new SelectOption("False", texts["admin.providers.disabled"]) };
 
             // Render only real registry rows.
-            foreach (var provider in (_providers?.Items ?? []).Where(provider => !Enum.TryParse<MediaServerType>(provider.Key, true, out _) || texts.Can(null, "ProgressSync")))
+            foreach (var provider in (_providers?.Items ?? []).Where(provider => MediaServerTypes.FromProviderKey(provider.Key) is null || texts.Can(null, "ProgressSync")))
             {
                 page.Content.Add(new P(new ValueText(provider.Key)));
                 page.Content.Add(new Form<UpdateProviderDataV1>(form =>
@@ -76,7 +76,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 }
 
                 // Jellyfin and Emby users share their progress with the profile an administrator confirmed.
-                if (Enum.TryParse<MediaServerType>(provider.Key, true, out var type) && _servers.TryGetValue(type, out var server))
+                if (MediaServerTypes.FromProviderKey(provider.Key) is { } type && _servers.TryGetValue(type, out var server))
                 {
                     DefineMediaServer(page, type, server.Server, server.Links);
                 }

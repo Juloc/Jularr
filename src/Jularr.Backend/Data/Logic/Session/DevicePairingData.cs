@@ -126,39 +126,20 @@ namespace Jularr.Backend.Data.Logic.Session
         public long ApprovedProfileId { get; }
     }
 
-    internal sealed class DeviceSessionData : BaseData
+    // The device a session belongs to; browser sign-ins have none.
+    internal sealed class SessionDeviceData : BaseData
     {
-        public DeviceSessionData(Guid publicId, long accountId, long profileId, byte[] tokenHash, DateTime expiresAt, string deviceName, string devicePlatform)
+        public SessionDeviceData(string? deviceName, string? devicePlatform)
         {
-            PublicId = publicId;
-            AccountId = accountId;
-            ProfileId = profileId;
-            TokenHash = tokenHash;
-            ExpiresAt = expiresAt;
             DeviceName = deviceName;
             DevicePlatform = devicePlatform;
         }
 
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
-        public Guid PublicId { get; }
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName))]
+        public string? DeviceName { get; }
 
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.AccountId))]
-        public long AccountId { get; }
-
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ActiveProfileId), true)]
-        public long ProfileId { get; }
-
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.TokenHash))]
-        public byte[] TokenHash { get; }
-
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ExpiresAt))]
-        public DateTime ExpiresAt { get; }
-
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName), true)]
-        public string DeviceName { get; }
-
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DevicePlatform), true)]
-        public string DevicePlatform { get; }
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DevicePlatform))]
+        public string? DevicePlatform { get; }
     }
 
     internal sealed class DeviceSessionRevisionData : BaseData

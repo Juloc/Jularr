@@ -8,9 +8,10 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Provider;
 using Jularr.Integrations.Data.Plex;
 using Jularr.Integrations.Logic.Plex;
+using Jularr.Backend.Service.Admin.Provider.V1;
 using Microsoft.AspNetCore.DataProtection;
 
-namespace Jularr.Backend.Service.Admin.Provider.V1
+namespace Jularr.Backend.Service.Core
 {
     // The owner's Plex Media Server; shared by Admin, the import and the System sync.
     internal sealed class PlexServer

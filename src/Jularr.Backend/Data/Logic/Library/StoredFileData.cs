@@ -138,8 +138,10 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class StoredFileAssignmentData : BaseData
     {
-        public StoredFileAssignmentData(long storedFileId, long? workId, string? title, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber, long? gamePlatformId)
+        public StoredFileAssignmentData(long storedFileId, long? workId, string? title, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber, long? gamePlatformId,
+            bool isManual)
         {
+            IsManual = isManual;
             GamePlatformId = gamePlatformId;
             StoredFileId = storedFileId;
             WorkId = workId;
@@ -170,6 +172,10 @@ namespace Jularr.Backend.Data.Logic.Library
         // A game's platform; without one its platform folder names it.
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.Id), false)]
         public long? GamePlatformId { get; }
+
+        // Assigned or uploaded by an administrator; imports never replace it.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsManual))]
+        public bool IsManual { get; }
     }
 
     internal sealed class MediaAssetIdData : BaseData

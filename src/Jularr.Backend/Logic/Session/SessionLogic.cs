@@ -197,22 +197,27 @@ namespace Jularr.Backend.Logic.Session
             var credentials = new SessionCredentialsData(Guid.NewGuid(), account.Id, profileId,
                 SHA256.HashData(Encoding.UTF8.GetBytes(token)), token, account.CredentialRevision, DateTime.UtcNow.Add(lifetime));
 
-            // Store the session hash.
-            sql = new SqlStatement();
+            await ctx.InsertSessionAsync(credentials, new SessionDeviceData(null, null), ct);
+            return credentials;
+        }
+
+        // Only the hash is stored; a paired device adds its name and platform.
+        public static async Task InsertSessionAsync(this LogicContext ctx, SessionCredentialsData credentials, SessionDeviceData device, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
-                    "AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "CredentialRevision", "ExpiresAt")
+                    "AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "CredentialRevision", "ExpiresAt", "DeviceName", "DevicePlatform")
                 VALUES
-                    (@PublicId, @AccountId, @ProfileId, @TokenHash, @CredentialRevision, @ExpiresAt);
+                    (@PublicId, @AccountId, @ProfileId, @TokenHash, @CredentialRevision, @ExpiresAt, @DeviceName, @DevicePlatform);
                 """;
             sql.Parameters.Add(credentials);
+            sql.Parameters.Add(device);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new InvalidOperationException("The session could not be created.");
             }
-
-            return credentials;
         }
 
         public static async Task<SessionAuthenticationData> ReadSessionAsync(this LogicContext ctx, SessionParameters parameters, CancellationToken ct)

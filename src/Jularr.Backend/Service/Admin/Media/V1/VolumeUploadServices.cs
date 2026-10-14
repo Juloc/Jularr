@@ -79,8 +79,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(rootId, modifiedAt, files), ct);
                 var file = await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(rootId, relativePath), ct) ?? throw new KeyNotFoundException("The uploaded file was not found.");
-                await ctx.ProtectMediaAssetAsync(await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, Parameters.WorkId, null,
-                    Data.VolumeNumber is null ? null : WorkUnitType.Volume, Data.VolumeNumber, null, null), ct), ct);
+                await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, Parameters.WorkId, null, Data.VolumeNumber is null ? null : WorkUnitType.Volume,
+                    Data.VolumeNumber, null, null, true), ct);
                 await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, rootId, null), ct);
                 return true;
             }, CancellationToken);

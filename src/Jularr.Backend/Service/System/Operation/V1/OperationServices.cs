@@ -347,7 +347,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                         continue;
                     }
 
-                    var assignment = new StoredFileAssignmentData(file.Id, file.WorkId, null, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, null);
+                    var assignment = new StoredFileAssignmentData(file.Id, file.WorkId, null, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, null, false);
                     try
                     {
                         await Context.ExecuteBatchAsync((ctx, ct) => ctx.AssignStoredFileAsync(assignment, ct), CancellationToken);

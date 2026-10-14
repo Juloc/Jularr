@@ -176,7 +176,7 @@ namespace Jularr.Backend.Data.Logic.Library
             RelativePath = relativePath;
         }
 
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.Id))]
         public long Id { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
@@ -188,7 +188,7 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
         public string SharePath { get; }
 
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FolderPath))]
+        [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.FolderPath))]
         public string FolderPath { get; }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
@@ -202,7 +202,7 @@ namespace Jularr.Backend.Data.Logic.Library
             Ids = ids;
         }
 
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Ids))]
+        [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.Ids))]
         public long[] Ids { get; }
     }
 }

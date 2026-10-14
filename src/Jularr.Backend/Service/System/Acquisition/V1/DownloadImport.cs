@@ -10,7 +10,6 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
-using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
@@ -96,7 +95,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), token) is { } file)
                     {
                         assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
-                            placement.ParentUnitNumber, download.GamePlatformId), token)).Id);
+                            placement.ParentUnitNumber, download.GamePlatformId, false), token)).Id);
                     }
                 }
 

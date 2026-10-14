@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Fields.Playback;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Provider;
@@ -167,14 +168,14 @@ namespace Jularr.Backend.Logic.Provider
                 profile.Statement =
                     """
                     SELECT
-                        profile."Id" AS "ProviderProfileLinkId"
+                        profile."Id" AS "ProfileId"
                     FROM
                         "Profiles" AS profile
                     WHERE
                         profile."Id" = @ProfileId;
                     """;
                 profile.Parameters.Add(data);
-                _ = await ctx.ReadOptionalAsync<MediaServerLinkIdData>(profile, ct) ?? throw new KeyNotFoundException("The profile was not found.");
+                _ = await ctx.ReadOptionalAsync<Data.Logic.Profile.ProfileParameters>(profile, ct) ?? throw new KeyNotFoundException("The profile was not found.");
             }
 
             // A profile shares progress with one user of a server at a time.
@@ -388,6 +389,10 @@ namespace Jularr.Backend.Logic.Provider
                 throw new KeyNotFoundException("The media server provider is not registered.");
             }
         }
+
+        // Jellyfin writes user data per item from 10.9 on.
+        public static bool IsSupported(MediaServerType type, string? version) =>
+            type != MediaServerType.Jellyfin || Version.TryParse(version, out var parsed) && parsed >= new Version(10, 9);
 
         // Films and episodes as ReadProgressCandidatesAsync reads them; an episode takes the ids of its series and needs its numbers.
         public static string ItemRows(IEnumerable<MediaServerItem> items, IReadOnlyDictionary<string, MediaServerItem> series) =>

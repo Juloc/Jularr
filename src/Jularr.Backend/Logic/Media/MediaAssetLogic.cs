@@ -87,16 +87,17 @@ namespace Jularr.Backend.Logic.Media
                         "Id"
                 )
                 INSERT INTO
-                    "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId")
+                    "MediaAssets" ("WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId", "IsManual")
                 SELECT
                     @WorkId,
                     COALESCE((SELECT available."Id" FROM available), (SELECT created."Id" FROM created)),
                     @WorkUnitId,
-                    @MediaAssetTypeId
+                    @MediaAssetTypeId,
+                    @IsManual
                 RETURNING
                     "Id";
                 """;
-            sql.Parameters.Add(new MediaAssetCreationData(workId, editionId, unitId, assetType.Value));
+            sql.Parameters.Add(new MediaAssetCreationData(workId, editionId, unitId, assetType.Value, data.IsManual));
             var asset = await ctx.ReadRequiredAsync<MediaAssetIdData>(sql, ct);
 
             // Subtitles beside the file follow it.

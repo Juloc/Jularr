@@ -3,7 +3,6 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.System.Provider.V1;
-using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.System.Provider.V1

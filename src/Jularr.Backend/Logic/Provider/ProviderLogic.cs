@@ -107,5 +107,12 @@ namespace Jularr.Backend.Logic.Provider
             sql.Parameters.Add(parameters);
             return ctx.ReadSql.ReadOptionalAsync<ProviderCredentialData>(sql, ct);
         }
+
+        // A provider address ends in a slash, may carry a reverse-proxy path, never a query or fragment.
+        public static Uri ServerAddress(string baseUrl, string field)
+        {
+            var address = new Uri(baseUrl.TrimEnd('/') + "/");
+            return address.Query.Length == 0 && address.Fragment.Length == 0 ? address : throw new DataValidationException(field, "invalid_url");
+        }
     }
 }

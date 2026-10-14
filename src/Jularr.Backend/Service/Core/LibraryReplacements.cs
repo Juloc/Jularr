@@ -6,6 +6,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Core
@@ -15,10 +16,12 @@ namespace Jularr.Backend.Service.Core
     internal sealed class LibraryReplacements
     {
         private readonly StorageOptions _storage;
+        private readonly ILogger<LibraryReplacements> _logger;
 
-        public LibraryReplacements(IOptions<StorageOptions> storage)
+        public LibraryReplacements(IOptions<StorageOptions> storage, ILogger<LibraryReplacements> logger)
         {
             _storage = storage.Value;
+            _logger = logger;
         }
 
         // After an import; without a profile nothing is known to be better.
@@ -58,7 +61,11 @@ namespace Jularr.Backend.Service.Core
                     var source = StorageFileSystem.ResolveFile(library, file.RelativePath);
                     var folder = LibraryRecycleBin.Folder(_storage, settings, file);
                     var target = settings.RecycleModeId == RecycleMode.OwnFolder && file.RootPath.Length > 0 ? file.RootPath + "/" + file.RelativePath : file.RelativePath;
-                    if (await Task.Run(() => LibraryRecycleBin.Recycle(source, folder, target), ct) is { } recycled)
+                    if (await Task.Run(() => LibraryRecycleBin.Recycle(source, folder, target), ct) is not { } recycled)
+                    {
+                        _logger.LogWarning("{Path} stays as a further version; it could not be moved or deleted.", file.RelativePath);
+                    }
+                    else
                     {
                         retired.Add(new
                         {
@@ -72,6 +79,7 @@ namespace Jularr.Backend.Service.Core
                 }
                 catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
                 {
+                    _logger.LogWarning(exception, "{Path} stays as a further version; it could not be replaced.", file.RelativePath);
                 }
             }
 

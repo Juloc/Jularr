@@ -173,7 +173,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
                     try
                     {
-                        await context.ExecuteBatchAsync((ctx, token) => ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.StoredFileId, match.WorkId, null, null, null, null, null), token), ct);
+                        await context.ExecuteBatchAsync((ctx, token) => ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.StoredFileId, match.WorkId, null, null, null, null, null, false), token), ct);
                     }
                     catch (DataValidationException)
                     {

@@ -111,8 +111,7 @@ namespace Jularr.Backend.Logic.Library
 
         public static Task<IReadOnlyList<ReplacedFileData>> ReadReplacedFilesAsync(this LogicContext ctx, ReplacingAssetsData data, CancellationToken ct)
         {
-            // Files of other assets of the same kind, edition, Work and unit on writable libraries; books and comics only of the same format,
-            // games keep one asset per platform, and assets added by hand only go on an administrator's confirmation.
+            // Files of the other versions on writable libraries; versions added by hand only go on an administrator's confirmation.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -130,15 +129,10 @@ namespace Jularr.Backend.Logic.Library
                     replacingMedia."Revision" AS "NewRevision"
                 FROM
                     "MediaAssets" AS replacing
-                    JOIN "WorkVersions" AS version ON version."Id" = replacing."WorkVersionId"
-                    JOIN "MediaAssets" AS earlier ON earlier."WorkId" = replacing."WorkId"
-                        AND earlier."WorkUnitId" IS NOT DISTINCT FROM replacing."WorkUnitId"
-                        AND earlier."MediaAssetTypeId" = replacing."MediaAssetTypeId"
-                        AND earlier."Id" <> ALL (@MediaAssetIds)
-                    JOIN "WorkVersions" AS earlierVersion ON earlierVersion."Id" = earlier."WorkVersionId" AND earlierVersion."WorkEditionId" = version."WorkEditionId"
+                    JOIN "MediaAssetSiblings" AS sibling ON sibling."MediaAssetId" = replacing."Id"
+                    JOIN "MediaAssets" AS earlier ON earlier."Id" = sibling."SiblingMediaAssetId" AND earlier."Id" <> ALL (@MediaAssetIds)
                     JOIN LATERAL (
                         SELECT
-                            main."RelativePath",
                             main."QualityKey",
                             main."Revision"
                         FROM
@@ -152,7 +146,6 @@ namespace Jularr.Backend.Logic.Library
                     ) AS earlierMedia ON TRUE
                     JOIN LATERAL (
                         SELECT
-                            main."RelativePath",
                             main."QualityKey",
                             main."Revision"
                         FROM
@@ -169,14 +162,9 @@ namespace Jularr.Backend.Logic.Library
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                 WHERE
                     replacing."Id" = ANY (@MediaAssetIds)
-                    AND replacing."MediaAssetTypeId" <> 5
                     AND file."MissingSince" IS NULL
                     AND NOT mount."IsReadOnly"
                     AND (@IsConfirmed OR NOT earlier."IsManual")
-                    AND (
-                        replacing."MediaAssetTypeId" IN (1, 2)
-                        OR lower(substring(replacingMedia."RelativePath" FROM '\.[^./]+$')) = lower(substring(earlierMedia."RelativePath" FROM '\.[^./]+$'))
-                    )
                 ORDER BY
                     file."Id";
                 """;
@@ -291,26 +279,6 @@ namespace Jularr.Backend.Logic.Library
             var earlier = UpgradePolicy.RankOf(profile, file.EarlierQualityKey);
             var replacing = UpgradePolicy.RankOf(profile, file.NewQualityKey);
             return replacing != int.MaxValue && earlier != int.MaxValue && (replacing < earlier || replacing == earlier && file.NewRevision > file.EarlierRevision);
-        }
-
-        // An asset an administrator added by hand stays through imports.
-        public static async Task ProtectMediaAssetAsync(this LogicContext ctx, MediaAssetIdData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "MediaAssets" AS asset
-                SET
-                    "IsManual" = TRUE
-                WHERE
-                    asset."Id" = @Id;
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
-            {
-                throw new KeyNotFoundException("The media asset was not found.");
-            }
         }
 
         // Recycled files older than the configured days; none while they are kept.

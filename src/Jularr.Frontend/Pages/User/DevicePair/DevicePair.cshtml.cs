@@ -48,7 +48,7 @@ namespace Jularr.Frontend.Pages.User.DevicePair
                 return NotFound();
             }
 
-            if (!string.IsNullOrWhiteSpace(Code))
+            if (Code is not null)
             {
                 _device = await read.ExecuteAsync<DevicePairingRequestV1>(new DevicePairingCodeParametersV1(Code), HttpContext.RequestAborted);
             }

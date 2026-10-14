@@ -136,29 +136,25 @@ namespace Jularr.Backend.Logic.Session
             var credentials = await ctx.ReadOptionalAsync<DeviceSessionRevisionData>(revision, ct) ?? throw new KeyNotFoundException("The account is not available.");
 
             var token = SessionLogic.NewToken();
-            var session = new DeviceSessionData(Guid.NewGuid(), accountId, profileId, SHA256.HashData(Encoding.UTF8.GetBytes(token)), DateTime.UtcNow.Add(lifetime),
-                pairing.DeviceName, pairing.DevicePlatform);
-            var insert = new SqlStatement();
-            insert.Statement =
-                """
-                INSERT INTO
-                    "AccountSessions" ("PublicId", "AccountId", "ActiveProfileId", "TokenHash", "CredentialRevision", "ExpiresAt", "DeviceName", "DevicePlatform")
-                VALUES
-                    (@PublicId, @AccountId, @ProfileId, @TokenHash, @CredentialRevision, @ExpiresAt, @DeviceName, @DevicePlatform);
+            var session = new SessionCredentialsData(Guid.NewGuid(), accountId, profileId, SHA256.HashData(Encoding.UTF8.GetBytes(token)), token, credentials.CredentialRevision,
+                DateTime.UtcNow.Add(lifetime));
+            await ctx.InsertSessionAsync(session, new SessionDeviceData(pairing.DeviceName, pairing.DevicePlatform), ct);
 
+            var claimed = new SqlStatement();
+            claimed.Statement =
+                """
                 DELETE FROM
                     "DevicePairings" AS pairing
                 WHERE
                     pairing."Id" = @Id;
                 """;
-            insert.Parameters.Add(session);
-            insert.Parameters.Add(credentials);
-            insert.Parameters.Add(new DevicePairingIdData(pairing.Id));
-            if (await ctx.ExecuteAsyncForAffectedRows(insert, ct) != 2)
+            claimed.Parameters.Add(new DevicePairingIdData(pairing.Id));
+            if (await ctx.ExecuteAsyncForAffectedRows(claimed, ct) != 1)
             {
-                throw new InvalidOperationException("The device session could not be created.");
+                throw new InvalidOperationException("The pairing could not be closed.");
             }
-            return new SessionCredentialsData(session.PublicId, accountId, profileId, session.TokenHash, token, credentials.CredentialRevision, session.ExpiresAt);
+
+            return session;
         }
     }
 }
