@@ -57,6 +57,16 @@ namespace Jularr.Frontend.Pages.Shared
                 header.Add(new SearchBox("/", "search.global", searchQuery, searchType is null ? null : new Dictionary<string, string> { ["type"] = searchType }));
             }
 
+            // Inbox with its unread count.
+            if (texts.Capabilities?.CanNotify is true)
+            {
+                var unread = texts.UnreadNotifications;
+                header.Add(new A(new Icon("bell", assets), unread > 0 ? new Span(new ValueText(unread > 99 ? "99+" : unread.ToString(System.Globalization.CultureInfo.CurrentCulture))).Class("app-notifications__count") : new Span())
+                    .Class("app-notifications" + (currentPath.StartsWith("/Notifications", StringComparison.OrdinalIgnoreCase) ? " is-active" : ""))
+                    .Attribute("href", "/Notifications")
+                    .Attribute("aria-label", unread > 0 ? string.Format(System.Globalization.CultureInfo.CurrentCulture, texts["notifications.unread"], unread) : texts["notifications.title"]));
+            }
+
             new Header([.. header]).Class("app-header").WriteTo(writer, encoder, texts);
 
             new Aside(

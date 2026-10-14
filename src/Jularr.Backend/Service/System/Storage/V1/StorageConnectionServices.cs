@@ -1,9 +1,12 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Logic.Notification;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Data.System.Storage.V1;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Notification;
 using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
@@ -108,7 +111,14 @@ namespace Jularr.Backend.Service.System.Storage.V1
 
                 await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
-                    await ctx.SaveStorageReconnectAsync(probe, candidate.ReconnectAttempts + 1, ct);
+                    var wanted = await ctx.SaveStorageReconnectAsync(probe, candidate.ReconnectAttempts + 1, ct);
+
+                    // The Owner hears once the third attempt failed.
+                    if (wanted && probe.StorageAvailabilityTypeId != StorageAvailabilityType.Available && candidate.ReconnectAttempts + 1 == 3)
+                    {
+                        await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.StorageOffline, null, mount.Name, "/Admin/Storage?storageMountId=" + mount.Id, true), ct);
+                    }
+
                     return true;
                 }, CancellationToken);
             }

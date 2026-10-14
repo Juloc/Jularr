@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.User.Instance.V1
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
         public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
-            bool canManageProfiles, bool canPlayGames)
+            bool canManageProfiles, bool canPlayGames, bool canNotify)
         {
+            CanNotify = canNotify;
             CanPlayGames = canPlayGames;
             CanRead = canRead;
             CanManageProfiles = canManageProfiles;
@@ -41,5 +42,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
         // Retro games play in the browser.
         public bool CanPlayGames { get; }
+
+        // The profile has an inbox.
+        public bool CanNotify { get; }
     }
 }

@@ -1,18 +1,20 @@
-using Jularr.Backend.Data.Public.Localization.V1;
-using Jularr.Backend.Service.Public.Localization.V1;
-using Microsoft.AspNetCore.Http;
 using Jularr.Backend.Data.Public.Authentication.V1;
-using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Instance.V1;
+using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Instance.V1;
+using Jularr.Backend.Data.User.Notification.V1;
+using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Instance.V1;
+using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Backend.Service.User.Instance.V1;
+using Jularr.Backend.Service.User.Notification.V1;
+using Microsoft.AspNetCore.Http;
 
 namespace Jularr.Frontend.Framework
 {
     // Scoped page presentation.
     public sealed class UiText(ReadUiTextsV1 textsService, ReadAuthenticationV1 authenticationService,
-        ReadInstancePresentationV1 presentationService, ReadInstanceCapabilitiesV1 capabilitiesService)
+        ReadInstancePresentationV1 presentationService, ReadInstanceCapabilitiesV1 capabilitiesService, ReadUnreadNotificationsV1 unreadService)
     {
         private ReadUiTextsResultV1? _catalog;
         private InstancePresentationDetailsV1? _presentation;
@@ -21,6 +23,9 @@ namespace Jularr.Frontend.Framework
         public bool IsRightToLeft => Catalog.IsRightToLeft;
         public string InstanceName => _presentation?.Name ?? throw new InvalidOperationException("The instance presentation was not initialized.");
         public InstanceCapabilitiesDetailsV1? Capabilities { get; private set; }
+
+        // Unread notices for the shell's bell.
+        public int UnreadNotifications { get; private set; }
 
         public string this[string key] => Catalog.Texts.TryGetValue(key, out var value)
             ? value
@@ -43,6 +48,10 @@ namespace Jularr.Frontend.Framework
             if (authentication.IsAuthenticated)
             {
                 Capabilities = await capabilitiesService.ExecuteAsync<InstanceCapabilitiesDetailsV1>(new ReadInstanceCapabilitiesParametersV1(), token);
+                if (Capabilities.CanNotify)
+                {
+                    UnreadNotifications = (await unreadService.ExecuteAsync<UnreadNotificationsV1>(new NotificationsParametersV1(), token)).UnreadCount;
+                }
             }
         }
     }

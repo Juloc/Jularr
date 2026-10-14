@@ -20,11 +20,39 @@
 .app-header-brand { display: none; }
 .app-header-location { min-width: 0; overflow-wrap: anywhere; font-weight: 650; font-size: 16px; }
 .app-header .search-box { margin-left: auto; }
+.app-notifications {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: var(--muted);
+    text-decoration: none;
+
+    &:hover, &.is-active { background: var(--surface-hover); color: var(--text); }
+}
+.app-header-location + .app-notifications { margin-left: auto; }
+.app-notifications__count {
+    position: absolute;
+    top: 4px;
+    right: 2px;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+}
 @media (max-width: 780px) {
     // Mark, context, then search.
     .app-header {
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-columns: auto minmax(0, 1fr) auto;
         gap: 10px;
         top: max(8px, env(safe-area-inset-top));
         min-height: 62px;
@@ -36,6 +64,7 @@
     .app-header-brand :is(.shell-brand__name, .shell-brand__attribution) { display: none; }
     .app-header-location { font-size: 14px; }
     .app-header .search-box { grid-column: 1 / -1; width: 100%; max-width: none; margin: 0; }
+    .app-notifications { grid-column: 3; grid-row: 1; }
 }
 
 .app-sidebar {

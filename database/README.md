@@ -22,7 +22,8 @@ WorkExternalIdentities (tmdb/tvdb/imdb mappings, never an alternative Work ID) a
 WatchlistEntries. Episode units carry their air date for acquisition. It is not a migration for an existing database. Media integration
 tests explicitly install it in their disposable Account fixture.
 
-`Acquisition.sql` follows Account and Media in a fresh installation. It adds
+`Acquisition.sql` also holds Notifications with their types and the per-profile
+MutedNotificationTypes. It follows Account and Media in a fresh installation. It adds
 AcquisitionRequests, their status catalog, shared whole-Work WantedItems and
 RequestTargets. A profile's active Work/language intent is unique; only approval
 creates its Wanted link, atomically in the same transaction. Owner/MediaManager

@@ -1,10 +1,13 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Notification;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Notification;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
@@ -635,10 +638,16 @@ namespace Jularr.Backend.Logic.Acquisition
                 FROM
                     released
                 WHERE
-                    wanted."Id" = released."WantedItemId";
+                    wanted."Id" = released."WantedItemId"
+                RETURNING
+                    wanted."WorkId",
+                    (SELECT work."CanonicalTitle" FROM "Works" AS work WHERE work."Id" = wanted."WorkId") AS "Title";
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } failed)
+            {
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadFailed, failed.WorkId, failed.Title, "/Admin/Activity", false), ct);
+            }
         }
 
         public static async Task SetDownloadAttentionAsync(this LogicContext ctx, DownloadAttentionData data, CancellationToken ct)
@@ -828,7 +837,14 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS "IsComplete";
                 """;
             sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<WantedCompletionData>(sql, ct) is { IsComplete: true } wanted)
+            if (await ctx.ReadOptionalAsync<WantedCompletionData>(sql, ct) is not { } wanted)
+            {
+                return;
+            }
+
+            // Requesters hear about every arrival, not only the last one.
+            await ctx.NotifyRequestersAsync(new WantedNotificationData(wanted.WantedItemId, NotificationType.MediaAvailable), ct);
+            if (wanted.IsComplete)
             {
                 await ctx.AdvanceRequestsAsync(new RequestProgressData(wanted.WantedItemId, AcquisitionRequestStatusType.Completed), ct);
             }

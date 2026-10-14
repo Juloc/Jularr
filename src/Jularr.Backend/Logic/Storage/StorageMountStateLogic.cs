@@ -61,7 +61,7 @@ namespace Jularr.Backend.Logic.Storage
         }
 
         // Only while the Owner still wants the connection.
-        public static async Task SaveStorageReconnectAsync(this LogicContext ctx, StorageMountProbeData probe, int failedAttempts, CancellationToken ct)
+        public static async Task<bool> SaveStorageReconnectAsync(this LogicContext ctx, StorageMountProbeData probe, int failedAttempts, CancellationToken ct)
         {
             var available = probe.StorageAvailabilityTypeId == StorageAvailabilityType.Available;
             var sql = new SqlStatement();
@@ -84,7 +84,7 @@ namespace Jularr.Backend.Logic.Storage
                 """;
             sql.Parameters.Add(probe);
             sql.Parameters.Add(new StorageReconnectAttemptData(available ? 0 : failedAttempts, ReconnectMinutes[Math.Clamp(failedAttempts, 1, ReconnectMinutes.Length) - 1]));
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
         }
     }
 }

@@ -1,8 +1,11 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Localization;
+using Jularr.Backend.Data.Logic.Notification;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Notification;
 
 namespace Jularr.Backend.Logic.Acquisition
 {
@@ -163,6 +166,9 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 await ctx.RecordRequestTargetAsync(request, ct);
             }
+
+            await ctx.NotifyRequestAsync(new RequestNotificationData(request.Id,
+                data.AcquisitionRequestStatusTypeId == AcquisitionRequestStatusType.Approved ? NotificationType.RequestApproved : NotificationType.RequestRejected, data.ActorAccountId), ct);
         }
     }
 }
