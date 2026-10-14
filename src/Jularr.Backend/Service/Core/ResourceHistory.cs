@@ -11,8 +11,6 @@ namespace Jularr.Backend.Service.Core
     // Each minute it also follows the Diagnostics module for all in-memory diagnostics.
     internal sealed class ResourceHistory(TimeProvider time, IServiceScopeFactory scopes, RecentLogs logs, ServiceTimings timings, ILogger<ResourceHistory> logger) : BackgroundService
     {
-        private bool _enabled = true;
-
         private const int Capacity = 360;
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
         private readonly Queue<ResourceSample> _samples = new();
@@ -55,7 +53,6 @@ namespace Jularr.Backend.Service.Core
             {
                 await using var scope = scopes.CreateAsyncScope();
                 var enabled = (await scope.ServiceProvider.GetRequiredService<ReadDiagnosticsStateV1>().ExecuteAsync<DiagnosticsStateV1>(new DiagnosticsStateParametersV1(), default, ct)).IsEnabled;
-                _enabled = enabled;
                 logs.Enable(enabled);
                 timings.Enable(enabled);
                 if (!enabled)
@@ -75,7 +72,7 @@ namespace Jularr.Backend.Service.Core
         // The share of all processors used since the last sample.
         private void Sample(Process process)
         {
-            if (!_enabled)
+            if (!timings.IsEnabled)
             {
                 return;
             }

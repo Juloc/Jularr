@@ -49,9 +49,9 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours");
                     form.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays");
                     form.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes");
-                    form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
-                    form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
-                    form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
+                    if (texts.HasModule("Collections")) form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
+                    if (texts.HasModule("UnitGroups")) form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
+                    if (texts.HasModule("Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
                     form.Submit("common.save");
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
@@ -118,7 +118,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
             // Save through the service.
             _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources, libraryScanIntervalHours,
                 historyRetentionDays, historyMegabytes, collectionLimit, unitGroupLimit,
-                subtitleLanguages?.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) ?? []);
+                subtitleLanguages is null ? null : [subtitleLanguages]);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             TempData["InstanceSaved"] = true;
             return LocalRedirect(Home);

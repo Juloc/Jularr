@@ -45,7 +45,7 @@ namespace Jularr.Backend.Tests
                 """);
             using var unknown = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings", new UpdateInstanceSettingsDataV1("Jularr", 1, 1, subtitleLanguages: ["xx"]));
             StringAssert.Contains(await unknown.Content.ReadAsStringAsync(), "unknown_language");
-            using var languages = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings", new UpdateInstanceSettingsDataV1("Jularr", 1, 1, subtitleLanguages: ["ger", "en"]));
+            using var languages = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings", new UpdateInstanceSettingsDataV1("Jularr", 1, 1, subtitleLanguages: ["ger, en"]));
             Assert.AreEqual(HttpStatusCode.OK, languages.StatusCode, await languages.Content.ReadAsStringAsync());
 
             // A provider is a connection like an indexer; its test logs in.

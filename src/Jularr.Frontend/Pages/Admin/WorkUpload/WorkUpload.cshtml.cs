@@ -12,7 +12,7 @@ namespace Jularr.Frontend.Pages.Admin.WorkUpload
     // Only this page accepts a request as large as a volume.
     [RequestSizeLimit(UploadFields.VolumeRequestBytes)]
     [RequestFormLimits(MultipartBodyLengthLimit = UploadFields.VolumeRequestBytes)]
-    public sealed class WorkUploadModel(UploadVolumeV1 upload, IAntiforgery antiforgery) : JularrPage
+    public sealed class WorkUploadModel(UploadVolumeV1 upload, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -32,14 +32,18 @@ namespace Jularr.Frontend.Pages.Admin.WorkUpload
 
         public IActionResult OnGet()
         {
+            if (!texts.CanUploadVolumes())
+            {
+                return Forbid();
+            }
+
             PreparePage();
             return Page();
         }
 
-        // A missing file reads as required, like any missing value.
         public async Task<IActionResult> OnPostAsync(IFormFile? file, decimal? volumeNumber)
         {
-            var data = new UploadVolumeDataV1(file is null ? null! : new UploadedFile(file.FileName, file.Length, file.OpenReadStream), volumeNumber);
+            var data = new UploadVolumeDataV1(file is null ? null : new UploadedFile(file.FileName, file.Length, file.OpenReadStream), volumeNumber);
             await upload.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), data, HttpContext.RequestAborted);
             TempData["VolumeUploaded"] = true;
             return LocalRedirect(WorkAddress);

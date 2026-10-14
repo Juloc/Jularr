@@ -48,7 +48,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 throw new ServiceUnavailableException("import_no_library");
             }
 
-            var extension = Path.GetExtension(Data.File.FileName).ToLowerInvariant();
+            var file = Data.File ?? throw new DataValidationException(nameof(UploadVolumeDataV1.File), "required");
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
             var relativePath = LibraryNaming.Volume(target.CanonicalTitle, Data.VolumeNumber) + extension;
             if (!LibraryNaming.IsStorable(relativePath))
             {
@@ -57,7 +58,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             // The file must be what its name says.
             var header = new byte[128];
-            await using (var check = Data.File.OpenRead())
+            await using (var check = file.OpenRead())
             {
                 var read = await check.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, CancellationToken);
                 if (!LibraryFileTypes.IsDocumentContent(extension, header.AsSpan(0, read)))
@@ -66,40 +67,14 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 }
             }
 
-            // Written aside under its own name, then moved in; an existing volume stays.
+            // An existing volume stays.
             var directory = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(protocol, mountId, share), rootPath);
-            var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
-            Directory.CreateDirectory(Path.Combine(directory, folder));
-            var path = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
-            if (File.Exists(path))
-            {
-                throw new DataValidationException(nameof(UploadVolumeDataV1.File), "duplicate_value");
-            }
-
-            var partial = path + "." + Guid.NewGuid().ToString("N") + ".partial";
-            try
-            {
-                await using (var source = Data.File.OpenRead())
-                await using (var stream = new FileStream(partial, FileMode.CreateNew, FileAccess.Write))
-                {
-                    await source.CopyToAsync(stream, CancellationToken);
-                }
-
-                File.Move(partial, path, false);
-            }
-            catch (IOException) when (File.Exists(path))
-            {
-                throw new DataValidationException(nameof(UploadVolumeDataV1.File), "duplicate_value");
-            }
-            finally
-            {
-                if (File.Exists(partial)) File.Delete(partial);
-            }
+            await using var content = file.OpenRead();
+            var (length, modifiedAt) = await LibraryFileWriter.WriteAsync(directory, relativePath, content, CancellationToken)
+                ?? throw new DataValidationException(nameof(UploadVolumeDataV1.File), "duplicate_value");
 
             // Assigned at once; the scan reads it like an imported file.
-            var info = new FileInfo(path);
-            var modifiedAt = DateTime.UnixEpoch.AddTicks((info.LastWriteTimeUtc.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
-            var files = JsonSerializer.Serialize(new[] { new { RelativePath = relativePath, SizeBytes = info.Length, ModifiedAt = modifiedAt, Revision = 1 } });
+            var files = JsonSerializer.Serialize(new[] { new { RelativePath = relativePath, SizeBytes = length, ModifiedAt = modifiedAt, Revision = 1 } });
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(rootId, modifiedAt, files), ct);

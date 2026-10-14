@@ -138,29 +138,15 @@ namespace Jularr.Backend.Service.System.Media.V1
         // An existing file of that name stays; the new one belongs to the video's asset.
         private async Task SaveAsync(SubtitleSourceData source, string directory, string relativePath, byte[] bytes)
         {
-            var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
-            var path = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
-            var partial = path + ".partial";
-            await using (var stream = new FileStream(partial, FileMode.CreateNew, FileAccess.Write))
+            using var content = new MemoryStream(bytes);
+            if (await LibraryFileWriter.WriteAsync(directory, relativePath, content, CancellationToken) is not var (length, modifiedAt))
             {
-                await stream.WriteAsync(bytes, CancellationToken);
-            }
-
-            try
-            {
-                File.Move(partial, path, false);
-            }
-            catch (IOException)
-            {
-                File.Delete(partial);
                 return;
             }
 
-            var info = new FileInfo(path);
-            var modifiedAt = DateTime.UnixEpoch.AddTicks((info.LastWriteTimeUtc.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.SaveSubtitleFileAsync(new SubtitleFileData(source.LibraryRootId, relativePath, info.Length, modifiedAt, source.MediaAssetId), ct);
+                await ctx.SaveSubtitleFileAsync(new SubtitleFileData(source.LibraryRootId, relativePath, length, modifiedAt, source.MediaAssetId), ct);
                 return true;
             }, CancellationToken);
         }

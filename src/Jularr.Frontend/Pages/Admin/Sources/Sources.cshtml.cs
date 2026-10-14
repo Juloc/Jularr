@@ -28,7 +28,7 @@ namespace Jularr.Frontend.Pages.Admin.Sources
                     TempData["SourcesNeedAccount"] as string is { Length: > 0 } waiting ? waiting : "-"))).Attribute("role", "status"));
             }
 
-            foreach (var group in _sources.GroupBy(source => source.SourceGroupId))
+            foreach (var group in _sources.Where(source => source.SourceGroupId != SourceGroup.Subtitles || texts.CanFetchSubtitles()).GroupBy(source => source.SourceGroupId))
             {
                 page.Content.Add(new UiSection("sources.group." + group.Key, [new Table<SourceCatalogItemV1>([.. group])
                     .Text(item => item.Name, "sources.name")

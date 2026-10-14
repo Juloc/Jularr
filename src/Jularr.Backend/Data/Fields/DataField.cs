@@ -411,6 +411,13 @@ namespace Jularr.Backend.Data.Fields
         {
         }
 
+        // "de, en" from one text field becomes ["de", "en"].
+        public bool SplitsCommas { get; init; }
+
+        public override object? Normalize(object? value) => SplitsCommas && value is string[] values
+            ? values.SelectMany(item => item.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToArray()
+            : value;
+
         protected override void ValidateValue(object value, string name, int? maximumLength)
         {
             var values = (string[])value;

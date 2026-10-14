@@ -92,7 +92,10 @@ namespace Jularr.Backend.Service.Core
         }
 
         // Large uploads check the caller and permission before their body is read.
-        public async Task AuthorizeAsync(TParameters parameters, CancellationToken cancellationToken)
+        public Task AuthorizeAsync(TParameters parameters, CancellationToken cancellationToken) =>
+            RequireCallerAsync(parameters ?? BaseParameters.CreateEmpty<TParameters>(), _definition.Value.DefaultResultType, cancellationToken);
+
+        private async Task<(ServiceCaller Caller, ServicePermission Permission)> RequireCallerAsync(TParameters parameters, Type resultType, CancellationToken cancellationToken)
         {
             var caller = await Runtime.Gate.RequireCallerAsync(Area, cancellationToken);
             if (caller is null || caller.Area != Area || string.IsNullOrWhiteSpace(caller.PrincipalKey))
@@ -100,9 +103,9 @@ namespace Jularr.Backend.Service.Core
                 throw new UnauthorizedAccessException("The service caller has not been verified for this area.");
             }
 
-            var permission = GetPermission(parameters ?? BaseParameters.CreateEmpty<TParameters>(), _definition.Value.DefaultResultType)
-                ?? throw new InvalidOperationException("A service permission must be declared.");
+            var permission = GetPermission(parameters, resultType) ?? throw new InvalidOperationException("A service permission must be declared.");
             await Runtime.Gate.RequireAccessAsync(caller, permission, cancellationToken);
+            return (caller, permission);
         }
 
         // Timed per call; only server faults count as errors.
@@ -154,14 +157,7 @@ namespace Jularr.Backend.Service.Core
             }
 
             // Verify caller and permission.
-            var caller = await Runtime.Gate.RequireCallerAsync(Area, cancellationToken);
-            if (caller is null || caller.Area != Area || string.IsNullOrWhiteSpace(caller.PrincipalKey))
-            {
-                throw new UnauthorizedAccessException("The service caller has not been verified for this area.");
-            }
-
-            var permission = GetPermission(parameters, resultType) ?? throw new InvalidOperationException("A service permission must be declared.");
-            await Runtime.Gate.RequireAccessAsync(caller, permission, cancellationToken);
+            var (caller, permission) = await RequireCallerAsync(parameters, resultType, cancellationToken);
 
             // Own the transaction boundary.
             await using var sql = Runtime.CreateSqlContext();
