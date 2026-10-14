@@ -42,6 +42,17 @@ namespace Jularr.Backend.Logic.Library
                         OR root."RelativePath" = @RelativePath
                         OR left(@RelativePath, length(root."RelativePath") + 1) = root."RelativePath" || '/'
                         OR left(root."RelativePath", length(@RelativePath) + 1) = @RelativePath || '/')
+                UNION ALL
+                SELECT
+                    settings."Id"
+                FROM
+                    "InstanceSettings" AS settings
+                WHERE
+                    settings."RecycleStorageMountId" = @StorageMountId
+                    AND (@RelativePath = ''
+                        OR settings."RecyclePath" = @RelativePath
+                        OR left(@RelativePath, length(settings."RecyclePath") + 1) = settings."RecyclePath" || '/'
+                        OR left(settings."RecyclePath", length(@RelativePath) + 1) = @RelativePath || '/')
                 LIMIT 1;
                 """;
             sql.Parameters.Add(data);

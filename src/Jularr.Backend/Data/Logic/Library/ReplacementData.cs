@@ -11,8 +11,9 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class ReplacementSettingsData : BaseData
     {
         public ReplacementSettingsData(bool keepsReleases, bool recyclesInLibraries, long? recycleStorageMountId, StorageProtocolType? storageProtocolTypeId, string? sharePath,
-            string? recyclePath, int recycleDays)
+            bool? isReadOnly, string? recyclePath, int recycleDays)
         {
+            IsReadOnly = isReadOnly;
             KeepsReleases = keepsReleases;
             RecyclesInLibraries = recyclesInLibraries;
             RecycleStorageMountId = recycleStorageMountId;
@@ -36,6 +37,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath), false)]
         public string? SharePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsReadOnly), false)]
+        public bool? IsReadOnly { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecyclePath))]
         public string? RecyclePath { get; }

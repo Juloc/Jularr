@@ -88,4 +88,7 @@ FROM
     "StorageMounts" AS mount
     LEFT JOIN "StorageMountStates" AS state ON state."StorageMountId" = mount."Id";
 
+-- A connection holding the recycle folder cannot go while it is configured.
+ALTER TABLE "InstanceSettings" ADD FOREIGN KEY ("RecycleStorageMountId") REFERENCES "StorageMounts" ("Id") ON DELETE RESTRICT;
+
 COMMIT;

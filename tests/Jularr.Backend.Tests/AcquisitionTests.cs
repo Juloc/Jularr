@@ -351,6 +351,43 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Movie_UpgradeWithoutRecycleFolder_DeletesOnlyTheEarlierFileOfThatFormat()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
+            Directory.CreateDirectory(library);
+            File.WriteAllText(Path.Combine(library, "Example Movie (2020) [DVD].mkv"), "earlier");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT 900, "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT 900, "Id", 900 FROM "Works";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                    SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020) [DVD].mkv', 7, now(), now(), 900 FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
+                """);
+
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidate = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.First();
+            using var grabbed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+            Assert.AreEqual(HttpStatusCode.OK, grabbed.StatusCode, await grabbed.Content.ReadAsStringAsync());
+            var completed = Path.Combine(downloads.Path, Feature);
+            Directory.CreateDirectory(completed);
+            File.WriteAllText(Path.Combine(completed, Feature + ".mkv"), new string('x', 4096));
+            usenet.Queue = FakeUsenet.EmptyQueue;
+            usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // Without a recycle folder the earlier file is deleted, as Sonarr does.
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv")));
+            Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
+            Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle")));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"Id\" = 900"));
+        }
+
+        [TestMethod]
         public async Task Plex_ConnectSyncsAvailabilityAndRefreshesAfterImport()
         {
             using var storage = new TemporaryDirectory();

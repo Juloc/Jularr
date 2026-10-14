@@ -38,8 +38,9 @@ namespace Jularr.Backend.Service.System.Library.V1
                     var directory = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(library.StorageProtocolTypeId, library.StorageMountId, library.SharePath), library.RootPath);
                     LibraryRecycleBin.Clean(Path.Combine(directory, StorageFileSystem.RecycleFolder), settings.RecycleDays, now);
                 }
-                catch (NasMountException)
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
                 {
+                    // Cleaned on a later pass.
                 }
             }
 
@@ -52,8 +53,9 @@ namespace Jularr.Backend.Service.System.Library.V1
                         LibraryRecycleBin.Clean(folder, settings.RecycleDays, now);
                     }
                 }
-                catch (NasMountException)
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
                 {
+                    // Cleaned on a later pass.
                 }
             }
 

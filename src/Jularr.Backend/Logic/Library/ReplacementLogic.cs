@@ -19,28 +19,54 @@ namespace Jularr.Backend.Logic.Library
                     settings."RecycleStorageMountId",
                     mount."StorageProtocolTypeId",
                     mount."SharePath",
+                    mount."IsReadOnly",
                     settings."RecyclePath",
                     settings."RecycleDays"
                 FROM
                     "InstanceSettings" AS settings
                     LEFT JOIN "StorageMounts" AS mount ON mount."Id" = settings."RecycleStorageMountId"
                 WHERE
-                    settings."Id" = 1;
+                    settings."Id" = 1
+                FOR SHARE OF
+                    settings;
                 """;
-            return ctx.ReadSql.ReadRequiredAsync<ReplacementSettingsData>(sql, ct);
+            return ctx.ReadRequiredAsync<ReplacementSettingsData>(sql, ct);
         }
 
         public static async Task SaveReplacementSettingsAsync(this LogicContext ctx, ReplacementSettingsSaveData data, CancellationToken ct)
         {
+            if ((data.RecycleStorageMountId is null) != (data.RecyclePath is null))
+            {
+                throw new DataValidationException(nameof(data.RecyclePath), "required");
+            }
+
+            // The settings row stays locked, so a pattern edit waits and sees the new choice.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "InstanceSettings" AS settings
+                SET
+                    "KeepsReleases" = @KeepsReleases,
+                    "RecyclesInLibraries" = @RecyclesInLibraries,
+                    "RecycleStorageMountId" = @RecycleStorageMountId,
+                    "RecyclePath" = @RecyclePath,
+                    "RecycleDays" = @RecycleDays,
+                    "Version" = settings."Version" + 1
+                WHERE
+                    settings."Id" = 1
+                    AND settings."Version" = @Version;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.Version), "invalid_transition");
+            }
+
             // Several releases of one film or episode need names that tell them apart.
             if (data.KeepsReleases && (await ctx.ReadNamingPatternsAsync(ct)).Values.Any(pattern => !NamingPattern.Distinguishes(pattern)))
             {
                 throw new DataValidationException(nameof(data.KeepsReleases), "naming_needs_release_token");
-            }
-
-            if ((data.RecycleStorageMountId is null) != (data.RecyclePath is null))
-            {
-                throw new DataValidationException(nameof(data.RecyclePath), "required");
             }
 
             // The folder lies on a writable connection, outside every library, so no scan takes it for media.
@@ -74,33 +100,12 @@ namespace Jularr.Backend.Logic.Library
                 folder.Parameters.Add(data);
                 _ = await ctx.ReadOptionalAsync<StorageMountIdData>(folder, ct) ?? throw new DataValidationException(nameof(data.RecyclePath), "invalid_value");
             }
-
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "InstanceSettings" AS settings
-                SET
-                    "KeepsReleases" = @KeepsReleases,
-                    "RecyclesInLibraries" = @RecyclesInLibraries,
-                    "RecycleStorageMountId" = @RecycleStorageMountId,
-                    "RecyclePath" = @RecyclePath,
-                    "RecycleDays" = @RecycleDays,
-                    "Version" = settings."Version" + 1
-                WHERE
-                    settings."Id" = 1
-                    AND settings."Version" = @Version;
-                """;
-            sql.Parameters.Add(data);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
-            {
-                throw new DataValidationException(nameof(data.Version), "invalid_transition");
-            }
         }
 
         public static Task<IReadOnlyList<ReplacedFileData>> ReadReplacedFilesAsync(this LogicContext ctx, ReplacingAssetsData data, CancellationToken ct)
         {
-            // Files of other assets of the same kind for the same Work and unit; games keep one asset per platform.
+            // Files of other assets of the same kind, edition, Work and unit on writable libraries; books and comics only of the same format,
+            // games keep one asset per platform.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -114,10 +119,21 @@ namespace Jularr.Backend.Logic.Library
                     file."RelativePath"
                 FROM
                     "MediaAssets" AS replacing
+                    JOIN "WorkVersions" AS version ON version."Id" = replacing."WorkVersionId"
                     JOIN "MediaAssets" AS earlier ON earlier."WorkId" = replacing."WorkId"
                         AND earlier."WorkUnitId" IS NOT DISTINCT FROM replacing."WorkUnitId"
                         AND earlier."MediaAssetTypeId" = replacing."MediaAssetTypeId"
                         AND earlier."Id" <> ALL (@MediaAssetIds)
+                    JOIN "WorkVersions" AS earlierVersion ON earlierVersion."Id" = earlier."WorkVersionId" AND earlierVersion."WorkEditionId" = version."WorkEditionId"
+                    JOIN LATERAL (
+                        SELECT
+                            min(main."RelativePath") AS "RelativePath"
+                        FROM
+                            "StoredFiles" AS main
+                        WHERE
+                            main."MediaAssetId" = earlier."Id"
+                            AND NOT main."IsSubtitle"
+                    ) AS earlierMedia ON TRUE
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = earlier."Id"
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
@@ -125,6 +141,20 @@ namespace Jularr.Backend.Logic.Library
                     replacing."Id" = ANY (@MediaAssetIds)
                     AND replacing."MediaAssetTypeId" <> 5
                     AND file."MissingSince" IS NULL
+                    AND NOT mount."IsReadOnly"
+                    AND (
+                        replacing."MediaAssetTypeId" IN (1, 2)
+                        OR EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "StoredFiles" AS media
+                            WHERE
+                                media."MediaAssetId" = replacing."Id"
+                                AND NOT media."IsSubtitle"
+                                AND lower(substring(media."RelativePath" FROM '\.[^./]+$')) = lower(substring(earlierMedia."RelativePath" FROM '\.[^./]+$'))
+                        )
+                    )
                 ORDER BY
                     file."Id";
                 """;
@@ -185,6 +215,7 @@ namespace Jularr.Backend.Logic.Library
                         retired
                     WHERE
                         file."Id" = retired."StoredFileId"
+                        AND retired."NewStoredFileId" IS NOT NULL
                     RETURNING
                         retired."EarlierMediaAssetId"
                 )

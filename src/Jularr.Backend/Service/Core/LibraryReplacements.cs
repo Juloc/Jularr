@@ -32,7 +32,7 @@ namespace Jularr.Backend.Service.Core
                 return;
             }
 
-            // Files on an unreachable library stay and remain further versions.
+            // A file that cannot be moved, on an unreachable library or with an unusable recycle folder, stays as a further version.
             var retired = new List<object>();
             foreach (var file in files.DistinctBy(file => file.StoredFileId))
             {
@@ -40,12 +40,14 @@ namespace Jularr.Backend.Service.Core
                 {
                     var library = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(file.StorageProtocolTypeId, file.StorageMountId, file.SharePath), file.RootPath);
                     var target = settings.RecyclesInLibraries || file.RootPath.Length == 0 ? file.RelativePath : file.RootPath + "/" + file.RelativePath;
-                    if (LibraryRecycleBin.Recycle(StorageFileSystem.ResolveFile(library, file.RelativePath), LibraryRecycleBin.Folder(_storage, settings, library), target))
+                    var source = StorageFileSystem.ResolveFile(library, file.RelativePath);
+                    var folder = LibraryRecycleBin.Folder(_storage, settings, library);
+                    if (await Task.Run(() => LibraryRecycleBin.Recycle(source, folder, target), ct))
                     {
                         retired.Add(new { file.StoredFileId, file.NewMediaAssetId });
                     }
                 }
-                catch (NasMountException)
+                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
                 {
                 }
             }

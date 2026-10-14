@@ -193,6 +193,14 @@ namespace Jularr.Backend.Logic.Storage
                             "LibraryRoots" AS root
                         WHERE
                             root."StorageMountId" = mount."Id"
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "InstanceSettings" AS settings
+                        WHERE
+                            settings."RecycleStorageMountId" = mount."Id"
                     );
                 """;
             sql.Parameters.Add(data);
