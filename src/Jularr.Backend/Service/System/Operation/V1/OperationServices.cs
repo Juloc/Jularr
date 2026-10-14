@@ -317,7 +317,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                             AND file."MediaAssetId" IS NULL
                             AND file."MissingSince" IS NULL
                             AND strpos(file."RelativePath", '/') > 0
-                            AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                            AND NOT file."IsSubtitle"
                         GROUP BY
                             file."Id",
                             file."RelativePath",

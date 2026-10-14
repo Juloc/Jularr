@@ -258,7 +258,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                     (file."SubtitlesCheckedAt" IS NULL OR file."SubtitlesCheckedAt" < now() - interval '1 day')
                     AND file."ProbedAt" IS NOT NULL
                     AND file."MissingSince" IS NULL
-                    AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                    AND NOT file."IsSubtitle"
                     AND coalesce(state."StorageAvailabilityTypeId", 1) = 1
                     AND (work."MediaTypeId" = 1 OR unit."WorkUnitTypeId" = 2 AND parent."Number" IS NOT NULL)
                     AND EXISTS (

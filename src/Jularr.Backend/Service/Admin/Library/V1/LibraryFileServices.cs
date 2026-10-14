@@ -50,7 +50,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 WHERE
                     (@LibraryRootId::bigint IS NULL OR file."LibraryRootId" = @LibraryRootId)
                     AND (NOT @OnlyUnmatched OR file."MediaAssetId" IS NULL)
-                    AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                    AND NOT file."IsSubtitle"
                 ORDER BY
                     file."LibraryRootId",
                     file."RelativePath"

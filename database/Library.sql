@@ -42,6 +42,8 @@ CREATE TABLE "StoredFiles" (
     "TrickplayFrames" integer NULL CHECK ("TrickplayFrames" > 0),
     "TrickplayCheckedAt" timestamptz NULL,
     "SubtitlesCheckedAt" timestamptz NULL,
+    -- Subtitle files by extension, as LibraryFileTypes knows them.
+    "IsSubtitle" boolean GENERATED ALWAYS AS ("RelativePath" ~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$') STORED,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("LibraryRootId", "RelativePath")
 );

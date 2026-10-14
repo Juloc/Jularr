@@ -38,7 +38,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         WHERE
                             asset."Id" = @MediaAssetId
                             AND candidate."MissingSince" IS NULL
-                            AND candidate."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                            AND NOT candidate."IsSubtitle"
                         ORDER BY
                             candidate."Id"
                         LIMIT 1
@@ -86,7 +86,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 WHERE
                     asset."Id" = @MediaAssetId
                     AND candidate."MissingSince" IS NULL
-                    AND candidate."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                    AND NOT candidate."IsSubtitle"
                 ORDER BY
                     candidate."Id"
                 LIMIT 1;

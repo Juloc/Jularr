@@ -112,7 +112,7 @@ namespace Jularr.Backend.Logic.Media
                     OR (file."LibraryRootId" = @LibraryRootId
                         AND file."MediaAssetId" IS NULL
                         AND left(file."RelativePath", length(@Stem) + 1) = @Stem || '.'
-                        AND file."RelativePath" ~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$');
+                        AND file."IsSubtitle");
                 """;
             sql.Parameters.Add(new StoredFileLinkData(file.Id, file.LibraryRootId, Stem(file.RelativePath), asset.Id));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
@@ -145,7 +145,7 @@ namespace Jularr.Backend.Logic.Media
                     file."MediaAssetId" = @MediaAssetId
                     AND (file."Id" = @StoredFileId
                         OR (left(file."RelativePath", length(@Stem) + 1) = @Stem || '.'
-                            AND file."RelativePath" ~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'));
+                            AND file."IsSubtitle"));
                 """;
             sql.Parameters.Add(new StoredFileLinkData(file.Id, file.LibraryRootId, Stem(file.RelativePath), file.MediaAssetId));
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

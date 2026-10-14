@@ -83,7 +83,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                         AND file."ProbedAt" IS NOT NULL
                         AND file."DurationMs" > 0
                         AND file."MissingSince" IS NULL
-                        AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                        AND NOT file."IsSubtitle"
                         AND coalesce(state."StorageAvailabilityTypeId", 1) = 1
                     ORDER BY
                         file."TrickplayCheckedAt" NULLS FIRST,

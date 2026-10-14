@@ -10,6 +10,7 @@ namespace Jularr.Backend.Logic.Library
         private static readonly FrozenSet<string> Audio = FrozenSet.Create(".mp3", ".flac", ".m4a", ".m4b", ".ogg", ".opus", ".aac", ".wav", ".wv");
         private static readonly FrozenSet<string> Ebook = FrozenSet.Create(".epub", ".pdf", ".mobi", ".azw3");
         private static readonly FrozenSet<string> Comic = FrozenSet.Create(".cbz", ".cbr", ".cb7");
+        // Kept equal to the generated column StoredFiles.IsSubtitle.
         private static readonly FrozenSet<string> Subtitle = FrozenSet.Create(".srt", ".ass", ".ssa", ".vtt", ".sub", ".idx", ".sup");
         private static readonly FrozenSet<string> Game = FrozenSet.Create(".iso", ".chd", ".cue", ".zip", ".7z", ".rar", ".nsp", ".xci", ".3ds", ".gcm", ".rvz", ".wbfs")
             .Union(GameRomMatching.FileExtensions).ToFrozenSet();

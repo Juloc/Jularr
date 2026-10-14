@@ -225,7 +225,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                             count(*) AS "FileCount",
                             sum(file."SizeBytes")::bigint AS "SizeBytes",
                             max(file."DurationMs") AS "DurationMs",
-                            coalesce(bool_or(file."MissingSince" IS NULL) FILTER (WHERE file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'), FALSE) AS "IsAvailable"
+                            coalesce(bool_or(file."MissingSince" IS NULL) FILTER (WHERE NOT file."IsSubtitle"), FALSE) AS "IsAvailable"
                         FROM
                             "StoredFiles" AS file
                         WHERE

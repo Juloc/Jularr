@@ -59,7 +59,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                                 WHERE
                                     file."MediaAssetId" = other."Id"
                                     AND file."MissingSince" IS NULL
-                                    AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                                    AND NOT file."IsSubtitle"
                             )
                         ORDER BY
                             coalesce(otherParent."Number", 0) DESC,
@@ -87,7 +87,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                                 WHERE
                                     file."MediaAssetId" = other."Id"
                                     AND file."MissingSince" IS NULL
-                                    AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                                    AND NOT file."IsSubtitle"
                             )
                         ORDER BY
                             coalesce(otherParent."Number", 0),
@@ -143,7 +143,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     WHERE
                         asset."Id" = @MediaAssetId
                         AND file."MissingSince" IS NULL
-                        AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                        AND NOT file."IsSubtitle"
                     ORDER BY
                         file."Id"
                     LIMIT 1
@@ -181,7 +181,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     JOIN "StoredFiles" AS sidecar ON sidecar."MediaAssetId" = @MediaAssetId
                 WHERE
                     sidecar."MissingSince" IS NULL
-                    AND sidecar."RelativePath" ~* '\.(srt|vtt|ass|ssa|sub|idx|sup)$'
+                    AND sidecar."IsSubtitle"
                 ORDER BY
                     4,
                     1 NULLS LAST,
@@ -257,7 +257,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                             WHERE
                                 media."MediaAssetId" = asset."Id"
                                 AND media."MissingSince" IS NULL
-                                AND media."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                                AND NOT media."IsSubtitle"
                             ORDER BY
                                 media."Id"
                             LIMIT 1
@@ -339,7 +339,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     WHERE
                         asset."Id" = @MediaAssetId
                         AND file."MissingSince" IS NULL
-                        AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                        AND NOT file."IsSubtitle"
                     ORDER BY
                         file."Id"
                     LIMIT 1;
