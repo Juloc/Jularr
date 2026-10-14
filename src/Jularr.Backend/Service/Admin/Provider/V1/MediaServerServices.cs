@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
@@ -58,7 +59,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         {
             // Only a server that answers with this key is stored; its users are proposed right away.
             var baseUrl = new Uri(Data.BaseUrl.TrimEnd('/') + "/");
-            if (baseUrl.Query.Length > 0)
+            if (baseUrl.AbsolutePath != "/" || baseUrl.Query.Length > 0)
             {
                 throw new DataValidationException(nameof(SaveMediaServerDataV1.BaseUrl), "invalid_url");
             }
@@ -68,6 +69,11 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
                 ?? throw new DataValidationException(nameof(SaveMediaServerDataV1.ApiKey), "required");
             var connection = new MediaServerConnection(baseUrl, apiKey, MediaServers.Dialect(type));
             var server = await _servers.ReadServerAsync(connection, CancellationToken);
+            if (type == MediaServerType.Jellyfin && (!Version.TryParse(server.Version, out var version) || version < new Version(10, 9)))
+            {
+                throw new ServiceUnavailableException("media_server_outdated");
+            }
+
             var data = new MediaServerSaveData(MediaServers.ProviderKey(type), baseUrl.ToString(), Data.ApiKey is null ? null : _servers.Protect(apiKey), server.Id);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {

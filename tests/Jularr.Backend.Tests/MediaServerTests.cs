@@ -21,7 +21,7 @@ namespace Jularr.Backend.Tests
         public async Task Jellyfin_ConfirmedUser_SharesProgressBothWaysAndCatchesUpAfterAnOutage()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
-            var jellyfin = new FakeJellyfin();
+            var jellyfin = new FakeServer();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true,
                 services: services => services.AddHttpClient<MediaServerClient>().ConfigurePrimaryHttpMessageHandler(() => jellyfin));
             jellyfin.ProfileName = (string)(await host.ScalarAsync("SELECT \"DisplayName\" FROM \"Profiles\" WHERE \"Id\" = 101"))!;
@@ -41,11 +41,11 @@ namespace Jularr.Backend.Tests
             // Only a server that accepts the key is stored; its users are proposed the profile of the same name.
             using var refused = await host.SendAsync(HttpMethod.Post, Route, new SaveMediaServerDataV1("http://jellyfin.example.test:8096", "wrong"));
             StringAssert.Contains(await refused.Content.ReadAsStringAsync(), "media_server_authentication_failed");
-            using var connected = await host.SendAsync(HttpMethod.Post, Route, new SaveMediaServerDataV1("http://jellyfin.example.test:8096", FakeJellyfin.ApiKey));
+            using var connected = await host.SendAsync(HttpMethod.Post, Route, new SaveMediaServerDataV1("http://jellyfin.example.test:8096", FakeServer.ApiKey));
             Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
             Assert.AreEqual(2, (await connected.Content.ReadFromJsonAsync<MediaServerTestV1>())!.UserCount);
             using var read = await host.SendAsync(HttpMethod.Get, Route);
-            Assert.IsFalse((await read.Content.ReadAsStringAsync()).Contains(FakeJellyfin.ApiKey, StringComparison.Ordinal));
+            Assert.IsFalse((await read.Content.ReadAsStringAsync()).Contains(FakeServer.ApiKey, StringComparison.Ordinal));
             var links = await ReadLinksAsync(host);
             var proposed = links.Single(link => link.ExternalName == jellyfin.ProfileName);
             Assert.AreEqual(101L, proposed.ProfileId);
@@ -90,7 +90,44 @@ namespace Jularr.Backend.Tests
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, WebUtility.HtmlEncode(jellyfin.ProfileName + " shares progress with " + jellyfin.ProfileName));
-            Assert.IsFalse(html.Contains(FakeJellyfin.ApiKey, StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains(FakeServer.ApiKey, StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        public async Task Emby_TwoVersionsOfAFilm_AgreeOnTheFurtherPosition()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            var emby = new FakeServer { IsEmby = true };
+            emby.Positions["m603b"] = 200_000;
+            emby.Played["m603b"] = false;
+            emby.Positions["m603"] = 100_000;
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path,
+                services: services => services.AddHttpClient<MediaServerClient>().ConfigurePrimaryHttpMessageHandler(() => emby));
+            emby.ProfileName = (string)(await host.ScalarAsync("SELECT \"DisplayName\" FROM \"Profiles\" WHERE \"Id\" = 101"))!;
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'ProgressSync';
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 1, 'Example Film');
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'tmdb_movie', '603');
+                """);
+            const string route = "/api/v1/admin/media-servers/Emby";
+            using var connected = await host.SendAsync(HttpMethod.Post, route, new SaveMediaServerDataV1("http://emby.example.test:8096", FakeServer.ApiKey));
+            Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
+            using var path = await host.SendAsync(HttpMethod.Post, route, new SaveMediaServerDataV1("http://emby.example.test:8096/emby", FakeServer.ApiKey));
+            StringAssert.Contains(await path.Content.ReadAsStringAsync(), "invalid_url");
+            using var linksResponse = await host.SendAsync(HttpMethod.Get, route + "/links");
+            var link = (await linksResponse.Content.ReadFromJsonAsync<MediaServerLinkV1[]>())!.Single(item => item.ExternalName == emby.ProfileName);
+            using var confirmed = await host.SendAsync(HttpMethod.Put, route + "/links/" + link.Id, new SaveMediaServerLinkDataV1(101));
+            Assert.AreEqual(HttpStatusCode.OK, confirmed.StatusCode, await confirmed.Content.ReadAsStringAsync());
+
+            // Jularr takes the further version; the other version is brought level, and the next pass has nothing to do.
+            using var synced = await host.SendAsync(HttpMethod.Post, route + "/sync");
+            var result = (await synced.Content.ReadFromJsonAsync<MediaServerSyncResultV1>())!;
+            Assert.AreEqual((1, 1), (result.LocalCount, result.RemoteCount));
+            Assert.AreEqual(200_000L, await host.ScalarAsync("SELECT \"PositionMs\" FROM \"MediaProgress\" WHERE \"WorkId\" = 10"));
+            Assert.AreEqual(200_000L, emby.Positions["m603"]);
+            using var again = await host.SendAsync(HttpMethod.Post, route + "/sync");
+            var quiet = (await again.Content.ReadFromJsonAsync<MediaServerSyncResultV1>())!;
+            Assert.AreEqual((0, 0), (quiet.LocalCount, quiet.RemoteCount));
         }
 
         [TestMethod]
@@ -99,25 +136,25 @@ namespace Jularr.Backend.Tests
             var agreed = DateTime.UtcNow.AddHours(-1);
             var later = DateTime.UtcNow;
 
-            // Watched on, both sides: the further position.
-            var both = MediaServerLogic.Merge(Candidate(remote: (300, false), local: (500, false, later), synced: (100, false, agreed)))!;
-            Assert.AreEqual((500L, false, false, true), (both.PositionMs, both.IsCompleted, both.WritesLocal, both.WritesRemote));
+            // Watched on, both sides: the further position, sent to the server.
+            var both = MediaServerLogic.Plan([Candidate(remote: (300, false), local: (500, false, later), synced: (100, false, agreed))]).Single();
+            Assert.AreEqual((500L, false, false, true), (both.Target.PositionMs, both.Target.IsCompleted, both.WritesLocal, both.WritesRemote));
 
             // Finished on the server while Jularr was further along: finishing wins.
-            var finished = MediaServerLogic.Merge(Candidate(remote: (0, true), local: (900, false, later), synced: (100, false, agreed)))!;
-            Assert.AreEqual((0L, true, true, false), (finished.PositionMs, finished.IsCompleted, finished.WritesLocal, finished.WritesRemote));
+            var finished = MediaServerLogic.Plan([Candidate(remote: (0, true), local: (900, false, later), synced: (100, false, agreed))]).Single();
+            Assert.AreEqual((0L, true, true, false), (finished.Target.PositionMs, finished.Target.IsCompleted, finished.WritesLocal, finished.WritesRemote));
 
             // Only the server moved back: a rewatch, taken over.
-            var rewatch = MediaServerLogic.Merge(Candidate(remote: (50, true), local: (0, true, agreed.AddMinutes(-1)), synced: (0, true, agreed)))!;
-            Assert.AreEqual((50L, true, true, false), (rewatch.PositionMs, rewatch.IsCompleted, rewatch.WritesLocal, rewatch.WritesRemote));
+            var rewatch = MediaServerLogic.Plan([Candidate(remote: (50, true), local: (0, true, agreed.AddMinutes(-1)), synced: (0, true, agreed))]).Single();
+            Assert.AreEqual((50L, true, true, false), (rewatch.Target.PositionMs, rewatch.Target.IsCompleted, rewatch.WritesLocal, rewatch.WritesRemote));
 
             // Nothing moved since the last agreement.
-            Assert.IsNull(MediaServerLogic.Merge(Candidate(remote: (100, false), local: (100, false, agreed.AddMinutes(-1)), synced: (100, false, agreed))));
+            Assert.AreEqual(0, MediaServerLogic.Plan([Candidate(remote: (100, false), local: (100, false, agreed.AddMinutes(-1)), synced: (100, false, agreed))]).Count);
         }
 
         private static ProgressCandidateData Candidate((long Position, bool Completed) remote, (long Position, bool Completed, DateTime UpdatedAt) local,
             (long Position, bool Completed, DateTime At) synced) =>
-            new("m1", remote.Position, remote.Completed, null, 10, null, local.Position, local.Completed, local.UpdatedAt, synced.Position, synced.Completed, synced.At);
+            new("m1", remote.Position, remote.Completed, null, 10, null, local.Position, local.Completed, local.UpdatedAt, synced.Position, synced.Completed, synced.At, DateTime.UtcNow);
 
         private static async Task<MediaServerLinkV1[]> ReadLinksAsync(Host host)
         {
@@ -134,11 +171,12 @@ namespace Jularr.Backend.Tests
             return (result.LocalCount, result.RemoteCount);
         }
 
-        // One server with two users; only u1 has watched anything.
-        private sealed class FakeJellyfin : HttpMessageHandler
+        // One server with two users; only u1 has watched anything. Emby names the user in the path and takes its own key header.
+        private sealed class FakeServer : HttpMessageHandler
         {
-            public const string ApiKey = "jellyfin-test-key";
+            public const string ApiKey = "media-server-test-key";
 
+            public bool IsEmby { get; init; }
             public string ProfileName { get; set; } = "";
             public bool IsAvailable { get; set; } = true;
             public Dictionary<string, long> Positions { get; } = new() { ["m603"] = 3_000_000, ["m604"] = 0, ["e1"] = 0 };
@@ -151,13 +189,26 @@ namespace Jularr.Backend.Tests
                     throw new HttpRequestException("offline");
                 }
 
-                if (!request.Headers.TryGetValues("Authorization", out var authorization) || authorization.Single() != "MediaBrowser Token=\"" + ApiKey + "\"")
+                var key = IsEmby
+                    ? request.Headers.TryGetValues("X-Emby-Token", out var token) ? token.Single() : null
+                    : request.Headers.TryGetValues("Authorization", out var authorization) ? authorization.Single() : null;
+                if (key != (IsEmby ? ApiKey : "MediaBrowser Token=\"" + ApiKey + "\""))
                 {
                     return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                 }
 
                 var path = request.RequestUri!.AbsolutePath;
                 var query = request.RequestUri.Query;
+                if (IsEmby && path == "/Users/u1/Items")
+                {
+                    path = "/Items";
+                }
+
+                if (IsEmby && path.StartsWith("/Users/u1/Items/", StringComparison.Ordinal) && path.EndsWith("/UserData", StringComparison.Ordinal))
+                {
+                    path = "/UserItems/" + path.Split('/')[4] + "/UserData";
+                    query = "?userId=u1";
+                }
                 if (path == "/System/Info")
                 {
                     return Json("""{"Id":"jf1","ServerName":"Home","Version":"10.10.7"}""");
@@ -175,16 +226,13 @@ namespace Jularr.Backend.Tests
 
                 if (path == "/Items")
                 {
-                    return Json(JsonSerializer.Serialize(new
+                    var items = Positions.Keys.Select(id => id switch
                     {
-                        Items = new object[]
-                        {
-                            Item("m603", "Movie", new { Tmdb = "603" }, null, null, null),
-                            Item("m604", "Movie", new { Tmdb = "604" }, null, null, null),
-                            Item("e1", "Episode", new { }, "s1", 1, 1)
-                        },
-                        TotalRecordCount = 3
-                    }));
+                        "e1" => Item(id, "Episode", new { }, "s1", 1, 1),
+                        "m604" => Item(id, "Movie", new { Tmdb = "604" }, null, null, null),
+                        _ => Item(id, "Movie", new { Tmdb = "603" }, null, null, null)
+                    }).ToArray();
+                    return Json(JsonSerializer.Serialize(new { Items = items, TotalRecordCount = items.Length }));
                 }
 
                 if (request.Method == HttpMethod.Post && path.StartsWith("/UserItems/", StringComparison.Ordinal) && query == "?userId=u1")

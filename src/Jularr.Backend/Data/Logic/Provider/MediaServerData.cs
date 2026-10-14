@@ -137,7 +137,7 @@ namespace Jularr.Backend.Data.Logic.Provider
     internal sealed class ProgressCandidateData : BaseData
     {
         public ProgressCandidateData(string externalItemId, long remotePositionMs, bool remoteIsCompleted, long? durationMs, long workId, long? workUnitId,
-            long? localPositionMs, bool? localIsCompleted, DateTime? localUpdatedAt, long? syncedPositionMs, bool? syncedIsCompleted, DateTime? syncedAt)
+            long? localPositionMs, bool? localIsCompleted, DateTime? localUpdatedAt, long? syncedPositionMs, bool? syncedIsCompleted, DateTime? syncedAt, DateTime readAt)
         {
             ExternalItemId = externalItemId;
             RemotePositionMs = remotePositionMs;
@@ -151,6 +151,7 @@ namespace Jularr.Backend.Data.Logic.Provider
             SyncedPositionMs = syncedPositionMs;
             SyncedIsCompleted = syncedIsCompleted;
             SyncedAt = syncedAt;
+            ReadAt = readAt;
         }
 
         [DataField(typeof(MediaServerFields), nameof(MediaServerFields.ExternalItemId))]
@@ -188,14 +189,18 @@ namespace Jularr.Backend.Data.Logic.Provider
 
         [DataField(typeof(MediaServerFields), nameof(MediaServerFields.ChangedAt))]
         public DateTime? SyncedAt { get; }
+
+        [DataField(typeof(MediaServerFields), nameof(MediaServerFields.ChangedAt), true)]
+        public DateTime ReadAt { get; }
     }
 
     internal sealed class SyncedProgressData : BaseData
     {
-        public SyncedProgressData(long providerProfileLinkId, long profileId, string local, string states)
+        public SyncedProgressData(long providerProfileLinkId, long profileId, DateTime readAt, string local, string states)
         {
             ProviderProfileLinkId = providerProfileLinkId;
             ProfileId = profileId;
+            ReadAt = readAt;
             Local = local;
             States = states;
         }
@@ -205,6 +210,9 @@ namespace Jularr.Backend.Data.Logic.Provider
 
         [DataField(typeof(MediaServerFields), nameof(MediaServerFields.ProfileId), true)]
         public long ProfileId { get; }
+
+        [DataField(typeof(MediaServerFields), nameof(MediaServerFields.ChangedAt), true)]
+        public DateTime ReadAt { get; }
 
         // JSON rows of WorkId, WorkUnitId, PositionMs, DurationMs and IsCompleted to take over.
         [DataField(typeof(MediaServerFields), nameof(MediaServerFields.Rows))]

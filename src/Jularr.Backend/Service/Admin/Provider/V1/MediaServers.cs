@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Provider;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
@@ -16,7 +15,6 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
     // Connected Jellyfin and Emby servers; shared by Admin and the System sync.
     internal sealed class MediaServers
     {
-        private const long MaximumPositionMs = 864_000_000;
         private readonly MediaServerClient _client;
         private readonly IDataProtector _protector;
 
@@ -139,67 +137,35 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         private async Task<(int Local, int Remote)> SyncPageAsync(LogicContext context, MediaServerConnection connection, MediaServerSyncLinkData link,
             Dictionary<string, MediaServerItem> series, IReadOnlyList<MediaServerItem> items, CancellationToken ct)
         {
-            var rows = items.Select(item =>
-            {
-                var owner = item.Kind == MediaServerItemKind.Episode ? series.GetValueOrDefault(item.SeriesId ?? "") : item;
-                return owner is null || item.Kind == MediaServerItemKind.Episode && (item.Season is null || item.Episode is null) ? null : new
-                {
-                    item.Id,
-                    MediaTypeId = (byte)(item.Kind == MediaServerItemKind.Movie ? MediaType.Movie : MediaType.Series),
-                    TmdbNamespace = item.Kind == MediaServerItemKind.Movie ? "tmdb_movie" : "tmdb_tv",
-                    owner.TmdbId,
-                    owner.ImdbId,
-                    owner.TvdbId,
-                    item.Season,
-                    item.Episode,
-                    PositionMs = Math.Min(item.PositionMs, MaximumPositionMs),
-                    item.IsPlayed,
-                    DurationMs = item.DurationMs is <= MaximumPositionMs ? item.DurationMs : null
-                };
-            }).Where(row => row is not null).ToArray();
-            if (rows.Length == 0)
+            var rows = MediaServerLogic.ItemRows(items, series);
+            var candidates = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadProgressCandidatesAsync(new MediaServerItemsData(link.Id, link.ProfileId, rows), token), ct);
+            var actions = MediaServerLogic.Plan(candidates);
+            if (actions.Count == 0)
             {
                 return (0, 0);
             }
 
-            var candidates = await context.ExecuteBatchAsync((ctx, token) =>
-                ctx.ReadProgressCandidatesAsync(new MediaServerItemsData(link.Id, link.ProfileId, JsonSerializer.Serialize(rows)), token), ct);
-            var taken = new HashSet<(long, long?)>();
-            var local = new List<object>();
-            var states = new List<object>();
-            var remote = 0;
-            foreach (var candidate in candidates)
+            foreach (var action in actions.Where(action => action.WritesRemote))
             {
-                if (MediaServerLogic.Merge(candidate) is not { } decision)
-                {
-                    continue;
-                }
-
-                if (decision.WritesRemote)
-                {
-                    await _client.SaveUserDataAsync(connection, link.ExternalUserId, candidate.ExternalItemId, decision.PositionMs, decision.IsCompleted, ct);
-                    remote++;
-                }
-
-                // Two server items of one Work (two versions of a film) move it once.
-                if (decision.WritesLocal && taken.Add((candidate.WorkId, candidate.WorkUnitId)))
-                {
-                    local.Add(new { candidate.WorkId, candidate.WorkUnitId, decision.PositionMs, candidate.DurationMs, decision.IsCompleted });
-                }
-
-                states.Add(new { candidate.ExternalItemId, decision.PositionMs, decision.IsCompleted });
+                await _client.SaveUserDataAsync(connection, link.ExternalUserId, action.Candidate.ExternalItemId, action.Target.PositionMs, action.Target.IsCompleted, ct);
             }
 
-            if (states.Count > 0)
+            var local = actions.Where(action => action.WritesLocal).Select(action => new
             {
-                await context.ExecuteBatchAsync(async (ctx, token) =>
-                {
-                    await ctx.SaveSyncedProgressAsync(new SyncedProgressData(link.Id, link.ProfileId, JsonSerializer.Serialize(local), JsonSerializer.Serialize(states)), token);
-                    return true;
-                }, ct);
-            }
-
-            return (local.Count, remote);
+                action.Candidate.WorkId,
+                action.Candidate.WorkUnitId,
+                action.Target.PositionMs,
+                action.Candidate.DurationMs,
+                action.Target.IsCompleted
+            }).ToArray();
+            var states = actions.Select(action => new { action.Candidate.ExternalItemId, action.Target.PositionMs, action.Target.IsCompleted });
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.SaveSyncedProgressAsync(new SyncedProgressData(link.Id, link.ProfileId, candidates[0].ReadAt, JsonSerializer.Serialize(local),
+                    JsonSerializer.Serialize(states)), token);
+                return true;
+            }, ct);
+            return (local.Length, actions.Count(action => action.WritesRemote));
         }
 
         private string Unprotect(byte[] secret)

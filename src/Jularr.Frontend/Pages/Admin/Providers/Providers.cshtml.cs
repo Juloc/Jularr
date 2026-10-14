@@ -41,7 +41,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             var options = new[] { new SelectOption("True", texts["admin.providers.enabled"]), new SelectOption("False", texts["admin.providers.disabled"]) };
 
             // Render only real registry rows.
-            foreach (var provider in _providers?.Items ?? [])
+            foreach (var provider in (_providers?.Items ?? []).Where(provider => !Enum.TryParse<MediaServerType>(provider.Key, true, out _) || texts.Can(null, "ProgressSync")))
             {
                 page.Content.Add(new P(new ValueText(provider.Key)));
                 page.Content.Add(new Form<UpdateProviderDataV1>(form =>
