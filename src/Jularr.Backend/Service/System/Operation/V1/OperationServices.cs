@@ -114,7 +114,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var seenAt = DateTime.UnixEpoch.AddTicks((DateTime.UtcNow.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
+            var seenAt = StoredFileLogic.StoredTime(DateTime.UtcNow);
             var root = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();

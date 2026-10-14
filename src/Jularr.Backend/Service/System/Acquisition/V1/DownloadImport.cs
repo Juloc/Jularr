@@ -78,7 +78,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await Task.Run(() => StorageFileTransfer.HardlinkOrCopy(sourceFile, destination), ct);
 
                     var info = new FileInfo(destination);
-                    imported.Add(new ImportedFile(relativePath, info.Length, LibraryFileWriter.Truncate(info.LastWriteTimeUtc), facts));
+                    imported.Add(new ImportedFile(relativePath, info.Length, StoredFileLogic.StoredTime(info.LastWriteTimeUtc), facts));
                     if (placement.IsMedia)
                     {
                         media.Add((relativePath, placement));
@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, LibraryFileWriter.Truncate(DateTime.UtcNow), JsonSerializer.Serialize(imported)), token);
+                await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, StoredFileLogic.StoredTime(DateTime.UtcNow), JsonSerializer.Serialize(imported)), token);
                 foreach (var (relativePath, placement) in media)
                 {
                     if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), token) is { } file)

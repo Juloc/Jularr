@@ -1,3 +1,4 @@
+using Jularr.Backend.Logic.Library;
 using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Service.Core
@@ -5,7 +6,7 @@ namespace Jularr.Backend.Service.Core
     // Puts a new file into a library: written aside under its own name, then moved in, never over an existing one.
     internal static class LibraryFileWriter
     {
-        // Size and the modification time as stored files keep it; none when the name is taken.
+        // The relative path must already be a checked library path. Size and the modification time as stored files keep it; none when the name is taken.
         public static async Task<(long Length, DateTime ModifiedAt)?> WriteAsync(string directory, string relativePath, Stream content, CancellationToken ct)
         {
             var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
@@ -36,10 +37,7 @@ namespace Jularr.Backend.Service.Core
             }
 
             var info = new FileInfo(path);
-            return (info.Length, Truncate(info.LastWriteTimeUtc));
+            return (info.Length, StoredFileLogic.StoredTime(info.LastWriteTimeUtc));
         }
-
-        // PostgreSQL keeps microseconds.
-        public static DateTime Truncate(DateTime value) => DateTime.UnixEpoch.AddTicks((value.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
     }
 }

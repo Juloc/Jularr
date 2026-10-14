@@ -21,9 +21,11 @@ namespace Jularr.Backend.Tests
                 """);
             const string route = "/api/v1/admin/works/70/volumes";
 
-            // Off by default.
+            // Off by default, the page too.
             using var off = await host.SendAsync(HttpMethod.Post, route, Volume("v3.cbz", "3"));
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+            using var offPage = await host.SendAsync(HttpMethod.Get, "/Admin/Works/70/Upload");
+            Assert.AreNotEqual(HttpStatusCode.OK, offPage.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Uploads'");
 
             // A volume takes the import layout and belongs to its unit.

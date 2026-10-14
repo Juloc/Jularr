@@ -45,6 +45,8 @@ namespace Jularr.Backend.Tests
                 """);
             using var unknown = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings", new UpdateInstanceSettingsDataV1("Jularr", 1, 1, subtitleLanguages: ["xx"]));
             StringAssert.Contains(await unknown.Content.ReadAsStringAsync(), "unknown_language");
+            using var missing = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings", new UpdateInstanceSettingsDataV1("Jularr", 1, 1, subtitleLanguages: ["de", null!]));
+            Assert.AreEqual(HttpStatusCode.BadRequest, missing.StatusCode, await missing.Content.ReadAsStringAsync());
             using var languages = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings", new UpdateInstanceSettingsDataV1("Jularr", 1, 1, subtitleLanguages: ["ger, en"]));
             Assert.AreEqual(HttpStatusCode.OK, languages.StatusCode, await languages.Content.ReadAsStringAsync());
 

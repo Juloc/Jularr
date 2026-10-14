@@ -139,6 +139,19 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task StoredFiles_SubtitleColumn_MatchesTheFileTypes()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var rootId = await CreateRootAsync(host, await CreateMountAsync(host), "Movies", MediaType.Movie);
+            foreach (var path in new[] { "a.SRT", "b.ass", "c.Ssa", "d.vtt", "e.sub", "f.idx", "g.sup", "h.mkv", "srt.txt", "i.srt.mkv" })
+            {
+                await host.Fixture.RunSqlAsync($"""INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt") VALUES ({rootId}, '{path}', 1, now(), now())""");
+                Assert.AreEqual(LibraryFileTypes.IsSubtitle(path), await host.ScalarAsync($"""SELECT "IsSubtitle" FROM "StoredFiles" WHERE "RelativePath" = '{path}'"""), path);
+            }
+        }
+
+        [TestMethod]
         public async Task Operations_QueueOncePerRootAndResumeAfterRestart()
         {
             using var storage = new TemporaryDirectory();

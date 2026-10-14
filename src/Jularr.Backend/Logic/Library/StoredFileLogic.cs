@@ -5,6 +5,9 @@ namespace Jularr.Backend.Logic.Library
 {
     internal static class StoredFileLogic
     {
+        // PostgreSQL keeps microseconds; compared times must match what was stored.
+        public static DateTime StoredTime(DateTime value) => DateTime.UnixEpoch.AddTicks((value.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
+
         public static Task<int> UpsertStoredFilesAsync(this LogicContext ctx, StoredFileBatchData data, CancellationToken ct)
         {
             // Changed files lose their analysis and take the new release facts; unchanged ones keep theirs, also after a rename.

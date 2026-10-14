@@ -49,9 +49,9 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours");
                     form.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays");
                     form.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes");
-                    if (texts.HasModule("Collections")) form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
-                    if (texts.HasModule("UnitGroups")) form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
-                    if (texts.HasModule("Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
+                    if (texts.Can(null, "Collections")) form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
+                    if (texts.Can(null, "UnitGroups")) form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
+                    if (texts.Can(null, "Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
                     form.Submit("common.save");
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
