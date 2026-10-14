@@ -332,8 +332,10 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class TrickplaySourceData : BaseData
     {
         public TrickplaySourceData(long id, long sizeBytes, DateTime modifiedAt, long durationMs, string relativePath, string rootRelativePath, long storageMountId,
-            StorageProtocolType storageProtocolTypeId, string sharePath)
+            StorageProtocolType storageProtocolTypeId, string sharePath, int width, int height)
         {
+            Width = width;
+            Height = height;
             Id = id;
             SizeBytes = sizeBytes;
             ModifiedAt = modifiedAt;
@@ -371,5 +373,11 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
         public string SharePath { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Width))]
+        public int Width { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
+        public int Height { get; }
     }
 }

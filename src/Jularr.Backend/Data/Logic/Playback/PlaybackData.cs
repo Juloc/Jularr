@@ -342,4 +342,19 @@ namespace Jularr.Backend.Data.Logic.Playback
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
         public int Height { get; }
     }
+
+    internal sealed class TrickplaySheetFileData : BaseData
+    {
+        public TrickplaySheetFileData(long id, int? trickplayFrames)
+        {
+            Id = id;
+            TrickplayFrames = trickplayFrames;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.TrickplayFrames), false)]
+        public int? TrickplayFrames { get; }
+    }
 }

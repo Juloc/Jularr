@@ -53,7 +53,7 @@ namespace Jularr.Integrations.Logic.Media
         }
 
         // One thumbnail every interval from keyframes only, 10 by 10 per JPEG sheet named 001.jpg onwards.
-        public async Task<bool> CreateTrickplayAsync(string inputPath, string folder, int intervalSeconds, int width, CancellationToken ct)
+        public async Task<bool> CreateTrickplayAsync(string inputPath, string folder, int intervalSeconds, int width, int height, int columns, int rows, CancellationToken ct)
         {
             if (!IsAvailable)
             {
@@ -68,7 +68,7 @@ namespace Jularr.Integrations.Logic.Media
                 CreateNoWindow = true
             };
             foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file", "-skip_frame", "nokey", "-i", inputPath,
-                "-an", "-sn", "-dn", "-vf", "fps=1/" + intervalSeconds.ToString(CultureInfo.InvariantCulture) + ",scale=" + width.ToString(CultureInfo.InvariantCulture) + ":-2,tile=10x10",
+                "-an", "-sn", "-dn", "-vf", string.Create(CultureInfo.InvariantCulture, $"fps=1/{intervalSeconds},scale={width}:{height},tile={columns}x{rows}"),
                 "-q:v", "5", Path.Combine(folder, "%03d.jpg")])
             {
                 start.ArgumentList.Add(argument);

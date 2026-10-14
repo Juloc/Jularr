@@ -52,8 +52,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 """;
             sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
             var file = await Context.ReadSql.ReadOptionalAsync<TrickplayFileData>(sql, CancellationToken) ?? throw new KeyNotFoundException("No seek thumbnails exist.");
-            var height = Math.Max(2, (int)Math.Round(Trickplay.TileWidth * (double)file.Height / file.Width / 2) * 2);
-            return new TrickplayV1(Trickplay.IntervalSeconds, file.TrickplayFrames, Trickplay.Columns, Trickplay.Rows, Trickplay.TileWidth, height);
+            return new TrickplayV1(Trickplay.IntervalSeconds, file.TrickplayFrames, Trickplay.Columns, Trickplay.Rows, Trickplay.TileWidth, Trickplay.TileHeight(file.Width, file.Height));
         }
     }
 
@@ -78,7 +77,8 @@ namespace Jularr.Backend.Service.User.Playback.V1
             sql.Statement =
                 """
                 SELECT
-                    candidate."Id"
+                    candidate."Id",
+                    candidate."TrickplayFrames"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
@@ -92,8 +92,8 @@ namespace Jularr.Backend.Service.User.Playback.V1
                 LIMIT 1;
                 """;
             sql.Parameters.Add(new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value));
-            var file = await Context.ReadSql.ReadOptionalAsync<StoredFileIdData>(sql, CancellationToken);
-            var path = file is not null && _options.TrickplayPath is { } root ? Trickplay.Sheet(Trickplay.Folder(root, file.Id), Parameters.Sheet) : null;
+            var file = await Context.ReadSql.ReadOptionalAsync<TrickplaySheetFileData>(sql, CancellationToken);
+            var path = file?.TrickplayFrames is not null && _options.TrickplayPath is { } root ? Trickplay.Sheet(Trickplay.Folder(root, file.Id), Parameters.Sheet) : null;
             return path is not null && File.Exists(path) ? new PlaybackStreamV1(path, "image/jpeg") : throw new KeyNotFoundException("The sheet was not found.");
         }
     }

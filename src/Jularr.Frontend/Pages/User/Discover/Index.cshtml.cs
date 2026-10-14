@@ -263,12 +263,17 @@ namespace Jularr.Frontend.Pages.User.Discover
                 _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted);
             }
 
-            if (texts.Capabilities?.CanPlay is true || texts.Capabilities?.CanRead is true)
+            var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
+            if ((texts.Capabilities?.CanPlay is true || texts.Capabilities?.CanRead is true)
+                && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading]))
             {
                 _continue = await continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted);
             }
 
-            _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected.Slug is null ? null : selected.Type, pageSize: 20), HttpContext.RequestAborted)).Items;
+            if (shown.Contains(HomeShelfType.RecentlyAdded))
+            {
+                _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected.Slug is null ? null : selected.Type, pageSize: 20), HttpContext.RequestAborted)).Items;
+            }
         }
 
         private async Task LoadListedAsync()

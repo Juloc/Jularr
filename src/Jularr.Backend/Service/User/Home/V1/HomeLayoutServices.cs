@@ -42,7 +42,7 @@ namespace Jularr.Backend.Service.User.Home.V1
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(HomeLayoutParametersV1 parameters) => ModuleRequirement.All("Library", "HomeLayout");
-        protected override ServicePermission GetPermission(HomeLayoutParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override ServicePermission GetPermission(HomeLayoutParametersV1 parameters, Type resultType) => new("profile.self.update");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {

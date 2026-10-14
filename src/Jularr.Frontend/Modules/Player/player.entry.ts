@@ -86,7 +86,8 @@ async function start(player: HTMLElement): Promise<void> {
         if (!url || !preview) return;
         const response = await fetch(url, { credentials: "same-origin" }).catch(() => null);
         if (!response?.ok) return;
-        const layout = await response.json() as { intervalSeconds: number; frames: number; columns: number; rows: number; tileWidth: number; tileHeight: number };
+        const layout = await (response.json() as Promise<{ intervalSeconds: number; frames: number; columns: number; rows: number; tileWidth: number; tileHeight: number }>).catch(() => null);
+        if (!layout || layout.frames < 1) return;
         preview.style.width = `${layout.tileWidth}px`;
         preview.style.height = `${layout.tileHeight}px`;
         const show = (seconds: number, x: number) => {
@@ -98,7 +99,7 @@ async function start(player: HTMLElement): Promise<void> {
             // A hidden element has no offset parent; it is shown before it is placed.
             preview.hidden = false;
             const area = (preview.offsetParent ?? timeline).getBoundingClientRect();
-            preview.style.left = `${Math.min(Math.max(0, x - area.left - layout.tileWidth / 2), area.width - layout.tileWidth)}px`;
+            preview.style.left = `${Math.max(0, Math.min(x - area.left - layout.tileWidth / 2, area.width - layout.tileWidth))}px`;
         };
         timeline.addEventListener("pointermove", event => {
             const bounds = timeline.getBoundingClientRect();

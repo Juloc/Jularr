@@ -38,7 +38,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                 return new UpdateResult(false);
             }
 
-            // Analysed videos on storage that is not known to be offline.
+            // Analysed videos on storage that is not known to be offline; failed ones again after a day.
             var source = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -53,21 +53,40 @@ namespace Jularr.Backend.Service.System.Media.V1
                         root."RelativePath" AS "RootRelativePath",
                         mount."Id" AS "StorageMountId",
                         mount."StorageProtocolTypeId",
-                        mount."SharePath"
+                        mount."SharePath",
+                        video."Width",
+                        video."Height"
                     FROM
                         "StoredFiles" AS file
                         JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" AND asset."MediaAssetTypeId" = 1
                         JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                         JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
                         LEFT JOIN "StorageMountStates" AS state ON state."StorageMountId" = mount."Id"
+                        JOIN LATERAL (
+                            SELECT
+                                track."Width",
+                                track."Height"
+                            FROM
+                                "MediaTracks" AS track
+                            WHERE
+                                track."StoredFileId" = file."Id"
+                                AND track."MediaTrackTypeId" = 1
+                                AND track."Width" > 0
+                                AND track."Height" > 0
+                            ORDER BY
+                                track."StreamIndex"
+                            LIMIT 1
+                        ) AS video ON TRUE
                     WHERE
-                        file."TrickplayCheckedAt" IS NULL
+                        file."TrickplayFrames" IS NULL
+                        AND (file."TrickplayCheckedAt" IS NULL OR file."TrickplayCheckedAt" < now() - interval '1 day')
                         AND file."ProbedAt" IS NOT NULL
                         AND file."DurationMs" > 0
                         AND file."MissingSince" IS NULL
                         AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
                         AND coalesce(state."StorageAvailabilityTypeId", 1) = 1
                     ORDER BY
+                        file."TrickplayCheckedAt" NULLS FIRST,
                         file."Id"
                     LIMIT 1;
                     """;
@@ -86,21 +105,29 @@ namespace Jularr.Backend.Service.System.Media.V1
             }
             catch (NasMountException)
             {
-                // Storage that went away is tried again with the next pass.
-                return new UpdateResult(false);
+                // Unreachable storage counts as an attempt, so other files go first.
+                await SaveAsync(source, null);
+                return new UpdateResult(true);
             }
 
-            // Rendered aside, then swapped in whole.
+            // Rendered aside, then swapped in whole; the old sheets leave only after the new ones are in place.
             var folder = Trickplay.Folder(root, source.Id);
             var pending = folder + ".partial";
-            if (Directory.Exists(pending)) Directory.Delete(pending, true);
+            var replaced = folder + ".old";
+            foreach (var leftover in (string[])[pending, replaced])
+            {
+                if (Directory.Exists(leftover)) Directory.Delete(leftover, true);
+            }
+
             Directory.CreateDirectory(pending);
             int? frames = null;
-            if (await _transcoder.CreateTrickplayAsync(input, pending, Trickplay.IntervalSeconds, Trickplay.TileWidth, CancellationToken)
+            if (await _transcoder.CreateTrickplayAsync(input, pending, Trickplay.IntervalSeconds, Trickplay.TileWidth, Trickplay.TileHeight(source.Width, source.Height),
+                    Trickplay.Columns, Trickplay.Rows, CancellationToken)
                 && Directory.GetFiles(pending, "*.jpg").Length is var sheets and > 0)
             {
-                if (Directory.Exists(folder)) Directory.Delete(folder, true);
+                if (Directory.Exists(folder)) Directory.Move(folder, replaced);
                 Directory.Move(pending, folder);
+                if (Directory.Exists(replaced)) Directory.Delete(replaced, true);
                 var tiles = (int)Math.Ceiling(source.DurationMs / (Trickplay.IntervalSeconds * 1000d));
                 frames = Math.Min(tiles, sheets * Trickplay.Columns * Trickplay.Rows);
             }
@@ -109,12 +136,15 @@ namespace Jularr.Backend.Service.System.Media.V1
                 Directory.Delete(pending, true);
             }
 
-            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            await SaveAsync(source, frames);
+            return new UpdateResult(true);
+        }
+
+        private Task<bool> SaveAsync(TrickplaySourceData source, int? frames) =>
+            Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SaveTrickplayAsync(new TrickplaySaveData(source.Id, source.SizeBytes, source.ModifiedAt, frames), ct);
                 return true;
             }, CancellationToken);
-            return new UpdateResult(true);
-        }
     }
 }
