@@ -71,7 +71,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 if (creators.Count > 0) page.Content.Add(new P([.. creators]).Class("details-creators"));
                 if (work.FranchiseId is { } franchiseId && work.FranchiseName is { } franchiseName)
                 {
-                    page.Content.Add(new P([new Text("franchise.title"), new ValueText(": "),
+                    page.Content.Add(new P([new Text("details.franchise"), new ValueText(" "),
                         new A(new ValueText(franchiseName)).Attribute("href", "/Franchise/" + franchiseId.ToString(CultureInfo.InvariantCulture))]).Class("details-franchise"));
                 }
 

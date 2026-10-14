@@ -79,8 +79,8 @@ namespace Jularr.Integrations.Data.Tmdb
     internal sealed class TmdbWork
     {
         public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,
-            IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries, int? collectionId = null,
-            string? collectionName = null, DateOnly? releasedOn = null)
+            IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries, int? collectionId,
+            string? collectionName, DateOnly? releasedOn)
         {
             ReleasedOn = releasedOn;
             CollectionId = collectionId;

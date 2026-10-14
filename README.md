@@ -345,6 +345,10 @@ parallele Jobs. Konfiguration: `Media:FfmpegPath`, `Media:TranscodeCachePath`,
 `Media:HardwareAccelerationArguments` mit Software-Fallback. Vorschaubilder beim Spulen
 (Modul „Trickplay“, standardmäßig aus) rendert ein Hintergrund-Worker mit FFmpeg nach
 `Media:TrickplayPath`; ohne diesen Ordner gibt es keine.
+Filme nennen ihre TMDB-Filmreihe (Modul „Franchises“, eigene Seite `/Franchise/{id}`). Jede Datei
+behält die Release-Angaben ihres Namens (Gruppe, Qualität, Edition, Proper); Admin → Bibliothek → Benennung
+legt die Namen von Film- und Folgendateien mit Sonarr-artigen Platzhaltern fest. Ein selbstsigniertes
+DSM-Zertifikat vertraut Jularr erst, nachdem der Owner seinen Fingerabdruck auf der Speicher-Seite bestätigt hat.
 Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.

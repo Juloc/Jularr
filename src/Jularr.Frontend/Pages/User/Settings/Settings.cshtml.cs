@@ -17,6 +17,14 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.Settings
 {
+    public enum HomeShelfAction : byte
+    {
+        Up = 1,
+        Down = 2,
+        Hide = 3,
+        Show = 4
+    }
+
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
         UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
         IAntiforgery antiforgery, UiText texts) : JularrPage
@@ -125,9 +133,9 @@ namespace Jularr.Frontend.Pages.User.Settings
                     {
                         var index = positions[shelf.HomeShelfTypeId];
                         return new Div([
-                            .. index > 0 ? new IUiComponent[] { HomeAction(shelf, "Up", "home.moveUp", csrf) } : [],
-                            .. index + 1 < _layout.Count ? new IUiComponent[] { HomeAction(shelf, "Down", "home.moveDown", csrf) } : [],
-                            HomeAction(shelf, shelf.IsHidden ? "Show" : "Hide", shelf.IsHidden ? "home.show" : "home.hide", csrf)]);
+                            .. index > 0 ? new IUiComponent[] { HomeAction(shelf, HomeShelfAction.Up, "home.moveUp", csrf) } : [],
+                            .. index + 1 < _layout.Count ? new IUiComponent[] { HomeAction(shelf, HomeShelfAction.Down, "home.moveDown", csrf) } : [],
+                            HomeAction(shelf, shelf.IsHidden ? HomeShelfAction.Show : HomeShelfAction.Hide, shelf.IsHidden ? "home.show" : "home.hide", csrf)]);
                     })]));
             }
 
@@ -208,26 +216,21 @@ namespace Jularr.Frontend.Pages.User.Settings
             return RedirectToPage("/User/Settings/Settings");
         }
 
-        private IUiComponent HomeAction(HomeShelfV1 shelf, string action, string labelKey, string? csrf) =>
+        private IUiComponent HomeAction(HomeShelfV1 shelf, HomeShelfAction action, string labelKey, string? csrf) =>
             new Form<HomeLayoutParametersV1>(form => form.Submit(labelKey), "/Settings?handler=Home&shelf=" + shelf.HomeShelfTypeId + "&action=" + action, csrf, new HomeLayoutParametersV1());
 
-        public async Task<IActionResult> OnPostHomeAsync([BindRequired] HomeShelfType shelf, [BindRequired] string action)
+        public async Task<IActionResult> OnPostHomeAsync([BindRequired] HomeShelfType shelf, [BindRequired] HomeShelfAction action)
         {
             // The whole order is saved; one shelf moves or changes its visibility.
-            if (action is not ("Up" or "Down" or "Hide" or "Show"))
-            {
-                return BadRequest();
-            }
-
             var layout = (await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted)).ToList();
             var index = layout.FindIndex(item => item.HomeShelfTypeId == shelf);
-            var target = action switch { "Up" => index - 1, "Down" => index + 1, _ => index };
+            var target = action switch { HomeShelfAction.Up => index - 1, HomeShelfAction.Down => index + 1, _ => index };
             if (index >= 0 && target >= 0 && target < layout.Count)
             {
                 (layout[index], layout[target]) = (layout[target], layout[index]);
             }
 
-            bool Hidden(HomeShelfV1 item) => item.HomeShelfTypeId != shelf ? item.IsHidden : action switch { "Hide" => true, "Show" => false, _ => item.IsHidden };
+            bool Hidden(HomeShelfV1 item) => item.HomeShelfTypeId != shelf ? item.IsHidden : action switch { HomeShelfAction.Hide => true, HomeShelfAction.Show => false, _ => item.IsHidden };
             var hidden = layout.Where(Hidden).Select(item => item.HomeShelfTypeId.ToString()).ToArray();
             await saveLayout.ExecuteAsync<UpdateResult>(new HomeLayoutParametersV1(), new SaveHomeLayoutDataV1([.. layout.Select(item => item.HomeShelfTypeId.ToString())], hidden),
                 HttpContext.RequestAborted);

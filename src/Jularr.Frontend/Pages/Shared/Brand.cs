@@ -46,8 +46,5 @@ namespace Jularr.Frontend.Pages.Shared
                 .Class(cssClass).Attribute("viewBox", "0 0 48 48")
                 .Attribute("width", "48").Attribute("height", "48").Attribute("focusable", "false");
         }
-
-        private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);
-        private sealed class Use() : HtmlElement("use");
     }
 }

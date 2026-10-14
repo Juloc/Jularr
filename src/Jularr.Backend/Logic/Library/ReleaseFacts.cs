@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 
@@ -28,7 +29,7 @@ namespace Jularr.Backend.Logic.Library
                 return null;
             }
 
-            return new ReleaseFact(Cut(release.RawTitle, 500)!, Cut(group, 64), Cut(quality, 64), Cut(edition, 64), revision);
+            return new ReleaseFact(TextLimit.Cut(release.RawTitle, 500)!, TextLimit.Cut(group, 64), TextLimit.Cut(quality, 64), TextLimit.Cut(edition, 64), revision);
         }
 
         // A scanned file's own name unless its folder says more, as scene folders often do.
@@ -40,8 +41,6 @@ namespace Jularr.Backend.Logic.Library
         }
 
         private static int Score(ReleaseFact? fact) => fact is null ? -1 : (fact.ReleaseGroup is null ? 0 : 2) + (fact.QualityKey is null ? 0 : 1) + (fact.Edition is null ? 0 : 1);
-
-        private static string? Cut(string? value, int length) => value is null || value.Length <= length ? value : value[..length];
 
         [GeneratedRegex(@"\[([A-Za-z]+-\d{3,4}p)\]")]
         private static partial Regex QualityTag();

@@ -12,12 +12,11 @@ namespace Jularr.Backend.Service.Core
         Task RequireTransactionalAccessAsync(ServiceCaller caller, ServicePermission permission, LogicContext context, CancellationToken cancellationToken);
     }
 
-    internal sealed class ServiceRuntime(NpgsqlDataSource database, IServiceGate gate, ServiceTimings? timings = null)
+    internal sealed class ServiceRuntime(NpgsqlDataSource database, IServiceGate gate, ServiceTimings timings)
     {
         public IServiceGate Gate { get; } = gate ?? throw new ArgumentNullException(nameof(gate));
 
-        // Isolated test runtimes time nothing.
-        public ServiceTimings? Timings { get; } = timings;
+        public ServiceTimings Timings { get; } = timings;
 
         public SqlContext CreateSqlContext() => new(database);
 

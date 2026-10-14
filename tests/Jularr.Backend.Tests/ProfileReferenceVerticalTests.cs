@@ -20,7 +20,7 @@ namespace Jularr.Backend.Tests
         {
             await using var fixture = await ProfileFixture.CreateAsync();
             var gate = fixture.NewGate();
-            var service = new ServiceRuntime(fixture.Database, gate).Create<ReadProfileV1>();
+            var service = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System)).Create<ReadProfileV1>();
 
             var own = await service.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(fixture.ProfileAId));
             Assert.AreEqual(fixture.ProfileAId, own.Id);
@@ -40,7 +40,7 @@ namespace Jularr.Backend.Tests
         {
             await using var fixture = await ProfileFixture.CreateAsync();
             var gate = fixture.NewGate();
-            var runtime = new ServiceRuntime(fixture.Database, gate);
+            var runtime = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System));
             var rename = runtime.Create<UpdateProfileV1>();
             runtime.ValidateAll([rename]);
 
@@ -65,7 +65,7 @@ namespace Jularr.Backend.Tests
             await fixture.RunSqlAsync(
                 "INSERT INTO \"AccountProfiles\" (\"AccountId\", \"ProfileId\") VALUES (41, 202)");
 
-            var rename = new ServiceRuntime(fixture.Database, fixture.NewGate()).Create<UpdateProfileV1>();
+            var rename = new ServiceRuntime(fixture.Database, fixture.NewGate(), new ServiceTimings(TimeProvider.System)).Create<UpdateProfileV1>();
 
             await Assert.ThrowsExactlyAsync<KeyNotFoundException>(
                 () => rename.ExecuteAsync<UpdateResult>(
@@ -80,7 +80,7 @@ namespace Jularr.Backend.Tests
         {
             await using var fixture = await ProfileFixture.CreateAsync();
             var gate = fixture.NewGate();
-            var runtime = new ServiceRuntime(fixture.Database, gate);
+            var runtime = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System));
             var read = runtime.Create<ReadProfileV1>();
             var rename = runtime.Create<UpdateProfileV1>();
             var p = new ReadProfileParametersV1(fixture.ProfileAId);
@@ -114,7 +114,7 @@ namespace Jularr.Backend.Tests
             await using var fixture = await ProfileFixture.CreateAsync();
             var gate = fixture.NewGate();
             gate.DenyTransactionalWrite = true;
-            var rename = new ServiceRuntime(fixture.Database, gate).Create<UpdateProfileV1>();
+            var rename = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System)).Create<UpdateProfileV1>();
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
                 () => rename.ExecuteAsync<UpdateResult>(
@@ -129,7 +129,7 @@ namespace Jularr.Backend.Tests
         public async Task InvalidNameRollsBackAndParameterBindingDoesNotInterpretSql()
         {
             await using var fixture = await ProfileFixture.CreateAsync();
-            var rename = new ServiceRuntime(fixture.Database, fixture.NewGate()).Create<UpdateProfileV1>();
+            var rename = new ServiceRuntime(fixture.Database, fixture.NewGate(), new ServiceTimings(TimeProvider.System)).Create<UpdateProfileV1>();
 
             await Assert.ThrowsExactlyAsync<DataValidationException>(
                 () => rename.ExecuteAsync<UpdateResult>(
@@ -152,7 +152,7 @@ namespace Jularr.Backend.Tests
         {
             await using var fixture = await ProfileFixture.CreateAsync();
             var gate = fixture.NewGate();
-            var read = new ServiceRuntime(fixture.Database, gate).Create<ReadProfileV1>();
+            var read = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System)).Create<ReadProfileV1>();
 
             await Assert.ThrowsExactlyAsync<DataValidationException>(
                 () => read.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(0)));
@@ -164,7 +164,7 @@ namespace Jularr.Backend.Tests
         public async Task Update_LateFailure_RollsBackSharedLogicTransaction()
         {
             await using var fixture = await ProfileFixture.CreateAsync();
-            var service = new ServiceRuntime(fixture.Database, fixture.NewGate()).Create(new FailingUpdate());
+            var service = new ServiceRuntime(fixture.Database, fixture.NewGate(), new ServiceTimings(TimeProvider.System)).Create(new FailingUpdate());
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.ExecuteAsync<UpdateResult>(
                 new UpdateProfileParametersV1(fixture.ProfileAId), new UpdateProfileDataV1("Pending")));

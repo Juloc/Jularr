@@ -25,16 +25,6 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class StorageTests
     {
-        [TestMethod]
-        public void Synology_Certificates_NeedAnAuthorityOrTheOwnersTrust()
-        {
-            var selfSigned = new SynologyCertificate(new string('B', 64), false);
-            Assert.IsFalse(SynologyClient.Accepts(null, selfSigned));
-            Assert.IsFalse(SynologyClient.Accepts(new string('C', 64), selfSigned));
-            Assert.IsTrue(SynologyClient.Accepts(new string('b', 64), selfSigned));
-            Assert.IsTrue(SynologyClient.Accepts(null, new SynologyCertificate(new string('D', 64), true)));
-        }
-
         private const string Route = "/api/v1/admin/storage/mounts";
         private const string Password = "nas-password,with=punctuation";
 
@@ -316,6 +306,16 @@ namespace Jularr.Backend.Tests
                 await helper.ContinueWith(_ => { });
                 if (File.Exists(socketPath)) File.Delete(socketPath);
             }
+        }
+
+        [TestMethod]
+        public void Synology_Certificates_NeedAnAuthorityOrTheOwnersTrust()
+        {
+            var selfSigned = new SynologyCertificate(new string('B', 64), false);
+            Assert.IsFalse(SynologyClient.Accepts(null, selfSigned));
+            Assert.IsFalse(SynologyClient.Accepts(new string('C', 64), selfSigned));
+            Assert.IsTrue(SynologyClient.Accepts(new string('b', 64), selfSigned));
+            Assert.IsTrue(SynologyClient.Accepts(null, new SynologyCertificate(new string('D', 64), true)));
         }
 
         [TestMethod]

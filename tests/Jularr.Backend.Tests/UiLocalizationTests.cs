@@ -68,7 +68,7 @@ namespace Jularr.Backend.Tests
             var time = new CatalogClock();
             using var cache = new UiLocalizationCache(time);
             var runtime = new ServiceRuntime(fixture.Database,
-                new ServiceGate(new SessionAuthentication(fixture.Database), new HttpContextAccessor()));
+                new ServiceGate(new SessionAuthentication(fixture.Database), new HttpContextAccessor()), new ServiceTimings(TimeProvider.System));
             var service = runtime.Create(new ReadUiTextsV1(cache));
             var bundle = await service.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(5));
             Assert.AreEqual("Parent A", bundle["a"]);
@@ -97,7 +97,7 @@ namespace Jularr.Backend.Tests
             await using var unavailable = new NpgsqlDataSourceBuilder(
                 "Host=127.0.0.1;Port=1;Username=unused;Database=unused;Timeout=1").Build();
             var offlineRuntime = new ServiceRuntime(unavailable,
-                new ServiceGate(new SessionAuthentication(unavailable), new HttpContextAccessor()));
+                new ServiceGate(new SessionAuthentication(unavailable), new HttpContextAccessor()), new ServiceTimings(TimeProvider.System));
             var offlineService = offlineRuntime.Create(new ReadUiTextsV1(cache));
             Assert.AreEqual("English C", (await offlineService.ExecuteAsync<ReadUiTextsResultV1>(new ReadUiTextsParametersV1(999)))["c"]);
             await Assert.ThrowsExactlyAsync<DataValidationException>(() =>

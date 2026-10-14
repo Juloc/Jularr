@@ -200,7 +200,8 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "FinishedAt") SELECT 3, 3, now() - make_interval(secs => number) FROM generate_series(1, 20000) AS number;
                 """);
             Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new PruneOperationsParametersV1(), default, CancellationToken.None)).Success);
-            Assert.IsTrue((long)(await host.ScalarAsync("SELECT count(*) FROM \"Operations\""))! is > 1000 and < 20000);
+            Assert.IsTrue((long)(await host.ScalarAsync("SELECT count(*) FROM \"Operations\""))! < 20000);
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 3 AND \"FinishedAt\" < now() - interval '19999 seconds'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 3 AND \"FinishedAt\" = (SELECT max(\"FinishedAt\") FROM \"Operations\" WHERE \"OperationTypeId\" = 3)"));
         }
 

@@ -163,7 +163,7 @@ namespace Jularr.Backend.Tests
             using var scope = services.CreateScope();
             SetPrincipal(scope.ServiceProvider, fixture.SessionPublicId, fixture.SessionToken);
             var gate = new AuthorizationChangingGate(scope.ServiceProvider.GetRequiredService<IServiceGate>(), fixture, mutation);
-            var rename = new ServiceRuntime(fixture.Database, gate).Create<UpdateProfileV1>();
+            var rename = new ServiceRuntime(fixture.Database, gate, new ServiceTimings(TimeProvider.System)).Create<UpdateProfileV1>();
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => rename.ExecuteAsync<UpdateResult>(
                 new UpdateProfileParametersV1(fixture.ProfileAId), new UpdateProfileDataV1("Denied")));

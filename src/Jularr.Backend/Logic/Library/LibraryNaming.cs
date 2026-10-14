@@ -11,8 +11,6 @@ namespace Jularr.Backend.Logic.Library
     {
         private static readonly HashSet<char> InvalidNameCharacters = [.. Path.GetInvalidFileNameChars(), '<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
-        // Movies and episodes follow the Admin's pattern for their type.
-        public static string Video(IReadOnlyDictionary<MediaType, string> patterns, MediaType mediaType, NamingValues values) => NamingPattern.Apply(patterns[mediaType], values);
 
         public static string Book(string title, int? year, string? author) =>
             (BookReleaseJudge.Authors(author).FirstOrDefault() is { } writer ? SafeName(writer) + "/" : "") + Folder(title, year) + "/" + SafeName(title);

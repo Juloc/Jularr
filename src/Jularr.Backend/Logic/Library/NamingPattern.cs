@@ -8,7 +8,7 @@ namespace Jularr.Backend.Logic.Library
     // Sonarr-like tokens in braces, numbers padded as in {Season:00}; an empty token takes its brackets with it.
     internal static partial class NamingPattern
     {
-        public static readonly IReadOnlyList<string> Tokens = ["Title", "Year", "Season", "Episode", "Episode Title", "Quality", "Release Group", "Edition", "Proper"];
+        private static readonly IReadOnlyList<string> Tokens = ["Title", "Year", "Season", "Episode", "Episode Title", "Quality", "Release Group", "Edition", "Proper"];
 
         public static void Validate(MediaType mediaType, string pattern, string field)
         {
@@ -51,7 +51,7 @@ namespace Jularr.Backend.Logic.Library
                 }
 
                 var text = Token().Replace(literal, match => LibraryNaming.SafeName(Value(match.Groups["name"].Value, match.Groups["format"].Value, values)));
-                segments.Add(LibraryNaming.SafeName(text.Length > 200 ? text[..200] : text));
+                segments.Add(LibraryNaming.SafeName(TextLimit.Cut(text, 200)!));
             }
 
             return string.Join('/', segments);

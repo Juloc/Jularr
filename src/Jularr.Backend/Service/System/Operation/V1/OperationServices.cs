@@ -159,7 +159,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 }
 
                 var facts = ReleaseFacts.OfPath(file.RelativePath);
-                batch.Add(new ScannedFile(file.RelativePath, file.SizeBytes, file.ModifiedAt, facts?.ReleaseName, facts?.ReleaseGroup, facts?.QualityKey, facts?.Edition, facts?.Revision));
+                batch.Add(new ScannedFile(file.RelativePath, file.SizeBytes, file.ModifiedAt, facts?.ReleaseName, facts?.ReleaseGroup, facts?.QualityKey, facts?.Edition, facts?.Revision ?? 1));
                 if (batch.Count == BatchSize)
                 {
                     processed += await SaveBatchAsync(root.Id, seenAt, batch, processed);
@@ -372,7 +372,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
             }
         }
 
-        private sealed record ScannedFile(string RelativePath, long SizeBytes, DateTime ModifiedAt, string? ReleaseName, string? ReleaseGroup, string? QualityKey, string? Edition, int? Revision);
+        private sealed record ScannedFile(string RelativePath, long SizeBytes, DateTime ModifiedAt, string? ReleaseName, string? ReleaseGroup, string? QualityKey, string? Edition, int Revision);
 
         private sealed record ProbedTrack(int StreamIndex, MediaTrackType MediaTrackTypeId, string? Codec, string? Language, string? Title, int? Width, int? Height, int? Channels,
             bool IsDefault, bool IsForced);

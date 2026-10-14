@@ -32,8 +32,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 return;
             }
 
-            // Ebooks and comics must be what their names say.
             var facts = ReleaseFacts.Of(download.Title);
+
+            // Ebooks and comics must be what their names say.
             var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, patterns, facts,
                     download.Author, download.TrackCount, download.PlatformName)
                 .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
@@ -143,7 +144,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 ReleaseGroup = facts?.ReleaseGroup;
                 QualityKey = facts?.QualityKey;
                 Edition = facts?.Edition;
-                Revision = facts?.Revision;
+                Revision = facts?.Revision ?? 1;
             }
 
             public string RelativePath { get; }
@@ -153,7 +154,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             public string? ReleaseGroup { get; }
             public string? QualityKey { get; }
             public string? Edition { get; }
-            public int? Revision { get; }
+            public int Revision { get; }
         }
     }
 }

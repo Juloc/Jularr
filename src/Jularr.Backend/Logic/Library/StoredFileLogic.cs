@@ -23,7 +23,7 @@ namespace Jularr.Backend.Logic.Library
                     item."ReleaseGroup",
                     item."QualityKey",
                     item."Edition",
-                    coalesce(item."Revision", 1)
+                    item."Revision"
                 FROM
                     jsonb_to_recordset(@Files::jsonb) AS item("RelativePath" text, "SizeBytes" bigint, "ModifiedAt" timestamptz, "ReleaseName" text, "ReleaseGroup" text, "QualityKey" text,
                         "Edition" text, "Revision" smallint)

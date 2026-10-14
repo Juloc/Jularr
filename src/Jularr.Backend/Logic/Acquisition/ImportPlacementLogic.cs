@@ -27,7 +27,7 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files,
-            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts = null, string? author = null, int trackCount = 0, string? platform = null)
+            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null)
         {
             if (mediaType == MediaType.Book)
             {
@@ -51,7 +51,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 // The largest video is the feature.
                 if (videos.MaxBy(video => video.SizeBytes) is { } feature)
                 {
-                    AddGroup(placements, files, feature, LibraryNaming.Video(patterns, MediaType.Movie,
+                    AddGroup(placements, files, feature, NamingPattern.Apply(patterns[MediaType.Movie],
                         new NamingValues(title, year, null, null, null, qualityKey, facts?.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)), null, null, null);
                 }
 
@@ -66,7 +66,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     continue;
                 }
 
-                AddGroup(placements, files, video, LibraryNaming.Video(patterns, MediaType.Series,
+                AddGroup(placements, files, video, NamingPattern.Apply(patterns[MediaType.Series],
                     new NamingValues(title, year, season, episode, null, qualityKey, facts?.ReleaseGroup ?? parsed.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)), WorkUnitType.Episode, episode, season);
             }
 

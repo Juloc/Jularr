@@ -19,7 +19,7 @@ namespace Jularr.Backend.Tests
         };
 
         [TestMethod]
-        public void Patterns_FillTokensAndDropEmptyOnes()
+        public void NamingPattern_EmptyPlaceholders_DropWithTheirBrackets()
         {
             var episode = new NamingValues("Show: Part", 2020, 1, 2.5m, "Pilot", "WEB-1080p", "GRP", null, 2);
             Assert.AreEqual("Show Part/Season 01/Show Part - S01E02.5 [WEB-1080p]", NamingPattern.Apply(Defaults[MediaType.Series], episode));
@@ -41,7 +41,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public void Patterns_RejectUnknownIncompleteAndEmptyParts()
+        public void NamingPattern_UnknownOrIncomplete_IsRejected()
         {
             Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title} {Studio}", "Pattern")).Code);
             Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title} {", "Pattern")).Code);
@@ -53,7 +53,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Patterns_AdminEdits_AreVersionChecked()
+        public async Task NamingPattern_AdminEdit_IsVersionChecked()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);

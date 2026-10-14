@@ -150,7 +150,7 @@ namespace Jularr.Backend.Tests
             await gate.RequireAccessAsync(caller, ServicePermission.Public, default);
             await Assert.ThrowsExactlyAsync<SecurityException>(() => gate.RequireAccessAsync(caller, new("profile.self.read"), default));
 
-            var runtime = new ServiceRuntime(database, gate);
+            var runtime = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System));
             var service = runtime.Create<ParameterlessService>();
             var response = await service.ExecuteAsync<EchoResult>();
             Assert.AreEqual("no parameters", response.Value);

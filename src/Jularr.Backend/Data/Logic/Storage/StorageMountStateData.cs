@@ -79,7 +79,7 @@ namespace Jularr.Backend.Data.Logic.Storage
 
     internal sealed class StorageSynologyData : BaseData
     {
-        public StorageSynologyData(long storageMountId, string? synologyUrl, string? synologyUsername, byte[]? synologyProtectedPassword, string? synologyCertificateSha256 = null)
+        public StorageSynologyData(long storageMountId, string? synologyUrl, string? synologyUsername, byte[]? synologyProtectedPassword, string? synologyCertificateSha256)
         {
             SynologyCertificateSha256 = synologyCertificateSha256;
             StorageMountId = storageMountId;

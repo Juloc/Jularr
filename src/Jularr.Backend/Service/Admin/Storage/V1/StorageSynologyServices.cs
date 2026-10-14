@@ -35,7 +35,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             var password = Data.SynologyUrl is not null && Data.Password is { } clear ? _protector.Protect(Encoding.UTF8.GetBytes(clear)) : null;
             try
             {
-                await Context.UpdateStorageSynologyAsync(new StorageSynologyData(Parameters.StorageMountId, Data.SynologyUrl, Data.SynologyUrl is null ? null : Data.SynologyUsername, password),
+                await Context.UpdateStorageSynologyAsync(new StorageSynologyData(Parameters.StorageMountId, Data.SynologyUrl, Data.SynologyUrl is null ? null : Data.SynologyUsername, password, null),
                     CancellationToken);
             }
             catch (DataValidationException exception) when (exception.Field == nameof(StorageSynologyData.SynologyProtectedPassword))

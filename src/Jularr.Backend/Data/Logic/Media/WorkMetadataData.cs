@@ -9,7 +9,7 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class WorkMetadataData : BaseData
     {
         public WorkMetadataData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,
-            string units, string facts, string providerKey, DateOnly? releasedOn = null)
+            string units, string facts, string providerKey, DateOnly? releasedOn)
         {
             ReleasedOn = releasedOn;
             ProviderKey = providerKey;

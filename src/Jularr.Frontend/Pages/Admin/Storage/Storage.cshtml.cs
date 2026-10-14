@@ -193,14 +193,15 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             }
 
             yield return new Form<StorageMountParametersV1>(form => form.Submit("storage.synology.status"), Address(mount.Id, handler: "SynologyStatus"), csrf, new StorageMountParametersV1(mount.Id));
-            if (mount.SynologyUrl.StartsWith("https:", StringComparison.OrdinalIgnoreCase))
-            {
-                yield return new Form<StorageMountParametersV1>(form => form.Submit("storage.synology.certificate"), Address(mount.Id, handler: "SynologyCertificate"), csrf,
-                    new StorageMountParametersV1(mount.Id));
-            }
+            yield return new Form<StorageMountParametersV1>(form => form.Submit("storage.synology.certificate"), Address(mount.Id, handler: "SynologyCertificate"), csrf,
+                new StorageMountParametersV1(mount.Id));
 
             // A self-signed certificate is trusted once the Owner compared its fingerprint.
-            if (TempData["SynologyCertificate"] is string certificateJson && JsonSerializer.Deserialize<SynologyCertificateV1>(certificateJson) is { Sha256: { } sha256 } certificate)
+            if (TempData["SynologyCertificate"] is string certificateJson && JsonSerializer.Deserialize<SynologyCertificateV1>(certificateJson) is { Sha256: null })
+            {
+                yield return new P(new Text("storage.synology.certificate.none")).Attribute("role", "status");
+            }
+            else if (TempData["SynologyCertificate"] is string presented && JsonSerializer.Deserialize<SynologyCertificateV1>(presented) is { Sha256: { } sha256 } certificate)
             {
                 var state = certificate.IsValid ? "valid" : certificate.IsTrusted ? "trusted" : "untrusted";
                 yield return new P([new Text("storage.synology.certificate." + state), new ValueText(" " + string.Join(':', sha256.Chunk(2).Select(pair => new string(pair))))]).Attribute("role", "status");

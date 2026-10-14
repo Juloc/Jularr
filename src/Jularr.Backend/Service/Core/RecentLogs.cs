@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Jularr.Backend.Data.Common;
 using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Core
@@ -41,7 +42,7 @@ namespace Jularr.Backend.Service.Core
 
                 var message = formatter(state, exception);
                 if (exception is not null) message += " (" + exception.GetType().Name + ": " + exception.Message + ")";
-                owner.Add(new RecentLogEntry(owner.Now(), logLevel, category, message.Length > 2000 ? message[..2000] : message));
+                owner.Add(new RecentLogEntry(owner.Now(), logLevel, category, TextLimit.Cut(message, 2000)!));
             }
         }
 

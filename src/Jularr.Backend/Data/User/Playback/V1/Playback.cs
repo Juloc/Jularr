@@ -309,7 +309,7 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(TrickplayFields), nameof(TrickplayFields.IntervalSeconds))]
         public int IntervalSeconds { get; }
 
-        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Frames))]
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.TrickplayFrames))]
         public int Frames { get; }
 
         [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Tiles))]

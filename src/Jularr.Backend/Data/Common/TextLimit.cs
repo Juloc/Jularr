@@ -1,4 +1,4 @@
-namespace Jularr.Backend.Service.Core
+namespace Jularr.Backend.Data.Common
 {
     // Provider and file text cut to the length its field allows.
     internal static class TextLimit

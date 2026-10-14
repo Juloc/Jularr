@@ -25,7 +25,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var runtime = new ServiceRuntime(database, gate);
+            var runtime = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System));
             var service = runtime.Create(new AccountReadService());
             runtime.ValidateAll([service]);
 
@@ -41,7 +41,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate { BlockModule = true };
-            var service = new ServiceRuntime(database, gate).Create(new AccountReadService());
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountReadService());
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(5)));
@@ -54,7 +54,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var service = new ServiceRuntime(database, gate).Create(new AccountReadService());
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountReadService());
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(
                 () => service.ExecuteAsync<PrivateAccountResult>(new AccountParameters(5)));
@@ -67,7 +67,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var service = new ServiceRuntime(database, gate).Create(new AccountListService());
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountListService());
 
             await Assert.ThrowsExactlyAsync<ArgumentOutOfRangeException>(
                 () => service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(1, 25, (ListSort)255)));
@@ -83,7 +83,7 @@ namespace Jularr.Backend.Tests
         public async Task UserList_PageHook_IsEvaluatedOnceAndUsedBySql()
         {
             await using var database = CreateDataSource();
-            var service = new ServiceRuntime(database, new TestGate()).Create(new AccountListService());
+            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new AccountListService());
 
             var result = await service.ExecuteAsync<PageResult<AccountResult>>(new ListParameters(2, 1, null));
 
@@ -104,7 +104,7 @@ namespace Jularr.Backend.Tests
             }
 
             var gate = new TestGate { Area = ServiceArea.Admin };
-            var service = new ServiceRuntime(database, gate).Create(new AccountWriteService(new AccountWorkflowLogic()));
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new AccountWriteService(new AccountWorkflowLogic()));
 
             var error = await Assert.ThrowsExactlyAsync<PostgresException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(5), new AccountData("test", Duplicate: true)));
@@ -129,7 +129,7 @@ namespace Jularr.Backend.Tests
             }
 
             var gate = new TestGate { Area = ServiceArea.System };
-            var service = new ServiceRuntime(database, gate).Create(new SystemBatchService());
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService());
 
             var error = await Assert.ThrowsExactlyAsync<PostgresException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("batch")));
@@ -156,7 +156,7 @@ namespace Jularr.Backend.Tests
             }
 
             var gate = new TestGate { Area = ServiceArea.System, BlockSecondTransaction = true };
-            var service = new ServiceRuntime(database, gate).Create(new SystemBatchService());
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService());
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("blocked")));
@@ -171,7 +171,7 @@ namespace Jularr.Backend.Tests
         public async Task ReadService_CannotObtainLogicWriteCapability()
         {
             await using var database = CreateDataSource();
-            var service = new ServiceRuntime(database, new TestGate()).Create(new ReadWithForbiddenLogicService());
+            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new ReadWithForbiddenLogicService());
 
             var result = await service.ExecuteAsync<AccountResult>(new AccountParameters(6));
             Assert.AreEqual("blocked", result.Name);
@@ -188,7 +188,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate();
-            var service = new ServiceRuntime(database, gate).Create(new HookReadService());
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new HookReadService());
 
             await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(
                 () => service.ExecuteAsync<AccountResult>(new AccountParameters(999)));
@@ -202,7 +202,7 @@ namespace Jularr.Backend.Tests
         public async Task OnRead_ConcurrentCalls_KeepInvocationStateIsolated()
         {
             await using var database = CreateDataSource();
-            var service = new ServiceRuntime(database, new TestGate()).Create(new HookReadService());
+            var service = new ServiceRuntime(database, new TestGate(), new ServiceTimings(TimeProvider.System)).Create(new HookReadService());
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var first = service.ExecuteAsync<AccountResult>(new AccountParameters(11), timeout.Token);
             var second = service.ExecuteAsync<AccountResult>(new AccountParameters(22), timeout.Token);
@@ -330,7 +330,7 @@ namespace Jularr.Backend.Tests
         {
             await using var database = CreateDataSource();
             var gate = new TestGate { Area = ServiceArea.System, BlockModule = true };
-            var service = new ServiceRuntime(database, gate).Create(new SystemBatchService(requireModule: true));
+            var service = new ServiceRuntime(database, gate, new ServiceTimings(TimeProvider.System)).Create(new SystemBatchService(requireModule: true));
 
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.ExecuteAsync<AccountResult>(new AccountParameters(9), new AccountData("blocked")));
             Assert.AreEqual(0, service.HookCalls);

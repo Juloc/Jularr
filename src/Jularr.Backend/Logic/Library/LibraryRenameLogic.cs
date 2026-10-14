@@ -147,8 +147,8 @@ namespace Jularr.Backend.Logic.Library
 
             return (file.MediaTypeId, file.WorkUnitTypeId) switch
             {
-                (MediaType.Movie, null) => LibraryNaming.Video(patterns, MediaType.Movie, Values(file, title, null, null)),
-                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => LibraryNaming.Video(patterns, MediaType.Series, Values(file, title, season, file.UnitNumber)),
+                (MediaType.Movie, null) => NamingPattern.Apply(patterns[MediaType.Movie], Values(file, title, null, null)),
+                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => NamingPattern.Apply(patterns[MediaType.Series], Values(file, title, season, file.UnitNumber)),
                 (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => LibraryNaming.Volume(title, file.UnitNumber),
                 (MediaType.Book, null) => LibraryNaming.Book(title, file.ReleaseYear, file.Author),
                 (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is { } name => LibraryNaming.Track(file.Author, title, file.ReleaseYear, file.UnitNumber!.Value, name),

@@ -27,7 +27,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.storage_wake_failed", "The Wake-on-LAN packet could not be sent."),
             new("errors.scan_incomplete", "Some folders could not be read. Nothing was marked as missing."),
             new("errors.synology_unavailable", "The Synology NAS could not be reached at its DSM address."),
-            new("errors.synology_certificate_untrusted", "The NAS presents a certificate nobody vouches for. Check and trust it below."),
+            new("errors.synology_certificate_untrusted", "The NAS presents a certificate nobody vouches for."),
             new("errors.synology_login_failed", "DSM rejected the account or password."),
             new("errors.synology_two_factor", "This DSM account uses two-step verification; use an administrator account without it."),
             new("errors.synology_not_admin", "This DSM account may not read health or change power; use an administrator account."),
