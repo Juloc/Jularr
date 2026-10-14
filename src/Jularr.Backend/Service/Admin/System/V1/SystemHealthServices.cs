@@ -2,7 +2,6 @@ using Jularr.Backend.Data.Admin.System.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
-using Jularr.Backend.Data.User.Statistics.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Database;
@@ -80,7 +79,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
                 new("mountHelper", _mounts.IsConfigured),
                 new("pgDump", _backups.CanBackUp)
             ];
-            var lastBackup = _backupOptions.Path is { } path ? BackupFiles.List(path).FirstOrDefault()?.CreatedAt : null;
+            var lastBackup = _backupOptions.Path is { } path ? BackupFiles.Newest(path) : null;
             return new SystemHealthV1(totals.DatabaseBytes, totals.QueuedOperations, totals.FailedOperations, totals.Profiles, totals.StorageOffline, lastBackup,
                 new BaseDataList<ToolStateV1>(tools), new BaseDataList<MediaTypeCountV1>(library));
         }

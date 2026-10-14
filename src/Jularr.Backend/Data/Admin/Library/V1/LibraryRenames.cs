@@ -45,17 +45,13 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     // One page of the whole plan; applying needs the fingerprint of exactly this plan.
     public sealed class LibraryRenamePlanV1 : BaseResponse
     {
-        public LibraryRenamePlanV1(BaseDataList<LibraryRenameV1> items, long totalCount, string fingerprint)
+        public LibraryRenamePlanV1(BaseDataList<LibraryRenameV1> items, string fingerprint)
         {
             Items = items;
-            TotalCount = totalCount;
             Fingerprint = fingerprint;
         }
 
         public BaseDataList<LibraryRenameV1> Items { get; }
-
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]
-        public long TotalCount { get; }
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RenameFingerprint))]
         public string Fingerprint { get; }

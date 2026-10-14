@@ -342,6 +342,15 @@ namespace Jularr.Backend.Tests
             using var shutdown = await host.SendAsync(HttpMethod.Post, route + "/power", new PowerStorageSynologyDataV1(SynologyPowerType.Shutdown));
             Assert.AreEqual(HttpStatusCode.OK, shutdown.StatusCode, await shutdown.Content.ReadAsStringAsync());
             CollectionAssert.AreEqual(new[] { "login", "shutdown" }, dsm.Methods);
+
+            // A lost answer counts as sent; a refusal does not.
+            dsm.DropPower = true;
+            using var dropped = await host.SendAsync(HttpMethod.Post, route + "/power", new PowerStorageSynologyDataV1(SynologyPowerType.Restart));
+            Assert.AreEqual(HttpStatusCode.OK, dropped.StatusCode, await dropped.Content.ReadAsStringAsync());
+            dsm.DropPower = false;
+            dsm.RefusePower = true;
+            using var refused = await host.SendAsync(HttpMethod.Post, route + "/power", new PowerStorageSynologyDataV1(SynologyPowerType.Restart));
+            StringAssert.Contains(await refused.Content.ReadAsStringAsync(), "synology_not_admin");
             dsm.RejectLogin = true;
             using var rejected = await host.SendAsync(HttpMethod.Post, route + "/status");
             StringAssert.Contains(await rejected.Content.ReadAsStringAsync(), "synology_login_failed");
@@ -366,6 +375,8 @@ namespace Jularr.Backend.Tests
             public List<string> Addresses { get; } = [];
             public string? Password { get; private set; }
             public bool RejectLogin { get; set; }
+            public bool DropPower { get; set; }
+            public bool RefusePower { get; set; }
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
@@ -374,9 +385,11 @@ namespace Jularr.Backend.Tests
                 var method = form["method"]!;
                 Methods.Add(method);
                 if (method == "login") Password = form["passwd"];
+                if (method == "reboot" && DropPower) throw new HttpRequestException("The NAS went down.");
                 var body = method switch
                 {
                     "login" when RejectLogin => "{\"success\":false,\"error\":{\"code\":400}}",
+                    "reboot" when RefusePower => "{\"success\":false,\"error\":{\"code\":105}}",
                     "login" => "{\"success\":true,\"data\":{\"sid\":\"session-1\"}}",
                     "info" => "{\"success\":true,\"data\":{\"model\":\"DS920+\",\"firmware_ver\":\"DSM 7.2\",\"sys_temp\":41}}",
                     "load_info" => "{\"success\":true,\"data\":{\"volumes\":[{\"vol_path\":\"/volume1\",\"status\":\"normal\",\"size\":{\"total\":\"8000000000000\",\"used\":\"2000000000000\"}}],\"disks\":[{\"name\":\"Drive 1\",\"model\":\"WD80EFZZ \",\"status\":\"normal\",\"temp\":36}]}}",

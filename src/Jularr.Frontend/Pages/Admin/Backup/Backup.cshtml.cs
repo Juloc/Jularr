@@ -33,11 +33,13 @@ namespace Jularr.Frontend.Pages.Admin.Backup
                 page.Content.Add(new Form<BackupsParametersV1>(form => form.Submit("admin.backup.create"), Home + "?handler=Create", csrf, new BackupsParametersV1()));
             }
 
-            page.Content.Add(new Table<BackupV1>(backups.Items)
-                .Content("admin.backup.createdAt", item => new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))
-                .Content("table.size", item => new ValueText(ByteSize.Format(item.SizeBytes)))
-                .Content("admin.backup.compatible", item => new Text(item.IsCompatible ? "common.yes" : "admin.backup.otherVersion"))
-                .Content("common.actions", item => new Div([.. Actions(item, backups.CanRestore, csrf)]).Class("backup__actions")));
+            page.Content.Add(backups.Items.Count > 0
+                ? new Table<BackupV1>(backups.Items)
+                    .Content("admin.backup.createdAt", item => new ValueText(item.CreatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))
+                    .Content("table.size", item => new ValueText(ByteSize.Format(item.SizeBytes)))
+                    .Content("admin.backup.compatible", item => new Text(item.IsCompatible ? "common.yes" : "admin.backup.otherVersion"))
+                    .Content("common.actions", item => new Div([.. Actions(item, backups.CanRestore, csrf)]).Class("backup__actions"))
+                : new P(new Text("admin.backup.empty")));
         }
 
         private IEnumerable<IUiComponent> Actions(BackupV1 item, bool canRestore, string? csrf)

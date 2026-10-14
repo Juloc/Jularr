@@ -18,11 +18,12 @@ namespace Jularr.Frontend.Pages.User.Collections
         {
             page.Title("collections.title");
             page.Navigation("collections.title");
-            page.Content.Add(new Table<CollectionV1>(_collections)
-                .Content("collections.name", item => new A(new ValueText(item.Name)).Attribute("href", "/Collections/" + item.Id.ToString(CultureInfo.InvariantCulture)))
-                .Content("collections.kind", item => new Text(item.IsSmart ? "collections.smart" : "collections.manual"))
-                .Content("collections.works", item => new ValueText(item.WorkCount?.ToString(CultureInfo.CurrentCulture) ?? "")));
-            if (_collections.Count == 0) page.Content.Add(new P(new Text("collections.empty")));
+            page.Content.Add(_collections.Count > 0
+                ? new Table<CollectionV1>(_collections)
+                    .Content("collections.name", item => new A(new ValueText(item.Name)).Attribute("href", "/Collections/" + item.Id.ToString(CultureInfo.InvariantCulture)))
+                    .Content("collections.kind", item => new Text(item.IsSmart ? "collections.smart" : "collections.manual"))
+                    .Content("table.titles", item => new ValueText(item.WorkCount?.ToString(CultureInfo.CurrentCulture) ?? ""))
+                : new P(new Text("collections.empty")));
 
             page.Content.Add(new UiSection("collections.new", [new Form<CreateCollectionDataV1>(form =>
             {

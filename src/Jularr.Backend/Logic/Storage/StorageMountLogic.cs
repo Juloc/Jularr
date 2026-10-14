@@ -89,48 +89,32 @@ namespace Jularr.Backend.Logic.Storage
             }
         }
 
-        public static Task<StorageSynologyData> ReadStorageSynologyAsync(this LogicContext ctx, long storageMountId, bool forUpdate, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement = forUpdate
-                ? """
-                  SELECT
-                      mount."Id" AS "StorageMountId",
-                      mount."SynologyUrl",
-                      mount."SynologyUsername",
-                      mount."SynologyProtectedPassword"
-                  FROM
-                      "StorageMounts" AS mount
-                  WHERE
-                      mount."Id" = @StorageMountId
-                  FOR UPDATE;
-                  """
-                : """
-                  SELECT
-                      mount."Id" AS "StorageMountId",
-                      mount."SynologyUrl",
-                      mount."SynologyUsername",
-                      mount."SynologyProtectedPassword"
-                  FROM
-                      "StorageMounts" AS mount
-                  WHERE
-                      mount."Id" = @StorageMountId;
-                  """;
-            sql.Parameters.Add(new StorageMountParameters(storageMountId));
-            return forUpdate ? ctx.ReadRequiredAsync<StorageSynologyData>(sql, ct) : ctx.ReadSql.ReadRequiredAsync<StorageSynologyData>(sql, ct);
-        }
-
         // DSM access is no mount setting: the mount's version stays. A stored password never follows another address or account.
         public static async Task UpdateStorageSynologyAsync(this LogicContext ctx, StorageSynologyData data, CancellationToken ct)
         {
-            var current = await ctx.ReadStorageSynologyAsync(data.StorageMountId, true, ct);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    mount."Id" AS "StorageMountId",
+                    mount."SynologyUrl",
+                    mount."SynologyUsername",
+                    mount."SynologyProtectedPassword"
+                FROM
+                    "StorageMounts" AS mount
+                WHERE
+                    mount."Id" = @StorageMountId
+                FOR UPDATE;
+                """;
+            sql.Parameters.Add(new StorageMountParameters(data.StorageMountId));
+            var current = await ctx.ReadRequiredAsync<StorageSynologyData>(sql, ct);
             if (data.SynologyUrl is not null && data.SynologyProtectedPassword is null
                 && (current.SynologyProtectedPassword is null || current.SynologyUrl != data.SynologyUrl || current.SynologyUsername != data.SynologyUsername))
             {
                 throw new DataValidationException(nameof(StorageSynologyData.SynologyProtectedPassword), "required");
             }
 
-            var sql = new SqlStatement();
+            sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE

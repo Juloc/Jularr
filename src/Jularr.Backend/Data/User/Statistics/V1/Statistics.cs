@@ -18,7 +18,7 @@ namespace Jularr.Backend.Data.User.Statistics.V1
 
     public sealed class ProfileStatisticsV1 : BaseResponse
     {
-        public ProfileStatisticsV1(long watchedMs, long sessions, long gamePlayedMs, BaseDataList<MediaTypeCountV1> completed, BaseDataList<WorkTimeV1> topWorks)
+        public ProfileStatisticsV1(long watchedMs, long sessions, long gamePlayedMs, BaseDataList<MediaTypeCompletedV1> completed, BaseDataList<WorkTimeV1> topWorks)
         {
             WatchedMs = watchedMs;
             Sessions = sessions;
@@ -38,18 +38,17 @@ namespace Jularr.Backend.Data.User.Statistics.V1
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.DurationMs))]
         public long GamePlayedMs { get; }
 
-        public BaseDataList<MediaTypeCountV1> Completed { get; }
+        public BaseDataList<MediaTypeCompletedV1> Completed { get; }
 
         public BaseDataList<WorkTimeV1> TopWorks { get; }
     }
 
-    public sealed class MediaTypeCountV1 : BaseResponse
+    public sealed class MediaTypeCompletedV1 : BaseResponse
     {
-        public MediaTypeCountV1(MediaType mediaTypeId, long count, long bytes = 0)
+        public MediaTypeCompletedV1(MediaType mediaTypeId, long count)
         {
             MediaTypeId = mediaTypeId;
             Count = count;
-            Bytes = bytes;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
@@ -57,9 +56,6 @@ namespace Jularr.Backend.Data.User.Statistics.V1
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Count))]
         public long Count { get; }
-
-        [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Bytes))]
-        public long Bytes { get; }
     }
 
     public sealed class WorkTimeV1 : BaseResponse

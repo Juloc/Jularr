@@ -42,7 +42,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                 ORDER BY
                     collection."Name",
                     collection."Id"
-                LIMIT 500;
+                LIMIT 100;
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return new BaseDataList<CollectionV1>(await Context.ReadSql.ReadListAsync<CollectionV1>(sql, CancellationToken));
@@ -221,7 +221,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                 ORDER BY
                     collection."Name",
                     collection."Id"
-                LIMIT 500;
+                LIMIT 100;
                 """;
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));

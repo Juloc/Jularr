@@ -161,7 +161,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             var renames = LibraryRenameLogic.Plan(await Context.ReadLibraryRenameFilesAsync(CancellationToken));
             var items = renames.Skip((Page.Page - 1) * Page.PageSize).Take(Page.PageSize)
                 .Select(rename => new LibraryRenameV1(rename.StoredFileId, rename.LibraryRootName, rename.RelativePath, rename.TargetPath));
-            return new LibraryRenamePlanV1(new BaseDataList<LibraryRenameV1>(items), renames.Count, LibraryRenameLogic.Fingerprint(renames));
+            return new LibraryRenamePlanV1(new BaseDataList<LibraryRenameV1>(items), LibraryRenameLogic.Fingerprint(renames));
         }
     }
 

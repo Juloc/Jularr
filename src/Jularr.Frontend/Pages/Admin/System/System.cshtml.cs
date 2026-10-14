@@ -1,6 +1,5 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.System.V1;
-using Jularr.Backend.Data.User.Statistics.V1;
 using Jularr.Backend.Service.Admin.System.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Mvc;
@@ -28,9 +27,9 @@ namespace Jularr.Frontend.Pages.Admin.System
             page.Content.Add(new UiSection("system.tools", [new Table<ToolStateV1>(health.Tools)
                 .Content("system.tool", item => new Text("system.tool." + item.Key))
                 .Content("table.status", item => new Text(item.IsAvailable ? "system.configured" : "system.missing"))]));
-            page.Content.Add(new UiSection("system.library", [new Table<MediaTypeCountV1>(health.Library)
+            page.Content.Add(new UiSection("nav.library", [new Table<MediaTypeCountV1>(health.Library)
                 .Content("table.type", item => new Text("media.type." + item.MediaTypeId))
-                .Content("system.works", item => new ValueText(item.Count.ToString(CultureInfo.CurrentCulture)))
+                .Content("table.titles", item => new ValueText(item.Count.ToString(CultureInfo.CurrentCulture)))
                 .Content("table.size", item => new ValueText(ByteSize.Format(item.Bytes)))]));
         }
 

@@ -32,9 +32,9 @@ namespace Jularr.Integrations.Logic.Synology
             {
                 await CallAsync(access.BaseAddress, session, new() { ["api"] = "SYNO.Core.System", ["version"] = "1", ["method"] = restart ? "reboot" : "shutdown" }, ct);
             }
-            catch (SynologyException exception) when (exception.Code == "synology_unavailable")
+            catch (SynologyException exception) when (exception.InnerException is HttpRequestException or TaskCanceledException or JsonException)
             {
-                // Sent; the answer was lost.
+                // Sent; the answer was lost. DSM refusals still surface.
             }
         }
 
@@ -86,7 +86,7 @@ namespace Jularr.Integrations.Logic.Synology
             }
             catch (Exception exception) when (exception is HttpRequestException or JsonException or TaskCanceledException && !ct.IsCancellationRequested)
             {
-                throw new SynologyException("synology_unavailable");
+                throw new SynologyException("synology_unavailable", exception);
             }
 
             using (document)

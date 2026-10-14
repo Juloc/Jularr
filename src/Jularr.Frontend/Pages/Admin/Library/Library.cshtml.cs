@@ -3,10 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Admin.Library.V1;
-using Jularr.Backend.Service.Core;
-using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -22,12 +19,11 @@ namespace Jularr.Frontend.Pages.Admin.Library
     }
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
-        ApplyLibraryRenamesV1 applyRenames, ReadAuthenticationV1 authentication, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ApplyLibraryRenamesV1 applyRenames, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const int RenamePageSize = 100;
         private PageResult<LibraryFileDetailsV1>? _files;
         private LibraryRenamePlanV1? _renames;
-        private bool _canRename;
         private long? _failedFileId;
 
         [BindProperty(SupportsGet = true)]
@@ -40,7 +36,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
         {
             page.Title("admin.library.title");
             page.Navigation("nav.admin");
-            page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>().Where(tab => tab != LibraryTab.Rename || _canRename)
+            page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>().Where(tab => tab != LibraryTab.Rename || CanRename)
                 .Select(tab => new NavigationTab("library.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.library.title"));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
@@ -57,8 +53,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     : table.Content("table.work", item => item.WorkId is { } workId
                         ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), Release(item, csrf))
                         : new Text("library.unmatched"));
-                page.Content.Add(table);
-                if (files.Items.Count == 0) page.Content.Add(new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty")));
+                page.Content.Add(files.Items.Count > 0 ? table : new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty")));
                 Paging(page, files.Page, files.Items.Count == files.PageSize);
             }
 
@@ -69,16 +64,17 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["library.renamed"], renamed, skipped))).Attribute("role", "status"));
                 }
 
-                page.Content.Add(new Table<LibraryRenameV1>(renames.Items)
-                    .Text(item => item.LibraryRootName, "library.root")
-                    .Text(item => item.RelativePath, "library.file")
-                    .Text(item => item.TargetPath, "library.renameTarget"));
                 if (renames.Items.Count == 0)
                 {
                     page.Content.Add(new P(new Text("library.renameEmpty")));
                 }
                 else
                 {
+                    page.Content.Add(new Table<LibraryRenameV1>(renames.Items)
+                        .Text(item => item.LibraryRootName, "library.root")
+                        .Text(item => item.RelativePath, "library.file")
+                        .Text(item => item.TargetPath, "library.renameTarget"));
+
                     // Files move only for the confirmed plan.
                     page.Content.Add(new Form<ApplyLibraryRenamesDataV1>(form =>
                     {
@@ -87,7 +83,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     }, Address(handler: "Rename"), csrf, new ApplyLibraryRenamesDataV1(renames.Fingerprint)));
                 }
 
-                Paging(page, PageNumber, PageNumber * RenamePageSize < renames.TotalCount);
+                Paging(page, PageNumber, renames.Items.Count == RenamePageSize);
             }
 
             if (FormError is not null && _failedFileId is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -157,9 +153,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            var auth = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: ct);
-            _canRename = auth.Permissions.Contains(ServiceApi.StorageReadPolicyName, StringComparer.Ordinal);
-            if (Tab == LibraryTab.Rename && !_canRename)
+            if (Tab == LibraryTab.Rename && !CanRename)
             {
                 Tab = LibraryTab.Files;
             }
@@ -178,6 +172,8 @@ namespace Jularr.Frontend.Pages.Admin.Library
             if (current > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(current - 1)));
             if (hasNext) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(current + 1)));
         }
+
+        private bool CanRename => texts.Capabilities?.CanManageStorage is true;
 
         private string Address(int? pageNumber = null, LibraryTab? tab = null, string? handler = null) =>
             "/Admin/Library?Tab=" + (tab ?? Tab) + "&PageNumber=" + (pageNumber ?? (tab is null ? PageNumber : 1)).ToString(CultureInfo.InvariantCulture)

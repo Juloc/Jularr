@@ -66,7 +66,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var access = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageSynologyAsync(Parameters.StorageMountId, false, ct), CancellationToken);
+            var access = await Context.ExecuteBatchAsync((ctx, ct) => StorageSynology.ReadAccessAsync(ctx, Parameters.StorageMountId, ct), CancellationToken);
             var status = await StorageSynology.RunAsync(access, _protector, credentials => _synology.ReadStatusAsync(credentials, CancellationToken));
             return new SynologyStatusV1(status.Model, status.Version, status.Temperature,
                 new BaseDataList<SynologyVolumeV1>(status.Volumes.Select(volume => new SynologyVolumeV1(volume.Name, volume.Status, volume.TotalBytes, volume.UsedBytes))),
@@ -93,7 +93,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            var access = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageSynologyAsync(Parameters.StorageMountId, false, ct), CancellationToken);
+            var access = await Context.ExecuteBatchAsync((ctx, ct) => StorageSynology.ReadAccessAsync(ctx, Parameters.StorageMountId, ct), CancellationToken);
             await StorageSynology.RunAsync(access, _protector, async credentials =>
             {
                 await _synology.PowerAsync(credentials, Data.SynologyPowerTypeId == SynologyPowerType.Restart, CancellationToken);
@@ -106,6 +106,25 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
     // Decrypts the DSM password for one call and maps DSM failures to service errors.
     internal static class StorageSynology
     {
+        public static Task<StorageSynologyData> ReadAccessAsync(LogicContext ctx, long storageMountId, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    mount."Id" AS "StorageMountId",
+                    mount."SynologyUrl",
+                    mount."SynologyUsername",
+                    mount."SynologyProtectedPassword"
+                FROM
+                    "StorageMounts" AS mount
+                WHERE
+                    mount."Id" = @StorageMountId;
+                """;
+            sql.Parameters.Add(new StorageMountParameters(storageMountId));
+            return ctx.ReadSql.ReadRequiredAsync<StorageSynologyData>(sql, ct);
+        }
+
         public static async Task<T> RunAsync<T>(StorageSynologyData access, IDataProtector protector, Func<SynologyAccess, Task<T>> call)
         {
             if (access is not { SynologyUrl: { } url, SynologyUsername: { } username, SynologyProtectedPassword: { } protectedPassword })

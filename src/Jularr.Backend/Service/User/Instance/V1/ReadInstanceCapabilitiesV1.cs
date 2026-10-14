@@ -57,7 +57,9 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 notifications && permissions.Contains("profile.notifications", StringComparer.Ordinal),
                 library && collections && permissions.Contains("profile.collections", StringComparer.Ordinal),
                 library && calendar && permissions.Contains("profile.media.read", StringComparer.Ordinal),
-                library && statistics && permissions.Contains("profile.media.read", StringComparer.Ordinal));
+                library && statistics && permissions.Contains("profile.media.read", StringComparer.Ordinal),
+                permissions.Contains("instance.settings.read", StringComparer.Ordinal),
+                library && permissions.Contains("storage.update", StringComparer.Ordinal));
         }
     }
 }

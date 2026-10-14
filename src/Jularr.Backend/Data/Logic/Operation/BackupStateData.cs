@@ -32,4 +32,16 @@ namespace Jularr.Backend.Data.Logic.Operation
         [DataField(typeof(BackupFields), nameof(BackupFields.CanRestore))]
         public bool CanRestore { get; }
     }
+
+    // Only an instance that has not finished setup is replaced.
+    internal sealed class BackupRestoreData : BaseData
+    {
+        public BackupRestoreData(bool canRestore)
+        {
+            CanRestore = canRestore;
+        }
+
+        [DataField(typeof(BackupFields), nameof(BackupFields.CanRestore))]
+        public bool CanRestore { get; }
+    }
 }

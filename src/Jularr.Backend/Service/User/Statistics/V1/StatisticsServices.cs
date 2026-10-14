@@ -59,8 +59,7 @@ namespace Jularr.Backend.Service.User.Statistics.V1
                 """
                 SELECT
                     work."MediaTypeId",
-                    count(*) AS "Count",
-                    0::bigint AS "Bytes"
+                    count(*) AS "Count"
                 FROM
                     "MediaProgress" AS progress
                     JOIN "Works" AS work ON work."Id" = progress."WorkId"
@@ -74,7 +73,7 @@ namespace Jularr.Backend.Service.User.Statistics.V1
                     work."MediaTypeId";
                 """;
             sql.Parameters.Add(scope);
-            var completed = await Context.ReadSql.ReadListAsync<MediaTypeCountV1>(sql, CancellationToken);
+            var completed = await Context.ReadSql.ReadListAsync<MediaTypeCompletedV1>(sql, CancellationToken);
 
             // The five Works with the most time in the player.
             sql = new SqlStatement();
@@ -101,7 +100,7 @@ namespace Jularr.Backend.Service.User.Statistics.V1
                 """;
             sql.Parameters.Add(scope);
             var top = await Context.ReadSql.ReadListAsync<WorkTimeV1>(sql, CancellationToken);
-            return new ProfileStatisticsV1(totals.WatchedMs, totals.Sessions, totals.GamePlayedMs, new BaseDataList<MediaTypeCountV1>(completed), new BaseDataList<WorkTimeV1>(top));
+            return new ProfileStatisticsV1(totals.WatchedMs, totals.Sessions, totals.GamePlayedMs, new BaseDataList<MediaTypeCompletedV1>(completed), new BaseDataList<WorkTimeV1>(top));
         }
     }
 }

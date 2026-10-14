@@ -38,9 +38,13 @@ namespace Jularr.Frontend.Pages.Shared
                 mobile.Add(watchlist);
             }
 
-            if (texts.Capabilities?.CanManageMedia is true)
+            if (texts.Capabilities?.CanAdminister is true)
             {
                 secondary.Add(new ShellLink("system.title", "/Admin/System", "server"));
+            }
+
+            if (texts.Capabilities?.CanManageMedia is true)
+            {
                 secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
                 secondary.Add(new ShellLink("admin.library.title", "/Admin/Library", "library"));
                 secondary.Add(new ShellLink("admin.activity.title", "/Admin/Activity", "settings"));
@@ -77,7 +81,7 @@ namespace Jularr.Frontend.Pages.Shared
             if (texts.Capabilities?.CanNotify is true)
             {
                 var unread = texts.UnreadNotifications;
-                header.Add(new A(new Icon("bell", assets), unread > 0 ? new Span(new ValueText(unread > 99 ? "99+" : unread.ToString(System.Globalization.CultureInfo.CurrentCulture))).Class("app-notifications__count") : new Span())
+                header.Add(new A([new Icon("bell", assets), .. unread > 0 ? new IUiComponent[] { new Span(new ValueText(unread > 99 ? "99+" : unread.ToString(System.Globalization.CultureInfo.CurrentCulture))).Class("app-notifications__count") } : []])
                     .Class("app-notifications" + (currentPath.StartsWith("/Notifications", StringComparison.OrdinalIgnoreCase) ? " is-active" : ""))
                     .Attribute("href", "/Notifications")
                     .Attribute("aria-label", unread > 0 ? string.Format(System.Globalization.CultureInfo.CurrentCulture, texts["notifications.unread"], unread) : texts["notifications.title"]));

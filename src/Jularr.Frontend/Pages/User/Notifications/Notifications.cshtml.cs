@@ -46,10 +46,7 @@ namespace Jularr.Frontend.Pages.User.Notifications
 
             // One switch per kind of notice.
             var states = new[] { new SelectOption("False", texts["notifications.on"]), new SelectOption("True", texts["notifications.off"]) };
-            // Failures and storage concern managers only.
-            var staff = texts.Capabilities?.CanManageMedia is true;
-            var settings = _settings.Where(setting => staff || setting.NotificationTypeId is not (NotificationType.DownloadFailed or NotificationType.StorageOffline));
-            page.Content.Add(new UiSection("notifications.settings", [.. settings.Select(setting => (IUiComponent)new Form<UpdateNotificationSettingDataV1>(form =>
+            page.Content.Add(new UiSection("notifications.settings", [.. _settings.Select(setting => (IUiComponent)new Form<UpdateNotificationSettingDataV1>(form =>
             {
                 form.Hidden(item => item.NotificationTypeId);
                 form.Select(item => item.IsMuted, "notifications.type." + setting.NotificationTypeId, states);

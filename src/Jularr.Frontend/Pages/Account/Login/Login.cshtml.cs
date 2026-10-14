@@ -33,17 +33,17 @@ namespace Jularr.Frontend.Pages.Account.Login
             var action = Url.Page("/Account/Login/Login", new { returnUrl = SafeReturnUrl(Request.Query["ReturnUrl"]) })!;
             var token = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            page.Content.Add(new Section(
+            page.Content.Add(new Section([
                 new Brand(assets, login: true),
                 new H1(new Text("account.login.title")).Class("visually-hidden"),
-                TempData["BackupRestored"] is true ? new P(new Text("admin.backup.restored")).Attribute("role", "status") : new Span(),
+                .. TempData["BackupRestored"] is true ? new IUiComponent[] { new P(new Text("admin.backup.restored")).Attribute("role", "status") } : [],
                 new Form<LoginDataV1>(form =>
                 {
                     form.Text(x => x.Email, "account.field.email", "username");
                     form.Password(x => x.Password, "account.field.password", "current-password");
                     form.Submit("account.login.submit");
                 }, action, token, new LoginDataV1(_email, ""), FormError)
-            ).Class("auth-card"));
+            ]).Class("auth-card"));
             page.Content.Add(new Appearance(collapsible: true));
 
             // Advertise configured methods only.

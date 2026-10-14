@@ -395,7 +395,7 @@ namespace Jularr.Backend.Tests
             File.WriteAllText(Path.Combine(movies, "Second Movie", "Second Movie.mkv"), "unscanned");
             using var blockedPreview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
             var blockedPlan = (await blockedPreview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
-            Assert.AreEqual(2L, blockedPlan.TotalCount);
+            Assert.AreEqual(2, blockedPlan.Items.Count);
             using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(blockedPlan.Fingerprint));
             var blockedResult = (await blocked.Content.ReadFromJsonAsync<ApplyLibraryRenamesResultV1>())!;
             Assert.AreEqual(0, blockedResult.RenamedCount);

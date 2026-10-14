@@ -139,15 +139,13 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
                 sql.Statement =
                     """
                     SELECT
-                        FALSE AS "IsRunning",
-                        NULL::varchar AS "ErrorKey",
                         setup."CompletedAt" IS NULL AS "CanRestore"
                     FROM
                         "InstanceSetupState" AS setup
                     WHERE
                         setup."Id" = 1;
                     """;
-                return ctx.ReadSql.ReadRequiredAsync<BackupStateData>(sql, ct);
+                return ctx.ReadSql.ReadRequiredAsync<BackupRestoreData>(sql, ct);
             }, CancellationToken);
             if (!open.CanRestore)
             {

@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Media
@@ -9,7 +10,40 @@ namespace Jularr.Backend.Logic.Media
     {
         public static async Task<long> CreateCollectionAsync(this LogicContext ctx, CollectionSaveData data, CancellationToken ct)
         {
+            // A profile keeps at most 100 collections, so every list shows all of them.
             var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id" AS "ProfileId"
+                FROM
+                    "Profiles" AS profile
+                WHERE
+                    profile."Id" = @ProfileId
+                FOR UPDATE OF
+                    profile;
+                """;
+            sql.Parameters.Add(data);
+            _ = await ctx.ReadRequiredAsync<ProfileParameters>(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id" AS "ProfileId"
+                FROM
+                    "Profiles" AS profile
+                WHERE
+                    profile."Id" = @ProfileId
+                    AND (SELECT count(*) FROM "Collections" AS collection WHERE collection."ProfileId" = profile."Id") < 100;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<ProfileParameters>(sql, ct) is null)
+            {
+                throw new DataValidationException(nameof(data.Name), "collection_limit");
+            }
+
+            sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO

@@ -52,6 +52,14 @@ namespace Jularr.Backend.Service.Core
                 .OrderByDescending(folder => folder.Name, StringComparer.Ordinal)];
         }
 
+        // Only the name is read; sizes and manifests stay untouched.
+        public static DateTime? Newest(string root) => Directory.Exists(root)
+            ? new DirectoryInfo(root).EnumerateDirectories("jularr-*")
+                .Where(folder => Name().IsMatch(folder.Name) && File.Exists(Path.Combine(folder.FullName, DumpName)))
+                .Select(folder => (DateTime?)CreatedAt(folder.Name))
+                .Max()
+            : null;
+
         // Only names this class created, never a path.
         public static string Resolve(string root, string name) =>
             Name().IsMatch(name) && Directory.Exists(Path.Combine(root, name)) ? Path.Combine(root, name) : throw new KeyNotFoundException("The backup was not found.");

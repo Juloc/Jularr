@@ -1,5 +1,6 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Notification;
@@ -110,7 +111,16 @@ namespace Jularr.Backend.Service.User.Notification.V1
                     type."Id";
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
-            return new BaseDataList<NotificationSettingV1>(await Context.ReadSql.ReadListAsync<NotificationSettingV1>(sql, CancellationToken));
+            var settings = await Context.ReadSql.ReadListAsync<NotificationSettingV1>(sql, CancellationToken);
+
+            // Kinds the account receives: failures reach media managers too, offline storage the Owner only.
+            var role = Auth.AccountRoleTypeId;
+            return new BaseDataList<NotificationSettingV1>(settings.Where(setting => setting.NotificationTypeId switch
+            {
+                NotificationType.DownloadFailed => role is AccountRoleType.Owner or AccountRoleType.MediaManager,
+                NotificationType.StorageOffline => role == AccountRoleType.Owner,
+                _ => true
+            }));
         }
     }
 

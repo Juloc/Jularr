@@ -1,6 +1,6 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
-using Jularr.Backend.Data.User.Statistics.V1;
 
 namespace Jularr.Backend.Data.Admin.System.V1
 {
@@ -62,5 +62,24 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.IsAvailable))]
         public bool IsAvailable { get; }
+    }
+
+    public sealed class MediaTypeCountV1 : BaseResponse
+    {
+        public MediaTypeCountV1(MediaType mediaTypeId, long count, long bytes)
+        {
+            MediaTypeId = mediaTypeId;
+            Count = count;
+            Bytes = bytes;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Count))]
+        public long Count { get; }
+
+        [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Bytes))]
+        public long Bytes { get; }
     }
 }

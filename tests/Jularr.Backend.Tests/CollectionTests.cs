@@ -77,6 +77,11 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites);
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
 
+            // A profile keeps at most 100 collections, so lists are always complete.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Collections\" (\"ProfileId\", \"Name\", \"IsSmart\") SELECT 101, 'List ' || n, FALSE FROM generate_series(1, 100) AS n");
+            using var tooMany = await host.SendAsync(HttpMethod.Post, Route, new CreateCollectionDataV1("One more", false));
+            StringAssert.Contains(await tooMany.Content.ReadAsStringAsync(), "collection_limit");
+
             // Switched off, nothing is read and the navigation hides it.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Collections'");
             using var off = await host.SendAsync(HttpMethod.Get, Route);

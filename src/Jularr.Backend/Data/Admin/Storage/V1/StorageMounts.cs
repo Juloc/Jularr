@@ -54,8 +54,8 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     public sealed class StorageMountDetailsV1 : BaseResponse
     {
         public StorageMountDetailsV1(long id, string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion, string? username, string? domain, bool isReadOnly,
-            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool canMount, long version, StorageHealthType? storageHealthTypeId = null,
-            string? diagnosticCode = null, DateTime? checkedAt = null, long? freeBytes = null, long? totalBytes = null, string? synologyUrl = null, string? synologyUsername = null)
+            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool canMount, long version, StorageHealthType? storageHealthTypeId,
+            string? diagnosticCode, DateTime? checkedAt, long? freeBytes, long? totalBytes, string? synologyUrl, string? synologyUsername)
         {
             SynologyUrl = synologyUrl;
             SynologyUsername = synologyUsername;

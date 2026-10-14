@@ -32,7 +32,7 @@ namespace Jularr.Integrations.Data.Synology
         public int? Temperature { get; } = temperature;
     }
 
-    internal sealed class SynologyException(string code) : Exception("The Synology NAS did not answer as expected.")
+    internal sealed class SynologyException(string code, Exception? innerException = null) : Exception("The Synology NAS did not answer as expected.", innerException)
     {
         public string Code { get; } = code;
     }
