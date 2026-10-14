@@ -31,6 +31,15 @@ namespace Jularr.Integrations.Logic.Synology
             }
         };
 
+        // Each request opens its own connection, so its certificate is checked against its own pin.
+        private static HttpRequestMessage Request(HttpMethod method, Uri address, string? pinned)
+        {
+            var request = new HttpRequestMessage(method, address);
+            request.Headers.ConnectionClose = true;
+            request.Options.Set(Pinned, pinned);
+            return request;
+        }
+
         public static bool Accepts(string? pinned, SynologyCertificate presented) => presented.IsValid || string.Equals(pinned, presented.Sha256, StringComparison.OrdinalIgnoreCase);
 
         // The certificate the address presents now; none over plain HTTP.
@@ -41,7 +50,7 @@ namespace Jularr.Integrations.Logic.Synology
                 return null;
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(baseAddress, "webapi/query.cgi"));
+            using var request = Request(HttpMethod.Get, new Uri(baseAddress, "webapi/query.cgi"), null);
             try
             {
                 using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -125,10 +134,10 @@ namespace Jularr.Integrations.Logic.Synology
             }
 
             JsonDocument document;
+            using var request = Request(HttpMethod.Post, new Uri(access.BaseAddress, "webapi/entry.cgi"), access.CertificateSha256);
+            request.Content = new FormUrlEncodedContent(form);
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(access.BaseAddress, "webapi/entry.cgi")) { Content = new FormUrlEncodedContent(form) };
-                request.Options.Set(Pinned, access.CertificateSha256);
                 using var response = await http.SendAsync(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
@@ -137,7 +146,7 @@ namespace Jularr.Integrations.Logic.Synology
 
                 document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
             }
-            catch (HttpRequestException exception) when (exception.HttpRequestError == HttpRequestError.SecureConnectionError)
+            catch (HttpRequestException exception) when (request.Options.TryGetValue(Presented, out var presented) && !Accepts(access.CertificateSha256, presented))
             {
                 throw new SynologyException("synology_certificate_untrusted", exception);
             }

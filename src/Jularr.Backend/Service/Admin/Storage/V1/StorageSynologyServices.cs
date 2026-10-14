@@ -119,7 +119,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             }
             catch (SynologyException exception)
             {
-                throw new ServiceUnavailableException(exception.Code);
+                throw new ServiceUnavailableException(exception.Code, exception);
             }
         }
 
