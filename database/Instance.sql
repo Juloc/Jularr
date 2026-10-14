@@ -7,6 +7,7 @@ CREATE TABLE "InstanceSettings" (
     "ReadingCacheBytes" bigint NOT NULL DEFAULT 2147483648 CHECK ("ReadingCacheBytes" >= 0),
     "ReadingCacheWorks" integer NOT NULL DEFAULT 100 CHECK ("ReadingCacheWorks" BETWEEN 0 AND 10000),
     "UsersConfirmSources" boolean NOT NULL DEFAULT FALSE,
+    "LibraryScanIntervalHours" smallint NOT NULL DEFAULT 24 CHECK ("LibraryScanIntervalHours" BETWEEN 0 AND 720),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
 );
 
