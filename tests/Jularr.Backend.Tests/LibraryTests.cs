@@ -9,6 +9,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Data.User.Media.V1;
@@ -254,6 +255,20 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Versions &amp; languages");
 
+            // Renaming moves files through the confirmed preview only.
+            using var preview = await host.SendAsync(HttpMethod.Get, "/Admin/Library?Tab=Rename");
+            html = await preview.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, html);
+            StringAssert.Contains(html, "Film/Film.mkv");
+            using var renamed = await host.SendAsync(HttpMethod.Post, "/Admin/Library?Tab=Rename&PageNumber=1&handler=Rename", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = Token(html), ["Fingerprint"] = Regex.Match(html, "value=\"([0-9a-f]{64})\"").Groups[1].Value
+            });
+            Assert.AreEqual(HttpStatusCode.Redirect, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
+            Assert.IsTrue(File.Exists(Path.Combine(storage.Path, mountId.ToString(), "Movies", "Film", "Film.mkv")));
+            using var done = await host.SendAsync(HttpMethod.Get, renamed.Headers.Location!.OriginalString);
+            StringAssert.Contains(await done.Content.ReadAsStringAsync(), "Files renamed: 1. Skipped: 0.");
+
             // Path pages stay navigable when empty.
             await host.Fixture.RunSqlAsync("INSERT INTO \"LibraryRoots\" (\"Name\", \"MediaTypeId\", \"StorageMountId\", \"RelativePath\") SELECT 'Root ' || n, 1, " + mountId + ", 'Root' || n FROM generate_series(1, 25) AS n");
             using var paths = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId + "&rootPageNumber=1");
@@ -296,6 +311,97 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("ger", probe.Streams[1].Language);
             Assert.IsNull(probe.Streams[2].Language);
             Assert.IsTrue(probe.Streams[2].IsForced);
+        }
+
+        [TestMethod]
+        public async Task Rename_MovesOnlyTheConfirmedPreviewAndKeepsIdentity()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            var movies = Path.Combine(storage.Path, mountId.ToString(), "Movies");
+            Directory.CreateDirectory(Path.Combine(movies, "Some Folder"));
+            Directory.CreateDirectory(Path.Combine(movies, "Example Movie (2020)"));
+            File.WriteAllText(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv"), "movie");
+            File.WriteAllText(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].en.srt"), "subtitle");
+            File.WriteAllText(Path.Combine(movies, "Example Movie (2020)", "Example Movie (2020) [Bluray-1080p].mkv"), "someone else");
+            var rootId = await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Some Folder/movie file [Bluray-1080p].mkv'"))!;
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, "Example Movie", null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"Works\" SET \"ReleaseYear\" = 2020");
+
+            // The preview names every move; a taken name gets a counter; nothing moves yet.
+            using var preview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
+            var plan = (await preview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            CollectionAssert.AreEquivalent(new[] { "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).mkv", "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).en.srt" },
+                plan.Items.Select(item => item.TargetPath).ToArray());
+            Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
+
+            // Only the exact preview is applied.
+            using var changed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(new string('0', 64)));
+            Assert.AreEqual(HttpStatusCode.BadRequest, changed.StatusCode);
+            StringAssert.Contains(await changed.Content.ReadAsStringAsync(), "library_rename_changed");
+            using var applied = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(plan.Fingerprint));
+            Assert.AreEqual(HttpStatusCode.OK, applied.StatusCode, await applied.Content.ReadAsStringAsync());
+            var result = (await applied.Content.ReadFromJsonAsync<ApplyLibraryRenamesResultV1>())!;
+            Assert.AreEqual(2, result.RenamedCount);
+            Assert.AreEqual(0, result.SkippedCount);
+            Assert.IsTrue(File.Exists(Path.Combine(movies, "Example Movie (2020)", "Example Movie (2020) [Bluray-1080p] (2).en.srt")));
+            Assert.IsFalse(Directory.Exists(Path.Combine(movies, "Some Folder")));
+            Assert.AreEqual("Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).mkv",
+                await host.ScalarAsync("SELECT \"RelativePath\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId + " AND \"MediaAssetId\" IS NOT NULL"));
+            using var empty = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            Assert.AreEqual(0, (await empty.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!.Items.Count);
+
+            // A name taken on disk only skips the media file and its subtitles together.
+            Directory.CreateDirectory(Path.Combine(movies, "Second"));
+            File.WriteAllText(Path.Combine(movies, "Second", "second.mkv"), "second");
+            File.WriteAllText(Path.Combine(movies, "Second", "second.en.srt"), "subtitle");
+            await ScanAsync(host, rootId);
+            var secondId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Second/second.mkv'"))!;
+            using var second = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + secondId + "/assignment", new AssignLibraryFileDataV1(null, "Second Movie", null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, second.StatusCode, await second.Content.ReadAsStringAsync());
+            Directory.CreateDirectory(Path.Combine(movies, "Second Movie"));
+            File.WriteAllText(Path.Combine(movies, "Second Movie", "Second Movie.mkv"), "unscanned");
+            using var blockedPreview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            var blockedPlan = (await blockedPreview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
+            Assert.AreEqual(2L, blockedPlan.TotalCount);
+            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/renames", new ApplyLibraryRenamesDataV1(blockedPlan.Fingerprint));
+            var blockedResult = (await blocked.Content.ReadFromJsonAsync<ApplyLibraryRenamesResultV1>())!;
+            Assert.AreEqual(0, blockedResult.RenamedCount);
+            Assert.AreEqual(2, blockedResult.SkippedCount);
+            Assert.IsTrue(File.Exists(Path.Combine(movies, "Second", "second.en.srt")));
+            Assert.AreEqual("unscanned", File.ReadAllText(Path.Combine(movies, "Second Movie", "Second Movie.mkv")));
+
+            // Moving files is the Owner's.
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var denied = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
+            Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+
+        [TestMethod]
+        public void Rename_Plan_UsesTheImportLayoutPerType()
+        {
+            static LibraryRenameFileData File(long id, MediaType type, string path, string? title, WorkUnitType? unit = null, decimal? number = null, decimal? parent = null,
+                MediaSubtype? subtype = null, string? unitTitle = null, DateTime? missing = null) =>
+                new(id, 1, "Library", type, subtype, path, missing, title is null ? null : id, title, 2019, "Artist A, Artist B", unit, number, unitTitle, parent);
+
+            var plan = LibraryRenameLogic.Plan([
+                File(1, MediaType.Series, "show/s1/ep2 [WEBDL-1080p].mkv", "Show", WorkUnitType.Episode, 2m, 1m),
+                File(2, MediaType.Music, "rip/track.flac", "Album", WorkUnitType.Track, 3m, unitTitle: "Song: One"),
+                File(3, MediaType.Book, "manga/half.cbz", "Manga", WorkUnitType.Volume, 1.5m, subtype: MediaSubtype.Manga),
+                File(4, MediaType.Game, "roms/game.sfc", "Game"),
+                File(5, MediaType.Movie, "gone.mkv", "Gone", missing: DateTime.UtcNow),
+                File(6, MediaType.Movie, "kept (2019)/KEPT (2019).mkv", "Kept"),
+                File(7, MediaType.Book, "loose.epub", "Book")]);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "Show/Season 01/Show - S01E02 [WEBDL-1080p].mkv", "Artist A, Artist B/Album (2019)/03 - Song One.flac", "Manga/Manga v01.5.cbz", "Artist A/Book (2019)/Book.epub"
+            }, plan.Select(rename => rename.TargetPath).ToArray());
         }
 
         internal static async Task ScanAsync(Host host, long rootId)

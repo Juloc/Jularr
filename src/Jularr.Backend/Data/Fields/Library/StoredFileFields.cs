@@ -21,5 +21,9 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly LongField FileCount = new() { Minimum = 0 };
         public static readonly StringField Payload = new() { AllowBlank = false };
         public static readonly LongField AfterId = new() { Minimum = 0 };
+        public static readonly StringField TargetPath = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, AllowBlank = false, Format = StringFormat.RelativePath };
+        public static readonly StringField RenameFingerprint = new() { MinimumLength = 64, MaximumLength = 64, AllowBlank = false, Format = StringFormat.SingleLine };
+        public static readonly IntField RenamedCount = new() { Minimum = 0 };
+        public static readonly IntField SkippedCount = new() { Minimum = 0 };
     }
 }

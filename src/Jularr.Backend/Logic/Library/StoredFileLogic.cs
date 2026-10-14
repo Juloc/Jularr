@@ -71,6 +71,43 @@ namespace Jularr.Backend.Logic.Library
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        public static async Task<bool> RenameStoredFileAsync(this LogicContext ctx, LibraryRenameData data, CancellationToken ct)
+        {
+            // The file keeps its identity, analysis and progress under the new name; a running scan keeps the old one.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "StoredFiles" AS file
+                SET
+                    "RelativePath" = @TargetPath
+                WHERE
+                    file."Id" = @StoredFileId
+                    AND file."RelativePath" = @RelativePath
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "StoredFiles" AS other
+                        WHERE
+                            other."LibraryRootId" = file."LibraryRootId"
+                            AND other."RelativePath" = @TargetPath
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "Operations" AS scan
+                        WHERE
+                            scan."LibraryRootId" = file."LibraryRootId"
+                            AND scan."OperationTypeId" = 1
+                            AND scan."OperationStatusTypeId" IN (1, 2)
+                    );
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
+        }
+
         public static async Task SaveStoredFileProbeAsync(this LogicContext ctx, StoredFileProbeData data, CancellationToken ct)
         {
             // Ignore analyses of files changed meanwhile.

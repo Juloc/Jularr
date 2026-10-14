@@ -82,6 +82,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.invalid_transition", "This change is not available."),
             new("errors.validation.setup_completed", "Only an instance that has not finished setup can be replaced by a backup."),
             new("errors.validation.backup_incompatible", "This backup belongs to another Jularr version."),
+            new("errors.validation.library_rename_changed", "The library changed since the preview. Please check the new preview."),
             new("errors.validation.invalid_placeholders", "The translation must preserve its placeholders."),
             new("errors.validation.unknown_id", "The referenced item is unavailable."),
             new("errors.validation.duplicate_id", "The item was supplied more than once."),

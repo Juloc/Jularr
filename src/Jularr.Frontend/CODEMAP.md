@@ -56,7 +56,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): supported settings and module controls.
 - [Storage](Pages/Admin/Storage/Storage.cshtml.cs): mounts with their last observed state, WOL, safe browsing and independently paged library paths.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): registry, protected TMDB/IGDB credentials and Plex server.
-- [Works](Pages/Admin/Works/Works.cshtml.cs), [Work](Pages/Admin/Work/Work.cshtml.cs), [AniList matches](Pages/Admin/Matches/Matches.cshtml.cs), [Library inventory](Pages/Admin/Library/Library.cshtml.cs): metadata, editing, matching and file identification.
+- [Works](Pages/Admin/Works/Works.cshtml.cs), [Work](Pages/Admin/Work/Work.cshtml.cs), [AniList matches](Pages/Admin/Matches/Matches.cshtml.cs), [Library inventory](Pages/Admin/Library/Library.cshtml.cs): metadata, editing, matching, file identification and rename preview.
 - [Requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs), [Activity](Pages/Admin/Activity/Activity.cshtml.cs): moderation, acquisition and recovery.
 - [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs), [Sources](Pages/Admin/Sources/Sources.cshtml.cs), [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs): connection/catalog/profile configuration.
 - [Takeover](Pages/Admin/Takeover/Takeover.cshtml.cs): one-time Prowlarr/Sonarr/Radarr preview and import.

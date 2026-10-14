@@ -70,6 +70,14 @@ identified as exactly one Work are assigned automatically when the path parser f
 their unit; everything else waits for manual identification under `/Admin/Library`.
 Profiles read the stored availability only.
 
+The Rename tab there previews moving identified files into the import layout
+(subtitles follow their video, a trailing `[quality]` tag stays, taken names get a
+counter, games and libraries being scanned are left alone). Applying needs the
+fingerprint of exactly that plan; each file is moved on the share first and then
+recorded under its new path, keeping its identity, analysis and progress, or moved
+back. Offline libraries and names taken meanwhile are skipped, a video together with
+its subtitles, and folders a rename emptied are removed.
+
 ## Linux deployment
 
 The console `Jularr.MountHelper` uses a private Unix-domain socket and the Linux

@@ -1,9 +1,6 @@
-using System.Globalization;
 using System.Text.RegularExpressions;
-using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Integrations.Data.Storage;
@@ -14,8 +11,6 @@ namespace Jularr.Backend.Logic.Acquisition
     {
         // Download bookkeeping that never belongs in a library.
         private static readonly HashSet<string> ReleaseNoise = [".par2", ".sfv", ".nfo", ".srr", ".url", ".diz", ".nzb"];
-
-        private static readonly HashSet<char> InvalidNameCharacters = [.. Path.GetInvalidFileNameChars(), '<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
         public static string? MapRemotePath(string storagePath, string remotePath)
         {
@@ -50,16 +45,14 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             var videos = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video && !MediaPathParser.IsSample(file.RelativePath)).ToArray();
-            var name = SafeName(title);
-            var quality = qualityKey is { Length: > 0 } ? " [" + SafeName(qualityKey) + "]" : "";
+            var quality = LibraryNaming.Quality(qualityKey);
             var placements = new List<ImportPlacementData>();
             if (mediaType == MediaType.Movie)
             {
                 // The largest video is the feature.
                 if (videos.MaxBy(video => video.SizeBytes) is { } feature)
                 {
-                    var folder = year is { } value ? $"{name} ({value.ToString(CultureInfo.InvariantCulture)})" : name;
-                    AddGroup(placements, files, feature, $"{folder}/{folder}{quality}", null, null, null);
+                    AddGroup(placements, files, feature, LibraryNaming.Movie(title, year, quality), null, null, null);
                 }
 
                 return placements;
@@ -73,9 +66,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     continue;
                 }
 
-                var seasonText = season.ToString("00", CultureInfo.InvariantCulture);
-                AddGroup(placements, files, video, $"{name}/Season {seasonText}/{name} - S{seasonText}E{episode.ToString("00", CultureInfo.InvariantCulture)}{quality}", WorkUnitType.Episode,
-                    episode, season);
+                AddGroup(placements, files, video, LibraryNaming.Episode(title, season, episode, quality), WorkUnitType.Episode, episode, season);
             }
 
             return placements;
@@ -84,17 +75,14 @@ namespace Jularr.Backend.Logic.Acquisition
         // One file per ebook format, the largest; the author names the folder.
         private static IReadOnlyList<ImportPlacementData> PlanBook(string title, int? year, string? author, IReadOnlyList<StorageFile> files)
         {
-            var name = SafeName(title);
-            var folder = year is { } value ? $"{name} ({value.ToString(CultureInfo.InvariantCulture)})" : name;
-            var writer = BookReleaseJudge.Authors(author).FirstOrDefault() is { } first ? SafeName(first) + "/" : "";
+            var stem = LibraryNaming.Book(title, year, author);
             var placements = new List<ImportPlacementData>();
             foreach (var book in files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Ebook)
                 .GroupBy(file => Path.GetExtension(file.RelativePath).ToLowerInvariant())
                 .Select(format => format.MaxBy(file => file.SizeBytes)!))
             {
                 var extension = Path.GetExtension(book.RelativePath).ToLowerInvariant();
-                var stem = $"{writer}{folder}/{name}";
-                if (IsStorable(stem + extension))
+                if (LibraryNaming.IsStorable(stem + extension))
                 {
                     placements.Add(new ImportPlacementData(placements.Count, book.RelativePath, stem, extension, true, null, null, null));
                 }
@@ -106,7 +94,6 @@ namespace Jularr.Backend.Logic.Acquisition
         // One file per volume, the largest; a single unnumbered file is the whole series. A file holding a range is no single volume.
         private static IReadOnlyList<ImportPlacementData> PlanManga(string title, IReadOnlyList<StorageFile> files)
         {
-            var name = SafeName(title);
             var documents = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) is MediaAssetType.Comic or MediaAssetType.Ebook)
                 .Select(file => (File: file, Parsed: MangaReleaseJudge.Parse(Path.GetFileNameWithoutExtension(file.RelativePath))))
                 .Where(document => document.Parsed.VolumeEnd is null || document.Parsed.VolumeEnd == document.Parsed.VolumeStart)
@@ -115,12 +102,12 @@ namespace Jularr.Backend.Logic.Acquisition
             var placements = new List<ImportPlacementData>();
             foreach (var volume in documents.Where(document => document.Volume is not null).GroupBy(document => document.Volume!.Value).Select(group => group.MaxBy(document => document.File.SizeBytes)))
             {
-                AddGroup(placements, files, volume.File, $"{name}/{name} v{volume.Volume!.Value.ToString("00", CultureInfo.InvariantCulture)}", WorkUnitType.Volume, volume.Volume, null);
+                AddGroup(placements, files, volume.File, LibraryNaming.Volume(title, volume.Volume), WorkUnitType.Volume, volume.Volume, null);
             }
 
             if (placements.Count == 0 && documents.Length == 1)
             {
-                AddGroup(placements, files, documents[0].File, $"{name}/{name}", null, null, null);
+                AddGroup(placements, files, documents[0].File, LibraryNaming.Volume(title, null), null, null, null);
             }
 
             return placements;
@@ -129,8 +116,6 @@ namespace Jularr.Backend.Logic.Acquisition
         // Tracks keep the release's natural order and land on their units only when the album's track count matches; the artist names the folder.
         private static IReadOnlyList<ImportPlacementData> PlanMusic(string title, int? year, string? artist, IReadOnlyList<StorageFile> files, int trackCount)
         {
-            var album = SafeName(title) + (year is { } value ? " (" + value.ToString(CultureInfo.InvariantCulture) + ")" : "");
-            var folder = (artist is { Length: > 0 } ? SafeName(artist) + "/" : "") + album;
             var tracks = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Audio)
                 .OrderBy(file => Digits().Replace(file.RelativePath, match => match.Value.PadLeft(10, '0')), StringComparer.OrdinalIgnoreCase).ToArray();
             var numbered = tracks.All(file => Path.GetFileName(file.RelativePath) is { Length: > 0 } name && char.IsAsciiDigit(name[0]));
@@ -140,9 +125,7 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 var stem = Path.GetFileNameWithoutExtension(tracks[index].RelativePath);
                 var name = (numbered ? TrackNumber().Replace(stem, "") : stem).Trim(' ', '-', '.', '_');
-                var number = (index + 1).ToString("00", CultureInfo.InvariantCulture);
-                AddGroup(placements, files, tracks[index], $"{folder}/{number} - {(name.Length > 0 ? SafeName(name) : "Track " + number)}", units ? WorkUnitType.Track : null,
-                    units ? index + 1 : null, null);
+                AddGroup(placements, files, tracks[index], LibraryNaming.Track(artist, title, year, index + 1, name), units ? WorkUnitType.Track : null, units ? index + 1 : null, null);
             }
 
             return placements;
@@ -151,7 +134,7 @@ namespace Jularr.Backend.Logic.Acquisition
         // A game keeps its release's files below its platform; the largest game file is the media.
         private static IReadOnlyList<ImportPlacementData> PlanGame(string title, int? year, string? platform, IReadOnlyList<StorageFile> files)
         {
-            var folder = SafeName(platform ?? "Unknown") + "/" + SafeName(title) + (year is { } value ? " (" + value.ToString(CultureInfo.InvariantCulture) + ")" : "");
+            var folder = LibraryNaming.Game(platform, title, year);
             if (files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Game).MaxBy(file => file.SizeBytes) is not { } main)
             {
                 return [];
@@ -161,8 +144,8 @@ namespace Jularr.Backend.Logic.Acquisition
             foreach (var file in files.Where(file => !ReleaseNoise.Contains(Path.GetExtension(file.RelativePath).ToLowerInvariant())))
             {
                 var extension = Path.GetExtension(file.RelativePath).ToLowerInvariant();
-                var stem = folder + "/" + string.Join('/', file.RelativePath[..^extension.Length].Split('/').Select(SafeName));
-                if (!IsStorable(stem + extension))
+                var stem = folder + "/" + string.Join('/', file.RelativePath[..^extension.Length].Split('/').Select(LibraryNaming.SafeName));
+                if (!LibraryNaming.IsStorable(stem + extension))
                 {
                     return [];
                 }
@@ -173,28 +156,12 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
-        // Taken names are never reused; a counter keeps both files.
-        public static string Alternative(string stem, int attempt) => attempt <= 1 ? stem : $"{stem} ({attempt.ToString(CultureInfo.InvariantCulture)})";
-
-        public static bool IsStorable(string relativePath)
-        {
-            try
-            {
-                StoredFileFields.RelativePath.Validate(relativePath, nameof(StoredFileFields.RelativePath));
-                return true;
-            }
-            catch (DataValidationException)
-            {
-                return false;
-            }
-        }
-
         private static void AddGroup(List<ImportPlacementData> placements, IReadOnlyList<StorageFile> files, StorageFile media, string stem, WorkUnitType? unitType, decimal? unitNumber,
             decimal? parentUnitNumber)
         {
             var group = placements.Count;
             var extension = Path.GetExtension(media.RelativePath).ToLowerInvariant();
-            if (!IsStorable(stem + extension))
+            if (!LibraryNaming.IsStorable(stem + extension))
             {
                 return;
             }
@@ -206,7 +173,7 @@ namespace Jularr.Backend.Logic.Acquisition
             foreach (var subtitle in files.Where(file => file.RelativePath.StartsWith(videoStem + ".", StringComparison.Ordinal) && LibraryFileTypes.IsSubtitle(file.RelativePath)))
             {
                 var suffix = subtitle.RelativePath[videoStem.Length..].ToLowerInvariant();
-                if (!suffix.Contains('/') && IsStorable(stem + suffix))
+                if (!suffix.Contains('/') && LibraryNaming.IsStorable(stem + suffix))
                 {
                     placements.Add(new ImportPlacementData(group, subtitle.RelativePath, stem, suffix, false, null, null, null));
                 }
@@ -218,11 +185,5 @@ namespace Jularr.Backend.Logic.Acquisition
 
         [GeneratedRegex(@"\d+")]
         private static partial Regex Digits();
-
-        private static string SafeName(string value)
-        {
-            var cleaned = new string(value.Select(character => InvalidNameCharacters.Contains(character) || char.IsControl(character) ? ' ' : character).ToArray());
-            return string.Join(' ', cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Trim('.', ' ') is { Length: > 0 } name ? name : "Untitled";
-        }
     }
 }

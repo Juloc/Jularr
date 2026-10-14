@@ -63,7 +63,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
             foreach (var group in placements.GroupBy(placement => placement.Group))
             {
-                var stem = Enumerable.Range(1, 99).Select(attempt => ImportPlacementLogic.Alternative(group.First().TargetStem, attempt))
+                var stem = Enumerable.Range(1, 99).Select(attempt => LibraryNaming.Alternative(group.First().TargetStem, attempt))
                     .First(candidate => group.All(placement => !File.Exists(Path.Combine(directory, (candidate + placement.Extension).Replace('/', Path.DirectorySeparatorChar)))));
                 foreach (var placement in group)
                 {

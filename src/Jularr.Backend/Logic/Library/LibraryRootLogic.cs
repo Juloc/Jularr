@@ -64,6 +64,29 @@ namespace Jularr.Backend.Logic.Library
             return (await ctx.ReadRequiredAsync<LibraryRootIdData>(sql, ct)).Id;
         }
 
+        public static Task<LibraryRootLocationData?> ReadLibraryRootLocationAsync(this LogicContext ctx, LibraryRootParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    root."Id",
+                    root."MediaTypeId",
+                    root."MediaSubtypeId",
+                    root."StorageMountId",
+                    mount."StorageProtocolTypeId",
+                    mount."SharePath",
+                    root."RelativePath"
+                FROM
+                    "LibraryRoots" AS root
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                WHERE
+                    root."Id" = @LibraryRootId;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ReadSql.ReadOptionalAsync<LibraryRootLocationData>(sql, ct);
+        }
+
         public static async Task RenameLibraryRootAsync(this LogicContext ctx, LibraryRootRenameData data, CancellationToken ct)
         {
             // Location changes would orphan the inventory.
