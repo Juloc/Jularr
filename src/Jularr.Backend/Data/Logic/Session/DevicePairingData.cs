@@ -36,11 +36,15 @@ namespace Jularr.Backend.Data.Logic.Session
     // What a device calls itself; it names itself, nothing verifies it.
     internal sealed class DevicePairingDeviceData : BaseData
     {
-        public DevicePairingDeviceData(string deviceName, string devicePlatform)
+        public DevicePairingDeviceData(long id, string deviceName, string devicePlatform)
         {
+            Id = id;
             DeviceName = deviceName;
             DevicePlatform = devicePlatform;
         }
+
+        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.Id))]
+        public long Id { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
         public string DeviceName { get; }
@@ -109,12 +113,16 @@ namespace Jularr.Backend.Data.Logic.Session
 
     internal sealed class DevicePairingApprovalData : BaseData
     {
-        public DevicePairingApprovalData(string code, long approvedAccountId, long approvedProfileId)
+        public DevicePairingApprovalData(long id, string code, long approvedAccountId, long approvedProfileId)
         {
+            Id = id;
             Code = code;
             ApprovedAccountId = approvedAccountId;
             ApprovedProfileId = approvedProfileId;
         }
+
+        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.Id))]
+        public long Id { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.Code))]
         public string Code { get; }

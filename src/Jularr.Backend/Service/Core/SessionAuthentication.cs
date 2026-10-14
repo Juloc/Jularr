@@ -23,10 +23,11 @@ namespace Jularr.Backend.Service.Core
 
         public SessionParameters? Parameters { get; private set; }
 
-        internal async Task VerifyAsync(HttpContext http, ClaimsPrincipal? principal, CancellationToken cancellationToken, DateTime? renewalExpiresAt = null)
+        internal async Task<SessionAuthenticationData> VerifyAsync(HttpContext http, ClaimsPrincipal? principal, CancellationToken cancellationToken, DateTime? renewalExpiresAt = null)
         {
             var session = await ReadAsync(principal, cancellationToken, renewalExpiresAt);
             http.Items[typeof(SessionAuthentication)] = (principal, session, Parameters!);
+            return session;
         }
 
         public Task<SessionAuthenticationData> ReadRequestAsync(HttpContext? http, CancellationToken cancellationToken)
@@ -96,7 +97,8 @@ namespace Jularr.Backend.Service.Core
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId",
-                    session."DeviceName" IS NOT NULL AS "IsDevice"
+                    session."DeviceName" IS NOT NULL AS "IsDevice",
+                    session."ExpiresAt"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN

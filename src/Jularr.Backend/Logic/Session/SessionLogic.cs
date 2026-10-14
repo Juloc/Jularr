@@ -232,7 +232,8 @@ namespace Jularr.Backend.Logic.Session
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId",
-                    session."DeviceName" IS NOT NULL AS "IsDevice"
+                    session."DeviceName" IS NOT NULL AS "IsDevice",
+                    session."ExpiresAt"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
@@ -272,7 +273,7 @@ namespace Jularr.Backend.Logic.Session
 
         // A paired device is a normal user of its profile, whatever its account may do elsewhere.
         public static SessionAuthenticationData Effective(SessionAuthenticationData session) => session.IsDevice
-            ? new SessionAuthenticationData(session.AccountId, session.ProfileId, session.ProfileOwnerAccountId, session.UiLocaleId, AccountRoleType.User, true)
+            ? new SessionAuthenticationData(session.AccountId, session.ProfileId, session.ProfileOwnerAccountId, session.UiLocaleId, AccountRoleType.User, true, session.ExpiresAt)
             : session;
 
         // Only a paired device of the account has a name to change.

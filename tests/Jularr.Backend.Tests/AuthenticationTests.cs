@@ -482,6 +482,7 @@ namespace Jularr.Backend.Tests
 
                 var app = builder.Build();
                 app.UseExceptionHandler();
+                app.UseTrustedProxies();
                 app.UseRateLimiter();
                 app.UseAuthentication();
                 if (razor)
@@ -539,6 +540,8 @@ namespace Jularr.Backend.Tests
 
                 return response;
             }
+
+            public HttpClient Client => _client;
 
             public async Task<HttpResponseMessage> SendAsAppAsync(HttpMethod method, string path, string token, object? data = null)
             {

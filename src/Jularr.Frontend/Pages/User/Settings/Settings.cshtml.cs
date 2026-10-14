@@ -87,13 +87,13 @@ namespace Jularr.Frontend.Pages.User.Settings
                         }
 
                         // Deleting asks once more; nothing of the profile remains.
-                        if (Request.Query["delete"] == "true")
+                        if (texts.CanDeleteProfile() && Request.Query["delete"] == "true")
                         {
                             content.Add(new P(new Text("profile.delete.warning")).Attribute("role", "alert"));
                             content.Add(new Form<UpdateProfilePinDataV1>(form => form.Submit("profile.delete.confirm"), Url.Page("/User/Settings/Settings", "Delete"),
                                 antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
                         }
-                        else
+                        else if (texts.CanDeleteProfile())
                         {
                             content.Add(new A(new Text("profile.delete")).Class("button").Attribute("href", Url.Page("/User/Settings/Settings", new { delete = true })!));
                         }

@@ -54,11 +54,12 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     if (texts.Can(null, "Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
                     if (texts.Can(null, "Devices")) form.Text(item => item.PublicUrl, "admin.instance.publicUrl");
                     else form.Hidden(item => item.PublicUrl);
+                    form.Text(item => item.TrustedProxies, "admin.instance.trustedProxies");
                     form.Submit("common.save");
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
                         settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes, settings.CollectionLimit,
-                        settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl), _moduleId is null && _mediaInput is null ? FormError : null));
+                        settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl, settings.TrustedProxies), _moduleId is null && _mediaInput is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {

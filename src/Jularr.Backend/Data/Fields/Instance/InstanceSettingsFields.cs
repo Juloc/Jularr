@@ -18,6 +18,7 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly IntField CollectionLimit = new() { Minimum = 1, Maximum = 1000 };
         public static readonly IntField UnitGroupLimit = new() { Minimum = 1, Maximum = 1000 };
         public static readonly StringArrayField SubtitleLanguages = new() { ItemMaximumLength = 8, MaximumLength = 10, SplitsCommas = true };
+        public static readonly StringArrayField TrustedProxies = new() { ItemMaximumLength = 43, MaximumLength = 20, SplitsCommas = true };
         public static readonly StringField PublicUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.HttpUrl };
         public static readonly BoolField KeepsReleases = new();
         public static readonly EnumField RecycleModeId = new(typeof(Enums.Library.RecycleMode));

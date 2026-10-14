@@ -193,13 +193,20 @@ namespace Jularr.Backend.Service.Core
             services.AddScoped<IServiceGate, ServiceGate>();
             services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
+            services.AddSingleton(provider => new TrustedProxies(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<TimeProvider>()));
 
-            // Browsers use the session cookie, apps their device token; a request with a token never reads cookies.
+            // Token requests never read cookies.
             services.AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, DeviceBearerHandler>(DeviceBearerScheme, null)
                 .AddPolicyScheme(SessionScheme, null, options => options.ForwardDefaultSelector = http =>
                     http.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.Ordinal) ? DeviceBearerScheme : CookieAuthenticationDefaults.AuthenticationScheme);
-            services.PostConfigure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(options => options.DefaultScheme = SessionScheme);
+            services.PostConfigure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(options =>
+            {
+                if (options.SchemeMap.ContainsKey(CookieAuthenticationDefaults.AuthenticationScheme))
+                {
+                    options.DefaultScheme = SessionScheme;
+                }
+            });
             services.AddDataProtection().SetApplicationName("Jularr");
 
             // Razor consumes verified service grants.
@@ -511,7 +518,7 @@ namespace Jularr.Backend.Service.Core
                 return Results.Ok<object>(result);
             };
 
-        // A device token is no cookie, so another site cannot send it along; app endpoints set no cookie that one could.
+        // No cookies, no cross-site forgery.
         private static bool IsAppRequest(HttpContext http) =>
             http.User.Identity?.AuthenticationType == DeviceBearerScheme || http.GetEndpoint()?.Metadata.GetMetadata<ServiceEndpointAttribute>()?.ForApps == true;
 
@@ -520,7 +527,7 @@ namespace Jularr.Backend.Service.Core
         {
             http.Response.Headers.CacheControl = "no-store";
 
-            // Apps keep their session themselves.
+            // Apps receive tokens, not cookies.
             if (IsAppRequest(http))
             {
                 if (result is ISessionResult { Session: { } appSession })

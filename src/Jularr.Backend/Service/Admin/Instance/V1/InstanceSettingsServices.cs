@@ -34,7 +34,8 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                     settings."CollectionLimit",
                     settings."UnitGroupLimit",
                     settings."SubtitleLanguages"::text[] AS "SubtitleLanguages",
-                    settings."PublicUrl"
+                    settings."PublicUrl",
+                    settings."TrustedProxies"::text[] AS "TrustedProxies"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE
@@ -47,6 +48,13 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
     [ServiceEndpoint("PUT", "/api/v1/admin/instance/settings")]
     public sealed class UpdateInstanceSettingsV1 : AdminService<UpdateInstanceSettingsParametersV1, UpdateInstanceSettingsDataV1>
     {
+        private readonly TrustedProxies _proxies;
+
+        internal UpdateInstanceSettingsV1(TrustedProxies proxies)
+        {
+            _proxies = proxies;
+        }
+
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(UpdateInstanceSettingsParametersV1 parameters) => ModuleRequirement.None;
@@ -57,7 +65,8 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
             // Use the canonical writer.
             await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks, Data.UsersConfirmSources,
                 Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes,
-                Data.CollectionLimit, Data.UnitGroupLimit, Data.SubtitleLanguages, Data.PublicUrl), CancellationToken);
+                Data.CollectionLimit, Data.UnitGroupLimit, Data.SubtitleLanguages, Data.PublicUrl, Data.TrustedProxies), CancellationToken);
+            _proxies.Expect(Data.Version + 1);
             return new UpdateResult(true);
         }
     }

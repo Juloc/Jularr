@@ -1,3 +1,4 @@
+using System.Net;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Infrastructure.Sql;
@@ -30,6 +31,14 @@ namespace Jularr.Backend.Logic.Instance
                 data.PublicUrl = Provider.ProviderLogic.ServerAddress(publicUrl, nameof(data.PublicUrl)).AbsoluteUri;
             }
 
+            // A proxy is an address or a network, stored in its canonical form.
+            if (data.TrustedProxies is { } proxies)
+            {
+                data.TrustedProxies = [.. proxies.Select(proxy => IPNetwork.TryParse(proxy, out var network) ? network.ToString()
+                    : IPAddress.TryParse(proxy, out var address) ? new IPNetwork(address, address.GetAddressBytes().Length * 8).ToString()
+                    : throw new DataValidationException(nameof(data.TrustedProxies), "invalid_network")).Distinct(StringComparer.Ordinal)];
+            }
+
             // Reject concurrent edits.
             var sql = new SqlStatement();
             sql.Statement =
@@ -49,6 +58,7 @@ namespace Jularr.Backend.Logic.Instance
                     "UnitGroupLimit" = coalesce(@UnitGroupLimit, settings."UnitGroupLimit"),
                     "SubtitleLanguages" = coalesce(@SubtitleLanguages::varchar(2)[], settings."SubtitleLanguages"),
                     "PublicUrl" = @PublicUrl,
+                    "TrustedProxies" = coalesce(@TrustedProxies::cidr[], settings."TrustedProxies"),
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."Id" = 1
