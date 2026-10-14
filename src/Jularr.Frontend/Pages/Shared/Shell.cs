@@ -18,6 +18,11 @@ namespace Jularr.Frontend.Pages.Shared
                 var library = new ShellLink("nav.library", "/Library", "library");
                 primary.Add(library);
                 mobile.Insert(1, library);
+                if (texts.Capabilities.CanCollect)
+                {
+                    primary.Add(new ShellLink("collections.title", "/Collections", "bookmark"));
+                }
+
                 var watchlist = new ShellLink("watchlist.title", "/Watchlist", "home");
                 primary.Add(watchlist);
                 mobile.Add(watchlist);

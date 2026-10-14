@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.User.Instance.V1
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
         public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
-            bool canManageProfiles, bool canPlayGames, bool canNotify)
+            bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect)
         {
+            CanCollect = canCollect;
             CanNotify = canNotify;
             CanPlayGames = canPlayGames;
             CanRead = canRead;
@@ -45,5 +46,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
         // The profile has an inbox.
         public bool CanNotify { get; }
+
+        // The profile keeps its own collections.
+        public bool CanCollect { get; }
     }
 }

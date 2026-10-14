@@ -16,7 +16,8 @@ Playback gates playback. Disabling a module retains data. Public presentation ex
 capabilities expose implemented grants, and Razor consumes both. Setup module
 progress, per-media/profile visibility and Tracking remain pending.
 
-`Media.sql` follows `Account.sql` in a new installation. It is embedded as
+`Media.sql` follows `Account.sql` in a new installation. It also holds a profile's
+Collections (hand-picked CollectionWorks or a saved filter). It is embedded as
 `Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles,
 WorkExternalIdentities (tmdb/tvdb/imdb mappings, never an alternative Work ID) and
 WatchlistEntries. Episode units carry their air date for acquisition. It is not a migration for an existing database. Media integration

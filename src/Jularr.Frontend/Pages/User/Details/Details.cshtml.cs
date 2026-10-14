@@ -5,7 +5,9 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Data.User.Media.V1;
+using Jularr.Backend.Data.User.Collection.V1;
 using Jularr.Backend.Service.User.Media.V1;
+using Jularr.Backend.Service.User.Collection.V1;
 using Jularr.Backend.Service.User.Request.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Frontend.Framework;
@@ -16,9 +18,11 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Details
 {
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
-        ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
+        RemoveCollectionWorkV1 removeFromCollection, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private WorkDetailsV1? _work;
+        private IReadOnlyList<WorkCollectionV1> _collections = [];
         private PageResult<WorkAvailabilityV1>? _availability;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
         private BaseDataList<GamePlatformV1>? _platforms;
@@ -119,6 +123,16 @@ namespace Jularr.Frontend.Pages.User.Details
                 }
 
                 if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("details-paging").Attribute("aria-label", texts["details.pages"]));
+
+                // Hand-picked collections take or give back this Work.
+                if (_collections.Count > 0)
+                {
+                    page.Content.Add(new UiSection("collections.title", [new Div([.. _collections.Select(collection => (IUiComponent)new Div(new Span(new ValueText(collection.Name)),
+                        new Form<CollectionParametersV1>(form => form.Submit(collection.ContainsWork ? "collections.removeFrom" : "collections.addTo"),
+                            "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=" + (collection.ContainsWork ? "RemoveFromCollection" : "AddToCollection")
+                            + "&collectionId=" + collection.CollectionId.ToString(CultureInfo.InvariantCulture), csrf, new CollectionParametersV1(collection.CollectionId)))
+                        .Class("details-collection"))]).Class("details-collections")]));
+                }
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
@@ -155,6 +169,18 @@ namespace Jularr.Frontend.Pages.User.Details
             return Page();
         }
 
+        public async Task<IActionResult> OnPostAddToCollectionAsync([BindRequired] long collectionId)
+        {
+            await addToCollection.ExecuteAsync<UpdateResult>(new CollectionWorkParametersV1(collectionId, Id), default, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Details/Details", new { id = Id });
+        }
+
+        public async Task<IActionResult> OnPostRemoveFromCollectionAsync([BindRequired] long collectionId)
+        {
+            await removeFromCollection.ExecuteAsync<UpdateResult>(new CollectionWorkParametersV1(collectionId, Id), default, HttpContext.RequestAborted);
+            return RedirectToPage("/User/Details/Details", new { id = Id });
+        }
+
         public async Task<IActionResult> OnPostAsync([BindRequired] bool isWatchlisted)
         {
             await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), new UpdateWatchlistDataV1(isWatchlisted), HttpContext.RequestAborted);
@@ -165,6 +191,10 @@ namespace Jularr.Frontend.Pages.User.Details
         {
             _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
+            if (texts.Capabilities?.CanCollect is true)
+            {
+                _collections = await readCollections.ExecuteAsync<BaseDataList<WorkCollectionV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+            }
             if (texts.Capabilities?.CanRequest is true)
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);

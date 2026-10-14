@@ -194,7 +194,7 @@ namespace Jularr.Backend.Service.Core
             if (profileId is not null)
             {
                 permissions.Add("profile.self.read");
-                permissions.AddRange(["profile.media.read", "profile.watchlist.update", "profile.requests.read", "profile.requests.update", "profile.playback", "profile.notifications"]);
+                permissions.AddRange(["profile.media.read", "profile.watchlist.update", "profile.requests.read", "profile.requests.update", "profile.playback", "profile.notifications", "profile.collections"]);
                 if (ownerAccountId == accountId)
                 {
                     permissions.Add("profile.self.update");
