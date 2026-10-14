@@ -425,4 +425,37 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
         [DataField(typeof(SynologyFields), nameof(SynologyFields.Temperature))]
         public int? Temperature { get; }
     }
+
+    public sealed class SynologyCertificateV1 : BaseResponse
+    {
+        public SynologyCertificateV1(string? sha256, bool isValid, bool isTrusted)
+        {
+            Sha256 = sha256;
+            IsValid = isValid;
+            IsTrusted = isTrusted;
+        }
+
+        // None over plain HTTP.
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyCertificateSha256))]
+        public string? Sha256 { get; }
+
+        // A public authority vouches for it.
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.IsCertificateValid))]
+        public bool IsValid { get; }
+
+        // The Owner confirmed exactly this one.
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.IsCertificateTrusted))]
+        public bool IsTrusted { get; }
+    }
+
+    public sealed class TrustSynologyCertificateDataV1 : BaseData
+    {
+        public TrustSynologyCertificateDataV1(string synologyCertificateSha256)
+        {
+            SynologyCertificateSha256 = synologyCertificateSha256;
+        }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyCertificateSha256))]
+        public string SynologyCertificateSha256 { get; }
+    }
 }

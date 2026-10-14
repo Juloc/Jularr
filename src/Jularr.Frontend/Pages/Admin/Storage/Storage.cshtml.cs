@@ -22,7 +22,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
     public class StorageModel(ReadStorageMountsV1 read, ReadStorageMountV1 readMount, ReadStorageProtocolsV1 readProtocols, ReadStorageLocalPathsV1 readLocalPaths,
         CreateStorageMountV1 create, UpdateStorageMountV1 update, ExecuteStorageMountV1 execute, WakeStorageMountV1 wake, RemoveStorageMountV1 remove,
         UpdateStorageSynologyV1 synology, ReadStorageSynologyStatusV1 synologyStatus, PowerStorageSynologyV1 synologyPower,
-        ReadStorageDirectoriesV1 readDirectories, ReadLibraryRootsV1 readRoots, CreateLibraryRootV1 createRoot, RenameLibraryRootV1 renameRoot, DeleteLibraryRootV1 deleteRoot,
+        ReadStorageSynologyCertificateV1 synologyCertificate, TrustStorageSynologyCertificateV1 trustCertificate, ReadStorageDirectoriesV1 readDirectories, ReadLibraryRootsV1 readRoots, CreateLibraryRootV1 createRoot, RenameLibraryRootV1 renameRoot, DeleteLibraryRootV1 deleteRoot,
         QueueLibraryScanV1 queueScan, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<StorageMountDetailsV1>? _mounts;
@@ -193,6 +193,26 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             }
 
             yield return new Form<StorageMountParametersV1>(form => form.Submit("storage.synology.status"), Address(mount.Id, handler: "SynologyStatus"), csrf, new StorageMountParametersV1(mount.Id));
+            if (mount.SynologyUrl.StartsWith("https:", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new Form<StorageMountParametersV1>(form => form.Submit("storage.synology.certificate"), Address(mount.Id, handler: "SynologyCertificate"), csrf,
+                    new StorageMountParametersV1(mount.Id));
+            }
+
+            // A self-signed certificate is trusted once the Owner compared its fingerprint.
+            if (TempData["SynologyCertificate"] is string certificateJson && JsonSerializer.Deserialize<SynologyCertificateV1>(certificateJson) is { Sha256: { } sha256 } certificate)
+            {
+                var state = certificate.IsValid ? "valid" : certificate.IsTrusted ? "trusted" : "untrusted";
+                yield return new P([new Text("storage.synology.certificate." + state), new ValueText(" " + string.Join(':', sha256.Chunk(2).Select(pair => new string(pair))))]).Attribute("role", "status");
+                if (!certificate.IsValid && !certificate.IsTrusted)
+                {
+                    yield return new Form<TrustSynologyCertificateDataV1>(form =>
+                    {
+                        form.Hidden(item => item.SynologyCertificateSha256);
+                        form.Submit("storage.synology.certificate.trust");
+                    }, Address(mount.Id, handler: "SynologyTrust"), csrf, new TrustSynologyCertificateDataV1(sha256), _failedSection == "SynologyTrust" ? FormError : null);
+                }
+            }
             if (Power is { } power)
             {
                 yield return new P(new Text("storage.synology.confirm." + power)).Attribute("role", "alert");
@@ -377,6 +397,20 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         {
             var status = await synologyStatus.ExecuteAsync<SynologyStatusV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
             TempData["SynologyStatus"] = JsonSerializer.Serialize(status);
+            return LocalRedirect(Address(storageMountId));
+        }
+
+        public async Task<IActionResult> OnPostSynologyCertificateAsync([BindRequired] long storageMountId)
+        {
+            var certificate = await synologyCertificate.ExecuteAsync<SynologyCertificateV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
+            TempData["SynologyCertificate"] = JsonSerializer.Serialize(certificate);
+            return LocalRedirect(Address(storageMountId));
+        }
+
+        public async Task<IActionResult> OnPostSynologyTrustAsync([BindRequired] long storageMountId, [BindRequired] string synologyCertificateSha256)
+        {
+            _failedSection = "SynologyTrust";
+            await trustCertificate.ExecuteAsync<UpdateResult>(new StorageMountParametersV1(storageMountId), new TrustSynologyCertificateDataV1(synologyCertificateSha256), HttpContext.RequestAborted);
             return LocalRedirect(Address(storageMountId));
         }
 

@@ -79,8 +79,9 @@ namespace Jularr.Backend.Data.Logic.Storage
 
     internal sealed class StorageSynologyData : BaseData
     {
-        public StorageSynologyData(long storageMountId, string? synologyUrl, string? synologyUsername, byte[]? synologyProtectedPassword)
+        public StorageSynologyData(long storageMountId, string? synologyUrl, string? synologyUsername, byte[]? synologyProtectedPassword, string? synologyCertificateSha256 = null)
         {
+            SynologyCertificateSha256 = synologyCertificateSha256;
             StorageMountId = storageMountId;
             SynologyUrl = synologyUrl;
             SynologyUsername = synologyUsername;
@@ -99,5 +100,28 @@ namespace Jularr.Backend.Data.Logic.Storage
         [JsonIgnore]
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.ProtectedPassword))]
         public byte[]? SynologyProtectedPassword { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyCertificateSha256))]
+        public string? SynologyCertificateSha256 { get; }
+    }
+
+    internal sealed class StorageSynologyCertificateData : BaseData
+    {
+        public StorageSynologyCertificateData(long storageMountId, string synologyUrl, string synologyCertificateSha256)
+        {
+            StorageMountId = storageMountId;
+            SynologyUrl = synologyUrl;
+            SynologyCertificateSha256 = synologyCertificateSha256;
+        }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        // The address the certificate was read from.
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyUrl))]
+        public string SynologyUrl { get; }
+
+        [DataField(typeof(SynologyFields), nameof(SynologyFields.SynologyCertificateSha256))]
+        public string SynologyCertificateSha256 { get; }
     }
 }

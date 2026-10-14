@@ -12,6 +12,7 @@ using Jularr.Backend.Data.System.Storage.V1;
 using Jularr.Backend.Service.System.Storage.V1;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Nas;
+using Jularr.Integrations.Data.Synology;
 using Jularr.Integrations.Logic.Synology;
 using Jularr.MountHelper;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +25,16 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class StorageTests
     {
+        [TestMethod]
+        public void Synology_Certificates_NeedAnAuthorityOrTheOwnersTrust()
+        {
+            var selfSigned = new SynologyCertificate(new string('B', 64), false);
+            Assert.IsFalse(SynologyClient.Accepts(null, selfSigned));
+            Assert.IsFalse(SynologyClient.Accepts(new string('C', 64), selfSigned));
+            Assert.IsTrue(SynologyClient.Accepts(new string('b', 64), selfSigned));
+            Assert.IsTrue(SynologyClient.Accepts(null, new SynologyCertificate(new string('D', 64), true)));
+        }
+
         private const string Route = "/api/v1/admin/storage/mounts";
         private const string Password = "nas-password,with=punctuation";
 
@@ -325,6 +336,14 @@ namespace Jularr.Backend.Tests
             var json = await read.Content.ReadAsStringAsync();
             Assert.IsFalse(json.Contains("dsm-secret", StringComparison.Ordinal));
             Assert.AreEqual("admin", (await read.Content.ReadFromJsonAsync<StorageMountDetailsV1>())!.SynologyUsername);
+
+            // A trusted certificate belongs to its address; plain HTTP has none.
+            await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"SynologyCertificateSha256\" = repeat('A', 64)");
+            using var same = await host.SendAsync(HttpMethod.Put, route, new UpdateStorageSynologyDataV1("http://nas.test:5000", "admin", null));
+            Assert.AreEqual(HttpStatusCode.OK, same.StatusCode, await same.Content.ReadAsStringAsync());
+            Assert.IsNotNull(await host.ScalarAsync("SELECT \"SynologyCertificateSha256\" FROM \"StorageMounts\""));
+            using var certificate = await host.SendAsync(HttpMethod.Post, route + "/certificate");
+            Assert.IsNull((await certificate.Content.ReadFromJsonAsync<SynologyCertificateV1>())!.Sha256);
 
             // Health in one session that is closed again; the password only in the login body.
             using var health = await host.SendAsync(HttpMethod.Post, route + "/status");

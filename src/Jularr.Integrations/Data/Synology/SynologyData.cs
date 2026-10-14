@@ -1,10 +1,20 @@
 namespace Jularr.Integrations.Data.Synology
 {
-    internal sealed class SynologyAccess(Uri baseAddress, string username, string password)
+    internal sealed class SynologyAccess(Uri baseAddress, string username, string password, string? certificateSha256)
     {
         public Uri BaseAddress { get; } = baseAddress;
         public string Username { get; } = username;
         public string Password { get; } = password;
+
+        // A self-signed certificate the Owner confirmed.
+        public string? CertificateSha256 { get; } = certificateSha256;
+    }
+
+    // What the NAS presents: its certificate's SHA-256 and whether a public authority vouches for it.
+    internal sealed class SynologyCertificate(string sha256, bool isValid)
+    {
+        public string Sha256 { get; } = sha256;
+        public bool IsValid { get; } = isValid;
     }
 
     internal sealed class SynologyStatus(string? model, string? version, int? temperature, IReadOnlyList<SynologyVolume> volumes, IReadOnlyList<SynologyDisk> disks)

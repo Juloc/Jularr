@@ -238,7 +238,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true);
             AddClient<IgdbClient>(services, 20, 8, agent: true);
             AddClient<LibretroClient>(services, 60, 16, agent: true);
-            AddClient<SynologyClient>(services, 30, 4);
+            AddClient<SynologyClient>(services, 30, 4, handler: SynologyClient.CreateHandler);
             AddClient<ServarrApiClient>(services, 60, 32);
             AddClient<PlexServerClient>(services, 20, 16);
             AddClient<NewznabClient>(services, 30, 16);

@@ -99,7 +99,8 @@ namespace Jularr.Backend.Logic.Storage
                     mount."Id" AS "StorageMountId",
                     mount."SynologyUrl",
                     mount."SynologyUsername",
-                    mount."SynologyProtectedPassword"
+                    mount."SynologyProtectedPassword",
+                    mount."SynologyCertificateSha256"
                 FROM
                     "StorageMounts" AS mount
                 WHERE
@@ -123,6 +124,7 @@ namespace Jularr.Backend.Logic.Storage
                     "SynologyUrl" = @SynologyUrl,
                     "SynologyUsername" = @SynologyUsername,
                     "SynologyProtectedPassword" = CASE WHEN @SynologyUrl IS NOT NULL THEN coalesce(@SynologyProtectedPassword, mount."SynologyProtectedPassword") END,
+                    "SynologyCertificateSha256" = CASE WHEN @SynologyUrl = mount."SynologyUrl" THEN mount."SynologyCertificateSha256" END,
                     "UpdatedAt" = statement_timestamp()
                 WHERE
                     mount."Id" = @StorageMountId;
@@ -131,6 +133,28 @@ namespace Jularr.Backend.Logic.Storage
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new KeyNotFoundException("The storage connection was not found.");
+            }
+        }
+
+        // Trusts the certificate read from the address that is still configured.
+        public static async Task TrustStorageSynologyCertificateAsync(this LogicContext ctx, StorageSynologyCertificateData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "StorageMounts" AS mount
+                SET
+                    "SynologyCertificateSha256" = @SynologyCertificateSha256,
+                    "UpdatedAt" = statement_timestamp()
+                WHERE
+                    mount."Id" = @StorageMountId
+                    AND mount."SynologyUrl" = @SynologyUrl;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.SynologyUrl), "invalid_transition");
             }
         }
 

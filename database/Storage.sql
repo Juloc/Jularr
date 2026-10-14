@@ -33,6 +33,8 @@ CREATE TABLE "StorageMounts" (
     "SynologyUrl" varchar(2048) NULL CHECK ("SynologyUrl" ~ '^https?://'),
     "SynologyUsername" varchar(256) NULL CHECK (length("SynologyUsername") > 0),
     "SynologyProtectedPassword" bytea NULL,
+    -- A self-signed DSM certificate the Owner confirmed once (SHA-256 of the certificate); a new address forgets it.
+    "SynologyCertificateSha256" varchar(64) NULL CHECK ("SynologyCertificateSha256" ~ '^[0-9A-F]{64}$'),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
     "CreatedAt" timestamptz NOT NULL DEFAULT statement_timestamp(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT statement_timestamp(),

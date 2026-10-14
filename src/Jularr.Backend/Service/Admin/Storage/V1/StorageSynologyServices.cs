@@ -106,6 +106,23 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
     // Decrypts the DSM password for one call and maps DSM failures to service errors.
     internal static class StorageSynology
     {
+        public static async Task<SynologyCertificate?> ReadCertificateAsync(SynologyClient synology, StorageSynologyData access, CancellationToken ct)
+        {
+            if (access.SynologyUrl is not { } url)
+            {
+                throw new DataValidationException(nameof(UpdateStorageSynologyDataV1.SynologyUrl), "required");
+            }
+
+            try
+            {
+                return await synology.ReadCertificateAsync(Address(url), ct);
+            }
+            catch (SynologyException exception)
+            {
+                throw new ServiceUnavailableException(exception.Code);
+            }
+        }
+
         public static Task<StorageSynologyData> ReadAccessAsync(LogicContext ctx, long storageMountId, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -115,7 +132,8 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     mount."Id" AS "StorageMountId",
                     mount."SynologyUrl",
                     mount."SynologyUsername",
-                    mount."SynologyProtectedPassword"
+                    mount."SynologyProtectedPassword",
+                    mount."SynologyCertificateSha256"
                 FROM
                     "StorageMounts" AS mount
                 WHERE
@@ -124,6 +142,8 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             sql.Parameters.Add(new StorageMountParameters(storageMountId));
             return ctx.ReadSql.ReadRequiredAsync<StorageSynologyData>(sql, ct);
         }
+
+        public static Uri Address(string url) => new(url.EndsWith('/') ? url : url + "/");
 
         public static async Task<T> RunAsync<T>(StorageSynologyData access, IDataProtector protector, Func<SynologyAccess, Task<T>> call)
         {
@@ -147,12 +167,71 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             // DSM I/O outside transactions.
             try
             {
-                return await call(new SynologyAccess(new Uri(url.EndsWith('/') ? url : url + "/"), username, password));
+                return await call(new SynologyAccess(Address(url), username, password, access.SynologyCertificateSha256));
             }
             catch (SynologyException exception)
             {
                 throw new ServiceUnavailableException(exception.Code);
             }
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/storage/mounts/{storageMountId:long}/synology/certificate")]
+    public sealed class ReadStorageSynologyCertificateV1 : AdminService<StorageMountParametersV1, NoData>
+    {
+        private readonly SynologyClient _synology;
+
+        internal ReadStorageSynologyCertificateV1(SynologyClient synology)
+        {
+            _synology = synology;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<SynologyCertificateV1>()];
+        protected override ModuleRequirement GetInstanceModules(StorageMountParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(StorageMountParametersV1 parameters, Type resultType) => new("storage.update");
+
+        // What the NAS presents now, beside what the Owner confirmed.
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var access = await Context.ExecuteBatchAsync((ctx, ct) => StorageSynology.ReadAccessAsync(ctx, Parameters.StorageMountId, ct), CancellationToken);
+            var certificate = await StorageSynology.ReadCertificateAsync(_synology, access, CancellationToken);
+            return new SynologyCertificateV1(certificate?.Sha256, certificate?.IsValid ?? false,
+                certificate is not null && string.Equals(certificate.Sha256, access.SynologyCertificateSha256, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/storage/mounts/{storageMountId:long}/synology/certificate/trust")]
+    public sealed class TrustStorageSynologyCertificateV1 : AdminService<StorageMountParametersV1, TrustSynologyCertificateDataV1>
+    {
+        private readonly SynologyClient _synology;
+
+        internal TrustStorageSynologyCertificateV1(SynologyClient synology)
+        {
+            _synology = synology;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(StorageMountParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(StorageMountParametersV1 parameters, Type resultType) => new("storage.update");
+
+        // Only the certificate the NAS still presents, and the Owner saw, is trusted.
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            var access = await Context.ExecuteBatchAsync((ctx, ct) => StorageSynology.ReadAccessAsync(ctx, Parameters.StorageMountId, ct), CancellationToken);
+            var certificate = await StorageSynology.ReadCertificateAsync(_synology, access, CancellationToken);
+            if (certificate is null || access.SynologyUrl is not { } url || !string.Equals(certificate.Sha256, Data.SynologyCertificateSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new DataValidationException(nameof(Data.SynologyCertificateSha256), "invalid_transition");
+            }
+
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.TrustStorageSynologyCertificateAsync(new StorageSynologyCertificateData(Parameters.StorageMountId, url, certificate.Sha256), ct);
+                return true;
+            }, CancellationToken);
+            return new UpdateResult(true);
         }
     }
 }
