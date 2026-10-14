@@ -56,6 +56,9 @@ LibraryRoots (`Library.sql`) place one media type below a connection; paths on o
 connection never overlap. Their location and media type are fixed, the name is
 version-checked. Removing a path forgets its inventory and empty assets, never
 Works or files. `QueueLibraryScanV1` queues one active scan per path in Operations.
+The storage worker also calls `ScheduleLibraryScansV1`: every path without a scan in the
+last `Storage:ScanIntervalHours` (default 24, 0 turns it off) is rescanned, except on
+connections last probed offline, so a sleeping NAS is not woken.
 
 Hosts opt in to `AddJularrWorkers` (`Jularr.Workers`); its worker requeues interrupted scans on
 start, claims queued operations with `SKIP LOCKED` and calls System services, which

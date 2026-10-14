@@ -33,6 +33,38 @@ namespace Jularr.Backend.Logic.Operation
             return (await ctx.ReadOptionalAsync<OperationData>(sql, ct) ?? throw new KeyNotFoundException("The library root was not found.")).Id;
         }
 
+        public static Task<int> QueueDueLibraryScansAsync(this LogicContext ctx, OperationSinceData data, CancellationToken ct)
+        {
+            // Storage known to be offline is not scanned, so a sleeping NAS stays asleep.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "Operations" ("OperationTypeId", "LibraryRootId")
+                SELECT
+                    1,
+                    root."Id"
+                FROM
+                    "LibraryRoots" AS root
+                    LEFT JOIN "StorageMountStates" AS state ON state."StorageMountId" = root."StorageMountId"
+                WHERE
+                    coalesce(state."StorageAvailabilityTypeId", 1) = 1
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "Operations" AS operation
+                        WHERE
+                            operation."LibraryRootId" = root."Id"
+                            AND operation."OperationTypeId" = 1
+                            AND operation."CreatedAt" > @Since
+                    )
+                ON CONFLICT ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task<bool> QueueBackupAsync(this LogicContext ctx, OperationCreationData data, CancellationToken ct)
         {
             // One backup at a time.

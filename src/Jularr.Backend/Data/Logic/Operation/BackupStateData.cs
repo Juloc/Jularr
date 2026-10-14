@@ -3,17 +3,6 @@ using Jularr.Backend.Data.Fields.Operation;
 
 namespace Jularr.Backend.Data.Logic.Operation
 {
-    internal sealed class BackupSinceData : BaseData
-    {
-        public BackupSinceData(DateTime since)
-        {
-            Since = since;
-        }
-
-        [DataField(typeof(BackupFields), nameof(BackupFields.CreatedAt))]
-        public DateTime Since { get; }
-    }
-
     internal sealed class BackupAttemptData : BaseData
     {
         public BackupAttemptData(bool hasRecentAttempt)

@@ -20,6 +20,9 @@ namespace Jularr.Backend.Service.Core
         // A stale empty mount point is never a library.
         public bool RequireMountPoint { get; set; } = true;
 
+        // Libraries rescan after this many hours; 0 turns it off.
+        public int ScanIntervalHours { get; set; } = 24;
+
         internal string GetConnectionPath(StorageProtocolType protocol, long storageMountId, string sharePath)
         {
             if (protocol == StorageProtocolType.Local)

@@ -161,6 +161,33 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Scan_IsQueuedAgainAfterTheIntervalButNotForOfflineStorage()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path);
+            var mountId = await CreateMountAsync(host);
+            await CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            async Task<bool> ScheduleAsync()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                return (await scope.ServiceProvider.GetRequiredService<ScheduleLibraryScansV1>().ExecuteAsync<UpdateResult>(new LibraryScanScheduleParametersV1(), default,
+                    CancellationToken.None)).Success;
+            }
+
+            // A recent scan is enough.
+            Assert.IsTrue(await ScheduleAsync());
+            Assert.IsFalse(await ScheduleAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"CreatedAt\" = now() - interval '25 hours', \"OperationStatusTypeId\" = 3, \"FinishedAt\" = now()");
+            Assert.IsTrue(await ScheduleAsync());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 1"));
+
+            // A sleeping NAS stays asleep.
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"CreatedAt\" = now() - interval '25 hours', \"OperationStatusTypeId\" = 3, \"FinishedAt\" = now()");
+            await host.Fixture.RunSqlAsync("INSERT INTO \"StorageMountStates\" (\"StorageMountId\", \"StorageAvailabilityTypeId\", \"CheckedAt\") VALUES (" + mountId + ", 2, now())");
+            Assert.IsFalse(await ScheduleAsync());
+        }
+
+        [TestMethod]
         public async Task Storage_LocalPathsWakeAndBrowsing_StayInsideConfiguredConnections()
         {
             using var storage = new TemporaryDirectory();

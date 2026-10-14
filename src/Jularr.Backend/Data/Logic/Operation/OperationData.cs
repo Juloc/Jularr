@@ -66,4 +66,16 @@ namespace Jularr.Backend.Data.Logic.Operation
         [DataField(typeof(OperationFields), nameof(OperationFields.ErrorKey))]
         public string? ErrorKey { get; }
     }
+
+    // Operations created after this point count as recent.
+    internal sealed class OperationSinceData : BaseData
+    {
+        public OperationSinceData(DateTime since)
+        {
+            Since = since;
+        }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.CreatedAt))]
+        public DateTime Since { get; }
+    }
 }

@@ -162,7 +162,7 @@ Aktionen über den separaten Linux-Mount-Helfer. Lokale Compose-Pfade sind nur a
 `Storage:LocalPaths` wählbar; Wake-on-LAN ist pro Verbindung als „nur Owner“ oder
 „automatisch bei Abruf“ einstellbar. Library-Pfade liegen auf derselben Seite unter
 der Verbindung und werden über einen sicheren Ordner-Browser gewählt. Scans laufen
-im Hintergrund-Worker, `/Admin/Library` zeigt Inventar und Zuordnung, `/Admin/Activity` die Scans, die
+im Hintergrund-Worker, automatisch alle `Storage:ScanIntervalHours` (Standard 24, 0 aus; schlafende NAS bleiben unberührt), `/Admin/Library` zeigt Inventar und Zuordnung, `/Admin/Activity` die Scans, die
 Detailseite die gespeicherte Verfügbarkeit. Dafür sind die frischen
 [Storage-](database/Storage.sql) und [Library-Baselines](database/Library.sql)
 erforderlich; `Media:FfprobePath` aktiviert die Stream-Analyse. Deployment, Rechte und

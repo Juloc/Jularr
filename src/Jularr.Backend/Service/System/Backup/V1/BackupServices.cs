@@ -107,7 +107,7 @@ namespace Jularr.Backend.Service.System.Backup.V1
                             AND operation."CreatedAt" > @Since
                     ) AS "HasRecentAttempt";
                 """;
-            sql.Parameters.Add(new BackupSinceData(since));
+            sql.Parameters.Add(new OperationSinceData(since));
             if ((await Context.ReadSql.ReadRequiredAsync<BackupAttemptData>(sql, CancellationToken)).HasRecentAttempt)
             {
                 return new UpdateResult(false);
