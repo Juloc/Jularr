@@ -28,12 +28,15 @@ namespace Jularr.Frontend.Pages.User.Player
             if (_item is { } item)
             {
                 var asset = item.MediaAssetId.ToString(CultureInfo.InvariantCulture);
-                var context = MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber);
+                var unit = MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber);
+                var context = unit is null ? null : item.UnitTitle is { } name ? unit + " · " + name : unit;
                 var source = new PlayerSource(item.CanonicalTitle, context, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), "/api/v1/playback/assets/" + asset + "/sessions",
                     "/api/v1/playback/sessions/", antiforgery.GetAndStoreTokens(HttpContext).RequestToken ?? "", null,
                     [.. _tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Audio).Select(Track)],
                     [.. _tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Subtitle).Select(Track)],
-                    "/api/v1/playback/assets/" + asset + "/subtitles/");
+                    "/api/v1/playback/assets/" + asset + "/subtitles/",
+                    item.PreviousMediaAssetId is { } previous ? "/Player/" + previous.ToString(CultureInfo.InvariantCulture) : null,
+                    item.NextMediaAssetId is { } next ? "/Player/" + next.ToString(CultureInfo.InvariantCulture) : null);
                 page.Content.Add(new UiPlayer(source, assets));
             }
             else if (FormError is not null)

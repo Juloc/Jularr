@@ -38,7 +38,46 @@ namespace Jularr.Backend.Service.User.Playback.V1
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",
                     parent."Number" AS "ParentUnitNumber",
-                    progress."PositionMs" AS "ResumePositionMs"
+                    unit."Title" AS "UnitTitle",
+                    progress."PositionMs" AS "ResumePositionMs",
+                    (
+                        SELECT
+                            other."Id"
+                        FROM
+                            "MediaAssets" AS other
+                            JOIN "WorkUnits" AS otherUnit ON otherUnit."Id" = other."WorkUnitId"
+                            LEFT JOIN "WorkUnits" AS otherParent ON otherParent."Id" = otherUnit."ParentWorkUnitId"
+                        WHERE
+                            other."WorkId" = asset."WorkId"
+                            AND other."MediaAssetTypeId" = asset."MediaAssetTypeId"
+                            AND (coalesce(otherParent."Number", 0), otherUnit."Number") < (coalesce(parent."Number", 0), unit."Number")
+                            AND EXISTS (SELECT 1 FROM "StoredFiles" AS file WHERE file."MediaAssetId" = other."Id" AND file."MissingSince" IS NULL)
+                        ORDER BY
+                            coalesce(otherParent."Number", 0) DESC,
+                            otherUnit."Number" DESC,
+                            other."WorkVersionId" = asset."WorkVersionId" DESC,
+                            other."Id"
+                        LIMIT 1
+                    ) AS "PreviousMediaAssetId",
+                    (
+                        SELECT
+                            other."Id"
+                        FROM
+                            "MediaAssets" AS other
+                            JOIN "WorkUnits" AS otherUnit ON otherUnit."Id" = other."WorkUnitId"
+                            LEFT JOIN "WorkUnits" AS otherParent ON otherParent."Id" = otherUnit."ParentWorkUnitId"
+                        WHERE
+                            other."WorkId" = asset."WorkId"
+                            AND other."MediaAssetTypeId" = asset."MediaAssetTypeId"
+                            AND (coalesce(otherParent."Number", 0), otherUnit."Number") > (coalesce(parent."Number", 0), unit."Number")
+                            AND EXISTS (SELECT 1 FROM "StoredFiles" AS file WHERE file."MediaAssetId" = other."Id" AND file."MissingSince" IS NULL)
+                        ORDER BY
+                            coalesce(otherParent."Number", 0),
+                            otherUnit."Number",
+                            other."WorkVersionId" = asset."WorkVersionId" DESC,
+                            other."Id"
+                        LIMIT 1
+                    ) AS "NextMediaAssetId"
                 FROM
                     "MediaAssets" AS asset
                     JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId

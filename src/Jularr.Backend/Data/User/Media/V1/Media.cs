@@ -19,6 +19,22 @@ namespace Jularr.Backend.Data.User.Media.V1
         public int PageSize { get; }
     }
 
+    public sealed class ReadCreatorWorksParametersV1 : BaseParameters
+    {
+        public ReadCreatorWorksParametersV1(string name, int page = 1, int pageSize = 25)
+        {
+            Name = name;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creator))]
+        public string Name { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
     public sealed class WorkParametersV1 : BaseParameters
     {
         public WorkParametersV1(long workId)
@@ -89,8 +105,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl, string[] platforms)
+            string? plexUrl, string[] platforms, string[] creators)
         {
+            Creators = creators;
             Platforms = platforms;
             PlexUrl = plexUrl;
             Id = id;
@@ -139,6 +156,10 @@ namespace Jularr.Backend.Data.User.Media.V1
         // Platforms a game is available on.
         [DataField(typeof(WorkFields), nameof(WorkFields.Titles))]
         public string[] Platforms { get; }
+
+        // The authors or artists, each on its own.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creators))]
+        public string[] Creators { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData
@@ -172,8 +193,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     {
         public WorkAvailabilityV1(long id, long workVersionId, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
             long fileCount, long sizeBytes, long? durationMs, bool isAvailable, int? height, string[] audioLanguages, string[] subtitleLanguages, long? resumePositionMs, bool isCompleted, bool isEmulated,
-            string? groupName)
+            string? groupName, string? unitTitle)
         {
+            UnitTitle = unitTitle;
             GroupName = groupName;
             IsEmulated = isEmulated;
             Id = id;
@@ -245,5 +267,8 @@ namespace Jularr.Backend.Data.User.Media.V1
         // The named section the unit falls into, if any.
         [DataField(typeof(WorkUnitGroupFields), nameof(WorkUnitGroupFields.Name), false)]
         public string? GroupName { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitTitle))]
+        public string? UnitTitle { get; }
     }
 }

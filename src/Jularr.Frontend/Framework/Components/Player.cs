@@ -4,7 +4,7 @@ namespace Jularr.Frontend.Framework
 {
     // Server-rendered player chrome; Modules/Player owns the client behavior.
     public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null,
-        IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null);
+        IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null, string? PreviousHref = null, string? NextHref = null);
 
     // One audio or subtitle choice; unsupported ones stay visible but disabled.
     public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsDefault, bool IsSupported);
@@ -50,13 +50,13 @@ namespace Jularr.Frontend.Framework
                                     .Attribute("value", "1").Attribute("data-role", "volume").Attribute("aria-label", texts["player.volume"])
                             ).Class("player__audio"),
                             new Div(
-                                Action("previous", "player.previousEpisode", "previous").Attribute("disabled", "disabled"),
+                                Neighbour(Action("previous", "player.previous", "previous"), source.PreviousHref),
                                 Action("back", "player.back10", "back-10"),
                                 new Button(Icon("play"), Icon("pause")).Class("player__button player__button--primary")
                                     .Attribute("data-action", "toggle").Attribute("aria-label", texts["player.play"])
                                     .Attribute("data-label-play", texts["player.play"]).Attribute("data-label-pause", texts["player.pause"]),
                                 Action("forward", "player.forward30", "forward-30"),
-                                Action("next", "player.nextEpisode", "next").Attribute("disabled", "disabled")
+                                Neighbour(Action("next", "player.next", "next"), source.NextHref)
                             ).Class("player__transport"),
                             new Div([
                                 .. Choice("subtitles", "player.subtitles", new Icon("subtitles", assets), Subtitles.Count > 0),
@@ -94,6 +94,9 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-antiforgery", source.AntiforgeryToken)
                 .Attribute("data-subtitle-url", source.SubtitleUrl ?? "")
                 .WriteTo(writer, encoder, texts);
+
+            // Without a neighbour the button stays visible but inactive.
+            static HtmlElement Neighbour(HtmlElement button, string? href) => href is null ? button.Attribute("disabled", "disabled") : button.Attribute("data-href", href);
 
             HtmlElement Action(string action, string labelKey, string icon) => new Button(Icon(icon)).Class("player__button")
                 .Attribute("data-action", action).Attribute("aria-label", texts[labelKey]);

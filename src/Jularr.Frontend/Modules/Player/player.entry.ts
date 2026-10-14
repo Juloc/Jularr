@@ -62,9 +62,21 @@ async function start(player: HTMLElement): Promise<void> {
     };
     setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
     video.addEventListener("pause", () => report(false));
-    video.addEventListener("ended", () => report(true));
+    video.addEventListener("ended", () => {
+        report(true);
+        // An album or season continues with the next unit.
+        const next = player.querySelector<HTMLElement>("[data-action=next][data-href]")?.dataset.href;
+        if (next) location.assign(next);
+    });
     document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
     window.addEventListener("pagehide", event => report(!event.persisted, false));
+
+    function go(direction: "previous" | "next") {
+        const href = player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`)?.dataset.href;
+        if (!href) return;
+        report(false);
+        location.assign(href);
+    }
 
     // Planning needs the real browser capabilities; another audio track asks for a new plan.
     async function requestPlan(audioStreamIndex: number | null): Promise<PlaybackPlan | null> {
@@ -186,6 +198,8 @@ async function start(player: HTMLElement): Promise<void> {
         subtitles: () => panel("subtitles"),
         more: () => panel("more"),
         close: () => report(true, false),
+        previous: () => go("previous"),
+        next: () => go("next"),
         minimize: () => void minimize(),
         expand: () => expand(true),
         stop

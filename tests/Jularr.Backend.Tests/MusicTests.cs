@@ -28,6 +28,53 @@ namespace Jularr.Backend.Tests
         private const string Album = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
 
         [TestMethod]
+        public async Task Album_PlaysItsPresentTracksInOrderAndLeadsToTheArtist()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 6, 'Album'), (20, 6, 'Other Album');
+                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (10, 'Artist', 'Artist A & Artist B', TRUE), (20, 'Artist', 'artist a', TRUE);
+                INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "Title") VALUES (101, 10, 5, 1, 'One'), (102, 10, 5, 2, 'Two'), (103, 10, 5, 3, 'Three');
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (1, 10);
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (1, 10, 1);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") VALUES (1, 10, 1, 101, 2), (2, 10, 1, 102, 2), (3, 10, 1, 103, 2);
+                """);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Music", MediaType.Music);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "MissingSince")
+                VALUES ({rootId}, 'Album/01.flac', 1, now(), now(), 1, NULL), ({rootId}, 'Album/02.flac', 1, now(), now(), 2, now()), ({rootId}, 'Album/03.flac', 1, now(), now(), 3, NULL);
+                """);
+
+            // A missing track is skipped; the first and last have one neighbour.
+            using var first = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/1");
+            var opening = (await first.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Playback.V1.PlaybackItemV1>())!;
+            Assert.AreEqual("One", opening.UnitTitle);
+            Assert.IsNull(opening.PreviousMediaAssetId);
+            Assert.AreEqual(3L, opening.NextMediaAssetId);
+            using var last = await host.SendAsync(HttpMethod.Get, "/api/v1/playback/assets/3");
+            var closing = (await last.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Playback.V1.PlaybackItemV1>())!;
+            Assert.AreEqual(1L, closing.PreviousMediaAssetId);
+            Assert.IsNull(closing.NextMediaAssetId);
+            using var player = await host.SendAsync(HttpMethod.Get, "/Player/1");
+            var html = await player.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, player.StatusCode, html);
+            StringAssert.Contains(html, "data-href=\"/Player/3\"");
+            StringAssert.Contains(html, "Track 1 &#xB7; One");
+
+            // Each artist leads to everything of theirs the profile may see.
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/10");
+            var page = await details.Content.ReadAsStringAsync();
+            StringAssert.Contains(page, "href=\"/Creator?name=Artist%20B\"");
+            using var creator = await host.SendAsync(HttpMethod.Get, "/api/v1/creators/works?name=ARTIST%20A");
+            CollectionAssert.AreEquivalent(new[] { 10L, 20L }, (await creator.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
+            using var creatorPage = await host.SendAsync(HttpMethod.Get, "/Creator?name=Artist%20A");
+            Assert.AreEqual(HttpStatusCode.OK, creatorPage.StatusCode);
+            StringAssert.Contains(await creatorPage.Content.ReadAsStringAsync(), "Other Album");
+        }
+
+        [TestMethod]
         public async Task Music_MusicBrainzAlbumSearchAndImport_PlacesTracksOnTheirUnits()
         {
             using var storage = new TemporaryDirectory();

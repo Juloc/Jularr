@@ -149,4 +149,15 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
         public LibrarySortType LibrarySortTypeId { get; }
     }
+
+    internal sealed class CreatorData : BaseData
+    {
+        public CreatorData(string name)
+        {
+            Name = name;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creator))]
+        public string Name { get; }
+    }
 }

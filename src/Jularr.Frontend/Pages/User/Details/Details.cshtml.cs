@@ -60,6 +60,16 @@ namespace Jularr.Frontend.Pages.User.Details
                     work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }
                     .Where(part => part is not null)), work.Overview, actionKey, actionHref));
 
+                // Each author or artist leads to their other titles.
+                var creators = new List<IUiComponent>();
+                foreach (var creator in work.Creators)
+                {
+                    if (creators.Count > 0) creators.Add(new ValueText(", "));
+                    creators.Add(new A(new ValueText(creator)).Attribute("href", "/Creator?name=" + Uri.EscapeDataString(creator)));
+                }
+
+                if (creators.Count > 0) page.Content.Add(new P([.. creators]).Class("details-creators"));
+
                 // Shared personal actions.
                 var actions = new List<IUiComponent>();
                 actions.Add(new Form<UpdateWatchlistDataV1>(form =>
@@ -144,7 +154,9 @@ namespace Jularr.Frontend.Pages.User.Details
         }
 
         private Table<WorkAvailabilityV1> Versions(IReadOnlyList<WorkAvailabilityV1> items) => new Table<WorkAvailabilityV1>(items)
-            .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber) ?? texts["details.wholeWork"]))
+            .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber) is { } unit
+                ? item.UnitTitle is { } name ? unit + " · " + name : unit
+                : texts["details.wholeWork"]))
             .Resource(item => item.MediaAssetTypeId, "table.type", type => "media.asset." + type)
             .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
             .Content("details.audio", item => new ValueText(string.Join(", ", item.AudioLanguages)))

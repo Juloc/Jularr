@@ -132,8 +132,11 @@ namespace Jularr.Backend.Data.User.Playback.V1
     public sealed class PlaybackItemV1 : BaseResponse
     {
         public PlaybackItemV1(long mediaAssetId, long workId, string canonicalTitle, MediaAssetType mediaAssetTypeId, WorkUnitType? workUnitTypeId, decimal? unitNumber,
-            decimal? parentUnitNumber, long? resumePositionMs)
+            decimal? parentUnitNumber, string? unitTitle, long? resumePositionMs, long? previousMediaAssetId, long? nextMediaAssetId)
         {
+            UnitTitle = unitTitle;
+            PreviousMediaAssetId = previousMediaAssetId;
+            NextMediaAssetId = nextMediaAssetId;
             MediaAssetId = mediaAssetId;
             WorkId = workId;
             CanonicalTitle = canonicalTitle;
@@ -165,8 +168,18 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
 
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitTitle))]
+        public string? UnitTitle { get; }
+
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PositionMs), false)]
         public long? ResumePositionMs { get; }
+
+        // The neighbouring units of the same Work that can be played, e.g. the album's previous and next track.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id), false)]
+        public long? PreviousMediaAssetId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id), false)]
+        public long? NextMediaAssetId { get; }
     }
 
     public sealed class StartPlaybackDataV1 : BaseData

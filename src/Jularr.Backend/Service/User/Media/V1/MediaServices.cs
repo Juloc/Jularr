@@ -122,7 +122,19 @@ namespace Jularr.Backend.Service.User.Media.V1
                             AND EXISTS (SELECT 1 FROM "StoredFiles" AS file WHERE file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL)
                         ORDER BY
                             platform."Name"
-                    ) AS "Platforms"
+                    ) AS "Platforms",
+                    coalesce((
+                        SELECT
+                            regexp_split_to_array(btrim(fact."Value"), '\s*[,;&]\s*')
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" IN ('Author', 'Artist')
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ), ARRAY[]::text[]) AS "Creators"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
@@ -189,7 +201,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                             AND (section."ParentNumber", section."Number") >= (coalesce(unitGroup."FirstParentNumber", 0), unitGroup."FirstNumber")
                             AND (section."ParentNumber", section."Number") <= (coalesce(unitGroup."LastParentNumber", 0), unitGroup."LastNumber")
                         LIMIT 1
-                    ) AS "GroupName"
+                    ) AS "GroupName",
+                    unit."Title" AS "UnitTitle"
                 FROM
                     "MediaAssets" AS asset
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
@@ -241,6 +254,70 @@ namespace Jularr.Backend.Service.User.Media.V1
             sql.Parameters.Add(new EmulatedPlatformsData(GameRomMatching.EmulatedPlatforms));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkAvailabilityV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/creators/works")]
+    public sealed class ReadCreatorWorksV1 : UserService<ReadCreatorWorksParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadCreatorWorksParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadCreatorWorksParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override PageRequest GetPageRequest(ReadCreatorWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Everything the profile may see by this author or artist, oldest first.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id",
+                    work."MediaTypeId",
+                    visible."MediaSubtypeId",
+                    work."CanonicalTitle",
+                    entry."WorkId" IS NOT NULL AS "IsWatchlisted",
+                    work."ReleaseYear"::integer AS "ReleaseYear",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Poster'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "PosterUrl"
+                FROM
+                    "ProfileWorks" AS visible
+                    JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = visible."ProfileId"
+                WHERE
+                    visible."ProfileId" = @ProfileId
+                    AND NOT visible."IsHidden"
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" IN ('Author', 'Artist')
+                            AND lower(@Name) = ANY(regexp_split_to_array(lower(btrim(fact."Value")), '\s*[,;&]\s*'))
+                    )
+                ORDER BY
+                    work."ReleaseYear" NULLS LAST,
+                    work."CanonicalTitle",
+                    work."Id"
+                LIMIT @PageSize
+                OFFSET @Offset;
+                """;
+            sql.Parameters.Add(new CreatorData(Parameters.Name));
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            sql.Page = Page;
+            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
         }
     }
 
