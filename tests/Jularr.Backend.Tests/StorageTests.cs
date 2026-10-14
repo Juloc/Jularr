@@ -344,6 +344,13 @@ namespace Jularr.Backend.Tests
             Assert.IsNotNull(await host.ScalarAsync("SELECT \"SynologyCertificateSha256\" FROM \"StorageMounts\""));
             using var certificate = await host.SendAsync(HttpMethod.Post, route + "/certificate");
             Assert.IsNull((await certificate.Content.ReadFromJsonAsync<SynologyCertificateV1>())!.Sha256);
+            using var trust = await host.SendAsync(HttpMethod.Post, route + "/certificate/trust", new TrustSynologyCertificateDataV1(new string('A', 64)));
+            Assert.AreEqual(HttpStatusCode.BadRequest, trust.StatusCode);
+            using var otherAddress = await host.SendAsync(HttpMethod.Put, route, new UpdateStorageSynologyDataV1("http://nas2.test:5000", "admin", "dsm-secret"));
+            Assert.AreEqual(HttpStatusCode.OK, otherAddress.StatusCode, await otherAddress.Content.ReadAsStringAsync());
+            Assert.IsTrue(await host.ScalarAsync("SELECT \"SynologyCertificateSha256\" FROM \"StorageMounts\"") is null or DBNull);
+            using var back = await host.SendAsync(HttpMethod.Put, route, new UpdateStorageSynologyDataV1("http://nas.test:5000", "admin", "dsm-secret"));
+            Assert.AreEqual(HttpStatusCode.OK, back.StatusCode);
 
             // Health in one session that is closed again; the password only in the login body.
             using var health = await host.SendAsync(HttpMethod.Post, route + "/status");
