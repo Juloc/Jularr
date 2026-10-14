@@ -77,7 +77,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
             }
 
             var server = await _plex.ReadServerAsync(new PlexServerConnection(baseUrl, token), CancellationToken);
-            var data = new PlexServerSaveData(baseUrl.ToString(), Data.Token is null ? null : _plex.Protect(token), server.MachineIdentifier);
+            var data = new PlexServerSaveData(baseUrl.AbsoluteUri, Data.Token is null ? null : _plex.Protect(token), server.MachineIdentifier);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SavePlexServerAsync(data, ct);

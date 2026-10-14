@@ -32,7 +32,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     ARRAY(SELECT (candidate ->> 'Id')::integer FROM jsonb_array_elements(match."Candidates") AS candidate) AS "CandidateIds",
                     ARRAY(
                         SELECT
-                            concat_ws(' · ', candidate ->> 'Title', candidate ->> 'Year', candidate ->> 'Format')
+                            left(concat_ws(' · ', candidate ->> 'Title', candidate ->> 'Year', candidate ->> 'Format'), 500)
                         FROM
                             jsonb_array_elements(match."Candidates") AS candidate
                     ) AS "CandidateLabels"

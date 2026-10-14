@@ -405,23 +405,25 @@ namespace Jularr.Backend.Data.Fields
 
     public sealed class StringArrayField : DataField
     {
-        private StringField? _element;
+        private readonly StringField _element = new();
 
         public StringArrayField() : base(typeof(string[]), NpgsqlDbType.Array | NpgsqlDbType.Text)
         {
         }
 
-        // Longest single entry; every entry is also required and not blank.
-        public required int ItemMaximumLength { get; init; }
-
-        private StringField Element => _element ??= new() { MaximumLength = ItemMaximumLength, AllowBlank = false };
+        // Longest single entry; every entry is also trimmed, required and not blank.
+        public required int ItemMaximumLength
+        {
+            get => _element.MaximumLength ?? 0;
+            init => _element = new() { MaximumLength = value, AllowBlank = false, Trim = true };
+        }
 
         // "de, en" from one text field becomes ["de", "en"].
         public bool SplitsCommas { get; init; }
 
-        public override object? Normalize(object? value) => SplitsCommas && value is string[] values
-            ? values.SelectMany<string?, string?>(item => item is null ? new string?[] { null } : item.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToArray()
-            : value;
+        public override object? Normalize(object? value) => value is not string[] values ? value
+            : SplitsCommas ? values.SelectMany<string?, string?>(item => item is null ? new string?[] { null } : item.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToArray()
+            : values.Select(item => (string?)_element.Normalize(item)).ToArray();
 
         protected override void ValidateValue(object value, string name, int? maximumLength)
         {
@@ -433,7 +435,7 @@ namespace Jularr.Backend.Data.Fields
 
             foreach (var item in values)
             {
-                Element.Validate(item, name);
+                _element.Validate(item, name);
             }
         }
     }

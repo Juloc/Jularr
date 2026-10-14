@@ -31,7 +31,8 @@ namespace Jularr.Integrations.Logic.Plex
                 };
                 if (kind is { } sectionKind && ReadString(directory, "key") is { } key && SectionKey().IsMatch(key))
                 {
-                    found.Add(new PlexSection(key, sectionKind, ReadString(directory, "title") ?? key));
+                    var title = ReadString(directory, "title") ?? key;
+                    found.Add(new PlexSection(key, sectionKind, title.Length > 200 ? title[..200] : title));
                 }
             }
 

@@ -74,7 +74,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
                 throw new ServiceUnavailableException("media_server_outdated");
             }
 
-            var data = new MediaServerSaveData(MediaServers.ProviderKey(type), baseUrl.ToString(), Data.ApiKey is null ? null : _servers.Protect(apiKey), server.Id);
+            var data = new MediaServerSaveData(MediaServers.ProviderKey(type), baseUrl.AbsoluteUri, Data.ApiKey is null ? null : _servers.Protect(apiKey), server.Id);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 await ctx.SaveMediaServerAsync(data, ct);

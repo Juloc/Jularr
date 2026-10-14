@@ -214,7 +214,6 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadRequiredAsync<AcquisitionProfileStateData>(sql, ct);
         }
 
-        private static string[] Terms(string[] values) =>
-            [.. values.Select(value => value.Trim()).Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
+        private static string[] Terms(string[] values) => [.. values.Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 }

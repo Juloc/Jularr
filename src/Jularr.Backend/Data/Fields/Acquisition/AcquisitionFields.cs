@@ -37,7 +37,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField ReleaseIdentity = new(NpgsqlDbType.Varchar) { MaximumLength = 600, AllowBlank = false };
-        public static readonly StringArrayField ReleaseIdentities = new() { ItemMaximumLength = 1000 };
+        public static readonly StringArrayField ReleaseIdentities = new() { ItemMaximumLength = 600 };
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false };
         public static readonly StringField SourceUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
         public static readonly StringField QualityKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
