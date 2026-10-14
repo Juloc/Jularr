@@ -98,7 +98,7 @@ namespace Jularr.Backend.Tests
         }
 
         private static async Task<long[]> WorksAsync(Host host, long collectionId) =>
-            [.. (await ReadAsync<PageResult<WorkDetailsV1>>(host, Route + "/" + collectionId + "/works")).Items.Select(item => item.Id)];
+            [.. (await ReadAsync<PageResult<WorkCardV1>>(host, Route + "/" + collectionId + "/works")).Items.Select(item => item.Id)];
 
         private static async Task<T> ReadAsync<T>(Host host, string path)
         {

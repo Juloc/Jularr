@@ -247,7 +247,7 @@ namespace Jularr.Backend.Service.User.Media.V1
     [ServiceEndpoint("GET", "/api/v1/watchlist")]
     public sealed class ReadWatchlistV1 : UserService<ReadWatchlistParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkDetailsV1>>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadWatchlistParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(ReadWatchlistParametersV1 parameters, Type resultType) => new("profile.media.read");
         protected override PageRequest GetPageRequest(ReadWatchlistParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
@@ -265,7 +265,6 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."CanonicalTitle",
                     TRUE AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    NULL::text AS "Overview",
                     (
                         SELECT
                             fact."Value"
@@ -277,10 +276,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
-                    ) AS "PosterUrl",
-                    NULL::text AS "BackdropUrl",
-                    NULL::text AS "PlexUrl",
-                    ARRAY[]::text[] AS "Platforms"
+                    ) AS "PosterUrl"
                 FROM
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
@@ -296,7 +292,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 """;
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
-            return await Context.ReadSql.ReadPageAsync<WorkDetailsV1>(sql, CancellationToken);
+            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
         }
     }
 

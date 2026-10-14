@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
     [ServiceEndpoint("GET", "/api/v1/collections/{collectionId:long}/works")]
     public sealed class ReadCollectionWorksV1 : UserService<CollectionWorksParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkDetailsV1>>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
         protected override ModuleRequirement GetInstanceModules(CollectionWorksParametersV1 parameters) => ModuleRequirement.All("Library", "Collections");
         protected override ServicePermission GetPermission(CollectionWorksParametersV1 parameters, Type resultType) => new("profile.collections");
         protected override PageRequest GetPageRequest(CollectionWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
@@ -106,7 +106,6 @@ namespace Jularr.Backend.Service.User.Collection.V1
                     work."CanonicalTitle",
                     EXISTS (SELECT 1 FROM "WatchlistEntries" AS entry WHERE entry."ProfileId" = collection."ProfileId" AND entry."WorkId" = work."Id") AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    NULL::text AS "Overview",
                     (
                         SELECT
                             fact."Value"
@@ -118,10 +117,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
-                    ) AS "PosterUrl",
-                    NULL::text AS "BackdropUrl",
-                    NULL::text AS "PlexUrl",
-                    ARRAY[]::text[] AS "Platforms"
+                    ) AS "PosterUrl"
                 FROM
                     "Collections" AS collection
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = collection."ProfileId" AND NOT visible."IsHidden"
@@ -192,7 +188,7 @@ namespace Jularr.Backend.Service.User.Collection.V1
                 """;
             sql.Parameters.Add(new CollectionOwnerData(Auth.ProfileId!.Value, Parameters.CollectionId));
             sql.Page = Page;
-            return await Context.ReadSql.ReadPageAsync<WorkDetailsV1>(sql, CancellationToken);
+            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
         }
     }
 

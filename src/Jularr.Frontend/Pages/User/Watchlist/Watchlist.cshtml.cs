@@ -9,7 +9,7 @@ namespace Jularr.Frontend.Pages.User.Watchlist
 {
     public sealed class WatchlistModel(ReadWatchlistV1 read) : JularrPage
     {
-        private PageResult<WorkDetailsV1>? _works;
+        private PageResult<WorkCardV1>? _works;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -43,7 +43,7 @@ namespace Jularr.Frontend.Pages.User.Watchlist
 
         protected override async Task LoadDataAsync()
         {
-            _works = await read.ExecuteAsync<PageResult<WorkDetailsV1>>(new ReadWatchlistParametersV1(PageNumber), HttpContext.RequestAborted);
+            _works = await read.ExecuteAsync<PageResult<WorkCardV1>>(new ReadWatchlistParametersV1(PageNumber), HttpContext.RequestAborted);
         }
     }
 }

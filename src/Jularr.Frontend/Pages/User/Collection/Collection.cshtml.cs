@@ -17,7 +17,7 @@ namespace Jularr.Frontend.Pages.User.Collection
         UiText texts) : JularrPage
     {
         private CollectionV1? _collection;
-        private PageResult<WorkDetailsV1>? _works;
+        private PageResult<WorkCardV1>? _works;
         private UpdateCollectionDataV1? _input;
 
         [BindProperty(SupportsGet = true)]
@@ -84,7 +84,7 @@ namespace Jularr.Frontend.Pages.User.Collection
         {
             var token = HttpContext.RequestAborted;
             _collection = await read.ExecuteAsync<CollectionV1>(new CollectionParametersV1(Id), token);
-            _works = await readWorks.ExecuteAsync<PageResult<WorkDetailsV1>>(new CollectionWorksParametersV1(Id, Math.Max(1, PageNumber)), token);
+            _works = await readWorks.ExecuteAsync<PageResult<WorkCardV1>>(new CollectionWorksParametersV1(Id, Math.Max(1, PageNumber)), token);
         }
 
         public async Task<IActionResult> OnPostAsync(string? name, [BindRequired] long version, MediaType? mediaTypeId, MediaSubtype? mediaSubtypeId, int? releaseYearFrom, int? releaseYearTo,
