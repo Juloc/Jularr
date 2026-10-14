@@ -16,18 +16,25 @@ namespace Jularr.E2E.Tests
         private Process? _process;
         private bool _created;
 
-        private JularrInstance(string adminConnection)
+        private readonly IReadOnlyDictionary<string, string> _settings;
+
+        private JularrInstance(string adminConnection, IReadOnlyDictionary<string, string> settings)
         {
             _adminConnection = adminConnection;
+            _settings = settings;
             Address = new Uri("http://127.0.0.1:" + FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture) + "/");
         }
 
         public Uri Address { get; }
 
+        // Folders the test fills, removed with the instance.
+        public string Storage => _storage;
+
         // The repository holding this test project.
         public static string Repository { get; } = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
-        public static async Task<JularrInstance> StartAsync()
+        // Settings are configuration keys such as "Providers:Tmdb".
+        public static async Task<JularrInstance> StartAsync(IReadOnlyDictionary<string, string>? settings = null)
         {
             var admin = Environment.GetEnvironmentVariable("JULARR_TEST_DB");
             if (string.IsNullOrWhiteSpace(admin))
@@ -36,7 +43,7 @@ namespace Jularr.E2E.Tests
             }
 
             // Whatever was set up before a failure is taken down again.
-            var instance = new JularrInstance(admin!);
+            var instance = new JularrInstance(admin!, settings ?? new Dictionary<string, string>());
             try
             {
                 await instance.CreateDatabaseAsync();
@@ -140,6 +147,11 @@ namespace Jularr.E2E.Tests
             start.Environment["JULARR_DB"] = ConnectionString;
             start.Environment["Storage__MountRoot"] = _storage;
             start.Environment["Storage__RequireMountPoint"] = "false";
+            foreach (var (key, value) in _settings)
+            {
+                start.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;
+            }
+
             _process = Process.Start(start) ?? throw new InvalidOperationException("The Jularr host did not start.");
             _process.OutputDataReceived += (_, line) => Output(line.Data);
             _process.ErrorDataReceived += (_, line) => Output(line.Data);

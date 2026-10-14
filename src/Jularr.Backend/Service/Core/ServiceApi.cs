@@ -112,6 +112,12 @@ namespace Jularr.Backend.Service.Core
             services.Configure<StorageOptions>(configuration.GetSection("Storage"));
             services.AddSingleton(new NasMountClient { SocketPath = configuration["Storage:MountHelperSocket"] });
             services.Configure<MediaOptions>(configuration.GetSection("Media"));
+            var providers = configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions();
+            if (providers.Addresses.Any(address => !address.IsAbsoluteUri || address.Scheme is not ("http" or "https") || !address.AbsolutePath.EndsWith('/')
+                || address.UserInfo.Length > 0 || address.Query.Length > 0))
+            {
+                throw new InvalidOperationException("Provider addresses must be http or https addresses ending in a slash.");
+            }
             services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
             services.AddSingleton(new MediaTranscoder { ExecutablePath = configuration["Media:FfmpegPath"] });
             services.AddSingleton(new ArchiveTools { Par2Path = configuration["Usenet:Par2Path"], SevenZipPath = configuration["Usenet:SevenZipPath"] });
@@ -129,17 +135,17 @@ namespace Jularr.Backend.Service.Core
                 PgRestorePath = configuration["Backup:PgRestorePath"],
                 Connection = new PostgresConnection(target.Host ?? "localhost", target.Port, target.Database ?? "", target.Username ?? "", target.Password)
             });
-            return RegisterServices(services, [typeof(Service).Assembly]);
+            return RegisterServices(services, [typeof(Service).Assembly], providers);
         }
 
         internal static IServiceCollection AddJularrServices(this IServiceCollection services, NpgsqlDataSource database, params Assembly[] assemblies)
         {
             // Tests own isolated data sources.
             services.AddSingleton(new SqlDatabase(database));
-            return RegisterServices(services, assemblies);
+            return RegisterServices(services, assemblies, new ProviderOptions());
         }
 
-        private static IServiceCollection RegisterServices(IServiceCollection services, Assembly[] assemblies)
+        private static IServiceCollection RegisterServices(IServiceCollection services, Assembly[] assemblies, ProviderOptions providers)
         {
             // Recent warnings and errors for the Owner's system page.
             services.TryAddSingleton<RecentLogs>();
@@ -260,9 +266,9 @@ namespace Jularr.Backend.Service.Core
             AddClient<GutenbergClient>(services, 60, null, agent: true);
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
-            AddClient<OpenLibraryClient>(services, 15, 4, agent: true);
-            AddClient<AniListClient>(services, 15, 4, agent: true);
-            AddClient<MusicBrainzClient>(services, 20, 4, agent: true);
+            AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary);
+            AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList);
+            AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz);
             AddClient<IgdbClient>(services, 20, 8, agent: true);
             AddClient<LibretroClient>(services, 60, 16, agent: true);
             AddClient<SynologyClient>(services, 30, 4, handler: SynologyClient.CreateHandler);
@@ -270,7 +276,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<PlexServerClient>(services, 20, 16);
             AddClient<MediaServerClient>(services, 30, 32);
             AddClient<NewznabClient>(services, 30, 16);
-            AddClient<TmdbClient>(services, 15, 4, baseAddress: new Uri("https://api.themoviedb.org/3/"));
+            AddClient<TmdbClient>(services, 15, 4, baseAddress: providers.Tmdb);
             AddClient<SabnzbdClient>(services, 15, 16);
             AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
             AddClient<SubDlClient>(services, 30, 12, agent: true);

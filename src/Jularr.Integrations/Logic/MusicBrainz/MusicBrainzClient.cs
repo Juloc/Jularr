@@ -9,7 +9,6 @@ namespace Jularr.Integrations.Logic.MusicBrainz
     // MusicBrainz: keyless album metadata; the service allows one request per second per application.
     internal sealed partial class MusicBrainzClient(HttpClient http)
     {
-        private static readonly Uri Api = new("https://musicbrainz.org/ws/2/");
         private static readonly SemaphoreSlim Pace = new(1, 1);
         private static readonly TimeSpan Spacing = TimeSpan.FromMilliseconds(1100);
         private static DateTimeOffset _last = DateTimeOffset.MinValue;
@@ -107,7 +106,7 @@ namespace Jularr.Integrations.Logic.MusicBrainz
                     await Task.Delay(wait, ct);
                 }
 
-                response = await http.GetAsync(new Uri(Api, path), HttpCompletionOption.ResponseHeadersRead, ct);
+                response = await http.GetAsync(new Uri(path, UriKind.Relative), HttpCompletionOption.ResponseHeadersRead, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
             {

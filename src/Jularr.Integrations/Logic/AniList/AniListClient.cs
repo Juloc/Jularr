@@ -9,7 +9,6 @@ namespace Jularr.Integrations.Logic.AniList
     // AniList: keyless anime and manga metadata through its public GraphQL endpoint.
     internal sealed partial class AniListClient(HttpClient http)
     {
-        private static readonly Uri Endpoint = new("https://graphql.anilist.co");
         private static readonly TimeSpan Spacing = TimeSpan.FromMilliseconds(700);
         private static readonly SemaphoreSlim Pace = new(1, 1);
         private static DateTimeOffset _last = DateTimeOffset.MinValue;
@@ -89,7 +88,7 @@ namespace Jularr.Integrations.Logic.AniList
                 }
 
                 _last = DateTimeOffset.UtcNow;
-                response = await http.PostAsJsonAsync(Endpoint, new Dictionary<string, object> { ["query"] = query, ["variables"] = variables }, ct);
+                response = await http.PostAsJsonAsync(http.BaseAddress, new Dictionary<string, object> { ["query"] = query, ["variables"] = variables }, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
             {

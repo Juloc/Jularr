@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Instance.V1;
@@ -165,12 +166,12 @@ namespace Jularr.Backend.Tests
         public async Task AniList_NullFields_ReadAsMissing()
         {
             var sources = new FakeMangaSources { Manga = """{"id":102,"title":{"romaji":"Reidai","english":null,"native":null},"startDate":null,"volumes":null,"description":null,"coverImage":null,"staff":null}""" };
-            var manga = await new AniListClient(new HttpClient(sources)).ReadAsync(Jularr.Integrations.Data.AniList.AniListMediaType.Manga, 102, CancellationToken.None);
+            var manga = await new AniListClient(new HttpClient(sources) { BaseAddress = new ProviderOptions().AniList }).ReadAsync(Jularr.Integrations.Data.AniList.AniListMediaType.Manga, 102, CancellationToken.None);
             Assert.AreEqual("Reidai", manga.RomajiTitle);
             Assert.IsNull(manga.Volumes);
             Assert.AreEqual(0, manga.Authors.Count);
             sources.Manga = "null";
-            await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.AniList.AniListException>(() => new AniListClient(new HttpClient(sources)).ReadAsync(Jularr.Integrations.Data.AniList.AniListMediaType.Manga, 102, CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<Jularr.Integrations.Data.AniList.AniListException>(() => new AniListClient(new HttpClient(sources) { BaseAddress = new ProviderOptions().AniList }).ReadAsync(Jularr.Integrations.Data.AniList.AniListMediaType.Manga, 102, CancellationToken.None));
         }
 
         private static byte[] Archive(string header, int length) => [.. Encoding.Latin1.GetBytes(header), .. new byte[length - header.Length]];

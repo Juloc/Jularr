@@ -48,7 +48,7 @@ jobs:
   # A fresh installation in a real browser (Playwright, Chromium).
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:18
@@ -83,7 +83,12 @@ jobs:
       - run: dotnet build tests/Jularr.E2E.Tests --configuration Release
       - name: Install Chromium and its system libraries
         run: pwsh tests/Jularr.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+      # Test films are made and played with FFmpeg, as in a real installation.
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg
       - run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build
+        env:
+          JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
       - name: Keep screenshots of a failed run
         if: failure()
         uses: actions/upload-artifact@v4

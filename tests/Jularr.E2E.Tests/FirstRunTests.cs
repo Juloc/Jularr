@@ -57,16 +57,7 @@ namespace Jularr.E2E.Tests
             }
             catch
             {
-                // The picture helps; its own failure must not hide the real one.
-                try
-                {
-                    var folder = Directory.CreateDirectory(Path.Combine(JularrInstance.Repository, "TestResults", "e2e")).FullName;
-                    await page.ScreenshotAsync(new PageScreenshotOptions { Path = Path.Combine(folder, "first-run.png"), FullPage = true });
-                }
-                catch (PlaywrightException)
-                {
-                }
-
+                await Evidence.SaveAsync(page, "first-run");
                 throw;
             }
         }

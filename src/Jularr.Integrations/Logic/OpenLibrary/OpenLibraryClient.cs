@@ -69,7 +69,7 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             HttpResponseMessage response;
             try
             {
-                response = await http.GetAsync(new Uri(new Uri("https://openlibrary.org/"), path), HttpCompletionOption.ResponseHeadersRead, ct);
+                response = await http.GetAsync(new Uri(path, UriKind.Relative), HttpCompletionOption.ResponseHeadersRead, ct);
             }
             catch (Exception exception) when (exception is HttpRequestException || exception is TaskCanceledException && !ct.IsCancellationRequested)
             {
