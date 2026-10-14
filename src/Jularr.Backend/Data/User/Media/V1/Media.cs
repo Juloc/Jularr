@@ -105,8 +105,10 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl, string[] platforms, string[] creators)
+            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName)
         {
+            FranchiseId = franchiseId;
+            FranchiseName = franchiseName;
             Creators = creators;
             Platforms = platforms;
             PlexUrl = plexUrl;
@@ -160,6 +162,13 @@ namespace Jularr.Backend.Data.User.Media.V1
         // The authors or artists, each on its own.
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creators))]
         public string[] Creators { get; }
+
+        // The provider's film series, while franchises are switched on.
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Id), false)]
+        public long? FranchiseId { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
+        public string? FranchiseName { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData

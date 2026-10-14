@@ -168,7 +168,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), Limit(work.Title)!,
                 work.OriginalTitle == work.Title ? null : Limit(work.OriginalTitle), work.Year is >= 1800 and <= 2200 ? work.Year : null,
                 JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tmdb");
-            return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
+            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var workId = await ctx.SaveWorkMetadataAsync(data, token);
+                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, Limit(work.CollectionName)), token);
+                return workId;
+            }, ct);
         }
 
         private static TmdbMediaKind Kind(MediaType mediaType) => mediaType switch

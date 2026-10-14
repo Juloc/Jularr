@@ -79,8 +79,11 @@ namespace Jularr.Integrations.Data.Tmdb
     internal sealed class TmdbWork
     {
         public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,
-            IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries)
+            IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries, int? collectionId = null,
+            string? collectionName = null)
         {
+            CollectionId = collectionId;
+            CollectionName = collectionName;
             GenreIds = genreIds;
             OriginalLanguage = originalLanguage;
             OriginCountries = originCountries;
@@ -111,6 +114,10 @@ namespace Jularr.Integrations.Data.Tmdb
         public IReadOnlyList<int> GenreIds { get; }
         public string? OriginalLanguage { get; }
         public IReadOnlyList<string> OriginCountries { get; }
+
+        // A movie's film series.
+        public int? CollectionId { get; }
+        public string? CollectionName { get; }
     }
 
     // Ranked lists; Upcoming exists for movies only.

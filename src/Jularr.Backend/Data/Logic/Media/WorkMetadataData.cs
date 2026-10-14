@@ -160,4 +160,24 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creator))]
         public string Name { get; }
     }
+
+    // The provider's film series of a Work, or none.
+    internal sealed class WorkFranchiseData : BaseData
+    {
+        public WorkFranchiseData(long workId, int? tmdbCollectionId, string? name)
+        {
+            WorkId = workId;
+            TmdbCollectionId = tmdbCollectionId;
+            Name = name;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.TmdbCollectionId), false)]
+        public int? TmdbCollectionId { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
+        public string? Name { get; }
+    }
 }

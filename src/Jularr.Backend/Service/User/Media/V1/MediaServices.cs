@@ -135,11 +135,15 @@ namespace Jularr.Backend.Service.User.Media.V1
                             fact."IsManual" DESC,
                             fact."Id"
                         LIMIT 1
-                    ), ARRAY[]::text[]) AS "Creators"
+                    ), ARRAY[]::text[]) AS "Creators",
+                    franchise."Id" AS "FranchiseId",
+                    franchise."Name" AS "FranchiseName"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
+                    LEFT JOIN "InstanceModules" AS module ON module."Key" = 'Franchises' AND module."IsEnabled"
+                    LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId" AND module."Key" IS NOT NULL
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND work."Id" = @WorkId;

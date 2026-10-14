@@ -8,6 +8,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
+using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Data.Tmdb;
@@ -25,7 +26,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Discover_FeedsSearchAndRequest_ResolveOneCanonicalWork()
         {
-            await using var host = await CreateHostAsync();
+            await using var host = await CreateHostAsync(razor: true);
 
             // Feeds come from TMDB with the viewer state of each title.
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
@@ -65,6 +66,19 @@ namespace Jularr.Backend.Tests
             var entry = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single();
             Assert.AreEqual(MediaStateType.Requested, entry.MediaStateTypeId);
             Assert.AreEqual("https://image.tmdb.org/t/p/w500/poster.jpg", entry.PosterUrl);
+
+            // TMDB's collection is the Work's film series, listed on its own page.
+            var franchiseId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Franchises\" WHERE \"TmdbCollectionId\" = 2344"))!;
+            using var series = await host.SendAsync(HttpMethod.Get, "/api/v1/franchises/" + franchiseId + "/works");
+            Assert.AreEqual(HttpStatusCode.OK, series.StatusCode, await series.Content.ReadAsStringAsync());
+            Assert.AreEqual(details.WorkId, (await series.Content.ReadFromJsonAsync<BaseDataList<WorkCardV1>>())!.Single().Id);
+            using var detailsPage = await host.SendAsync(HttpMethod.Get, "/Details/" + details.WorkId);
+            StringAssert.Contains(await detailsPage.Content.ReadAsStringAsync(), "/Franchise/" + franchiseId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Franchise/" + franchiseId);
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "The Matrix Collection");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Franchises'");
+            using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/franchises/" + franchiseId);
+            Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
         }
 
         [TestMethod]
@@ -203,7 +217,7 @@ namespace Jularr.Backend.Tests
                 {
                     "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
                     "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
-                    "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"}}",
+                    "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}}",
                     _ => null
                 };
                 return Task.FromResult(body is null
