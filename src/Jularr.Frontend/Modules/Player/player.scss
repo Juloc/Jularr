@@ -77,6 +77,7 @@
     &__progress {
         display: grid;
         grid-template-columns: auto 1fr auto;
+        position: relative;
         align-items: center;
         gap: 12px;
         font-variant-numeric: tabular-nums;
@@ -87,6 +88,19 @@
     &__volume { accent-color: var(--accent); }
 
     &__timeline { width: 100%; }
+
+    // A seek thumbnail floats above its place on the timeline.
+    &__preview {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        z-index: 3;
+        border-radius: 6px;
+        background-repeat: no-repeat;
+        background-color: #000;
+        pointer-events: none;
+
+        &[hidden] { display: none; }
+    }
     &__volume { width: 96px; }
 
     &__actions {

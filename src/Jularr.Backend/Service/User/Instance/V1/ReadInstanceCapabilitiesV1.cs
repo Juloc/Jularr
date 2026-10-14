@@ -39,6 +39,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
             var statistics = modules.Any(module => module.Key == "Statistics" && module.IsEnabled);
             var unitGroups = modules.Any(module => module.Key == "UnitGroups" && module.IsEnabled);
             var homeLayout = modules.Any(module => module.Key == "HomeLayout" && module.IsEnabled);
+            var trickplay = modules.Any(module => module.Key == "Trickplay" && module.IsEnabled);
 
             // Reuse verified central grants.
             var permissions = ServiceGate.GetPermissions(Auth.AccountId, Auth.ProfileId, Auth.ProfileOwnerAccountId, Auth.AccountRoleTypeId);
@@ -61,7 +62,8 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 permissions.Contains("instance.settings.read", StringComparer.Ordinal),
                 library && permissions.Contains("storage.update", StringComparer.Ordinal),
                 library && unitGroups && permissions.Contains("media.manual.update", StringComparer.Ordinal),
-                library && homeLayout && permissions.Contains("profile.media.read", StringComparer.Ordinal));
+                library && homeLayout && permissions.Contains("profile.media.read", StringComparer.Ordinal),
+                library && playback && trickplay && permissions.Contains("profile.playback", StringComparer.Ordinal));
         }
     }
 }

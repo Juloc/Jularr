@@ -52,6 +52,55 @@ namespace Jularr.Integrations.Logic.Media
             }
         }
 
+        // One thumbnail every interval from keyframes only, 10 by 10 per JPEG sheet named 001.jpg onwards.
+        public async Task<bool> CreateTrickplayAsync(string inputPath, string folder, int intervalSeconds, int width, CancellationToken ct)
+        {
+            if (!IsAvailable)
+            {
+                throw new ProviderUnavailableException();
+            }
+
+            var start = new ProcessStartInfo(ExecutablePath!)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            foreach (var argument in (string[])["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-protocol_whitelist", "file", "-skip_frame", "nokey", "-i", inputPath,
+                "-an", "-sn", "-dn", "-vf", "fps=1/" + intervalSeconds.ToString(CultureInfo.InvariantCulture) + ",scale=" + width.ToString(CultureInfo.InvariantCulture) + ":-2,tile=10x10",
+                "-q:v", "5", Path.Combine(folder, "%03d.jpg")])
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromMinutes(30));
+            try
+            {
+                using var process = Process.Start(start) ?? throw new ProviderUnavailableException();
+                var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+                var errors = process.StandardError.ReadToEndAsync(timeout.Token);
+                try
+                {
+                    await process.WaitForExitAsync(timeout.Token);
+                    await Task.WhenAll(output, errors);
+                }
+                catch (OperationCanceledException)
+                {
+                    process.Kill(true);
+                    ct.ThrowIfCancellationRequested();
+                    return false;
+                }
+
+                return process.ExitCode == 0;
+            }
+            catch (Win32Exception)
+            {
+                throw new ProviderUnavailableException();
+            }
+        }
+
         // A text subtitle stream or file as WebVTT; bounded so a stuck read never holds a request.
         public async Task<bool> ConvertSubtitleAsync(string inputPath, string? inputFormat, int? streamIndex, string outputPath, CancellationToken ct)
         {

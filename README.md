@@ -342,8 +342,9 @@ Dateien laufen als HLS: FFmpeg kopiert passende Spuren (Remux) oder wandelt nach
 H.264/AAC (Transcode), erzeugt Segmente erst bei Bedarf und begrenzt Vorlauf und
 parallele Jobs. Konfiguration: `Media:FfmpegPath`, `Media:TranscodeCachePath`,
 `Media:MaxTranscodes`, optional `Media:VideoEncoderArguments` und
-`Media:HardwareAccelerationArguments` mit Software-Fallback. Home und automatische
-Arr-Abläufe bleiben offen.
+`Media:HardwareAccelerationArguments` mit Software-Fallback. Vorschaubilder beim Spulen
+(Modul „Trickplay“, standardmäßig aus) rendert ein Hintergrund-Worker mit FFmpeg nach
+`Media:TrickplayPath`; ohne diesen Ordner gibt es keine.
 Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.

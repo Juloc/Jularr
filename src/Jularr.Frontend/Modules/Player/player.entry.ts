@@ -79,6 +79,38 @@ async function start(player: HTMLElement): Promise<void> {
         location.assign(href);
     }
 
+    // Seek thumbnails over the timeline where the server has rendered them.
+    async function previews(): Promise<void> {
+        const url = player.dataset.trickplayUrl;
+        const preview = player.querySelector<HTMLElement>("[data-role=preview]");
+        if (!url || !preview) return;
+        const response = await fetch(url, { credentials: "same-origin" }).catch(() => null);
+        if (!response?.ok) return;
+        const layout = await response.json() as { intervalSeconds: number; frames: number; columns: number; rows: number; tileWidth: number; tileHeight: number };
+        preview.style.width = `${layout.tileWidth}px`;
+        preview.style.height = `${layout.tileHeight}px`;
+        const show = (seconds: number, x: number) => {
+            const frame = Math.min(layout.frames - 1, Math.max(0, Math.floor(seconds / layout.intervalSeconds)));
+            const perSheet = layout.columns * layout.rows;
+            const tile = frame % perSheet;
+            preview.style.backgroundImage = `url("${url}/${Math.floor(frame / perSheet) + 1}")`;
+            preview.style.backgroundPosition = `-${(tile % layout.columns) * layout.tileWidth}px -${Math.floor(tile / layout.columns) * layout.tileHeight}px`;
+            // A hidden element has no offset parent; it is shown before it is placed.
+            preview.hidden = false;
+            const area = (preview.offsetParent ?? timeline).getBoundingClientRect();
+            preview.style.left = `${Math.min(Math.max(0, x - area.left - layout.tileWidth / 2), area.width - layout.tileWidth)}px`;
+        };
+        timeline.addEventListener("pointermove", event => {
+            const bounds = timeline.getBoundingClientRect();
+            show(Number(timeline.max) * Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)), event.clientX);
+        });
+        timeline.addEventListener("input", () => {
+            const bounds = timeline.getBoundingClientRect();
+            show(Number(timeline.value), bounds.left + bounds.width * (Number(timeline.value) / Math.max(1, Number(timeline.max))));
+        });
+        for (const name of ["pointerleave", "change"]) timeline.addEventListener(name, () => { preview.hidden = true; });
+    }
+
     // Planning needs the real browser capabilities; another audio track asks for a new plan.
     async function requestPlan(audioStreamIndex: number | null): Promise<PlaybackPlan | null> {
         for (let attempt = 0; ; attempt++) {
@@ -184,6 +216,7 @@ async function start(player: HTMLElement): Promise<void> {
         player.classList.toggle("player--muted", video.muted);
     });
     timeline.addEventListener("input", () => { video.currentTime = Number(timeline.value); });
+    void previews();
     volume.addEventListener("input", () => { video.volume = Number(volume.value); video.muted = video.volume === 0; });
     player.querySelector<HTMLElement>("[data-action=pip]")!.hidden = !document.pictureInPictureEnabled;
 

@@ -292,4 +292,51 @@ namespace Jularr.Backend.Data.User.Playback.V1
         [JsonIgnore]
         public string ContentType { get; }
     }
+
+    // Seek thumbnails: one tile per interval, row by row on sheets of columns times rows.
+    public sealed class TrickplayV1 : BaseResponse
+    {
+        public TrickplayV1(int intervalSeconds, int frames, int columns, int rows, int tileWidth, int tileHeight)
+        {
+            IntervalSeconds = intervalSeconds;
+            Frames = frames;
+            Columns = columns;
+            Rows = rows;
+            TileWidth = tileWidth;
+            TileHeight = tileHeight;
+        }
+
+        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.IntervalSeconds))]
+        public int IntervalSeconds { get; }
+
+        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Frames))]
+        public int Frames { get; }
+
+        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Tiles))]
+        public int Columns { get; }
+
+        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Tiles))]
+        public int Rows { get; }
+
+        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Pixels))]
+        public int TileWidth { get; }
+
+        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Pixels))]
+        public int TileHeight { get; }
+    }
+
+    public sealed class TrickplaySheetParametersV1 : BaseParameters
+    {
+        public TrickplaySheetParametersV1(long mediaAssetId, int sheet)
+        {
+            MediaAssetId = mediaAssetId;
+            Sheet = sheet;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(TrickplayFields), nameof(TrickplayFields.Sheet))]
+        public int Sheet { get; }
+    }
 }

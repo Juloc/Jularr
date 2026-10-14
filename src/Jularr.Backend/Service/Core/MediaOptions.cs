@@ -10,6 +10,9 @@ namespace Jularr.Backend.Service.Core
         public string TranscodeCachePath { get; set; } = Path.Combine(Path.GetTempPath(), "jularr-transcode");
         public int MaxTranscodes { get; set; } = 2;
 
+        // Seek thumbnails are kept here; without a folder there are none.
+        public string? TrickplayPath { get; set; }
+
         // Optional hardware encoding; software stays the fallback.
         public string[] HardwareAccelerationArguments { get; set; } = [];
         public string[] VideoEncoderArguments { get; set; } = [];

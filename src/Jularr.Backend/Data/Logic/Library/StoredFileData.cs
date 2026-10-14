@@ -1,7 +1,9 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
+using Jularr.Backend.Data.Fields.Storage;
 
 namespace Jularr.Backend.Data.Logic.Library
 {
@@ -301,5 +303,73 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
         public long Id { get; }
+    }
+
+    internal sealed class TrickplaySaveData : BaseData
+    {
+        public TrickplaySaveData(long id, long sizeBytes, DateTime modifiedAt, int? trickplayFrames)
+        {
+            Id = id;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+            TrickplayFrames = trickplayFrames;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.TrickplayFrames), false)]
+        public int? TrickplayFrames { get; }
+    }
+
+    // A video file that has no seek thumbnails yet.
+    internal sealed class TrickplaySourceData : BaseData
+    {
+        public TrickplaySourceData(long id, long sizeBytes, DateTime modifiedAt, long durationMs, string relativePath, string rootRelativePath, long storageMountId,
+            StorageProtocolType storageProtocolTypeId, string sharePath)
+        {
+            Id = id;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+            DurationMs = durationMs;
+            RelativePath = relativePath;
+            RootRelativePath = rootRelativePath;
+            StorageMountId = storageMountId;
+            StorageProtocolTypeId = storageProtocolTypeId;
+            SharePath = sharePath;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.DurationMs))]
+        public long DurationMs { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
+        public string RootRelativePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
+        public StorageProtocolType StorageProtocolTypeId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
+        public string SharePath { get; }
     }
 }

@@ -323,4 +323,23 @@ namespace Jularr.Backend.Data.Logic.Playback
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id), false)]
         public long? StoredFileId { get; }
     }
+
+    internal sealed class TrickplayFileData : BaseData
+    {
+        public TrickplayFileData(int trickplayFrames, int width, int height)
+        {
+            TrickplayFrames = trickplayFrames;
+            Width = width;
+            Height = height;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.TrickplayFrames))]
+        public int TrickplayFrames { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Width))]
+        public int Width { get; }
+
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
+        public int Height { get; }
+    }
 }

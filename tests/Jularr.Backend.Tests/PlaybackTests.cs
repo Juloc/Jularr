@@ -1,16 +1,18 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Logic.Playback;
+using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Playback.V1;
 using Jularr.Backend.Logic.Playback;
+using Jularr.Backend.Service.System.Media.V1;
 using Jularr.Backend.Service.User.Playback.V1;
 using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Logic.Media;
@@ -348,6 +350,45 @@ namespace Jularr.Backend.Tests
 
             transcodes.Stop(session);
             Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(first)));
+        }
+
+        [TestMethod]
+        public async Task Trickplay_RenderedSheets_ShowThePlayedFilesThumbnails()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            using var thumbnails = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, settings: new Dictionary<string, string> { ["Media:TrickplayPath"] = thumbnails.Path });
+            var (assetId, _) = await CreatePlayableAsync(host, storage.Path, wakeOnDemand: false);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "StoredFiles" SET "TrickplayFrames" = 50, "TrickplayCheckedAt" = now() WHERE "Id" = {fileId};
+                INSERT INTO "MediaTracks" ("StoredFileId", "StreamIndex", "MediaTrackTypeId", "Width", "Height", "IsDefault", "IsForced") VALUES ({fileId}, 0, 1, 1920, 800, TRUE, FALSE);
+                """);
+            Directory.CreateDirectory(Path.Combine(thumbnails.Path, fileId.ToString()));
+            File.WriteAllBytes(Path.Combine(thumbnails.Path, fileId.ToString(), "001.jpg"), [0xFF, 0xD8, 0xFF]);
+            var route = "/api/v1/playback/assets/" + assetId + "/trickplay";
+
+            // Off by default; switched on, the layout follows the video's shape.
+            using var off = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Trickplay'");
+            using var layout = await host.SendAsync(HttpMethod.Get, route);
+            var trickplay = (await layout.Content.ReadFromJsonAsync<TrickplayV1>())!;
+            Assert.AreEqual(50, trickplay.Frames);
+            Assert.AreEqual(66, trickplay.TileHeight);
+            using var sheet = await host.SendAsync(HttpMethod.Get, route + "/1");
+            Assert.AreEqual("image/jpeg", sheet.Content.Headers.ContentType!.MediaType);
+            CollectionAssert.AreEqual(new byte[] { 0xFF, 0xD8, 0xFF }, await sheet.Content.ReadAsByteArrayAsync());
+            using var missing = await host.SendAsync(HttpMethod.Get, route + "/2");
+            Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
+            using var player = await host.SendAsync(HttpMethod.Get, "/Player/" + assetId);
+            StringAssert.Contains(await player.Content.ReadAsStringAsync(), "data-trickplay-url=\"" + route + "\"");
+
+            // Without FFmpeg nothing is rendered and the file waits.
+            await host.Fixture.RunSqlAsync($"UPDATE \"StoredFiles\" SET \"TrickplayFrames\" = NULL, \"TrickplayCheckedAt\" = NULL, \"ProbedAt\" = now(), \"DurationMs\" = 60000 WHERE \"Id\" = {fileId}");
+            await using var scope = host.Services.CreateAsyncScope();
+            Assert.IsFalse((await scope.ServiceProvider.GetRequiredService<GenerateTrickplayV1>().ExecuteAsync<UpdateResult>(new TrickplayParametersV1(), default, CancellationToken.None)).Success);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"TrickplayCheckedAt\" IS NULL FROM \"StoredFiles\""));
         }
 
         private static async Task<(long AssetId, long WorkId)> CreatePlayableAsync(Host host, string storagePath, bool wakeOnDemand, string fileName = "Film.mp4")

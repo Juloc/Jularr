@@ -4,7 +4,8 @@ namespace Jularr.Frontend.Framework
 {
     // Server-rendered player chrome; Modules/Player owns the client behavior.
     public sealed record PlayerSource(string Title, string? Context, string BackHref, string StartUrl, string SessionUrl, string AntiforgeryToken, string? PosterUrl = null,
-        IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null, string? PreviousHref = null, string? NextHref = null);
+        IReadOnlyList<PlayerTrack>? AudioTracks = null, IReadOnlyList<PlayerTrack>? Subtitles = null, string? SubtitleUrl = null, string? PreviousHref = null, string? NextHref = null,
+        string? TrickplayUrl = null);
 
     // One audio or subtitle choice; unsupported ones stay visible but disabled.
     public sealed record PlayerTrack(string Key, string Label, string? Language, bool IsDefault, bool IsSupported);
@@ -40,6 +41,7 @@ namespace Jularr.Frontend.Framework
                             new Span(new ValueText("0:00")).Attribute("data-role", "time"),
                             new Input().Class("player__timeline").Attribute("type", "range").Attribute("min", "0").Attribute("max", "0").Attribute("step", "1")
                                 .Attribute("value", "0").Attribute("data-role", "timeline").Attribute("aria-label", texts["player.timeline"]),
+                            new Div().Class("player__preview").Attribute("data-role", "preview").Attribute("aria-hidden", "true").Attribute("hidden", "hidden"),
                             new Span(new ValueText("0:00")).Attribute("data-role", "duration")
                         ).Class("player__progress"),
                         new Div(
@@ -93,6 +95,7 @@ namespace Jularr.Frontend.Framework
                 .Attribute("data-session-url", source.SessionUrl)
                 .Attribute("data-antiforgery", source.AntiforgeryToken)
                 .Attribute("data-subtitle-url", source.SubtitleUrl ?? "")
+                .Attribute("data-trickplay-url", source.TrickplayUrl ?? "")
                 .WriteTo(writer, encoder, texts);
 
             // Without a neighbour the button stays visible but inactive.

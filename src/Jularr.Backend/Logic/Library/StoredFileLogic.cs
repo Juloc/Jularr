@@ -32,6 +32,12 @@ namespace Jularr.Backend.Logic.Library
                     END,
                     "Sha1" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."Sha1"
+                    END,
+                    "TrickplayFrames" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."TrickplayFrames"
+                    END,
+                    "TrickplayCheckedAt" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."TrickplayCheckedAt"
                     END;
                 """;
             sql.Parameters.Add(data);
@@ -106,6 +112,26 @@ namespace Jularr.Backend.Logic.Library
                 """;
             sql.Parameters.Add(data);
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
+        }
+
+        public static async Task SaveTrickplayAsync(this LogicContext ctx, TrickplaySaveData data, CancellationToken ct)
+        {
+            // Frames of a file changed meanwhile are not kept; a failed attempt waits for a changed file.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "StoredFiles" AS file
+                SET
+                    "TrickplayFrames" = @TrickplayFrames,
+                    "TrickplayCheckedAt" = now()
+                WHERE
+                    file."Id" = @Id
+                    AND file."SizeBytes" = @SizeBytes
+                    AND file."ModifiedAt" = @ModifiedAt;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static async Task SaveStoredFileProbeAsync(this LogicContext ctx, StoredFileProbeData data, CancellationToken ct)

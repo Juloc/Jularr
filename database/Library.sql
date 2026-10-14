@@ -33,6 +33,8 @@ CREATE TABLE "StoredFiles" (
     "DurationMs" bigint NULL CHECK ("DurationMs" >= 0),
     "BitRate" bigint NULL CHECK ("BitRate" >= 0),
     "Sha1" varchar(40) NULL CHECK ("Sha1" ~ '^[0-9a-f]{40}$'),
+    "TrickplayFrames" integer NULL CHECK ("TrickplayFrames" > 0),
+    "TrickplayCheckedAt" timestamptz NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("LibraryRootId", "RelativePath")
 );

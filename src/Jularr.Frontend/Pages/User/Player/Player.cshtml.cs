@@ -35,7 +35,8 @@ namespace Jularr.Frontend.Pages.User.Player
                     [.. _tracks.Where(track => track.MediaTrackTypeId == MediaTrackType.Subtitle).Select(Track)],
                     "/api/v1/playback/assets/" + asset + "/subtitles/",
                     item.PreviousMediaAssetId is { } previous ? "/Player/" + previous.ToString(CultureInfo.InvariantCulture) : null,
-                    item.NextMediaAssetId is { } next ? "/Player/" + next.ToString(CultureInfo.InvariantCulture) : null);
+                    item.NextMediaAssetId is { } next ? "/Player/" + next.ToString(CultureInfo.InvariantCulture) : null,
+                    texts.Capabilities?.CanPreviewSeeking is true ? "/api/v1/playback/assets/" + asset + "/trickplay" : null);
                 page.Content.Add(new UiPlayer(source, assets));
             }
             else if (FormError is not null)

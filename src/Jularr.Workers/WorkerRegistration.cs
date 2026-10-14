@@ -14,6 +14,7 @@ namespace Jularr.Workers
             services.AddHostedService<StorageWorker>();
             services.AddHostedService<BackupWorker>();
             services.AddHostedService<MaintenanceWorker>();
+            services.AddHostedService<TrickplayWorker>();
             return services;
         }
     }

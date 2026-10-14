@@ -788,6 +788,7 @@ namespace Jularr.Frontend.Localization
             new("home.hide", "Hide"),
             new("home.show", "Show"),
             new("instance.module.HomeLayout", "Personal home page order"),
+            new("instance.module.Trickplay", "Thumbnails while seeking"),
             new("calendar.title", "Calendar"),
             new("calendar.earlier", "Earlier"),
             new("calendar.today", "From today"),

@@ -10,8 +10,9 @@ namespace Jularr.Backend.Data.User.Instance.V1
     {
         public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
             bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect, bool canSeeCalendar, bool canSeeStatistics, bool canAdminister, bool canManageStorage,
-            bool canGroupUnits, bool canArrangeHome)
+            bool canGroupUnits, bool canArrangeHome, bool canPreviewSeeking)
         {
+            CanPreviewSeeking = canPreviewSeeking;
             CanArrangeHome = canArrangeHome;
             CanGroupUnits = canGroupUnits;
             CanAdminister = canAdminister;
@@ -74,5 +75,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
         // The profile orders and hides its home shelves.
         public bool CanArrangeHome { get; }
+
+        // The player shows thumbnails while seeking.
+        public bool CanPreviewSeeking { get; }
     }
 }
