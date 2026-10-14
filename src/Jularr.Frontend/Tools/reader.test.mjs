@@ -23,10 +23,10 @@ function reader(stored = '{}', blocked = false) {
         querySelectorAll: selector => selector === '[data-setting]' ? [button] : []
     };
     runInNewContext(script, {
-        exports: {}, require: () => ({ progressReporter: () => value => saved.push(value) }),
+        exports: {}, require: () => ({ progressReporter: () => value => saved.push(value), highlights() {}, findings() {} }),
         document: { querySelector: () => element, addEventListener() {} },
         window: { innerHeight: 900, addEventListener: (name, action) => events[name] = action },
-        location: { hash: '' },
+        location: { hash: '', search: '' }, URLSearchParams,
         localStorage: { getItem: () => stored, setItem() { if (blocked) throw new Error('Unavailable storage'); } }
     });
     return { element, saved, enlarge: () => buttons.click(), leave: () => events.pagehide(), finish: () => bottom = 800 };
