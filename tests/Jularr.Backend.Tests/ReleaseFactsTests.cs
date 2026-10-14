@@ -21,6 +21,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("WEB-1080p", file.QualityKey);
             Assert.IsNull(file.Edition);
             Assert.AreEqual(1, file.Revision);
+
+            // Title words are no edition or group; Jularr's own tag is the quality; plain names say nothing.
+            Assert.IsNull(ReleaseFacts.Of("Uncut.Gems.2019.1080p.WEB-DL-GRP")!.Edition);
+            Assert.IsNull(ReleaseFacts.Of("Spider-Man.mkv"));
+            Assert.AreEqual("WEB-1080p", ReleaseFacts.Of("Example Movie (2020) [WEB-1080p].mkv")!.QualityKey);
+            Assert.IsNull(ReleaseFacts.OfPath("Show/Season 01/cover.jpg"));
         }
     }
 }

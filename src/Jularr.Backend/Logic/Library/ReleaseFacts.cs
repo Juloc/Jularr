@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Logic.Acquisition;
 
 namespace Jularr.Backend.Logic.Library
@@ -13,11 +14,21 @@ namespace Jularr.Backend.Logic.Library
                 return null;
             }
 
-            var quality = ReleaseQuality.GetKey(release);
-            var edition = EditionTag().Match(release.RawTitle);
+            // Jularr's own names carry the quality in brackets.
+            var quality = ReleaseQuality.GetKey(release) is var key && !key.Contains("UNKNOWN", StringComparison.Ordinal) ? key
+                : QualityTag().Match(release.RawTitle) is { Success: true } tag ? tag.Groups[1].Value : null;
+
+            // Title words such as "Uncut" or a hyphen as in "Spider-Man" only count behind the year or the quality.
+            var tail = Technical().Match(release.RawTitle) is { Success: true } start ? release.RawTitle[start.Index..] : null;
+            var edition = tail is null ? null : EditionTag().Match(tail) is { Success: true } match ? match.Value.Replace('.', ' ').Replace('_', ' ') : null;
+            var group = tail is null && release.Resolution is null && release.Source == ReleaseSource.Unknown ? null : release.ReleaseGroup;
             var revision = Math.Clamp(release.Version > 1 ? release.Version : release.IsProper || release.IsRepack ? 2 : 1, 1, 9);
-            return new ReleaseFact(Cut(release.RawTitle, 500)!, Cut(release.ReleaseGroup, 64), quality.Contains("UNKNOWN", StringComparison.Ordinal) ? null : Cut(quality, 64),
-                edition.Success ? Cut(edition.Value.Replace('.', ' ').Replace('_', ' '), 64) : null, revision);
+            if (quality is null && group is null && edition is null && revision == 1)
+            {
+                return null;
+            }
+
+            return new ReleaseFact(Cut(release.RawTitle, 500)!, Cut(group, 64), Cut(quality, 64), Cut(edition, 64), revision);
         }
 
         // A scanned file's own name unless its folder says more, as scene folders often do.
@@ -31,6 +42,12 @@ namespace Jularr.Backend.Logic.Library
         private static int Score(ReleaseFact? fact) => fact is null ? -1 : (fact.ReleaseGroup is null ? 0 : 2) + (fact.QualityKey is null ? 0 : 1) + (fact.Edition is null ? 0 : 1);
 
         private static string? Cut(string? value, int length) => value is null || value.Length <= length ? value : value[..length];
+
+        [GeneratedRegex(@"\[([A-Za-z]+-\d{3,4}p)\]")]
+        private static partial Regex QualityTag();
+
+        [GeneratedRegex(@"(?<![0-9])(?:19|20)\d{2}(?![0-9])|(?<![0-9])\d{3,4}p(?![A-Za-z0-9])", RegexOptions.IgnoreCase)]
+        private static partial Regex Technical();
 
         [GeneratedRegex(@"(?<![A-Za-z])(Director'?s[ ._]Cut|Extended(?:[ ._](?:Cut|Edition))?|Unrated|Uncut|Theatrical(?:[ ._]Cut)?|Remastered|IMAX|Special[ ._]Edition|Ultimate[ ._](?:Cut|Edition)|Criterion)(?![A-Za-z])", RegexOptions.IgnoreCase)]
         private static partial Regex EditionTag();
