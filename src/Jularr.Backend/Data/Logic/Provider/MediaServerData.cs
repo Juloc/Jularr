@@ -128,7 +128,7 @@ namespace Jularr.Backend.Data.Logic.Provider
         [DataField(typeof(MediaServerFields), nameof(MediaServerFields.ProfileId), true)]
         public long ProfileId { get; }
 
-        // JSON rows of Id, MediaTypeId, TmdbNamespace, TmdbId, ImdbId, TvdbId, Season, Episode, PositionMs, IsPlayed and DurationMs.
+        // JSON rows of Key (the item id), MediaTypeId, TmdbId, ImdbId, TvdbId, Season, Episode, PositionMs, IsPlayed and DurationMs.
         [DataField(typeof(MediaServerFields), nameof(MediaServerFields.Rows))]
         public string Items { get; }
     }

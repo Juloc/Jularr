@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField RequestLimit = new() { Minimum = 1, Maximum = 10000, Required = false };
         public static readonly IntField PeriodDays = new() { Minimum = 1, Maximum = 365 };
         public static readonly BoolField IsAutomaticApproval = new();
-        public static readonly StringArrayField MediaKeys = new() { MaximumLength = 50 };
+        public static readonly StringArrayField MediaKeys = new() { ItemMaximumLength = 32, MaximumLength = 50 };
         public static readonly LongArrayField AcquisitionProfileIds = new() { Minimum = 1, MaximumLength = 200 };
         public static readonly BoolField IsDefault = new();
         public static readonly LongField Version = new() { Minimum = 1 };

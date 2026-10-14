@@ -55,7 +55,7 @@ namespace Jularr.Backend.Data.Logic.Provider
             Items = items;
         }
 
-        // JSON rows of RatingKey, MediaTypeId, Title, Year, TmdbId, ImdbId and TvdbId.
+        // JSON rows of Key (the rating key), MediaTypeId, Title, Year, TmdbId, ImdbId and TvdbId.
         [DataField(typeof(PlexFields), nameof(PlexFields.Items))]
         public string Items { get; }
     }

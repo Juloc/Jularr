@@ -25,7 +25,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField LocalPath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly IntField MaxConnections = new() { Minimum = 1, Maximum = 50, Required = false };
         public static readonly StringField Capabilities = new() { Required = false };
-        public static readonly StringArrayField SearchModes = new();
+        public static readonly StringArrayField SearchModes = new() { ItemMaximumLength = 32 };
         public static readonly StringField ServerVersion = new() { MaximumLength = 64, Required = false };
         public static readonly DateTimeField CheckedAt = new() { Required = false };
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
@@ -37,7 +37,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly StringField ReleaseIdentity = new(NpgsqlDbType.Varchar) { MaximumLength = 600, AllowBlank = false };
-        public static readonly StringArrayField ReleaseIdentities = new();
+        public static readonly StringArrayField ReleaseIdentities = new() { ItemMaximumLength = 1000 };
         public static readonly StringField Title = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false };
         public static readonly StringField SourceUrl = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Required = false, Format = StringFormat.HttpUrl };
         public static readonly StringField QualityKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
@@ -66,13 +66,13 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField Name = new(NpgsqlDbType.Varchar) { MaximumLength = 128, AllowBlank = false, Trim = true };
         public static readonly StringField Definition = new() { MaximumLength = 65536, AllowBlank = false };
         public static readonly BoolField IsDefault = new();
-        public static readonly StringArrayField AllowedQualities = new() { MaximumLength = 32 };
+        public static readonly StringArrayField AllowedQualities = new() { ItemMaximumLength = 64, MaximumLength = 32 };
         public static readonly BoolField UpgradeAllowed = new();
         public static readonly StringField UpgradeCutoffQuality = new() { MaximumLength = 64, Required = false };
         public static readonly IntField MinimumSizeMb = new() { Minimum = 0, Maximum = 1_000_000, Required = false };
         public static readonly IntField MaximumSizeMb = new() { Minimum = 1, Maximum = 1_000_000, Required = false };
-        public static readonly StringArrayField MustContain = new() { MaximumLength = 50 };
-        public static readonly StringArrayField MustNotContain = new() { MaximumLength = 50 };
+        public static readonly StringArrayField MustContain = new() { ItemMaximumLength = 200, MaximumLength = 50 };
+        public static readonly StringArrayField MustNotContain = new() { ItemMaximumLength = 200, MaximumLength = 50 };
         public static readonly IntField WantedCount = new() { Minimum = 0 };
         public static readonly LongField Version = new() { Minimum = 1 };
     }
@@ -84,9 +84,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField Name = new() { MaximumLength = 128, AllowBlank = false };
         public static readonly EnumField SourceGroupId = new(typeof(SourceGroup));
         public static readonly EnumField SourceAvailabilityId = new(typeof(SourceAvailability));
-        public static readonly StringArrayField Capabilities = new();
+        public static readonly StringArrayField Capabilities = new() { ItemMaximumLength = 64 };
         public static readonly StringField DefaultBaseUrl = new() { MaximumLength = 500, Required = false };
         public static readonly BoolField IsConfigured = new();
-        public static readonly StringArrayField Keys = new();
+        public static readonly StringArrayField Keys = new() { ItemMaximumLength = 64 };
     }
 }

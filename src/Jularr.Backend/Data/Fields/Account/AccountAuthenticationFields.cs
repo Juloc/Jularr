@@ -26,7 +26,7 @@ namespace Jularr.Backend.Data.Fields.Account
         };
         public static readonly LongField SignatureCounter = new() { Minimum = 0 };
         public static readonly GuidField Aaguid = new() { Required = false, AllowEmpty = true };
-        public static readonly StringArrayField Transports = new();
+        public static readonly StringArrayField Transports = new() { ItemMaximumLength = 32 };
         public static readonly BoolField BackupEligible = new() { Required = false };
         public static readonly BoolField BackedUp = new() { Required = false };
         public static readonly BoolField UserVerificationRequired = new() { Required = false };

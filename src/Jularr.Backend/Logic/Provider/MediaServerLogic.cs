@@ -2,8 +2,10 @@ using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Playback;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.MediaServer;
 
 namespace Jularr.Backend.Logic.Provider
@@ -248,14 +250,15 @@ namespace Jularr.Backend.Logic.Provider
             return ctx.ReadSql.ReadListAsync<MediaServerSyncLinkData>(sql, ct);
         }
 
-        public static Task<IReadOnlyList<ProgressCandidateData>> ReadProgressCandidatesAsync(this LogicContext ctx, MediaServerItemsData data, CancellationToken ct)
+        public static async Task<IReadOnlyList<ProgressCandidateData>> ReadProgressCandidatesAsync(this LogicContext ctx, MediaServerItemsData data, CancellationToken ct)
         {
             // Items the profile may see, matched by provider id and for episodes by season and number; untouched ones are left out.
+            var matches = await ctx.MatchWorksByIdentityAsync(new WorkIdentityRowsData(data.Items), ct);
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    item."Id" AS "ExternalItemId",
+                    item."Key" AS "ExternalItemId",
                     item."PositionMs" AS "RemotePositionMs",
                     item."IsPlayed" AS "RemoteIsCompleted",
                     item."DurationMs",
@@ -269,27 +272,9 @@ namespace Jularr.Backend.Logic.Provider
                     state."SyncedAt",
                     now() AS "ReadAt"
                 FROM
-                    jsonb_to_recordset(@Items::jsonb) AS item(
-                        "Id" text, "MediaTypeId" smallint, "TmdbNamespace" text, "TmdbId" text, "ImdbId" text, "TvdbId" text,
-                        "Season" integer, "Episode" integer, "PositionMs" bigint, "IsPlayed" boolean, "DurationMs" bigint)
-                    CROSS JOIN LATERAL (
-                        SELECT
-                            identity."WorkId"
-                        FROM
-                            "WorkExternalIdentities" AS identity
-                            JOIN "Works" AS candidate ON candidate."Id" = identity."WorkId"
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = candidate."Id" AND visible."ProfileId" = @ProfileId
-                        WHERE
-                            candidate."MediaTypeId" = item."MediaTypeId"
-                            AND (
-                                identity."Namespace" = item."TmdbNamespace" AND identity."Value" = item."TmdbId"
-                                OR identity."Namespace" = 'imdb' AND identity."Value" = item."ImdbId"
-                                OR identity."Namespace" = 'tvdb' AND identity."Value" = item."TvdbId"
-                            )
-                        ORDER BY
-                            identity."WorkId"
-                        LIMIT 1
-                    ) AS work
+                    jsonb_to_recordset(@Items::jsonb) AS item("Key" text, "Season" integer, "Episode" integer, "PositionMs" bigint, "IsPlayed" boolean, "DurationMs" bigint)
+                    JOIN jsonb_to_recordset(@Matches::jsonb) AS work ("Key" text, "WorkId" bigint) ON work."Key" = item."Key"
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = work."WorkId" AND visible."ProfileId" = @ProfileId
                     LEFT JOIN LATERAL (
                         SELECT
                             episode."Id"
@@ -307,13 +292,14 @@ namespace Jularr.Backend.Logic.Provider
                     LEFT JOIN "MediaProgress" AS progress ON progress."ProfileId" = @ProfileId
                         AND progress."WorkId" = work."WorkId"
                         AND progress."WorkUnitId" IS NOT DISTINCT FROM unit."Id"
-                    LEFT JOIN "ProviderProgress" AS state ON state."ProviderProfileLinkId" = @ProviderProfileLinkId AND state."ExternalItemId" = item."Id"
+                    LEFT JOIN "ProviderProgress" AS state ON state."ProviderProfileLinkId" = @ProviderProfileLinkId AND state."ExternalItemId" = item."Key"
                 WHERE
                     (item."Episode" IS NULL OR unit."Id" IS NOT NULL)
                     AND (item."PositionMs" > 0 OR item."IsPlayed" OR progress."Id" IS NOT NULL OR state."ExternalItemId" IS NOT NULL);
                 """;
             sql.Parameters.Add(data);
-            return ctx.ReadSql.ReadListAsync<ProgressCandidateData>(sql, ct);
+            sql.Parameters.Add(matches);
+            return await ctx.ReadSql.ReadListAsync<ProgressCandidateData>(sql, ct);
         }
 
         public static async Task SaveSyncedProgressAsync(this LogicContext ctx, SyncedProgressData data, CancellationToken ct)
@@ -409,9 +395,8 @@ namespace Jularr.Backend.Logic.Provider
                 .Where(row => row.Owner is not null && (row.Item.Kind != MediaServerItemKind.Episode || row.Item.Season is not null && row.Item.Episode is not null))
                 .Select(row => new
                 {
-                    row.Item.Id,
+                    Key = row.Item.Id,
                     MediaTypeId = (byte)(row.Item.Kind == MediaServerItemKind.Movie ? MediaType.Movie : MediaType.Series),
-                    TmdbNamespace = row.Item.Kind == MediaServerItemKind.Movie ? "tmdb_movie" : "tmdb_tv",
                     row.Owner!.TmdbId,
                     row.Owner.ImdbId,
                     row.Owner.TvdbId,

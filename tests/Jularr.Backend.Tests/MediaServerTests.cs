@@ -110,10 +110,10 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") VALUES (10, 'tmdb_movie', '603');
                 """);
             const string route = "/api/v1/admin/media-servers/Emby";
-            using var connected = await host.SendAsync(HttpMethod.Post, route, new SaveMediaServerDataV1("http://emby.example.test:8096", FakeServer.ApiKey));
+            using var connected = await host.SendAsync(HttpMethod.Post, route, new SaveMediaServerDataV1("https://media.example.test/emby", FakeServer.ApiKey));
             Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
-            using var path = await host.SendAsync(HttpMethod.Post, route, new SaveMediaServerDataV1("http://emby.example.test:8096/emby", FakeServer.ApiKey));
-            StringAssert.Contains(await path.Content.ReadAsStringAsync(), "invalid_url");
+            using var query = await host.SendAsync(HttpMethod.Post, route, new SaveMediaServerDataV1("https://media.example.test/emby?x=1", FakeServer.ApiKey));
+            Assert.AreEqual(HttpStatusCode.BadRequest, query.StatusCode);
             using var linksResponse = await host.SendAsync(HttpMethod.Get, route + "/links");
             var link = (await linksResponse.Content.ReadFromJsonAsync<MediaServerLinkV1[]>())!.Single(item => item.ExternalName == emby.ProfileName);
             using var confirmed = await host.SendAsync(HttpMethod.Put, route + "/links/" + link.Id, new SaveMediaServerLinkDataV1(101));
@@ -197,7 +197,8 @@ namespace Jularr.Backend.Tests
                     return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                 }
 
-                var path = request.RequestUri!.AbsolutePath;
+                // Emby sits below /emby of a reverse proxy.
+                var path = IsEmby && request.RequestUri!.AbsolutePath.StartsWith("/emby/", StringComparison.Ordinal) ? request.RequestUri.AbsolutePath[5..] : request.RequestUri!.AbsolutePath;
                 var query = request.RequestUri.Query;
                 if (IsEmby && path == "/Users/u1/Items")
                 {

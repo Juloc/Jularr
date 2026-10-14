@@ -18,8 +18,8 @@ namespace Jularr.Backend.Data.Fields.Provider
     public static class PlexFields
     {
         public static readonly StringField Items = new() { AllowBlank = false };
-        public static readonly StringArrayField RatingKeys = new();
-        public static readonly StringArrayField Sections = new();
+        public static readonly StringArrayField RatingKeys = new() { ItemMaximumLength = 64 };
+        public static readonly StringArrayField Sections = new() { ItemMaximumLength = 200 };
         public static readonly IntField LinkedCount = new() { Minimum = 0 };
         public static readonly IntField CreatedCount = new() { Minimum = 0 };
         public static readonly IntField SkippedCount = new() { Minimum = 0 };

@@ -65,7 +65,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
         {
             // Only a server that answers with this token is stored.
             var baseUrl = new Uri(Data.BaseUrl.TrimEnd('/') + "/");
-            if (baseUrl.AbsolutePath != "/" || baseUrl.Query.Length > 0)
+            if (baseUrl.Query.Length > 0 || baseUrl.Fragment.Length > 0)
             {
                 throw new DataValidationException(nameof(SavePlexServerDataV1.BaseUrl), "invalid_url");
             }

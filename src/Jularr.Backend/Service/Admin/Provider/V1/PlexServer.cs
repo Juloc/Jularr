@@ -70,7 +70,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
                         {
                             var rows = JsonSerializer.Serialize(page.Items.Select(item => new
                             {
-                                item.RatingKey,
+                                Key = item.RatingKey,
                                 MediaTypeId = (byte)mediaType,
                                 item.Title,
                                 item.Year,

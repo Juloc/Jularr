@@ -1,5 +1,7 @@
 using Jularr.Backend.Data.Logic.Provider;
+using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Backend.Logic.Provider
 {
@@ -72,21 +74,22 @@ namespace Jularr.Backend.Logic.Provider
                 DELETE FROM
                     "WorkExternalIdentities" AS identity
                 USING
-                    jsonb_to_recordset(@Items::jsonb) AS item ("RatingKey" text)
+                    jsonb_to_recordset(@Items::jsonb) AS item ("Key" text)
                 WHERE
                     identity."Namespace" = 'plex'
-                    AND identity."Value" = item."RatingKey";
+                    AND identity."Value" = item."Key";
                 """;
             release.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(release, ct);
 
             // Match by provider ids; unknown titles become Works; one Plex item per Work.
+            var matches = await ctx.MatchWorksByIdentityAsync(new WorkIdentityRowsData(data.Items), ct);
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 WITH item AS (
-                    SELECT DISTINCT ON (item."RatingKey")
-                        item."RatingKey",
+                    SELECT DISTINCT ON (item."Key")
+                        item."Key",
                         item."MediaTypeId",
                         item."Title",
                         item."Year",
@@ -94,7 +97,7 @@ namespace Jularr.Backend.Logic.Provider
                         item."ImdbId",
                         item."TvdbId"
                     FROM
-                        jsonb_to_recordset(@Items::jsonb) AS item ("RatingKey" text, "MediaTypeId" smallint, "Title" text, "Year" smallint, "TmdbId" text, "ImdbId" text, "TvdbId" text)
+                        jsonb_to_recordset(@Items::jsonb) AS item ("Key" text, "MediaTypeId" smallint, "Title" text, "Year" smallint, "TmdbId" text, "ImdbId" text, "TvdbId" text)
                     WHERE
                         item."TmdbId" IS NOT NULL
                         OR item."ImdbId" IS NOT NULL
@@ -102,23 +105,10 @@ namespace Jularr.Backend.Logic.Provider
                 ), matched AS (
                     SELECT
                         item.*,
-                        (
-                            SELECT
-                                identity."WorkId"
-                            FROM
-                                "WorkExternalIdentities" AS identity
-                                JOIN "Works" AS work ON work."Id" = identity."WorkId" AND work."MediaTypeId" = item."MediaTypeId"
-                            WHERE
-                                identity."Namespace" = CASE item."MediaTypeId" WHEN 1 THEN 'tmdb_movie' ELSE 'tmdb_tv' END AND identity."Value" = item."TmdbId"
-                                OR identity."Namespace" = 'imdb' AND identity."Value" = item."ImdbId"
-                                OR identity."Namespace" = 'tvdb' AND identity."Value" = item."TvdbId"
-                            ORDER BY
-                                identity."Namespace" LIKE 'tmdb%' DESC,
-                                identity."WorkId"
-                            LIMIT 1
-                        ) AS "WorkId"
+                        match."WorkId"
                     FROM
                         item
+                        LEFT JOIN jsonb_to_recordset(@Matches::jsonb) AS match ("Key" text, "WorkId" bigint) ON match."Key" = item."Key"
                 ), created AS (
                     SELECT DISTINCT ON (matched."MediaTypeId", coalesce(matched."TmdbId", matched."ImdbId", matched."TvdbId"))
                         matched.*,
@@ -130,7 +120,7 @@ namespace Jularr.Backend.Logic.Provider
                     ORDER BY
                         matched."MediaTypeId",
                         coalesce(matched."TmdbId", matched."ImdbId", matched."TvdbId"),
-                        matched."RatingKey"
+                        matched."Key"
                 ), works AS (
                     INSERT INTO
                         "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleaseYear")
@@ -173,11 +163,11 @@ namespace Jularr.Backend.Logic.Provider
                 ), linked AS (
                     SELECT DISTINCT ON (target."WorkId")
                         target."WorkId",
-                        target."RatingKey"
+                        target."Key"
                     FROM (
                         SELECT
                             matched."WorkId",
-                            matched."RatingKey"
+                            matched."Key"
                         FROM
                             matched
                         WHERE
@@ -185,20 +175,20 @@ namespace Jularr.Backend.Logic.Provider
                         UNION ALL
                         SELECT
                             created."NewWorkId",
-                            created."RatingKey"
+                            created."Key"
                         FROM
                             created
                     ) AS target
                     ORDER BY
                         target."WorkId",
-                        target."RatingKey"
+                        target."Key"
                 ), plex AS (
                     INSERT INTO
                         "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
                     SELECT
                         linked."WorkId",
                         'plex',
-                        linked."RatingKey"
+                        linked."Key"
                     FROM
                         linked
                     ON CONFLICT ("WorkId", "Namespace") DO UPDATE
@@ -213,6 +203,7 @@ namespace Jularr.Backend.Logic.Provider
                     (SELECT count(*) FROM created)::integer AS "CreatedCount";
                 """;
             sql.Parameters.Add(data);
+            sql.Parameters.Add(matches);
             return await ctx.ReadRequiredAsync<PlexItemsResultData>(sql, ct);
         }
 

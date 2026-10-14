@@ -15,6 +15,6 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly IntField Channels = new() { Minimum = 1, Required = false };
         public static readonly BoolField IsDefault = new();
         public static readonly BoolField IsForced = new();
-        public static readonly StringArrayField Languages = new();
+        public static readonly StringArrayField Languages = new() { ItemMaximumLength = 16 };
     }
 }

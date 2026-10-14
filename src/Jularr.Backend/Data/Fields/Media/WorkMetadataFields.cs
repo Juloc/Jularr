@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField ExternalId = new() { MaximumLength = 64, AllowBlank = false, Format = Enums.Field.StringFormat.SingleLine };
         public static readonly StringField Author = new() { MaximumLength = 4000, Required = false };
         public static readonly StringField Creator = new() { MaximumLength = 500, AllowBlank = false, Trim = true, Format = Enums.Field.StringFormat.SingleLine };
-        public static readonly StringArrayField Creators = new();
+        public static readonly StringArrayField Creators = new() { ItemMaximumLength = 500 };
         public static readonly StringField OriginalTitle = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };
         public static readonly StringField Overview = new() { MaximumLength = 4000, Required = false };
         public static readonly StringField ExternalIdentities = new() { AllowBlank = false };
@@ -18,7 +18,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField Facts = new() { AllowBlank = false };
         public static readonly StringField Platforms = new() { AllowBlank = false };
         public static readonly StringField ImageUrl = new() { MaximumLength = 500, Required = false };
-        public static readonly StringArrayField ExternalIdentityList = new();
+        public static readonly StringArrayField ExternalIdentityList = new() { ItemMaximumLength = 200 };
         public static readonly StringField Namespace = new(NpgsqlDbType.Varchar) { MaximumLength = 16, AllowBlank = false };
         public static readonly StringField Value = new(NpgsqlDbType.Varchar) { MaximumLength = 64, AllowBlank = false };
     }

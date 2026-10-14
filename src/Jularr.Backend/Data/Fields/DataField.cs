@@ -405,11 +405,16 @@ namespace Jularr.Backend.Data.Fields
 
     public sealed class StringArrayField : DataField
     {
-        private static readonly StringField Element = new();
+        private StringField? _element;
 
         public StringArrayField() : base(typeof(string[]), NpgsqlDbType.Array | NpgsqlDbType.Text)
         {
         }
+
+        // Longest single entry; every entry is also required and not blank.
+        public required int ItemMaximumLength { get; init; }
+
+        private StringField Element => _element ??= new() { MaximumLength = ItemMaximumLength, AllowBlank = false };
 
         // "de, en" from one text field becomes ["de", "en"].
         public bool SplitsCommas { get; init; }

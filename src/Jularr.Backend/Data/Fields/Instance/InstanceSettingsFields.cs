@@ -17,7 +17,7 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly IntField HistoryMegabytes = new() { Minimum = 1, Maximum = 100000 };
         public static readonly IntField CollectionLimit = new() { Minimum = 1, Maximum = 1000 };
         public static readonly IntField UnitGroupLimit = new() { Minimum = 1, Maximum = 1000 };
-        public static readonly StringArrayField SubtitleLanguages = new() { MaximumLength = 10, SplitsCommas = true };
+        public static readonly StringArrayField SubtitleLanguages = new() { ItemMaximumLength = 8, MaximumLength = 10, SplitsCommas = true };
         public static readonly BoolField KeepsReleases = new();
         public static readonly EnumField RecycleModeId = new(typeof(Enums.Library.RecycleMode));
         public static readonly LongField RecycleStorageMountId = new() { Minimum = 1, Required = false };

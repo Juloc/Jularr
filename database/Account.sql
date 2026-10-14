@@ -177,7 +177,7 @@ CREATE TABLE "Providers" (
     "Key" text NOT NULL,
     "IsEnabled" boolean NOT NULL DEFAULT TRUE,
     "ProtectedSecret" bytea NULL,
-    "BaseUrl" varchar(500) NULL CHECK ("BaseUrl" ~ '^https?://[^/?#]+/$'),
+    "BaseUrl" varchar(500) NULL CHECK ("BaseUrl" ~ '^https?://[^/?#]+(/[^?#]*)?/$'),
     "ExternalId" varchar(128) NULL,
     "SyncedAt" timestamptz NULL,
     CONSTRAINT "PK_Providers" PRIMARY KEY ("Id"),

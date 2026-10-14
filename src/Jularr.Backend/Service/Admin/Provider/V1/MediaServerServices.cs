@@ -57,9 +57,9 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Only a server that answers with this key is stored; its users are proposed right away.
+            // Only a server that answers with this key is stored, also below a path of a reverse proxy; its users are proposed right away.
             var baseUrl = new Uri(Data.BaseUrl.TrimEnd('/') + "/");
-            if (baseUrl.AbsolutePath != "/" || baseUrl.Query.Length > 0)
+            if (baseUrl.Query.Length > 0 || baseUrl.Fragment.Length > 0)
             {
                 throw new DataValidationException(nameof(SaveMediaServerDataV1.BaseUrl), "invalid_url");
             }

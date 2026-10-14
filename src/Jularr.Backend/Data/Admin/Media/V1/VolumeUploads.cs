@@ -11,7 +11,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
             VolumeNumber = volumeNumber;
         }
 
-        // Required by its field; a form without the file reads as required.
+        // Nullable for a form without the file; its field reports it as required.
         [DataField(typeof(UploadFields), nameof(UploadFields.Volume))]
         public UploadedFile? File { get; }
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
@@ -120,6 +121,30 @@ namespace Jularr.Backend.Logic.Media
             {
                 throw new InvalidOperationException("The manual title was not saved.");
             }
+        }
+
+        // The one way a provider's item finds its Work: TMDB first, then IMDB and TVDB, always of the same media type.
+        public static async Task<WorkIdentityMatchesData> MatchWorksByIdentityAsync(this LogicContext ctx, WorkIdentityRowsData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT DISTINCT ON (item."Key")
+                    item."Key",
+                    identity."WorkId"
+                FROM
+                    jsonb_to_recordset(@Rows::jsonb) AS item ("Key" text, "MediaTypeId" smallint, "TmdbId" text, "ImdbId" text, "TvdbId" text)
+                    JOIN "WorkExternalIdentities" AS identity ON identity."Namespace" = CASE item."MediaTypeId" WHEN 1 THEN 'tmdb_movie' ELSE 'tmdb_tv' END AND identity."Value" = item."TmdbId"
+                        OR identity."Namespace" = 'imdb' AND identity."Value" = item."ImdbId"
+                        OR identity."Namespace" = 'tvdb' AND identity."Value" = item."TvdbId"
+                    JOIN "Works" AS work ON work."Id" = identity."WorkId" AND work."MediaTypeId" = item."MediaTypeId"
+                ORDER BY
+                    item."Key",
+                    identity."Namespace" LIKE 'tmdb%' DESC,
+                    identity."WorkId";
+                """;
+            sql.Parameters.Add(data);
+            return new WorkIdentityMatchesData(JsonSerializer.Serialize(await ctx.ReadSql.ReadListAsync<WorkIdentityMatchData>(sql, ct)));
         }
     }
 }

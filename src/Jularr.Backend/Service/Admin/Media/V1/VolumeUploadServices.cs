@@ -48,7 +48,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 throw new ServiceUnavailableException("import_no_library");
             }
 
-            var file = Data.File ?? throw new DataValidationException(nameof(UploadVolumeDataV1.File), "required");
+            var file = Data.File ?? throw new InvalidOperationException("The volume file is validated as required.");
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
             var relativePath = LibraryNaming.Volume(target.CanonicalTitle, Data.VolumeNumber) + extension;
             if (!LibraryNaming.IsStorable(relativePath))
