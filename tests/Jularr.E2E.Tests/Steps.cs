@@ -153,8 +153,7 @@ namespace Jularr.E2E.Tests
                 await page.WaitForTimeoutAsync(3000);
             }
 
-            Assert.Fail(title + " did not become available within two minutes.");
-            return "";
+            throw new AssertFailedException(title + " did not become available within two minutes.");
         }
 
         // An album of the given tracks as FLAC, a tone each; without FFmpeg only bytes for the import.

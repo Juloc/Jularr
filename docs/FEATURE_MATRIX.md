@@ -23,10 +23,10 @@ through the UI). A row is done only at e2e. Tests name classes in `tests/Jularr.
 | Import, library | e2e | DownloadImport, ImportPlacement | AcquisitionTests, path tests | – | The file lands in the right library and folder, the request reads available |
 | Play / read, progress | e2e (film, episode, album track with FFmpeg in CI; EPUB, comic) | Playback, Reading | PlaybackTests, ReadingTests, progress.test.mjs, path tests | Transcoding and track choice in the browser | Playback and reading start, seek and save progress |
 | Sign out, sign in, resume | e2e | Sessions, Progress | AuthenticationTests, path tests | Another device | Progress resumes on another session and device |
-| Failure cases: restart during a download, lost database connections, failed download and Retry, offline library, 5xx and script errors | e2e | as above | FailureTests, every path test watches 5xx and script errors | – |
-| Failure cases: missing metadata, ambiguous release, profiles and permissions, unavailable media, upgrades, subtitles and audio tracks, transcoding errors | tested (parts) | as above | LibraryTests, AcquisitionTests, PlaybackTests, StorageTests | Browser scenarios (B4b, B4c) | Each case ends in a visible, recoverable state without data loss |
+| Failure cases: restart during a download, lost database connections, failed download and Retry, offline library, 5xx and script errors | e2e | as above | FailureTests, every path test watches 5xx and script errors | – | Each case ends in a visible, recoverable state without data loss |
+| Failure cases: missing metadata, ambiguous release, profiles and permissions, unavailable media, upgrades, subtitles and audio tracks, transcoding errors | tested (parts) | as above | LibraryTests, AcquisitionTests, PlaybackTests, StorageTests | Browser scenarios (B4b, B4c) | Each case ends in a visible, recoverable state without data loss | Each case ends in a visible, recoverable state without data loss |
 
-The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader, a restartable instance and the failure cases (B4).
+The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader and the remaining failure cases (B4b, B4c).
 
 ## Arr+ core
 

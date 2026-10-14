@@ -88,8 +88,17 @@ namespace Jularr.E2E.Tests
             }
             finally
             {
-                Directory.Delete(_storage, true);
-                Directory.Delete(_keys, true);
+                foreach (var folder in new[] { _storage, _keys })
+                {
+                    try
+                    {
+                        Directory.Delete(folder, true);
+                    }
+                    catch (IOException exception)
+                    {
+                        Evidence.Log("[test] " + folder + " stays: " + exception.Message);
+                    }
+                }
             }
         }
 
@@ -101,14 +110,14 @@ namespace Jularr.E2E.Tests
             await WaitUntilReadyAsync();
         }
 
-        // Ends every connection to the instance's database, as a PostgreSQL restart does.
-        public async Task DropConnectionsAsync()
+        // Ends every connection to the instance's database, as a PostgreSQL restart does, and counts them.
+        public async Task<long> DropConnectionsAsync()
         {
             await using var connection = new NpgsqlConnection(_adminConnection);
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE datname = @database AND pid <> pg_backend_pid()", connection);
             command.Parameters.AddWithValue("database", _database);
-            await command.ExecuteScalarAsync();
+            return (long)(await command.ExecuteScalarAsync())!;
         }
 
         public async Task RunSqlAsync(string sql)
@@ -140,7 +149,10 @@ namespace Jularr.E2E.Tests
             _process = null;
         }
 
+        // The test's own connections close at once; the host pools its connections as in production.
         private string ConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database, Pooling = false }.ConnectionString;
+
+        private string HostConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database }.ConnectionString;
 
         private async Task CreateDatabaseAsync()
         {
@@ -174,7 +186,7 @@ namespace Jularr.E2E.Tests
             };
             start.Environment["ASPNETCORE_URLS"] = Address.ToString().TrimEnd('/');
             start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-            start.Environment["JULARR_DB"] = ConnectionString;
+            start.Environment["JULARR_DB"] = HostConnectionString;
             start.Environment["Storage__MountRoot"] = _storage;
             start.Environment["Storage__RequireMountPoint"] = "false";
             start.Environment["DataProtection__KeyDirectory"] = _keys;

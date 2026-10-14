@@ -58,20 +58,24 @@ namespace Jularr.E2E.Tests
 
         public IReadOnlyCollection<string> Grabbed => _grabbed;
 
+        private volatile bool _holdDownloads;
+        private volatile bool _failDownloads;
+
         // Grabbed jobs wait in the queue until finished.
-        public bool HoldDownloads { get; set; }
+        public bool HoldDownloads { get => _holdDownloads; set => _holdDownloads = value; }
 
         // Finished jobs report a broken download.
-        public bool FailDownloads { get; set; }
+        public bool FailDownloads { get => _failDownloads; set => _failDownloads = value; }
 
         public void FinishDownloads()
         {
-            foreach (var release in _held.Values)
+            foreach (var guid in _held.Keys)
             {
-                Complete(release);
+                if (_held.TryRemove(guid, out var release))
+                {
+                    Complete(release);
+                }
             }
-
-            _held.Clear();
         }
 
         public static async Task<FakeServices> StartAsync(string downloads)
