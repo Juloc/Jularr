@@ -10,109 +10,147 @@ namespace Jularr.E2E.Tests
     {
         // Applied in the order of a new installation.
         private static readonly string[] Baselines = ["Account", "Instance", "Media", "Acquisition", "Storage", "Library", "Playback"];
-        private readonly Process _process;
         private readonly string _adminConnection;
-        private readonly string _database;
-        private readonly string _storage;
+        private readonly string _database = "jularr_e2e_" + Guid.NewGuid().ToString("N");
+        private readonly string _storage = Directory.CreateTempSubdirectory("jularr-e2e-").FullName;
+        private Process? _process;
+        private bool _created;
 
-        private JularrInstance(Process process, Uri address, string adminConnection, string database, string storage)
+        private JularrInstance(string adminConnection)
         {
-            _process = process;
-            Address = address;
             _adminConnection = adminConnection;
-            _database = database;
-            _storage = storage;
+            Address = new Uri("http://127.0.0.1:" + FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture) + "/");
         }
 
         public Uri Address { get; }
+
+        // The repository holding this test project.
+        public static string Repository { get; } = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
         public static async Task<JularrInstance> StartAsync()
         {
             var admin = Environment.GetEnvironmentVariable("JULARR_TEST_DB");
             if (string.IsNullOrWhiteSpace(admin))
             {
-                Assert.Inconclusive("JULARR_TEST_DB is not configured.");
+                Unavailable("JULARR_TEST_DB is not configured.");
             }
 
-            var database = "jularr_e2e_" + Guid.NewGuid().ToString("N");
-            await using (var connection = new NpgsqlConnection(admin))
+            // Whatever was set up before a failure is taken down again.
+            var instance = new JularrInstance(admin!);
+            try
             {
-                await connection.OpenAsync();
-                await using var create = new NpgsqlCommand("CREATE DATABASE \"" + database + "\"", connection);
-                await create.ExecuteNonQueryAsync();
+                await instance.CreateDatabaseAsync();
+                instance.StartHost();
+                await instance.WaitUntilReadyAsync();
+                return instance;
+            }
+            catch
+            {
+                await instance.DisposeAsync();
+                throw;
+            }
+        }
+
+        // Locally a missing prerequisite skips the browser tests; in CI it fails them.
+        public static void Unavailable(string reason)
+        {
+            if (Environment.GetEnvironmentVariable("CI") is not null)
+            {
+                Assert.Fail(reason);
             }
 
-            var connectionString = new NpgsqlConnectionStringBuilder(admin) { Database = database, Pooling = false }.ConnectionString;
-            await using (var connection = new NpgsqlConnection(connectionString))
+            Assert.Inconclusive(reason);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            try
             {
-                await connection.OpenAsync();
-                foreach (var name in Baselines)
+                if (_process is not null)
                 {
-                    await using var command = new NpgsqlCommand(await File.ReadAllTextAsync(Path.Combine(Repository, "database", name + ".sql")), connection);
-                    await command.ExecuteNonQueryAsync();
+                    try
+                    {
+                        _process.Kill(entireProcessTree: true);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Already gone.
+                    }
+
+                    await _process.WaitForExitAsync();
+                    _process.Dispose();
+                }
+
+                if (_created)
+                {
+                    await using var connection = new NpgsqlConnection(_adminConnection);
+                    await connection.OpenAsync();
+                    await using var drop = new NpgsqlCommand("DROP DATABASE IF EXISTS \"" + _database + "\" WITH (FORCE)", connection);
+                    await drop.ExecuteNonQueryAsync();
                 }
             }
+            finally
+            {
+                Directory.Delete(_storage, true);
+            }
+        }
 
-            // The host is the build next to this project's, in the same configuration.
+        private string ConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database, Pooling = false }.ConnectionString;
+
+        private async Task CreateDatabaseAsync()
+        {
+            await using (var connection = new NpgsqlConnection(_adminConnection))
+            {
+                await connection.OpenAsync();
+                await using var create = new NpgsqlCommand("CREATE DATABASE \"" + _database + "\"", connection);
+                await create.ExecuteNonQueryAsync();
+                _created = true;
+            }
+
+            await using var database = new NpgsqlConnection(ConnectionString);
+            await database.OpenAsync();
+            foreach (var name in Baselines)
+            {
+                await using var command = new NpgsqlCommand(await File.ReadAllTextAsync(Path.Combine(Repository, "database", name + ".sql")), database);
+                await command.ExecuteNonQueryAsync();
+            }
+        }
+
+        // The host is the build next to this project's, in the same configuration.
+        private void StartHost()
+        {
             var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
             var frontend = Path.Combine(Repository, "src", "Jularr.Frontend");
-            var address = new Uri("http://127.0.0.1:" + FreePort().ToString(System.Globalization.CultureInfo.InvariantCulture) + "/");
-            var storage = Directory.CreateTempSubdirectory("jularr-e2e-").FullName;
             var start = new ProcessStartInfo("dotnet", [Path.Combine(frontend, "bin", configuration, "net10.0", "Jularr.Frontend.dll")])
             {
                 WorkingDirectory = frontend,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
-            start.Environment["ASPNETCORE_URLS"] = address.ToString().TrimEnd('/');
+            start.Environment["ASPNETCORE_URLS"] = Address.ToString().TrimEnd('/');
             start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-            start.Environment["JULARR_DB"] = connectionString;
-            start.Environment["Storage__MountRoot"] = storage;
+            start.Environment["JULARR_DB"] = ConnectionString;
+            start.Environment["Storage__MountRoot"] = _storage;
             start.Environment["Storage__RequireMountPoint"] = "false";
-            var process = Process.Start(start) ?? throw new InvalidOperationException("The Jularr host did not start.");
-            process.OutputDataReceived += (_, line) => Output(line.Data);
-            process.ErrorDataReceived += (_, line) => Output(line.Data);
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            var instance = new JularrInstance(process, address, admin!, database, storage);
-            await instance.WaitUntilReadyAsync();
-            return instance;
-        }
-
-        // The repository holding this test project.
-        public static string Repository { get; } = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-        public async ValueTask DisposeAsync()
-        {
-            if (!_process.HasExited)
-            {
-                _process.Kill(entireProcessTree: true);
-                await _process.WaitForExitAsync();
-            }
-
-            _process.Dispose();
-            NpgsqlConnection.ClearAllPools();
-            await using (var connection = new NpgsqlConnection(_adminConnection))
-            {
-                await connection.OpenAsync();
-                await using var drop = new NpgsqlCommand("DROP DATABASE IF EXISTS \"" + _database + "\" WITH (FORCE)", connection);
-                await drop.ExecuteNonQueryAsync();
-            }
-
-            Directory.Delete(_storage, true);
+            _process = Process.Start(start) ?? throw new InvalidOperationException("The Jularr host did not start.");
+            _process.OutputDataReceived += (_, line) => Output(line.Data);
+            _process.ErrorDataReceived += (_, line) => Output(line.Data);
+            _process.BeginOutputReadLine();
+            _process.BeginErrorReadLine();
         }
 
         private async Task WaitUntilReadyAsync()
         {
             using var http = new HttpClient { BaseAddress = Address, Timeout = TimeSpan.FromSeconds(5) };
+            Exception? last = null;
             for (var attempt = 0; attempt < 120; attempt++)
             {
-                if (_process.HasExited)
+                if (_process!.HasExited)
                 {
                     throw new InvalidOperationException("The Jularr host stopped with exit code " + _process.ExitCode + ".");
                 }
 
+                // Refused or slow answers are expected while the host starts.
                 try
                 {
                     using var response = await http.GetAsync("api/v1/auth");
@@ -120,18 +158,18 @@ namespace Jularr.E2E.Tests
                     {
                         return;
                     }
+
+                    last = new HttpRequestException("HTTP " + (int)response.StatusCode);
                 }
-                catch (HttpRequestException)
+                catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
                 {
-                }
-                catch (TaskCanceledException)
-                {
+                    last = exception;
                 }
 
                 await Task.Delay(500);
             }
 
-            throw new TimeoutException("The Jularr host did not answer within a minute.");
+            throw new TimeoutException("The Jularr host did not answer within a minute.", last);
         }
 
         private static int FreePort()

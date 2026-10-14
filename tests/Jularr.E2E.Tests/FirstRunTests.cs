@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -9,16 +10,17 @@ namespace Jularr.E2E.Tests
         private const string Password = "e2e-owner-password-123";
 
         [ClassInitialize]
-        public static void InstallBrowser(TestContext context)
+        public static void InstallBrowser(TestContext _)
         {
             // Playwright keeps its browsers in its own cache; this fetches Chromium once.
             if (Microsoft.Playwright.Program.Main(["install", "chromium"]) != 0)
             {
-                Assert.Inconclusive("Chromium for Playwright could not be installed.");
+                JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
             }
         }
 
         [TestMethod]
+        [Timeout(300_000)]
         public async Task FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors()
         {
             await using var jularr = await JularrInstance.StartAsync();
@@ -26,15 +28,15 @@ namespace Jularr.E2E.Tests
             await using var browser = await playwright.Chromium.LaunchAsync();
             var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
             var page = await context.NewPageAsync();
-            var problems = new List<string>();
+            var problems = new ConcurrentQueue<string>();
             page.Console += (_, message) =>
             {
-                if (message.Type == "error") problems.Add(page.Url + ": " + message.Text);
+                if (message.Type == "error") problems.Enqueue(page.Url + ": " + message.Text);
             };
-            page.PageError += (_, error) => problems.Add(page.Url + ": " + error);
+            page.PageError += (_, error) => problems.Enqueue(page.Url + ": " + error);
             page.Response += (_, response) =>
             {
-                if (response.Status >= 500) problems.Add(response.Url + ": HTTP " + response.Status);
+                if (response.Status >= 500) problems.Enqueue(response.Url + ": HTTP " + response.Status);
             };
 
             try
@@ -68,12 +70,20 @@ namespace Jularr.E2E.Tests
                     Assert.AreEqual(1, await page.Locator("main").CountAsync(), link + " has no page content");
                 }
 
-                CollectionAssert.AreEqual(Array.Empty<string>(), problems);
+                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
             }
             catch
             {
-                var folder = Directory.CreateDirectory(Path.Combine(JularrInstance.Repository, "TestResults", "e2e")).FullName;
-                await page.ScreenshotAsync(new PageScreenshotOptions { Path = Path.Combine(folder, "first-run.png"), FullPage = true });
+                // The picture helps; its own failure must not hide the real one.
+                try
+                {
+                    var folder = Directory.CreateDirectory(Path.Combine(JularrInstance.Repository, "TestResults", "e2e")).FullName;
+                    await page.ScreenshotAsync(new PageScreenshotOptions { Path = Path.Combine(folder, "first-run.png"), FullPage = true });
+                }
+                catch (PlaywrightException)
+                {
+                }
+
                 throw;
             }
         }

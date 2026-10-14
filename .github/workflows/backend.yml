@@ -43,7 +43,7 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
-      - run: dotnet test Jularr.sln --configuration Release --filter "FullyQualifiedName!~Jularr.E2E"
+      - run: dotnet test tests/Jularr.Backend.Tests --configuration Release
 
   # A fresh installation in a real browser (Playwright, Chromium).
   e2e:
