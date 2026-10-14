@@ -76,4 +76,15 @@ namespace Jularr.Backend.Data.User.Session.V1
         public bool IsAuthenticated => false;
         public bool EndsCurrentSession => true;
     }
+
+    public sealed class RenameSessionDeviceDataV1 : BaseData
+    {
+        public RenameSessionDeviceDataV1(string deviceName)
+        {
+            DeviceName = deviceName;
+        }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName), true)]
+        public string DeviceName { get; }
+    }
 }

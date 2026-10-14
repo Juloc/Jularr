@@ -11,8 +11,8 @@ Owner services provide version-checked settings/module edits. InstanceSettings a
 whether several releases of a film or episode are kept and what happens to a replaced
 file (deleted, moved to a recycle folder inside its library or to one folder on a storage
 connection) and after how many days recycled files leave. RecycledFiles lists what Jularr
-moved there, the only files its cleanup removes; MediaAssets.IsManual protects versions
-an administrator added from imports. Library gates manual
+moved there, the only files its cleanup removes; MediaAssets.IsProtected keeps versions
+an administrator added or protected from automatic upgrades. Library gates manual
 media/watchlist Services; Profiles (off by default) allows several profiles per account,
 otherwise the view SelectableProfiles offers each account its main profile only; Requests gates request creation/moderation and manual
 Wanted management; Acquisition (Arr+) gates indexers, download clients, search,
@@ -109,7 +109,7 @@ Included tables:
 - UiTranslationMessages, UiTranslations and UiTranslationStatusTypes share UiLocales.
 - AccountPasswords, AccountPasskeys, AccountTotpFactors and AccountRecoveryCodes.
 - Providers, AccountExternalLogins and AccountExternalAuthFlows.
-- AccountSessions (paired devices carry their name and platform), DevicePairings, AccountAuthChallenges and AuthChallengePurposeTypes.
+- AccountSessions (paired devices carry their name and platform), DevicePairings and DevicePairingAttempts (wrong codes per account), AccountAuthChallenges and AuthChallengePurposeTypes.
 - InstanceSetupState records first-Owner creation permanently; it is not a second account registry.
 
 The original CLEAN_CUT_DATABASE snapshot supplied by the owner defines the scope;

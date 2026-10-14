@@ -41,7 +41,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             var options = new[] { new SelectOption("True", texts["admin.providers.enabled"]), new SelectOption("False", texts["admin.providers.disabled"]) };
 
             // Render only real registry rows.
-            foreach (var provider in (_providers?.Items ?? []).Where(provider => MediaServerTypes.FromProviderKey(provider.Key) is null || texts.Can(null, "ProgressSync")))
+            foreach (var provider in (_providers?.Items ?? []).Where(provider => MediaServerTypes.FromProviderKey(provider.Key) is null || texts.Can(null, "ProgressSync", "Library")))
             {
                 page.Content.Add(new P(new ValueText(provider.Key)));
                 page.Content.Add(new Form<UpdateProviderDataV1>(form =>
@@ -222,7 +222,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
         {
             _providers = await providers.ExecuteAsync<PageResult<ProviderDetailsV1>>(new ReadProvidersParametersV1(PageNumber), HttpContext.RequestAborted);
             _plex = await readPlex.ExecuteAsync<PlexServerDetailsV1>(new PlexServerParametersV1(), HttpContext.RequestAborted);
-            if (!texts.Can(null, "ProgressSync"))
+            if (!texts.Can(null, "ProgressSync", "Library"))
             {
                 return;
             }

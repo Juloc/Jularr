@@ -24,6 +24,12 @@ namespace Jularr.Backend.Logic.Instance
                 data.SubtitleLanguages = [.. codes.OfType<string>().Distinct(StringComparer.Ordinal)];
             }
 
+            // A public address is stored like a provider address, ending in a slash.
+            if (data.PublicUrl is { } publicUrl)
+            {
+                data.PublicUrl = Provider.ProviderLogic.ServerAddress(publicUrl, nameof(data.PublicUrl)).AbsoluteUri;
+            }
+
             // Reject concurrent edits.
             var sql = new SqlStatement();
             sql.Statement =
@@ -42,6 +48,7 @@ namespace Jularr.Backend.Logic.Instance
                     "CollectionLimit" = coalesce(@CollectionLimit, settings."CollectionLimit"),
                     "UnitGroupLimit" = coalesce(@UnitGroupLimit, settings."UnitGroupLimit"),
                     "SubtitleLanguages" = coalesce(@SubtitleLanguages::varchar(2)[], settings."SubtitleLanguages"),
+                    "PublicUrl" = @PublicUrl,
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."Id" = 1

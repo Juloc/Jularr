@@ -95,6 +95,14 @@ namespace Jularr.E2E.Tests
             }
         }
 
+        public async Task RunSqlAsync(string sql)
+        {
+            await using var connection = new NpgsqlConnection(ConnectionString);
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand(sql, connection);
+            await command.ExecuteNonQueryAsync();
+        }
+
         private string ConnectionString => new NpgsqlConnectionStringBuilder(_adminConnection) { Database = _database, Pooling = false }.ConnectionString;
 
         private async Task CreateDatabaseAsync()

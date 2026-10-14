@@ -104,7 +104,7 @@ namespace Jularr.Backend.Service.Core
             var parameters = _sessions.Parameters!;
             _caller = new ServiceCaller(session.AccountId, session.ProfileId, area,
                 parameters.SessionPublicId.ToString("D"), parameters.SessionPublicId, parameters.SessionRevision,
-                session.ProfileOwnerAccountId, parameters.SessionTokenHash, session.AccountRoleTypeId);
+                session.ProfileOwnerAccountId, parameters.SessionTokenHash, session.AccountRoleTypeId, session.IsDevice);
             return _caller;
         }
 
@@ -130,7 +130,7 @@ namespace Jularr.Backend.Service.Core
             var current = await context.ReadSessionAsync(parameters, cancellationToken);
 
             if (current.AccountId != caller.AccountId || current.ProfileId != caller.ProfileId
-                || current.ProfileOwnerAccountId != caller.ProfileOwnerAccountId || current.AccountRoleTypeId != caller.AccountRoleTypeId)
+                || current.ProfileOwnerAccountId != caller.ProfileOwnerAccountId || current.AccountRoleTypeId != caller.AccountRoleTypeId || current.IsDevice != caller.IsDevice)
             {
                 throw new UnauthorizedAccessException("The session authorization changed.");
             }
@@ -161,7 +161,7 @@ namespace Jularr.Backend.Service.Core
                     throw new UnauthorizedAccessException("An active profile is required.");
                 }
 
-                if (GetPermissions(caller.AccountId, caller.ProfileId, caller.ProfileOwnerAccountId, caller.AccountRoleTypeId).Contains(permission.Key, StringComparer.Ordinal))
+                if (GetPermissions(caller.AccountId, caller.ProfileId, caller.ProfileOwnerAccountId, caller.AccountRoleTypeId, caller.IsDevice).Contains(permission.Key, StringComparer.Ordinal))
                 {
                     return;
                 }
@@ -171,7 +171,7 @@ namespace Jularr.Backend.Service.Core
         }
 
         // Share effective grants with consumers.
-        internal static IReadOnlyList<string> GetPermissions(long? accountId, long? profileId, long? ownerAccountId, AccountRoleType accountRoleTypeId = AccountRoleType.User)
+        internal static IReadOnlyList<string> GetPermissions(long? accountId, long? profileId, long? ownerAccountId, AccountRoleType accountRoleTypeId = AccountRoleType.User, bool isDevice = false)
         {
             if (accountId is null)
             {
@@ -198,7 +198,13 @@ namespace Jularr.Backend.Service.Core
             if (profileId is not null)
             {
                 permissions.Add("profile.self.read");
-                permissions.AddRange(["profile.media.read", "profile.watchlist.update", "profile.requests.read", "profile.requests.update", "profile.playback", "profile.notifications", "profile.collections", "profile.devices"]);
+                permissions.AddRange(["profile.media.read", "profile.watchlist.update", "profile.requests.read", "profile.requests.update", "profile.playback", "profile.notifications", "profile.collections"]);
+
+                // A paired device pairs no further ones.
+                if (!isDevice)
+                {
+                    permissions.Add("profile.devices");
+                }
                 if (ownerAccountId == accountId)
                 {
                     permissions.Add("profile.self.update");

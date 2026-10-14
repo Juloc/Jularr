@@ -15,7 +15,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
     public sealed class ReadMediaServerV1 : AdminService<MediaServerParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaServerDetailsV1>()];
-        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
         protected override ServicePermission GetPermission(MediaServerParametersV1 parameters, Type resultType) => new("providers.read");
 
         protected override async Task<IServiceOutput> OnRead()
@@ -52,7 +52,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaServerTestV1>()];
-        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
         protected override ServicePermission GetPermission(MediaServerParametersV1 parameters, Type resultType) => new("providers.update");
 
         protected override async Task<IServiceOutput> OnExecute()
@@ -86,7 +86,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
         protected override ServicePermission GetPermission(MediaServerParametersV1 parameters, Type resultType) => new("providers.update");
 
         protected override async Task<IServiceOutput> OnDelete()
@@ -101,7 +101,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
     public sealed class ReadMediaServerLinksV1 : AdminService<MediaServerParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<MediaServerLinkV1>>()];
-        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
         protected override ServicePermission GetPermission(MediaServerParametersV1 parameters, Type resultType) => new("providers.read");
 
         protected override async Task<IServiceOutput> OnRead()
@@ -137,7 +137,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(MediaServerLinkParametersV1 parameters) => ModuleRequirement.All("ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(MediaServerLinkParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
         protected override ServicePermission GetPermission(MediaServerLinkParametersV1 parameters, Type resultType) => new("providers.update");
 
         protected override async Task<IServiceOutput> OnUpdate()
@@ -160,7 +160,7 @@ namespace Jularr.Backend.Service.Admin.Provider.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<MediaServerSyncResultV1>()];
-        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(MediaServerParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
         protected override ServicePermission GetPermission(MediaServerParametersV1 parameters, Type resultType) => new("providers.update");
 
         protected override async Task<IServiceOutput> OnExecute()

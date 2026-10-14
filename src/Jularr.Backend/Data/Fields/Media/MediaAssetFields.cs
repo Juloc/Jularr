@@ -14,7 +14,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly DecimalField UnitNumber = new() { Minimum = 0, Maximum = 999999.999m, Scale = 3 };
         public static readonly StringField UnitTitle = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };
         public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 1000 };
-        public static readonly BoolField IsManual = new();
+        public static readonly BoolField IsProtected = new();
         public static readonly BoolField IsConfirmed = new();
     }
 }

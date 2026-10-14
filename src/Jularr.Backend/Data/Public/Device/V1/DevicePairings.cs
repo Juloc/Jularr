@@ -11,10 +11,14 @@ namespace Jularr.Backend.Data.Public.Device.V1
 
     public sealed class StartDevicePairingDataV1 : BaseData
     {
-        public StartDevicePairingDataV1(string deviceName, string devicePlatform)
+        // The name a browser pairs with; stored the same in every language and shown translated.
+        public const string BrowserName = "Browser";
+
+        public StartDevicePairingDataV1(string deviceName, string devicePlatform, Guid? replacesPairingId = null)
         {
             DeviceName = deviceName;
             DevicePlatform = devicePlatform;
+            ReplacesPairingId = replacesPairingId;
         }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
@@ -22,6 +26,10 @@ namespace Jularr.Backend.Data.Public.Device.V1
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
         public string DevicePlatform { get; }
+
+        // The device's previous, unconfirmed pairing; its code ends at once.
+        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.PublicId), false)]
+        public Guid? ReplacesPairingId { get; }
     }
 
     // The device shows the code; the pairing id is its secret for fetching the session.

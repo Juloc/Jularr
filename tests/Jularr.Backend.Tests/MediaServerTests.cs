@@ -36,7 +36,10 @@ namespace Jularr.Backend.Tests
             // Off by default.
             using var off = await host.SendAsync(HttpMethod.Get, Route);
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'ProgressSync'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = CASE WHEN \"Key\" = 'Library' THEN FALSE ELSE TRUE END WHERE \"Key\" IN ('ProgressSync', 'Library')");
+            using var noLibrary = await host.SendAsync(HttpMethod.Get, Route);
+            Assert.AreEqual(HttpStatusCode.Forbidden, noLibrary.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Library'");
 
             // Only a server that accepts the key is stored; its users are proposed the profile of the same name.
             using var refused = await host.SendAsync(HttpMethod.Post, Route, new SaveMediaServerDataV1("http://jellyfin.example.test:8096", "wrong"));

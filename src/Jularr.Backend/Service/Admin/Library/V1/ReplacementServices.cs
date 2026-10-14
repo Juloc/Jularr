@@ -90,4 +90,19 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             return new UpdateResult(true);
         }
     }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/library/files/{storedFileId:long}/protection")]
+    public sealed class ProtectLibraryFileV1 : AdminService<StoredFileParametersV1, ProtectLibraryFileDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(StoredFileParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(StoredFileParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.ProtectStoredFileAsync(new StoredFileProtectionData(Parameters.StoredFileId, Data.IsProtected), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
 }

@@ -11,17 +11,20 @@ namespace Jularr.Backend.Logic.Session
     // and the device fetches its own session once; it lasts and renews like any session.
     internal static class DevicePairingLogic
     {
-        public static async Task<DevicePairingStartedData> StartDevicePairingAsync(this LogicContext ctx, string deviceName, string devicePlatform, CancellationToken ct)
+        public static async Task<DevicePairingStartedData> StartDevicePairingAsync(this LogicContext ctx, string deviceName, string devicePlatform, Guid? replacesPairingId,
+            CancellationToken ct)
         {
-            // Codes of expired pairings become free again.
+            // Codes of expired pairings become free again; a device asking anew ends its own open code at once.
             var cleanup = new SqlStatement();
             cleanup.Statement =
                 """
                 DELETE FROM
                     "DevicePairings" AS pairing
                 WHERE
-                    pairing."ExpiresAt" < statement_timestamp();
+                    pairing."ExpiresAt" < statement_timestamp()
+                    OR pairing."PublicId" = @ReplacesPairingId AND pairing."ApprovedAccountId" IS NULL;
                 """;
+            cleanup.Parameters.Add(new DevicePairingReplacementData(replacesPairingId));
             await ctx.ExecuteAsyncForAffectedRows(cleanup, ct);
 
             // A code in use is drawn again.
@@ -49,6 +52,53 @@ namespace Jularr.Backend.Logic.Session
             }
 
             throw new ServiceUnavailableException("device_pairing_busy");
+        }
+
+        // An attempt is recorded before a code is checked and removed when it was right; five wrong ones in ten minutes and the account waits.
+        public static async Task<DevicePairingAttemptData> TakeDevicePairingAttemptAsync(this LogicContext ctx, DevicePairingAccountData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    pg_advisory_xact_lock(hashtextextended('device-pairing-attempt', @AccountId));
+
+                DELETE FROM
+                    "DevicePairingAttempts" AS attempt
+                WHERE
+                    attempt."AttemptedAt" < statement_timestamp() - interval '10 minutes';
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            var take = new SqlStatement();
+            take.Statement =
+                """
+                INSERT INTO
+                    "DevicePairingAttempts" ("AccountId")
+                SELECT
+                    @AccountId
+                WHERE
+                    (SELECT count(*) FROM "DevicePairingAttempts" AS attempt WHERE attempt."AccountId" = @AccountId) < 5
+                RETURNING
+                    "Id";
+                """;
+            take.Parameters.Add(data);
+            return await ctx.ReadOptionalAsync<DevicePairingAttemptData>(take, ct) ?? throw new ServiceUnavailableException("device_pairing_attempts");
+        }
+
+        public static async Task ReturnDevicePairingAttemptAsync(this LogicContext ctx, DevicePairingAttemptData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "DevicePairingAttempts" AS attempt
+                WHERE
+                    attempt."Id" = @Id;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static Task<DevicePairingDeviceData?> ReadOpenDevicePairingAsync(this LogicContext ctx, DevicePairingCodeData data, CancellationToken ct)

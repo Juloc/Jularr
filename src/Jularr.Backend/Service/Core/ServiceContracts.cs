@@ -71,7 +71,8 @@ namespace Jularr.Backend.Service.Core
         long? SessionRevision = null,
         long? ProfileOwnerAccountId = null,
         byte[]? SessionTokenHash = null,
-        AccountRoleType AccountRoleTypeId = AccountRoleType.User);
+        AccountRoleType AccountRoleTypeId = AccountRoleType.User,
+        bool IsDevice = false);
 
     public interface IServiceDefinition
     {

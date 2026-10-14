@@ -88,7 +88,8 @@ namespace Jularr.Backend.Service.Core
                     account."AccountRoleTypeId",
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
-                    profile."UiLocaleId"
+                    profile."UiLocaleId",
+                    session."DeviceName" IS NOT NULL AS "IsDevice"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
@@ -116,7 +117,7 @@ namespace Jularr.Backend.Service.Core
                 ?? throw new UnauthorizedAccessException("The session is unavailable.");
 
             Parameters = parameters;
-            return session;
+            return SessionLogic.Effective(session);
         }
     }
 }

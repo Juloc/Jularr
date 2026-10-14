@@ -18,7 +18,7 @@ namespace Jularr.Backend.Service.System.Provider.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(MediaServerSyncParametersV1 parameters) => ModuleRequirement.All("ProgressSync");
+        protected override ModuleRequirement GetInstanceModules(MediaServerSyncParametersV1 parameters) => ModuleRequirement.All("ProgressSync", "Library");
         protected override ServicePermission GetPermission(MediaServerSyncParametersV1 parameters, Type resultType) => new("system.media");
 
         protected override async Task<IServiceOutput> OnExecute()

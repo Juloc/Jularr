@@ -33,18 +33,25 @@ namespace Jularr.Backend.Tests
             using var waiting = await host.SendAsync(HttpMethod.Post, claimRoute);
             Assert.IsFalse((await waiting.Content.ReadFromJsonAsync<DevicePairingClaimV1>())!.IsPaired);
             var wrongCode = pairing.Code == "000000" ? "000001" : "000000";
-            using var wrong = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(wrongCode));
+            using var wrong = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(wrongCode));
             StringAssert.Contains(await wrong.Content.ReadAsStringAsync(), "invalid_code");
-            using var approved = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(pairing.Code));
+            using var approved = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(pairing.Code));
             Assert.AreEqual(HttpStatusCode.OK, approved.StatusCode, await approved.Content.ReadAsStringAsync());
 
-            // The device fetches its session once; it carries the device and the confirming profile.
+            // The device fetches its session once; it carries the device and the confirming profile. This client stays the phone.
+            var phone = new Dictionary<string, string>(host.Cookies);
             using var paired = await host.SendAsync(HttpMethod.Post, claimRoute);
             Assert.IsTrue((await paired.Content.ReadFromJsonAsync<DevicePairingClaimV1>())!.IsPaired);
             Assert.AreEqual(101L, await host.ScalarAsync("SELECT \"ActiveProfileId\" FROM \"AccountSessions\" WHERE \"DeviceName\" = 'Living room TV'"));
+            host.Cookies.Clear();
+            foreach (var (name, value) in phone)
+            {
+                host.Cookies[name] = value;
+            }
+
             using var again = await host.SendAsync(HttpMethod.Post, claimRoute);
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
-            using var twice = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(pairing.Code));
+            using var twice = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(pairing.Code));
             StringAssert.Contains(await twice.Content.ReadAsStringAsync(), "invalid_code");
             using var sessions = await host.SendAsync(HttpMethod.Get, "/api/v1/sessions?pageSize=100");
             var device = (await sessions.Content.ReadFromJsonAsync<PageResult<SessionDetailsV1>>())!.Items.Single(session => session.DeviceName is not null);
@@ -54,17 +61,29 @@ namespace Jularr.Backend.Tests
             using var late = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/pairings", new StartDevicePairingDataV1("Phone", "Android"));
             var expired = (await late.Content.ReadFromJsonAsync<DevicePairingStartedV1>())!;
             await host.Fixture.RunSqlAsync("UPDATE \"DevicePairings\" SET \"CreatedAt\" = now() - interval '1 hour', \"ExpiresAt\" = now() - interval '1 minute'");
-            using var tooLate = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(expired.Code));
+            using var tooLate = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(expired.Code));
             StringAssert.Contains(await tooLate.Content.ReadAsStringAsync(), "invalid_code");
             using var fresh = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/pairings", new StartDevicePairingDataV1("Tablet", "iPadOS"));
             var open = (await fresh.Content.ReadFromJsonAsync<DevicePairingStartedV1>())!;
             for (var attempt = 0; attempt < 3; attempt++)
             {
-                using var guess = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(open.Code == "000000" ? "000001" : "000000"));
+                using var guess = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(open.Code == "000000" ? "000001" : "000000"));
             }
 
-            using var blocked = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(open.Code));
+            using var blocked = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(open.Code));
             StringAssert.Contains(await blocked.Content.ReadAsStringAsync(), "device_pairing_attempts");
+
+            // The attempts are kept in the database, so a restart does not forget them.
+            Assert.AreEqual(5L, await host.ScalarAsync("SELECT count(*) FROM \"DevicePairingAttempts\""));
+
+            // An optional public address for QR codes, stored like a provider address.
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings",
+                new Jularr.Backend.Data.Admin.Instance.V1.UpdateInstanceSettingsDataV1("Jularr", 1, version, publicUrl: "https://jularr.example.test/home"));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            using var presentation = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/presentation");
+            Assert.AreEqual("https://jularr.example.test/home/",
+                (await presentation.Content.ReadFromJsonAsync<Jularr.Backend.Data.Public.Instance.V1.InstancePresentationDetailsV1>())!.PublicUrl);
         }
 
         [TestMethod]
@@ -94,11 +113,21 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "<svg");
             Assert.AreEqual("5", shown.Headers.GetValues("Refresh").Single());
 
-            // The phone sees which device asks before confirming it.
+            // An expired code is replaced by a new one at once; the old one ends.
+            await host.Fixture.RunSqlAsync("UPDATE \"DevicePairings\" SET \"CreatedAt\" = now() - interval '1 hour', \"ExpiresAt\" = now() - interval '1 minute'");
+            using var renewed = await host.SendAsync(HttpMethod.Get, "/Devices/Link");
+            Assert.AreEqual(HttpStatusCode.Redirect, renewed.StatusCode);
+            using var fresh = await host.SendAsync(HttpMethod.Get, "/Devices/Link");
+            code = Regex.Match(await fresh.Content.ReadAsStringAsync(), "aria-live=\"polite\">([0-9]{6})<").Groups[1].Value;
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"DevicePairings\""));
+
+            // Opening the QR address shows the device and its code; it does not pair by itself.
             using var form = await host.SendAsync(HttpMethod.Get, "/Devices/Pair?code=" + code);
             var pairHtml = await form.Content.ReadAsStringAsync();
             StringAssert.Contains(pairHtml, "Browser (Web) asks to be paired");
-            using var approved = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(code));
+            StringAssert.Contains(pairHtml, ">" + code + "<");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"DevicePairings\" WHERE \"ApprovedAccountId\" IS NOT NULL"));
+            using var approved = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(code));
             Assert.AreEqual(HttpStatusCode.OK, approved.StatusCode, await approved.Content.ReadAsStringAsync());
 
             // Another browser without that cookie gets nothing; the asking one is signed in.
@@ -112,6 +141,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
             Assert.AreEqual("/", signedIn.Headers.Location!.OriginalString);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
+
+            // The device is a normal user of the profile: no administration, no further pairings; it may rename itself.
+            using var admin = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/providers");
+            Assert.AreEqual(HttpStatusCode.Unauthorized, admin.StatusCode);
+            using var further = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1("123456"));
+            Assert.AreEqual(HttpStatusCode.Forbidden, further.StatusCode);
+            var deviceSession = (Guid)(await host.ScalarAsync("SELECT \"PublicId\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"))!;
+            using var renamed = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + deviceSession + "/device", new RenameSessionDeviceDataV1("Living room TV"));
+            Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
+            Assert.AreEqual("Living room TV", await host.ScalarAsync("SELECT \"DeviceName\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
         }
     }
 }

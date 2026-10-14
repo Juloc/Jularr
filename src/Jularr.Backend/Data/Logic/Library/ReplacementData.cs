@@ -205,4 +205,19 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(RecycledFileFields), nameof(RecycledFileFields.Ids))]
         public long[] Ids { get; }
     }
+
+    internal sealed class StoredFileProtectionData : BaseData
+    {
+        public StoredFileProtectionData(long storedFileId, bool isProtected)
+        {
+            StoredFileId = storedFileId;
+            IsProtected = isProtected;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
+        public bool IsProtected { get; }
+    }
 }

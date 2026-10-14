@@ -111,7 +111,7 @@ namespace Jularr.Backend.Logic.Library
 
         public static Task<IReadOnlyList<ReplacedFileData>> ReadReplacedFilesAsync(this LogicContext ctx, ReplacingAssetsData data, CancellationToken ct)
         {
-            // Files of the other versions on writable libraries; versions added by hand only go on an administrator's confirmation.
+            // Files of the other versions on writable libraries; protected versions only go on an administrator's confirmation.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -164,7 +164,7 @@ namespace Jularr.Backend.Logic.Library
                     replacing."Id" = ANY (@MediaAssetIds)
                     AND file."MissingSince" IS NULL
                     AND NOT mount."IsReadOnly"
-                    AND (@IsConfirmed OR NOT earlier."IsManual")
+                    AND (@IsConfirmed OR NOT earlier."IsProtected")
                 ORDER BY
                     file."Id";
                 """;
@@ -279,6 +279,28 @@ namespace Jularr.Backend.Logic.Library
             var earlier = UpgradePolicy.RankOf(profile, file.EarlierQualityKey);
             var replacing = UpgradePolicy.RankOf(profile, file.NewQualityKey);
             return replacing != int.MaxValue && earlier != int.MaxValue && (replacing < earlier || replacing == earlier && file.NewRevision > file.EarlierRevision);
+        }
+
+        public static async Task ProtectStoredFileAsync(this LogicContext ctx, StoredFileProtectionData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "MediaAssets" AS asset
+                SET
+                    "IsProtected" = @IsProtected
+                FROM
+                    "StoredFiles" AS file
+                WHERE
+                    file."Id" = @StoredFileId
+                    AND asset."Id" = file."MediaAssetId";
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new KeyNotFoundException("The file has no version to protect.");
+            }
         }
 
         // Recycled files older than the configured days; none while they are kept.

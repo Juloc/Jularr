@@ -62,6 +62,7 @@ namespace Jularr.Backend.Service.Core
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
         public const string DevicePairingCookieName = "jularr.device_pairing";
         public const string DevicePairingRateLimit = "device-pairing";
+        public const string DeviceApprovalRateLimit = "device-approval";
         public const string AdminPolicyName = "jularr.admin";
         public const string StorageReadPolicyName = "storage.read";
         public const string RulesReadPolicyName = "rules.read";
@@ -162,7 +163,6 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<MediaServers>();
             services.TryAddTransient<LibraryReplacements>();
-            services.TryAddSingleton<DevicePairingAttempts>();
             services.TryAddTransient<BookMetadata>();
             services.TryAddTransient<GameRomIdentification>();
             services.TryAddTransient<AniListMetadata>();
@@ -277,6 +277,15 @@ namespace Jularr.Backend.Service.Core
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0
                     }));
+                // Codes checked from one address, whichever accounts it uses.
+                options.AddPolicy(DeviceApprovalRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
+                    http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 10,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
                 options.OnRejected = (context, token) => new ValueTask(
                     Results.Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "rate_limit_exceeded",
                         extensions: new Dictionary<string, object?>
@@ -382,6 +391,10 @@ namespace Jularr.Backend.Service.Core
                 if (definition.ServiceArea == ServiceArea.Public)
                 {
                     route.RequireRateLimiting("public").WithMetadata(new RequestSizeLimitAttribute(16 * 1024));
+                }
+                else if (endpoint.RateLimit is { } policy)
+                {
+                    route.RequireRateLimiting(policy);
                 }
 
                 // Uploads may be as large as their file field allows.

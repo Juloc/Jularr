@@ -40,9 +40,10 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     {
         public LibraryFileDetailsV1(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, string relativePath, long sizeBytes, DateTime? missingSince,
             long? mediaAssetId, long? workId, string? workTitle, string suggestedTitle, long? suggestedWorkId, WorkUnitType? suggestedWorkUnitTypeId, decimal? suggestedUnitNumber,
-            decimal? suggestedParentUnitNumber, bool hasOtherVersions)
+            decimal? suggestedParentUnitNumber, bool hasOtherVersions, bool isProtected)
         {
             HasOtherVersions = hasOtherVersions;
+            IsProtected = isProtected;
             Id = id;
             LibraryRootId = libraryRootId;
             LibraryRootName = libraryRootName;
@@ -108,6 +109,10 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         // Another version of the same film, episode or volume is in the library.
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.HasOtherVersions))]
         public bool HasOtherVersions { get; }
+
+        // Imports never replace it.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
+        public bool IsProtected { get; }
     }
 
     public sealed class AssignLibraryFileDataV1 : BaseData
@@ -151,5 +156,16 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
         public long MediaAssetId { get; }
+    }
+
+    public sealed class ProtectLibraryFileDataV1 : BaseData
+    {
+        public ProtectLibraryFileDataV1(bool isProtected)
+        {
+            IsProtected = isProtected;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
+        public bool IsProtected { get; }
     }
 }

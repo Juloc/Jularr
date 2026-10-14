@@ -371,7 +371,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT 900, "Id" FROM "Works";
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT version, "Id", 900 FROM "Works", unnest(ARRAY[900, 901, 902, 903]) AS version;
-                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId", "IsManual") SELECT asset, "Id", asset, 1, asset = 901 FROM "Works", unnest(ARRAY[900, 901, 902, 903]) AS asset;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId", "IsProtected") SELECT asset, "Id", asset, 1, asset = 901 FROM "Works", unnest(ARRAY[900, 901, 902, 903]) AS asset;
                 INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey")
                     SELECT item.id, root."Id", 'Example Movie (2020)/Example Movie (2020) [' || item.name || '].mkv', 3, now(), now(), item.id, item.quality
                     FROM "LibraryRoots" AS root, (VALUES (900, 'DVD', 'WEB-720p'), (901, 'Manual', NULL), (902, 'Bluray', 'BLURAY-1080p'), (903, 'Unknown', NULL)) AS item(id, name, quality)
@@ -401,6 +401,10 @@ namespace Jularr.Backend.Tests
             var newFile = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%WEB-1080p].mkv'"))!;
             using var files = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/files?onlyUnmatched=false");
             Assert.IsTrue((await files.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.Admin.Library.V1.LibraryFileDetailsV1>>())!.Items.Single(file => file.Id == newFile).HasOtherVersions);
+            using var protectedNew = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + newFile + "/protection",
+                new Jularr.Backend.Data.Admin.Library.V1.ProtectLibraryFileDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, protectedNew.StatusCode, await protectedNew.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT asset.\"IsProtected\" FROM \"MediaAssets\" AS asset JOIN \"StoredFiles\" AS file ON file.\"MediaAssetId\" = asset.\"Id\" WHERE file.\"Id\" = " + newFile));
             using var kept = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/files/" + newFile + "/keep-only");
             Assert.AreEqual(HttpStatusCode.OK, kept.StatusCode, await kept.Content.ReadAsStringAsync());
             Assert.AreEqual(1, Directory.GetFiles(library).Length);

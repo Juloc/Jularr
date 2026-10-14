@@ -19,7 +19,17 @@ namespace Jularr.Backend.Service.Public.Instance.V1
                 """
                 SELECT
                     settings."Name",
-                    settings."UiLocaleId"
+                    settings."UiLocaleId",
+                    settings."PublicUrl",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "InstanceModules" AS module
+                        WHERE
+                            module."Key" = 'Devices'
+                            AND module."IsEnabled"
+                    ) AS "PairsDevices"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE

@@ -163,4 +163,37 @@ namespace Jularr.Backend.Data.Logic.Session
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.Id))]
         public long Id { get; }
     }
+
+    internal sealed class DevicePairingAttemptData : BaseData
+    {
+        public DevicePairingAttemptData(long id)
+        {
+            Id = id;
+        }
+
+        [DataField(typeof(DevicePairingAttemptFields), nameof(DevicePairingAttemptFields.Id))]
+        public long Id { get; }
+    }
+
+    internal sealed class DevicePairingAccountData : BaseData
+    {
+        public DevicePairingAccountData(long accountId)
+        {
+            AccountId = accountId;
+        }
+
+        [DataField(typeof(DevicePairingAttemptFields), nameof(DevicePairingAttemptFields.AccountId))]
+        public long AccountId { get; }
+    }
+
+    internal sealed class DevicePairingReplacementData : BaseData
+    {
+        public DevicePairingReplacementData(Guid? replacesPairingId)
+        {
+            ReplacesPairingId = replacesPairingId;
+        }
+
+        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.PublicId), false)]
+        public Guid? ReplacesPairingId { get; }
+    }
 }

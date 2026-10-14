@@ -16,6 +16,8 @@ CREATE TABLE "InstanceSettings" (
     "UnitGroupLimit" smallint NOT NULL DEFAULT 100 CHECK ("UnitGroupLimit" BETWEEN 1 AND 1000),
     -- Two-letter language codes in the order subtitles are wanted.
     "SubtitleLanguages" varchar(2)[] NOT NULL DEFAULT '{}' CHECK (cardinality("SubtitleLanguages") <= 10),
+    -- How phones reach Jularr from outside, for QR codes; without it the address a device used counts.
+    "PublicUrl" varchar(500) NULL CHECK ("PublicUrl" ~ '^https?://[^/?#]+(/[^?#]*)?/$'),
     -- An import replaces the earlier file of a film, episode or volume unless several releases are kept.
     "KeepsReleases" boolean NOT NULL DEFAULT FALSE,
     -- Replaced files are deleted (1), moved to a recycle folder inside their library (2) or to one folder on a storage connection (3).

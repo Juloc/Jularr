@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Common;
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.User.Session.V1;
@@ -9,7 +10,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Frontend.Pages.Account.Sessions
 {
-    public sealed class SessionsModel(ReadSessionsV1 readSessions, RevokeSessionV1 revokeSession, IAntiforgery antiforgery) : JularrPage
+    public sealed class SessionsModel(ReadSessionsV1 readSessions, RevokeSessionV1 revokeSession, RenameSessionDeviceV1 renameDevice, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<SessionDetailsV1>? _sessions;
         private int _pageNumber = 1;
@@ -24,7 +25,18 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                 foreach (var session in _sessions.Items)
                 {
                     page.Content.Add(new UiSection(session.IsCurrent ? "session.current" : "session.other", [
-                        .. (session.DeviceName is { } device ? new IUiComponent[] { new P(new ValueText(device + " · " + session.DevicePlatform)) } : []),
+                        .. (session.DeviceName is { } device
+                            ? new IUiComponent[]
+                            {
+                                new P(new ValueText(DeviceNames.Show(device, texts) + " · " + session.DevicePlatform)),
+                                new Form<RenameSessionDeviceDataV1>(form =>
+                                {
+                                    form.Text(item => item.DeviceName, "devices.rename");
+                                    form.Submit("common.save");
+                                }, Url.Page("/Account/Sessions/Sessions", "Rename", new { sessionPublicId = session.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                                    new RenameSessionDeviceDataV1(DeviceNames.Show(device, texts)))
+                            }
+                            : []),
                         new P(new Text("session.created"), new ValueText(session.CreatedAt.ToString("u", CultureInfo.InvariantCulture))),
                         new P(new Text("session.expires"), new ValueText(session.ExpiresAt.ToString("u", CultureInfo.InvariantCulture))),
                         new Form<RevokeSessionParametersV1>(form =>
@@ -48,6 +60,12 @@ namespace Jularr.Frontend.Pages.Account.Sessions
             await LoadDataAsync();
             PreparePage();
             return Page();
+        }
+
+        public async Task<IActionResult> OnPostRenameAsync(Guid sessionPublicId, string? deviceName)
+        {
+            await renameDevice.ExecuteAsync<UpdateResult>(new RevokeSessionParametersV1(sessionPublicId), new RenameSessionDeviceDataV1(deviceName ?? ""), HttpContext.RequestAborted);
+            return RedirectToPage("/Account/Sessions/Sessions");
         }
 
         public async Task<IActionResult> OnPostAsync(Guid sessionPublicId)

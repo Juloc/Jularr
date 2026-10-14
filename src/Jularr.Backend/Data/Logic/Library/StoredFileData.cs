@@ -139,9 +139,9 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class StoredFileAssignmentData : BaseData
     {
         public StoredFileAssignmentData(long storedFileId, long? workId, string? title, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber, long? gamePlatformId,
-            bool isManual)
+            bool isProtected)
         {
-            IsManual = isManual;
+            IsProtected = isProtected;
             GamePlatformId = gamePlatformId;
             StoredFileId = storedFileId;
             WorkId = workId;
@@ -174,8 +174,8 @@ namespace Jularr.Backend.Data.Logic.Library
         public long? GamePlatformId { get; }
 
         // Assigned or uploaded by an administrator; imports never replace it.
-        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsManual))]
-        public bool IsManual { get; }
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
+        public bool IsProtected { get; }
     }
 
     internal sealed class MediaAssetIdData : BaseData
@@ -192,9 +192,10 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class LibraryFileRowData : BaseData
     {
         public LibraryFileRowData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, string relativePath, long sizeBytes, DateTime? missingSince,
-            long? mediaAssetId, long? workId, string? workTitle, string? romName, bool hasOtherVersions)
+            long? mediaAssetId, long? workId, string? workTitle, string? romName, bool hasOtherVersions, bool isProtected)
         {
             HasOtherVersions = hasOtherVersions;
+            IsProtected = isProtected;
             RomName = romName;
             Id = id;
             LibraryRootId = libraryRootId;
@@ -244,6 +245,9 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.HasOtherVersions))]
         public bool HasOtherVersions { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
+        public bool IsProtected { get; }
     }
 
     internal sealed class LibraryFileFilterData : BaseData

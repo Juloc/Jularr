@@ -7,8 +7,10 @@ namespace Jularr.Backend.Data.Logic.Session
 {
     public sealed class SessionAuthenticationData : BaseData
     {
-        public SessionAuthenticationData(long accountId, long? profileId, long? profileOwnerAccountId, long? uiLocaleId = null, AccountRoleType accountRoleTypeId = AccountRoleType.User)
+        public SessionAuthenticationData(long accountId, long? profileId, long? profileOwnerAccountId, long? uiLocaleId = null, AccountRoleType accountRoleTypeId = AccountRoleType.User,
+            bool isDevice = false)
         {
+            IsDevice = isDevice;
             AccountId = accountId;
             ProfileId = profileId;
             ProfileOwnerAccountId = profileOwnerAccountId;
@@ -30,5 +32,8 @@ namespace Jularr.Backend.Data.Logic.Session
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId), false)]
         public long? UiLocaleId { get; }
+
+        // A paired TV, phone or app rather than a browser sign-in.
+        public bool IsDevice { get; }
     }
 }

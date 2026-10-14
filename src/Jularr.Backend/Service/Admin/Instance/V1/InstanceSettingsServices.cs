@@ -33,7 +33,8 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                     settings."HistoryMegabytes",
                     settings."CollectionLimit",
                     settings."UnitGroupLimit",
-                    settings."SubtitleLanguages"::text[] AS "SubtitleLanguages"
+                    settings."SubtitleLanguages"::text[] AS "SubtitleLanguages",
+                    settings."PublicUrl"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE
@@ -56,7 +57,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
             // Use the canonical writer.
             await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks, Data.UsersConfirmSources,
                 Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes,
-                Data.CollectionLimit, Data.UnitGroupLimit, Data.SubtitleLanguages), CancellationToken);
+                Data.CollectionLimit, Data.UnitGroupLimit, Data.SubtitleLanguages, Data.PublicUrl), CancellationToken);
             return new UpdateResult(true);
         }
     }

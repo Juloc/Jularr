@@ -52,11 +52,12 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     if (texts.Can(null, "Collections")) form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
                     if (texts.Can(null, "UnitGroups")) form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
                     if (texts.Can(null, "Subtitles")) form.Text(item => item.SubtitleLanguages, "admin.instance.subtitleLanguages");
+                    if (texts.Can(null, "Devices")) form.Text(item => item.PublicUrl, "admin.instance.publicUrl");
                     form.Submit("common.save");
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
                         settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes, settings.CollectionLimit,
-                        settings.UnitGroupLimit, settings.SubtitleLanguages), _moduleId is null && _mediaInput is null ? FormError : null));
+                        settings.UnitGroupLimit, settings.SubtitleLanguages, settings.PublicUrl), _moduleId is null && _mediaInput is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
@@ -113,12 +114,12 @@ namespace Jularr.Frontend.Pages.Admin.Instance
 
         public async Task<IActionResult> OnPostAsync(string? name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks,
             bool? usersConfirmSources, int? libraryScanIntervalHours, int? historyRetentionDays, int? historyMegabytes,
-            int? collectionLimit, int? unitGroupLimit, string? subtitleLanguages)
+            int? collectionLimit, int? unitGroupLimit, string? subtitleLanguages, string? publicUrl)
         {
             // Save through the service.
             _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources, libraryScanIntervalHours,
                 historyRetentionDays, historyMegabytes, collectionLimit, unitGroupLimit,
-                subtitleLanguages is null ? null : [subtitleLanguages]);
+                subtitleLanguages is null ? null : [subtitleLanguages], publicUrl);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             TempData["InstanceSaved"] = true;
             return LocalRedirect(Home);

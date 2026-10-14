@@ -30,9 +30,9 @@ namespace Jularr.Backend.Data.Logic.Media
 
     internal sealed class MediaAssetCreationData : BaseData
     {
-        public MediaAssetCreationData(long workId, long workEditionId, long? workUnitId, MediaAssetType mediaAssetTypeId, bool isManual)
+        public MediaAssetCreationData(long workId, long workEditionId, long? workUnitId, MediaAssetType mediaAssetTypeId, bool isProtected)
         {
-            IsManual = isManual;
+            IsProtected = isProtected;
             WorkId = workId;
             WorkEditionId = workEditionId;
             WorkUnitId = workUnitId;
@@ -51,8 +51,8 @@ namespace Jularr.Backend.Data.Logic.Media
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.MediaAssetTypeId))]
         public MediaAssetType MediaAssetTypeId { get; }
 
-        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsManual))]
-        public bool IsManual { get; }
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsProtected))]
+        public bool IsProtected { get; }
     }
 
     internal sealed class StoredFileLinkData : BaseData

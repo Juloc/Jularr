@@ -50,7 +50,8 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                             JOIN "StoredFiles" AS present ON present."MediaAssetId" = sibling."SiblingMediaAssetId" AND present."MissingSince" IS NULL AND NOT present."IsSubtitle"
                         WHERE
                             sibling."MediaAssetId" = asset."Id"
-                    ) AS "HasOtherVersions"
+                    ) AS "HasOtherVersions",
+                    coalesce(asset."IsProtected", FALSE) AS "IsProtected"
                 FROM
                     "StoredFiles" AS file
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
@@ -102,7 +103,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 var title = Limit(path.Title);
                 var match = matches.FirstOrDefault(item => item.MediaTypeId == row.MediaTypeId && item.Title == title.ToLowerInvariant());
                 return new LibraryFileDetailsV1(row.Id, row.LibraryRootId, row.LibraryRootName, row.MediaTypeId, row.RelativePath, row.SizeBytes, row.MissingSince, row.MediaAssetId,
-                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, row.HasOtherVersions);
+                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, row.HasOtherVersions, row.IsProtected);
             }).ToArray();
             return new PageResult<LibraryFileDetailsV1>(items, Page);
         }

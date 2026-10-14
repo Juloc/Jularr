@@ -44,7 +44,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
                 accountId = session.AccountId;
                 profileId = session.ProfileId;
                 uiLocaleId = session.UiLocaleId;
-                permissions = ServiceGate.GetPermissions(session.AccountId, session.ProfileId, session.ProfileOwnerAccountId, session.AccountRoleTypeId);
+                permissions = ServiceGate.GetPermissions(session.AccountId, session.ProfileId, session.ProfileOwnerAccountId, session.AccountRoleTypeId, session.IsDevice);
             }
 
             // Expose available login methods.

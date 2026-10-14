@@ -1,16 +1,19 @@
 using System.Globalization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.User.Device.V1;
+using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.User.Device.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Jularr.Frontend.Pages.User.DevicePair
 {
-    // A code a TV or app shows: first the device it belongs to is shown, then it is confirmed for the signed-in profile.
-    // The QR code opens this page with the code filled in.
-    public sealed class DevicePairModel(ReadDevicePairingV1 read, ApproveDevicePairingV1 approve, IAntiforgery antiforgery, UiText texts) : JularrPage
+    // A code a TV or app shows: first its device, platform and code are shown, then it is confirmed for the signed-in profile.
+    // The QR code opens this page with the code filled in; opening it never pairs anything.
+    [EnableRateLimiting(ServiceApi.DeviceApprovalRateLimit)]
+    public sealed class DevicePairModel(InspectDevicePairingV1 inspect, ApproveDevicePairingV1 approve, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private DevicePairingRequestV1? _device;
 
@@ -25,12 +28,15 @@ namespace Jularr.Frontend.Pages.User.DevicePair
             if (TempData["DevicePaired"] is true) page.Content.Add(new P(new Text("devices.pair.done")).Attribute("role", "status"));
             if (_device is { } device)
             {
-                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["devices.pair.device"], device.DeviceName, device.DevicePlatform, Code))));
+                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["devices.pair.device"],
+                    DeviceNames.Show(device.DeviceName, texts), device.DevicePlatform))));
+                page.Content.Add(new P(new ValueText(device.Code)).Attribute("aria-label", texts["devices.pair.code"]));
+                page.Content.Add(new P(new Text("devices.pair.warning")));
                 page.Content.Add(new Form<ApproveDevicePairingDataV1>(form =>
                 {
                     form.Hidden(item => item.Code);
                     form.Submit("devices.pair.submit");
-                }, "/Devices/Pair", csrf, new ApproveDevicePairingDataV1(Code ?? "")));
+                }, "/Devices/Pair", csrf, new ApproveDevicePairingDataV1(device.Code)));
                 return;
             }
 
@@ -50,7 +56,7 @@ namespace Jularr.Frontend.Pages.User.DevicePair
 
             if (Code is not null)
             {
-                _device = await read.ExecuteAsync<DevicePairingRequestV1>(new DevicePairingCodeParametersV1(Code), HttpContext.RequestAborted);
+                _device = await inspect.ExecuteAsync<DevicePairingRequestV1>(new ApproveDevicePairingParametersV1(), new ApproveDevicePairingDataV1(Code), HttpContext.RequestAborted);
             }
 
             PreparePage();

@@ -18,7 +18,7 @@ namespace Jularr.Backend.Service.Public.Device.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            var started = await Context.StartDevicePairingAsync(Data.DeviceName, Data.DevicePlatform, CancellationToken);
+            var started = await Context.StartDevicePairingAsync(Data.DeviceName, Data.DevicePlatform, Data.ReplacesPairingId, CancellationToken);
             return new DevicePairingStartedV1(started.PublicId, started.Code, started.ExpiresAt);
         }
     }

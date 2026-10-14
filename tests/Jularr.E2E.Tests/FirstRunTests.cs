@@ -7,8 +7,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class FirstRunTests
     {
-        private const string Password = "e2e-owner-password-123";
-
         [ClassInitialize]
         public static void InstallBrowser(TestContext _)
         {
@@ -41,23 +39,8 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                // The first visit leads to setup, where the Owner is created.
-                await page.GotoAsync("/");
-                await page.WaitForURLAsync("**/Setup**");
-                await page.FillAsync("[name=Email]", "owner@example.test");
-                await page.FillAsync("[name=DisplayName]", "Owner");
-                await page.FillAsync("[name=Password]", Password);
-                await page.FillAsync("[name=PasswordConfirmation]", Password);
-                await page.Locator("form button[type=submit]").Last.ClickAsync();
-                await page.WaitForURLAsync(url => new Uri(url).AbsolutePath != "/Setup");
-
-                // Signed out and in again with the new account.
-                await context.ClearCookiesAsync();
-                await page.GotoAsync("/Account/Login");
-                await page.FillAsync("[name=Email]", "owner@example.test");
-                await page.FillAsync("[name=Password]", Password);
-                await page.Locator("form button[type=submit]").First.ClickAsync();
-                await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
+                // The first visit leads to setup, where the Owner is created, then signs in again.
+                await Owner.SetUpAndSignInAsync(context, page);
 
                 // Every menu entry opens with its content and without server or script errors.
                 var links = await page.Locator("nav a[href^='/']").EvaluateAllAsync<string[]>("links => [...new Set(links.map(link => link.getAttribute('href')))]");

@@ -25,7 +25,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
         ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, ReadReplacementSettingsV1 readReplacement,
-        UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ReadStorageMountsV1 readMounts, IAntiforgery antiforgery, UiText texts) : JularrPage
+        UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private ReplacementSettingsV1? _replacement;
         private UpdateReplacementSettingsDataV1? _replacementInput;
@@ -171,10 +171,21 @@ namespace Jularr.Frontend.Pages.Admin.Library
             var id = file.Id.ToString(CultureInfo.InvariantCulture);
             var unassign = new Form<StoredFileParametersV1>(form => form.Submit("library.unassign"), Address(handler: "Unassign") + "&storedFileId=" + id, csrf,
                 new StoredFileParametersV1(file.Id));
+            var protection = new Form<ProtectLibraryFileDataV1>(form =>
+            {
+                form.Hidden(item => item.IsProtected);
+                form.Submit(file.IsProtected ? "library.unprotect" : "library.protect");
+            }, Address(handler: "Protect") + "&storedFileId=" + id, csrf, new ProtectLibraryFileDataV1(!file.IsProtected));
             return file.HasOtherVersions
-                ? new Div(unassign, new Form<StoredFileParametersV1>(form => form.Submit("library.keepOnly"), Address(handler: "KeepOnly") + "&storedFileId=" + id, csrf,
+                ? new Div(unassign, protection, new Form<StoredFileParametersV1>(form => form.Submit("library.keepOnly"), Address(handler: "KeepOnly") + "&storedFileId=" + id, csrf,
                     new StoredFileParametersV1(file.Id)))
-                : new Div(unassign);
+                : new Div(unassign, protection);
+        }
+
+        public async Task<IActionResult> OnPostProtectAsync([BindRequired] long storedFileId, [BindRequired] bool isProtected)
+        {
+            await protect.ExecuteAsync<UpdateResult>(new StoredFileParametersV1(storedFileId), new ProtectLibraryFileDataV1(isProtected), HttpContext.RequestAborted);
+            return LocalRedirect(Address());
         }
 
         public async Task<IActionResult> OnPostKeepOnlyAsync([BindRequired] long storedFileId)

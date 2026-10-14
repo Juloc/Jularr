@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Public.Device.V1;
+using Jularr.Backend.Data.Public.Instance.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Public.Device.V1;
+using Jularr.Backend.Service.Public.Instance.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -12,9 +14,10 @@ namespace Jularr.Frontend.Pages.Account.DeviceLink
     // A TV or another browser without a keyboard: it shows a code and a QR code, a signed-in phone confirms it, and this page signs in.
     // The pairing belongs to the browser that asked for it (a strict cookie), so no link can sign someone else in.
     [EnableRateLimiting(ServiceApi.DevicePairingRateLimit)]
-    public sealed partial class DeviceLinkModel(StartDevicePairingV1 start, ClaimDevicePairingV1 claim, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed partial class DeviceLinkModel(StartDevicePairingV1 start, ClaimDevicePairingV1 claim, ReadInstancePresentationV1 presentation, IAntiforgery antiforgery) : JularrPage
     {
         private string? _code;
+        private string? _pairAddress;
 
         protected override void Define(Page page)
         {
@@ -28,12 +31,17 @@ namespace Jularr.Frontend.Pages.Account.DeviceLink
 
             page.Content.Add(new P(new Text("devices.link.hint")));
             page.Content.Add(new P(new ValueText(_code)).Attribute("aria-live", "polite"));
-            page.Content.Add(new QrCode(Request.Scheme + "://" + Request.Host + "/Devices/Pair?code=" + _code, "devices.link.qr"));
+            if (_pairAddress is { } address)
+            {
+                page.Content.Add(new QrCode(address + "Devices/Pair?code=" + _code, "devices.link.qr"));
+            }
         }
 
         public async Task<IActionResult> OnGetAsync()
         {
-            if (!texts.Can(null, "Devices"))
+            // A TV has no account yet, so the public presentation tells whether pairing is on.
+            var instance = await presentation.ExecuteAsync<InstancePresentationDetailsV1>(new ReadInstancePresentationParametersV1(), HttpContext.RequestAborted);
+            if (!instance.PairsDevices)
             {
                 return NotFound();
             }
@@ -47,41 +55,42 @@ namespace Jularr.Frontend.Pages.Account.DeviceLink
                 }
                 catch (KeyNotFoundException)
                 {
-                    result = null;
+                    // An expired code is replaced by a new one; the old one ends at once.
+                    return await StartAsync(pairing.Id);
                 }
 
-                if (result is { IsPaired: true })
+                if (result.IsPaired)
                 {
                     Response.Cookies.Delete(ServiceApi.DevicePairingCookieName, CookieOptions());
                     await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
                     return LocalRedirect("/");
                 }
 
-                // Looks again every few seconds until the phone confirmed; an expired code asks for a new one.
-                if (result is not null)
-                {
-                    Response.Headers["Refresh"] = "5";
-                    _code = pairing.Code;
-                }
-                else
-                {
-                    Response.Cookies.Delete(ServiceApi.DevicePairingCookieName, CookieOptions());
-                }
+                // Looks again every few seconds until the phone confirmed.
+                Response.Headers["Refresh"] = "5";
+                _code = pairing.Code;
+                _pairAddress = PairAddress(instance.PublicUrl);
             }
 
             PreparePage();
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync()
+        public Task<IActionResult> OnPostAsync() => StartAsync(Pairing()?.Id);
+
+        private async Task<IActionResult> StartAsync(Guid? replaces)
         {
-            var started = await start.ExecuteAsync<DevicePairingStartedV1>(new StartDevicePairingParametersV1(), new StartDevicePairingDataV1(texts["devices.link.deviceName"], "Web"),
-                HttpContext.RequestAborted);
+            var started = await start.ExecuteAsync<DevicePairingStartedV1>(new StartDevicePairingParametersV1(),
+                new StartDevicePairingDataV1(StartDevicePairingDataV1.BrowserName, "Web", replaces), HttpContext.RequestAborted);
             var options = CookieOptions();
             options.Expires = started.ExpiresAt;
             Response.Cookies.Append(ServiceApi.DevicePairingCookieName, started.PairingId.ToString("D") + "." + started.Code, options);
             return LocalRedirect("/Devices/Link");
         }
+
+        // The configured public address, else this request's own if it names a proper host; none, and only the code is shown.
+        private string? PairAddress(string? publicUrl) => publicUrl
+            ?? (Request.Scheme is "http" or "https" && Uri.CheckHostName(Request.Host.Host) != UriHostNameType.Unknown ? Request.Scheme + "://" + Request.Host + "/" : null);
 
         private (Guid Id, string Code)? Pairing()
         {

@@ -14,8 +14,9 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
     public sealed class InstanceSettingsDetailsV1 : BaseResponse
     {
         public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version, int readingCacheMegabytes, int readingCacheWorks, bool usersConfirmSources, int libraryScanIntervalHours,
-            int historyRetentionDays, int historyMegabytes, int collectionLimit, int unitGroupLimit, string[] subtitleLanguages)
+            int historyRetentionDays, int historyMegabytes, int collectionLimit, int unitGroupLimit, string[] subtitleLanguages, string? publicUrl)
         {
+            PublicUrl = publicUrl;
             SubtitleLanguages = subtitleLanguages;
             CollectionLimit = collectionLimit;
             UnitGroupLimit = unitGroupLimit;
@@ -70,14 +71,18 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         // Two-letter codes in the order subtitles are wanted.
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.SubtitleLanguages))]
         public string[] SubtitleLanguages { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.PublicUrl))]
+        public string? PublicUrl { get; }
     }
 
     public sealed class UpdateInstanceSettingsDataV1 : BaseData
     {
         public UpdateInstanceSettingsDataV1(string name, long uiLocaleId, long version, int? readingCacheMegabytes = null, int? readingCacheWorks = null, bool? usersConfirmSources = null,
             int? libraryScanIntervalHours = null, int? historyRetentionDays = null, int? historyMegabytes = null, int? collectionLimit = null, int? unitGroupLimit = null,
-            string[]? subtitleLanguages = null)
+            string[]? subtitleLanguages = null, string? publicUrl = null)
         {
+            PublicUrl = publicUrl;
             SubtitleLanguages = subtitleLanguages;
             CollectionLimit = collectionLimit;
             UnitGroupLimit = unitGroupLimit;
@@ -119,6 +124,10 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.SubtitleLanguages), false)]
         public string[]? SubtitleLanguages { get; }
+
+        // Empty: QR codes use the address a device opened.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.PublicUrl))]
+        public string? PublicUrl { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
         public string Name { get; }

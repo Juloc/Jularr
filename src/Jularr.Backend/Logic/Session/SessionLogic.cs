@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Account;
 using System.Security.Cryptography;
 using System.Text;
 using System.Security;
@@ -230,7 +231,8 @@ namespace Jularr.Backend.Logic.Session
                     account."AccountRoleTypeId",
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
-                    profile."UiLocaleId"
+                    profile."UiLocaleId",
+                    session."DeviceName" IS NOT NULL AS "IsDevice"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
@@ -264,8 +266,37 @@ namespace Jularr.Backend.Logic.Session
                 """;
             sql.Parameters.Add(parameters);
 
-            return await ctx.ReadOptionalAsync<SessionAuthenticationData>(sql, ct)
-                ?? throw new UnauthorizedAccessException("The profile session is unavailable.");
+            return Effective(await ctx.ReadOptionalAsync<SessionAuthenticationData>(sql, ct)
+                ?? throw new UnauthorizedAccessException("The profile session is unavailable."));
+        }
+
+        // A paired device is a normal user of its profile, whatever its account may do elsewhere.
+        public static SessionAuthenticationData Effective(SessionAuthenticationData session) => session.IsDevice
+            ? new SessionAuthenticationData(session.AccountId, session.ProfileId, session.ProfileOwnerAccountId, session.UiLocaleId, AccountRoleType.User, true)
+            : session;
+
+        // Only a paired device of the account has a name to change.
+        public static async Task RenameSessionDeviceAsync(this LogicContext ctx, SessionRevocationData session, SessionDeviceData device, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountSessions" AS session
+                SET
+                    "DeviceName" = @DeviceName
+                WHERE
+                    session."PublicId" = @SessionPublicId
+                    AND session."AccountId" = @AccountId
+                    AND session."DeviceName" IS NOT NULL
+                    AND session."RevokedAt" IS NULL;
+                """;
+            sql.Parameters.Add(session);
+            sql.Parameters.Add(device);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new KeyNotFoundException("The device was not found.");
+            }
         }
 
         // A session secret: 32 random bytes, URL-safe.

@@ -81,4 +81,20 @@ namespace Jularr.Backend.Service.User.Session.V1
             return new RevokeSessionResultV1(Parameters.SessionPublicId == Auth.SessionPublicId);
         }
     }
+
+    [ServiceEndpoint("PUT", "/api/v1/sessions/{sessionPublicId:guid}/device")]
+    public sealed class RenameSessionDeviceV1 : UserService<RevokeSessionParametersV1, RenameSessionDeviceDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(RevokeSessionParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(RevokeSessionParametersV1 parameters, Type resultType) => new("session.self.revoke");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.RenameSessionDeviceAsync(new SessionRevocationData(Parameters.SessionPublicId, Auth.AccountId!.Value), new SessionDeviceData(Data.DeviceName, null),
+                CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
 }

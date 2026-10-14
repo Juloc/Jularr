@@ -5,5 +5,8 @@ namespace Jularr.Backend.Service.Core
     {
         public string Method { get; } = method.ToUpperInvariant();
         public string Route { get; } = route;
+
+        // A rate limit policy by remote address, beyond the one every public endpoint has.
+        public string? RateLimit { get; init; }
     }
 }
