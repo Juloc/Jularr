@@ -81,6 +81,27 @@ and commit together. No migration, active-database installation or extra server.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
   a Jularr backup restore; migration stays with the stopped Phase B; the AI step waits
   for its own package.
+- Owner decisions of 14 October 2026: order is the running Arr+ packages, then Playwright
+  browser and end-to-end tests (agents check important changes with them), then K24 and
+  the core features, then optional modules. An upgrade replaces the old file like Sonarr:
+  an Admin recycle folder (empty deletes) with cleanup days, plus an optional simple mode
+  with a recycle folder inside each library. No personal API keys; apps get their own
+  authentication with K24 (pairing by QR or number code, versioned app API, remote
+  control over SignalR, device management per profile and for administrators, modules
+  off by default, later native Android/TV apps in mind). LAN discovery: QR codes
+  (QRCoder approved) and mDNS, never requiring Docker host networking; address and QR
+  always work. Offline (K12): module off by default, right and optional storage limit
+  per profile, copies removed at the next online contact after the right is withdrawn,
+  no expiry, an uploadable Owner logo or the default icon in the accent colour, native
+  apps as well as the browser; books download as the processed ebook when the reader
+  converts, the original PDF besides. PDFs convert to a readable format where possible
+  and otherwise stay a download or the browser's viewer without Jularr progress; pdf.js
+  is declined. Dependencies: Playwright now; Bergamot and Chromaprint/AcoustID later as
+  optional modules; MailKit, TOTP and passkeys not now. Instant play while downloading
+  (K25) is a later optional module, only with direct unpack and enough buffer.
+  Audiobooks are a Book subtype with their own library and requests. AniList sign-in
+  uses an application each administrator registers. ScreenScraper waits; IGDB and
+  libretro thumbnails cover games.
 - Jularr is a standalone Arr system. Sonarr/Radarr/Prowlarr are optional one-time
   takeover sources only: preserve monitoring state, roots, naming and indexer
   settings where supported, preview unsupported mappings and require explicit
