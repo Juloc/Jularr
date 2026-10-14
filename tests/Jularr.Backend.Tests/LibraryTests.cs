@@ -380,7 +380,7 @@ namespace Jularr.Backend.Tests
             using var preview = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
             Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, await preview.Content.ReadAsStringAsync());
             var plan = (await preview.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!;
-            CollectionAssert.AreEquivalent(new[] { "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).mkv", "Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).en.srt" },
+            CollectionAssert.AreEquivalent(new[] { "Example Movie (2020)/Example Movie (2020) [BLURAY-1080p] (2).mkv", "Example Movie (2020)/Example Movie (2020) [BLURAY-1080p] (2).en.srt" },
                 plan.Items.Select(item => item.TargetPath).ToArray());
             Assert.IsTrue(File.Exists(Path.Combine(movies, "Some Folder", "movie file [Bluray-1080p].mkv")));
 
@@ -393,9 +393,9 @@ namespace Jularr.Backend.Tests
             var result = (await applied.Content.ReadFromJsonAsync<ApplyLibraryRenamesResultV1>())!;
             Assert.AreEqual(2, result.RenamedCount);
             Assert.AreEqual(0, result.SkippedCount);
-            Assert.IsTrue(File.Exists(Path.Combine(movies, "Example Movie (2020)", "Example Movie (2020) [Bluray-1080p] (2).en.srt")));
+            Assert.IsTrue(File.Exists(Path.Combine(movies, "Example Movie (2020)", "Example Movie (2020) [BLURAY-1080p] (2).en.srt")));
             Assert.IsFalse(Directory.Exists(Path.Combine(movies, "Some Folder")));
-            Assert.AreEqual("Example Movie (2020)/Example Movie (2020) [Bluray-1080p] (2).mkv",
+            Assert.AreEqual("Example Movie (2020)/Example Movie (2020) [BLURAY-1080p] (2).mkv",
                 await host.ScalarAsync("SELECT \"RelativePath\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId + " AND \"MediaAssetId\" IS NOT NULL"));
             using var empty = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/renames");
             Assert.AreEqual(0, (await empty.Content.ReadFromJsonAsync<LibraryRenamePlanV1>())!.Items.Count);

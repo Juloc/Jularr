@@ -102,7 +102,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                         form.Hidden(item => item.Version);
                         form.Text(item => item.Pattern, "library.naming." + pattern.MediaTypeId);
                         form.Submit("common.save");
-                    }, Address(handler: "Naming") + "&mediaTypeId=" + pattern.MediaTypeId, csrf, failed && _patternInput is not null ? _patternInput : new UpdateNamingPatternDataV1(pattern.Pattern, pattern.Version),
+                    }, Address(handler: "Naming") + "&mediaTypeId=" + pattern.MediaTypeId, csrf, new UpdateNamingPatternDataV1(failed && _patternInput is { } input ? input.Pattern : pattern.Pattern, pattern.Version),
                         failed ? FormError : null));
                 }
             }
