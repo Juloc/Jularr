@@ -9,11 +9,12 @@ namespace Jularr.Frontend.Pages.User.Statistics
     // The profile's own history in numbers, for a chosen period.
     public sealed class StatisticsModel(ReadProfileStatisticsV1 read, UiText texts) : JularrPage
     {
-        private static readonly int[] Periods = [7, 30, 365, 0];
+        private const int DefaultDays = 30;
+        private static readonly int[] Periods = [7, DefaultDays, 365, 0];
         private ProfileStatisticsV1? _statistics;
 
         [BindProperty(SupportsGet = true)]
-        public int Days { get; set; } = 30;
+        public int Days { get; set; } = DefaultDays;
 
         protected override void Define(Page page)
         {
@@ -44,7 +45,7 @@ namespace Jularr.Frontend.Pages.User.Statistics
 
         public async Task<IActionResult> OnGetAsync()
         {
-            if (!Periods.Contains(Days)) Days = 30;
+            if (!Periods.Contains(Days)) Days = DefaultDays;
             await LoadDataAsync();
             PreparePage();
             return Page();

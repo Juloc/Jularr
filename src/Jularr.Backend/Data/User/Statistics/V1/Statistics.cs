@@ -7,7 +7,7 @@ namespace Jularr.Backend.Data.User.Statistics.V1
     // The last days, or everything with 0.
     public sealed class ReadStatisticsParametersV1 : BaseParameters
     {
-        public ReadStatisticsParametersV1(int days = 30)
+        public ReadStatisticsParametersV1(int days)
         {
             Days = days;
         }

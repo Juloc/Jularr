@@ -23,9 +23,10 @@ namespace Jularr.Workers
                     await using var scope = scopes.CreateAsyncScope();
                     busy = (await scope.ServiceProvider.GetRequiredService<DownloadUsenetV1>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, stoppingToken)).Success;
                 }
-                catch (SecurityException)
+                catch (SecurityException exception)
                 {
                     // Arr+ is switched off.
+                    logger.LogDebug(exception, "The Usenet download pass skipped.");
                 }
                 catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
                 {

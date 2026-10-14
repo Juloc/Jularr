@@ -6,7 +6,7 @@ namespace Jularr.Backend.Data.User.Calendar.V1
 {
     public sealed class ReadCalendarParametersV1 : BaseParameters
     {
-        public ReadCalendarParametersV1(DateOnly from, int days = 14)
+        public ReadCalendarParametersV1(DateOnly from, int days)
         {
             From = from;
             Days = days;

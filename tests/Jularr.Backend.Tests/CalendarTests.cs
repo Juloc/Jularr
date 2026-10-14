@@ -49,7 +49,7 @@ namespace Jularr.Backend.Tests
             using var tooLong = await host.SendAsync(HttpMethod.Get, "/api/v1/calendar?from=" + today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&days=100");
             Assert.AreEqual(HttpStatusCode.BadRequest, tooLong.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Calendar'");
-            using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/calendar?from=" + today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/calendar?from=" + today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&days=14");
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
         }
     }

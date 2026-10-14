@@ -1,74 +1,41 @@
-using System.Security;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Backend.Service.System.Provider.V1;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    internal sealed class AcquisitionWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<AcquisitionWorker> logger) : BackgroundService
+    internal sealed class AcquisitionWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<AcquisitionWorker> logger)
+        : PeriodicWorker(scopes, time, logger, TimeSpan.FromSeconds(15))
     {
-        private static readonly TimeSpan MonitorInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan SearchInterval = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan PlexInterval = TimeSpan.FromMinutes(30);
+        private DateTimeOffset _nextSearch = DateTimeOffset.MinValue;
+        private DateTimeOffset _nextPlexSync = DateTimeOffset.MinValue;
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task RunOnceAsync(CancellationToken ct)
         {
-            var nextSearch = DateTimeOffset.MinValue;
-            var nextPlexSync = DateTimeOffset.MinValue;
-            using var timer = new PeriodicTimer(MonitorInterval, time);
-            do
+            // Downloads are tracked often; metadata and due targets are refreshed in small passes.
+            await RunAsync<MonitorDownloadsV1>(ct);
+            if (Time.GetUtcNow() >= _nextSearch)
             {
-                // Downloads are tracked often; metadata and due targets are refreshed in small passes.
-                await RunAsync<MonitorDownloadsV1>(stoppingToken);
-                if (time.GetUtcNow() >= nextSearch)
-                {
-                    await RunAsync<RefreshWantedMetadataV1>(stoppingToken);
-                    await RunAsync<SearchDueWantedV1>(stoppingToken);
-                    nextSearch = time.GetUtcNow() + SearchInterval;
-                }
+                await RunAsync<RefreshWantedMetadataV1>(ct);
+                await RunAsync<SearchDueWantedV1>(ct);
+                _nextSearch = Time.GetUtcNow() + SearchInterval;
+            }
 
-                // Plex availability follows the server every half hour.
-                if (time.GetUtcNow() >= nextPlexSync)
-                {
-                    await RunAsync<SyncPlexLibraryV1>(stoppingToken);
-                    nextPlexSync = time.GetUtcNow() + PlexInterval;
-                }
-            }
-            while (await WaitAsync(timer, stoppingToken));
-        }
-
-        private async Task RunAsync<TService>(CancellationToken ct) where TService : SystemService<AcquisitionCycleParametersV1, NoData>
-        {
-            try
+            // Plex availability follows the server every half hour.
+            if (Time.GetUtcNow() >= _nextPlexSync)
             {
-                await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, ct);
-            }
-            catch (SecurityException)
-            {
-                // Arr+ is switched off.
-            }
-            catch (Exception exception) when (!ct.IsCancellationRequested)
-            {
-                logger.LogWarning(exception, "Acquisition work {Service} failed.", typeof(TService).Name);
+                await RunAsync<SyncPlexLibraryV1>(ct);
+                _nextPlexSync = Time.GetUtcNow() + PlexInterval;
             }
         }
 
-        private static async Task<bool> WaitAsync(PeriodicTimer timer, CancellationToken ct)
-        {
-            try
-            {
-                return await timer.WaitForNextTickAsync(ct);
-            }
-            catch (OperationCanceledException)
-            {
-                return false;
-            }
-        }
+        private Task RunAsync<TService>(CancellationToken ct) where TService : SystemService<AcquisitionCycleParametersV1, NoData> =>
+            RunAsync(typeof(TService).Name, (services, token) => services.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default, token), ct);
     }
 }

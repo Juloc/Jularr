@@ -95,13 +95,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(OperationType.Backup, claimed.OperationTypeId);
             var failure = await Assert.ThrowsExactlyAsync<ServiceUnavailableException>(() =>
                 scope.ServiceProvider.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(claimed.OperationId!.Value), default, CancellationToken.None));
-            Assert.AreEqual("backup_failed", failure.Code);
+            Assert.AreEqual("backup_tool_missing", failure.Code);
             await scope.ServiceProvider.GetRequiredService<FailOperationV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(claimed.OperationId!.Value), new FailOperationDataV1(failure.Code),
                 CancellationToken.None);
             Assert.AreEqual(0, Directory.GetFileSystemEntries(folder.Path).Length);
             var state = await ReadAsync(host);
             Assert.IsFalse(state.IsRunning);
-            Assert.AreEqual("backup_failed", state.ErrorKey);
+            Assert.AreEqual("backup_tool_missing", state.ErrorKey);
         }
 
         private static async Task WriteBackupAsync(string root, string name, string fingerprint)

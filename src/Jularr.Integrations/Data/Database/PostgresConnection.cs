@@ -9,4 +9,10 @@ namespace Jularr.Integrations.Data.Database
         public string Username { get; } = username;
         public string? Password { get; } = password;
     }
+
+    // The reason in Jularr's words; the message keeps the end of the tool's error output for the log.
+    internal sealed class PostgresToolException(string code, string output) : Exception("The PostgreSQL tool failed: " + output)
+    {
+        public string Code { get; } = code;
+    }
 }

@@ -115,4 +115,51 @@ namespace Jularr.Backend.Data.Logic.Notification
         [DataField(typeof(AccountFields), nameof(AccountFields.AccountRoleTypeId))]
         public AccountRoleType AccountRoleTypeId { get; }
     }
+
+    // A profile a notice is meant for, with what it is about.
+    internal sealed class NotificationRecipientData : BaseData
+    {
+        public NotificationRecipientData(long profileId, long? workId, string subject)
+        {
+            ProfileId = profileId;
+            WorkId = workId;
+            Subject = subject;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        [DataField(typeof(NotificationFields), nameof(NotificationFields.Subject))]
+        public string Subject { get; }
+    }
+
+    internal sealed class NotificationBatchData : BaseData
+    {
+        public NotificationBatchData(NotificationType notificationTypeId, long[] profileIds, long? workId, string subject, string? link)
+        {
+            NotificationTypeId = notificationTypeId;
+            ProfileIds = profileIds;
+            WorkId = workId;
+            Subject = subject;
+            Link = link;
+        }
+
+        [DataField(typeof(NotificationFields), nameof(NotificationFields.NotificationTypeId))]
+        public NotificationType NotificationTypeId { get; }
+
+        [DataField(typeof(NotificationFields), nameof(NotificationFields.ProfileIds))]
+        public long[] ProfileIds { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        [DataField(typeof(NotificationFields), nameof(NotificationFields.Subject))]
+        public string Subject { get; }
+
+        [DataField(typeof(NotificationFields), nameof(NotificationFields.Link))]
+        public string? Link { get; }
+    }
 }

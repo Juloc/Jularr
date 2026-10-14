@@ -27,7 +27,7 @@ namespace Jularr.Frontend.Pages.Admin.Backup
             // State of the latest run.
             if (!backups.IsConfigured) page.Content.Add(new P(new Text("admin.backup.notConfigured")).Attribute("role", "status"));
             else if (backups.IsRunning) page.Content.Add(new P(new Text("admin.backup.running")).Attribute("role", "status"));
-            else if (backups.ErrorKey is not null) page.Content.Add(new P(new Text("admin.backup.failed")).Attribute("role", "alert"));
+            else if (backups.ErrorKey is { } error) page.Content.Add(new P(new Text("admin.backup.failed"), new ValueText(" "), new Text("errors." + error)).Attribute("role", "alert"));
             if (backups.IsConfigured && !backups.IsRunning)
             {
                 page.Content.Add(new Form<BackupsParametersV1>(form => form.Submit("admin.backup.create"), Home + "?handler=Create", csrf, new BackupsParametersV1()));

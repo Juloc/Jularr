@@ -5,6 +5,7 @@ using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Database;
 using Jularr.Integrations.Logic.Database;
 using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
@@ -167,9 +168,13 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
             try
             {
                 BackupFiles.CopyKeys(Path.Combine(folder, "keys"), _options.KeyDirectory);
-                if (!await _tools.RestoreAsync(Path.Combine(folder, BackupFiles.DumpName), CancellationToken))
+                try
                 {
-                    throw new ServiceUnavailableException("backup_failed");
+                    await _tools.RestoreAsync(Path.Combine(folder, BackupFiles.DumpName), CancellationToken);
+                }
+                catch (PostgresToolException exception)
+                {
+                    throw new ServiceUnavailableException(exception.Code, exception);
                 }
             }
             finally

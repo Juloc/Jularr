@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Logic.Notification;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Infrastructure.Sql;
@@ -13,38 +14,20 @@ namespace Jularr.Backend.Logic.Notification
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                INSERT INTO
-                    "Notifications" ("ProfileId", "NotificationTypeId", "WorkId", "Subject", "Link")
                 SELECT
-                    request."RequestedByProfileId",
-                    @NotificationTypeId,
-                    work."Id",
-                    work."CanonicalTitle",
-                    '/Details/' || work."Id"
+                    request."RequestedByProfileId" AS "ProfileId",
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Subject"
                 FROM
                     "AcquisitionRequests" AS request
                     JOIN "Works" AS work ON work."Id" = request."WorkId"
-                    JOIN "InstanceModules" AS module ON module."Key" = 'Notifications' AND module."IsEnabled"
                 WHERE
                     request."Id" = @AcquisitionRequestId
                     AND request."RequestedByProfileId" IS NOT NULL
-                    AND request."RequestedByAccountId" IS DISTINCT FROM @ActorAccountId
-                    AND NOT EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "MutedNotificationTypes" AS muted
-                        WHERE
-                            muted."ProfileId" = request."RequestedByProfileId"
-                            AND muted."NotificationTypeId" = @NotificationTypeId
-                    )
-                ON CONFLICT ("ProfileId", "NotificationTypeId", (coalesce("WorkId", 0)), "Subject") WHERE "ReadAt" IS NULL DO UPDATE
-                SET
-                    "Occurrences" = "Notifications"."Occurrences" + 1,
-                    "CreatedAt" = now();
+                    AND request."RequestedByAccountId" IS DISTINCT FROM @ActorAccountId;
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.NotifyWorkAsync(data.NotificationTypeId, await ctx.ReadSql.ReadListAsync<NotificationRecipientData>(sql, ct), ct);
         }
 
         // Everyone whose open request waits for this target.
@@ -53,70 +36,86 @@ namespace Jularr.Backend.Logic.Notification
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                INSERT INTO
-                    "Notifications" ("ProfileId", "NotificationTypeId", "WorkId", "Subject", "Link")
                 SELECT DISTINCT
-                    request."RequestedByProfileId",
-                    @NotificationTypeId,
-                    work."Id",
-                    work."CanonicalTitle",
-                    '/Details/' || work."Id"
+                    request."RequestedByProfileId" AS "ProfileId",
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Subject"
                 FROM
                     "RequestTargets" AS target
                     JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
                     JOIN "Works" AS work ON work."Id" = request."WorkId"
-                    JOIN "InstanceModules" AS module ON module."Key" = 'Notifications' AND module."IsEnabled"
                 WHERE
                     target."WantedItemId" = @WantedItemId
                     AND request."RequestedByProfileId" IS NOT NULL
-                    AND request."AcquisitionRequestStatusTypeId" NOT IN (7, 9)
-                    AND NOT EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "MutedNotificationTypes" AS muted
-                        WHERE
-                            muted."ProfileId" = request."RequestedByProfileId"
-                            AND muted."NotificationTypeId" = @NotificationTypeId
-                    )
-                ON CONFLICT ("ProfileId", "NotificationTypeId", (coalesce("WorkId", 0)), "Subject") WHERE "ReadAt" IS NULL DO UPDATE
-                SET
-                    "Occurrences" = "Notifications"."Occurrences" + 1,
-                    "CreatedAt" = now();
+                    -- Rejected (7) and cancelled (9) requests wait for nothing.
+                    AND request."AcquisitionRequestStatusTypeId" NOT IN (7, 9);
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            await ctx.NotifyWorkAsync(data.NotificationTypeId, await ctx.ReadSql.ReadListAsync<NotificationRecipientData>(sql, ct), ct);
         }
 
-        // Owners, and for media problems also media managers, through their own profiles.
+        // Owners, and for staff types also media managers, through their own profiles.
         public static async Task NotifyStaffAsync(this LogicContext ctx, StaffNotificationData data, CancellationToken ct)
         {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id" AS "ProfileId",
+                    @WorkId AS "WorkId",
+                    @Subject AS "Subject"
+                FROM
+                    "Accounts" AS account
+                    JOIN "Profiles" AS profile ON profile."OwnerAccountId" = account."Id"
+                    JOIN "NotificationTypes" AS type ON type."Id" = @NotificationTypeId
+                WHERE
+                    account."IsEnabled"
+                    AND (account."AccountRoleTypeId" = 1 OR NOT type."IsOwnerOnly" AND account."AccountRoleTypeId" = 3);
+                """;
+            sql.Parameters.Add(data);
+            var recipients = await ctx.ReadSql.ReadListAsync<NotificationRecipientData>(sql, ct);
+            await ctx.NotifyProfilesAsync(new NotificationBatchData(data.NotificationTypeId, [.. recipients.Select(recipient => recipient.ProfileId)], data.WorkId, data.Subject, data.Link), ct);
+        }
+
+        private static async Task NotifyWorkAsync(this LogicContext ctx, NotificationType type, IReadOnlyList<NotificationRecipientData> recipients, CancellationToken ct)
+        {
+            if (recipients.FirstOrDefault() is { } work)
+            {
+                await ctx.NotifyProfilesAsync(new NotificationBatchData(type, [.. recipients.Select(recipient => recipient.ProfileId)], work.WorkId, work.Subject,
+                    "/Details/" + work.WorkId), ct);
+            }
+        }
+
+        // The one place for muting, the module switch and folding repeats into an unread notice.
+        private static async Task NotifyProfilesAsync(this LogicContext ctx, NotificationBatchData data, CancellationToken ct)
+        {
+            if (data.ProfileIds.Length == 0)
+            {
+                return;
+            }
+
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
                     "Notifications" ("ProfileId", "NotificationTypeId", "WorkId", "Subject", "Link")
                 SELECT DISTINCT
-                    profile."Id",
+                    recipient."ProfileId",
                     @NotificationTypeId,
                     @WorkId,
                     @Subject,
                     @Link
                 FROM
-                    "Accounts" AS account
-                    JOIN "Profiles" AS profile ON profile."OwnerAccountId" = account."Id"
+                    unnest(@ProfileIds) AS recipient("ProfileId")
                     JOIN "InstanceModules" AS module ON module."Key" = 'Notifications' AND module."IsEnabled"
-                    JOIN "NotificationTypes" AS type ON type."Id" = @NotificationTypeId
                 WHERE
-                    account."IsEnabled"
-                    AND (account."AccountRoleTypeId" = 1 OR NOT type."IsOwnerOnly" AND account."AccountRoleTypeId" = 3)
-                    AND NOT EXISTS (
+                    NOT EXISTS (
                         SELECT
                             1
                         FROM
                             "MutedNotificationTypes" AS muted
                         WHERE
-                            muted."ProfileId" = profile."Id"
+                            muted."ProfileId" = recipient."ProfileId"
                             AND muted."NotificationTypeId" = @NotificationTypeId
                     )
                 ON CONFLICT ("ProfileId", "NotificationTypeId", (coalesce("WorkId", 0)), "Subject") WHERE "ReadAt" IS NULL DO UPDATE

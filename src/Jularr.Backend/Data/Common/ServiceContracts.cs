@@ -26,7 +26,7 @@ namespace Jularr.Backend.Data.Common
     }
 
     // A required runtime resource is temporarily unavailable.
-    public sealed class ServiceUnavailableException(string code) : Exception("The requested operation is temporarily unavailable.")
+    public sealed class ServiceUnavailableException(string code, Exception? innerException = null) : Exception("The requested operation is temporarily unavailable.", innerException)
     {
         public string Code { get; } = code;
     }

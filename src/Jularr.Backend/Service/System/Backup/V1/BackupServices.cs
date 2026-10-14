@@ -7,6 +7,7 @@ using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Database;
 using Jularr.Integrations.Logic.Database;
 using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
@@ -45,9 +46,13 @@ namespace Jularr.Backend.Service.System.Backup.V1
             BackupFiles.CreatePrivate(partial);
             try
             {
-                if (!await _tools.DumpAsync(Path.Combine(partial, BackupFiles.DumpName), CancellationToken))
+                try
                 {
-                    throw new ServiceUnavailableException("backup_failed");
+                    await _tools.DumpAsync(Path.Combine(partial, BackupFiles.DumpName), CancellationToken);
+                }
+                catch (PostgresToolException exception)
+                {
+                    throw new ServiceUnavailableException(exception.Code, exception);
                 }
 
                 BackupFiles.CopyKeys(_options.KeyDirectory, Path.Combine(partial, "keys"));

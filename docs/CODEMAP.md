@@ -9,7 +9,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 ## Host and Profile entry points
 
-- [Backend project](../src/Jularr.Backend/Jularr.Backend.csproj): class library; [Workers project](../src/Jularr.Workers/Jularr.Workers.csproj): hosted background work that only runs System services ([WorkerRegistration.cs](../src/Jularr.Workers/WorkerRegistration.cs)); [Frontend Program](../src/Jularr.Frontend/Program.cs): the only web host. Backend host registration: [README](../README.md#backend-im-gemeinsamen-host).
+- [Backend project](../src/Jularr.Backend/Jularr.Backend.csproj): class library; [Workers project](../src/Jularr.Workers/Jularr.Workers.csproj): hosted background work that only runs System services ([WorkerRegistration.cs](../src/Jularr.Workers/WorkerRegistration.cs); timer workers share [PeriodicWorker.cs](../src/Jularr.Workers/PeriodicWorker.cs)); [Frontend Program](../src/Jularr.Frontend/Program.cs): the only web host. Backend host registration: [README](../README.md#backend-im-gemeinsamen-host).
 - [ServiceApi.cs](../src/Jularr.Backend/Service/Core/ServiceApi.cs): configuration-based host registration, Backend-owned data source, service DI, endpoint discovery, parameter/body binding and antiforgery.
 - [ServiceEndpointAttribute.cs](../src/Jularr.Backend/Service/Core/ServiceEndpointAttribute.cs): class-level API opt-in; unmarked services stay internal, System services cannot be exposed.
 - [ServiceExceptionHandler.cs](../src/Jularr.Backend/Service/Core/ServiceExceptionHandler.cs): central sanitized ProblemDetails, including binding and data validation failures.
