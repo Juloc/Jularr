@@ -92,6 +92,10 @@ namespace Jularr.Backend.Service.Core
             }
 
             var session = await _sessions.ReadRequestAsync(_accessor.HttpContext, cancellationToken);
+            if (_accessor.HttpContext is { } http)
+            {
+                ServiceError.ShowDetailTo(http, session.AccountRoleTypeId != AccountRoleType.User);
+            }
             if (area == ServiceArea.Admin && session.AccountRoleTypeId == AccountRoleType.User)
             {
                 throw new UnauthorizedAccessException("An administrative role is required.");

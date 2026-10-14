@@ -27,19 +27,23 @@ namespace Jularr.Frontend.Framework
                 return;
             }
 
-            var error = ServiceError.FromException(executed.Exception);
-            if (error.StatusCode == StatusCodes.Status500InternalServerError)
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>();
+            var error = ServiceError.Describe(executed.Exception, HttpContext, logger);
+            if (error.StatusCode < StatusCodes.Status500InternalServerError && executed.Exception.InnerException is { } cause)
             {
-                return;
+                logger.LogWarning(cause, "{Code} on {Path}.", error.Code, Request.Path);
             }
 
-            if (executed.Exception.InnerException is { } cause)
+            // A page that cannot even show its error leaves it to the shared handler.
+            try
             {
-                HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>().LogWarning(cause, "{Code} on {Path}.", error.Code, Request.Path);
+                executed.Result = await PrepareFailureAsync(error);
+                executed.ExceptionHandled = true;
             }
-
-            executed.Result = await PrepareFailureAsync(error);
-            executed.ExceptionHandled = true;
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogError(exception, "The error page of {Path} failed.", Request.Path);
+            }
         }
 
         private async Task<IActionResult> PrepareFailureAsync(ServiceError error)
@@ -54,9 +58,9 @@ namespace Jularr.Frontend.Framework
                 {
                     await LoadDataAsync();
                 }
-                catch (Exception exception) when (ServiceError.FromException(exception).StatusCode < StatusCodes.Status500InternalServerError)
+                catch (Exception exception) when (exception is not OperationCanceledException)
                 {
-                    _error = ServiceError.FromException(exception);
+                    _error = ServiceError.Describe(exception, HttpContext, HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>());
                     Response.StatusCode = _error.StatusCode;
                 }
             }
@@ -78,7 +82,7 @@ namespace Jularr.Frontend.Framework
             if (_error is not null && HttpMethods.IsGet(Request.Method))
             {
                 // Failed reads always explain why.
-                page.Content.Insert(0, new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("ui-page-error").Attribute("role", "alert"));
+                page.Content.Insert(0, new P(ErrorText.Of(_error)).Class("ui-page-error").Attribute("role", "alert"));
             }
             return page;
         }

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
@@ -22,6 +23,24 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class ServiceApiTests
     {
+        [TestMethod]
+        public void UnknownErrors_ReadAsUnknownAndShowTheirMessageToAdministratorsOnly()
+        {
+            // Known errors keep their text; a code without text or a fault reads as unknown.
+            var context = new DefaultHttpContext();
+            Assert.AreEqual("errors.not_found", ServiceError.Describe(new KeyNotFoundException("gone"), context, NullLogger.Instance).ResourceKey);
+            var undefined = ServiceError.Describe(new ServiceUnavailableException("no_such_text"), context, NullLogger.Instance);
+            Assert.IsFalse(undefined.IsDefined);
+            Assert.AreEqual("errors.internal_error", undefined.ResourceKey);
+            Assert.IsNull(undefined.Detail);
+
+            ServiceError.ShowDetailTo(context, false);
+            Assert.IsNull(ServiceError.Describe(new InvalidOperationException("private error"), context, NullLogger.Instance).Detail);
+            ServiceError.ShowDetailTo(context, true);
+            Assert.AreEqual("InvalidOperationException: private error", ServiceError.Describe(new InvalidOperationException("private error"), context, NullLogger.Instance).Detail);
+            Assert.IsNull(ServiceError.Describe(new KeyNotFoundException("gone"), context, NullLogger.Instance).Detail);
+        }
+
         [TestMethod]
         public void Registration_MissingDatabaseConfiguration_IsRejected()
         {

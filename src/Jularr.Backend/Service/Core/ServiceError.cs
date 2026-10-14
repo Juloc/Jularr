@@ -5,12 +5,15 @@ using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Nas;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace Jularr.Backend.Service.Core
 {
     public sealed class ServiceError
     {
+        private const string DetailItem = "Jularr.ServiceErrorDetail";
+
         private ServiceError(int statusCode, string code, string? field = null, string? validationCode = null)
         {
             StatusCode = statusCode;
@@ -21,10 +24,45 @@ namespace Jularr.Backend.Service.Core
 
         public int StatusCode { get; }
         public string Code { get; }
-        public string ResourceKey => ServiceErrorResources.GetKey(Code);
+
+        // A code without text reads as an unknown error.
+        public bool IsDefined => ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey(Code))
+            && (ValidationCode is null || ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey("validation." + ValidationCode)));
+        public string ResourceKey => ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey(Code)) ? ServiceErrorResources.GetKey(Code) : ServiceErrorResources.GetKey("internal_error");
         public string? Field { get; }
         public string? ValidationCode { get; }
-        public string? FieldResourceKey => ValidationCode is null ? null : ServiceErrorResources.GetKey("validation." + ValidationCode);
+        public string? FieldResourceKey => ValidationCode is not null && ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey("validation." + ValidationCode))
+            ? ServiceErrorResources.GetKey("validation." + ValidationCode)
+            : null;
+
+        // The original message of an unknown error, for an Owner or Media Manager only.
+        public string? Detail { get; private init; }
+
+        // Unknown errors are logged; administrators also read what happened.
+        public static ServiceError Describe(Exception exception, HttpContext context, ILogger logger)
+        {
+            var error = FromException(exception);
+            if (error.StatusCode < StatusCodes.Status500InternalServerError && error.IsDefined)
+            {
+                return error;
+            }
+
+            if (error.IsDefined)
+            {
+                logger.LogError(exception, "{Code} on {Path}.", error.Code, context.Request.Path);
+            }
+            else
+            {
+                logger.LogError(exception, "{Code} on {Path} has no error text.", error.Code, context.Request.Path);
+            }
+
+            return context.Items.TryGetValue(DetailItem, out var shows) && shows is true
+                ? new ServiceError(error.StatusCode, error.Code, error.Field, error.ValidationCode) { Detail = exception.GetType().Name + ": " + exception.Message }
+                : error;
+        }
+
+        // Set once the request's caller is known.
+        internal static void ShowDetailTo(HttpContext context, bool administrator) => context.Items[DetailItem] = administrator;
 
         // One API/Razor classification.
         public static ServiceError FromException(Exception exception) => exception switch

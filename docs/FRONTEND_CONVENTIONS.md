@@ -85,7 +85,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   `Form<TData>` emits ASP.NET's `__Invariant` field markers; use normal framework
   binding, not per-page parsing or a parallel binder. Field validation remains
   Backend-owned. Hidden-field errors must be visible at form level; failed reads
-  receive the shared Page error presentation, including empty-result pages.
+  receive the shared Page error presentation, including empty-result pages; unknown errors render in the page too
+  (`ErrorText`), not as a bare JSON answer.
 - Buttons and single-line fields use the shared pill radius. Form labels sit
   in the fieldset's native legend cutout, without a painted label background,
   remain associated through `for`/id and wrap without

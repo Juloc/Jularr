@@ -55,7 +55,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.acquisition_no_download_client", "No enabled download client is configured."),
             new("errors.acquisition_grab_failed", "The download client did not accept the release."),
             new("errors.concurrent_change", "Another change was made at the same time. Please reload and try again."),
-            new("errors.internal_error", "An unexpected error occurred."),
+            new("errors.internal_error", "An unknown error occurred."),
             new("errors.rate_limit_exceeded", "Too many requests. Please try again later."),
             new("errors.validation.required", "A value is required."),
             new("errors.validation.invalid_type", "The value has an invalid type."),
@@ -97,5 +97,9 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.duplicate_id", "The item was supplied more than once."),
             new("errors.validation.unknown_or_duplicate_id", "The item is unavailable or was supplied more than once.")
         ];
+
+        public static bool IsDefined(string key) => Keys.Contains(key);
+
+        private static readonly HashSet<string> Keys = new(English.Select(resource => resource.Key), StringComparer.Ordinal);
     }
 }

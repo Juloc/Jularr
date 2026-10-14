@@ -155,7 +155,7 @@ namespace Jularr.Frontend.Framework
             var content = new List<IUiComponent>(_content);
             if (_error is not null && (_error.Field is null || !_fields.Contains(_error.Field) || _hiddenFields.Contains(_error.Field)))
             {
-                content.Insert(0, new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+                content.Insert(0, new P(ErrorText.Of(_error)).Class("field-error").Attribute("role", "alert"));
             }
 
             var form = new HtmlForm([.. content]).Class("ui-form");

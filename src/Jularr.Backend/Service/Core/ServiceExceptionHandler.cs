@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Jularr.Backend.Service.Core
 {
-    internal sealed class ServiceExceptionHandler : IExceptionHandler
+    internal sealed class ServiceExceptionHandler(ILogger<ServiceExceptionHandler> logger) : IExceptionHandler
     {
         public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
         {
@@ -14,7 +15,7 @@ namespace Jularr.Backend.Service.Core
             }
 
             // Share sanitized error contracts.
-            var error = ServiceError.FromException(exception);
+            var error = ServiceError.Describe(exception, context, logger);
             var extensions = new Dictionary<string, object?>
             {
                 ["code"] = error.Code,
@@ -26,11 +27,11 @@ namespace Jularr.Backend.Service.Core
                 extensions["errors"] = new Dictionary<string, string[]> { [field] = [code] };
                 extensions["errorResourceKeys"] = new Dictionary<string, string[]>
                 {
-                    [field] = [error.FieldResourceKey!]
+                    [field] = [error.FieldResourceKey ?? error.ResourceKey]
                 };
             }
 
-            await Results.Problem(statusCode: error.StatusCode, title: error.Code, extensions: extensions).ExecuteAsync(context);
+            await Results.Problem(statusCode: error.StatusCode, title: error.Code, detail: error.Detail, extensions: extensions).ExecuteAsync(context);
             return true;
         }
     }
