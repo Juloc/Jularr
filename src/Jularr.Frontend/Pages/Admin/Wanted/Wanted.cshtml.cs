@@ -269,8 +269,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         private static string Age(DateTime? publishedAt) =>
             publishedAt is { } date ? Math.Max(0, (int)(DateTime.UtcNow - date).TotalDays).ToString(CultureInfo.InvariantCulture) : "";
 
-        private static string Size(long? bytes) =>
-            bytes is { } size ? (size / 1024d / 1024 / 1024).ToString("0.0", CultureInfo.InvariantCulture) : "";
+        private static string Size(long? bytes) => bytes is { } size ? ByteSize.Format(size) : "";
 
         private bool CanAcquire => texts.Capabilities?.CanAcquire is true;
 

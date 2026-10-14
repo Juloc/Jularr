@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
@@ -27,7 +25,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
         internal ExecuteStorageMountV1(NasMountClient mounts, IDataProtectionProvider protection, IOptions<StorageOptions> options)
         {
             _mounts = mounts;
-            _protector = protection.CreateProtector(StorageMountInput.ProtectorPurpose);
+            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
             _options = options.Value;
         }
 
@@ -49,47 +47,56 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     throw new DataValidationException(nameof(ExecuteStorageMountDataV1.OperationTypeId), "invalid_transition");
                 }
 
-                var exists = Directory.Exists(_options.GetConnectionPath(mount.StorageProtocolTypeId, mount.Id, mount.SharePath));
+                var local = await _options.ProbeAsync(mount.Id, mount.StorageProtocolTypeId, mount.SharePath, CancellationToken);
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.SaveStorageMountProbeAsync(local, ct);
+                    return true;
+                }, CancellationToken);
+                var exists = local.StorageAvailabilityTypeId == StorageAvailabilityType.Available;
                 return new StorageMountStatusV1(exists, exists);
             }
 
-            // Decrypt only for connection.
-            string? password = null;
+            // Keep NAS I/O outside transactions.
             var action = Data.OperationTypeId switch
             {
                 StorageMountOperationType.Connect => NasMountAction.Connect,
                 StorageMountOperationType.Disconnect => NasMountAction.Disconnect,
                 _ => NasMountAction.Status
             };
-            if (action == NasMountAction.Connect && mount.ProtectedPassword is { } protectedPassword)
+            // Remember the Owner's wish first.
+            if (action != NasMountAction.Status)
             {
-                byte[] clear;
-                try
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
-                    clear = _protector.Unprotect(protectedPassword);
-                }
-                catch (CryptographicException)
-                {
-                    throw new NasMountException("storage_unavailable");
-                }
-
-                try
-                {
-                    password = Encoding.UTF8.GetString(clear);
-                }
-                finally
-                {
-                    CryptographicOperations.ZeroMemory(clear);
-                }
+                    await ctx.RequestStorageConnectionAsync(new StorageConnectRequestData(mount.Id, action == NasMountAction.Connect), ct);
+                    return true;
+                }, CancellationToken);
             }
 
-            // Keep NAS I/O outside transactions.
-            var request = new NasMountRequest(action, mount.Id, mount.Version, mount.StorageProtocolTypeId.ToString(), mount.Host!, mount.SharePath,
-                mount.ProtocolVersion!, mount.Username, mount.Domain, password, mount.IsReadOnly);
-            var status = await _mounts.ExecuteAsync(request, CancellationToken);
+            NasMountResponse status;
+            try
+            {
+                status = await _mounts.ExecuteAsync(StorageMountRequests.Create(mount, action, _protector), CancellationToken);
+            }
+            catch (NasMountException exception) when (action == NasMountAction.Connect && exception.Code == "storage_unavailable")
+            {
+                // The worker retries later.
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    await ctx.SaveStorageReconnectAsync(new StorageMountProbeData(mount.Id, StorageAvailabilityType.Offline, exception.Code, null, null), 1, ct);
+                    return true;
+                }, CancellationToken);
+                throw;
+            }
 
-            // Resolve concurrent configuration edits.
-            var current = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadStorageMountAsync(Parameters.StorageMountId, ct), CancellationToken);
+            // Record what a mounted share shows.
+            var probe = action != NasMountAction.Disconnect && status.IsMounted ? await _options.ProbeAsync(mount.Id, mount.StorageProtocolTypeId, mount.SharePath, CancellationToken) : null;
+            var current = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                if (probe is not null) await ctx.SaveStorageMountProbeAsync(probe, ct);
+                return await ctx.ReadStorageMountAsync(Parameters.StorageMountId, ct);
+            }, CancellationToken);
             return new StorageMountStatusV1(status.IsMounted, status.IsMounted && status.MountedVersion == current.Version);
         }
     }
@@ -127,10 +134,12 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
     public sealed class RemoveStorageMountV1 : AdminService<StorageMountParametersV1, RemoveStorageMountDataV1>
     {
         private readonly NasMountClient _mounts;
+        private readonly IDataProtector _protector;
 
-        internal RemoveStorageMountV1(NasMountClient mounts)
+        internal RemoveStorageMountV1(NasMountClient mounts, IDataProtectionProvider protection)
         {
             _mounts = mounts;
+            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -149,8 +158,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
             // Release helper mounts before forgetting them.
             if (mount.StorageProtocolTypeId != StorageProtocolType.Local && _mounts.IsConfigured)
             {
-                await _mounts.ExecuteAsync(new NasMountRequest(NasMountAction.Disconnect, mount.Id, mount.Version, mount.StorageProtocolTypeId.ToString(), mount.Host!, mount.SharePath,
-                    mount.ProtocolVersion!, mount.Username, mount.Domain, null, mount.IsReadOnly), CancellationToken);
+                await _mounts.ExecuteAsync(StorageMountRequests.Create(mount, NasMountAction.Disconnect, _protector), CancellationToken);
             }
 
             await Context.ExecuteBatchAsync(async (ctx, ct) =>

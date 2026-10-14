@@ -42,9 +42,15 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     mount."WakeBroadcastAddress",
                     mount."WakeOnDemand",
                     mount."StorageProtocolTypeId" <> 3 AS "CanMount",
-                    mount."Version"
+                    mount."Version",
+                    health."StorageHealthTypeId",
+                    health."DiagnosticCode",
+                    health."CheckedAt",
+                    health."FreeBytes",
+                    health."TotalBytes"
                 FROM
                     "StorageMounts" AS mount
+                    JOIN "StorageMountHealth" AS health ON health."StorageMountId" = mount."Id"
                 ORDER BY
                     mount."Id"
                 LIMIT @PageSize
@@ -63,7 +69,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         internal CreateStorageMountV1(IDataProtectionProvider protection, IOptions<StorageOptions> options)
         {
-            _protector = protection.CreateProtector(StorageMountInput.ProtectorPurpose);
+            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
             _options = options.Value;
         }
 
@@ -87,7 +93,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         internal UpdateStorageMountV1(IDataProtectionProvider protection, IOptions<StorageOptions> options)
         {
-            _protector = protection.CreateProtector(StorageMountInput.ProtectorPurpose);
+            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
             _options = options.Value;
         }
 
@@ -106,8 +112,6 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
     internal static class StorageMountInput
     {
-        public const string ProtectorPurpose = "Jularr.Storage.Password.V1";
-
         public static StorageMountSaveData Create(long? id, SaveStorageMountDataV1 data, IDataProtector protector, StorageOptions options)
         {
             // Local paths come from deployment configuration.

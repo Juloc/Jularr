@@ -43,4 +43,43 @@ CREATE TABLE "StorageMounts" (
 );
 CREATE UNIQUE INDEX "UX_StorageMounts_LocalPath" ON "StorageMounts" ("SharePath") WHERE "StorageProtocolTypeId" = 3;
 
+-- Last observed state and the Owner's connect wish.
+CREATE TABLE "StorageAvailabilityTypes" (
+    "Id" smallint PRIMARY KEY,
+    "Key" varchar(32) NOT NULL UNIQUE
+);
+INSERT INTO "StorageAvailabilityTypes" ("Id", "Key") VALUES (1, 'Available'), (2, 'Offline'), (3, 'AccessDenied');
+
+CREATE TABLE "StorageMountStates" (
+    "StorageMountId" bigint PRIMARY KEY REFERENCES "StorageMounts" ("Id") ON DELETE CASCADE,
+    "IsConnectRequested" boolean NOT NULL DEFAULT FALSE,
+    "StorageAvailabilityTypeId" smallint NULL REFERENCES "StorageAvailabilityTypes" ("Id"),
+    "DiagnosticCode" varchar(64) NULL,
+    "CheckedAt" timestamptz NULL,
+    "AvailableAt" timestamptz NULL,
+    "FreeBytes" bigint NULL CHECK ("FreeBytes" >= 0),
+    "TotalBytes" bigint NULL CHECK ("TotalBytes" >= 0),
+    "ReconnectAttempts" integer NOT NULL DEFAULT 0 CHECK ("ReconnectAttempts" >= 0),
+    "ReconnectAt" timestamptz NULL,
+    CHECK (("StorageAvailabilityTypeId" IS NULL) = ("CheckedAt" IS NULL))
+);
+CREATE INDEX "IX_StorageMountStates_Reconnect" ON "StorageMountStates" ("ReconnectAt") WHERE "IsConnectRequested";
+
+-- Offline with Wake-on-LAN reads as asleep.
+CREATE VIEW "StorageMountHealth" AS
+SELECT
+    mount."Id" AS "StorageMountId",
+    CASE state."StorageAvailabilityTypeId"
+        WHEN 1 THEN 1
+        WHEN 3 THEN 4
+        WHEN 2 THEN CASE WHEN mount."WakeMacAddress" IS NOT NULL THEN 2 ELSE 3 END
+    END::smallint AS "StorageHealthTypeId",
+    state."DiagnosticCode",
+    state."CheckedAt",
+    state."FreeBytes",
+    state."TotalBytes"
+FROM
+    "StorageMounts" AS mount
+    LEFT JOIN "StorageMountStates" AS state ON state."StorageMountId" = mount."Id";
+
 COMMIT;

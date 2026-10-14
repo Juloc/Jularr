@@ -12,6 +12,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Operation;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Media;
@@ -107,7 +108,13 @@ namespace Jularr.Backend.Service.System.Operation.V1
                 return ctx.ReadSql.ReadRequiredAsync<LibraryRootLocationData>(sql, ct);
             }, CancellationToken);
 
-            // Unreachable storage never marks media missing.
+            // Record health; unreachable storage never marks media missing.
+            var probe = await _options.ProbeAsync(root.StorageMountId, root.StorageProtocolTypeId, root.SharePath, CancellationToken);
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.SaveStorageMountProbeAsync(probe, ct);
+                return true;
+            }, CancellationToken);
             var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(root.StorageProtocolTypeId, root.StorageMountId, root.SharePath), root.RelativePath);
             var processed = 0L;
             var batch = new List<ScannedFile>(BatchSize);

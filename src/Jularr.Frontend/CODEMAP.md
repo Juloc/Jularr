@@ -19,6 +19,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
 - [Appearance](Modules/Appearance/Appearance.cs), [palette](Modules/Appearance/Palette.ts), [theme client](Modules/Appearance/theme.entry.ts): Original/Clean, brightness and optional device preferences.
 - [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
+- [ByteSize.cs](Framework/ByteSize.cs): file and volume sizes in decimal units for every page.
 - [MediaCard](Framework/Components/MediaCard.cs): Continue progress (time left, or the read share for books and comics), top-corner status/availability, up to three genres and centered hover/focus actions.
 - [MediaPreview](Framework/Components/MediaPreview.cs), [client](Framework/Components/MediaPreview.ts), [tests](Tools/media-preview.test.mjs): opt-in status links, inert SSR content and one native modal; official trailer embed on Play, released on close. Design examples await real trailer/request/download service fields.
 - [MediaAvailability](Framework/Components/MediaAvailability.cs): noninteractive, background-free status symbol with monitored-unit counts; MediaCard composes its separate hint/preview target.
@@ -47,7 +48,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments and sessions.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): supported settings and module controls.
-- [Storage](Pages/Admin/Storage/Storage.cshtml.cs): mounts, WOL, safe browsing and independently paged library paths.
+- [Storage](Pages/Admin/Storage/Storage.cshtml.cs): mounts with their last observed state, WOL, safe browsing and independently paged library paths.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): registry, protected TMDB/IGDB credentials and Plex server.
 - [Works](Pages/Admin/Works/Works.cshtml.cs), [Work](Pages/Admin/Work/Work.cshtml.cs), [AniList matches](Pages/Admin/Matches/Matches.cshtml.cs), [Library inventory](Pages/Admin/Library/Library.cshtml.cs): metadata, editing, matching and file identification.
 - [Requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs), [Activity](Pages/Admin/Activity/Activity.cshtml.cs): moderation, acquisition and recovery.

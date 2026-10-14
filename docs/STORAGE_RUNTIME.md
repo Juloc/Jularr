@@ -124,13 +124,31 @@ real Razor settings and Setup forms, antiforgery, bounded paging, private socket
 communication, concurrent edits and native command arguments. Runtime smoke tests
 must distinguish control-socket checks from successful SMB/NFS mounts.
 
+## Health and reconnection
+
+`StorageMountStates` keeps what Jularr last saw of a connection: available, offline
+or no access, the reason, free and total space and when it was checked. Explicit
+Connect/Status actions and every library scan probe the connection (one directory
+entry and the volume's space, at most five seconds, so a hanging network mount
+never blocks); reads use the stored state and the `StorageMountHealth` view, which
+shows an offline connection with Wake-on-LAN as asleep. Connect also records that
+the Owner wants the connection kept; Disconnect forgets the wish and the state.
+A failed Connect keeps the wish, so the connection is retried.
+`ReconnectStorageMountsV1`, run every minute by the storage worker, asks the helper
+whether such connections are mounted (kernel state only, so a sleeping NAS stays
+asleep) and remounts a lost one, for example after a host restart, retrying after
+1, 2, 5, 10 and then every 15 minutes. A share that stays mounted while its NAS
+sleeps is left to the kernel's own reconnection and shows its state at the next
+scan or check. The worker never sends Wake-on-LAN; a helper that is down pauses it.
+A probe that hangs in the kernel keeps its thread until the kernel gives up; callers
+continue after five seconds.
+
 Playback wakes sleeping storage on demand (per the connection's policy) and Arr+
 imports completed downloads into the first writable library of the media type.
 Connection paths of SMB/NFS mounts must be actual mount points (`Storage:RequireMountPoint`,
 default on), so a stale empty mount point is never read as an empty library or
 written to; a scan that skipped unreadable folders fails as `scan_incomplete`
-without marking files missing. Read/write/capacity probes, automatic reconnection
-and Synology management are later packages. One media type per library path is
+without marking files missing. Synology management is a later package. One media type per library path is
 the owner decision.
 
 References: [Docker bind propagation](https://docs.docker.com/engine/storage/bind-mounts/#configure-bind-propagation),

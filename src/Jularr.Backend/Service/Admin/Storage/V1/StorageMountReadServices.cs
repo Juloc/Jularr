@@ -36,9 +36,15 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     mount."WakeBroadcastAddress",
                     mount."WakeOnDemand",
                     mount."StorageProtocolTypeId" <> 3 AS "CanMount",
-                    mount."Version"
+                    mount."Version",
+                    health."StorageHealthTypeId",
+                    health."DiagnosticCode",
+                    health."CheckedAt",
+                    health."FreeBytes",
+                    health."TotalBytes"
                 FROM
                     "StorageMounts" AS mount
+                    JOIN "StorageMountHealth" AS health ON health."StorageMountId" = mount."Id"
                 WHERE
                     mount."Id" = @StorageMountId;
                 """;

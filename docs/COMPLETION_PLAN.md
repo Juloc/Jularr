@@ -20,10 +20,26 @@ audit before integration. Each package lists its acceptance; tests stay focused.
 | K11 | AniList OAuth, list import, sync, discovery feeds | Retries after outages without duplicates |
 | K12 | Offline PWA with device check, renditions, local state and sync queue | Offline playback and reading; progress syncs when online |
 | K13 | Translation owner (Bergamot, glossary, translation memory, cache) | Same input, same cached output |
+| K14 | Backup and restore (`pg_dump`, Setup step 2, scheduled copies) | A restored backup brings back accounts, library and progress |
+| K15 | Notifications and events: bell, request approved/available, download failed, per-profile subscriptions | An approved request that becomes available notifies its profile once |
+| K16 | Collections (manual, then smart rules) and franchises | A collection keeps its order and hides what the profile may not see |
+| K17 | Release calendar and upcoming for Watchlist and Wanted | Upcoming episodes and releases appear by date per profile |
+| K18 | Subtitles: provider download, language profiles, completeness | A missing preferred subtitle is found and offered in the player |
+| K19 | Intro/credits skip and trickplay thumbnails | Skip appears at the detected segment; seeking shows thumbnails |
+| K20 | Statistics for profiles and the Owner, admin health/system/log pages | Numbers come from stored history, never from live provider calls |
+| K21 | Library tools: filesystem watch, naming profiles and rename, presentation groups | A rename preview never moves files until confirmed |
+| K22 | Reader: annotations, highlights, text search, PDF | Highlights survive re-opening and follow the profile |
+| K23 | Music album/artist pages, audiobook chapters and narrators | An album plays in track order with progress per track |
+| K24 | Device pairing and client API for native clients, playback-session hub (remote control) | A paired TV plays what the phone sends |
+| K25 | Instant play while downloading | Playback starts before the download completes and never plays a broken file |
+| K26 | Home layout editor, personal API keys, LAN discovery, Manga upload | Each is a switchable module |
 | P2 | Email verification (SMTP), TOTP/WebAuthn/passkeys (library needs approval), branding | |
 
+K14-K26 close the gaps of a parity audit against Alpha-90 (`dev`, 14 October 2026); language
+learning, AI and TTS stay out of scope until the owner schedules them.
+
 Done: K1a, K1b, K2, K3 (without backup/restore), K4a (platform in details and per file), K4b (ROM
-identification through libretro DATs), K4c (retro play in self-hosted EmulatorJS with saves and play time per profile; offline play follows with K12), K7 (profile PIN with lockout and Owner reset; up to ten own profiles, deletion with their requests), request rules (limits, approval, allowed media, offered qualities, per-account overrides), K6 (comic reader for CBZ/CBR/CB7 in the shared reading cache), K8 (audio and subtitle choice, mini player, Continue Watching/Listening/Reading shelves and the Continue Reading bar). ScreenScraper waits for an owner developer account.
+identification through libretro DATs), K4c (retro play in self-hosted EmulatorJS with saves and play time per profile; offline play follows with K12), K7 (profile PIN with lockout and Owner reset; up to ten own profiles, deletion with their requests), request rules (limits, approval, allowed media, offered qualities, per-account overrides), K6 (comic reader for CBZ/CBR/CB7 in the shared reading cache), K8 (audio and subtitle choice, mini player, Continue Watching/Listening/Reading shelves and the Continue Reading bar), K9 without Synology (connection state from probes, background reconnect with backoff). ScreenScraper waits for an owner developer account.
 
 Risks: K1 touches most reads; the community anime mapping and EmulatorJS cores need a
 license check before use; backup needs `pg_dump` in the container; offline video is

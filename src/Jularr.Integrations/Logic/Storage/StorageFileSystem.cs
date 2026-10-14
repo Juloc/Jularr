@@ -68,6 +68,55 @@ namespace Jularr.Integrations.Logic.Storage
             return path;
         }
 
+        public static async Task<StorageProbe> ProbeAsync(string path, CancellationToken ct)
+        {
+            // Hanging mounts time out.
+            try
+            {
+                return await Task.Run(() => Probe(path), ct).WaitAsync(TimeSpan.FromSeconds(5), ct);
+            }
+            catch (TimeoutException)
+            {
+                return new StorageProbe(false, "probe_timeout", null, null);
+            }
+        }
+
+        private static StorageProbe Probe(string path)
+        {
+            try
+            {
+                if (!Directory.Exists(path))
+                {
+                    return new StorageProbe(false, "storage_unavailable", null, null);
+                }
+
+                // One entry proves an answer.
+                using (var entries = Directory.EnumerateFileSystemEntries(path).GetEnumerator())
+                {
+                    entries.MoveNext();
+                }
+
+                // Windows reports drive roots only.
+                try
+                {
+                    var drive = new DriveInfo(OperatingSystem.IsWindows() ? Path.GetPathRoot(Path.GetFullPath(path))! : path);
+                    return drive.IsReady ? new StorageProbe(true, null, drive.AvailableFreeSpace, drive.TotalSize) : new StorageProbe(true, null, null, null);
+                }
+                catch (ArgumentException)
+                {
+                    return new StorageProbe(true, null, null, null);
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return new StorageProbe(false, "permission_denied", null, null);
+            }
+            catch (IOException)
+            {
+                return new StorageProbe(false, "storage_unavailable", null, null);
+            }
+        }
+
         public static bool IsMountPoint(string path)
         {
             // Only Linux hosts mount connections; elsewhere the directory is the connection.

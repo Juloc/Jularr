@@ -94,12 +94,7 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             return percent.Length == 0 ? amount : percent + " · " + amount;
         }
 
-        private static string Size(long? bytes) => bytes switch
-        {
-            null => "",
-            >= 1L << 30 => (bytes.Value / (double)(1L << 30)).ToString("0.0 'GB'", CultureInfo.InvariantCulture),
-            _ => (bytes.Value / (double)(1L << 20)).ToString("0 'MB'", CultureInfo.InvariantCulture)
-        };
+        private static string Size(long? bytes) => bytes is { } size ? ByteSize.Format(size) : "";
 
         private static string Eta(int? seconds) => seconds switch
         {

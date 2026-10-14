@@ -54,8 +54,14 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     public sealed class StorageMountDetailsV1 : BaseResponse
     {
         public StorageMountDetailsV1(long id, string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion, string? username, string? domain, bool isReadOnly,
-            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool canMount, long version)
+            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool canMount, long version, StorageHealthType? storageHealthTypeId = null,
+            string? diagnosticCode = null, DateTime? checkedAt = null, long? freeBytes = null, long? totalBytes = null)
         {
+            StorageHealthTypeId = storageHealthTypeId;
+            DiagnosticCode = diagnosticCode;
+            CheckedAt = checkedAt;
+            FreeBytes = freeBytes;
+            TotalBytes = totalBytes;
             Id = id;
             Name = name;
             StorageProtocolTypeId = storageProtocolTypeId;
@@ -117,6 +123,22 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Version))]
         public long Version { get; }
+
+        // Last observed state; never checked is null.
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.StorageHealthTypeId))]
+        public StorageHealthType? StorageHealthTypeId { get; }
+
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.DiagnosticCode))]
+        public string? DiagnosticCode { get; }
+
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.CheckedAt))]
+        public DateTime? CheckedAt { get; }
+
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.FreeBytes))]
+        public long? FreeBytes { get; }
+
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.TotalBytes))]
+        public long? TotalBytes { get; }
     }
 
     public sealed class SaveStorageMountDataV1 : BaseData

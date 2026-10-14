@@ -42,7 +42,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 var table = new Table<LibraryFileDetailsV1>(files.Items)
                     .Text(item => item.RelativePath, "library.file")
                     .Text(item => item.LibraryRootName, "library.root")
-                    .Content("table.size", item => new ValueText(Size(item.SizeBytes)))
+                    .Content("table.size", item => new ValueText(ByteSize.Format(item.SizeBytes)))
                     .Content("table.status", item => new Text(item.MissingSince is null ? "library.present" : "library.missing"));
                 table = Tab == LibraryTab.Unmatched
                     ? table.Content("library.assign", item => Assignment(item, csrf))
@@ -125,9 +125,5 @@ namespace Jularr.Frontend.Pages.Admin.Library
         private string Address(int? pageNumber = null, LibraryTab? tab = null, string? handler = null) =>
             "/Admin/Library?Tab=" + (tab ?? Tab) + "&PageNumber=" + (pageNumber ?? (tab is null ? PageNumber : 1)).ToString(CultureInfo.InvariantCulture)
             + (handler is null ? "" : "&handler=" + handler);
-
-        private static string Size(long bytes) => bytes >= 1L << 30
-            ? (bytes / (double)(1L << 30)).ToString("0.0 'GiB'", CultureInfo.InvariantCulture)
-            : (bytes / (double)(1L << 20)).ToString("0.0 'MiB'", CultureInfo.InvariantCulture);
     }
 }

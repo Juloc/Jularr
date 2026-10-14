@@ -71,6 +71,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                     .Text(item => item.Name, "storage.name")
                     .Resource(item => item.StorageProtocolTypeId, "storage.protocol", protocol => "storage.protocol." + protocol)
                     .Content("storage.location", item => new ValueText(item.Host is null ? item.SharePath : item.Host + item.SharePath))
+                    .Content("storage.health", item => new Text("storage.health." + (item.StorageHealthTypeId?.ToString() ?? "Unknown")))
                     .Link(item => item.Id, "common.open", id => Address(id), "common.open"));
 
                 if (_mounts?.Page > 1) content.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(pageNumber: PageNumber - 1)));
@@ -88,11 +89,8 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 if (_mount is { } mount)
                 {
                     content.Secondary.Add(new Div([.. ConnectionActions(mount, csrf)]).Class("storage__actions"));
-                    if (TempData["StorageMounted"] is bool isMounted)
-                    {
-                        content.Secondary.Add(new P(new Text(isMounted ? "storage.mounted" : "storage.unmounted")).Attribute("role", "status"));
-                        if (isMounted && TempData["StorageCurrent"] is false) content.Secondary.Add(new P(new Text("storage.stale")).Attribute("role", "status"));
-                    }
+                    content.Secondary.Add(Health(mount));
+                    if (TempData["StorageCurrent"] is false) content.Secondary.Add(new P(new Text("storage.stale")).Attribute("role", "status"));
 
                     if (TempData["StorageWoken"] is true) content.Secondary.Add(new P(new Text("storage.wake.sent")).Attribute("role", "status"));
                     if (TempData["StorageScanQueued"] is true) content.Secondary.Add(new P(new Text("storage.paths.scanQueued")).Attribute("role", "status"));
@@ -147,6 +145,28 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 ]);
                 form.Submit("common.save");
             }, Address(StorageMountId), csrf, input, _failedSection == "Save" ? FormError : null);
+        }
+
+        // What Jularr last saw; reading it never touches the NAS.
+        private IUiComponent Health(StorageMountDetailsV1 mount)
+        {
+            if (mount.StorageHealthTypeId is not { } health || mount.CheckedAt is not { } checkedAt)
+            {
+                return new P(new Text("storage.health.Unknown")).Class("storage__health");
+            }
+
+            var parts = new List<string> { texts["storage.health." + health] };
+            if (health == StorageHealthType.Online && mount.FreeBytes is { } free && mount.TotalBytes is { } total)
+            {
+                parts.Add(string.Format(CultureInfo.CurrentCulture, texts["storage.space"], ByteSize.Format(free), ByteSize.Format(total)));
+            }
+            else if (health != StorageHealthType.Online && mount.DiagnosticCode is { } code)
+            {
+                parts.Add(texts["storage.problem." + (code is "permission_denied" or "probe_timeout" ? code : "storage_unavailable")]);
+            }
+
+            parts.Add(string.Format(CultureInfo.CurrentCulture, texts["storage.checkedAt"], checkedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)));
+            return new P(new ValueText(string.Join(" · ", parts))).Class("storage__health").Attribute("role", "status");
         }
 
         private IEnumerable<IUiComponent> ConnectionActions(StorageMountDetailsV1 mount, string? csrf)
@@ -286,8 +306,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
         {
             var result = await execute.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(storageMountId),
                 new ExecuteStorageMountDataV1(operationTypeId), HttpContext.RequestAborted);
-            TempData["StorageMounted"] = result.IsMounted;
-            TempData["StorageCurrent"] = result.IsCurrentConfiguration;
+            TempData["StorageCurrent"] = !result.IsMounted || result.IsCurrentConfiguration;
             return LocalRedirect(Address(storageMountId));
         }
 

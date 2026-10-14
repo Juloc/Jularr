@@ -43,7 +43,8 @@ Unit/edition targets, rules/quotas, cancellation and profile editing remain pend
 Tests explicitly install this embedded baseline only in their disposable Media
 fixture; the host never installs it.
 
-`Storage.sql` is an explicit fresh baseline for StorageMounts, its SMB/NFS/Local
+`Storage.sql` also keeps StorageMountStates (last observed availability, the Owner's
+connect wish, reconnect backoff) and the StorageMountHealth view. It is an explicit fresh baseline for StorageMounts, its SMB/NFS/Local
 protocol/version catalogs and per-connection Wake-on-LAN settings. Owner Services protect credentials before persistence.
 Setup and Admin use the same configuration; mounting is an explicit Linux helper
 operation, not application-startup SQL. Tests install this baseline only in their

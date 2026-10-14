@@ -183,6 +183,13 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        [DataRow(999L, "999 B")]
+        [DataRow(1_500_000_000L, "1.5 GB")]
+        [DataRow(4_000_000_000_000L, "4.0 TB")]
+        public void ByteSize_Format_UsesDecimalUnits(long bytes, string expected) =>
+            Assert.AreEqual(expected.Replace(".", CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator, StringComparison.Ordinal), ByteSize.Format(bytes));
+
+        [TestMethod]
         public async Task Razor_PageFolders_PreservePublicRoutes()
         {
             await using var host = await Host.CreateAsync(razor: true, media: true);

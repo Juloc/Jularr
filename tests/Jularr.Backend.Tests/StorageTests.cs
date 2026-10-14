@@ -6,7 +6,10 @@ using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.System.Storage.V1;
+using Jularr.Backend.Service.System.Storage.V1;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.MountHelper;
@@ -187,6 +190,120 @@ namespace Jularr.Backend.Tests
         private static SaveStorageMountDataV1 Smb(string? password = Password, string name = "NAS", string server = "nas.test", string path = "/media", string version = "3.1.1")
         {
             return new SaveStorageMountDataV1(name, StorageProtocolType.Smb, server, path, version, "jularr", null, true, password);
+        }
+
+        [TestMethod]
+        public async Task Connections_LostAfterConnect_ReconnectWithBackoffAndShowTheirState()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var share = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Directory.CreateDirectory(share);
+            File.WriteAllText(Path.Combine(share, "movie.mkv"), "movie");
+            var socketPath = Path.Combine(Path.GetTempPath(), "jularr-mount-" + Guid.NewGuid().ToString("N")[..12] + ".sock");
+            using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            listener.Listen(4);
+            host.Services.GetRequiredService<NasMountClient>().SocketPath = socketPath;
+            var answers = new Queue<string>();
+            var actions = new List<NasMountAction>();
+            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+            // The helper answers "mounted", "unmounted" or "failed" in turn, no NAS.
+            var helper = Task.Run(async () =>
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    using var socket = await listener.AcceptAsync(stop.Token);
+                    using var stream = new NetworkStream(socket);
+                    var request = await NasMountProtocol.ReadAsync<NasMountRequest>(stream, stop.Token);
+                    actions.Add(request.Action);
+                    var answer = answers.Dequeue();
+                    await NasMountProtocol.WriteAsync(stream, answer switch
+                    {
+                        "mounted" => new NasMountResponse(true, request.Version),
+                        "unmounted" => new NasMountResponse(false, 0),
+                        _ => new NasMountResponse(false, 0, "storage_unavailable")
+                    }, stop.Token);
+                }
+            });
+
+            async Task ReconnectAsync()
+            {
+                await using var scope = host.Services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<ReconnectStorageMountsV1>().ExecuteAsync<UpdateResult>(new StorageConnectionsParametersV1(), default, CancellationToken.None);
+            }
+
+            async Task<StorageMountDetailsV1> ReadAsync()
+            {
+                using var read = await host.SendAsync(HttpMethod.Get, Route + "/" + mountId);
+                return (await read.Content.ReadFromJsonAsync<StorageMountDetailsV1>())!;
+            }
+
+            try
+            {
+                // Connect remembers the wish and what the share shows.
+                answers.Enqueue("mounted");
+                using var connected = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Connect));
+                Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
+                var mount = await ReadAsync();
+                Assert.AreEqual(StorageHealthType.Online, mount.StorageHealthTypeId);
+                Assert.IsNotNull(mount.CheckedAt);
+                using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId);
+                StringAssert.Contains(await page.Content.ReadAsStringAsync(), "class=\"storage__health\" role=\"status\">Online");
+
+                // A mounted share is left alone.
+                answers.Enqueue("mounted");
+                await ReconnectAsync();
+                CollectionAssert.AreEqual(new[] { NasMountAction.Connect, NasMountAction.Status }, actions);
+
+                // Lost and not back yet: asleep (it has Wake-on-LAN), retried later.
+                actions.Clear();
+                answers.Enqueue("unmounted");
+                answers.Enqueue("failed");
+                await ReconnectAsync();
+                CollectionAssert.AreEqual(new[] { NasMountAction.Status, NasMountAction.Connect }, actions);
+                Assert.AreEqual(StorageHealthType.Sleeping, (await ReadAsync()).StorageHealthTypeId);
+                Assert.AreEqual(1, await host.ScalarAsync("SELECT \"ReconnectAttempts\" FROM \"StorageMountStates\""));
+                actions.Clear();
+                await ReconnectAsync();
+                Assert.AreEqual(0, actions.Count);
+
+                // Due again, it reconnects by itself.
+                await host.Fixture.RunSqlAsync("UPDATE \"StorageMountStates\" SET \"ReconnectAt\" = now() - interval '1 minute'");
+                answers.Enqueue("unmounted");
+                answers.Enqueue("mounted");
+                await ReconnectAsync();
+                Assert.AreEqual(StorageHealthType.Online, (await ReadAsync()).StorageHealthTypeId);
+                Assert.AreEqual(0, await host.ScalarAsync("SELECT \"ReconnectAttempts\" FROM \"StorageMountStates\""));
+
+                // Disconnect ends both the wish and the state.
+                actions.Clear();
+                answers.Enqueue("unmounted");
+                using var disconnected = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Disconnect));
+                Assert.AreEqual(HttpStatusCode.OK, disconnected.StatusCode, await disconnected.Content.ReadAsStringAsync());
+                Assert.IsNull((await ReadAsync()).StorageHealthTypeId);
+                answers.Enqueue("unmounted");
+                using var checkedStatus = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.ReadStatus));
+                Assert.AreEqual(HttpStatusCode.OK, checkedStatus.StatusCode);
+                Assert.IsNull((await ReadAsync()).StorageHealthTypeId);
+                await ReconnectAsync();
+                CollectionAssert.AreEqual(new[] { NasMountAction.Disconnect, NasMountAction.Status }, actions);
+
+                // A Connect while the NAS is away keeps the wish for the worker.
+                answers.Enqueue("failed");
+                using var failed = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Connect));
+                Assert.AreNotEqual(HttpStatusCode.OK, failed.StatusCode);
+                Assert.AreEqual(StorageHealthType.Sleeping, (await ReadAsync()).StorageHealthTypeId);
+                Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsConnectRequested\" AND \"ReconnectAt\" > now() FROM \"StorageMountStates\""));
+            }
+            finally
+            {
+                await stop.CancelAsync();
+                await helper.ContinueWith(_ => { });
+                if (File.Exists(socketPath)) File.Delete(socketPath);
+            }
         }
 
         private static async Task<Host> CreateHostAsync(bool razor = false)
