@@ -108,10 +108,11 @@ namespace Jularr.Frontend.Pages.Admin.Instance
         }
 
         public async Task<IActionResult> OnPostAsync(string? name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks,
-            bool? usersConfirmSources, int? libraryScanIntervalHours)
+            bool? usersConfirmSources, int? libraryScanIntervalHours, int? historyRetentionDays, int? historyMegabytes)
         {
             // Save through the service.
-            _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources, libraryScanIntervalHours);
+            _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources, libraryScanIntervalHours,
+                historyRetentionDays, historyMegabytes);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             TempData["InstanceSaved"] = true;
             return LocalRedirect(Home);

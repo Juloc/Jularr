@@ -49,7 +49,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
         }
     }
 
-    // Activity keeps finished work for 30 days.
+    // Activity keeps finished work as long and as much as the Admin set.
     public sealed class PruneOperationsV1 : SystemService<PruneOperationsParametersV1, NoData>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
