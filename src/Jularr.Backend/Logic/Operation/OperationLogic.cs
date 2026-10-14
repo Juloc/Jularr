@@ -33,9 +33,9 @@ namespace Jularr.Backend.Logic.Operation
             return (await ctx.ReadOptionalAsync<OperationData>(sql, ct) ?? throw new KeyNotFoundException("The library root was not found.")).Id;
         }
 
-        public static Task<int> QueueDueLibraryScansAsync(this LogicContext ctx, OperationSinceData data, CancellationToken ct)
+        public static Task<int> QueueDueLibraryScansAsync(this LogicContext ctx, CancellationToken ct)
         {
-            // Storage last probed offline or denied is not scanned, so a sleeping NAS stays asleep.
+            // The instance's interval; storage last probed offline or denied is not scanned, so a sleeping NAS stays asleep.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -46,6 +46,7 @@ namespace Jularr.Backend.Logic.Operation
                     root."Id"
                 FROM
                     "LibraryRoots" AS root
+                    JOIN "InstanceSettings" AS settings ON settings."Id" = 1 AND settings."LibraryScanIntervalHours" > 0
                     LEFT JOIN "StorageMountStates" AS state ON state."StorageMountId" = root."StorageMountId"
                 WHERE
                     coalesce(state."StorageAvailabilityTypeId", 1) = 1
@@ -57,9 +58,24 @@ namespace Jularr.Backend.Logic.Operation
                         WHERE
                             operation."LibraryRootId" = root."Id"
                             AND operation."OperationTypeId" = 1
-                            AND operation."CreatedAt" > @Since
+                            AND operation."CreatedAt" > now() - make_interval(hours => settings."LibraryScanIntervalHours")
                     )
                 ON CONFLICT ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING;
+                """;
+            return ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        public static Task<int> PruneFinishedOperationsAsync(this LogicContext ctx, OperationSinceData data, CancellationToken ct)
+        {
+            // Finished work leaves the history; running and queued work stays.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "Operations" AS operation
+                WHERE
+                    operation."OperationStatusTypeId" IN (3, 4)
+                    AND operation."FinishedAt" < @Since;
                 """;
             sql.Parameters.Add(data);
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);

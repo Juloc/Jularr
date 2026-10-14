@@ -57,8 +57,9 @@ connection never overlap. Their location and media type are fixed, the name is
 version-checked. Removing a path forgets its inventory and empty assets, never
 Works or files. `QueueLibraryScanV1` queues one active scan per path in Operations.
 The storage worker also calls `ScheduleLibraryScansV1`: every path without a scan in the
-last `Storage:ScanIntervalHours` (default 24, 0 turns it off) is rescanned, except on
-connections last probed offline, so a sleeping NAS is not woken.
+last `LibraryScanIntervalHours` of the instance settings (default 24, 0 turns it off) is
+rescanned, except on connections last probed offline, so a sleeping NAS is not woken.
+Finished operations leave the Activity history after 30 days (`PruneOperationsV1`, hourly).
 
 Hosts opt in to `AddJularrWorkers` (`Jularr.Workers`); its worker requeues interrupted scans on
 start, claims queued operations with `SKIP LOCKED` and calls System services, which

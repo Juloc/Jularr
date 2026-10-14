@@ -37,15 +37,6 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
     public sealed class ScheduleLibraryScansV1 : SystemService<LibraryScanScheduleParametersV1, NoData>
     {
-        private readonly StorageOptions _options;
-        private readonly TimeProvider _time;
-
-        internal ScheduleLibraryScansV1(IOptions<StorageOptions> options, TimeProvider time)
-        {
-            _options = options.Value;
-            _time = time;
-        }
-
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(LibraryScanScheduleParametersV1 parameters) => ModuleRequirement.All("Library");
@@ -54,13 +45,29 @@ namespace Jularr.Backend.Service.System.Operation.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // Changes made outside Jularr appear after the next scan.
-            if (_options.ScanIntervalHours <= 0)
-            {
-                return new UpdateResult(false);
-            }
+            return new UpdateResult(await Context.QueueDueLibraryScansAsync(CancellationToken) > 0);
+        }
+    }
 
-            var since = _time.GetUtcNow().UtcDateTime - TimeSpan.FromHours(_options.ScanIntervalHours);
-            return new UpdateResult(await Context.QueueDueLibraryScansAsync(new OperationSinceData(since), CancellationToken) > 0);
+    // Activity keeps finished work for 30 days.
+    public sealed class PruneOperationsV1 : SystemService<OperationQueueParametersV1, NoData>
+    {
+        private readonly TimeProvider _time;
+
+        internal PruneOperationsV1(TimeProvider time)
+        {
+            _time = time;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(OperationQueueParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(OperationQueueParametersV1 parameters, Type resultType) => new("system.operations");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var since = _time.GetUtcNow().UtcDateTime - TimeSpan.FromDays(30);
+            return new UpdateResult(await Context.PruneFinishedOperationsAsync(new OperationSinceData(since), CancellationToken) > 0);
         }
     }
 

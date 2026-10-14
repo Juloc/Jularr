@@ -9,8 +9,10 @@ namespace Jularr.Backend.Data.Logic.Library
     internal sealed class LibraryRenameFileData : BaseData
     {
         public LibraryRenameFileData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string relativePath, DateTime? missingSince,
-            long? mediaAssetId, string? canonicalTitle, int? releaseYear, string? author, WorkUnitType? workUnitTypeId, decimal? unitNumber, string? unitTitle, decimal? parentUnitNumber)
+            long? mediaAssetId, string? canonicalTitle, int? releaseYear, string? author, WorkUnitType? workUnitTypeId, decimal? unitNumber, string? unitTitle, decimal? parentUnitNumber,
+            int? width)
         {
+            Width = width;
             Id = id;
             LibraryRootId = libraryRootId;
             LibraryRootName = libraryRootName;
@@ -72,6 +74,10 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
+
+        // The analysed video width, for a quality tag the name lacks.
+        [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Width))]
+        public int? Width { get; }
     }
 
     // A file move the Owner confirms; subtitles name the media file they follow.

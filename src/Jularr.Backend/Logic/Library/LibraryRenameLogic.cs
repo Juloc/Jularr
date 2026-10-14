@@ -42,7 +42,16 @@ namespace Jularr.Backend.Logic.Library
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",
                     unit."Title" AS "UnitTitle",
-                    parent."Number" AS "ParentUnitNumber"
+                    parent."Number" AS "ParentUnitNumber",
+                    (
+                        SELECT
+                            max(track."Width")
+                        FROM
+                            "MediaTracks" AS track
+                        WHERE
+                            track."StoredFileId" = file."Id"
+                            AND track."MediaTrackTypeId" = 1
+                    ) AS "Width"
                 FROM
                     "StoredFiles" AS file
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
@@ -134,9 +143,8 @@ namespace Jularr.Backend.Logic.Library
 
             return (file.MediaTypeId, file.WorkUnitTypeId) switch
             {
-                (MediaType.Movie, null) => LibraryNaming.Movie(title, file.ReleaseYear, QualityOf(file.RelativePath)),
-                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => LibraryNaming.Episode(title, season, file.UnitNumber!.Value,
-                    QualityOf(file.RelativePath)),
+                (MediaType.Movie, null) => LibraryNaming.Movie(title, file.ReleaseYear, QualityOf(file)),
+                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => LibraryNaming.Episode(title, season, file.UnitNumber!.Value, QualityOf(file)),
                 (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => LibraryNaming.Volume(title, file.UnitNumber),
                 (MediaType.Book, null) => LibraryNaming.Book(title, file.ReleaseYear, file.Author),
                 (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is { } name => LibraryNaming.Track(file.Author, title, file.ReleaseYear, file.UnitNumber!.Value, name),
@@ -144,10 +152,16 @@ namespace Jularr.Backend.Logic.Library
             };
         }
 
-        // The quality tag an import gave the name stays.
-        private static string QualityOf(string relativePath) => QualityTag().Match(Path.GetFileNameWithoutExtension(relativePath)) is { Success: true } match
+        // The quality tag an import gave the name stays; otherwise the analysed width names the resolution, wide formats included.
+        private static string QualityOf(LibraryRenameFileData file) => QualityTag().Match(Path.GetFileNameWithoutExtension(file.RelativePath)) is { Success: true } match
             ? LibraryNaming.Quality(match.Groups[1].Value)
-            : "";
+            : LibraryNaming.Quality(file.Width switch
+            {
+                >= 3500 => "2160p",
+                >= 1800 => "1080p",
+                >= 1200 => "720p",
+                _ => null
+            });
 
         // A counted alternative is already in place.
         private static bool IsNamed(string current, string target) => current.Equals(target, StringComparison.OrdinalIgnoreCase)

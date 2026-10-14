@@ -5,8 +5,9 @@ namespace Jularr.Backend.Data.Logic.Instance
 {
     internal sealed class InstanceSettingsUpdateData : BaseData
     {
-        public InstanceSettingsUpdateData(string name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks, bool? usersConfirmSources)
+        public InstanceSettingsUpdateData(string name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks, bool? usersConfirmSources, int? libraryScanIntervalHours)
         {
+            LibraryScanIntervalHours = libraryScanIntervalHours;
             UsersConfirmSources = usersConfirmSources;
             Name = name;
             UiLocaleId = uiLocaleId;
@@ -23,6 +24,9 @@ namespace Jularr.Backend.Data.Logic.Instance
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UsersConfirmSources), false)]
         public bool? UsersConfirmSources { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.LibraryScanIntervalHours), false)]
+        public int? LibraryScanIntervalHours { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
         public string Name { get; }

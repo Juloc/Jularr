@@ -185,6 +185,14 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"CreatedAt\" = now() - interval '25 hours', \"OperationStatusTypeId\" = 3, \"FinishedAt\" = now()");
             await host.Fixture.RunSqlAsync("INSERT INTO \"StorageMountStates\" (\"StorageMountId\", \"StorageAvailabilityTypeId\", \"CheckedAt\") VALUES (" + mountId + ", 2, now())");
             Assert.IsFalse(await ScheduleAsync());
+
+            // Off in the instance settings, nothing is rescanned; finished history leaves after 30 days.
+            await host.Fixture.RunSqlAsync("DELETE FROM \"StorageMountStates\"; UPDATE \"InstanceSettings\" SET \"LibraryScanIntervalHours\" = 0");
+            Assert.IsFalse(await ScheduleAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"FinishedAt\" = now() - interval '31 days' WHERE \"Id\" = (SELECT min(\"Id\") FROM \"Operations\")");
+            await using var scope = host.Services.CreateAsyncScope();
+            Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default, CancellationToken.None)).Success);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\""));
         }
 
         [TestMethod]
@@ -413,8 +421,8 @@ namespace Jularr.Backend.Tests
         public void Rename_Plan_UsesTheImportLayoutPerType()
         {
             static LibraryRenameFileData File(long id, MediaType type, string path, string? title, WorkUnitType? unit = null, decimal? number = null, decimal? parent = null,
-                MediaSubtype? subtype = null, string? unitTitle = null, DateTime? missing = null) =>
-                new(id, 1, "Library", type, subtype, path, missing, title is null ? null : id, title, 2019, "Artist A, Artist B", unit, number, unitTitle, parent);
+                MediaSubtype? subtype = null, string? unitTitle = null, DateTime? missing = null, int? width = null) =>
+                new(id, 1, "Library", type, subtype, path, missing, title is null ? null : id, title, 2019, "Artist A, Artist B", unit, number, unitTitle, parent, width);
 
             var plan = LibraryRenameLogic.Plan([
                 File(1, MediaType.Series, "show/s1/ep2 [WEBDL-1080p].mkv", "Show", WorkUnitType.Episode, 2m, 1m),
@@ -423,11 +431,13 @@ namespace Jularr.Backend.Tests
                 File(4, MediaType.Game, "roms/game.sfc", "Game"),
                 File(5, MediaType.Movie, "gone.mkv", "Gone", missing: DateTime.UtcNow),
                 File(6, MediaType.Movie, "kept (2019)/KEPT (2019).mkv", "Kept"),
-                File(7, MediaType.Book, "loose.epub", "Book")]);
+                File(7, MediaType.Book, "loose.epub", "Book"),
+                File(8, MediaType.Movie, "wide.mkv", "Wide", width: 1920)]);
 
             CollectionAssert.AreEqual(new[]
             {
-                "Show/Season 01/Show - S01E02 [WEBDL-1080p].mkv", "Artist A, Artist B/Album (2019)/03 - Song One.flac", "Manga/Manga v01.5.cbz", "Artist A/Book (2019)/Book.epub"
+                "Show/Season 01/Show - S01E02 [WEBDL-1080p].mkv", "Artist A, Artist B/Album (2019)/03 - Song One.flac", "Manga/Manga v01.5.cbz", "Artist A/Book (2019)/Book.epub",
+                "Wide (2019)/Wide (2019) [1080p].mkv"
             }, plan.Select(rename => rename.TargetPath).ToArray());
         }
 

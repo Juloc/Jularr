@@ -34,8 +34,9 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""));
 
             // Commit the shared configuration.
-            using var changed = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Home", 1, 1));
+            using var changed = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Home", 1, 1, libraryScanIntervalHours: 12));
             Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)12, await host.ScalarAsync("SELECT \"LibraryScanIntervalHours\" FROM \"InstanceSettings\""));
             using var stale = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Stale", 2, 1));
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
             using var unknownLocale = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Unknown", 999, 2));
