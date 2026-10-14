@@ -1,9 +1,11 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Library.V1;
+using Jularr.Backend.Service.Admin.Storage.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -20,8 +22,12 @@ namespace Jularr.Frontend.Pages.Admin.Library
     }
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
-        ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, ReadReplacementSettingsV1 readReplacement,
+        UpdateReplacementSettingsV1 updateReplacement, ReadStorageMountsV1 readMounts, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        private ReplacementSettingsV1? _replacement;
+        private UpdateReplacementSettingsDataV1? _replacementInput;
+        private PageResult<StorageMountDetailsV1>? _mounts;
         private const int RenamePageSize = 100;
         private PageResult<LibraryFileDetailsV1>? _files;
         private LibraryRenamePlanV1? _renames;
@@ -107,7 +113,25 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 }
             }
 
-            if (FormError is not null && _failedFileId is null && _failedPattern is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            // What an import does with the earlier file of the same film or episode.
+            if (_replacement is { } replacement)
+            {
+                var mounts = (_mounts?.Items ?? []).Where(mount => !mount.IsReadOnly)
+                    .Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name)).Prepend(new SelectOption("", texts["library.replacement.noFolder"]));
+                page.Content.Add(new UiSection("library.replacement.title", [new Form<UpdateReplacementSettingsDataV1>(form =>
+                {
+                    form.Hidden(item => item.Version);
+                    form.Toggle(item => item.KeepsReleases, "library.replacement.keepsReleases");
+                    form.Toggle(item => item.RecyclesInLibraries, "library.replacement.inLibraries");
+                    form.Select(item => item.RecycleStorageMountId, "library.replacement.mount", mounts);
+                    form.Text(item => item.RecyclePath, "library.replacement.path");
+                    form.Number(item => item.RecycleDays, "library.replacement.days");
+                    form.Submit("common.save");
+                }, Address(handler: "Replacement"), csrf, _replacementInput ?? new UpdateReplacementSettingsDataV1(replacement.KeepsReleases, replacement.RecyclesInLibraries,
+                    replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version), _replacementInput is null ? null : FormError)]));
+            }
+
+            if (FormError is not null && _failedFileId is null && _failedPattern is null && _replacementInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         private Form<AssignLibraryFileDataV1> Assignment(LibraryFileDetailsV1 file, string? csrf)
@@ -171,6 +195,13 @@ namespace Jularr.Frontend.Pages.Admin.Library
             return LocalRedirect(Address());
         }
 
+        public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, bool recyclesInLibraries, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version)
+        {
+            _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recyclesInLibraries, recycleStorageMountId, recyclePath, recycleDays, version);
+            await updateReplacement.ExecuteAsync<UpdateResult>(new ReplacementSettingsParametersV1(), _replacementInput, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
         public async Task<IActionResult> OnPostRenameAsync([BindRequired] string fingerprint)
         {
             var result = await applyRenames.ExecuteAsync<ApplyLibraryRenamesResultV1>(new LibraryRenamesParametersV1(), new ApplyLibraryRenamesDataV1(fingerprint), HttpContext.RequestAborted);
@@ -190,6 +221,8 @@ namespace Jularr.Frontend.Pages.Admin.Library
             if (Tab == LibraryTab.Naming)
             {
                 _patterns = await readPatterns.ExecuteAsync<BaseDataList<NamingPatternV1>>(new ReadNamingPatternsParametersV1(), ct);
+                _replacement = await readReplacement.ExecuteAsync<ReplacementSettingsV1>(new ReplacementSettingsParametersV1(), ct);
+                _mounts = await readMounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(1, 100), ct);
                 return;
             }
 

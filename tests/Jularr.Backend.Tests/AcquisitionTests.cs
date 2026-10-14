@@ -123,10 +123,28 @@ namespace Jularr.Backend.Tests
             var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
             Directory.CreateDirectory(library);
             File.WriteAllText(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv"), "existing");
+
+            // The film's earlier release, already played, is replaced: in simple mode it waits in the library's recycle folder.
+            File.WriteAllText(Path.Combine(library, "Example Movie (2020) [DVD].mkv"), "earlier");
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceSettings" SET "RecyclesInLibraries" = TRUE;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT 900, "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT 900, "Id", 900 FROM "Works";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                    SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020) [DVD].mkv', 7, now(), now(), 900 FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
+                INSERT INTO "PlaybackSessions" ("PublicId", "ProfileId", "MediaAssetId", "StoredFileId", "PlaybackModeTypeId", "StartedAt", "LastSeenAt", "EndedAt")
+                    VALUES (gen_random_uuid(), 101, 900, 900, 1, now() - interval '1 hour', now(), now());
+                """);
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv")));
+            Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
+            Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"Id\" = 900"));
+            Assert.AreEqual("Example Movie (2020)/Example Movie (2020) [WEB-1080p] (2).mkv", await host.ScalarAsync(
+                "SELECT file.\"RelativePath\" FROM \"PlaybackSessions\" AS session JOIN \"StoredFiles\" AS file ON file.\"Id\" = session.\"StoredFileId\""));
             Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p] (2).mkv")));
             Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p] (2).en.srt")));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));

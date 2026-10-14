@@ -6,6 +6,9 @@ namespace Jularr.Integrations.Logic.Storage
 {
     internal static class StorageFileSystem
     {
+        // Replaced files wait here inside their library; scans pass it by.
+        public const string RecycleFolder = ".jularr-recycle";
+
         private static readonly EnumerationOptions Options = new()
         {
             AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
@@ -183,7 +186,7 @@ namespace Jularr.Integrations.Logic.Storage
                 foreach (var entry in entries)
                 {
                     var path = relative.Length == 0 ? entry.Name : relative + "/" + entry.Name;
-                    if (entry is DirectoryInfo)
+                    if (entry is DirectoryInfo && entry.Name != RecycleFolder)
                     {
                         pending.Push(path);
                     }

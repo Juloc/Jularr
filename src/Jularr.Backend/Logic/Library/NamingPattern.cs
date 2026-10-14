@@ -36,6 +36,10 @@ namespace Jularr.Backend.Logic.Library
             }
         }
 
+        // Several releases of one film or episode need a file name that tells them apart.
+        public static bool Distinguishes(string pattern) =>
+            Token().Matches(pattern.Split('/')[^1]).Any(match => match.Groups["name"].Value.ToLowerInvariant() is "quality" or "release group" or "edition");
+
         // A path stem below the library root; a folder left empty drops out.
         public static string Apply(string pattern, NamingValues values)
         {

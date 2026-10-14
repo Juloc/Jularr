@@ -21,7 +21,7 @@ using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
 namespace Jularr.Backend.Service.System.Acquisition.V1
 {
     // Shared by every downloader: plan, check, link or copy and assign; waits and failures are recorded the same way.
-    internal sealed class DownloadImport(PlexServer plex, IOptions<StorageOptions> options, TimeProvider time)
+    internal sealed class DownloadImport(PlexServer plex, LibraryReplacements replacements, IOptions<StorageOptions> options, TimeProvider time)
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
@@ -86,15 +86,16 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 }
             }
 
-            await context.ExecuteBatchAsync(async (ctx, token) =>
+            var assets = await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 await ctx.UpsertStoredFilesAsync(new StoredFileBatchData(root.Id, StoredFileLogic.StoredTime(DateTime.UtcNow), JsonSerializer.Serialize(imported)), token);
+                var assigned = new List<long>();
                 foreach (var (relativePath, placement) in media)
                 {
                     if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(root.Id, relativePath), token) is { } file)
                     {
-                        await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber, placement.ParentUnitNumber,
-                            download.GamePlatformId), token);
+                        assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
+                            placement.ParentUnitNumber, download.GamePlatformId), token)).Id);
                     }
                 }
 
@@ -102,8 +103,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
                 // The scan analyses the new streams.
                 await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), token);
-                return true;
+                return assigned;
             }, ct);
+            await replacements.ReplaceAsync(context, assets, ct);
 
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, download.MediaTypeId, ct);

@@ -13,5 +13,6 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly EnumField WorkUnitTypeId = new(typeof(WorkUnitType));
         public static readonly DecimalField UnitNumber = new() { Minimum = 0, Maximum = 999999.999m, Scale = 3 };
         public static readonly StringField UnitTitle = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };
+        public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 1000 };
     }
 }

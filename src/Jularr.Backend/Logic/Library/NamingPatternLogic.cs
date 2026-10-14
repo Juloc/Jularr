@@ -24,6 +24,10 @@ namespace Jularr.Backend.Logic.Library
         public static async Task SaveNamingPatternAsync(this LogicContext ctx, NamingPatternSaveData data, CancellationToken ct)
         {
             NamingPattern.Validate(data.MediaTypeId, data.Pattern, nameof(data.Pattern));
+            if (!NamingPattern.Distinguishes(data.Pattern) && (await ctx.ReadReplacementSettingsAsync(ct)).KeepsReleases)
+            {
+                throw new DataValidationException(nameof(data.Pattern), "naming_needs_release_token");
+            }
 
             // Reject concurrent edits.
             var sql = new SqlStatement();

@@ -7,7 +7,10 @@ embedded as `Jularr.Database.Account.sql` for isolated tests. The host never app
 InstanceSettings (Name, UiLocaleId, Version) and InstanceModules, using the shared English locale as
 its initial language. It is embedded as `Jularr.Database.Instance.sql` for focused
 isolated tests; it is never installed automatically on an existing database.
-Owner services provide version-checked settings/module edits. Library gates manual
+Owner services provide version-checked settings/module edits. InstanceSettings also say
+whether several releases of a film or episode are kept and where replaced files go (a
+recycle folder inside each library, one folder on a storage connection, or deletion) and
+after how many days recycled files leave. Library gates manual
 media/watchlist Services; Profiles (off by default) allows several profiles per account,
 otherwise the view SelectableProfiles offers each account its main profile only; Requests gates request creation/moderation and manual
 Wanted management; Acquisition (Arr+) gates indexers, download clients, search,

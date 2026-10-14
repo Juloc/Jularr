@@ -101,6 +101,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.backup_passphrase", "The passphrase does not open this backup's key ring."),
             new("errors.validation.naming_unknown_token", "The pattern uses an unknown placeholder."),
             new("errors.validation.naming_incomplete", "The pattern needs the title, and for episodes the season and episode."),
+            new("errors.validation.naming_needs_release_token", "Several releases need {Quality}, {Release Group} or {Edition} in every file name."),
             new("errors.validation.naming_invalid_path", "Each folder of the pattern needs a name."),
             new("errors.validation.setup_completed", "Only an instance that has not finished setup can be replaced by a backup."),
             new("errors.validation.backup_incompatible", "This backup belongs to another Jularr version."),
