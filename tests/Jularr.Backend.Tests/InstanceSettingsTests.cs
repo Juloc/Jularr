@@ -90,9 +90,11 @@ namespace Jularr.Backend.Tests
 
             using var changed = await host.SendAsync(HttpMethod.Post, "/Admin/Instance", new Dictionary<string, string>
             {
-                ["__RequestVerificationToken"] = csrf, ["Name"] = "<Home>", ["UiLocaleId"] = "1", ["Version"] = "1"
+                ["__RequestVerificationToken"] = csrf, ["Name"] = "<Home>", ["UiLocaleId"] = "1", ["Version"] = "1", ["HistoryRetentionDays"] = "7", ["HistoryMegabytes"] = "3"
             });
             Assert.AreEqual(HttpStatusCode.Redirect, changed.StatusCode, await changed.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)7, await host.ScalarAsync("SELECT \"HistoryRetentionDays\" FROM \"InstanceSettings\""));
+            Assert.AreEqual(3, await host.ScalarAsync("SELECT \"HistoryMegabytes\" FROM \"InstanceSettings\""));
             using var saved = await host.SendAsync(HttpMethod.Get, "/Admin/Instance");
             StringAssert.Contains(await saved.Content.ReadAsStringAsync(), "&lt;Home&gt;");
 

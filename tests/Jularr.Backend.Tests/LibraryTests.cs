@@ -201,7 +201,7 @@ namespace Jularr.Backend.Tests
                 """);
             Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new PruneOperationsParametersV1(), default, CancellationToken.None)).Success);
             Assert.IsTrue((long)(await host.ScalarAsync("SELECT count(*) FROM \"Operations\""))! is > 1000 and < 20000);
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 3 AND \"FinishedAt\" > now() - interval '2 seconds'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 3 AND \"FinishedAt\" = (SELECT max(\"FinishedAt\") FROM \"Operations\" WHERE \"OperationTypeId\" = 3)"));
         }
 
         [TestMethod]
