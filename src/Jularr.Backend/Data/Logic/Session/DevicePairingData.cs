@@ -5,12 +5,11 @@ namespace Jularr.Backend.Data.Logic.Session
 {
     internal sealed class DevicePairingStartData : BaseData
     {
-        public DevicePairingStartData(string code, string deviceName, string devicePlatform, DateTime expiresAt)
+        public DevicePairingStartData(string code, string deviceName, string devicePlatform)
         {
             Code = code;
             DeviceName = deviceName;
             DevicePlatform = devicePlatform;
-            ExpiresAt = expiresAt;
         }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.Code))]
@@ -21,9 +20,33 @@ namespace Jularr.Backend.Data.Logic.Session
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
         public string DevicePlatform { get; }
+    }
 
-        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.ExpiresAt))]
-        public DateTime ExpiresAt { get; }
+    internal sealed class DevicePairingCodeData : BaseData
+    {
+        public DevicePairingCodeData(string code)
+        {
+            Code = code;
+        }
+
+        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.Code))]
+        public string Code { get; }
+    }
+
+    // What a device calls itself; it names itself, nothing verifies it.
+    internal sealed class DevicePairingDeviceData : BaseData
+    {
+        public DevicePairingDeviceData(string deviceName, string devicePlatform)
+        {
+            DeviceName = deviceName;
+            DevicePlatform = devicePlatform;
+        }
+
+        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
+        public string DeviceName { get; }
+
+        [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
+        public string DevicePlatform { get; }
     }
 
     internal sealed class DevicePairingStartedData : BaseData

@@ -160,6 +160,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<PlexServer>();
             services.TryAddTransient<MediaServers>();
             services.TryAddTransient<LibraryReplacements>();
+            services.TryAddSingleton<DevicePairingAttempts>();
             services.TryAddTransient<BookMetadata>();
             services.TryAddTransient<GameRomIdentification>();
             services.TryAddTransient<AniListMetadata>();

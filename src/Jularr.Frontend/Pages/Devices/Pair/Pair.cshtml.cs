@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.User.Device.V1;
 using Jularr.Backend.Service.User.Device.V1;
@@ -7,10 +8,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Devices.Pair
 {
-    // The code a TV or app shows, confirmed for the signed-in profile; the QR code opens this page with it filled in.
-    public sealed class PairModel(ApproveDevicePairingV1 approve, IAntiforgery antiforgery, UiText texts) : JularrPage
+    // A code a TV or app shows: first the device it belongs to is shown, then it is confirmed for the signed-in profile.
+    // The QR code opens this page with the code filled in.
+    public sealed class PairModel(ReadDevicePairingV1 read, ApproveDevicePairingV1 approve, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
-        private ApproveDevicePairingDataV1? _input;
+        private DevicePairingRequestV1? _device;
+        private bool _failed;
 
         [BindProperty(SupportsGet = true)]
         public string? Code { get; set; }
@@ -19,29 +22,48 @@ namespace Jularr.Frontend.Pages.Devices.Pair
         {
             page.Title("devices.pair.title");
             page.Navigation("nav.settings");
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (TempData["DevicePaired"] is true) page.Content.Add(new P(new Text("devices.pair.done")).Attribute("role", "status"));
+            if (_device is { } device)
+            {
+                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["devices.pair.device"], device.DeviceName, device.DevicePlatform))));
+                page.Content.Add(new Form<ApproveDevicePairingDataV1>(form =>
+                {
+                    form.Hidden(item => item.Code);
+                    form.Submit("devices.pair.submit");
+                }, "/Devices/Pair", csrf, new ApproveDevicePairingDataV1(Code ?? ""), _failed ? FormError : null));
+                return;
+            }
+
             page.Content.Add(new Form<ApproveDevicePairingDataV1>(form =>
             {
                 form.Text(item => item.Code, "devices.pair.code", "one-time-code");
-                form.Submit("devices.pair.submit");
-            }, "/Devices/Pair", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input ?? new ApproveDevicePairingDataV1(Code ?? ""), _input is null ? null : FormError));
+                form.Submit("devices.pair.show");
+            }, "/Devices/Pair?handler=Show", csrf, new ApproveDevicePairingDataV1(Code ?? ""), FormError));
         }
 
-        public IActionResult OnGet()
+        public async Task<IActionResult> OnGetAsync()
         {
             if (!texts.Can("profile.devices", "Devices"))
             {
                 return NotFound();
             }
 
+            if (!string.IsNullOrWhiteSpace(Code))
+            {
+                _device = await read.ExecuteAsync<DevicePairingRequestV1>(new DevicePairingCodeParametersV1(Code), HttpContext.RequestAborted);
+            }
+
             PreparePage();
             return Page();
         }
 
+        public IActionResult OnPostShow() => LocalRedirect("/Devices/Pair?code=" + Uri.EscapeDataString(Code ?? ""));
+
         public async Task<IActionResult> OnPostAsync()
         {
-            _input = new ApproveDevicePairingDataV1(Code ?? "");
-            await approve.ExecuteAsync<UpdateResult>(new ApproveDevicePairingParametersV1(), _input, HttpContext.RequestAborted);
+            _failed = true;
+            await approve.ExecuteAsync<UpdateResult>(new ApproveDevicePairingParametersV1(), new ApproveDevicePairingDataV1(Code ?? ""), HttpContext.RequestAborted);
             TempData["DevicePaired"] = true;
             return LocalRedirect("/Devices/Pair");
         }

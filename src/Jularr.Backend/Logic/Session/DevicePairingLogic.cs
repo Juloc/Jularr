@@ -7,13 +7,10 @@ using Jularr.Backend.Infrastructure.Sql;
 
 namespace Jularr.Backend.Logic.Session
 {
-    // A TV, phone or app is paired like a sign-in on another device: it shows a code, a signed-in profile confirms it,
-    // and the device fetches its own session once.
+    // A TV, phone or app is paired like a sign-in on another device: it shows a code for ten minutes, a signed-in profile confirms it,
+    // and the device fetches its own session once; it lasts and renews like any session.
     internal static class DevicePairingLogic
     {
-        public static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(10);
-        public static readonly TimeSpan DeviceSessionLifetime = TimeSpan.FromDays(365);
-
         public static async Task<DevicePairingStartedData> StartDevicePairingAsync(this LogicContext ctx, string deviceName, string devicePlatform, CancellationToken ct)
         {
             // Codes of expired pairings become free again.
@@ -37,14 +34,14 @@ namespace Jularr.Backend.Logic.Session
                     INSERT INTO
                         "DevicePairings" ("Code", "DeviceName", "DevicePlatform", "ExpiresAt")
                     VALUES
-                        (@Code, @DeviceName, @DevicePlatform, @ExpiresAt)
+                        (@Code, @DeviceName, @DevicePlatform, statement_timestamp() + interval '10 minutes')
                     ON CONFLICT ("Code") DO NOTHING
                     RETURNING
                         "PublicId",
                         "Code",
                         "ExpiresAt";
                     """;
-                sql.Parameters.Add(new DevicePairingStartData(code, deviceName, devicePlatform, DateTime.UtcNow.Add(CodeLifetime)));
+                sql.Parameters.Add(new DevicePairingStartData(code, deviceName, devicePlatform));
                 if (await ctx.ReadOptionalAsync<DevicePairingStartedData>(sql, ct) is { } started)
                 {
                     return started;
@@ -52,6 +49,25 @@ namespace Jularr.Backend.Logic.Session
             }
 
             throw new ServiceUnavailableException("device_pairing_busy");
+        }
+
+        public static Task<DevicePairingDeviceData?> ReadOpenDevicePairingAsync(this LogicContext ctx, DevicePairingCodeData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    pairing."DeviceName",
+                    pairing."DevicePlatform"
+                FROM
+                    "DevicePairings" AS pairing
+                WHERE
+                    pairing."Code" = @Code
+                    AND pairing."ApprovedAccountId" IS NULL
+                    AND pairing."ExpiresAt" > statement_timestamp();
+                """;
+            sql.Parameters.Add(data);
+            return ctx.ReadSql.ReadOptionalAsync<DevicePairingDeviceData>(sql, ct);
         }
 
         public static async Task ApproveDevicePairingAsync(this LogicContext ctx, DevicePairingApprovalData data, CancellationToken ct)
@@ -78,7 +94,7 @@ namespace Jularr.Backend.Logic.Session
         }
 
         // Null while the code waits for its confirmation; an unknown or expired pairing is not found.
-        public static async Task<SessionCredentialsData?> ClaimDevicePairingAsync(this LogicContext ctx, DevicePairingParameters data, CancellationToken ct)
+        public static async Task<SessionCredentialsData?> ClaimDevicePairingAsync(this LogicContext ctx, DevicePairingParameters data, TimeSpan lifetime, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -113,13 +129,14 @@ namespace Jularr.Backend.Logic.Session
                     "Accounts" AS account
                 WHERE
                     account."Id" = @AccountId
-                    AND account."IsEnabled";
+                    AND account."IsEnabled"
+                FOR SHARE;
                 """;
             revision.Parameters.Add(new Data.Logic.Account.AccountParameters(accountId));
             var credentials = await ctx.ReadOptionalAsync<DeviceSessionRevisionData>(revision, ct) ?? throw new KeyNotFoundException("The account is not available.");
 
             var token = SessionLogic.NewToken();
-            var session = new DeviceSessionData(Guid.NewGuid(), accountId, profileId, SHA256.HashData(Encoding.UTF8.GetBytes(token)), DateTime.UtcNow.Add(DeviceSessionLifetime),
+            var session = new DeviceSessionData(Guid.NewGuid(), accountId, profileId, SHA256.HashData(Encoding.UTF8.GetBytes(token)), DateTime.UtcNow.Add(lifetime),
                 pairing.DeviceName, pairing.DevicePlatform);
             var insert = new SqlStatement();
             insert.Statement =
@@ -137,7 +154,10 @@ namespace Jularr.Backend.Logic.Session
             insert.Parameters.Add(session);
             insert.Parameters.Add(credentials);
             insert.Parameters.Add(new DevicePairingIdData(pairing.Id));
-            await ctx.ExecuteAsyncForAffectedRows(insert, ct);
+            if (await ctx.ExecuteAsyncForAffectedRows(insert, ct) != 2)
+            {
+                throw new InvalidOperationException("The device session could not be created.");
+            }
             return new SessionCredentialsData(session.PublicId, accountId, profileId, session.TokenHash, token, credentials.CredentialRevision, session.ExpiresAt);
         }
     }
