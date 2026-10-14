@@ -13,22 +13,22 @@ namespace Jularr.Frontend.Pages.Shared
             var secondary = navigation.Secondary.ToList();
             var mobile = navigation.Mobile.ToList();
 
-            if (texts.Capabilities?.CanReadMedia is true)
+            if (texts.CanReadMedia())
             {
                 var library = new ShellLink("nav.library", "/Library", "library");
                 primary.Add(library);
                 mobile.Insert(1, library);
-                if (texts.Capabilities.CanCollect)
+                if (texts.CanCollect())
                 {
                     primary.Add(new ShellLink("collections.title", "/Collections", "bookmark"));
                 }
 
-                if (texts.Capabilities.CanSeeCalendar)
+                if (texts.CanSeeCalendar())
                 {
                     primary.Add(new ShellLink("calendar.title", "/Calendar", "calendar"));
                 }
 
-                if (texts.Capabilities.CanSeeStatistics)
+                if (texts.CanSeeStatistics())
                 {
                     secondary.Add(new ShellLink("statistics.title", "/Statistics", "activity"));
                 }
@@ -38,29 +38,29 @@ namespace Jularr.Frontend.Pages.Shared
                 mobile.Add(watchlist);
             }
 
-            if (texts.Capabilities?.CanAdminister is true)
+            if (texts.CanAdminister())
             {
                 secondary.Add(new ShellLink("system.title", "/Admin/System", "server"));
             }
 
-            if (texts.Capabilities?.CanManageMedia is true)
+            if (texts.CanManageMedia())
             {
                 secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
                 secondary.Add(new ShellLink("admin.library.title", "/Admin/Library", "library"));
                 secondary.Add(new ShellLink("admin.activity.title", "/Admin/Activity", "settings"));
             }
 
-            if (texts.Capabilities?.CanRequest is true)
+            if (texts.CanRequest())
             {
                 primary.Add(new ShellLink("requests.title", "/Requests", "home"));
             }
 
-            if (texts.Capabilities?.CanManageRequests is true)
+            if (texts.CanManageRequests())
             {
                 secondary.Add(new ShellLink("admin.requests.title", "/Admin/Requests", "settings"));
             }
 
-            if (texts.Capabilities?.CanManageWanted is true)
+            if (texts.CanManageWanted())
             {
                 secondary.Add(new ShellLink("admin.wanted.title", "/Admin/Wanted", "settings"));
             }
@@ -72,13 +72,13 @@ namespace Jularr.Frontend.Pages.Shared
                 new Brand(assets, compact: true),
                 new Nav(new Span(new Text(pageTitleKey)).Attribute("aria-current", "page")).Class("app-header-location").Attribute("aria-label", texts["nav.breadcrumb"])
             };
-            if (texts.Capabilities?.CanReadMedia is true)
+            if (texts.CanReadMedia())
             {
                 header.Add(new SearchBox("/", "search.global", searchQuery, searchType is null ? null : new Dictionary<string, string> { ["type"] = searchType }));
             }
 
             // Inbox with its unread count.
-            if (texts.Capabilities?.CanNotify is true)
+            if (texts.CanNotify())
             {
                 var unread = texts.UnreadNotifications;
                 header.Add(new A([new Icon("bell", assets), .. unread > 0 ? new IUiComponent[] { new Span(new ValueText(unread > 99 ? "99+" : unread.ToString(System.Globalization.CultureInfo.CurrentCulture))).Class("app-notifications__count") } : []])

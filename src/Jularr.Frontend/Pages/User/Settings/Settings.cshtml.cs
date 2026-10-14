@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                     }
 
                     // PIN and deletion belong to the Profiles module.
-                    if (texts.Capabilities?.CanManageProfiles is true)
+                    if (texts.CanManageProfiles())
                     {
                         // A PIN guards switching to this profile.
                         content.Add(new Form<UpdateProfilePinDataV1>(form =>
@@ -133,7 +133,7 @@ namespace Jularr.Frontend.Pages.User.Settings
 
             page.Content.Add(new UiSection("settings.account", [
                 new A(new Text("settings.sessions")).Class("button").Attribute("href", "/Account/Sessions"),
-                .. (texts.Capabilities?.CanManageProfiles is true
+                .. (texts.CanManageProfiles()
                     ? new[] { new A(new Text("account.profile.title")).Class("button").Attribute("href", "/Account/Profiles?returnUrl=%2FSettings") }
                     : []),
                 new A(new Text("account.logout.title")).Class("button").Attribute("href", "/Account/Logout")
@@ -271,7 +271,7 @@ namespace Jularr.Frontend.Pages.User.Settings
                 _profile = await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
                 _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
                 _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
-                if (texts.Capabilities?.CanArrangeHome is true)
+                if (texts.CanArrangeHome())
                 {
                     _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), token);
                 }

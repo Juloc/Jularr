@@ -319,7 +319,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Forbidden, opened.StatusCode);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
             using var capabilities = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
-            Assert.IsFalse((await capabilities.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!.CanRead);
+            CollectionAssert.DoesNotContain((await capabilities.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!.Modules, "Reading");
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"MediaAssets\" WHERE \"Id\" = " + first))!;
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             var html = await details.Content.ReadAsStringAsync();

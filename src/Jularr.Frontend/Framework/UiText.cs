@@ -22,10 +22,15 @@ namespace Jularr.Frontend.Framework
         public string Locale => Catalog.Locale;
         public bool IsRightToLeft => Catalog.IsRightToLeft;
         public string InstanceName => _presentation?.Name ?? throw new InvalidOperationException("The instance presentation was not initialized.");
-        public InstanceCapabilitiesDetailsV1? Capabilities { get; private set; }
+        private InstanceCapabilitiesDetailsV1? _capabilities;
 
         // Unread notices for the shell's bell.
         public int UnreadNotifications { get; private set; }
+
+        // A permission inside enabled modules, as the capability service reports them; nothing for a visitor.
+        public bool Can(string? permission, params string[] modules) => _capabilities is { } capabilities
+            && (permission is null || capabilities.Permissions.Contains(permission, StringComparer.Ordinal))
+            && modules.All(module => capabilities.Modules.Contains(module, StringComparer.Ordinal));
 
         public string this[string key] => Catalog.Texts.TryGetValue(key, out var value)
             ? value
@@ -47,8 +52,8 @@ namespace Jularr.Frontend.Framework
             // Resolve navigation availability once.
             if (authentication.IsAuthenticated)
             {
-                Capabilities = await capabilitiesService.ExecuteAsync<InstanceCapabilitiesDetailsV1>(new ReadInstanceCapabilitiesParametersV1(), token);
-                if (Capabilities.CanNotify)
+                _capabilities = await capabilitiesService.ExecuteAsync<InstanceCapabilitiesDetailsV1>(new ReadInstanceCapabilitiesParametersV1(), token);
+                if (this.CanNotify())
                 {
                     UnreadNotifications = (await unreadService.ExecuteAsync<UnreadNotificationsV1>(new NotificationsParametersV1(), token)).UnreadCount;
                 }

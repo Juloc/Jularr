@@ -116,7 +116,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
         protected override async Task LoadDataAsync()
         {
             _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
-            if (texts.Capabilities?.CanGroupUnits is true)
+            if (texts.CanGroupUnits())
             {
                 _groups = await readGroups.ExecuteAsync<BaseDataList<WorkUnitGroupV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             }

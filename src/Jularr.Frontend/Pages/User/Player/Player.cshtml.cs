@@ -36,7 +36,7 @@ namespace Jularr.Frontend.Pages.User.Player
                     "/api/v1/playback/assets/" + asset + "/subtitles/",
                     item.PreviousMediaAssetId is { } previous ? "/Player/" + previous.ToString(CultureInfo.InvariantCulture) : null,
                     item.NextMediaAssetId is { } next ? "/Player/" + next.ToString(CultureInfo.InvariantCulture) : null,
-                    texts.Capabilities?.CanPreviewSeeking is true ? "/api/v1/playback/assets/" + asset + "/trickplay" : null);
+                    texts.CanPreviewSeeking() ? "/api/v1/playback/assets/" + asset + "/trickplay" : null);
                 page.Content.Add(new UiPlayer(source, assets));
             }
             else if (FormError is not null)

@@ -271,7 +271,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
         private static string Size(long? bytes) => bytes is { } size ? ByteSize.Format(size) : "";
 
-        private bool CanAcquire => texts.Capabilities?.CanAcquire is true;
+        private bool CanAcquire => texts.CanAcquire();
 
         private string SelectedTab => Tab is HistoryTab ? Tab : Tab is CurrentTab || !CanAcquire ? CurrentTab : SearchTab;
 

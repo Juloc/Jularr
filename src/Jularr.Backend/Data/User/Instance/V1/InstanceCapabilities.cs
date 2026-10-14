@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Fields.Instance;
 
 namespace Jularr.Backend.Data.User.Instance.V1
 {
@@ -8,75 +9,18 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
-        public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
-            bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect, bool canSeeCalendar, bool canSeeStatistics, bool canAdminister, bool canManageStorage,
-            bool canGroupUnits, bool canArrangeHome, bool canPreviewSeeking)
+        public InstanceCapabilitiesDetailsV1(string[] permissions, string[] modules)
         {
-            CanPreviewSeeking = canPreviewSeeking;
-            CanArrangeHome = canArrangeHome;
-            CanGroupUnits = canGroupUnits;
-            CanAdminister = canAdminister;
-            CanManageStorage = canManageStorage;
-            CanSeeStatistics = canSeeStatistics;
-            CanSeeCalendar = canSeeCalendar;
-            CanCollect = canCollect;
-            CanNotify = canNotify;
-            CanPlayGames = canPlayGames;
-            CanRead = canRead;
-            CanManageProfiles = canManageProfiles;
-            CanReadMedia = canReadMedia;
-            CanManageMedia = canManageMedia;
-            CanUpdateWatchlist = canUpdateWatchlist;
-            CanRequest = canRequest;
-            CanManageRequests = canManageRequests;
-            CanManageWanted = canManageWanted;
-            CanAcquire = canAcquire;
-            CanPlay = canPlay;
+            Permissions = permissions;
+            Modules = modules;
         }
 
-        public bool CanReadMedia { get; }
-        public bool CanManageMedia { get; }
-        public bool CanUpdateWatchlist { get; }
-        public bool CanRequest { get; }
-        public bool CanManageRequests { get; }
-        public bool CanManageWanted { get; }
-        public bool CanAcquire { get; }
-        public bool CanPlay { get; }
+        // The caller's verified grants.
+        [DataField(typeof(CapabilityFields), nameof(CapabilityFields.Permissions))]
+        public string[] Permissions { get; }
 
-        // Book processing and the reader are switched on.
-        public bool CanRead { get; }
-
-        // Several profiles with picker and PIN; otherwise each account uses its main profile.
-        public bool CanManageProfiles { get; }
-
-        // Retro games play in the browser.
-        public bool CanPlayGames { get; }
-
-        // The profile has an inbox.
-        public bool CanNotify { get; }
-
-        // The profile keeps its own collections.
-        public bool CanCollect { get; }
-
-        // Upcoming releases of the profile's Works.
-        public bool CanSeeCalendar { get; }
-
-        // The profile's own history in numbers.
-        public bool CanSeeStatistics { get; }
-
-        // Instance settings and the system overview.
-        public bool CanAdminister { get; }
-
-        // Library files move on the storage, e.g. through renames.
-        public bool CanManageStorage { get; }
-
-        // Staff name sections of a Work's units.
-        public bool CanGroupUnits { get; }
-
-        // The profile orders and hides its home shelves.
-        public bool CanArrangeHome { get; }
-
-        // The player shows thumbnails while seeking.
-        public bool CanPreviewSeeking { get; }
+        // Enabled modules that can work here.
+        [DataField(typeof(CapabilityFields), nameof(CapabilityFields.Modules))]
+        public string[] Modules { get; }
     }
 }

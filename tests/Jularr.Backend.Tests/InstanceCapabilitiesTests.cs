@@ -30,11 +30,8 @@ namespace Jularr.Backend.Tests
 
             using var before = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
             var capabilities = (await before.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!;
-            Assert.IsTrue(capabilities.CanReadMedia);
-            Assert.IsTrue(capabilities.CanManageMedia);
-            Assert.IsTrue(capabilities.CanUpdateWatchlist);
-            Assert.IsTrue(capabilities.CanAdminister);
-            Assert.IsTrue(capabilities.CanManageStorage);
+            CollectionAssert.IsSubsetOf(new[] { "profile.media.read", "media.manual.update", "profile.watchlist.update", "instance.settings.read", "storage.update" }, capabilities.Permissions);
+            CollectionAssert.Contains(capabilities.Modules, "Library");
 
             // Disable through the canonical writer.
             using var disabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/1", new UpdateInstanceModuleDataV1(false, 1));
@@ -56,11 +53,8 @@ namespace Jularr.Backend.Tests
 
             using var after = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
             capabilities = (await after.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!;
-            Assert.IsFalse(capabilities.CanReadMedia);
-            Assert.IsFalse(capabilities.CanManageMedia);
-            Assert.IsFalse(capabilities.CanUpdateWatchlist);
-            Assert.IsTrue(capabilities.CanAdminister);
-            Assert.IsFalse(capabilities.CanManageStorage);
+            CollectionAssert.DoesNotContain(capabilities.Modules, "Library");
+            CollectionAssert.Contains(capabilities.Permissions, "instance.settings.read");
 
             // Re-enable without recreating media.
             using var enabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/1", new UpdateInstanceModuleDataV1(true, 2));
@@ -74,16 +68,16 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"AccountSessions\" SET \"ActiveProfileId\" = NULL");
             using var noProfile = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
             capabilities = (await noProfile.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!;
-            Assert.IsFalse(capabilities.CanReadMedia);
-            Assert.IsFalse(capabilities.CanUpdateWatchlist);
-            Assert.IsTrue(capabilities.CanManageMedia);
+            CollectionAssert.DoesNotContain(capabilities.Permissions, "profile.media.read");
+            CollectionAssert.DoesNotContain(capabilities.Permissions, "profile.watchlist.update");
+            CollectionAssert.Contains(capabilities.Permissions, "media.manual.update");
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var managerDenied = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/1", new UpdateInstanceModuleDataV1(false, 3));
             Assert.AreEqual(HttpStatusCode.Forbidden, managerDenied.StatusCode);
             using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
             capabilities = (await manager.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!;
-            Assert.IsFalse(capabilities.CanAdminister);
-            Assert.IsFalse(capabilities.CanManageStorage);
+            CollectionAssert.DoesNotContain(capabilities.Permissions, "instance.settings.read");
+            CollectionAssert.DoesNotContain(capabilities.Permissions, "storage.update");
         }
 
         [TestMethod]

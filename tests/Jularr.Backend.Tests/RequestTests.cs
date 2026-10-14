@@ -250,8 +250,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
             using var capabilities = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
             using var state = JsonDocument.Parse(await capabilities.Content.ReadAsStringAsync());
-            Assert.IsFalse(state.RootElement.GetProperty("canRequest").GetBoolean());
-            Assert.IsFalse(state.RootElement.GetProperty("canManageWanted").GetBoolean());
+            Assert.IsFalse(state.RootElement.GetProperty("modules").EnumerateArray().Any(module => module.GetString() == "Requests"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionRequests\""));
         }
 

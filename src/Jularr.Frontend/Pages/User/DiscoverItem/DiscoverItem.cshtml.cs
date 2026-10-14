@@ -71,7 +71,7 @@ namespace Jularr.Frontend.Pages.User.DiscoverItem
         protected override async Task LoadDataAsync()
         {
             _item = await read.ExecuteAsync<DiscoverItemV1>(Parameters(), default, HttpContext.RequestAborted);
-            if (texts.Capabilities?.CanRequest is true)
+            if (texts.CanRequest())
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
             }

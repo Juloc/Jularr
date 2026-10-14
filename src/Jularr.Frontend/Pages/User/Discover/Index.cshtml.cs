@@ -56,7 +56,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             page.Title("discover.title");
             page.Navigation("nav.home");
-            if (texts.Capabilities?.CanReadMedia is not true)
+            if (!texts.CanReadMedia())
             {
                 return;
             }
@@ -120,7 +120,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             // Watching, listening and reading continue on their own shelves, in the profile's order.
             var continuing = _continue.Where(item => selected.Slug is null || item.MediaTypeId == selected.Type).ToList();
-            var canPlay = texts.Capabilities?.CanPlay is true;
+            var canPlay = texts.CanPlay();
             foreach (var shelf in _layout.Where(shelf => !shelf.IsHidden))
             {
                 page.Content.Add(shelf.HomeShelfTypeId switch
@@ -128,7 +128,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     HomeShelfType.ContinueWatching => ContinueShelf("discover.continueWatching", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Video) : []),
                     HomeShelfType.ContinueListening => ContinueShelf("discover.continueListening", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Audio) : []),
                     HomeShelfType.ContinueReading => ContinueShelf("media.continueReading",
-                        texts.Capabilities?.CanRead is true ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
+                        texts.CanRead() ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
                     HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title,
                         "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]),
                     _ => Recommendations(selected.Slug)
@@ -197,7 +197,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         public async Task<IActionResult> OnGetResultsAsync()
         {
-            if (texts.Capabilities?.CanReadMedia is not true) return Forbid();
+            if (!texts.CanReadMedia()) return Forbid();
 
             await LoadDataAsync();
             PreparePage();
@@ -206,7 +206,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         public async Task<IActionResult> OnGetRecommendationsAsync()
         {
-            if (texts.Capabilities?.CanReadMedia is not true) return Forbid();
+            if (!texts.CanReadMedia()) return Forbid();
             await LoadRecommendationsAsync();
 
             // Native navigation keeps full SSR.
@@ -228,7 +228,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         protected override async Task LoadDataAsync()
         {
-            if (texts.Capabilities?.CanReadMedia is not true)
+            if (!texts.CanReadMedia())
             {
                 return;
             }
@@ -258,13 +258,13 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             // Local shelves never wait for the provider.
-            if (texts.Capabilities?.CanArrangeHome is true)
+            if (texts.CanArrangeHome())
             {
                 _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted);
             }
 
             var shown = _layout.Where(shelf => !shelf.IsHidden).Select(shelf => shelf.HomeShelfTypeId).ToHashSet();
-            if ((texts.Capabilities?.CanPlay is true || texts.Capabilities?.CanRead is true)
+            if ((texts.CanPlay() || texts.CanRead())
                 && shown.Overlaps([HomeShelfType.ContinueWatching, HomeShelfType.ContinueListening, HomeShelfType.ContinueReading]))
             {
                 _continue = await continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted);
@@ -319,9 +319,9 @@ namespace Jularr.Frontend.Pages.User.Discover
         // The canonical next step: use what exists, request what is missing.
         private (string? Key, string? Href) Action(DiscoverItemV1 item) => item.MediaStateTypeId switch
         {
-            MediaStateType.Available when item.PlexUrl is { } plex && texts.Capabilities?.CanPlay is not true => ("media.openInPlex", plex),
+            MediaStateType.Available when item.PlexUrl is { } plex && !texts.CanPlay() => ("media.openInPlex", plex),
             MediaStateType.Available => ("media.watch", DetailsHref(item)),
-            MediaStateType.NotRequested when texts.Capabilities?.CanRequest is true => ("request.create", DetailsHref(item)),
+            MediaStateType.NotRequested when texts.CanRequest() => ("request.create", DetailsHref(item)),
             _ => (null, null)
         };
 

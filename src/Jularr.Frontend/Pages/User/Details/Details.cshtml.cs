@@ -46,7 +46,7 @@ namespace Jularr.Frontend.Pages.User.Details
             {
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 // Plex plays what Jularr cannot play here.
-                var plex = work.PlexUrl is not null && (texts.Capabilities?.CanPlay is not true || _availability?.Items.Any(item => item.IsAvailable) is not true) ? work.PlexUrl : null;
+                var plex = work.PlexUrl is not null && (!texts.CanPlay() || _availability?.Items.Any(item => item.IsAvailable) is not true) ? work.PlexUrl : null;
                 var playable = _availability?.Items.Where(CanOpen).OrderByDescending(item => item.ResumePositionMs is > 0 && !item.IsCompleted).FirstOrDefault();
                 var actionKey = plex is null ? null : "media.openInPlex";
                 var actionHref = plex;
@@ -182,8 +182,8 @@ namespace Jularr.Frontend.Pages.User.Details
             return new A(label).Class("button").Attribute("href", PlayHref(item));
         }
 
-        private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (item.MediaAssetTypeId == MediaAssetType.Game ? item.IsEmulated && texts.Capabilities?.CanPlayGames is true
-            : IsReadable(item) ? texts.Capabilities?.CanRead is true : texts.Capabilities?.CanPlay is true);
+        private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (item.MediaAssetTypeId == MediaAssetType.Game ? item.IsEmulated && texts.CanPlayGames()
+            : IsReadable(item) ? texts.CanRead() : texts.CanPlay());
 
         private static string PlayKey(WorkAvailabilityV1 item) => IsReadable(item) ? "details.read"
             : item.IsCompleted ? "details.playAgain" : item.ResumePositionMs is > 0 ? "media.continue" : "details.play";
@@ -222,11 +222,11 @@ namespace Jularr.Frontend.Pages.User.Details
         {
             _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
-            if (texts.Capabilities?.CanCollect is true)
+            if (texts.CanCollect())
             {
                 _collections = await readCollections.ExecuteAsync<BaseDataList<WorkCollectionV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             }
-            if (texts.Capabilities?.CanRequest is true)
+            if (texts.CanRequest())
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
                 _requestProfiles = await readRequestProfiles.ExecuteAsync<BaseDataList<RequestProfileOptionV1>>(new CreateRequestParametersV1(Id), HttpContext.RequestAborted);

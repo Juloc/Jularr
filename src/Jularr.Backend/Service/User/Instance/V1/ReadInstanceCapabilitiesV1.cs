@@ -35,44 +35,11 @@ namespace Jularr.Backend.Service.User.Instance.V1
                     "InstanceModules" AS module;
                 """;
             var modules = await Context.ReadSql.ReadListAsync<InstanceModuleData>(sql, CancellationToken);
-            var library = modules.Any(module => module.Key == "Library" && module.IsEnabled);
-            var requests = modules.Any(module => module.Key == "Requests" && module.IsEnabled);
-            var acquisition = modules.Any(module => module.Key == "Acquisition" && module.IsEnabled);
-            var playback = modules.Any(module => module.Key == "Playback" && module.IsEnabled);
-            var reading = modules.Any(module => module.Key == "Reading" && module.IsEnabled);
-            var profiles = modules.Any(module => module.Key == "Profiles" && module.IsEnabled);
-            var emulation = modules.Any(module => module.Key == "Emulation" && module.IsEnabled);
-            var notifications = modules.Any(module => module.Key == "Notifications" && module.IsEnabled);
-            var collections = modules.Any(module => module.Key == "Collections" && module.IsEnabled);
-            var calendar = modules.Any(module => module.Key == "Calendar" && module.IsEnabled);
-            var statistics = modules.Any(module => module.Key == "Statistics" && module.IsEnabled);
-            var unitGroups = modules.Any(module => module.Key == "UnitGroups" && module.IsEnabled);
-            var homeLayout = modules.Any(module => module.Key == "HomeLayout" && module.IsEnabled);
-            var trickplay = modules.Any(module => module.Key == "Trickplay" && module.IsEnabled);
 
-            // Reuse verified central grants.
+            // Seek thumbnails also need their folder.
+            var usable = modules.Where(module => module.IsEnabled && (module.Key != "Trickplay" || _media.TrickplayPath is not null)).Select(module => module.Key);
             var permissions = ServiceGate.GetPermissions(Auth.AccountId, Auth.ProfileId, Auth.ProfileOwnerAccountId, Auth.AccountRoleTypeId);
-            return new InstanceCapabilitiesDetailsV1(
-                library && permissions.Contains("profile.media.read", StringComparer.Ordinal),
-                library && permissions.Contains("media.manual.update", StringComparer.Ordinal),
-                library && permissions.Contains("profile.watchlist.update", StringComparer.Ordinal),
-                requests && permissions.Contains("profile.requests.update", StringComparer.Ordinal),
-                requests && permissions.Contains("requests.update", StringComparer.Ordinal),
-                requests && permissions.Contains("wanted.update", StringComparer.Ordinal),
-                requests && acquisition && permissions.Contains("wanted.update", StringComparer.Ordinal),
-                library && playback && permissions.Contains("profile.playback", StringComparer.Ordinal),
-                library && reading && permissions.Contains("profile.media.read", StringComparer.Ordinal),
-                profiles,
-                library && emulation && permissions.Contains("profile.playback", StringComparer.Ordinal),
-                notifications && permissions.Contains("profile.notifications", StringComparer.Ordinal),
-                library && collections && permissions.Contains("profile.collections", StringComparer.Ordinal),
-                library && calendar && permissions.Contains("profile.media.read", StringComparer.Ordinal),
-                library && statistics && permissions.Contains("profile.media.read", StringComparer.Ordinal),
-                permissions.Contains("instance.settings.read", StringComparer.Ordinal),
-                library && permissions.Contains("storage.update", StringComparer.Ordinal),
-                library && unitGroups && permissions.Contains("media.manual.update", StringComparer.Ordinal),
-                library && homeLayout && permissions.Contains("profile.self.update", StringComparer.Ordinal),
-                library && playback && trickplay && _media.TrickplayPath is not null && permissions.Contains("profile.playback", StringComparer.Ordinal));
+            return new InstanceCapabilitiesDetailsV1([.. permissions], [.. usable]);
         }
     }
 }

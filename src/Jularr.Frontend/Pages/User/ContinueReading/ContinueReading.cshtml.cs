@@ -13,7 +13,7 @@ namespace Jularr.Frontend.Pages.User.ContinueReading
     {
         public async Task<IActionResult> OnGetAsync()
         {
-            if (texts.Capabilities?.CanRead is not true) return new NoContentResult();
+            if (!texts.CanRead()) return new NoContentResult();
 
             var items = await continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted);
             if (items.FirstOrDefault(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) is not { } item) return new NoContentResult();

@@ -173,7 +173,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
             if (hasNext) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(current + 1)));
         }
 
-        private bool CanRename => texts.Capabilities?.CanManageStorage is true;
+        private bool CanRename => texts.CanManageStorage();
 
         private string Address(int? pageNumber = null, LibraryTab? tab = null, string? handler = null) =>
             "/Admin/Library?Tab=" + (tab ?? Tab) + "&PageNumber=" + (pageNumber ?? (tab is null ? PageNumber : 1)).ToString(CultureInfo.InvariantCulture)

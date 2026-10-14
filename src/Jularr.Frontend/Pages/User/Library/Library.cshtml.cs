@@ -81,7 +81,7 @@ namespace Jularr.Frontend.Pages.User.Library
 
         protected override async Task LoadDataAsync()
         {
-            if (texts.Capabilities?.CanReadMedia is not true)
+            if (!texts.CanReadMedia())
             {
                 return;
             }
