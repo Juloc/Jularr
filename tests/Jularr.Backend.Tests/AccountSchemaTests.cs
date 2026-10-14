@@ -43,7 +43,8 @@ namespace Jularr.Backend.Tests
                 ["AuthChallengePurposeTypes"] = typeof(AuthChallengePurposeTypeFields),
                 ["AccountAuthChallenges"] = typeof(AccountAuthChallengeFields),
                 ["AccountExternalAuthFlows"] = typeof(AccountExternalAuthFlowFields),
-                ["AccountSessions"] = typeof(AccountSessionFields)
+                ["AccountSessions"] = typeof(AccountSessionFields),
+                ["DevicePairings"] = typeof(DevicePairingFields)
             };
             var databaseTypes = new Dictionary<string, NpgsqlDbType>
             {

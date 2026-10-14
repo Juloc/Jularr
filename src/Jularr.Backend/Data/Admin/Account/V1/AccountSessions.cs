@@ -21,12 +21,14 @@ namespace Jularr.Backend.Data.Admin.Account.V1
 
     public sealed class AccountSessionDetailsV1 : BaseResponse
     {
-        public AccountSessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent)
+        public AccountSessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent, string? deviceName, string? devicePlatform)
         {
             Id = id;
             CreatedAt = createdAt;
             ExpiresAt = expiresAt;
             IsCurrent = isCurrent;
+            DeviceName = deviceName;
+            DevicePlatform = devicePlatform;
         }
 
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
@@ -39,6 +41,12 @@ namespace Jularr.Backend.Data.Admin.Account.V1
         public DateTime ExpiresAt { get; }
 
         public bool IsCurrent { get; }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName))]
+        public string? DeviceName { get; }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DevicePlatform))]
+        public string? DevicePlatform { get; }
     }
 
     public sealed class RevokeAccountSessionParametersV1 : BaseParameters

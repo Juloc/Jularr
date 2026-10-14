@@ -1,3 +1,5 @@
+using NpgsqlTypes;
+
 namespace Jularr.Backend.Data.Fields.Account
 {
     public static class AccountSessionFields
@@ -14,5 +16,7 @@ namespace Jularr.Backend.Data.Fields.Account
         public static readonly LongField CredentialRevision = new() { Minimum = 1 };
         public static readonly LongField RotationRevision = new() { Minimum = 1 };
         public static readonly DateTimeField RotatedAt = new() { Required = false };
+        public static readonly StringField DeviceName = new(NpgsqlDbType.Varchar) { MaximumLength = 100, Required = false, AllowBlank = false, Trim = true };
+        public static readonly StringField DevicePlatform = new(NpgsqlDbType.Varchar) { MaximumLength = 32, Required = false, AllowBlank = false, Trim = true };
     }
 }

@@ -110,7 +110,7 @@ namespace Jularr.Backend.Logic.Session
             }
 
             // Replace both identifier and secret.
-            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var token = NewToken();
             var credentials = new SessionCredentialsData(Guid.NewGuid(), target.AccountId, profile.ProfileId, SHA256.HashData(Encoding.UTF8.GetBytes(token)),
                 token, profile.CredentialRevision, profile.ExpiresAt, checked(proof.SessionRevision + 1));
 
@@ -193,7 +193,7 @@ namespace Jularr.Backend.Logic.Session
             var profileId = profile?.Id;
 
             // Issue a separate secret.
-            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var token = NewToken();
             var credentials = new SessionCredentialsData(Guid.NewGuid(), account.Id, profileId,
                 SHA256.HashData(Encoding.UTF8.GetBytes(token)), token, account.CredentialRevision, DateTime.UtcNow.Add(lifetime));
 
@@ -262,5 +262,8 @@ namespace Jularr.Backend.Logic.Session
             return await ctx.ReadOptionalAsync<SessionAuthenticationData>(sql, ct)
                 ?? throw new UnauthorizedAccessException("The profile session is unavailable.");
         }
+
+        // A session secret: 32 random bytes, URL-safe.
+        public static string NewToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 }

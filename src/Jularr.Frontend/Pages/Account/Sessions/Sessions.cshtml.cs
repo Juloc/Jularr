@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                 foreach (var session in _sessions.Items)
                 {
                     page.Content.Add(new UiSection(session.IsCurrent ? "session.current" : "session.other", [
+                        .. (session.DeviceName is { } device ? new IUiComponent[] { new P(new ValueText(device + " · " + session.DevicePlatform)) } : []),
                         new P(new Text("session.created"), new ValueText(session.CreatedAt.ToString("u", CultureInfo.InvariantCulture))),
                         new P(new Text("session.expires"), new ValueText(session.ExpiresAt.ToString("u", CultureInfo.InvariantCulture))),
                         new Form<RevokeSessionParametersV1>(form =>

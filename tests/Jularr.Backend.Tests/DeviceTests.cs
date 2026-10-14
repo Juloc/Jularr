@@ -1,0 +1,83 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.RegularExpressions;
+using Jularr.Backend.Data;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Public.Device.V1;
+using Jularr.Backend.Data.User.Device.V1;
+using Jularr.Backend.Data.User.Session.V1;
+
+namespace Jularr.Backend.Tests
+{
+    [TestClass]
+    public sealed class DeviceTests
+    {
+        [TestMethod]
+        public async Task Pairing_ConfirmedCode_GivesTheDeviceItsOwnSessionOnce()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+
+            // Off by default.
+            using var off = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/pairings", new StartDevicePairingDataV1("Living room TV", "AndroidTV"));
+            Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Devices'");
+
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/devices/pairings", new StartDevicePairingDataV1("Living room TV", "AndroidTV"));
+            Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            var pairing = (await started.Content.ReadFromJsonAsync<DevicePairingStartedV1>())!;
+            StringAssert.Matches(pairing.Code, new Regex("^[0-9]{6}$"));
+            var claimRoute = "/api/v1/devices/pairings/" + pairing.PairingId + "/claim";
+
+            // Waiting until a signed-in profile confirms; a wrong code changes nothing.
+            using var waiting = await host.SendAsync(HttpMethod.Post, claimRoute);
+            Assert.IsFalse((await waiting.Content.ReadFromJsonAsync<DevicePairingClaimV1>())!.IsPaired);
+            var wrongCode = pairing.Code == "000000" ? "000001" : "000000";
+            using var wrong = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(wrongCode));
+            StringAssert.Contains(await wrong.Content.ReadAsStringAsync(), "invalid_code");
+            using var approved = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(pairing.Code));
+            Assert.AreEqual(HttpStatusCode.OK, approved.StatusCode, await approved.Content.ReadAsStringAsync());
+
+            // The device fetches its session once; it carries the device and the confirming profile.
+            using var paired = await host.SendAsync(HttpMethod.Post, claimRoute);
+            Assert.IsTrue((await paired.Content.ReadFromJsonAsync<DevicePairingClaimV1>())!.IsPaired);
+            Assert.AreEqual(101L, await host.ScalarAsync("SELECT \"ActiveProfileId\" FROM \"AccountSessions\" WHERE \"DeviceName\" = 'Living room TV'"));
+            using var again = await host.SendAsync(HttpMethod.Post, claimRoute);
+            Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
+            using var sessions = await host.SendAsync(HttpMethod.Get, "/api/v1/sessions?pageSize=100");
+            var device = (await sessions.Content.ReadFromJsonAsync<PageResult<SessionDetailsV1>>())!.Items.Single(session => session.DeviceName is not null);
+            Assert.AreEqual(("Living room TV", "AndroidTV"), (device.DeviceName, device.DevicePlatform));
+        }
+
+        [TestMethod]
+        public async Task LinkPage_ShowsCodeAndQrUntilThePhoneConfirms()
+        {
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            using var off = await host.SendAsync(HttpMethod.Get, "/Devices/Link");
+            Assert.AreEqual(HttpStatusCode.NotFound, off.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Devices'");
+
+            using var start = await host.SendAsync(HttpMethod.Get, "/Devices/Link");
+            Assert.AreEqual(HttpStatusCode.Redirect, start.StatusCode);
+            var link = start.Headers.Location!.OriginalString;
+            var code = Regex.Match(link, "code=([0-9]{6})").Groups[1].Value;
+            using var shown = await host.SendAsync(HttpMethod.Get, link);
+            var html = await shown.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, shown.StatusCode, html);
+            StringAssert.Contains(html, code);
+            StringAssert.Contains(html, "<svg");
+            Assert.AreEqual("3", shown.Headers.GetValues("Refresh").Single());
+
+            // The QR code leads to the pairing form with the code filled in.
+            using var form = await host.SendAsync(HttpMethod.Get, "/Devices/Pair?code=" + code);
+            StringAssert.Contains(await form.Content.ReadAsStringAsync(), "value=\"" + code + "\"");
+            using var approved = await host.SendAsync(HttpMethod.Put, "/api/v1/devices/approvals", new ApproveDevicePairingDataV1(code));
+            Assert.AreEqual(HttpStatusCode.OK, approved.StatusCode, await approved.Content.ReadAsStringAsync());
+            using var signedIn = await host.SendAsync(HttpMethod.Get, link);
+            Assert.AreEqual(HttpStatusCode.Redirect, signedIn.StatusCode);
+            Assert.AreEqual("/", signedIn.Headers.Location!.OriginalString);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
+        }
+    }
+}

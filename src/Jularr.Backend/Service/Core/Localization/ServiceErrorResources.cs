@@ -53,6 +53,8 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.media_server_authentication_failed", "The media server refused the API key."),
             new("errors.media_server_invalid_response", "The media server returned an invalid response."),
             new("errors.media_server_outdated", "Jellyfin 10.9 or newer is needed."),
+            new("errors.device_pairing_busy", "No pairing code is free right now; try again in a minute."),
+            new("errors.validation.invalid_code", "This code is unknown or has expired."),
             new("errors.acquisition_unavailable", "The indexer or download client could not be reached."),
             new("errors.acquisition_authentication_failed", "The indexer or download client rejected the API key."),
             new("errors.acquisition_rate_limited", "The indexer limits requests right now. Please try again later."),

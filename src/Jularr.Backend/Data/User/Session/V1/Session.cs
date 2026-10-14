@@ -21,12 +21,14 @@ namespace Jularr.Backend.Data.User.Session.V1
 
     public sealed class SessionDetailsV1 : BaseResponse
     {
-        public SessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent)
+        public SessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent, string? deviceName, string? devicePlatform)
         {
             Id = id;
             CreatedAt = createdAt;
             ExpiresAt = expiresAt;
             IsCurrent = isCurrent;
+            DeviceName = deviceName;
+            DevicePlatform = devicePlatform;
         }
 
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
@@ -39,6 +41,13 @@ namespace Jularr.Backend.Data.User.Session.V1
         public DateTime ExpiresAt { get; }
 
         public bool IsCurrent { get; }
+
+        // A paired device; browser sign-ins have none.
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName))]
+        public string? DeviceName { get; }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DevicePlatform))]
+        public string? DevicePlatform { get; }
     }
 
     public sealed class RevokeSessionParametersV1 : BaseParameters

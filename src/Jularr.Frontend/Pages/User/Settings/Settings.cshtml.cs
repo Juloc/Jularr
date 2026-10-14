@@ -141,6 +141,7 @@ namespace Jularr.Frontend.Pages.User.Settings
 
             page.Content.Add(new UiSection("settings.account", [
                 new A(new Text("settings.sessions")).Class("button").Attribute("href", "/Account/Sessions"),
+                .. (texts.Can("profile.devices", "Devices") ? new[] { new A(new Text("devices.pair.title")).Class("button").Attribute("href", "/Devices/Pair") } : []),
                 .. (texts.CanManageProfiles()
                     ? new[] { new A(new Text("account.profile.title")).Class("button").Attribute("href", "/Account/Profiles?returnUrl=%2FSettings") }
                     : []),

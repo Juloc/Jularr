@@ -109,7 +109,7 @@ Included tables:
 - UiTranslationMessages, UiTranslations and UiTranslationStatusTypes share UiLocales.
 - AccountPasswords, AccountPasskeys, AccountTotpFactors and AccountRecoveryCodes.
 - Providers, AccountExternalLogins and AccountExternalAuthFlows.
-- AccountSessions, AccountAuthChallenges and AuthChallengePurposeTypes.
+- AccountSessions (paired devices carry their name and platform), DevicePairings, AccountAuthChallenges and AuthChallengePurposeTypes.
 - InstanceSetupState records first-Owner creation permanently; it is not a second account registry.
 
 The original CLEAN_CUT_DATABASE snapshot supplied by the owner defines the scope;

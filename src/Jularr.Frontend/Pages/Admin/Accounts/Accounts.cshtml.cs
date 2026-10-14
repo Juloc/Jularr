@@ -134,7 +134,8 @@ namespace Jularr.Frontend.Pages.Admin.Accounts
                     split.Secondary.Add(new H2(new Text("settings.sessions")));
                     foreach (var session in _sessions?.Items ?? [])
                     {
-                        split.Secondary.Add(new P(new Text(session.IsCurrent ? "session.current" : "session.other"), new Span(new ValueText(" · " + session.CreatedAt.ToString("u", CultureInfo.InvariantCulture)))));
+                        split.Secondary.Add(new P(new Text(session.IsCurrent ? "session.current" : "session.other"),
+                            new Span(new ValueText((session.DeviceName is { } device ? " · " + device + " (" + session.DevicePlatform + ")" : "") + " · " + session.CreatedAt.ToString("u", CultureInfo.InvariantCulture)))));
                         split.Secondary.Add(new Form<RevokeAccountSessionParametersV1>(form =>
                         {
                             form.Hidden(item => item.SessionPublicId);

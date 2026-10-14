@@ -27,7 +27,9 @@ namespace Jularr.Backend.Service.User.Session.V1
                     session."PublicId" AS "Id",
                     session."CreatedAt",
                     session."ExpiresAt",
-                    (session."PublicId" = @SessionPublicId) AS "IsCurrent"
+                    (session."PublicId" = @SessionPublicId) AS "IsCurrent",
+                    session."DeviceName",
+                    session."DevicePlatform"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
