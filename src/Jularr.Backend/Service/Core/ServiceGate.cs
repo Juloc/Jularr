@@ -178,8 +178,14 @@ namespace Jularr.Backend.Service.Core
                 return [];
             }
 
-            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select", "session.profile.create",
+            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select",
                 "instance.capabilities.read" };
+
+            // A paired device switches profiles but neither creates nor deletes them.
+            if (!isDevice)
+            {
+                permissions.Add("session.profile.create");
+            }
 
             // Manual media management only.
             if (accountRoleTypeId is AccountRoleType.Owner or AccountRoleType.MediaManager)
@@ -208,6 +214,10 @@ namespace Jularr.Backend.Service.Core
                 if (ownerAccountId == accountId)
                 {
                     permissions.Add("profile.self.update");
+                    if (!isDevice)
+                    {
+                        permissions.Add("profile.self.delete");
+                    }
                 }
             }
 

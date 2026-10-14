@@ -482,6 +482,7 @@ namespace Jularr.Backend.Tests
 
                 var app = builder.Build();
                 app.UseExceptionHandler();
+                app.UseTrustedProxies();
                 app.UseRateLimiter();
                 app.UseAuthentication();
                 if (razor)
@@ -538,6 +539,20 @@ namespace Jularr.Backend.Tests
                 }
 
                 return response;
+            }
+
+            public HttpClient Client => _client;
+
+            public async Task<HttpResponseMessage> SendAsAppAsync(HttpMethod method, string path, string token, object? data = null)
+            {
+                using var request = new HttpRequestMessage(method, path);
+                if (data is not null)
+                {
+                    request.Content = JsonContent.Create(data);
+                }
+
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                return await _client.SendAsync(request);
             }
 
             public async Task<object?> ScalarAsync(string sql)

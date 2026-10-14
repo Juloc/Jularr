@@ -8,9 +8,10 @@ namespace Jularr.Backend.Data.Logic.Session
     public sealed class SessionAuthenticationData : BaseData
     {
         public SessionAuthenticationData(long accountId, long? profileId, long? profileOwnerAccountId, long? uiLocaleId = null, AccountRoleType accountRoleTypeId = AccountRoleType.User,
-            bool isDevice = false)
+            bool isDevice = false, DateTime expiresAt = default)
         {
             IsDevice = isDevice;
+            ExpiresAt = expiresAt;
             AccountId = accountId;
             ProfileId = profileId;
             ProfileOwnerAccountId = profileOwnerAccountId;
@@ -35,5 +36,8 @@ namespace Jularr.Backend.Data.Logic.Session
 
         // A paired TV, phone or app rather than a browser sign-in.
         public bool IsDevice { get; }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.ExpiresAt))]
+        public DateTime ExpiresAt { get; }
     }
 }

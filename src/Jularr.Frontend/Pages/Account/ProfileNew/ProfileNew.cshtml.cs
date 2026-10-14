@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Account.ProfileNew
 {
-    public sealed class ProfileNewModel(ReadAuthenticationV1 authentication, ReadUiLocalesV1 readLocales, CreateProfileV1 createProfile, IAntiforgery antiforgery, FrontendAssets assets)
+    public sealed class ProfileNewModel(ReadAuthenticationV1 authentication, ReadUiLocalesV1 readLocales, CreateProfileV1 createProfile, IAntiforgery antiforgery, FrontendAssets assets, UiText texts)
         : JularrPage
     {
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
@@ -40,6 +40,11 @@ namespace Jularr.Frontend.Pages.Account.ProfileNew
 
         public async Task<IActionResult> OnGetAsync(string? returnUrl)
         {
+            if (!texts.CanCreateProfiles())
+            {
+                return NotFound();
+            }
+
             _returnUrl = SafeReturnUrl(returnUrl);
             await LoadDataAsync();
             PreparePage();

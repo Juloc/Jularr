@@ -20,6 +20,9 @@ namespace Jularr.Frontend.Pages.User.DevicePair
         [BindProperty(SupportsGet = true)]
         public string? Code { get; set; }
 
+        [BindProperty]
+        public long Id { get; set; }
+
         protected override void Define(Page page)
         {
             page.Title("devices.pair.title");
@@ -34,17 +37,18 @@ namespace Jularr.Frontend.Pages.User.DevicePair
                 page.Content.Add(new P(new Text("devices.pair.warning")));
                 page.Content.Add(new Form<ApproveDevicePairingDataV1>(form =>
                 {
+                    form.Hidden(item => item.Id);
                     form.Hidden(item => item.Code);
                     form.Submit("devices.pair.submit");
-                }, "/Devices/Pair", csrf, new ApproveDevicePairingDataV1(device.Code)));
+                }, "/Devices/Pair", csrf, new ApproveDevicePairingDataV1(device.Id, device.Code)));
                 return;
             }
 
-            page.Content.Add(new Form<ApproveDevicePairingDataV1>(form =>
+            page.Content.Add(new Form<InspectDevicePairingDataV1>(form =>
             {
                 form.Text(item => item.Code, "devices.pair.code", "one-time-code");
                 form.Submit("devices.pair.show");
-            }, "/Devices/Pair?handler=Show", csrf, new ApproveDevicePairingDataV1(Code ?? ""), FormError));
+            }, "/Devices/Pair?handler=Show", csrf, new InspectDevicePairingDataV1(Code ?? ""), FormError));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -56,7 +60,7 @@ namespace Jularr.Frontend.Pages.User.DevicePair
 
             if (Code is not null)
             {
-                _device = await inspect.ExecuteAsync<DevicePairingRequestV1>(new ApproveDevicePairingParametersV1(), new ApproveDevicePairingDataV1(Code), HttpContext.RequestAborted);
+                _device = await inspect.ExecuteAsync<DevicePairingRequestV1>(new ApproveDevicePairingParametersV1(), new InspectDevicePairingDataV1(Code), HttpContext.RequestAborted);
             }
 
             PreparePage();
@@ -67,7 +71,7 @@ namespace Jularr.Frontend.Pages.User.DevicePair
 
         public async Task<IActionResult> OnPostAsync()
         {
-            await approve.ExecuteAsync<UpdateResult>(new ApproveDevicePairingParametersV1(), new ApproveDevicePairingDataV1(Code ?? ""), HttpContext.RequestAborted);
+            await approve.ExecuteAsync<UpdateResult>(new ApproveDevicePairingParametersV1(), new ApproveDevicePairingDataV1(Id, Code ?? ""), HttpContext.RequestAborted);
             TempData["DevicePaired"] = true;
             return LocalRedirect("/Devices/Pair");
         }

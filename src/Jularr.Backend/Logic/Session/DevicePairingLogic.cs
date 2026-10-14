@@ -115,6 +115,7 @@ namespace Jularr.Backend.Logic.Session
             sql.Statement =
                 """
                 SELECT
+                    pairing."Id",
                     pairing."DeviceName",
                     pairing."DevicePlatform"
                 FROM
@@ -130,7 +131,7 @@ namespace Jularr.Backend.Logic.Session
 
         public static async Task ApproveDevicePairingAsync(this LogicContext ctx, DevicePairingApprovalData data, CancellationToken ct)
         {
-            // Only an open, unexpired code is taken, once.
+            // Only the inspected pairing, open and unexpired, is taken, once; a code shown again elsewhere is another pairing.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -140,14 +141,15 @@ namespace Jularr.Backend.Logic.Session
                     "ApprovedAccountId" = @ApprovedAccountId,
                     "ApprovedProfileId" = @ApprovedProfileId
                 WHERE
-                    pairing."Code" = @Code
+                    pairing."Id" = @Id
+                    AND pairing."Code" = @Code
                     AND pairing."ApprovedAccountId" IS NULL
                     AND pairing."ExpiresAt" > statement_timestamp();
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
-                throw new DataValidationException(nameof(data.Code), "invalid_code");
+                throw new DataValidationException(nameof(data.Code), "pairing_expired");
             }
         }
 

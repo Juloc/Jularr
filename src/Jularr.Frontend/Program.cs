@@ -26,6 +26,7 @@ builder.Services.AddSingleton<FrontendAssets>();
 
 var app = builder.Build();
 app.UseExceptionHandler();
+app.UseTrustedProxies();
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();

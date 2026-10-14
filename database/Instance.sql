@@ -18,6 +18,8 @@ CREATE TABLE "InstanceSettings" (
     "SubtitleLanguages" varchar(2)[] NOT NULL DEFAULT '{}' CHECK (cardinality("SubtitleLanguages") <= 10),
     -- How phones reach Jularr from outside, for QR codes; without it the address a device used counts.
     "PublicUrl" varchar(500) NULL CHECK ("PublicUrl" ~ '^https?://[^/?#]+(/[^?#]*)?/$'),
+    -- Reverse proxies whose forwarded client address, scheme and host count.
+    "TrustedProxies" cidr[] NOT NULL DEFAULT '{}' CHECK (cardinality("TrustedProxies") <= 20),
     -- An import replaces the earlier file of a film, episode or volume unless several releases are kept.
     "KeepsReleases" boolean NOT NULL DEFAULT FALSE,
     -- Replaced files are deleted (1), moved to a recycle folder inside their library (2) or to one folder on a storage connection (3).

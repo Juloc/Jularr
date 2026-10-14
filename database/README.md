@@ -10,7 +10,8 @@ isolated tests; it is never installed automatically on an existing database.
 Owner services provide version-checked settings/module edits. InstanceSettings also say
 whether several releases of a film or episode are kept and what happens to a replaced
 file (deleted, moved to a recycle folder inside its library or to one folder on a storage
-connection) and after how many days recycled files leave. RecycledFiles lists what Jularr
+connection) and after how many days recycled files leave, plus the public address for QR
+codes and the trusted reverse proxies (`cidr[]`). RecycledFiles lists what Jularr
 moved there, the only files its cleanup removes; MediaAssets.IsProtected keeps versions
 an administrator added or protected from automatic upgrades. Library gates manual
 media/watchlist Services; Profiles (off by default) allows several profiles per account,

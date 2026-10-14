@@ -23,10 +23,11 @@ namespace Jularr.Backend.Service.Core
 
         public SessionParameters? Parameters { get; private set; }
 
-        internal async Task VerifyCookieAsync(HttpContext http, ClaimsPrincipal? principal, CancellationToken cancellationToken, DateTime? renewalExpiresAt = null)
+        internal async Task<SessionAuthenticationData> VerifyAsync(HttpContext http, ClaimsPrincipal? principal, CancellationToken cancellationToken, DateTime? renewalExpiresAt = null)
         {
             var session = await ReadAsync(principal, cancellationToken, renewalExpiresAt);
             http.Items[typeof(SessionAuthentication)] = (principal, session, Parameters!);
+            return session;
         }
 
         public Task<SessionAuthenticationData> ReadRequestAsync(HttpContext? http, CancellationToken cancellationToken)
@@ -48,9 +49,9 @@ namespace Jularr.Backend.Service.Core
         {
             Parameters = null;
 
-            // Validate protected cookie claims.
+            // Validate protected cookie claims or a device token.
             var identities = principal?.Identities.Where(identity => identity.IsAuthenticated
-                && identity.AuthenticationType == CookieAuthenticationDefaults.AuthenticationScheme).ToArray();
+                && identity.AuthenticationType is CookieAuthenticationDefaults.AuthenticationScheme or ServiceApi.DeviceBearerScheme).ToArray();
             var ids = identities?.SelectMany(identity => identity.FindAll(ServiceGate.SessionClaimType)).ToArray();
             var revisions = identities?.SelectMany(identity => identity.FindAll(ServiceGate.SessionRevisionClaimType)).ToArray();
             var tokens = identities?.SelectMany(identity => identity.FindAll(ServiceGate.SessionTokenClaimType)).ToArray();
@@ -63,6 +64,8 @@ namespace Jularr.Backend.Service.Core
                 throw new UnauthorizedAccessException("A verified session is required.");
             }
 
+            var bearer = identities[0].AuthenticationType == ServiceApi.DeviceBearerScheme;
+
             // Verify current database state.
             var parameters = new SessionParameters(sessionId, revision, SHA256.HashData(Encoding.UTF8.GetBytes(tokens[0].Value)));
 
@@ -73,6 +76,11 @@ namespace Jularr.Backend.Service.Core
                 await transaction.BeginAsync(SqlAccessMode.ReadWrite, cancellationToken: cancellationToken);
                 var ctx = new LogicContext(transaction);
                 var verified = await ctx.ReadSessionAsync(parameters, cancellationToken);
+                if (bearer && !verified.IsDevice)
+                {
+                    throw new UnauthorizedAccessException("Only device sessions sign in by token.");
+                }
+
                 await ctx.RenewSessionAsync(parameters, new SessionRenewalData(expiresAt), cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 Parameters = parameters;
@@ -89,7 +97,8 @@ namespace Jularr.Backend.Service.Core
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId",
-                    session."DeviceName" IS NOT NULL AS "IsDevice"
+                    session."DeviceName" IS NOT NULL AS "IsDevice",
+                    session."ExpiresAt"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
@@ -115,6 +124,10 @@ namespace Jularr.Backend.Service.Core
             await context.BeginAsync(SqlAccessMode.ReadOnly, cancellationToken: cancellationToken);
             var session = await context.ReadSql.ReadOptionalAsync<SessionAuthenticationData>(sql, cancellationToken)
                 ?? throw new UnauthorizedAccessException("The session is unavailable.");
+            if (bearer && !session.IsDevice)
+            {
+                throw new UnauthorizedAccessException("Only device sessions sign in by token.");
+            }
 
             Parameters = parameters;
             return SessionLogic.Effective(session);

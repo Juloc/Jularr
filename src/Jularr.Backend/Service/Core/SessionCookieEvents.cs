@@ -26,7 +26,7 @@ namespace Jularr.Backend.Service.Core
                 var lifetime = TimeSpan.FromHours(_options.SessionLifetimeHours);
                 var renew = context.Properties.AllowRefresh != false && context.Properties.ExpiresUtc is { } expiry && expiry - now < lifetime / 2;
                 var renewedExpiry = now.Add(lifetime);
-                await _authentication.VerifyCookieAsync(context.HttpContext, context.Principal, context.HttpContext.RequestAborted, renew ? renewedExpiry.UtcDateTime : null);
+                await _authentication.VerifyAsync(context.HttpContext, context.Principal, context.HttpContext.RequestAborted, renew ? renewedExpiry.UtcDateTime : null);
 
                 // Publish after database commit.
                 if (renew)
