@@ -42,7 +42,11 @@ namespace Jularr.Backend.Service.System.Operation.V1
         protected override ModuleRequirement GetInstanceModules(OperationQueueParametersV1 parameters) => ModuleRequirement.None;
         protected override ServicePermission GetPermission(OperationQueueParametersV1 parameters, Type resultType) => new("system.operations");
 
-        protected override async Task<IServiceOutput> OnUpdate() => new ClaimOperationResultV1((await Context.ClaimOperationAsync(CancellationToken))?.Id);
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            var claimed = await Context.ClaimOperationAsync(CancellationToken);
+            return new ClaimOperationResultV1(claimed?.Id, claimed?.OperationTypeId);
+        }
     }
 
     public sealed class FailOperationV1 : SystemService<OperationParametersV1, FailOperationDataV1>

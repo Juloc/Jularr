@@ -187,7 +187,8 @@ namespace Jularr.Backend.Service.Core
             if (accountRoleTypeId == AccountRoleType.Owner)
             {
                 permissions.AddRange(["accounts.read", "accounts.update", "storage.read", "storage.update", "providers.read", "providers.update",
-                    "localization.read", "localization.update", "rules.read", "rules.update", "acquisition.manage", "instance.settings.read", "instance.settings.update"]);
+                    "localization.read", "localization.update", "rules.read", "rules.update", "acquisition.manage", "instance.settings.read", "instance.settings.update",
+                    "backup.read", "backup.update"]);
             }
 
             if (profileId is not null)

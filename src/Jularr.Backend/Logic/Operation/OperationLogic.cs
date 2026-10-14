@@ -33,9 +33,25 @@ namespace Jularr.Backend.Logic.Operation
             return (await ctx.ReadOptionalAsync<OperationData>(sql, ct) ?? throw new KeyNotFoundException("The library root was not found.")).Id;
         }
 
+        public static async Task<bool> QueueBackupAsync(this LogicContext ctx, OperationCreationData data, CancellationToken ct)
+        {
+            // One backup at a time.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "Operations" ("OperationTypeId", "RequestedByAccountId")
+                VALUES
+                    (3, @RequestedByAccountId)
+                ON CONFLICT ("OperationTypeId") WHERE "OperationTypeId" = 3 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING;
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
+        }
+
         public static Task<OperationData?> ClaimOperationAsync(this LogicContext ctx, CancellationToken ct)
         {
-            // Oldest queued scan first; downloads are tracked by their client.
+            // Oldest queued scan or backup first; downloads are tracked by their client.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -51,7 +67,7 @@ namespace Jularr.Backend.Logic.Operation
                         FROM
                             "Operations" AS queued
                         WHERE
-                            queued."OperationTypeId" = 1
+                            queued."OperationTypeId" IN (1, 3)
                             AND queued."OperationStatusTypeId" = 1
                         ORDER BY
                             queued."CreatedAt",
@@ -82,7 +98,7 @@ namespace Jularr.Backend.Logic.Operation
                     "FinishedAt" = CASE WHEN @OperationStatusTypeId IN (3, 4) THEN now() END
                 WHERE
                     operation."Id" = @Id
-                    AND operation."OperationTypeId" = 1
+                    AND operation."OperationTypeId" IN (1, 3)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             sql.Parameters.Add(data);
@@ -113,7 +129,7 @@ namespace Jularr.Backend.Logic.Operation
 
         public static async Task RetryOperationAsync(this LogicContext ctx, OperationActionData data, CancellationToken ct)
         {
-            // Scans run again; downloads search their target now.
+            // Scans and backups run again; downloads search their target now.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -142,6 +158,17 @@ namespace Jularr.Backend.Logic.Operation
                     WHERE
                         failed."OperationTypeId" = 1
                     ON CONFLICT ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING
+                ), backedUp AS (
+                    INSERT INTO
+                        "Operations" ("OperationTypeId", "RequestedByAccountId")
+                    SELECT
+                        3,
+                        @AccountId
+                    FROM
+                        failed
+                    WHERE
+                        failed."OperationTypeId" = 3
+                    ON CONFLICT ("OperationTypeId") WHERE "OperationTypeId" = 3 AND "OperationStatusTypeId" IN (1, 2) DO NOTHING
                 ), searched AS (
                     UPDATE
                         "WantedItems" AS wanted
@@ -181,7 +208,7 @@ namespace Jularr.Backend.Logic.Operation
                     "OperationStatusTypeId" = 1,
                     "StartedAt" = NULL
                 WHERE
-                    operation."OperationTypeId" = 1
+                    operation."OperationTypeId" IN (1, 3)
                     AND operation."OperationStatusTypeId" = 2;
                 """;
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);

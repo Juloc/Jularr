@@ -66,7 +66,7 @@ CREATE TABLE "OperationTypes" (
     "Id" smallint PRIMARY KEY,
     "Key" varchar(32) NOT NULL UNIQUE
 );
-INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan'), (2, 'Download');
+INSERT INTO "OperationTypes" ("Id", "Key") VALUES (1, 'LibraryScan'), (2, 'Download'), (3, 'Backup');
 
 CREATE TABLE "OperationStatusTypes" (
     "Id" smallint PRIMARY KEY,
@@ -108,6 +108,7 @@ CREATE TABLE "Operations" (
     CHECK ("OperationTypeId" = 2 OR ("SizeBytes" IS NULL AND "DownloadStateTypeId" IS NULL))
 );
 CREATE UNIQUE INDEX "UX_Operations_ActiveScan" ON "Operations" ("LibraryRootId") WHERE "OperationTypeId" = 1 AND "OperationStatusTypeId" IN (1, 2);
+CREATE UNIQUE INDEX "UX_Operations_ActiveBackup" ON "Operations" ("OperationTypeId") WHERE "OperationTypeId" = 3 AND "OperationStatusTypeId" IN (1, 2);
 CREATE UNIQUE INDEX "UX_Operations_Download" ON "Operations" ("AcquisitionReleaseId") WHERE "OperationTypeId" = 2;
 CREATE INDEX "IX_Operations_Queue" ON "Operations" ("OperationTypeId", "OperationStatusTypeId", "CreatedAt", "Id");
 CREATE INDEX "IX_Operations_Recent" ON "Operations" ("CreatedAt" DESC, "Id" DESC);

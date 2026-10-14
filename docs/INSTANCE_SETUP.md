@@ -2,8 +2,10 @@
 
 Consolidated flow requested by the owner. The first Owner, resumable steps over the
 real Admin editors (Instance, Storage, Downloads, Providers, Existing media), the
-checks and the final completion are implemented. Backup/restore (page 2) and AI
-(page 7) follow as their own packages; until then the wizard skips them.
+checks and the final completion are implemented. Restore is offered on the first editor
+(`/Setup/Backup`) while setup is unfinished: a backup of the same schema replaces the new
+instance through `pg_restore`, then Jularr restarts and its own accounts sign in. AI (page 7)
+follows as its own package; until then the wizard skips it.
 Current code owners: [CODEMAP](CODEMAP.md). Keep one Frontend host,
 versioned Backend Data/Services, canonical Logic writers and shared transactions.
 

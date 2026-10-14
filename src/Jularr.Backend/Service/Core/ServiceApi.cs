@@ -45,6 +45,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Jularr.Integrations.Data.Database;
+using Jularr.Integrations.Logic.Database;
 using Npgsql;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
@@ -65,6 +67,7 @@ namespace Jularr.Backend.Service.Core
         public const string AccountsReadPolicyName = "accounts.read";
         public const string ProvidersReadPolicyName = "providers.read";
         public const string InstanceSettingsReadPolicyName = "instance.settings.read";
+        public const string BackupReadPolicyName = "backup.read";
 
         public static IServiceCollection AddJularrServices(this IServiceCollection services, IConfiguration configuration)
         {
@@ -102,6 +105,20 @@ namespace Jularr.Backend.Service.Core
             services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
             services.AddSingleton(new MediaTranscoder { ExecutablePath = configuration["Media:FfmpegPath"] });
             services.AddSingleton(new ArchiveTools { Par2Path = configuration["Usenet:Par2Path"], SevenZipPath = configuration["Usenet:SevenZipPath"] });
+
+            // Backups reach the same database.
+            var target = new NpgsqlConnectionStringBuilder(connectionString);
+            services.Configure<BackupOptions>(options =>
+            {
+                configuration.GetSection("Backup").Bind(options);
+                options.KeyDirectory = configuration["DataProtection:KeyDirectory"];
+            });
+            services.AddSingleton(new PostgresBackupTools
+            {
+                PgDumpPath = configuration["Backup:PgDumpPath"],
+                PgRestorePath = configuration["Backup:PgRestorePath"],
+                Connection = new PostgresConnection(target.Host ?? "localhost", target.Port, target.Database ?? "", target.Username ?? "", target.Password)
+            });
             return RegisterServices(services, [typeof(Service).Assembly]);
         }
 
@@ -140,6 +157,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
             services.TryAddSingleton<ArchiveTools>();
+            services.TryAddSingleton<PostgresBackupTools>();
             services.TryAddTransient<UsenetJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddTransient<ReadingContent>();
@@ -164,7 +182,7 @@ namespace Jularr.Backend.Service.Core
                 foreach (var (policyName, permission) in new[] { (AdminPolicyName, "admin.access"), (StorageReadPolicyName, "storage.read"), (RulesReadPolicyName, "rules.read"),
                     (MediaReadPolicyName, "media.read"), (RequestsReadPolicyName, "requests.read"), (WantedReadPolicyName, "wanted.read"), (AcquisitionManagePolicyName, "acquisition.manage"),
                     (LocalizationReadPolicyName, "localization.read"), (AccountsReadPolicyName, "accounts.read"), (ProvidersReadPolicyName, "providers.read"),
-                    (InstanceSettingsReadPolicyName, "instance.settings.read") })
+                    (InstanceSettingsReadPolicyName, "instance.settings.read"), (BackupReadPolicyName, "backup.read") })
                 {
                     options.AddPolicy(policyName, policy => policy.RequireAuthenticatedUser().RequireAssertion(async authorization =>
                     {

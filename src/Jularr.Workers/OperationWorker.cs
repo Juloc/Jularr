@@ -1,6 +1,8 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.System.Operation.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Backend.Service.System.Backup.V1;
 using Jularr.Backend.Service.System.Operation.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -63,7 +65,14 @@ namespace Jularr.Workers
 
             try
             {
-                await services.GetRequiredService<ExecuteLibraryScanV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                if (claimed.OperationTypeId == OperationType.Backup)
+                {
+                    await services.GetRequiredService<ExecuteBackupV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
+                else
+                {
+                    await services.GetRequiredService<ExecuteLibraryScanV1>().ExecuteAsync<UpdateResult>(new OperationParametersV1(operationId), default, ct);
+                }
             }
             catch (Exception exception) when (!ct.IsCancellationRequested)
             {

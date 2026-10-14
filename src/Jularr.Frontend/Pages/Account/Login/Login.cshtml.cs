@@ -36,6 +36,7 @@ namespace Jularr.Frontend.Pages.Account.Login
             page.Content.Add(new Section(
                 new Brand(assets, login: true),
                 new H1(new Text("account.login.title")).Class("visually-hidden"),
+                TempData["BackupRestored"] is true ? new P(new Text("admin.backup.restored")).Attribute("role", "status") : new Span(),
                 new Form<LoginDataV1>(form =>
                 {
                     form.Text(x => x.Email, "account.field.email", "username");

@@ -14,6 +14,7 @@ namespace Jularr.Frontend.Framework
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Acquisition");
             conventions.AddPageRoute("/Admin/Providers/Providers", "/Setup/Providers");
             conventions.AddPageRoute("/Admin/Takeover/Takeover", "/Setup/Takeover");
+            conventions.AddPageRoute("/Admin/Backup/Backup", "/Setup/Backup");
             conventions.AuthorizePage("/Admin/Requests/Requests", ServiceApi.RequestsReadPolicyName);
             conventions.AuthorizePage("/Admin/Wanted/Wanted", ServiceApi.WantedReadPolicyName);
             conventions.AuthorizePage("/Admin/Acquisition/Acquisition", ServiceApi.AcquisitionManagePolicyName);
@@ -30,6 +31,7 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/Accounts/Accounts", ServiceApi.AccountsReadPolicyName);
             conventions.AuthorizePage("/Admin/Providers/Providers", ServiceApi.ProvidersReadPolicyName);
             conventions.AuthorizePage("/Admin/Instance/Instance", ServiceApi.InstanceSettingsReadPolicyName);
+            conventions.AuthorizePage("/Admin/Backup/Backup", ServiceApi.BackupReadPolicyName);
             conventions.AllowAnonymousToPage("/Account/Login/Login");
             conventions.AllowAnonymousToPage("/Setup/Start/Start");
             conventions.AllowAnonymousToPage("/Development/ShellPreview/ShellPreview");

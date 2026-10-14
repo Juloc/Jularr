@@ -47,6 +47,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 ## Admin pages
 
 - [Accounts](Pages/Admin/Accounts/Accounts.cshtml.cs): roles, profile assignments and sessions.
+- [Backup](Pages/Admin/Backup/Backup.cshtml.cs): backups with their schema version, back up now, delete; under `/Setup/Backup` also restore.
 - [Instance](Pages/Admin/Instance/Instance.cshtml.cs): supported settings and module controls.
 - [Storage](Pages/Admin/Storage/Storage.cshtml.cs): mounts with their last observed state, WOL, safe browsing and independently paged library paths.
 - [Providers](Pages/Admin/Providers/Providers.cshtml.cs): registry, protected TMDB/IGDB credentials and Plex server.

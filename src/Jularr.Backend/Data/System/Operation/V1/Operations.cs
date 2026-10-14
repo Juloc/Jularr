@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Fields.Operation;
 
 namespace Jularr.Backend.Data.System.Operation.V1
@@ -20,13 +21,17 @@ namespace Jularr.Backend.Data.System.Operation.V1
 
     public sealed class ClaimOperationResultV1 : BaseResponse
     {
-        public ClaimOperationResultV1(long? operationId)
+        public ClaimOperationResultV1(long? operationId, OperationType? operationTypeId)
         {
             OperationId = operationId;
+            OperationTypeId = operationTypeId;
         }
 
         [DataField(typeof(OperationFields), nameof(OperationFields.Id), false)]
         public long? OperationId { get; }
+
+        [DataField(typeof(OperationFields), nameof(OperationFields.OperationTypeId), false)]
+        public OperationType? OperationTypeId { get; }
     }
 
     public sealed class FailOperationDataV1 : BaseData

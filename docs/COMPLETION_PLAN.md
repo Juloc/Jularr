@@ -15,7 +15,7 @@ audit before integration. Each package lists its acceptance; tests stay focused.
 | K6 | Manga reader (CBZ/CBR/CB7 pages, direction, spreads, preloading, progress) | Resumes on the exact page; large volumes stream page by page |
 | K7 | Profiles: create/delete, limits, PIN with the agreed lockout | Five failures lock for one minute across restarts |
 | K8 | Player: audio/subtitle selection, mini-player navigation, Continue Watching/Reading/Listening | Navigation keeps playback; without script ordinary navigation |
-| K9 | NAS probes, reconnect, Synology API | Outage keeps browsing; reconnect without restart |
+| K9 | NAS probes, reconnect, Synology health and power (DSM admin account) | Outage keeps browsing; reconnect without restart |
 | K10 | Provider sync core, Plex progress, Jellyfin, Emby | Two-way progress never regresses; outages catch up |
 | K11 | AniList OAuth, list import, sync, discovery feeds | Retries after outages without duplicates |
 | K12 | Offline PWA with device check, renditions, local state and sync queue | Offline playback and reading; progress syncs when online |
@@ -38,8 +38,8 @@ audit before integration. Each package lists its acceptance; tests stay focused.
 K14-K26 close the gaps of a parity audit against Alpha-90 (`dev`, 14 October 2026); language
 learning, AI and TTS stay out of scope until the owner schedules them.
 
-Done: K1a, K1b, K2, K3 (without backup/restore), K4a (platform in details and per file), K4b (ROM
-identification through libretro DATs), K4c (retro play in self-hosted EmulatorJS with saves and play time per profile; offline play follows with K12), K7 (profile PIN with lockout and Owner reset; up to ten own profiles, deletion with their requests), request rules (limits, approval, allowed media, offered qualities, per-account overrides), K6 (comic reader for CBZ/CBR/CB7 in the shared reading cache), K8 (audio and subtitle choice, mini player, Continue Watching/Listening/Reading shelves and the Continue Reading bar), K9 without Synology (connection state from probes, background reconnect with backoff). ScreenScraper waits for an owner developer account.
+Done: K1a, K1b, K2, K3, K4a (platform in details and per file), K4b (ROM
+identification through libretro DATs), K4c (retro play in self-hosted EmulatorJS with saves and play time per profile; offline play follows with K12), K7 (profile PIN with lockout and Owner reset; up to ten own profiles, deletion with their requests), request rules (limits, approval, allowed media, offered qualities, per-account overrides), K6 (comic reader for CBZ/CBR/CB7 in the shared reading cache), K8 (audio and subtitle choice, mini player, Continue Watching/Listening/Reading shelves and the Continue Reading bar), K9 without Synology (connection state from probes, background reconnect with backoff), K14 (pg_dump backups with schedule and retention, restore in setup). ScreenScraper waits for an owner developer account.
 
 Risks: K1 touches most reads; the community anime mapping and EmulatorJS cores need a
 license check before use; backup needs `pg_dump` in the container; offline video is

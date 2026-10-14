@@ -356,3 +356,10 @@ Reparatur und Entpacken übernehmen `Usenet:Par2Path` (par2) und `Usenet:SevenZi
 nur einer ausdrücklich gewählten einmaligen Übernahme (`/Admin/Acquisition/Takeover`:
 Vorschau, dann Übernahme von Indexern, SABnzbd und fehlenden Titeln), nicht dem laufenden Betrieb.
 Der Player wird von Jularr selbst gehostet; vorhandene Dev-Technik ist Referenz.
+
+Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` (`Backup:PgDumpPath`) samt
+Schlüsselbund (`DataProtection:KeyDirectory`) in `Backup:Path`; automatisch alle
+`Backup:IntervalHours` (Standard 24, 0 aus), die neuesten `Backup:Keep` (Standard 7, mindestens 1) bleiben.
+Ein Backup derselben Jularr-Version stellt `pg_restore` (`Backup:PgRestorePath`) nur in der
+Einrichtung wieder her (`/Setup/Backup`); danach Jularr neu starten. Der Backup-Ordner enthält
+die Schlüssel für gespeicherte Zugangsdaten und muss geschützt liegen.

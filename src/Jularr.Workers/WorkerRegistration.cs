@@ -12,6 +12,7 @@ namespace Jularr.Workers
             services.AddHostedService<UsenetWorker>();
             services.AddHostedService<MediaWorker>();
             services.AddHostedService<StorageWorker>();
+            services.AddHostedService<BackupWorker>();
             return services;
         }
     }

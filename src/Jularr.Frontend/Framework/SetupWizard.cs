@@ -28,6 +28,11 @@ namespace Jularr.Frontend.Framework
             {
                 new NavigationTabs([.. Paths.Select(step => new NavigationTab("setup.step." + step.Key, step.Value, step.Key == current))], "setup.steps")
             };
+            if (current == SetupStepType.Instance)
+            {
+                items.Add(new A(new Text("setup.restore")).Class("button").Attribute("href", "/Setup/Backup"));
+            }
+
             if (current != SetupStepType.Finish)
             {
                 items.Add(new Form<UpdateSetupProgressDataV1>(form =>

@@ -75,7 +75,7 @@ and commit together. No migration, active-database installation or extra server.
   follow a device check (server rendition or original), original download optional,
   behind a profile permission. The mini-player uses a small own navigation script with a
   full-page fallback. Translation uses Bergamot models (optional owner). Retro games play
-  through EmulatorJS (commercially usable cores only), other platforms are downloads.
+  through EmulatorJS (all cores, see the 13 October decision below), other platforms are downloads.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
   a Jularr backup restore; migration stays with the stopped Phase B; the AI step waits
   for its own package.
