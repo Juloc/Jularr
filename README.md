@@ -362,5 +362,7 @@ Backups (`/Admin/Backup`) sichern die Datenbank mit `pg_dump` (`Backup:PgDumpPat
 Schlüsselbund (`DataProtection:KeyDirectory`) in `Backup:Path`; automatisch alle
 `Backup:IntervalHours` (Standard 24, 0 aus), die neuesten `Backup:Keep` (Standard 7, mindestens 1) bleiben.
 Ein Backup derselben Jularr-Version stellt `pg_restore` (`Backup:PgRestorePath`) nur in der
-Einrichtung wieder her (`/Setup/Backup`); danach Jularr neu starten. Der Backup-Ordner enthält
-die Schlüssel für gespeicherte Zugangsdaten und muss geschützt liegen.
+Einrichtung wieder her (`/Setup/Backup`); danach Jularr neu starten. Mit `Backup:Passphrase` liegt der
+Schlüsselbund nur verschlüsselt im Backup (AES-GCM, Schlüssel per PBKDF2) und die Wiederherstellung fragt
+nach der Passphrase; ohne sie enthält der Backup-Ordner die Schlüssel für gespeicherte Zugangsdaten offen
+und muss geschützt liegen.

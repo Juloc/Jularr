@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,6 +12,9 @@ namespace Jularr.Backend.Service.Core
     internal static partial class BackupFiles
     {
         public const string DumpName = "database.dump";
+        public const string SealedKeysName = "keys.sealed";
+        private const int KeyIterations = 600_000;
+        private static readonly byte[] SealedMagic = "JKR1"u8.ToArray();
         private const string ManifestName = "backup.json";
 
         [GeneratedRegex(@"^jularr-\d{8}-\d{6}\z")]
@@ -42,7 +46,7 @@ namespace Jularr.Backend.Service.Core
         public static IReadOnlyList<BackupFolder> List(string root) =>
             [.. Folders(root)
                 .Select(folder => new BackupFolder(folder.Name, CreatedAt(folder.Name), folder.EnumerateFiles("*", SearchOption.AllDirectories).Sum(file => file.Length),
-                    ReadFingerprint(folder.FullName) == SchemaFingerprint))
+                    ReadFingerprint(folder.FullName) == SchemaFingerprint, File.Exists(Path.Combine(folder.FullName, SealedKeysName))))
                 .OrderByDescending(folder => folder.Name, StringComparer.Ordinal)];
 
         // Only the name is read; sizes and manifests stay untouched.
@@ -59,6 +63,63 @@ namespace Jularr.Backend.Service.Core
 
         public static async Task WriteManifestAsync(string folder, DateTime createdAt, CancellationToken ct) =>
             await File.WriteAllTextAsync(Path.Combine(folder, ManifestName), JsonSerializer.Serialize(new BackupManifest(SchemaFingerprint, createdAt)), ct);
+
+        // The key ring as one file: a ZIP of its keys, AES-GCM with a key from the passphrase.
+        public static void SealKeys(string? from, string file, string passphrase)
+        {
+            if (from is null || !Directory.Exists(from))
+            {
+                return;
+            }
+
+            using var archive = new MemoryStream();
+            using (var zip = new ZipArchive(archive, ZipArchiveMode.Create, true))
+            {
+                foreach (var key in Directory.EnumerateFiles(from, "*.xml"))
+                {
+                    zip.CreateEntryFromFile(key, Path.GetFileName(key));
+                }
+            }
+
+            var plain = archive.ToArray();
+            var salt = RandomNumberGenerator.GetBytes(16);
+            var nonce = RandomNumberGenerator.GetBytes(12);
+            var tag = new byte[16];
+            var sealedKeys = new byte[plain.Length];
+            using (var aes = new AesGcm(Derive(passphrase, salt), tag.Length))
+            {
+                aes.Encrypt(nonce, plain, sealedKeys, tag);
+            }
+
+            CryptographicOperations.ZeroMemory(plain);
+            File.WriteAllBytes(file, [.. SealedMagic, .. salt, .. nonce, .. tag, .. sealedKeys]);
+        }
+
+        // A wrong passphrase changes nothing.
+        public static void UnsealKeys(string file, string? to, string passphrase)
+        {
+            var content = File.ReadAllBytes(file);
+            if (to is null || content.Length < 48 || !content.AsSpan(0, 4).SequenceEqual(SealedMagic))
+            {
+                throw new CryptographicException("The key ring file is unreadable.");
+            }
+
+            var plain = new byte[content.Length - 48];
+            using (var aes = new AesGcm(Derive(passphrase, content[4..20]), 16))
+            {
+                aes.Decrypt(content.AsSpan(20, 12), content.AsSpan(48), content.AsSpan(32, 16), plain);
+            }
+
+            CreatePrivate(to);
+            using var zip = new ZipArchive(new MemoryStream(plain), ZipArchiveMode.Read);
+            foreach (var entry in zip.Entries.Where(entry => entry.Name == entry.FullName && entry.Name.EndsWith(".xml", StringComparison.Ordinal)))
+            {
+                var target = Path.Combine(to, entry.Name);
+                if (!File.Exists(target)) entry.ExtractToFile(target);
+            }
+        }
+
+        private static byte[] Derive(string passphrase, byte[] salt) => Rfc2898DeriveBytes.Pbkdf2(passphrase, salt, KeyIterations, HashAlgorithmName.SHA256, 32);
 
         public static void CopyKeys(string? from, string? to)
         {
@@ -107,11 +168,12 @@ namespace Jularr.Backend.Service.Core
         }
     }
 
-    internal sealed class BackupFolder(string name, DateTime createdAt, long sizeBytes, bool isCompatible)
+    internal sealed class BackupFolder(string name, DateTime createdAt, long sizeBytes, bool isCompatible, bool isSealed)
     {
         public string Name { get; } = name;
         public DateTime CreatedAt { get; } = createdAt;
         public long SizeBytes { get; } = sizeBytes;
         public bool IsCompatible { get; } = isCompatible;
+        public bool IsSealed { get; } = isSealed;
     }
 }

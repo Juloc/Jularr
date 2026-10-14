@@ -11,6 +11,8 @@ namespace Jularr.Frontend.Pages.Admin.Backup
     // Database backups of the instance; during setup a backup can replace the new instance.
     public sealed class BackupModel(ReadBackupsV1 read, QueueBackupV1 queue, DeleteBackupV1 delete, RestoreBackupV1 restore, IAntiforgery antiforgery) : JularrPage
     {
+        private string? _failedRestore;
+
         private BackupsV1? _backups;
 
         private string Home => SetupWizard.IsActive(Request) ? "/Setup/Backup" : "/Admin/Backup";
@@ -21,7 +23,7 @@ namespace Jularr.Frontend.Pages.Admin.Backup
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Backup/Backup.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null && _failedRestore is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
             if (_backups is not { } backups) return;
 
             // State of the latest run.
@@ -46,7 +48,11 @@ namespace Jularr.Frontend.Pages.Admin.Backup
         {
             if (canRestore && item.IsCompatible)
             {
-                yield return new Form<BackupParametersV1>(form => form.Submit("admin.backup.restore"), Home + "?handler=Restore&name=" + item.Name, csrf, new BackupParametersV1(item.Name));
+                yield return new Form<RestoreBackupDataV1>(form =>
+                {
+                    if (item.IsSealed) form.Password(data => data.Passphrase, "admin.backup.passphrase", "off");
+                    form.Submit("admin.backup.restore");
+                }, Home + "?handler=Restore&name=" + item.Name, csrf, new RestoreBackupDataV1(null), _failedRestore == item.Name ? FormError : null);
             }
 
             yield return new Form<BackupParametersV1>(form => form.Submit("admin.backup.delete"), Home + "?handler=Delete&name=" + item.Name, csrf, new BackupParametersV1(item.Name));
@@ -77,9 +83,10 @@ namespace Jularr.Frontend.Pages.Admin.Backup
         }
 
         // The restored instance has its own accounts; signing in starts over.
-        public async Task<IActionResult> OnPostRestoreAsync(string name)
+        public async Task<IActionResult> OnPostRestoreAsync(string name, string? passphrase)
         {
-            await restore.ExecuteAsync<UpdateResult>(new BackupParametersV1(name), default, HttpContext.RequestAborted);
+            _failedRestore = name;
+            await restore.ExecuteAsync<UpdateResult>(new BackupParametersV1(name), new RestoreBackupDataV1(passphrase), HttpContext.RequestAborted);
             TempData["BackupRestored"] = true;
             return LocalRedirect("/Account/Login");
         }

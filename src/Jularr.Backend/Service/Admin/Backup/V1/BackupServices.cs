@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Jularr.Backend.Data.Admin.Backup.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
@@ -58,7 +59,7 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
                 """;
             var state = await Context.ReadSql.ReadRequiredAsync<BackupStateData>(sql, CancellationToken);
             var items = _options.Path is { } path ? BackupFiles.List(path) : [];
-            return new BackupsV1(new BaseDataList<BackupV1>(items.Select(item => new BackupV1(item.Name, item.CreatedAt, item.SizeBytes, item.IsCompatible))), _options.Path is not null && _tools.CanBackUp,
+            return new BackupsV1(new BaseDataList<BackupV1>(items.Select(item => new BackupV1(item.Name, item.CreatedAt, item.SizeBytes, item.IsCompatible, item.IsSealed))), _options.Path is not null && _tools.CanBackUp,
                 state.IsRunning, state.ErrorKey, state.CanRestore && _tools.CanRestore);
         }
     }
@@ -114,7 +115,7 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/backups/{name}/restore")]
-    public sealed class RestoreBackupV1 : AdminService<BackupParametersV1, NoData>
+    public sealed class RestoreBackupV1 : AdminService<BackupParametersV1, RestoreBackupDataV1>
     {
         private static readonly SemaphoreSlim Running = new(1, 1);
         private readonly BackupOptions _options;
@@ -167,6 +168,19 @@ namespace Jularr.Backend.Service.Admin.Backup.V1
 
             try
             {
+                var sealedKeys = Path.Combine(folder, BackupFiles.SealedKeysName);
+                if (File.Exists(sealedKeys))
+                {
+                    try
+                    {
+                        BackupFiles.UnsealKeys(sealedKeys, _options.KeyDirectory, Data.Passphrase ?? "");
+                    }
+                    catch (CryptographicException)
+                    {
+                        throw new DataValidationException(nameof(Data.Passphrase), "backup_passphrase");
+                    }
+                }
+
                 BackupFiles.CopyKeys(Path.Combine(folder, "keys"), _options.KeyDirectory);
                 try
                 {

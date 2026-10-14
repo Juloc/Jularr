@@ -11,5 +11,8 @@ namespace Jularr.Backend.Service.Core
 
         // Protected credentials need the key ring of the instance.
         internal string? KeyDirectory { get; set; }
+
+        // Set, a backup keeps the key ring only encrypted with it; a restore asks for it.
+        public string? Passphrase { get; set; }
     }
 }

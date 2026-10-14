@@ -55,7 +55,14 @@ namespace Jularr.Backend.Service.System.Backup.V1
                     throw new ServiceUnavailableException(exception.Code, exception);
                 }
 
-                BackupFiles.CopyKeys(_options.KeyDirectory, Path.Combine(partial, "keys"));
+                if (_options.Passphrase is { Length: > 0 } passphrase)
+                {
+                    BackupFiles.SealKeys(_options.KeyDirectory, Path.Combine(partial, BackupFiles.SealedKeysName), passphrase);
+                }
+                else
+                {
+                    BackupFiles.CopyKeys(_options.KeyDirectory, Path.Combine(partial, "keys"));
+                }
                 await BackupFiles.WriteManifestAsync(partial, now, CancellationToken);
                 Directory.Move(partial, Path.Combine(root, name));
             }

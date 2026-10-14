@@ -723,6 +723,7 @@ namespace Jularr.Frontend.Localization
             new("admin.backup.compatible", "This version"),
             new("admin.backup.otherVersion", "Other version"),
             new("admin.backup.restore", "Restore"),
+            new("admin.backup.passphrase", "Backup passphrase"),
             new("admin.backup.delete", "Delete"),
             new("setup.restore", "Restore a backup instead"),
             new("storage.synology.title", "Synology"),

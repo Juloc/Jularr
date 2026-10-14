@@ -46,9 +46,9 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { false, true }, backups.Items.Select(item => item.IsCompatible).ToArray());
 
             // Restores need this schema and a working pg_restore.
-            using var other = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261002-120000/restore");
+            using var other = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261002-120000/restore", new RestoreBackupDataV1(null));
             StringAssert.Contains(await other.Content.ReadAsStringAsync(), "backup_incompatible");
-            using var noTool = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261001-120000/restore");
+            using var noTool = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261001-120000/restore", new RestoreBackupDataV1(null));
             Assert.AreEqual(HttpStatusCode.ServiceUnavailable, noTool.StatusCode, await noTool.Content.ReadAsStringAsync());
             Assert.IsTrue(File.Exists(Path.Combine(keys.Path, "key-1.xml")));
             using var traversal = await host.SendAsync(HttpMethod.Post, Route + "/..%2Fnotes/removal");
@@ -58,7 +58,7 @@ namespace Jularr.Backend.Tests
             // A finished setup is never replaced.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceSetupState\" SET \"CompletedAt\" = now()");
             Assert.IsFalse((await ReadAsync(host)).CanRestore);
-            using var completed = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261001-120000/restore");
+            using var completed = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261001-120000/restore", new RestoreBackupDataV1(null));
             StringAssert.Contains(await completed.Content.ReadAsStringAsync(), "setup_completed");
 
             // Deleting removes the folder; pruning keeps the newest.
@@ -102,6 +102,34 @@ namespace Jularr.Backend.Tests
             var state = await ReadAsync(host);
             Assert.IsFalse(state.IsRunning);
             Assert.AreEqual("backup_tool_missing", state.ErrorKey);
+        }
+
+        [TestMethod]
+        public async Task Backups_SealedKeyRing_ComesBackOnlyWithThePassphrase()
+        {
+            using var folder = new LibraryTests.TemporaryDirectory();
+            using var source = new LibraryTests.TemporaryDirectory();
+            using var keys = new LibraryTests.TemporaryDirectory();
+            var missingTool = Path.Combine(folder.Path, "missing", "pg_tool.exe");
+            await using var host = await CreateHostAsync(new Dictionary<string, string>
+            {
+                ["Backup:Path"] = folder.Path,
+                ["Backup:PgRestorePath"] = missingTool,
+                ["DataProtection:KeyDirectory"] = keys.Path
+            });
+            await WriteBackupAsync(folder.Path, "jularr-20261001-120000", BackupFiles.SchemaFingerprint);
+            await File.WriteAllTextAsync(Path.Combine(source.Path, "key-7.xml"), "<key id=\"7\" />");
+            BackupFiles.SealKeys(source.Path, Path.Combine(folder.Path, "jularr-20261001-120000", BackupFiles.SealedKeysName), "correct horse");
+            Assert.IsFalse(File.ReadAllText(Path.Combine(folder.Path, "jularr-20261001-120000", BackupFiles.SealedKeysName)).Contains("key id", StringComparison.Ordinal));
+            Assert.IsTrue((await ReadAsync(host)).Items.Single().IsSealed);
+
+            // A wrong passphrase restores nothing; the right one brings the keys back before the database.
+            using var wrong = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261001-120000/restore", new RestoreBackupDataV1("wrong"));
+            StringAssert.Contains(await wrong.Content.ReadAsStringAsync(), "backup_passphrase");
+            Assert.IsFalse(File.Exists(Path.Combine(keys.Path, "key-7.xml")));
+            using var right = await host.SendAsync(HttpMethod.Post, Route + "/jularr-20261001-120000/restore", new RestoreBackupDataV1("correct horse"));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, right.StatusCode, await right.Content.ReadAsStringAsync());
+            Assert.AreEqual("<key id=\"7\" />", File.ReadAllText(Path.Combine(keys.Path, "key-7.xml")));
         }
 
         private static async Task WriteBackupAsync(string root, string name, string fingerprint)

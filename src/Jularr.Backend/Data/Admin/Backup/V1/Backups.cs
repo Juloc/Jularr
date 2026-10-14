@@ -20,8 +20,9 @@ namespace Jularr.Backend.Data.Admin.Backup.V1
 
     public sealed class BackupV1 : BaseResponse
     {
-        public BackupV1(string name, DateTime createdAt, long sizeBytes, bool isCompatible)
+        public BackupV1(string name, DateTime createdAt, long sizeBytes, bool isCompatible, bool isSealed)
         {
+            IsSealed = isSealed;
             Name = name;
             CreatedAt = createdAt;
             SizeBytes = sizeBytes;
@@ -40,6 +41,21 @@ namespace Jularr.Backend.Data.Admin.Backup.V1
         // Made for this version of Jularr's schema.
         [DataField(typeof(BackupFields), nameof(BackupFields.IsCompatible))]
         public bool IsCompatible { get; }
+
+        // The key ring needs the passphrase to come back.
+        [DataField(typeof(BackupFields), nameof(BackupFields.IsSealed))]
+        public bool IsSealed { get; }
+    }
+
+    public sealed class RestoreBackupDataV1 : BaseData
+    {
+        public RestoreBackupDataV1(string? passphrase)
+        {
+            Passphrase = passphrase;
+        }
+
+        [DataField(typeof(BackupFields), nameof(BackupFields.Passphrase), false)]
+        public string? Passphrase { get; }
     }
 
     public sealed class BackupsV1 : BaseResponse
