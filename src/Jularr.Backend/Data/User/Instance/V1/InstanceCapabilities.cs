@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.User.Instance.V1
     public sealed class InstanceCapabilitiesDetailsV1 : BaseResponse
     {
         public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
-            bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect, bool canSeeCalendar)
+            bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect, bool canSeeCalendar, bool canSeeStatistics)
         {
+            CanSeeStatistics = canSeeStatistics;
             CanSeeCalendar = canSeeCalendar;
             CanCollect = canCollect;
             CanNotify = canNotify;
@@ -53,5 +54,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
         // Upcoming releases of the profile's Works.
         public bool CanSeeCalendar { get; }
+
+        // The profile's own history in numbers.
+        public bool CanSeeStatistics { get; }
     }
 }

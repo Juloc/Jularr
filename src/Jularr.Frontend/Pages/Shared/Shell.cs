@@ -28,6 +28,11 @@ namespace Jularr.Frontend.Pages.Shared
                     primary.Add(new ShellLink("calendar.title", "/Calendar", "calendar"));
                 }
 
+                if (texts.Capabilities.CanSeeStatistics)
+                {
+                    secondary.Add(new ShellLink("statistics.title", "/Statistics", "activity"));
+                }
+
                 var watchlist = new ShellLink("watchlist.title", "/Watchlist", "home");
                 primary.Add(watchlist);
                 mobile.Add(watchlist);
@@ -35,6 +40,7 @@ namespace Jularr.Frontend.Pages.Shared
 
             if (texts.Capabilities?.CanManageMedia is true)
             {
+                secondary.Add(new ShellLink("system.title", "/Admin/System", "server"));
                 secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
                 secondary.Add(new ShellLink("admin.library.title", "/Admin/Library", "library"));
                 secondary.Add(new ShellLink("admin.activity.title", "/Admin/Activity", "settings"));

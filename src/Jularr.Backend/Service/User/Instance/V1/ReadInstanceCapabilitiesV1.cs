@@ -25,7 +25,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 FROM
                     "InstanceModules" AS module
                 WHERE
-                    module."Key" IN ('Library', 'Requests', 'Acquisition', 'Playback', 'Reading', 'Profiles', 'Emulation', 'Notifications', 'Collections', 'Calendar');
+                    module."Key" IN ('Library', 'Requests', 'Acquisition', 'Playback', 'Reading', 'Profiles', 'Emulation', 'Notifications', 'Collections', 'Calendar', 'Statistics');
                 """;
             var modules = await Context.ReadSql.ReadListAsync<InstanceModuleData>(sql, CancellationToken);
             var library = modules.Any(module => module.Key == "Library" && module.IsEnabled);
@@ -38,6 +38,7 @@ namespace Jularr.Backend.Service.User.Instance.V1
             var notifications = modules.Any(module => module.Key == "Notifications" && module.IsEnabled);
             var collections = modules.Any(module => module.Key == "Collections" && module.IsEnabled);
             var calendar = modules.Any(module => module.Key == "Calendar" && module.IsEnabled);
+            var statistics = modules.Any(module => module.Key == "Statistics" && module.IsEnabled);
 
             // Reuse verified central grants.
             var permissions = ServiceGate.GetPermissions(Auth.AccountId, Auth.ProfileId, Auth.ProfileOwnerAccountId, Auth.AccountRoleTypeId);
@@ -55,7 +56,8 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 library && emulation && permissions.Contains("profile.playback", StringComparer.Ordinal),
                 notifications && permissions.Contains("profile.notifications", StringComparer.Ordinal),
                 library && collections && permissions.Contains("profile.collections", StringComparer.Ordinal),
-                library && calendar && permissions.Contains("profile.media.read", StringComparer.Ordinal));
+                library && calendar && permissions.Contains("profile.media.read", StringComparer.Ordinal),
+                library && statistics && permissions.Contains("profile.media.read", StringComparer.Ordinal));
         }
     }
 }

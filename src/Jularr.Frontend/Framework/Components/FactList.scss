@@ -1,0 +1,24 @@
+.fact-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 0 0 24px;
+
+    &__fact {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+
+        dt {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        dd {
+            margin: 4px 0 0;
+            font-size: 1.25rem;
+            font-weight: 650;
+        }
+    }
+}
