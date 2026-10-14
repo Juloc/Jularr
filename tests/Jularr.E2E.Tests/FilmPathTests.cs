@@ -6,15 +6,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class FilmPathTests
     {
-        [ClassInitialize]
-        public static void InstallBrowser(TestContext _)
-        {
-            if (Microsoft.Playwright.Program.Main(["install", "chromium"]) != 0)
-            {
-                JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
-            }
-        }
-
         [TestMethod]
         [Timeout(600_000)]
         public async Task FilmAndEpisode_FromSetupToRequestDownloadImportPlayAndResume()
@@ -33,26 +24,23 @@ namespace Jularr.E2E.Tests
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
                 ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
             });
-            using var playwright = await Playwright.CreateAsync();
-            await using var browser = await playwright.Chromium.LaunchAsync();
-            var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
-            var page = await context.NewPageAsync();
-            var problems = Steps.Watch(page);
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
 
             try
             {
                 // Setup, TMDB, the library with a film and a series path, indexer and download client.
-                await Owner.SetUpAndSignInAsync(context, page);
+                await Owner.SetUpAndSignInAsync(session.Context, page);
                 await Steps.SetTmdbKeyAsync(page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"), new LibraryPath("Series", "Series"));
                 await Steps.AddUsenetAsync(page, fakes, "2000,2040,5000,5040");
 
-                // Both are requested; their releases appear only afterwards.
+                // Both are requested; each title's releases appear just before its manual search.
                 await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
                 await Steps.RequestAsync(page, "Test Series", FakeServices.SeriesTitle);
-                fakes.Offer(film, otherFilm, episode);
 
                 // Wanted shows every candidate with its decision; the chosen one is downloaded.
+                fakes.Offer(film, otherFilm);
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = otherFilm.Title }).InnerTextAsync(), "Different title");
@@ -60,6 +48,7 @@ namespace Jularr.E2E.Tests
                 await Steps.GrabAsync(page, film);
 
                 // A single episode is searched by its season and number.
+                fakes.Offer(episode);
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
                 var search = Steps.FormWith(page, "Start search");
                 await search.Locator("[name=ParentUnitNumber]").FillAsync("1");
@@ -95,7 +84,7 @@ namespace Jularr.E2E.Tests
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
                 Assert.IsTrue(resumed >= 4.5, "The episode started at " + resumed + " s instead of continuing.");
 
-                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {

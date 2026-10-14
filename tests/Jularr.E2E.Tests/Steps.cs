@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO.Compression;
+using System.Security;
 using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
@@ -8,6 +10,9 @@ namespace Jularr.E2E.Tests
     internal static class Steps
     {
         public static readonly float MediaTimeout = 30_000;
+
+        // A 1x1 PNG: blank provider pictures and comic pages.
+        private static readonly byte[] Pixel = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=");
 
         // Browser errors, script errors and server faults a page caused.
         public static ConcurrentQueue<string> Watch(IPage page)
@@ -28,9 +33,8 @@ namespace Jularr.E2E.Tests
         // Pictures from provider hosts get a blank image; anything else leaving this machine fails visibly.
         public static async Task KeepLocalAsync(IBrowserContext context)
         {
-            byte[] pixel = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=");
             await context.RouteAsync(url => new Uri(url) is { IsLoopback: false, Scheme: "http" or "https" }, route =>
-                route.Request.ResourceType == "image" ? route.FulfillAsync(new() { ContentType = "image/png", BodyBytes = pixel }) : route.AbortAsync());
+                route.Request.ResourceType == "image" ? route.FulfillAsync(new() { ContentType = "image/png", BodyBytes = Pixel }) : route.AbortAsync());
         }
 
         public static ILocator FormWith(IPage page, string button) =>
@@ -202,11 +206,18 @@ namespace Jularr.E2E.Tests
             return details;
         }
 
+        public static async Task OpenReaderAsync(IPage page, string details)
+        {
+            await page.GotoAsync(details);
+            await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
+        }
+
         // Opens the next section and reads a little in it; the reader saves the position shortly after scrolling.
         public static async Task ReadNextSectionAsync(IPage page)
         {
             await page.Locator("[data-role=next]").First.ClickAsync();
             await page.WaitForURLAsync(url => url.Contains("s=1", StringComparison.Ordinal));
+            await page.Locator("[data-role=content]").HoverAsync();
             await page.RunAndWaitForResponseAsync(() => page.Mouse.WheelAsync(0, 800),
                 response => response.Request.Method == "PUT" && response.Ok, new() { Timeout = MediaTimeout });
         }
@@ -221,38 +232,37 @@ namespace Jularr.E2E.Tests
         // A two-chapter EPUB 3.
         public static string WriteEpub(string file, string title, string author)
         {
-            using var archive = System.IO.Compression.ZipFile.Open(file, System.IO.Compression.ZipArchiveMode.Create);
-            var mimetype = archive.CreateEntry("mimetype", System.IO.Compression.CompressionLevel.NoCompression);
+            using var archive = ZipFile.Open(file, ZipArchiveMode.Create);
+            var mimetype = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
             using (var writer = new StreamWriter(mimetype.Open()))
             {
                 writer.Write("application/epub+zip");
             }
 
             Entry(archive, "META-INF/container.xml", """<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>""");
-            Entry(archive, "OEBPS/content.opf", $"""<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">e2e-book</dc:identifier><dc:title>{title}</dc:title><dc:creator>{author}</dc:creator><dc:language>en</dc:language></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/><item id="two" href="two.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="one"/><itemref idref="two"/></spine></package>""");
-            Entry(archive, "OEBPS/nav.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body><nav epub:type="toc"><ol><li><a href="one.xhtml">Chapter One</a></li><li><a href="two.xhtml">Chapter Two</a></li></ol></nav></body></html>""");
+            Entry(archive, "OEBPS/content.opf", $"""<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">e2e-book</dc:identifier><dc:title>{SecurityElement.Escape(title)}</dc:title><dc:creator>{SecurityElement.Escape(author)}</dc:creator><dc:language>en</dc:language><meta property="dcterms:modified">2026-01-01T00:00:00Z</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/><item id="two" href="two.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="one"/><itemref idref="two"/></spine></package>""");
+            Entry(archive, "OEBPS/nav.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc"><ol><li><a href="one.xhtml">Chapter One</a></li><li><a href="two.xhtml">Chapter Two</a></li></ol></nav></body></html>""");
             // Chapters long enough to scroll through.
             var text = string.Concat(Enumerable.Range(1, 60).Select(number => "<p>Paragraph " + number + " of a long chapter, written to be read on.</p>"));
-            Entry(archive, "OEBPS/one.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Chapter One</h1>""" + text + "</body></html>");
-            Entry(archive, "OEBPS/two.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Chapter Two</h1>""" + text + "</body></html>");
+            Entry(archive, "OEBPS/one.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1>""" + text + "</body></html>");
+            Entry(archive, "OEBPS/two.xhtml", """<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Two</title></head><body><h1>Chapter Two</h1>""" + text + "</body></html>");
             return file;
         }
 
         // A comic archive of numbered pages.
         public static string WriteComic(string file, int pages)
         {
-            var pixel = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=");
-            using var archive = System.IO.Compression.ZipFile.Open(file, System.IO.Compression.ZipArchiveMode.Create);
+            using var archive = ZipFile.Open(file, ZipArchiveMode.Create);
             for (var number = 1; number <= pages; number++)
             {
                 using var stream = archive.CreateEntry(number.ToString("000", System.Globalization.CultureInfo.InvariantCulture) + ".png").Open();
-                stream.Write(pixel);
+                stream.Write(Pixel);
             }
 
             return file;
         }
 
-        private static void Entry(System.IO.Compression.ZipArchive archive, string name, string content)
+        private static void Entry(ZipArchive archive, string name, string content)
         {
             using var writer = new StreamWriter(archive.CreateEntry(name).Open());
             writer.Write(content);

@@ -6,15 +6,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class DevicePairingTests
     {
-        [ClassInitialize]
-        public static void InstallBrowser(TestContext _)
-        {
-            if (Microsoft.Playwright.Program.Main(["install", "chromium"]) != 0)
-            {
-                JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
-            }
-        }
-
         [TestMethod]
         [Timeout(300_000)]
         public async Task TvShowsCode_PhoneConfirmsTheShownDevice_TvSignsIn()

@@ -6,15 +6,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class ReadingPathTests
     {
-        [ClassInitialize]
-        public static void InstallBrowser(TestContext _)
-        {
-            if (Microsoft.Playwright.Program.Main(["install", "chromium"]) != 0)
-            {
-                JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
-            }
-        }
-
         [TestMethod]
         [Timeout(600_000)]
         public async Task BookMangaAndLightNovel_FromMetadataToRequestDownloadImportReadAndContinue()
@@ -33,16 +24,12 @@ namespace Jularr.E2E.Tests
                 ["Providers:AniList"] = fakes.AniList.ToString(),
                 ["Storage:LocalPaths:0"] = folders.Library
             });
-            using var playwright = await Playwright.CreateAsync();
-            await using var browser = await playwright.Chromium.LaunchAsync();
-            var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
-            await Steps.KeepLocalAsync(context);
-            var page = await context.NewPageAsync();
-            var problems = Steps.Watch(page);
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
 
             try
             {
-                await Owner.SetUpAndSignInAsync(context, page);
+                await Owner.SetUpAndSignInAsync(session.Context, page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"), new LibraryPath("Manga", "Book", "Manga"),
                     new LibraryPath("Light Novels", "Book", "Light novel"));
                 await Steps.AddUsenetAsync(page, fakes, "7000,7020,7030");
@@ -51,21 +38,24 @@ namespace Jularr.E2E.Tests
                 await Steps.ImportAndRequestAsync(page, "Book", null, FakeServices.BookTitle);
                 await Steps.ImportAndRequestAsync(page, "Book", "Manga", FakeServices.MangaTitle, "anilist");
                 await Steps.ImportAndRequestAsync(page, "Book", "Light novel", FakeServices.NovelTitle, "anilist");
-                fakes.Offer(book, volume, novel);
 
-                // Each search finds its release; the chosen one is downloaded.
+                // Each search finds its release, offered just before; the chosen one is downloaded.
+                fakes.Offer(book);
                 await Steps.OpenWantedAsync(page, FakeServices.BookTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = book.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, book);
+                fakes.Offer(volume);
                 await Steps.OpenWantedAsync(page, FakeServices.MangaTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = volume.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, volume);
+                fakes.Offer(novel);
                 await Steps.OpenWantedAsync(page, FakeServices.NovelTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = novel.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, novel);
+                CollectionAssert.AreEqual(new[] { book, volume, novel }.Select(release => fakes.NzbAddress(release).ToString()).ToArray(), fakes.Grabbed.ToArray());
 
                 // Both land in their own library path.
                 var bookDetails = await Steps.WaitForAvailableAsync(page, FakeServices.BookTitle, "Read");
@@ -76,30 +66,24 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Light Novels"), "*.epub", SearchOption.AllDirectories).Count(), "The light novel was not imported once.");
 
                 // Reading on saves the position in each.
-                await page.GotoAsync(bookDetails);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
+                await Steps.OpenReaderAsync(page, bookDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter One");
                 await Steps.ReadNextSectionAsync(page);
-                await page.GotoAsync(mangaDetails);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
+                await Steps.OpenReaderAsync(page, mangaDetails);
                 await Steps.TurnAsync(page);
-                await page.GotoAsync(novelDetails);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
+                await Steps.OpenReaderAsync(page, novelDetails);
                 await Steps.ReadNextSectionAsync(page);
 
                 // Signed out and in again, both open where reading stopped.
                 await Steps.SignOutAndInAsync(page);
-                await page.GotoAsync(bookDetails);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
+                await Steps.OpenReaderAsync(page, bookDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
-                await page.GotoAsync(mangaDetails);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
-                StringAssert.Contains(await page.Locator("[data-role=position]").InnerTextAsync(), "2");
-                await page.GotoAsync(novelDetails);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Read", Exact = true }).First.ClickAsync();
+                await Steps.OpenReaderAsync(page, mangaDetails);
+                Assert.AreEqual("2 / 3", (await page.Locator("[data-role=position]").InnerTextAsync()).Trim());
+                await Steps.OpenReaderAsync(page, novelDetails);
                 StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
 
-                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {

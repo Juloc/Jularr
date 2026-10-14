@@ -6,15 +6,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class MusicPathTests
     {
-        [ClassInitialize]
-        public static void InstallBrowser(TestContext _)
-        {
-            if (Microsoft.Playwright.Program.Main(["install", "chromium"]) != 0)
-            {
-                JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
-            }
-        }
-
         [TestMethod]
         [Timeout(600_000)]
         public async Task Album_FromMetadataToRequestDownloadImportPlayAndResume()
@@ -33,29 +24,26 @@ namespace Jularr.E2E.Tests
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
                 ["Media:FfprobePath"] = Steps.FfprobeBeside(ffmpeg) ?? ""
             });
-            using var playwright = await Playwright.CreateAsync();
-            await using var browser = await playwright.Chromium.LaunchAsync();
-            var context = await browser.NewContextAsync(new BrowserNewContextOptions { BaseURL = jularr.Address.ToString() });
-            await Steps.KeepLocalAsync(context);
-            var page = await context.NewPageAsync();
-            var problems = Steps.Watch(page);
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
 
             try
             {
-                await Owner.SetUpAndSignInAsync(context, page);
+                await Owner.SetUpAndSignInAsync(session.Context, page);
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Music", "Music"));
                 await Steps.AddUsenetAsync(page, fakes, "3000,3040");
 
                 // The album comes from MusicBrainz through the Works page; the Owner requests it on its details.
                 await Steps.ImportAndRequestAsync(page, "Music", null, FakeServices.AlbumTitle);
-                fakes.Offer(album, otherArtist);
 
                 // Only the requested artist's release is eligible.
+                fakes.Offer(album, otherArtist);
                 await Steps.OpenWantedAsync(page, FakeServices.AlbumTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("tr", new() { HasText = otherArtist.Title }).InnerTextAsync(), "Different artist");
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = otherArtist.Title }).InnerTextAsync(), "Not the wanted artist");
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = album.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, album);
+                CollectionAssert.AreEqual(new[] { fakes.NzbAddress(album).ToString() }, fakes.Grabbed.ToArray());
 
                 // All three tracks land in the music library.
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.AlbumTitle);
@@ -74,7 +62,7 @@ namespace Jularr.E2E.Tests
                 var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
                 Assert.IsTrue(resumed >= 4.5, "The track started at " + resumed + " s instead of continuing.");
 
-                CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {

@@ -90,8 +90,8 @@ namespace Jularr.E2E.Tests
             return services;
         }
 
-        // Releases appear only now, so no automatic search grabs before the manual one.
-        public void Offer(params FakeRelease[] releases) => _offered = releases;
+        // Releases appear only now, just before their manual search, so no automatic search grabs first.
+        public void Offer(params FakeRelease[] releases) => _offered = [.. _offered, .. releases];
 
         public Uri NzbAddress(FakeRelease release) => new(Address, "newznab/getnzb/" + release.Guid);
 

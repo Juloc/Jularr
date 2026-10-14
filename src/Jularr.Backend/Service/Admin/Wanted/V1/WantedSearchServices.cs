@@ -31,14 +31,17 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var (target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
 
-            // Series searches may target one season or episode, Manga searches one volume or, like the automatic search, every missing one.
+            // Manga searches the asked volume, else like the automatic search the whole series as a pack or the next missing volume; Series one season or episode.
             UnitScope? scope = null;
-            if (target.MediaTypeId == MediaType.Series && Data.ParentUnitNumber is not null || target.MediaSubtypeId == MediaSubtype.Manga)
+            if (target.MediaSubtypeId == MediaSubtype.Manga)
             {
                 var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
-                scope = target.MediaSubtypeId == MediaSubtype.Manga && Data.UnitNumber is null
-                    ? AcquisitionSelectionLogic.ReadNextUnitScope(units, null, firstAttempt: true)
-                    : AcquisitionSelectionLogic.ReadUnitScope(units, target.MediaSubtypeId == MediaSubtype.Manga ? null : Data.ParentUnitNumber, Data.UnitNumber);
+                scope = Data.UnitNumber is { } volume ? AcquisitionSelectionLogic.ReadUnitScope(units, null, volume) : AcquisitionSelectionLogic.ReadNextUnitScope(units, null, firstAttempt: true);
+            }
+            else if (target.MediaTypeId == MediaType.Series && Data.ParentUnitNumber is not null)
+            {
+                var units = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadUnitStatesAsync(target.WantedItemId, ct), CancellationToken);
+                scope = AcquisitionSelectionLogic.ReadUnitScope(units, Data.ParentUnitNumber, Data.UnitNumber);
             }
             else if (Data.UnitNumber is not null)
             {

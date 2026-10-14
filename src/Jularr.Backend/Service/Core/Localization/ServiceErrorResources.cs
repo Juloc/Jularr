@@ -40,7 +40,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.backup_disk_full", "The backup folder is full."),
             new("errors.backup_timeout", "The backup tool ran too long and was stopped."),
             new("errors.backup_running", "A restore is already running."),
-            new("errors.metadata_unavailable", "TMDB is not configured or cannot be reached."),
+            new("errors.metadata_unavailable", "The metadata source is not configured or cannot be reached."),
             new("errors.metadata_authentication_failed", "TMDB rejected the stored key."),
             new("errors.metadata_rate_limited", "TMDB limits requests right now. Please try again shortly."),
             new("errors.reading_unavailable", "This book is not saved for reading while its storage is offline."),

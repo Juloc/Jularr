@@ -7,16 +7,6 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class FirstRunTests
     {
-        [ClassInitialize]
-        public static void InstallBrowser(TestContext _)
-        {
-            // Playwright keeps its browsers in its own cache; this fetches Chromium once.
-            if (Microsoft.Playwright.Program.Main(["install", "chromium"]) != 0)
-            {
-                JularrInstance.Unavailable("Chromium for Playwright could not be installed.");
-            }
-        }
-
         [TestMethod]
         [Timeout(300_000)]
         public async Task FreshInstance_OwnerSetupSignInAndMenuPages_OpenWithoutErrors()
