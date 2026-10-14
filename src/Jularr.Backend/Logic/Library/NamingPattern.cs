@@ -12,8 +12,11 @@ namespace Jularr.Backend.Logic.Library
 
         public static void Validate(MediaType mediaType, string pattern, string field)
         {
-            var names = Token().Matches(pattern).Select(match => match.Groups["name"].Value).ToArray();
-            if (names.Any(name => !Tokens.Contains(name, StringComparer.OrdinalIgnoreCase)) || Token().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0)
+            // Only season and episode take a number format.
+            var tokens = Token().Matches(pattern);
+            var names = tokens.Select(match => match.Groups["name"].Value).ToArray();
+            if (names.Any(name => !Tokens.Contains(name, StringComparer.OrdinalIgnoreCase)) || Token().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0
+                || tokens.Any(match => match.Groups["format"].Success && match.Groups["name"].Value.ToLowerInvariant() is not ("season" or "episode")))
             {
                 throw new DataValidationException(field, "naming_unknown_token");
             }
@@ -24,19 +27,43 @@ namespace Jularr.Backend.Logic.Library
                 throw new DataValidationException(field, "naming_incomplete");
             }
 
-            if (pattern.Split('/').Any(segment => segment.Trim() is "" or "." or ".."))
+            // The file itself is always named by what it is.
+            var file = pattern.Split('/')[^1];
+            if (pattern.Split('/').Any(segment => segment.Trim() is "" or "." or "..")
+                || !file.Contains(mediaType == MediaType.Series ? "{Episode" : "{Title}", StringComparison.OrdinalIgnoreCase))
             {
                 throw new DataValidationException(field, "naming_invalid_path");
             }
         }
 
-        // A path stem below the library root.
-        public static string Apply(string pattern, NamingValues values) => string.Join('/', pattern.Split('/').Select(segment =>
+        // A path stem below the library root; a folder left empty drops out.
+        public static string Apply(string pattern, NamingValues values)
         {
-            var text = Token().Replace(segment, match => Value(match.Groups["name"].Value, match.Groups["format"].Value, values));
+            var segments = new List<string>();
+            var parts = pattern.Split('/');
+            for (var index = 0; index < parts.Length; index++)
+            {
+                // Empty placeholders leave first, with their brackets and separators; the values never pass through that cleanup.
+                var literal = Tidy(Token().Replace(parts[index], match => Value(match.Groups["name"].Value, match.Groups["format"].Value, values).Length > 0 ? match.Value : ""));
+                if (literal.Length == 0 && index < parts.Length - 1)
+                {
+                    continue;
+                }
+
+                var text = Token().Replace(literal, match => LibraryNaming.SafeName(Value(match.Groups["name"].Value, match.Groups["format"].Value, values)));
+                segments.Add(LibraryNaming.SafeName(text.Length > 200 ? text[..200] : text));
+            }
+
+            return string.Join('/', segments);
+        }
+
+        private static string Tidy(string text)
+        {
+            text = InnerSpace().Replace(text, "$1$2");
             text = EmptyBrackets().Replace(text, "");
-            return LibraryNaming.SafeName(DanglingSeparator().Replace(text.Trim(), "").Trim());
-        }));
+            text = RepeatedSeparator().Replace(text, " -");
+            return DanglingSeparator().Replace(Spaces().Replace(text, " ").Trim(), "").Trim();
+        }
 
         private static string Value(string name, string format, NamingValues values) => name.ToLowerInvariant() switch
         {
@@ -63,6 +90,15 @@ namespace Jularr.Backend.Logic.Library
 
         [GeneratedRegex(@"(?:\s+[-.]+)+$|^(?:[-.]+\s+)+")]
         private static partial Regex DanglingSeparator();
+
+        [GeneratedRegex(@"([\[(])\s+|\s+([\])])")]
+        private static partial Regex InnerSpace();
+
+        [GeneratedRegex(@"\s+-(?:\s+-)+(?=\s|$)")]
+        private static partial Regex RepeatedSeparator();
+
+        [GeneratedRegex(@"\s{2,}")]
+        private static partial Regex Spaces();
     }
 
     internal sealed record NamingValues(string Title, int? Year, decimal? Season, decimal? Episode, string? EpisodeTitle, string? Quality, string? ReleaseGroup, string? Edition, int Revision);

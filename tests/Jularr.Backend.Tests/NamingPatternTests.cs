@@ -30,6 +30,14 @@ namespace Jularr.Backend.Tests
             var bare = new NamingValues("Film", null, null, null, null, null, null, null, 1);
             Assert.AreEqual("Film/Film", NamingPattern.Apply(Defaults[MediaType.Movie], bare));
             Assert.AreEqual("Film", NamingPattern.Apply("{Title} - {Edition} [{Release Group}]", bare));
+            Assert.AreEqual("Film - GRP [WEB-1080p]", NamingPattern.Apply("{Title} - {Edition} - {Release Group} [{Quality} {Proper}]",
+                new NamingValues("Film", null, null, null, null, "WEB-1080p", "GRP", null, 1)));
+            Assert.AreEqual("Film", NamingPattern.Apply("{Edition}/{Title}", bare));
+
+            // Titles keep what the cleanup would cut; values cannot open folders.
+            Assert.AreEqual("Mr (2000)/Mr (2000)", NamingPattern.Apply(Defaults[MediaType.Movie], new NamingValues("Mr.", 2000, null, null, null, null, null, null, 1)));
+            Assert.AreEqual("Foo () (2000)/Foo () (2000)", NamingPattern.Apply(Defaults[MediaType.Movie], new NamingValues("Foo ()", 2000, null, null, null, null, null, null, 1)));
+            Assert.AreEqual("a b/a b", NamingPattern.Apply(Defaults[MediaType.Movie], new NamingValues("a/b", null, null, null, null, null, null, null, 1)));
         }
 
         [TestMethod]
@@ -39,6 +47,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title} {", "Pattern")).Code);
             Assert.AreEqual("naming_incomplete", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Series, "{Title} E{Episode}", "Pattern")).Code);
             Assert.AreEqual("naming_invalid_path", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title}//{Title}", "Pattern")).Code);
+            Assert.AreEqual("naming_invalid_path", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title}/{Year}", "Pattern")).Code);
+            Assert.AreEqual("naming_unknown_token", Assert.ThrowsExactly<DataValidationException>(() => NamingPattern.Validate(MediaType.Movie, "{Title:00}", "Pattern")).Code);
             NamingPattern.Validate(MediaType.Series, Defaults[MediaType.Series], "Pattern");
         }
 

@@ -159,16 +159,17 @@ namespace Jularr.Backend.Logic.Library
         private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode) =>
             new(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision);
 
-        // The quality tag the name already carries, else the stored release quality, else the analysed width, wide formats included.
-        private static string? QualityOf(LibraryRenameFileData file) => QualityTag().Match(Path.GetFileNameWithoutExtension(file.RelativePath)) is { Success: true } match
-            ? match.Groups[1].Value
-            : file.QualityKey ?? file.Width switch
-            {
-                >= 3500 => "2160p",
-                >= 1800 => "1080p",
-                >= 1200 => "720p",
-                _ => null
-            };
+        // The stored release quality, else a tag only an older name carries, else the analysed width, wide formats included.
+        private static string? QualityOf(LibraryRenameFileData file) => file.QualityKey
+            ?? (QualityTag().Match(Path.GetFileNameWithoutExtension(file.RelativePath)) is { Success: true } match
+                ? match.Groups[1].Value
+                : file.Width switch
+                {
+                    >= 3500 => "2160p",
+                    >= 1800 => "1080p",
+                    >= 1200 => "720p",
+                    _ => null
+                });
 
         // A counted alternative is already in place.
         private static bool IsNamed(string current, string target) => current.Equals(target, StringComparison.OrdinalIgnoreCase)
