@@ -1,7 +1,9 @@
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.Public.Instance.V1;
 using Jularr.Backend.Data.Public.Setup.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Public.Authentication.V1;
+using Jularr.Backend.Service.Public.Instance.V1;
 using Jularr.Backend.Service.Public.Setup.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Modules.Appearance;
@@ -16,13 +18,14 @@ namespace Jularr.Frontend.Pages.Account.Login
     [AllowAnonymous]
     [EnableRateLimiting("public")]
     public sealed class LoginModel(LoginV1 login, ReadAuthenticationV1 authentication, StartPlexV1 startPlex, CompletePlexV1 completePlex,
-        ReadSetupV1 setup, IAntiforgery antiforgery, FrontendAssets assets) : JularrPage
+        ReadSetupV1 setup, ReadInstancePresentationV1 presentation, IAntiforgery antiforgery, FrontendAssets assets) : JularrPage
     {
         private string _email = "";
         private AuthenticationResultV1? _authentication;
         private StartPlexResultV1? _plex;
         private Guid? _plexChallengeId;
         private bool _requiresApproval;
+        private bool _allowsRegistration;
 
         protected override void Define(Page page)
         {
@@ -42,7 +45,8 @@ namespace Jularr.Frontend.Pages.Account.Login
                     form.Text(x => x.Email, "account.field.email", "username");
                     form.Password(x => x.Password, "account.field.password", "current-password");
                     form.Submit("account.login.submit");
-                }, action, token, new LoginDataV1(_email, ""), FormError)
+                }, action, token, new LoginDataV1(_email, ""), FormError),
+                .. _allowsRegistration ? new IUiComponent[] { new A(new Text("account.register.title")).Attribute("href", "/Account/Register") } : []
             ]).Class("auth-card"));
             page.Content.Add(new Appearance(collapsible: true));
 
@@ -83,9 +87,15 @@ namespace Jularr.Frontend.Pages.Account.Login
                 return LocalRedirect(SafeReturnUrl(returnUrl));
             }
 
-            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            await LoadDataAsync();
             PreparePage();
             return Page();
+        }
+
+        protected override async Task LoadDataAsync()
+        {
+            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            _allowsRegistration = (await presentation.ExecuteAsync<InstancePresentationDetailsV1>(new ReadInstancePresentationParametersV1(), HttpContext.RequestAborted)).AllowsRegistration;
         }
 
         public async Task<IActionResult> OnPostAsync(string? email, string? password, string? returnUrl)

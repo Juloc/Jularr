@@ -182,6 +182,11 @@ namespace Jularr.Backend.Tests
             await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             var request = new RegisterDataV1("new@example.test", "New", Password, 1);
 
+            // Only with the Registration module.
+            using var closed = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", request);
+            Assert.AreEqual(HttpStatusCode.Forbidden, closed.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Registration'");
+
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", request);
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
             Assert.IsTrue((await created.Content.ReadFromJsonAsync<RegisterResultV1>())!.RequiresApproval);
