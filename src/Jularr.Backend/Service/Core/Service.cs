@@ -91,6 +91,20 @@ namespace Jularr.Backend.Service.Core
             return (TOutput)await RunAsync(parameters, data, typeof(TOutput), definition, cancellationToken);
         }
 
+        // Large uploads check the caller and permission before their body is read.
+        public async Task AuthorizeAsync(TParameters parameters, CancellationToken cancellationToken)
+        {
+            var caller = await Runtime.Gate.RequireCallerAsync(Area, cancellationToken);
+            if (caller is null || caller.Area != Area || string.IsNullOrWhiteSpace(caller.PrincipalKey))
+            {
+                throw new UnauthorizedAccessException("The service caller has not been verified for this area.");
+            }
+
+            var permission = GetPermission(parameters ?? BaseParameters.CreateEmpty<TParameters>(), _definition.Value.DefaultResultType)
+                ?? throw new InvalidOperationException("A service permission must be declared.");
+            await Runtime.Gate.RequireAccessAsync(caller, permission, cancellationToken);
+        }
+
         // Timed per call; only server faults count as errors.
         private async Task<IServiceOutput> RunAsync(TParameters parameters, TData data, Type resultType, ServiceDefinition definition, CancellationToken cancellationToken)
         {

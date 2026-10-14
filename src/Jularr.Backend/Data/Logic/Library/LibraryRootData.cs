@@ -139,9 +139,10 @@ namespace Jularr.Backend.Data.Logic.Library
     // Where a Work's own files go: its title and the first writable library of its type and subtype.
     internal sealed class UploadTargetData : BaseData
     {
-        public UploadTargetData(string canonicalTitle, MediaSubtype? mediaSubtypeId, long libraryRootId, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath,
-            string relativePath)
+        public UploadTargetData(string canonicalTitle, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, long? libraryRootId, long? storageMountId, StorageProtocolType? storageProtocolTypeId,
+            string? sharePath, string? relativePath)
         {
+            MediaTypeId = mediaTypeId;
             CanonicalTitle = canonicalTitle;
             MediaSubtypeId = mediaSubtypeId;
             LibraryRootId = libraryRootId;
@@ -154,22 +155,26 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string CanonicalTitle { get; }
 
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
         [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
         public MediaSubtype? MediaSubtypeId { get; }
 
-        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
-        public long LibraryRootId { get; }
+        // None without a writable library of the Work's kind.
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
+        public long? LibraryRootId { get; }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
-        public long StorageMountId { get; }
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id), false)]
+        public long? StorageMountId { get; }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
-        public StorageProtocolType StorageProtocolTypeId { get; }
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId), false)]
+        public StorageProtocolType? StorageProtocolTypeId { get; }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
-        public string SharePath { get; }
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath), false)]
+        public string? SharePath { get; }
 
-        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
-        public string RelativePath { get; }
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath), false)]
+        public string? RelativePath { get; }
     }
 }

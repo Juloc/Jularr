@@ -456,6 +456,8 @@ namespace Jularr.Backend.Service.Core
                     throw new BadHttpRequestException("A form with the file is required.");
                 }
 
+                await service.AuthorizeAsync(parameters, cancellationToken);
+
                 var data = FormDataBinder.Bind<TData>(await http.Request.ReadFormAsync(cancellationToken));
                 var result = await service.ExecuteAsync(parameters, data, cancellationToken);
                 await ApplyAuthenticationAsync(http, result, antiforgery);

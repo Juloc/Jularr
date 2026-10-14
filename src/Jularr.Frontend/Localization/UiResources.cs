@@ -811,7 +811,7 @@ namespace Jularr.Frontend.Localization
             new("instance.module.Subtitles", "Subtitles from providers"),
             new("instance.module.Uploads", "Upload manga volumes"),
             new("work.upload", "Upload a volume"),
-            new("work.upload.file", "Volume file (CBZ, CBR, CB7, EPUB or PDF)"),
+            new("work.upload.file", "Volume file"),
             new("work.upload.volume", "Volume number (empty: the whole series)"),
             new("work.upload.submit", "Upload"),
             new("work.upload.done", "The volume is in the library."),
