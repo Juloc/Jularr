@@ -31,6 +31,31 @@ namespace Jularr.Backend.Tests
             http = Request("10.0.0.2", "203.0.113.7", "https", "jularr.example.com");
             TrustedProxies.Apply(http, []);
             Assert.AreEqual(IPAddress.Parse("10.0.0.2"), http.Connection.RemoteIpAddress);
+
+            // A port is kept; a proxy seen as an IPv4-mapped address still counts; no peer, no change.
+            http = Request("::ffff:10.0.0.2", "203.0.113.7", "http", "jularr.example.com:80");
+            TrustedProxies.Apply(http, Proxies);
+            Assert.AreEqual(("203.0.113.7", "jularr.example.com:80"), (http.Connection.RemoteIpAddress!.ToString(), http.Request.Host.Value));
+            http = Request("10.0.0.2", "203.0.113.7", "https", null);
+            http.Connection.RemoteIpAddress = null;
+            TrustedProxies.Apply(http, Proxies);
+            Assert.AreEqual("http", http.Request.Scheme);
+        }
+
+        [TestMethod]
+        public void WrongDeviceTokens_BlockTheirAddressAfterThirty()
+        {
+            using var failures = new DeviceTokenFailures();
+            var address = DeviceTokenFailures.Key(IPAddress.Parse("2001:db8:1:2:3:4:5:6"));
+            Assert.AreEqual("2001:db8:1:2::/64", address);
+            for (var attempt = 0; attempt < 30; attempt++)
+            {
+                Assert.IsFalse(failures.IsBlocked(address));
+                failures.Fail(address);
+            }
+
+            Assert.IsTrue(failures.IsBlocked(address));
+            Assert.IsFalse(failures.IsBlocked(DeviceTokenFailures.Key(IPAddress.Parse("2001:db8:1:3::1"))));
         }
 
         [TestMethod]
@@ -43,7 +68,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("https", http.Request.Scheme);
 
             // Malformed entries leave the request as it came.
-            foreach (var (chain, scheme, host) in new[] { ("not-an-address", "https", "a.example"), ("203.0.113.7", "ftp", "a.example"), ("203.0.113.7", "https", "user@evil.example/x") })
+            foreach (var (chain, scheme, host) in new[] { ("not-an-address", "https", "a.example"), ("203.0.113.7", "ftp", "a.example"), ("203.0.113.7", "https", "user@evil.example/x"),
+                ("203.0.113.7", "https", "a.example:port") })
             {
                 http = Request("10.0.0.2", chain, scheme, host);
                 TrustedProxies.Apply(http, Proxies);
@@ -61,11 +87,15 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Devices'");
 
             var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""))!;
-            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings",
-                new UpdateInstanceSettingsDataV1("Jularr", 1, version, trustedProxies: ["proxy.local"]));
-            StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "invalid_network");
+            foreach (var proxy in new[] { "proxy.local", "0.0.0.0/0" })
+            {
+                using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings",
+                    new UpdateInstanceSettingsDataV1("Jularr", 1, version, trustedProxies: [proxy]));
+                StringAssert.Contains(await invalid.Content.ReadAsStringAsync(), "invalid_network");
+            }
+
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/settings",
-                new UpdateInstanceSettingsDataV1("Jularr", 1, version, trustedProxies: ["10.0.0.1/8", " 192.168.1.5 ", "10.0.0.0/8"]));
+                new UpdateInstanceSettingsDataV1("Jularr", 1, version, trustedProxies: ["10.0.0.1/8", " 192.168.1.5 ", "10.0.0.0/8", "::ffff:192.168.1.5"]));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             Assert.AreEqual("{10.0.0.0/8,192.168.1.5/32}", await host.ScalarAsync("SELECT \"TrustedProxies\"::text FROM \"InstanceSettings\""));
 

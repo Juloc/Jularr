@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Threading.RateLimiting;
@@ -11,31 +13,24 @@ namespace Jularr.Backend.Service.Core
 {
     // App device token: "Bearer <session>.<revision>.<secret>".
     internal sealed class DeviceBearerHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder,
-        SessionAuthentication authentication, IOptions<AuthenticationOptions> authenticationOptions, TimeProvider time) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+        SessionAuthentication authentication, IOptions<AuthenticationOptions> authenticationOptions, TimeProvider time, DeviceTokenFailures failures) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
-        // Wrong tokens per address; once spent, the database is not asked for a minute.
-        private static readonly PartitionedRateLimiter<string> Failures = PartitionedRateLimiter.Create<string, string>(address =>
-            RateLimitPartition.GetFixedWindowLimiter(address, _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-
         public static string Token(SessionCredentialsData session) =>
             session.PublicId.ToString("D") + "." + session.RotationRevision.ToString(CultureInfo.InvariantCulture) + "." + session.Token;
 
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            var address = Context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            using (var available = Failures.AttemptAcquire(address, 0))
+            var address = DeviceTokenFailures.Key(Context.Connection.RemoteIpAddress);
+            if (failures.IsBlocked(address))
             {
-                if (!available.IsAcquired)
-                {
-                    return AuthenticateResult.Fail("Too many wrong device tokens.");
-                }
+                return AuthenticateResult.Fail("Too many wrong device tokens.");
             }
 
             var header = Request.Headers.Authorization.ToString();
-            var parts = header.StartsWith("Bearer ", StringComparison.Ordinal) ? header[7..].Split('.') : [];
+            var parts = header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header[7..].Trim().Split('.') : [];
             if (parts.Length != 3)
             {
-                return Failed(address);
+                return failures.Fail(address);
             }
 
             var principal = new ClaimsPrincipal(new ClaimsIdentity([
@@ -57,14 +52,38 @@ namespace Jularr.Backend.Service.Core
             }
             catch (UnauthorizedAccessException)
             {
-                return Failed(address);
+                return failures.Fail(address);
             }
         }
+    }
 
-        private static AuthenticateResult Failed(string address)
+    // Wrong tokens per address; spent, the database is not asked for a minute.
+    internal sealed class DeviceTokenFailures : IDisposable
+    {
+        private readonly PartitionedRateLimiter<string> _limiter = PartitionedRateLimiter.Create<string, string>(address =>
+            RateLimitPartition.GetFixedWindowLimiter(address, _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+
+        // IPv6 clients usually own a whole /64.
+        public static string Key(IPAddress? address) => address switch
         {
-            using var _ = Failures.AttemptAcquire(address);
+            null => "unknown",
+            { IsIPv4MappedToIPv6: true } => address.MapToIPv4().ToString(),
+            { AddressFamily: AddressFamily.InterNetworkV6 } => new IPNetwork(new IPAddress([.. address.GetAddressBytes()[..8], .. new byte[8]]), 64).ToString(),
+            _ => address.ToString()
+        };
+
+        public bool IsBlocked(string address)
+        {
+            using var available = _limiter.AttemptAcquire(address, 0);
+            return !available.IsAcquired;
+        }
+
+        public AuthenticateResult Fail(string address)
+        {
+            using var _ = _limiter.AttemptAcquire(address);
             return AuthenticateResult.Fail("The device token is invalid.");
         }
+
+        public void Dispose() => _limiter.Dispose();
     }
 }

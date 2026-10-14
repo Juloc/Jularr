@@ -26,4 +26,4 @@ Send `Authorization: Bearer <token>` with every request; no cookies, no antiforg
 
 ## Errors
 
-Failures are problem details with a `code` (for example `invalid_code`, `pairing_expired`, `device_pairing_attempts`, `rate_limit_exceeded`) and a `resourceKey` for its text. 401 means the token is unknown, expired or revoked: pair again. Thirty wrong tokens from one address within a minute block further tokens from it for that minute.
+Failures are problem details with a `code` (for example `invalid_code`, `pairing_expired`, `device_pairing_attempts`, `rate_limit_exceeded`) and a `resourceKey` for its text. 401 means the token is unknown, expired or revoked (`GET /api/v1/auth` instead answers with an empty `accountId`): pair again. Thirty wrong tokens from one address within a minute block further tokens from it for that minute.

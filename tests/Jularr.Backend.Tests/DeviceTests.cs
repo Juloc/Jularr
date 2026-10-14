@@ -200,7 +200,9 @@ namespace Jularr.Backend.Tests
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
             using var off = await host.SendAsync(HttpMethod.Get, "/Devices/Link");
             Assert.AreEqual(HttpStatusCode.NotFound, off.StatusCode);
-            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Devices'");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" IN ('Devices', 'Profiles')");
+            using var ownerNewProfile = await host.SendAsync(HttpMethod.Get, "/Account/Profiles/New");
+            Assert.AreEqual(HttpStatusCode.OK, ownerNewProfile.StatusCode);
 
             // A pairing named in the address counts for nothing.
             using var forged = await host.SendAsync(HttpMethod.Get, "/Devices/Link?pairing=" + Guid.NewGuid() + "&code=123456");
@@ -261,6 +263,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Unauthorized, admin.StatusCode);
             using var further = await host.SendAsync(HttpMethod.Post, Approvals, new ApproveDevicePairingDataV1(1, "123456"));
             Assert.AreEqual(HttpStatusCode.Forbidden, further.StatusCode);
+            using var deviceNewProfile = await host.SendAsync(HttpMethod.Get, "/Account/Profiles/New");
+            Assert.AreEqual(HttpStatusCode.NotFound, deviceNewProfile.StatusCode);
             var deviceSession = (Guid)(await host.ScalarAsync("SELECT \"PublicId\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"))!;
             using var renamed = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + deviceSession + "/device", new RenameSessionDeviceDataV1("Living room TV"));
             Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());

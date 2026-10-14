@@ -193,13 +193,15 @@ namespace Jularr.Backend.Service.Core
             services.AddScoped<IServiceGate, ServiceGate>();
             services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
-            services.AddSingleton(provider => new TrustedProxies(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<TimeProvider>()));
+            services.AddSingleton(provider => new TrustedProxies(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<ILogger<TrustedProxies>>()));
+            services.AddSingleton<DeviceTokenFailures>();
 
             // Token requests never read cookies.
             services.AddAuthentication()
                 .AddScheme<AuthenticationSchemeOptions, DeviceBearerHandler>(DeviceBearerScheme, null)
                 .AddPolicyScheme(SessionScheme, null, options => options.ForwardDefaultSelector = http =>
-                    http.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.Ordinal) ? DeviceBearerScheme : CookieAuthenticationDefaults.AuthenticationScheme);
+                    http.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? DeviceBearerScheme : CookieAuthenticationDefaults.AuthenticationScheme);
             services.PostConfigure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(options =>
             {
                 if (options.SchemeMap.ContainsKey(CookieAuthenticationDefaults.AuthenticationScheme))

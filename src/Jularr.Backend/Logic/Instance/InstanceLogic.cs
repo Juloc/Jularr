@@ -31,12 +31,10 @@ namespace Jularr.Backend.Logic.Instance
                 data.PublicUrl = Provider.ProviderLogic.ServerAddress(publicUrl, nameof(data.PublicUrl)).AbsoluteUri;
             }
 
-            // A proxy is an address or a network, stored in its canonical form.
+            // Canonical addresses or networks; trusting everyone is no proxy.
             if (data.TrustedProxies is { } proxies)
             {
-                data.TrustedProxies = [.. proxies.Select(proxy => IPNetwork.TryParse(proxy, out var network) ? network.ToString()
-                    : IPAddress.TryParse(proxy, out var address) ? new IPNetwork(address, address.GetAddressBytes().Length * 8).ToString()
-                    : throw new DataValidationException(nameof(data.TrustedProxies), "invalid_network")).Distinct(StringComparer.Ordinal)];
+                data.TrustedProxies = [.. proxies.Select(proxy => TrustedNetwork(proxy, nameof(data.TrustedProxies)).ToString()).Distinct(StringComparer.Ordinal)];
             }
 
             // Reject concurrent edits.
@@ -69,6 +67,19 @@ namespace Jularr.Backend.Logic.Instance
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
+        }
+    
+        private static IPNetwork TrustedNetwork(string proxy, string field)
+        {
+            var network = IPNetwork.TryParse(proxy, out var parsed) ? parsed
+                : IPAddress.TryParse(proxy, out var address) ? new IPNetwork(new IPAddress(address.GetAddressBytes()), address.GetAddressBytes().Length * 8)
+                : throw new DataValidationException(field, "invalid_network");
+            if (network.BaseAddress.IsIPv4MappedToIPv6 && network.PrefixLength >= 96)
+            {
+                network = new IPNetwork(network.BaseAddress.MapToIPv4(), network.PrefixLength - 96);
+            }
+
+            return network.PrefixLength > 0 ? network : throw new DataValidationException(field, "invalid_network");
         }
     }
 }
