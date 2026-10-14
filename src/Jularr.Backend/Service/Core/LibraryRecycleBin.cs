@@ -64,14 +64,15 @@ namespace Jularr.Backend.Service.Core
         {
             try
             {
-                var file = new FileInfo(Path.Combine(folder, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+                var path = Path.Combine(folder, relativePath.Replace('/', Path.DirectorySeparatorChar));
+                var file = new FileInfo(File.Exists(path) ? StorageFileSystem.ResolveFile(folder, relativePath) : path);
                 if (file.Exists)
                 {
                     file.Delete();
                 }
 
-                for (var directory = file.Directory; directory is not null && directory.FullName.Length > folder.Length
-                    && directory.FullName.StartsWith(folder, StringComparison.Ordinal) && directory.Exists && !directory.EnumerateFileSystemInfos().Any(); directory = directory.Parent)
+                for (var directory = file.Directory; directory is not null && directory.FullName.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                    && directory.Exists && !directory.EnumerateFileSystemInfos().Any(); directory = directory.Parent)
                 {
                     directory.Delete();
                 }

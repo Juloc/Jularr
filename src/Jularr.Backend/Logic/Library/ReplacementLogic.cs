@@ -38,16 +38,14 @@ namespace Jularr.Backend.Logic.Library
 
         public static async Task SaveReplacementSettingsAsync(this LogicContext ctx, ReplacementSettingsSaveData input, CancellationToken ct)
         {
-            var data = input;
-
-            // Only the own folder names a place; the other modes forget it.
-            if (data.RecycleModeId == RecycleMode.OwnFolder && (data.RecycleStorageMountId is null || data.RecyclePath is null))
+            if (input.RecycleModeId == RecycleMode.OwnFolder && (input.RecycleStorageMountId is null || input.RecyclePath is null))
             {
-                throw new DataValidationException(nameof(data.RecyclePath), "required");
+                throw new DataValidationException(nameof(input.RecyclePath), "required");
             }
 
-            data = data.RecycleModeId == RecycleMode.OwnFolder ? data
-                : new ReplacementSettingsSaveData(data.KeepsReleases, data.RecycleModeId, null, null, data.RecycleDays, data.Version);
+            // Only the own folder names a place; the other modes forget it.
+            var data = input.RecycleModeId == RecycleMode.OwnFolder ? input
+                : new ReplacementSettingsSaveData(input.KeepsReleases, input.RecycleModeId, null, null, input.RecycleDays, input.Version);
 
             // The settings row stays locked, so a pattern edit waits and sees the new choice.
             var sql = new SqlStatement();
@@ -287,12 +285,12 @@ namespace Jularr.Backend.Logic.Library
         }
 
         // A new release replaces an earlier one when its quality ranks higher, or the same with a later revision (proper, repack).
-        // A new release of unknown quality is never better.
+        // When either quality is unknown to the profile, only the administrator decides.
         public static bool IsBetter(QualityProfile profile, ReplacedFileData file)
         {
             var earlier = UpgradePolicy.RankOf(profile, file.EarlierQualityKey);
             var replacing = UpgradePolicy.RankOf(profile, file.NewQualityKey);
-            return replacing != int.MaxValue && (replacing < earlier || replacing == earlier && file.NewRevision > file.EarlierRevision);
+            return replacing != int.MaxValue && earlier != int.MaxValue && (replacing < earlier || replacing == earlier && file.NewRevision > file.EarlierRevision);
         }
 
         // An asset an administrator added by hand stays through imports.
@@ -337,8 +335,7 @@ namespace Jularr.Backend.Logic.Library
                     AND settings."RecycleDays" > 0
                     AND recycled."RecycledAt" < now() - make_interval(days => settings."RecycleDays")
                 ORDER BY
-                    recycled."RecycledAt"
-                LIMIT 1000;
+                    recycled."RecycledAt";
                 """;
             return ctx.ReadSql.ReadListAsync<RecycledFileData>(sql, ct);
         }

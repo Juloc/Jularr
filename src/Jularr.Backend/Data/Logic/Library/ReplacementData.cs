@@ -93,7 +93,7 @@ namespace Jularr.Backend.Data.Logic.Library
         public long[] MediaAssetIds { get; }
 
         // An administrator chose them: assets added by hand go too.
-        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsManual))]
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsConfirmed))]
         public bool IsConfirmed { get; }
     }
 

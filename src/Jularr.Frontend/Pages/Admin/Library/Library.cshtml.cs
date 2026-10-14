@@ -115,13 +115,12 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 }
             }
 
-            // What an import does with the earlier file of the same film or episode; the current behaviour is spelled out above the form.
+            // What an import does with the earlier file of the same film or episode.
             if (_replacement is { } replacement)
             {
-                var modes = Enum.GetValues<RecycleMode>().Select(mode => new SelectOption(mode.ToString(), texts["library.replacement.mode." + mode]));
+                var modes = Enum.GetValues<RecycleMode>().Select(mode => new SelectOption(((byte)mode).ToString(CultureInfo.InvariantCulture), texts["library.replacement.mode." + mode]));
                 var mounts = (_mounts?.Items ?? []).Where(mount => !mount.IsReadOnly)
                     .Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name)).Prepend(new SelectOption("", "-"));
-                page.Content.Add(new P(new Text("library.replacement.current." + replacement.RecycleModeId)));
                 page.Content.Add(new Form<UpdateReplacementSettingsDataV1>(form =>
                 {
                     form.Hidden(item => item.Version);

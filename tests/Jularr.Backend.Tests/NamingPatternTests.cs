@@ -88,8 +88,10 @@ namespace Jularr.Backend.Tests
             Directory.CreateDirectory(Path.Combine(storage.Path, mountId.ToString(), "Movies"));
             await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"RecycleModeId\" = 2");
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library?Tab=Versions");
-            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Now: an imported better release deletes the earlier file at once.");
+            StringAssert.Matches(await page.Content.ReadAsStringAsync(), new System.Text.RegularExpressions.Regex("<option value=\"2\"[^>]*selected"));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"RecycleModeId\" = 1");
             const string route = "/api/v1/admin/library/replacement";
             using var read = await host.SendAsync(HttpMethod.Get, route);
             var settings = (await read.Content.ReadFromJsonAsync<ReplacementSettingsV1>())!;

@@ -15,5 +15,6 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField UnitTitle = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };
         public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 1000 };
         public static readonly BoolField IsManual = new();
+        public static readonly BoolField IsConfirmed = new();
     }
 }

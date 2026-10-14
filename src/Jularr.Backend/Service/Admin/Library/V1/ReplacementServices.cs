@@ -80,11 +80,12 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     "StoredFiles" AS file
                 WHERE
                     file."Id" = @StoredFileId
-                    AND file."MediaAssetId" IS NOT NULL;
+                    AND file."MediaAssetId" IS NOT NULL
+                    AND file."MissingSince" IS NULL;
                 """;
             sql.Parameters.Add(Parameters);
             var asset = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSql.ReadOptionalAsync<MediaAssetIdData>(sql, ct), CancellationToken)
-                ?? throw new KeyNotFoundException("The file has no version to keep.");
+                ?? throw new DataValidationException(nameof(StoredFileParametersV1.StoredFileId), "invalid_transition");
             await _replacements.KeepOnlyAsync(Context, asset.Id, CancellationToken);
             return new UpdateResult(true);
         }

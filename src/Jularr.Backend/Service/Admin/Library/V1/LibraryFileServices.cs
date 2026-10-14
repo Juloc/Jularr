@@ -47,12 +47,16 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                             1
                         FROM
                             "MediaAssets" AS other
-                            JOIN "StoredFiles" AS present ON present."MediaAssetId" = other."Id" AND present."MissingSince" IS NULL
+                            JOIN "WorkVersions" AS otherVersion ON otherVersion."Id" = other."WorkVersionId"
+                            JOIN "WorkVersions" AS version ON version."Id" = asset."WorkVersionId" AND version."WorkEditionId" = otherVersion."WorkEditionId"
+                            JOIN "StoredFiles" AS present ON present."MediaAssetId" = other."Id" AND present."MissingSince" IS NULL AND NOT present."IsSubtitle"
                         WHERE
                             other."WorkId" = asset."WorkId"
                             AND other."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                             AND other."MediaAssetTypeId" = asset."MediaAssetTypeId"
                             AND other."Id" <> asset."Id"
+                            AND (asset."MediaAssetTypeId" IN (1, 2)
+                                OR lower(substring(present."RelativePath" FROM '\.[^./]+$')) = lower(substring(file."RelativePath" FROM '\.[^./]+$')))
                     ) AS "HasOtherVersions"
                 FROM
                     "StoredFiles" AS file
