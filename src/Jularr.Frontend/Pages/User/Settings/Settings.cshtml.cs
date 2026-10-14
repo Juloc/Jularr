@@ -117,12 +117,13 @@ namespace Jularr.Frontend.Pages.User.Settings
             if (_layout.Count > 0)
             {
                 var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+                var positions = _layout.Select((shelf, index) => (shelf.HomeShelfTypeId, index)).ToDictionary(item => item.HomeShelfTypeId, item => item.index);
                 page.Content.Add(new UiSection("home.layout", [new Table<HomeShelfV1>(_layout)
                     .Resource(shelf => shelf.HomeShelfTypeId, "home.shelf", type => "home.shelf." + type)
                     .Content("table.status", shelf => new Text(shelf.IsHidden ? "home.hidden" : "home.shown"))
                     .Content("common.actions", shelf =>
                     {
-                        var index = _layout.ToList().IndexOf(shelf);
+                        var index = positions[shelf.HomeShelfTypeId];
                         return new Div([
                             .. index > 0 ? new IUiComponent[] { HomeAction(shelf, "Up", "home.moveUp", csrf) } : [],
                             .. index + 1 < _layout.Count ? new IUiComponent[] { HomeAction(shelf, "Down", "home.moveDown", csrf) } : [],
@@ -213,6 +214,11 @@ namespace Jularr.Frontend.Pages.User.Settings
         public async Task<IActionResult> OnPostHomeAsync([BindRequired] HomeShelfType shelf, [BindRequired] string action)
         {
             // The whole order is saved; one shelf moves or changes its visibility.
+            if (action is not ("Up" or "Down" or "Hide" or "Show"))
+            {
+                return BadRequest();
+            }
+
             var layout = (await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted)).ToList();
             var index = layout.FindIndex(item => item.HomeShelfTypeId == shelf);
             var target = action switch { "Up" => index - 1, "Down" => index + 1, _ => index };

@@ -8,10 +8,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Jularr.Workers
 {
-    // Seek thumbnails are rendered file after file while there are any; otherwise the worker looks again later.
+    // Seek thumbnails are rendered file after file with a short breather; without work the worker looks again later.
     internal sealed class TrickplayWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<TrickplayWorker> logger) : BackgroundService
     {
         private static readonly TimeSpan IdleDelay = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan BusyDelay = TimeSpan.FromSeconds(5);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -32,16 +33,13 @@ namespace Jularr.Workers
                     logger.LogWarning(exception, "Seek thumbnail rendering failed.");
                 }
 
-                if (!busy)
+                try
                 {
-                    try
-                    {
-                        await Task.Delay(IdleDelay, time, stoppingToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return;
-                    }
+                    await Task.Delay(busy ? BusyDelay : IdleDelay, time, stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
                 }
             }
         }

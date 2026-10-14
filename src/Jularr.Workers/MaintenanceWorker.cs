@@ -10,6 +10,6 @@ namespace Jularr.Workers
     internal sealed class MaintenanceWorker(IServiceScopeFactory scopes, TimeProvider time, ILogger<MaintenanceWorker> logger) : PeriodicWorker(scopes, time, logger, TimeSpan.FromHours(1))
     {
         protected override Task RunOnceAsync(CancellationToken ct) =>
-            RunAsync("Operation history pruning", (services, token) => services.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default, token), ct);
+            RunAsync("Operation history pruning", (services, token) => services.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new PruneOperationsParametersV1(), default, token), ct);
     }
 }

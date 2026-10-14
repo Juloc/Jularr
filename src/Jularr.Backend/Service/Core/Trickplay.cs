@@ -10,6 +10,9 @@ namespace Jularr.Backend.Service.Core
         public const int Rows = 10;
         public const int TileWidth = 160;
 
+        // Even, as the encoder needs it.
+        public static int TileHeight(int videoWidth, int videoHeight) => Math.Clamp((int)Math.Round(TileWidth * (double)videoHeight / videoWidth / 2) * 2, 2, 4096);
+
         public static string Folder(string root, long storedFileId) => Path.Combine(root, storedFileId.ToString(CultureInfo.InvariantCulture));
 
         public static string Sheet(string folder, int sheet) => Path.Combine(folder, sheet.ToString("000", CultureInfo.InvariantCulture) + ".jpg");

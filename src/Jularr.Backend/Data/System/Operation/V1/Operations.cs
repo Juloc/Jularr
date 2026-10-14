@@ -12,6 +12,10 @@ namespace Jularr.Backend.Data.System.Operation.V1
     {
     }
 
+    public sealed class PruneOperationsParametersV1 : BaseParameters
+    {
+    }
+
     public sealed class OperationParametersV1 : BaseParameters
     {
         public OperationParametersV1(long operationId)

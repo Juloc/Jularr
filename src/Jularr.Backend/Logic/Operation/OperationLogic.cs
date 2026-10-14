@@ -67,14 +67,14 @@ namespace Jularr.Backend.Logic.Operation
 
         public static Task<int> PruneFinishedOperationsAsync(this LogicContext ctx, OperationSinceData data, CancellationToken ct)
         {
-            // Finished work leaves the history; running and queued work stays.
+            // Finished work leaves the history; running, queued and unacknowledged failed work stays.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 DELETE FROM
                     "Operations" AS operation
                 WHERE
-                    operation."OperationStatusTypeId" IN (3, 4)
+                    (operation."OperationStatusTypeId" = 3 OR operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NOT NULL)
                     AND operation."FinishedAt" < @Since;
                 """;
             sql.Parameters.Add(data);

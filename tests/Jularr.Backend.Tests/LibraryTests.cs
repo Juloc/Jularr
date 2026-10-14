@@ -191,7 +191,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(await ScheduleAsync());
             await host.Fixture.RunSqlAsync("UPDATE \"Operations\" SET \"FinishedAt\" = now() - interval '31 days' WHERE \"Id\" = (SELECT min(\"Id\") FROM \"Operations\")");
             await using var scope = host.Services.CreateAsyncScope();
-            Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new OperationQueueParametersV1(), default, CancellationToken.None)).Success);
+            Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new PruneOperationsParametersV1(), default, CancellationToken.None)).Success);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\""));
         }
 

@@ -50,7 +50,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
     }
 
     // Activity keeps finished work for 30 days.
-    public sealed class PruneOperationsV1 : SystemService<OperationQueueParametersV1, NoData>
+    public sealed class PruneOperationsV1 : SystemService<PruneOperationsParametersV1, NoData>
     {
         private readonly TimeProvider _time;
 
@@ -61,8 +61,8 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(OperationQueueParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(OperationQueueParametersV1 parameters, Type resultType) => new("system.operations");
+        protected override ModuleRequirement GetInstanceModules(PruneOperationsParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(PruneOperationsParametersV1 parameters, Type resultType) => new("system.operations");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
