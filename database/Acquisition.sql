@@ -73,7 +73,7 @@ CREATE TABLE "AcquisitionConnections" (
     CHECK ("AcquisitionConnectionTypeId" = 7 OR "ProtectedPassword" IS NULL),
     CHECK (("AcquisitionConnectionTypeId" = 6) = ("BaseUrl" ~ '^nntps?://')),
     CHECK ("AcquisitionConnectionTypeId" = 6 OR "MaxConnections" IS NULL),
-    CHECK ("AcquisitionConnectionTypeId" <> 5 OR "BaseUrl" ~ '^https://')
+    CHECK ("AcquisitionConnectionTypeId" NOT IN (5, 7, 8) OR "BaseUrl" ~ '^https://')
 );
 
 -- Quality profiles; one default per media type and subtype, Works may choose another.

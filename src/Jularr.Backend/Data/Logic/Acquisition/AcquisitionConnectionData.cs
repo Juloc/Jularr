@@ -77,7 +77,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int? MaxConnections { get; }
 
         [JsonIgnore]
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey), false)]
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedPassword), false)]
         public byte[]? ProtectedPassword { get; }
     }
 
@@ -145,7 +145,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int? MaxConnections { get; }
 
         [JsonIgnore]
-        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey), false)]
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedPassword), false)]
         public byte[]? ProtectedPassword { get; }
     }
 

@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Instance;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Storage;
@@ -462,11 +463,11 @@ namespace Jularr.Backend.Data.Logic.Library
         public string? TmdbId { get; }
 
         // Embedded subtitle streams as their files name them.
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Languages))]
+        [DataField(typeof(SubtitleFields), nameof(SubtitleFields.TrackLanguages))]
         public string[] TrackLanguages { get; }
 
         // Files beside the video that extend its name.
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePaths))]
+        [DataField(typeof(SubtitleFields), nameof(SubtitleFields.SiblingPaths))]
         public string[] SiblingPaths { get; }
     }
 
@@ -523,7 +524,7 @@ namespace Jularr.Backend.Data.Logic.Library
             SubtitleLanguages = subtitleLanguages;
         }
 
-        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Languages))]
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.SubtitleLanguages))]
         public string[] SubtitleLanguages { get; }
     }
 }

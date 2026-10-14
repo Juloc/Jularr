@@ -43,7 +43,8 @@ namespace Jularr.Integrations.Logic.Subtitles
                 {
                     if (Text(item, "url") is { } url && url.StartsWith('/') && Text(item, "language") is { } language)
                     {
-                        offers.Add(new SubtitleOffer(url, language.ToLowerInvariant(), Text(item, "release_name"), item.TryGetProperty("hi", out var hi) && hi.ValueKind == JsonValueKind.True,
+                        // "BR_PT" is Brazilian Portuguese.
+                        offers.Add(new SubtitleOffer(url, language.Split('_')[^1].ToLowerInvariant(), Text(item, "release_name"), item.TryGetProperty("hi", out var hi) && hi.ValueKind == JsonValueKind.True,
                             false, 0));
                     }
                 }
@@ -52,8 +53,8 @@ namespace Jularr.Integrations.Logic.Subtitles
             return offers;
         }
 
-        // The first SubRip file of the archive.
-        public async Task<byte[]> DownloadAsync(SubtitleOffer offer, CancellationToken ct)
+        // The SubRip file of the archive; a season pack gives the asked episode or nothing.
+        public async Task<byte[]> DownloadAsync(SubtitleOffer offer, SubtitleQuery query, CancellationToken ct)
         {
             byte[] archive;
             try
@@ -74,7 +75,9 @@ namespace Jularr.Integrations.Logic.Subtitles
             try
             {
                 using var zip = new ZipArchive(new MemoryStream(archive), ZipArchiveMode.Read);
-                var entry = zip.Entries.FirstOrDefault(item => item.Name.EndsWith(".srt", StringComparison.OrdinalIgnoreCase) && item.Length is > 0 and <= MaximumBytes)
+                var entries = zip.Entries.Where(item => item.Name.EndsWith(".srt", StringComparison.OrdinalIgnoreCase) && item.Length is > 0 and <= MaximumBytes).ToArray();
+                var episode = query.IsEpisode ? string.Create(CultureInfo.InvariantCulture, $"S{query.Season:00}E{query.Episode:00}") : null;
+                var entry = (entries.Length == 1 ? entries[0] : entries.FirstOrDefault(item => episode is not null && item.Name.Contains(episode, StringComparison.OrdinalIgnoreCase)))
                     ?? throw new SubtitleException("acquisition_invalid_response");
                 using var stream = entry.Open();
                 using var copy = new MemoryStream();

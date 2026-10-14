@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -11,10 +12,13 @@ namespace Jularr.Integrations.Logic.Subtitles
     internal sealed class OpenSubtitlesClient(HttpClient http)
     {
         private const long MaximumBytes = 10L * 1024 * 1024;
+        private static readonly ConcurrentDictionary<string, (string Token, DateTimeOffset ExpiresAt)> Sessions = new(StringComparer.Ordinal);
 
         public async Task<IReadOnlyList<SubtitleOffer>> SearchAsync(SubtitleAccess access, SubtitleQuery query, CancellationToken ct)
         {
-            var parameters = new List<string> { "languages=" + string.Join(',', query.Languages.Order(StringComparer.Ordinal)) };
+            // Portuguese and Chinese exist only as regional variants.
+            var languages = query.Languages.SelectMany(language => language switch { "pt" => new[] { "pt-br", "pt-pt" }, "zh" => ["zh-cn", "zh-tw"], _ => [language] });
+            var parameters = new List<string> { "languages=" + string.Join(',', languages.Order(StringComparer.Ordinal)) };
             var imdb = query.ImdbId?.StartsWith("tt", StringComparison.OrdinalIgnoreCase) is true ? query.ImdbId[2..].TrimStart('0') : null;
             if (query.IsEpisode)
             {
@@ -40,7 +44,7 @@ namespace Jularr.Integrations.Logic.Subtitles
                         continue;
                     }
 
-                    offers.Add(new SubtitleOffer(fileId.GetRawText(), language.ToLowerInvariant(), Text(attributes, "release"), Flag(attributes, "hearing_impaired"),
+                    offers.Add(new SubtitleOffer(fileId.GetRawText(), language.Split('-')[0].ToLowerInvariant(), Text(attributes, "release"), Flag(attributes, "hearing_impaired"),
                         Flag(attributes, "foreign_parts_only"), attributes.TryGetProperty("download_count", out var count) && count.TryGetInt64(out var downloads) ? downloads : 0));
                 }
             }
@@ -53,7 +57,7 @@ namespace Jularr.Integrations.Logic.Subtitles
             var token = await LoginAsync(access, ct);
             using var request = Request(HttpMethod.Post, access, "download");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            request.Content = JsonContent.Create(new { file_id = long.Parse(offer.Handle, CultureInfo.InvariantCulture) });
+            request.Content = JsonContent.Create(new { file_id = long.Parse(offer.Handle, CultureInfo.InvariantCulture), sub_format = "srt" });
             using var document = await SendAsync(request, ct);
             if (Text(document.RootElement, "link") is not { } link || !Uri.TryCreate(link, UriKind.Absolute, out var address) || address.Scheme != Uri.UriSchemeHttps)
             {
@@ -66,6 +70,7 @@ namespace Jularr.Integrations.Logic.Subtitles
         // A login proves the key and the account.
         public async Task TestAsync(SubtitleAccess access, CancellationToken ct) => await LoginAsync(access, ct);
 
+        // A login lasts a day; the provider allows few of them.
         private async Task<string> LoginAsync(SubtitleAccess access, CancellationToken ct)
         {
             if (access.Username is null || access.Password is null)
@@ -73,10 +78,18 @@ namespace Jularr.Integrations.Logic.Subtitles
                 throw new SubtitleException("acquisition_authentication_failed");
             }
 
+            var account = access.BaseUrl + "\n" + access.Username + "\n" + access.Password;
+            if (Sessions.TryGetValue(account, out var session) && session.ExpiresAt > DateTimeOffset.UtcNow)
+            {
+                return session.Token;
+            }
+
             using var request = Request(HttpMethod.Post, access, "login");
             request.Content = JsonContent.Create(new { username = access.Username, password = access.Password });
             using var document = await SendAsync(request, ct);
-            return Text(document.RootElement, "token") ?? throw new SubtitleException("acquisition_authentication_failed");
+            var token = Text(document.RootElement, "token") ?? throw new SubtitleException("acquisition_authentication_failed");
+            Sessions[account] = (token, DateTimeOffset.UtcNow.AddHours(20));
+            return token;
         }
 
         private static HttpRequestMessage Request(HttpMethod method, SubtitleAccess access, string path)

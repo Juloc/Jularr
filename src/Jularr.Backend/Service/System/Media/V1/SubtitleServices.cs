@@ -53,9 +53,10 @@ namespace Jularr.Backend.Service.System.Media.V1
                 .Concat(source.SiblingPaths.Where(LibraryFileTypes.IsSubtitle).Select(PlaybackTracks.Describe).Where(sibling => !sibling.IsForced).Select(sibling => LanguageCodes.ToTwoLetter(sibling.Language)))
                 .OfType<string>().ToHashSet(StringComparer.Ordinal);
             var missing = languages.Where(language => !present.Contains(language)).ToList();
-            if (missing.Count > 0 && providers.Count > 0)
+            if (missing.Count > 0 && providers.Count > 0 && !await FetchAsync(source, missing, providers))
             {
-                await FetchAsync(source, missing, providers);
+                // Providers that failed or ran out of quota get the file again on the next run.
+                return new UpdateResult(false);
             }
 
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
@@ -66,7 +67,8 @@ namespace Jularr.Backend.Service.System.Media.V1
             return new UpdateResult(true);
         }
 
-        private async Task FetchAsync(SubtitleSourceData source, List<string> missing, IReadOnlyList<AcquisitionConnectionData> providers)
+        // Whether every provider answered; unreachable storage waits for the next day.
+        private async Task<bool> FetchAsync(SubtitleSourceData source, List<string> missing, IReadOnlyList<AcquisitionConnectionData> providers)
         {
             string directory;
             try
@@ -75,7 +77,7 @@ namespace Jularr.Backend.Service.System.Media.V1
             }
             catch (NasMountException)
             {
-                return;
+                return true;
             }
 
             var isEpisode = source.MediaTypeId == MediaType.Series;
@@ -94,7 +96,7 @@ namespace Jularr.Backend.Service.System.Media.V1
                     var offers = await _providers.SearchAsync(provider, query, CancellationToken);
                     foreach (var language in missing.ToArray())
                     {
-                        var best = offers.Where(offer => offer.Language == language && !offer.IsForeignOnly)
+                        var best = offers.Where(offer => LanguageCodes.ToTwoLetter(offer.Language) == language && !offer.IsForeignOnly)
                             .OrderByDescending(offer => Similarity(offer.ReleaseName, source))
                             .ThenBy(offer => offer.IsHearingImpaired)
                             .ThenByDescending(offer => offer.Downloads)
@@ -104,21 +106,33 @@ namespace Jularr.Backend.Service.System.Media.V1
                             continue;
                         }
 
-                        var bytes = await _providers.DownloadAsync(provider, best, CancellationToken);
+                        var bytes = await _providers.DownloadAsync(provider, best, query, CancellationToken);
                         if (!Encoding.UTF8.GetString(bytes).Contains("-->", StringComparison.Ordinal) && !PlaybackTracks.Decode(bytes).Contains("-->", StringComparison.Ordinal))
                         {
                             continue;
                         }
 
-                        await SaveAsync(source, directory, stem + "." + language + ".srt", bytes);
+                        try
+                        {
+                            await SaveAsync(source, directory, stem + "." + language + ".srt", bytes);
+                        }
+                        catch (IOException exception)
+                        {
+                            _logger.LogWarning(exception, "The subtitle beside stored file {StoredFileId} could not be written.", source.Id);
+                            return true;
+                        }
+
                         missing.Remove(language);
                     }
                 }
                 catch (SubtitleException exception)
                 {
                     _logger.LogWarning("Subtitle provider {Provider} failed: {Code}.", provider.Name, exception.Code);
+                    return false;
                 }
             }
+
+            return true;
         }
 
         // An existing file of that name stays; the new one belongs to the video's asset.
@@ -126,12 +140,22 @@ namespace Jularr.Backend.Service.System.Media.V1
         {
             var folder = Path.GetDirectoryName(relativePath.Replace('/', Path.DirectorySeparatorChar)) ?? "";
             var path = Path.Combine(StorageFileSystem.ResolveDirectory(directory, folder), Path.GetFileName(relativePath));
-            if (File.Exists(path))
+            var partial = path + ".partial";
+            await using (var stream = new FileStream(partial, FileMode.CreateNew, FileAccess.Write))
             {
+                await stream.WriteAsync(bytes, CancellationToken);
+            }
+
+            try
+            {
+                File.Move(partial, path, false);
+            }
+            catch (IOException)
+            {
+                File.Delete(partial);
                 return;
             }
 
-            await File.WriteAllBytesAsync(path, bytes, CancellationToken);
             var info = new FileInfo(path);
             var modifiedAt = DateTime.UnixEpoch.AddTicks((info.LastWriteTimeUtc.Ticks - DateTime.UnixEpoch.Ticks) / 10 * 10);
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
@@ -221,6 +245,8 @@ namespace Jularr.Backend.Service.System.Media.V1
                             track."StoredFileId" = file."Id"
                             AND track."MediaTrackTypeId" = 3
                             AND track."Language" IS NOT NULL
+                            AND NOT track."IsForced"
+                            AND lower(track."Codec") IN ('subrip', 'srt', 'ass', 'ssa', 'webvtt', 'mov_text', 'text')
                     ) AS "TrackLanguages",
                     ARRAY(
                         SELECT

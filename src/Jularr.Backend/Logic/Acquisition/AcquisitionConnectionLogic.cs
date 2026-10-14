@@ -83,7 +83,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var valid = data.AcquisitionConnectionTypeId switch
             {
                 AcquisitionConnectionType.Usenet => address.Scheme is "nntp" or "nntps" && address.AbsolutePath == "/",
-                AcquisitionConnectionType.AnnasArchive => address.Scheme == "https",
+                AcquisitionConnectionType.AnnasArchive or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl => address.Scheme == "https",
                 _ => address.Scheme is "http" or "https"
             };
             if (!valid)

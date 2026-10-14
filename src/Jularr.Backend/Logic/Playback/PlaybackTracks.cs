@@ -1,7 +1,8 @@
-using System.Collections.Frozen;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+
+using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Backend.Logic.Playback
 {
@@ -11,13 +12,6 @@ namespace Jularr.Backend.Logic.Playback
         public const long MaximumSubtitleBytes = 10L * 1024 * 1024;
 
         private static readonly HashSet<string> TextCodecs = new(StringComparer.OrdinalIgnoreCase) { "subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text" };
-
-        // ISO 639 codes, including the bibliographic forms subtitle files often use.
-        private static readonly FrozenSet<string> LanguageCodes = CultureInfo.GetCultures(CultureTypes.NeutralCultures)
-            .SelectMany(culture => new[] { culture.TwoLetterISOLanguageName, culture.ThreeLetterISOLanguageName })
-            .Concat(["alb", "arm", "baq", "bur", "chi", "cze", "dut", "fre", "geo", "ger", "gre", "ice", "mac", "mao", "may", "per", "rum", "slo", "tib", "wel"])
-            .Where(code => code.Length is 2 or 3)
-            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
         [GeneratedRegex(@"(\d{1,2}):(\d{2}):(\d{2}),(\d{3})")]
         private static partial Regex SrtTime();
@@ -50,7 +44,7 @@ namespace Jularr.Backend.Logic.Playback
         {
             var parts = Path.GetFileNameWithoutExtension(relativePath).Split('.');
             var tags = parts.Skip(1).Reverse().Take(3).Select(part => part.ToLowerInvariant()).ToArray();
-            var language = tags.FirstOrDefault(tag => LanguageTag().Match(tag) is { Success: true } match && LanguageCodes.Contains(match.Groups[1].Value));
+            var language = tags.FirstOrDefault(tag => LanguageTag().Match(tag) is { Success: true } match && LanguageCodes.ToTwoLetter(match.Groups[1].Value) is not null);
             return (language, tags.Contains("forced"));
         }
 

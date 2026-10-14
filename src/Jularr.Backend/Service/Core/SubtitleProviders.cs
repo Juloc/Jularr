@@ -21,10 +21,10 @@ namespace Jularr.Backend.Service.Core
             _ => throw new InvalidOperationException("The connection provides no subtitles.")
         };
 
-        public Task<byte[]> DownloadAsync(AcquisitionConnectionData connection, SubtitleOffer offer, CancellationToken ct) => connection.AcquisitionConnectionTypeId switch
+        public Task<byte[]> DownloadAsync(AcquisitionConnectionData connection, SubtitleOffer offer, SubtitleQuery query, CancellationToken ct) => connection.AcquisitionConnectionTypeId switch
         {
             AcquisitionConnectionType.OpenSubtitles => openSubtitles.DownloadAsync(Access(connection), offer, ct),
-            AcquisitionConnectionType.SubDl => subDl.DownloadAsync(offer, ct),
+            AcquisitionConnectionType.SubDl => subDl.DownloadAsync(offer, query, ct),
             _ => throw new InvalidOperationException("The connection provides no subtitles.")
         };
 

@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -9,6 +10,8 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.System.Media.V1;
 using Jularr.Backend.Service.System.Media.V1;
+using Jularr.Backend.Logic.Media;
+using Jularr.Integrations.Data.Subtitles;
 using Jularr.Integrations.Logic.Subtitles;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -57,13 +60,62 @@ namespace Jularr.Backend.Tests
             // Only German is fetched, the matching release preferred, and saved beside the video for its asset.
             await using var scope = host.Services.CreateAsyncScope();
             var fetch = scope.ServiceProvider.GetRequiredService<FetchSubtitlesV1>();
+
+            // A provider out of quota ends the run without setting the file aside for a day.
+            provider.RateLimited = true;
+            Assert.IsFalse((await fetch.ExecuteAsync<UpdateResult>(new SubtitleParametersV1(), default, CancellationToken.None)).Success);
+            Assert.IsInstanceOfType<DBNull>(await host.ScalarAsync("SELECT \"SubtitlesCheckedAt\" FROM \"StoredFiles\" WHERE \"Id\" = " + fileId));
+            provider.RateLimited = false;
             Assert.IsTrue((await fetch.ExecuteAsync<UpdateResult>(new SubtitleParametersV1(), default, CancellationToken.None)).Success);
             StringAssert.Contains(provider.Search!, "languages=de");
             StringAssert.Contains(provider.Search!, "imdb_id=133093");
-            Assert.AreEqual("{\"file_id\":2}", provider.Downloaded);
+            Assert.AreEqual("{\"file_id\":2,\"sub_format\":\"srt\"}", provider.Downloaded);
             Assert.AreEqual(FakeOpenSubtitles.Subtitle, File.ReadAllText(Path.Combine(folder, "Film.2001.1080p.WEB-DL-GRP.de.srt")));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%.de.srt' AND \"MediaAssetId\" IS NOT NULL"));
             Assert.IsFalse((await fetch.ExecuteAsync<UpdateResult>(new SubtitleParametersV1(), default, CancellationToken.None)).Success);
+        }
+
+        [TestMethod]
+        public async Task SubDl_SeasonPack_GivesTheAskedEpisodeInItsLanguage()
+        {
+            var client = new SubDlClient(new HttpClient(new FakeSubDl()));
+            var query = new SubtitleQuery(true, "tt0903747", null, 1, 2, ["pt"]);
+            var offer = (await client.SearchAsync(new SubtitleAccess("https://api.subdl.com/api/v1", "key", null, null), query, CancellationToken.None)).Single();
+            Assert.AreEqual("pt", offer.Language);
+            Assert.AreEqual("two", Encoding.UTF8.GetString(await client.DownloadAsync(offer, query, CancellationToken.None)));
+
+            // Codes as streams and files spell them.
+            Assert.AreEqual("de", LanguageCodes.ToTwoLetter("ger"));
+            Assert.AreEqual("pt", LanguageCodes.ToTwoLetter("pt-BR"));
+            Assert.IsNull(LanguageCodes.ToTwoLetter("xx"));
+        }
+
+        private sealed class FakeSubDl : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (request.RequestUri!.Host == "dl.subdl.com")
+                {
+                    var archive = new MemoryStream();
+                    using (var zip = new ZipArchive(archive, ZipArchiveMode.Create, true))
+                    {
+                        foreach (var (name, text) in new[] { ("Show.S01E01.srt", "one"), ("Show.S01E02.srt", "two") })
+                        {
+                            using var writer = new StreamWriter(zip.CreateEntry(name).Open());
+                            writer.Write(text);
+                        }
+                    }
+
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(archive.ToArray()) });
+                }
+
+                StringAssert.Contains(request.RequestUri.Query, "season_number=1");
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"status\":true,\"subtitles\":[{\"release_name\":\"Show.S01\",\"language\":\"BR_PT\",\"url\":\"/subtitle/1-2.zip\",\"hi\":false}]}",
+                        Encoding.UTF8, "application/json")
+                });
+            }
         }
 
         private sealed class FakeOpenSubtitles : HttpMessageHandler
@@ -71,6 +123,7 @@ namespace Jularr.Backend.Tests
             public const string Subtitle = "1\n00:00:01,000 --> 00:00:02,000\nHallo\n";
 
             public string? Search { get; private set; }
+            public bool RateLimited { get; set; }
             public string? Downloaded { get; private set; }
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -94,6 +147,11 @@ namespace Jularr.Backend.Tests
 
                 if (path.EndsWith("/subtitles", StringComparison.Ordinal))
                 {
+                    if (RateLimited)
+                    {
+                        return new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+                    }
+
                     Search = request.RequestUri.Query;
                     return Json("""
                         {"data":[

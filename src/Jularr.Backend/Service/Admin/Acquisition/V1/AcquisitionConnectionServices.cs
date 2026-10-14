@@ -128,6 +128,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new DataValidationException(nameof(SaveAcquisitionConnectionDataV1.ApiKey), "required");
             }
 
+            // OpenSubtitles downloads need its account.
+            if (Data.AcquisitionConnectionTypeId == AcquisitionConnectionType.OpenSubtitles && (Data.Username is null || Data.Password is null))
+            {
+                throw new DataValidationException(Data.Username is null ? nameof(SaveAcquisitionConnectionDataV1.Username) : nameof(SaveAcquisitionConnectionDataV1.Password), "required");
+            }
+
             var data = AcquisitionConnectionInput.Create(null, Data, _protector);
             return new CreateAcquisitionConnectionResultV1(await Context.CreateAcquisitionConnectionAsync(data, CancellationToken));
         }
