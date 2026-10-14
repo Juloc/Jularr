@@ -61,6 +61,7 @@ namespace Jularr.Backend.Service.Core
     {
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
         public const string DevicePairingCookieName = "jularr.device_pairing";
+        public const string DevicePairingRateLimit = "device-pairing";
         public const string AdminPolicyName = "jularr.admin";
         public const string StorageReadPolicyName = "storage.read";
         public const string RulesReadPolicyName = "rules.read";
@@ -264,6 +265,15 @@ namespace Jularr.Backend.Service.Core
                     _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = 20,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0
+                    }));
+                // A TV page asks every few seconds until a phone confirms it; several may share one address.
+                options.AddPolicy(DevicePairingRateLimit, http => RateLimitPartition.GetFixedWindowLimiter(
+                    http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 60,
                         Window = TimeSpan.FromMinutes(1),
                         QueueLimit = 0
                     }));

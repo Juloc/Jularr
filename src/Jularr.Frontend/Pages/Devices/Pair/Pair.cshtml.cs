@@ -13,7 +13,6 @@ namespace Jularr.Frontend.Pages.Devices.Pair
     public sealed class PairModel(ReadDevicePairingV1 read, ApproveDevicePairingV1 approve, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private DevicePairingRequestV1? _device;
-        private bool _failed;
 
         [BindProperty(SupportsGet = true)]
         public string? Code { get; set; }
@@ -26,12 +25,12 @@ namespace Jularr.Frontend.Pages.Devices.Pair
             if (TempData["DevicePaired"] is true) page.Content.Add(new P(new Text("devices.pair.done")).Attribute("role", "status"));
             if (_device is { } device)
             {
-                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["devices.pair.device"], device.DeviceName, device.DevicePlatform))));
+                page.Content.Add(new P(new ValueText(string.Format(CultureInfo.InvariantCulture, texts["devices.pair.device"], device.DeviceName, device.DevicePlatform, Code))));
                 page.Content.Add(new Form<ApproveDevicePairingDataV1>(form =>
                 {
                     form.Hidden(item => item.Code);
                     form.Submit("devices.pair.submit");
-                }, "/Devices/Pair", csrf, new ApproveDevicePairingDataV1(Code ?? ""), _failed ? FormError : null));
+                }, "/Devices/Pair", csrf, new ApproveDevicePairingDataV1(Code ?? "")));
                 return;
             }
 
@@ -62,7 +61,6 @@ namespace Jularr.Frontend.Pages.Devices.Pair
 
         public async Task<IActionResult> OnPostAsync()
         {
-            _failed = true;
             await approve.ExecuteAsync<UpdateResult>(new ApproveDevicePairingParametersV1(), new ApproveDevicePairingDataV1(Code ?? ""), HttpContext.RequestAborted);
             TempData["DevicePaired"] = true;
             return LocalRedirect("/Devices/Pair");

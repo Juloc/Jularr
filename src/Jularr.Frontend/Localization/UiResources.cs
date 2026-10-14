@@ -963,7 +963,7 @@ namespace Jularr.Frontend.Localization
             new("devices.pair.code", "Code shown on the device"),
             new("devices.pair.submit", "Pair with this profile"),
             new("devices.pair.show", "Show the device"),
-            new("devices.pair.device", "{0} ({1}) asks to be paired with this profile. The device names itself."),
+            new("devices.pair.device", "{0} ({1}) asks to be paired with this profile. Confirm only if your own device shows {2} right now; the device names itself, and whoever holds it signs in as you."),
             new("devices.link.start", "Show a pairing code"),
             new("devices.pair.done", "The device is paired; it signs in by itself."),
             new("instance.module.Devices", "Pair TVs, phones and apps by code"),

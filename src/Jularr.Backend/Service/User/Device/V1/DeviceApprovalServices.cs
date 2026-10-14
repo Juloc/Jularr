@@ -25,14 +25,11 @@ namespace Jularr.Backend.Service.User.Device.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // The person confirming sees which device asks; looking up codes counts as guessing them.
-            _attempts.RequireAllowed(Auth.AccountId!.Value);
-            var device = await Context.ReadOpenDevicePairingAsync(new DevicePairingCodeData(Parameters.Code), CancellationToken);
-            if (device is null)
-            {
-                _attempts.Fail(Auth.AccountId.Value);
-                throw new DataValidationException(nameof(DevicePairingCodeParametersV1.Code), "invalid_code");
-            }
-
+            var accountId = Auth.AccountId!.Value;
+            _attempts.Take(accountId);
+            var device = await Context.ReadOpenDevicePairingAsync(new DevicePairingCodeData(Parameters.Code), CancellationToken)
+                ?? throw new DataValidationException(nameof(DevicePairingCodeParametersV1.Code), "invalid_code");
+            _attempts.GiveBack(accountId);
             return new DevicePairingRequestV1(device.DeviceName, device.DevicePlatform);
         }
     }
@@ -56,17 +53,9 @@ namespace Jularr.Backend.Service.User.Device.V1
         {
             // The device signs in to the confirming account with its active profile.
             var accountId = Auth.AccountId!.Value;
-            _attempts.RequireAllowed(accountId);
-            try
-            {
-                await Context.ApproveDevicePairingAsync(new DevicePairingApprovalData(Data.Code, accountId, Auth.ProfileId!.Value), CancellationToken);
-            }
-            catch (DataValidationException)
-            {
-                _attempts.Fail(accountId);
-                throw;
-            }
-
+            _attempts.Take(accountId);
+            await Context.ApproveDevicePairingAsync(new DevicePairingApprovalData(Data.Code, accountId, Auth.ProfileId!.Value), CancellationToken);
+            _attempts.GiveBack(accountId);
             return new UpdateResult(true);
         }
     }

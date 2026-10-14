@@ -76,6 +76,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.NotFound, off.StatusCode);
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Devices'");
 
+            // A pairing named in the address counts for nothing.
+            using var forged = await host.SendAsync(HttpMethod.Get, "/Devices/Link?pairing=" + Guid.NewGuid() + "&code=123456");
+            StringAssert.Contains(await forged.Content.ReadAsStringAsync(), "Show a pairing code");
+            Assert.IsFalse(forged.Headers.Contains("Refresh"));
+
             // The TV asks for a code; it stays in a strict cookie, never in the address.
             using var page = await host.SendAsync(HttpMethod.Get, "/Devices/Link");
             var token = LibraryTests.Token(await page.Content.ReadAsStringAsync());
