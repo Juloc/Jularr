@@ -96,10 +96,10 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections)
+            int? maxConnections, string? password)
         {
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", Blank(apiKey), isEnabled, priority, Categories(categories),
-                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username), maxConnections);
+                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username), maxConnections, Blank(password));
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -152,6 +152,12 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 {
                     form.Text(item => item.Username, "acquisition.connection.username", "username");
                     form.Password(item => item.ApiKey, "acquisition.connection.password", "new-password");
+                }
+                else if (type == AcquisitionConnectionType.OpenSubtitles)
+                {
+                    form.Password(item => item.ApiKey, "acquisition.connection.apiKey", "new-password");
+                    form.Text(item => item.Username, "acquisition.connection.username", "username");
+                    form.Password(item => item.Password, "acquisition.connection.password", "new-password");
                 }
                 else if (type == AcquisitionConnectionType.AnnasArchive)
                 {

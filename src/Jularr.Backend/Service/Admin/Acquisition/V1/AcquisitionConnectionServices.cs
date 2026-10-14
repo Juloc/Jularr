@@ -16,6 +16,7 @@ using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Data.Usenet;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
+using Jularr.Integrations.Data.Subtitles;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
@@ -177,10 +178,12 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         private readonly SabnzbdClient _sabnzbd;
         private readonly DirectSources _direct;
         private readonly UsenetJob _usenet;
+        private readonly SubtitleProviders _subtitles;
         private readonly IDataProtector _protector;
 
-        internal TestAcquisitionConnectionV1(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, UsenetJob usenet, IDataProtectionProvider protection)
+        internal TestAcquisitionConnectionV1(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, UsenetJob usenet, SubtitleProviders subtitles, IDataProtectionProvider protection)
         {
+            _subtitles = subtitles;
             _usenet = usenet;
             _newznab = newznab;
             _sabnzbd = sabnzbd;
@@ -196,7 +199,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
-            var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId) || connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet
+            var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId)
+                || connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl
                 ? ""
                 : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
 
@@ -219,6 +223,19 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 catch (UsenetException exception)
                 {
                     result = new AcquisitionConnectionTestV1(false, exception.Failure == UsenetFailure.Unauthorized ? "acquisition_authentication_failed" : "acquisition_unavailable", null, []);
+                }
+            }
+            else if (connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl)
+            {
+                // A login or one search proves the subtitle provider.
+                try
+                {
+                    await _subtitles.TestAsync(connection, CancellationToken);
+                    result = new AcquisitionConnectionTestV1(true, null, null, []);
+                }
+                catch (SubtitleException exception)
+                {
+                    result = new AcquisitionConnectionTestV1(false, exception.Code, null, []);
                 }
             }
             else if (connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab)
@@ -258,10 +275,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         {
             // Protect before persistence.
             var apiKey = data.ApiKey is null ? null : protector.Protect(Encoding.UTF8.GetBytes(data.ApiKey));
+            var password = data.AcquisitionConnectionTypeId == AcquisitionConnectionType.OpenSubtitles && data.Password is { } clear ? protector.Protect(Encoding.UTF8.GetBytes(clear)) : null;
             return new AcquisitionConnectionSaveData(id, data.Name, data.AcquisitionConnectionTypeId, data.BaseUrl.TrimEnd('/'), apiKey, data.IsEnabled, data.Priority,
                 data.Categories.Distinct().Order().ToArray(), data.DownloadCategory, data.RemotePath, data.LocalPath,
-                data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet ? data.Username : null,
-                data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null);
+                data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
+                data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password);
         }
 
         public static string Unprotect(IDataProtector protector, byte[]? protectedApiKey)

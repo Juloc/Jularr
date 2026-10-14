@@ -16,7 +16,8 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Search = 2,
         Download = 4,
         Monitoring = 8,
-        Link = 16
+        Link = 16,
+        Subtitles = 32
     }
 
     public enum SourceGroup : byte
@@ -27,7 +28,8 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Audiobooks = 4,
         Acquisition = 5,
         Music = 6,
-        Games = 7
+        Games = 7,
+        Subtitles = 8
     }
 
     // One suggested source; ready entries map to a connection type or a metadata provider.
@@ -100,7 +102,13 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("librivox", "LibriVox", SourceGroup.Audiobooks, MetadataSearch, SourceAvailability.Planned),
             new("newznab", "Newznab indexer", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab),
             new("sabnzbd", "SABnzbd", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Account, AcquisitionConnectionType.Sabnzbd),
-            new("native", "Jularr usenet downloader", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Planned)
+            new("native", "Jularr usenet downloader", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Planned),
+            new("opensubtitles", "OpenSubtitles.com", SourceGroup.Subtitles, SourceCapability.Subtitles, SourceAvailability.Account, AcquisitionConnectionType.OpenSubtitles,
+                defaultBaseUrl: "https://api.opensubtitles.com/api/v1"),
+            new("subdl", "SubDL", SourceGroup.Subtitles, SourceCapability.Subtitles, SourceAvailability.Account, AcquisitionConnectionType.SubDl, defaultBaseUrl: "https://api.subdl.com/api/v1"),
+            new("podnapisi", "Podnapisi", SourceGroup.Subtitles, SourceCapability.Subtitles, SourceAvailability.Planned),
+            new("gestdown", "Gestdown (Addic7ed)", SourceGroup.Subtitles, SourceCapability.Subtitles, SourceAvailability.Planned),
+            new("jimaku", "Jimaku (anime)", SourceGroup.Subtitles, SourceCapability.Subtitles, SourceAvailability.Planned)
         ];
     }
 }

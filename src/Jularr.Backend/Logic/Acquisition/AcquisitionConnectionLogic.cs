@@ -28,7 +28,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Username",
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
-                    connection."Version"
+                    connection."Version",
+                    connection."ProtectedPassword"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
@@ -38,17 +39,8 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadRequiredAsync<AcquisitionConnectionData>(sql, ct);
         }
 
-        // SABnzbd and Jularr's own news servers, best priority first.
-        public static async Task<IReadOnlyList<AcquisitionConnectionData>> ReadDownloadClientsAsync(this LogicContext ctx, CancellationToken ct) =>
-            [.. (await ctx.ReadEnabledConnectionsAsync(ct)).Where(connection => IsDownloadClient(connection.AcquisitionConnectionTypeId))];
-
-        // Every enabled source that searches: indexers and catalogs, that is every type that is no download client.
-        public static async Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledSearchConnectionsAsync(this LogicContext ctx, CancellationToken ct) =>
-            [.. (await ctx.ReadEnabledConnectionsAsync(ct)).Where(connection => !IsDownloadClient(connection.AcquisitionConnectionTypeId))];
-
-        private static bool IsDownloadClient(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Usenet;
-
-        private static Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledConnectionsAsync(this LogicContext ctx, CancellationToken ct)
+        // The enabled connections of one role, best priority first.
+        public static Task<IReadOnlyList<AcquisitionConnectionData>> ReadEnabledConnectionsAsync(this LogicContext ctx, AcquisitionConnectionRole role, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -68,15 +60,19 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."Username",
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
-                    connection."Version"
+                    connection."Version",
+                    connection."ProtectedPassword"
                 FROM
                     "AcquisitionConnections" AS connection
+                    JOIN "AcquisitionConnectionTypes" AS type ON type."Id" = connection."AcquisitionConnectionTypeId"
                 WHERE
                     connection."IsEnabled"
+                    AND type."AcquisitionConnectionRoleId" = @AcquisitionConnectionRoleId
                 ORDER BY
                     connection."Priority",
                     connection."Id";
                 """;
+            sql.Parameters.Add(new AcquisitionConnectionRoleParameters(role));
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
@@ -106,10 +102,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories", "DownloadCategory",
-                        "RemotePath", "LocalPath", "Username", "MaxConnections")
+                        "RemotePath", "LocalPath", "Username", "MaxConnections", "ProtectedPassword")
                 VALUES
                     (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath, @LocalPath, @Username,
-                        @MaxConnections)
+                        @MaxConnections, @ProtectedPassword)
                 RETURNING
                     "Id";
                 """;
@@ -140,6 +136,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "LocalPath" = @LocalPath,
                     "Username" = @Username,
                     "MaxConnections" = @MaxConnections,
+                    "ProtectedPassword" = CASE WHEN @AcquisitionConnectionTypeId = 7 THEN COALESCE(@ProtectedPassword, connection."ProtectedPassword") END,
                     "Capabilities" = CASE
                         WHEN connection."BaseUrl" = @BaseUrl AND connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId AND @ProtectedApiKey IS NULL
                             THEN connection."Capabilities"

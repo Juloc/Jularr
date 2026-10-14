@@ -349,6 +349,8 @@ Filme nennen ihre TMDB-Filmreihe (Modul „Franchises“, eigene Seite `/Franchi
 behält die Release-Angaben ihres Namens (Gruppe, Qualität, Edition, Proper); Admin → Bibliothek → Benennung
 legt die Namen von Film- und Folgendateien mit Sonarr-artigen Platzhaltern fest. Ein selbstsigniertes
 DSM-Zertifikat vertraut Jularr erst, nachdem der Owner seinen Fingerabdruck auf der Speicher-Seite bestätigt hat.
+Fehlende Untertitel der gewünschten Sprachen (Modul „Untertitel“, standardmäßig aus) holt Jularr von Anbietern, die wie
+Indexer verwaltet werden (OpenSubtitles.com, SubDL), und legt sie als `<Video>.<Sprache>.srt` neben das Video.
 Ihre Verträge stehen in [BACKEND_NEXT](docs/BACKEND_NEXT.md).
 Phase B bleibt gestoppt. Razor-Integrationstests verwenden nur isoliertes PostgreSQL
 und verlangen vorher `npm run build` im Frontend für die echten Asset-Manifeste.

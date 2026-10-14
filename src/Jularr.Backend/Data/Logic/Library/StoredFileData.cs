@@ -1,6 +1,7 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Storage;
@@ -379,5 +380,150 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Height))]
         public int Height { get; }
+    }
+
+    // A video file whose subtitles are looked for, with what it already has.
+    internal sealed class SubtitleSourceData : BaseData
+    {
+        public SubtitleSourceData(long id, long libraryRootId, long sizeBytes, DateTime modifiedAt, string relativePath, string? releaseName, string? releaseGroup, long mediaAssetId,
+            string rootRelativePath, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, MediaType mediaTypeId, decimal? unitNumber, decimal? parentUnitNumber,
+            string? imdbId, string? tmdbId, string[] trackLanguages, string[] siblingPaths)
+        {
+            Id = id;
+            LibraryRootId = libraryRootId;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+            RelativePath = relativePath;
+            ReleaseName = releaseName;
+            ReleaseGroup = releaseGroup;
+            MediaAssetId = mediaAssetId;
+            RootRelativePath = rootRelativePath;
+            StorageMountId = storageMountId;
+            StorageProtocolTypeId = storageProtocolTypeId;
+            SharePath = sharePath;
+            MediaTypeId = mediaTypeId;
+            UnitNumber = unitNumber;
+            ParentUnitNumber = parentUnitNumber;
+            ImdbId = imdbId;
+            TmdbId = tmdbId;
+            TrackLanguages = trackLanguages;
+            SiblingPaths = siblingPaths;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long LibraryRootId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title), false)]
+        public string? ReleaseName { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ReleaseGroup))]
+        public string? ReleaseGroup { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
+        public string RootRelativePath { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
+        public long StorageMountId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.StorageProtocolTypeId))]
+        public StorageProtocolType StorageProtocolTypeId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
+        public string SharePath { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? UnitNumber { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? ParentUnitNumber { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? ImdbId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Value), false)]
+        public string? TmdbId { get; }
+
+        // Embedded subtitle streams as their files name them.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Languages))]
+        public string[] TrackLanguages { get; }
+
+        // Files beside the video that extend its name.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePaths))]
+        public string[] SiblingPaths { get; }
+    }
+
+    internal sealed class SubtitleCheckData : BaseData
+    {
+        public SubtitleCheckData(long id, long sizeBytes, DateTime modifiedAt)
+        {
+            Id = id;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+    }
+
+    internal sealed class SubtitleFileData : BaseData
+    {
+        public SubtitleFileData(long libraryRootId, string relativePath, long sizeBytes, DateTime modifiedAt, long mediaAssetId)
+        {
+            LibraryRootId = libraryRootId;
+            RelativePath = relativePath;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+            MediaAssetId = mediaAssetId;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long LibraryRootId { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+    }
+
+    internal sealed class SubtitleLanguagesData : BaseData
+    {
+        public SubtitleLanguagesData(string[] subtitleLanguages)
+        {
+            SubtitleLanguages = subtitleLanguages;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Languages))]
+        public string[] SubtitleLanguages { get; }
     }
 }

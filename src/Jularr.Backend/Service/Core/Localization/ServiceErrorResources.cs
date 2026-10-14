@@ -90,6 +90,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.unknown_reference", "The referenced resource is unavailable."),
             new("errors.validation.outdated_version", "The data has changed. Please reload and try again."),
             new("errors.validation.invalid_transition", "This change is not available."),
+            new("errors.validation.unknown_language", "Use two-letter language codes such as de or en."),
             new("errors.validation.backup_passphrase", "The passphrase does not open this backup's key ring."),
             new("errors.validation.naming_unknown_token", "The pattern uses an unknown placeholder."),
             new("errors.validation.naming_incomplete", "The pattern needs the title, and for episodes the season and episode."),

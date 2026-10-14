@@ -123,8 +123,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     public sealed class SaveAcquisitionConnectionDataV1 : BaseData
     {
         public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, string? apiKey, bool isEnabled, int priority, int[] categories,
-            string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null)
+            string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null)
         {
+            Password = password;
             Username = username;
             MaxConnections = maxConnections;
             Name = name;
@@ -197,6 +198,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MaxConnections))]
         public int? MaxConnections { get; }
+
+        // The OpenSubtitles account password; empty keeps the saved one.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Password))]
+        public string? Password { get; }
     }
 
     public sealed class CreateAcquisitionConnectionResultV1 : BaseResponse

@@ -56,7 +56,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
         {
             var now = _time.GetUtcNow().UtcDateTime;
             var (due, indexers, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadDueWantedItemsAsync(new WantedDueData(now, BatchSize), ct),
-                await ctx.ReadEnabledSearchConnectionsAsync(ct), await ctx.ReadDownloadClientsAsync(ct)),
+                await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct)),
                 CancellationToken);
             if (indexers.Count == 0)
             {

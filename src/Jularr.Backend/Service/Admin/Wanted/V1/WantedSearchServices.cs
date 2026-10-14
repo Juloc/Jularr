@@ -29,7 +29,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             var (target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledSearchConnectionsAsync(ct)), CancellationToken);
+                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
 
             // Series searches may target one season or episode, Manga searches one volume.
             UnitScope? scope = null;
@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var offer = _acquisition.FindOffer(Parameters.WantedItemId, Data.CandidateId)
                 ?? throw new DataValidationException(nameof(GrabWantedReleaseDataV1.CandidateId), "outdated_version");
             var (target, clients) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadDownloadClientsAsync(ct)), CancellationToken);
+                (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Download, ct)), CancellationToken);
             if (target.IsDownloading && target.MediaTypeId != MediaType.Series)
             {
                 throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");

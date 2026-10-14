@@ -2,6 +2,7 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Localization;
+using Jularr.Backend.Logic.Media;
 
 namespace Jularr.Backend.Logic.Instance
 {
@@ -10,6 +11,18 @@ namespace Jularr.Backend.Logic.Instance
         public static async Task UpdateInstanceSettingsAsync(this LogicContext ctx, InstanceSettingsUpdateData data, CancellationToken ct)
         {
             await ctx.RequireEnabledUiLocaleAsync(data.UiLocaleId, nameof(data.UiLocaleId), ct);
+
+            // Subtitle languages are known two-letter codes, each once.
+            if (data.SubtitleLanguages is { } languages)
+            {
+                var codes = languages.Select(LanguageCodes.ToTwoLetter).ToArray();
+                if (codes.Any(code => code is null))
+                {
+                    throw new DataValidationException(nameof(data.SubtitleLanguages), "unknown_language");
+                }
+
+                data.SubtitleLanguages = [.. codes.OfType<string>().Distinct(StringComparer.Ordinal)];
+            }
 
             // Reject concurrent edits.
             var sql = new SqlStatement();
@@ -28,6 +41,7 @@ namespace Jularr.Backend.Logic.Instance
                     "HistoryMegabytes" = coalesce(@HistoryMegabytes, settings."HistoryMegabytes"),
                     "CollectionLimit" = coalesce(@CollectionLimit, settings."CollectionLimit"),
                     "UnitGroupLimit" = coalesce(@UnitGroupLimit, settings."UnitGroupLimit"),
+                    "SubtitleLanguages" = coalesce(@SubtitleLanguages::varchar(2)[], settings."SubtitleLanguages"),
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."Id" = 1

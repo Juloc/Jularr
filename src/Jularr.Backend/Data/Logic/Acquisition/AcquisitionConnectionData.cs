@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username,
-            int? maxConnections)
+            int? maxConnections, byte[]? protectedPassword)
         {
+            ProtectedPassword = protectedPassword;
             Username = username;
             MaxConnections = maxConnections;
             Id = id;
@@ -74,14 +75,19 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MaxConnections))]
         public int? MaxConnections { get; }
+
+        [JsonIgnore]
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey), false)]
+        public byte[]? ProtectedPassword { get; }
     }
 
     internal sealed class AcquisitionConnectionSaveData : BaseData
     {
         public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections)
+            int? maxConnections, byte[]? protectedPassword)
         {
+            ProtectedPassword = protectedPassword;
             Username = username;
             MaxConnections = maxConnections;
             Id = id;
@@ -137,6 +143,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MaxConnections))]
         public int? MaxConnections { get; }
+
+        [JsonIgnore]
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedApiKey), false)]
+        public byte[]? ProtectedPassword { get; }
     }
 
     internal sealed class AcquisitionConnectionCheckData : BaseData
@@ -239,5 +249,16 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl))]
         public string BaseUrl { get; }
+    }
+
+    internal sealed class AcquisitionConnectionRoleParameters : BaseData
+    {
+        public AcquisitionConnectionRoleParameters(AcquisitionConnectionRole acquisitionConnectionRoleId)
+        {
+            AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionRoleId))]
+        public AcquisitionConnectionRole AcquisitionConnectionRoleId { get; }
     }
 }

@@ -30,5 +30,7 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly StringField QualityKey = new() { MaximumLength = 64, Required = false };
         public static readonly StringField Edition = new() { MaximumLength = 64, Required = false };
         public static readonly IntField Revision = new() { Minimum = 1, Maximum = 9 };
+        public static readonly StringArrayField Languages = new();
+        public static readonly StringArrayField RelativePaths = new();
     }
 }

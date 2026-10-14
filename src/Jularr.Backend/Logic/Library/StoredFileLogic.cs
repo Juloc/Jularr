@@ -64,6 +64,9 @@ namespace Jularr.Backend.Logic.Library
                     END,
                     "TrickplayCheckedAt" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."TrickplayCheckedAt"
+                    END,
+                    "SubtitlesCheckedAt" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."SubtitlesCheckedAt"
                     END;
                 """;
             sql.Parameters.Add(data);
@@ -155,6 +158,41 @@ namespace Jularr.Backend.Logic.Library
                     file."Id" = @Id
                     AND file."SizeBytes" = @SizeBytes
                     AND file."ModifiedAt" = @ModifiedAt;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // Looked at now; a file changed meanwhile is looked at again.
+        public static async Task SaveSubtitlesCheckedAsync(this LogicContext ctx, SubtitleCheckData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "StoredFiles" AS file
+                SET
+                    "SubtitlesCheckedAt" = now()
+                WHERE
+                    file."Id" = @Id
+                    AND file."SizeBytes" = @SizeBytes
+                    AND file."ModifiedAt" = @ModifiedAt;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // A fetched subtitle belongs to its video's asset at once.
+        public static async Task SaveSubtitleFileAsync(this LogicContext ctx, SubtitleFileData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                INSERT INTO
+                    "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                VALUES
+                    (@LibraryRootId, @RelativePath, @SizeBytes, @ModifiedAt, now(), @MediaAssetId)
+                ON CONFLICT ("LibraryRootId", "RelativePath") DO NOTHING;
                 """;
             sql.Parameters.Add(data);
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);

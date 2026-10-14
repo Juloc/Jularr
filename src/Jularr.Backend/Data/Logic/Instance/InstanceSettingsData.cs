@@ -6,8 +6,9 @@ namespace Jularr.Backend.Data.Logic.Instance
     internal sealed class InstanceSettingsUpdateData : BaseData
     {
         public InstanceSettingsUpdateData(string name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks, bool? usersConfirmSources, int? libraryScanIntervalHours,
-            int? historyRetentionDays, int? historyMegabytes, int? collectionLimit, int? unitGroupLimit)
+            int? historyRetentionDays, int? historyMegabytes, int? collectionLimit, int? unitGroupLimit, string[]? subtitleLanguages)
         {
+            SubtitleLanguages = subtitleLanguages;
             CollectionLimit = collectionLimit;
             UnitGroupLimit = unitGroupLimit;
             HistoryRetentionDays = historyRetentionDays;
@@ -44,6 +45,9 @@ namespace Jularr.Backend.Data.Logic.Instance
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UnitGroupLimit), false)]
         public int? UnitGroupLimit { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.SubtitleLanguages), false)]
+        public string[]? SubtitleLanguages { get; set; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
         public string Name { get; }

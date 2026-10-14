@@ -41,6 +41,7 @@ CREATE TABLE "StoredFiles" (
     "Revision" smallint NOT NULL DEFAULT 1 CHECK ("Revision" BETWEEN 1 AND 9),
     "TrickplayFrames" integer NULL CHECK ("TrickplayFrames" > 0),
     "TrickplayCheckedAt" timestamptz NULL,
+    "SubtitlesCheckedAt" timestamptz NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("LibraryRootId", "RelativePath")
 );

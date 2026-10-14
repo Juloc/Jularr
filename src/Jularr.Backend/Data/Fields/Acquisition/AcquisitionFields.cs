@@ -13,6 +13,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField ApiKey = new() { MaximumLength = 256, Required = false, Format = StringFormat.SingleLine };
         public static readonly StringField Username = new(NpgsqlDbType.Varchar) { MaximumLength = 128, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly ByteArrayField ProtectedApiKey = new();
+        public static readonly StringField Password = new() { MaximumLength = 256, Required = false, Format = StringFormat.SingleLine };
+        public static readonly EnumField AcquisitionConnectionRoleId = new(typeof(AcquisitionConnectionRole));
         public static readonly BoolField HasApiKey = new();
         public static readonly BoolField IsEnabled = new();
         public static readonly IntField Priority = new() { Minimum = 1, Maximum = 100 };

@@ -47,6 +47,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Jularr.Integrations.Data.Database;
 using Jularr.Integrations.Logic.Database;
+using Jularr.Integrations.Logic.Subtitles;
 using Jularr.Integrations.Logic.Synology;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -163,6 +164,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<MusicMetadata>();
             services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();
+            services.TryAddTransient<SubtitleProviders>();
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
             services.TryAddSingleton<ArchiveTools>();
@@ -244,6 +246,8 @@ namespace Jularr.Backend.Service.Core
             AddClient<NewznabClient>(services, 30, 16);
             AddClient<TmdbClient>(services, 15, 4, baseAddress: new Uri("https://api.themoviedb.org/3/"));
             AddClient<SabnzbdClient>(services, 15, 16);
+            AddClient<OpenSubtitlesClient>(services, 30, 12, agent: true);
+            AddClient<SubDlClient>(services, 30, 12, agent: true);
 
             // Throttle public requests.
             services.AddRateLimiter(options =>

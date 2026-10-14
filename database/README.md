@@ -35,8 +35,8 @@ RequestRules (limit per rolling period, approval, blocked media keys, offered qu
 profiles, one default) and AccountRequestRules (assignment and single-value overrides)
 resolve through the view EffectiveRequestRules; requests record their account and
 chosen quality.
-The Arr+ core adds AcquisitionConnections (Newznab indexers and SABnzbd clients in
-one table, protected API keys, cached capabilities, client path mapping),
+The Arr+ core adds AcquisitionConnections (Newznab indexers, SABnzbd clients and subtitle providers in
+one table, the type's role deciding where a connection is used, protected API keys, cached capabilities, client path mapping),
 AcquisitionProfiles (one default per media type and subtype, JSON definition for the shared
 selection engine), search state on WantedItems and AcquisitionReleases (grabbed,
 imported, failed and blocked releases of a target: history and blocklist in one
