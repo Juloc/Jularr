@@ -30,6 +30,7 @@ CREATE TABLE "InstanceModules" (
 INSERT INTO "InstanceModules" ("Key") VALUES ('Library'), ('Requests'), ('Acquisition'), ('Playback'), ('Reading'), ('Emulation'), ('Notifications'), ('Collections'), ('Calendar'), ('Statistics'), ('UnitGroups'), ('HomeLayout'), ('Franchises');
 -- Profiles: several profiles per account with picker and PIN; off, every account uses its main profile.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Profiles', FALSE);
+-- Franchises shows a movie's TMDB film series on its details and its own page.
 -- Trickplay renders seek thumbnails with FFmpeg; off by default because it costs a NAS processor time.
 INSERT INTO "InstanceModules" ("Key", "IsEnabled") VALUES ('Trickplay', FALSE);
 

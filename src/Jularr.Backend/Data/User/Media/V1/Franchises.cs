@@ -14,6 +14,22 @@ namespace Jularr.Backend.Data.User.Media.V1
         public long FranchiseId { get; }
     }
 
+    public sealed class FranchiseWorksParametersV1 : BaseParameters
+    {
+        public FranchiseWorksParametersV1(long franchiseId, int page = 1, int pageSize = 60)
+        {
+            FranchiseId = franchiseId;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Id))]
+        public long FranchiseId { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
     public sealed class FranchiseV1 : BaseResponse
     {
         public FranchiseV1(long id, string name)

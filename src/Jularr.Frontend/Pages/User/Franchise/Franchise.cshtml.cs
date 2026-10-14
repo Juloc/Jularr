@@ -1,5 +1,5 @@
 using System.Globalization;
-using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Frontend.Framework;
@@ -11,21 +11,26 @@ namespace Jularr.Frontend.Pages.User.Franchise
     public sealed class FranchiseModel(ReadFranchiseV1 read, ReadFranchiseWorksV1 readWorks) : JularrPage
     {
         private FranchiseV1? _franchise;
-        private IReadOnlyList<WorkCardV1> _works = [];
+        private PageResult<WorkCardV1>? _works;
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
+
+        [BindProperty(SupportsGet = true)]
+        public int PageNumber { get; set; } = 1;
 
         protected override void Define(Page page)
         {
             page.Title("franchise.title");
             page.Navigation("nav.library");
             page.Asset("Pages/User/Franchise/Franchise.entry.scss");
-            if (_franchise is { } franchise)
+            if (_franchise is { } franchise && _works is { } works)
             {
                 page.Content.Add(new H2(new ValueText(franchise.Name)));
-                page.Content.Add(new Div([.. _works.Select(item => new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
                     item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))]).Class("media-grid"));
+                if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(works.Page - 1)));
+                if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(works.Page + 1)));
             }
 
             if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -41,7 +46,9 @@ namespace Jularr.Frontend.Pages.User.Franchise
         protected override async Task LoadDataAsync()
         {
             _franchise = await read.ExecuteAsync<FranchiseV1>(new FranchiseParametersV1(Id), HttpContext.RequestAborted);
-            _works = await readWorks.ExecuteAsync<BaseDataList<WorkCardV1>>(new FranchiseParametersV1(Id), HttpContext.RequestAborted);
+            _works = await readWorks.ExecuteAsync<PageResult<WorkCardV1>>(new FranchiseWorksParametersV1(Id, Math.Max(1, PageNumber)), HttpContext.RequestAborted);
         }
+
+        private string Address(int page) => "/Franchise/" + Id.ToString(CultureInfo.InvariantCulture) + "?pageNumber=" + page.ToString(CultureInfo.InvariantCulture);
     }
 }

@@ -49,7 +49,10 @@ namespace Jularr.Backend.Logic.Media
                     work."Id" = @WorkId;
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new KeyNotFoundException("The work was not found.");
+            }
         }
     }
 }

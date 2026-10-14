@@ -26,7 +26,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public async Task Discover_FeedsSearchAndRequest_ResolveOneCanonicalWork()
         {
-            await using var host = await CreateHostAsync(razor: true);
+            await using var host = await CreateHostAsync();
 
             // Feeds come from TMDB with the viewer state of each title.
             using var feed = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/feed", new ReadDiscoverFeedDataV1(MediaType.Movie, DiscoverFeedType.Trending));
@@ -66,19 +66,33 @@ namespace Jularr.Backend.Tests
             var entry = (await library.Content.ReadFromJsonAsync<PageResult<LibraryItemV1>>())!.Items.Single();
             Assert.AreEqual(MediaStateType.Requested, entry.MediaStateTypeId);
             Assert.AreEqual("https://image.tmdb.org/t/p/w500/poster.jpg", entry.PosterUrl);
+        }
 
-            // TMDB's collection is the Work's film series, listed on its own page.
-            var franchiseId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Franchises\" WHERE \"TmdbCollectionId\" = 2344"))!;
+        [TestMethod]
+        public async Task Franchise_TmdbCollection_ListsTheVisibleTitles()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+            var franchiseId = (long)(await host.ScalarAsync("SELECT \"FranchiseId\" FROM \"Works\" WHERE \"Id\" = " + workId))!;
+            Assert.AreEqual("The Matrix Collection", await host.ScalarAsync("SELECT \"Name\" FROM \"Franchises\" WHERE \"TmdbCollectionId\" = 2344"));
+
+            // The series lists its titles and the details link to it.
             using var series = await host.SendAsync(HttpMethod.Get, "/api/v1/franchises/" + franchiseId + "/works");
             Assert.AreEqual(HttpStatusCode.OK, series.StatusCode, await series.Content.ReadAsStringAsync());
-            Assert.AreEqual(details.WorkId, (await series.Content.ReadFromJsonAsync<BaseDataList<WorkCardV1>>())!.Single().Id);
-            using var detailsPage = await host.SendAsync(HttpMethod.Get, "/Details/" + details.WorkId);
-            StringAssert.Contains(await detailsPage.Content.ReadAsStringAsync(), "/Franchise/" + franchiseId);
+            Assert.AreEqual(workId, (await series.Content.ReadFromJsonAsync<PageResult<WorkCardV1>>())!.Items.Single().Id);
             using var page = await host.SendAsync(HttpMethod.Get, "/Franchise/" + franchiseId);
             StringAssert.Contains(await page.Content.ReadAsStringAsync(), "The Matrix Collection");
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "/Franchise/" + franchiseId);
+
+            // Switched off, neither the series nor the link remain.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Franchises'");
             using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/franchises/" + franchiseId);
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
+            using var plain = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            Assert.IsFalse((await plain.Content.ReadAsStringAsync()).Contains("/Franchise/", StringComparison.Ordinal));
         }
 
         [TestMethod]

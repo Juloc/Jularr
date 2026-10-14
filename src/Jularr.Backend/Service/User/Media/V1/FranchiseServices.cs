@@ -1,4 +1,4 @@
-using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Infrastructure.Sql;
@@ -30,10 +30,12 @@ namespace Jularr.Backend.Service.User.Media.V1
                         SELECT
                             1
                         FROM
-                            "Works" AS work
-                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = work."Id" AND visible."ProfileId" = @ProfileId AND NOT visible."IsHidden"
+                            "ProfileWorks" AS visible
+                            JOIN "Works" AS work ON work."Id" = visible."WorkId"
                         WHERE
-                            work."FranchiseId" = franchise."Id"
+                            visible."ProfileId" = @ProfileId
+                            AND NOT visible."IsHidden"
+                            AND work."FranchiseId" = franchise."Id"
                     );
                 """;
             sql.Parameters.Add(Parameters);
@@ -43,11 +45,12 @@ namespace Jularr.Backend.Service.User.Media.V1
     }
 
     [ServiceEndpoint("GET", "/api/v1/franchises/{franchiseId:long}/works")]
-    public sealed class ReadFranchiseWorksV1 : UserService<FranchiseParametersV1>
+    public sealed class ReadFranchiseWorksV1 : UserService<FranchiseWorksParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WorkCardV1>>()];
-        protected override ModuleRequirement GetInstanceModules(FranchiseParametersV1 parameters) => ModuleRequirement.All("Library", "Franchises");
-        protected override ServicePermission GetPermission(FranchiseParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
+        protected override ModuleRequirement GetInstanceModules(FranchiseWorksParametersV1 parameters) => ModuleRequirement.All("Library", "Franchises");
+        protected override ServicePermission GetPermission(FranchiseWorksParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override PageRequest GetPageRequest(FranchiseWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
 
         protected override async Task<IServiceOutput> OnRead()
         {
@@ -85,11 +88,14 @@ namespace Jularr.Backend.Service.User.Media.V1
                 ORDER BY
                     work."ReleaseYear" NULLS LAST,
                     work."CanonicalTitle",
-                    work."Id";
+                    work."Id"
+                LIMIT @PageSize
+                OFFSET @Offset;
                 """;
-            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new FranchiseParametersV1(Parameters.FranchiseId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
-            return new BaseDataList<WorkCardV1>(await Context.ReadSql.ReadListAsync<WorkCardV1>(sql, CancellationToken));
+            sql.Page = Page;
+            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
         }
     }
 }

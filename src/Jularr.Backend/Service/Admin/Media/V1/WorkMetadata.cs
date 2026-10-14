@@ -171,7 +171,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
-                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, Limit(work.CollectionName)), token);
+                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, work.CollectionName is { Length: > 300 } name ? name[..300] : work.CollectionName), token);
                 return workId;
             }, ct);
         }
