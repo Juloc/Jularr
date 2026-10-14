@@ -1,0 +1,42 @@
+.calendar {
+    &__navigation {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 24px;
+    }
+
+    &__day {
+        margin-bottom: 24px;
+
+        h2 {
+            margin: 0 0 8px;
+            font-size: 1rem;
+        }
+
+        ul {
+            display: grid;
+            gap: 6px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+    }
+
+    &__entry {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+    }
+
+    &__unit,
+    &__state {
+        color: var(--muted);
+        font-size: 13px;
+    }
+}

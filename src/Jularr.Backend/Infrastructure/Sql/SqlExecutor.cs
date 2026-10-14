@@ -125,6 +125,12 @@ namespace Jularr.Backend.Infrastructure.Sql
                 return value;
             }
 
+            // Npgsql reads date columns as DateTime.
+            if (type == typeof(DateOnly) && value is DateTime day)
+            {
+                return DateOnly.FromDateTime(day);
+            }
+
             return Convert.ChangeType(value, type, System.Globalization.CultureInfo.InvariantCulture);
         }
 

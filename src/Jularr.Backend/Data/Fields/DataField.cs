@@ -286,6 +286,18 @@ namespace Jularr.Backend.Data.Fields
         }
     }
 
+    // A calendar day without time or zone.
+    public sealed class DateField : DataField
+    {
+        public DateField() : base(typeof(DateOnly), NpgsqlDbType.Date)
+        {
+        }
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+        }
+    }
+
     public sealed class ByteArrayField : DataField
     {
         public ByteArrayField() : base(typeof(byte[]), NpgsqlDbType.Bytea)

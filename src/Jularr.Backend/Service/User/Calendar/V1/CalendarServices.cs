@@ -1,0 +1,81 @@
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Profile;
+using Jularr.Backend.Data.User.Calendar.V1;
+using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Service.Core;
+
+namespace Jularr.Backend.Service.User.Calendar.V1
+{
+    [ServiceEndpoint("GET", "/api/v1/calendar")]
+    public sealed class ReadCalendarV1 : UserService<ReadCalendarParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<CalendarEntryV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadCalendarParametersV1 parameters) => ModuleRequirement.All("Library", "Calendar");
+        protected override ServicePermission GetPermission(ReadCalendarParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Episodes, volumes and tracks of the profile's Works: watchlisted, requested by it or already in the library.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    unit."ReleasedOn" AS "Day",
+                    work."Id" AS "WorkId",
+                    work."MediaTypeId",
+                    work."CanonicalTitle" AS "Title",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Poster'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "PosterUrl",
+                    unit."WorkUnitTypeId",
+                    unit."Number" AS "UnitNumber",
+                    parent."Number" AS "ParentUnitNumber",
+                    unit."Title" AS "UnitTitle",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                        WHERE
+                            asset."WorkUnitId" = unit."Id"
+                    ) AS "IsAvailable",
+                    entry."WorkId" IS NOT NULL AS "IsWatchlisted"
+                FROM
+                    "WorkUnits" AS unit
+                    JOIN "Works" AS work ON work."Id" = unit."WorkId"
+                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = @ProfileId AND visible."WorkId" = work."Id" AND NOT visible."IsHidden"
+                    LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                    LEFT JOIN "WatchlistEntries" AS entry ON entry."ProfileId" = @ProfileId AND entry."WorkId" = work."Id"
+                WHERE
+                    unit."ReleasedOn" >= @From
+                    AND unit."ReleasedOn" < @From + @Days
+                    AND NOT EXISTS (SELECT 1 FROM "WorkUnits" AS child WHERE child."ParentWorkUnitId" = unit."Id")
+                    AND (
+                        entry."WorkId" IS NOT NULL
+                        OR EXISTS (SELECT 1 FROM "AcquisitionRequests" AS request WHERE request."WorkId" = work."Id" AND request."RequestedByProfileId" = @ProfileId)
+                        OR EXISTS (SELECT 1 FROM "MediaAssets" AS asset WHERE asset."WorkId" = work."Id")
+                    )
+                ORDER BY
+                    unit."ReleasedOn",
+                    work."CanonicalTitle",
+                    parent."Number" NULLS FIRST,
+                    unit."Number"
+                LIMIT 500;
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<CalendarEntryV1>(await Context.ReadSql.ReadListAsync<CalendarEntryV1>(sql, CancellationToken));
+        }
+    }
+}

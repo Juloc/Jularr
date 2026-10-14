@@ -23,6 +23,11 @@ namespace Jularr.Frontend.Pages.Shared
                     primary.Add(new ShellLink("collections.title", "/Collections", "bookmark"));
                 }
 
+                if (texts.Capabilities.CanSeeCalendar)
+                {
+                    primary.Add(new ShellLink("calendar.title", "/Calendar", "calendar"));
+                }
+
                 var watchlist = new ShellLink("watchlist.title", "/Watchlist", "home");
                 primary.Add(watchlist);
                 mobile.Add(watchlist);
