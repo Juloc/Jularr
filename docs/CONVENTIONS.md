@@ -82,6 +82,7 @@ use the same services through the shared API adapter.
 - Test changed behavior and realistic regressions, especially authorization and atomic mutations. Reuse existing fixtures; avoid trivial plumbing tests and redundant permutations.
 - Use concise `Subject_Condition_Result` names and data-driven equivalent cases. No test XML prose.
 - Ordinary changes run the affected build and the smallest relevant test set. Full-suite validation is a separate requested/release gate.
+- Changes to pages and user flows are also checked in a real browser with the Playwright tests in `tests/Jularr.E2E.Tests`; extend them when a flow is new.
 - Before integrating parallel work, compare against the current target branch and preserve its fixes, tests and conventions. Resolve overlapping changes by their intended behavior; never replace current files with an older branch snapshot.
 - `README.md` describes startup, current capabilities and integration gaps; it is not a second rules document.
 - `docs/CODEMAP.md` indexes current owners, entry points, persistence and focused tests. Read the relevant section first, then inspect only those paths.

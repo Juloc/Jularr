@@ -415,7 +415,7 @@ namespace Jularr.Backend.Data.Fields
         public bool SplitsCommas { get; init; }
 
         public override object? Normalize(object? value) => SplitsCommas && value is string[] values
-            ? values.SelectMany<string?, string?>(item => item is null ? [null] : item.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToArray()
+            ? values.SelectMany<string?, string?>(item => item is null ? new string?[] { null } : item.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToArray()
             : value;
 
         protected override void ValidateValue(object value, string name, int? maximumLength)

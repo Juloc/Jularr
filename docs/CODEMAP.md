@@ -105,7 +105,7 @@ Navigation only. Shared rules: [CONVENTIONS.md](CONVENTIONS.md); Frontend: [FRON
 
 ## Focused tests
 
-All tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests).
+Behavior and integration tests are in [Jularr.Backend.Tests](../tests/Jularr.Backend.Tests). Browser tests are in [Jularr.E2E.Tests](../tests/Jularr.E2E.Tests): [JularrInstance.cs](../tests/Jularr.E2E.Tests/JularrInstance.cs) starts the built host on loopback with its own database from the baselines, Playwright drives Chromium; `FirstRunTests` covers setup, sign-in and every menu page; run with `dotnet test tests/Jularr.E2E.Tests` and `JULARR_TEST_DB`, screenshots of a failure land in `TestResults/e2e`. CI runs them in their own job.
 
 - Profile behavior/rollback: `ProfileReferenceVerticalTests.cs`; authorization/HTTP: `ProfileServiceGateTests.cs`.
 - Invocation, internal visibility and PostgreSQL-free consumer signatures: `ServiceFoundationTests.cs`, `ServiceArchitectureTests.cs`.
