@@ -368,14 +368,14 @@ namespace Jularr.Backend.Service.User.Reading.V1
             foreach (var section in sections)
             {
                 var text = ReadingHtml.Text(section.Html);
-                var first = text.IndexOf(query, StringComparison.CurrentCultureIgnoreCase);
+                var first = text.IndexOf(query, StringComparison.OrdinalIgnoreCase);
                 if (first < 0)
                 {
                     continue;
                 }
 
                 var matches = 0;
-                for (var index = first; index >= 0; index = text.IndexOf(query, index + query.Length, StringComparison.CurrentCultureIgnoreCase))
+                for (var index = first; index >= 0; index = text.IndexOf(query, index + query.Length, StringComparison.OrdinalIgnoreCase))
                 {
                     matches++;
                 }

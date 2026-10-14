@@ -61,12 +61,13 @@ async function start(player: HTMLElement): Promise<void> {
         if (ended) plan = null;
     };
     setInterval(() => { if (!video.paused) report(false); }, ReportInterval);
-    video.addEventListener("pause", () => report(false));
+    // The pause before an end is no position worth saving.
+    video.addEventListener("pause", () => { if (!video.ended) report(false); });
     video.addEventListener("ended", () => {
         report(true);
-        // An album or season continues with the next unit.
+        // An album or season continues with the next unit in the full player; the mini player stops where it is.
         const next = player.querySelector<HTMLElement>("[data-action=next][data-href]")?.dataset.href;
-        if (next) location.assign(next);
+        if (next && !player.classList.contains("player--mini")) location.assign(next);
     });
     document.addEventListener("visibilitychange", () => { if (document.hidden) report(false); });
     window.addEventListener("pagehide", event => report(!event.persisted, false));
@@ -74,7 +75,7 @@ async function start(player: HTMLElement): Promise<void> {
     function go(direction: "previous" | "next") {
         const href = player.querySelector<HTMLElement>(`[data-action=${direction}][data-href]`)?.dataset.href;
         if (!href) return;
-        report(false);
+        report(true, false);
         location.assign(href);
     }
 

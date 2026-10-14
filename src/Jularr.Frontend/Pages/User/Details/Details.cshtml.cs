@@ -154,9 +154,7 @@ namespace Jularr.Frontend.Pages.User.Details
         }
 
         private Table<WorkAvailabilityV1> Versions(IReadOnlyList<WorkAvailabilityV1> items) => new Table<WorkAvailabilityV1>(items)
-            .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber) is { } unit
-                ? item.UnitTitle is { } name ? unit + " · " + name : unit
-                : texts["details.wholeWork"]))
+            .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber, item.UnitTitle) ?? texts["details.wholeWork"]))
             .Resource(item => item.MediaAssetTypeId, "table.type", type => "media.asset." + type)
             .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
             .Content("details.audio", item => new ValueText(string.Join(", ", item.AudioLanguages)))

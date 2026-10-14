@@ -51,7 +51,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
                             other."WorkId" = asset."WorkId"
                             AND other."MediaAssetTypeId" = asset."MediaAssetTypeId"
                             AND (coalesce(otherParent."Number", 0), otherUnit."Number") < (coalesce(parent."Number", 0), unit."Number")
-                            AND EXISTS (SELECT 1 FROM "StoredFiles" AS file WHERE file."MediaAssetId" = other."Id" AND file."MissingSince" IS NULL)
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "StoredFiles" AS file
+                                WHERE
+                                    file."MediaAssetId" = other."Id"
+                                    AND file."MissingSince" IS NULL
+                                    AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                            )
                         ORDER BY
                             coalesce(otherParent."Number", 0) DESC,
                             otherUnit."Number" DESC,
@@ -70,7 +79,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
                             other."WorkId" = asset."WorkId"
                             AND other."MediaAssetTypeId" = asset."MediaAssetTypeId"
                             AND (coalesce(otherParent."Number", 0), otherUnit."Number") > (coalesce(parent."Number", 0), unit."Number")
-                            AND EXISTS (SELECT 1 FROM "StoredFiles" AS file WHERE file."MediaAssetId" = other."Id" AND file."MissingSince" IS NULL)
+                            AND EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "StoredFiles" AS file
+                                WHERE
+                                    file."MediaAssetId" = other."Id"
+                                    AND file."MissingSince" IS NULL
+                                    AND file."RelativePath" !~* '\.(srt|ass|ssa|vtt|sub|idx|sup)$'
+                            )
                         ORDER BY
                             coalesce(otherParent."Number", 0),
                             otherUnit."Number",

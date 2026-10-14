@@ -125,14 +125,15 @@ namespace Jularr.Backend.Service.User.Media.V1
                     ) AS "Platforms",
                     coalesce((
                         SELECT
-                            regexp_split_to_array(btrim(fact."Value"), '\s*[,;&]\s*')
+                            array_remove(CASE WHEN fact."FactKey" = 'Artist' THEN ARRAY[btrim(fact."Value")] ELSE regexp_split_to_array(btrim(fact."Value"), '\s*[,;]\s*') END, '')
                         FROM
                             "WorkMetadataFacts" AS fact
                         WHERE
                             fact."WorkId" = work."Id"
                             AND fact."FactKey" IN ('Author', 'Artist')
                         ORDER BY
-                            fact."IsManual" DESC
+                            fact."IsManual" DESC,
+                            fact."Id"
                         LIMIT 1
                     ), ARRAY[]::text[]) AS "Creators"
                 FROM
@@ -267,7 +268,7 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Everything the profile may see by this author or artist, oldest first.
+            // Everything the profile may see credited to this author or artist the way its details show it, oldest first.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -297,15 +298,24 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
-                    AND EXISTS (
+                    AND lower(@Name) = ANY(
                         SELECT
-                            1
+                            lower(credit)
                         FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" IN ('Author', 'Artist')
-                            AND lower(@Name) = ANY(regexp_split_to_array(lower(btrim(fact."Value")), '\s*[,;&]\s*'))
+                            (
+                                SELECT
+                                    CASE WHEN fact."FactKey" = 'Artist' THEN ARRAY[btrim(fact."Value")] ELSE regexp_split_to_array(btrim(fact."Value"), '\s*[,;]\s*') END AS "Credits"
+                                FROM
+                                    "WorkMetadataFacts" AS fact
+                                WHERE
+                                    fact."WorkId" = work."Id"
+                                    AND fact."FactKey" IN ('Author', 'Artist')
+                                ORDER BY
+                                    fact."IsManual" DESC,
+                                    fact."Id"
+                                LIMIT 1
+                            ) AS chosen
+                            CROSS JOIN LATERAL unnest(chosen."Credits") AS credit
                     )
                 ORDER BY
                     work."ReleaseYear" NULLS LAST,
