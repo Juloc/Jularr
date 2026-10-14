@@ -220,6 +220,8 @@ namespace Jularr.Frontend.Localization
             new("admin.instance.readingCacheMegabytes", "Reading cache for offline storage (MB)"),
             new("admin.instance.readingCacheWorks", "Reading cache: most recently read books"),
             new("admin.instance.libraryScanIntervalHours", "Library rescan interval in hours (0 = off)"),
+            new("admin.instance.historyRetentionDays", "Keep finished activity for days"),
+            new("admin.instance.historyMegabytes", "Activity history size in MB"),
             new("admin.instance.usersConfirmSources", "Users may confirm source checks"),
             new("admin.instance.saved", "Instance settings were saved."),
             new("admin.providers.scope", "Enable or disable registered integrations. Connection and login capabilities still require their existing host configuration."),

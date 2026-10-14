@@ -13,8 +13,11 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
     public sealed class InstanceSettingsDetailsV1 : BaseResponse
     {
-        public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version, int readingCacheMegabytes, int readingCacheWorks, bool usersConfirmSources, int libraryScanIntervalHours)
+        public InstanceSettingsDetailsV1(string name, long uiLocaleId, long version, int readingCacheMegabytes, int readingCacheWorks, bool usersConfirmSources, int libraryScanIntervalHours,
+            int historyRetentionDays, int historyMegabytes)
         {
+            HistoryRetentionDays = historyRetentionDays;
+            HistoryMegabytes = historyMegabytes;
             LibraryScanIntervalHours = libraryScanIntervalHours;
             UsersConfirmSources = usersConfirmSources;
             Name = name;
@@ -47,13 +50,22 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
         // Libraries rescan after this many hours; 0 turns it off.
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.LibraryScanIntervalHours))]
         public int LibraryScanIntervalHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.HistoryRetentionDays))]
+        public int HistoryRetentionDays { get; }
+
+        // Decimal megabytes.
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.HistoryMegabytes))]
+        public int HistoryMegabytes { get; }
     }
 
     public sealed class UpdateInstanceSettingsDataV1 : BaseData
     {
         public UpdateInstanceSettingsDataV1(string name, long uiLocaleId, long version, int? readingCacheMegabytes = null, int? readingCacheWorks = null, bool? usersConfirmSources = null,
-            int? libraryScanIntervalHours = null)
+            int? libraryScanIntervalHours = null, int? historyRetentionDays = null, int? historyMegabytes = null)
         {
+            HistoryRetentionDays = historyRetentionDays;
+            HistoryMegabytes = historyMegabytes;
             LibraryScanIntervalHours = libraryScanIntervalHours;
             UsersConfirmSources = usersConfirmSources;
             Name = name;
@@ -75,6 +87,12 @@ namespace Jularr.Backend.Data.Admin.Instance.V1
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.LibraryScanIntervalHours), false)]
         public int? LibraryScanIntervalHours { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.HistoryRetentionDays), false)]
+        public int? HistoryRetentionDays { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.HistoryMegabytes), false)]
+        public int? HistoryMegabytes { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
         public string Name { get; }

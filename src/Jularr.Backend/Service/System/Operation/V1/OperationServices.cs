@@ -52,13 +52,6 @@ namespace Jularr.Backend.Service.System.Operation.V1
     // Activity keeps finished work for 30 days.
     public sealed class PruneOperationsV1 : SystemService<PruneOperationsParametersV1, NoData>
     {
-        private readonly TimeProvider _time;
-
-        internal PruneOperationsV1(TimeProvider time)
-        {
-            _time = time;
-        }
-
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
         protected override ModuleRequirement GetInstanceModules(PruneOperationsParametersV1 parameters) => ModuleRequirement.None;
@@ -66,8 +59,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            var since = _time.GetUtcNow().UtcDateTime - TimeSpan.FromDays(30);
-            return new UpdateResult(await Context.PruneFinishedOperationsAsync(new OperationSinceData(since), CancellationToken) > 0);
+            return new UpdateResult(await Context.PruneFinishedOperationsAsync(CancellationToken) > 0);
         }
     }
 

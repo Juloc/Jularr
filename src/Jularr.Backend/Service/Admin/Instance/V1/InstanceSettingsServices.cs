@@ -28,7 +28,9 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                     (settings."ReadingCacheBytes" / 1048576)::integer AS "ReadingCacheMegabytes",
                     settings."ReadingCacheWorks",
                     settings."UsersConfirmSources",
-                    settings."LibraryScanIntervalHours"
+                    settings."LibraryScanIntervalHours",
+                    settings."HistoryRetentionDays",
+                    settings."HistoryMegabytes"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE
@@ -50,7 +52,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         {
             // Use the canonical writer.
             await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks, Data.UsersConfirmSources,
-                Data.LibraryScanIntervalHours), CancellationToken);
+                Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes), CancellationToken);
             return new UpdateResult(true);
         }
     }

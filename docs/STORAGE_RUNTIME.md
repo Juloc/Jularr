@@ -59,7 +59,7 @@ Works or files. `QueueLibraryScanV1` queues one active scan per path in Operatio
 The storage worker also calls `ScheduleLibraryScansV1`: every path without a scan in the
 last `LibraryScanIntervalHours` of the instance settings (default 24, 0 turns it off) is
 rescanned, except on connections last probed offline, so a sleeping NAS is not woken.
-Finished operations leave the Activity history after 30 days (`PruneOperationsV1`, hourly).
+Finished operations leave the Activity history after the Admin's retention days (default 30) or, oldest first, once the history exceeds its size in decimal megabytes (default 10); unacknowledged failures stay (`PruneOperationsV1`, hourly).
 
 Hosts opt in to `AddJularrWorkers` (`Jularr.Workers`); its worker requeues interrupted scans on
 start, claims queued operations with `SKIP LOCKED` and calls System services, which

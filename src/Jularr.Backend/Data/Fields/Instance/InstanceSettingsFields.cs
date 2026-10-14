@@ -13,5 +13,7 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly IntField ReadingCacheWorks = new() { Minimum = 0, Maximum = 10_000 };
         public static readonly BoolField UsersConfirmSources = new();
         public static readonly IntField LibraryScanIntervalHours = new() { Minimum = 0, Maximum = 720 };
+        public static readonly IntField HistoryRetentionDays = new() { Minimum = 1, Maximum = 3650 };
+        public static readonly IntField HistoryMegabytes = new() { Minimum = 1, Maximum = 100000 };
     }
 }

@@ -193,6 +193,15 @@ namespace Jularr.Backend.Tests
             await using var scope = host.Services.CreateAsyncScope();
             Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new PruneOperationsParametersV1(), default, CancellationToken.None)).Success);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\""));
+
+            // Beyond its room the oldest finished entries leave first.
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceSettings" SET "HistoryMegabytes" = 1;
+                INSERT INTO "Operations" ("OperationTypeId", "OperationStatusTypeId", "FinishedAt") SELECT 3, 3, now() - make_interval(secs => number) FROM generate_series(1, 20000) AS number;
+                """);
+            Assert.IsTrue((await scope.ServiceProvider.GetRequiredService<PruneOperationsV1>().ExecuteAsync<UpdateResult>(new PruneOperationsParametersV1(), default, CancellationToken.None)).Success);
+            Assert.IsTrue((long)(await host.ScalarAsync("SELECT count(*) FROM \"Operations\""))! is > 1000 and < 20000);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 3 AND \"FinishedAt\" > now() - interval '2 seconds'"));
         }
 
         [TestMethod]

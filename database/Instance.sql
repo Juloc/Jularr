@@ -8,6 +8,9 @@ CREATE TABLE "InstanceSettings" (
     "ReadingCacheWorks" integer NOT NULL DEFAULT 100 CHECK ("ReadingCacheWorks" BETWEEN 0 AND 10000),
     "UsersConfirmSources" boolean NOT NULL DEFAULT FALSE,
     "LibraryScanIntervalHours" smallint NOT NULL DEFAULT 24 CHECK ("LibraryScanIntervalHours" BETWEEN 0 AND 720),
+    -- Finished activity leaves after this many days or once it takes more room than this.
+    "HistoryRetentionDays" smallint NOT NULL DEFAULT 30 CHECK ("HistoryRetentionDays" BETWEEN 1 AND 3650),
+    "HistoryMegabytes" integer NOT NULL DEFAULT 10 CHECK ("HistoryMegabytes" BETWEEN 1 AND 100000),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
 );
 

@@ -25,6 +25,8 @@ namespace Jularr.Backend.Logic.Instance
                     "ReadingCacheWorks" = coalesce(@ReadingCacheWorks, settings."ReadingCacheWorks"),
                     "UsersConfirmSources" = coalesce(@UsersConfirmSources, settings."UsersConfirmSources"),
                     "LibraryScanIntervalHours" = coalesce(@LibraryScanIntervalHours, settings."LibraryScanIntervalHours"),
+                    "HistoryRetentionDays" = coalesce(@HistoryRetentionDays, settings."HistoryRetentionDays"),
+                    "HistoryMegabytes" = coalesce(@HistoryMegabytes, settings."HistoryMegabytes"),
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."Id" = 1

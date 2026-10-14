@@ -65,19 +65,36 @@ namespace Jularr.Backend.Logic.Operation
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        public static Task<int> PruneFinishedOperationsAsync(this LogicContext ctx, OperationSinceData data, CancellationToken ct)
+        public static Task<int> PruneFinishedOperationsAsync(this LogicContext ctx, CancellationToken ct)
         {
-            // Finished work leaves the history; running, queued and unacknowledged failed work stays.
+            // Finished work leaves the history by age or once the newer entries fill its room; running, queued and unacknowledged failed work stays.
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                WITH finished AS (
+                    SELECT
+                        operation."Id",
+                        operation."FinishedAt",
+                        sum(pg_column_size(operation.*)) OVER (ORDER BY operation."FinishedAt" DESC, operation."Id" DESC) AS "Bytes"
+                    FROM
+                        "Operations" AS operation
+                    WHERE
+                        operation."OperationStatusTypeId" = 3
+                        OR operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NOT NULL
+                )
                 DELETE FROM
                     "Operations" AS operation
+                USING
+                    finished,
+                    "InstanceSettings" AS settings
                 WHERE
-                    (operation."OperationStatusTypeId" = 3 OR operation."OperationStatusTypeId" = 4 AND operation."DismissedAt" IS NOT NULL)
-                    AND operation."FinishedAt" < @Since;
+                    operation."Id" = finished."Id"
+                    AND settings."Id" = 1
+                    AND (
+                        finished."FinishedAt" < now() - make_interval(days => settings."HistoryRetentionDays")
+                        OR finished."Bytes" > settings."HistoryMegabytes"::bigint * 1000000
+                    );
                 """;
-            sql.Parameters.Add(data);
             return ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 

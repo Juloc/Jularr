@@ -47,10 +47,12 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Select(item => item.UsersConfirmSources, "admin.instance.usersConfirmSources",
                         [new SelectOption("True", texts["common.yes"]), new SelectOption("False", texts["common.no"])]);
                     form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours");
+                    form.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays");
+                    form.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes");
                     form.Submit("common.save");
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
-                        settings.LibraryScanIntervalHours), _moduleId is null && _mediaInput is null ? FormError : null));
+                        settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes), _moduleId is null && _mediaInput is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
