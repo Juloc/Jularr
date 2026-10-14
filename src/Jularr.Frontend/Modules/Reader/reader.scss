@@ -67,6 +67,55 @@
         &[data-level="3"] { padding-left: 48px; }
     }
 
+    // Highlights keep the text colour; a note adds an underline.
+    &__mark {
+        color: inherit;
+        border-radius: 2px;
+        cursor: pointer;
+
+        &[data-color="1"] { background: rgb(250 204 21 / 0.4); }
+        &[data-color="2"] { background: rgb(74 222 128 / 0.35); }
+        &[data-color="3"] { background: rgb(96 165 250 / 0.35); }
+        &[data-color="4"] { background: rgb(244 114 182 / 0.35); }
+        &.has-note { text-decoration: underline dotted; }
+    }
+
+    &__pdf { flex: 1; width: 100%; min-height: 80dvh; border: 0; }
+
+    &__found { color: inherit; background: none; outline: 2px solid var(--reader-muted); border-radius: 2px; }
+
+    &__toolbar,
+    &__popover {
+        position: fixed;
+        z-index: 5;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        max-width: min(22rem, 100vw - 16px);
+        padding: 8px;
+        border: 1px solid var(--reader-line);
+        border-radius: 12px;
+        background: var(--reader-paper);
+
+        &[hidden] { display: none; }
+    }
+
+    &__popover {
+        flex-direction: column;
+
+        textarea { width: 100%; font: inherit; color: inherit; background: transparent; border: 1px solid var(--reader-line); border-radius: 8px; padding: 6px; }
+    }
+
+    &__color[data-color="1"] { border-color: rgb(250 204 21); }
+    &__color[data-color="2"] { border-color: rgb(74 222 128); }
+    &__color[data-color="3"] { border-color: rgb(96 165 250); }
+    &__color[data-color="4"] { border-color: rgb(244 114 182); }
+
+    &__notes { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    &__note { display: grid; gap: 4px; }
+    &__note-quote { color: inherit; }
+    &__note-text { margin: 0; color: var(--reader-muted); font-size: 14px; white-space: pre-wrap; }
+
     &__setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     &__choices { display: flex; gap: 8px; }
     &__choices [aria-pressed="true"] { outline: 2px solid currentColor; }

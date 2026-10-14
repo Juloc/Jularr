@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
@@ -97,6 +98,97 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(document.DocumentId, other.DocumentId);
             Assert.IsNull(other.Locator);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingDocuments\""));
+        }
+
+        [TestMethod]
+        public async Task Annotations_StayWithTheProfileAndMarkTheReader()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (first, _) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            await OpenAsync(host, first);
+            var route = "/api/v1/reading/assets/" + first + "/annotations";
+
+            // A highlight covers at least one character of the prepared text.
+            using var created = await host.SendAsync(HttpMethod.Post, route, new CreateReadingAnnotationDataV1(0, 0, 0, 0, 5, "Chapt", null, HighlightColorType.Green));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var id = (await created.Content.ReadFromJsonAsync<CreateReadingAnnotationResultV1>())!.Id;
+            using var empty = await host.SendAsync(HttpMethod.Post, route, new CreateReadingAnnotationDataV1(0, 1, 4, 1, 4, "x", null, HighlightColorType.Yellow));
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "out_of_range");
+            using var noted = await host.SendAsync(HttpMethod.Put, route + "/" + id, new UpdateReadingAnnotationDataV1("  Remember this.  ", HighlightColorType.Pink));
+            Assert.AreEqual(HttpStatusCode.OK, noted.StatusCode, await noted.Content.ReadAsStringAsync());
+
+            // The section shows it, the notes list it, the reader marks it.
+            using var section = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + first + "/sections/0/annotations");
+            var mark = (await section.Content.ReadFromJsonAsync<BaseDataList<ReadingAnnotationV1>>())!.Single();
+            Assert.AreEqual("Remember this.", mark.Note);
+            Assert.AreEqual(HighlightColorType.Pink, mark.HighlightColorTypeId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first + "?s=0");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "&quot;quote&quot;:&quot;Chapt&quot;");
+            StringAssert.Contains(html, "href=\"?s=0&amp;b=0\"");
+
+            // Another profile neither sees nor changes it.
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/accounts/41/profiles/202");
+            using var switched = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/202");
+            Assert.AreEqual(HttpStatusCode.OK, switched.StatusCode, await switched.Content.ReadAsStringAsync());
+            using var foreign = await host.SendAsync(HttpMethod.Get, route);
+            Assert.AreEqual(0, (await foreign.Content.ReadFromJsonAsync<PageResult<ReadingAnnotationV1>>())!.Items.Count);
+            using var foreignDelete = await host.SendAsync(HttpMethod.Delete, route + "/" + id);
+            Assert.AreEqual(HttpStatusCode.NotFound, foreignDelete.StatusCode);
+            using var back = await host.SendAsync(HttpMethod.Put, "/api/v1/auth/profile/101");
+            using var deleted = await host.SendAsync(HttpMethod.Delete, route + "/" + id);
+            Assert.AreEqual(HttpStatusCode.OK, deleted.StatusCode, await deleted.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"ReadingAnnotations\""));
+        }
+
+        [TestMethod]
+        public async Task Search_FindsTheSectionsWithTheWords()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (first, _) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            var document = await OpenAsync(host, first);
+            var route = "/api/v1/reading/documents/" + document.DocumentId + "/search?query=";
+
+            // Text without markup, case-insensitive, in reading order.
+            using var found = await host.SendAsync(HttpMethod.Get, route + "SECOND%20part");
+            var hit = (await found.Content.ReadFromJsonAsync<BaseDataList<ReadingSearchHitV1>>())!.Single();
+            Assert.AreEqual(1, hit.SectionIndex);
+            StringAssert.Contains(hit.Snippet, "The second part begins.");
+            Assert.AreEqual(1, hit.Matches);
+            using var missing = await host.SendAsync(HttpMethod.Get, route + "nowhere");
+            Assert.AreEqual(0, (await missing.Content.ReadFromJsonAsync<BaseDataList<ReadingSearchHitV1>>())!.Count);
+            using var tooShort = await host.SendAsync(HttpMethod.Get, route + "a");
+            Assert.AreEqual(HttpStatusCode.BadRequest, tooShort.StatusCode);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + first + "?s=0&q=second%20part");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "href=\"?s=1&amp;q=second%20part\"");
+        }
+
+        [TestMethod]
+        public async Task Pdf_OnlyBook_OpensInTheBrowsersViewer()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (first, second) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            File.WriteAllText(Path.Combine(storage.Path, "1", "Books", "Second Book", "Second Book.pdf"), "%PDF-1.4 test");
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"RelativePath\" = 'Second Book/Second Book.pdf' WHERE \"MediaAssetId\" = " + second);
+
+            // The format decides the reader; the PDF comes from its storage.
+            using var epub = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + first + "/source");
+            Assert.AreEqual(ReadingFormatType.Epub, (await epub.Content.ReadFromJsonAsync<ReadingSourceV1>())!.ReadingFormatTypeId);
+            using var pdf = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + second + "/source");
+            Assert.AreEqual(ReadingFormatType.Pdf, (await pdf.Content.ReadFromJsonAsync<ReadingSourceV1>())!.ReadingFormatTypeId);
+            using var file = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + second + "/file");
+            Assert.AreEqual("application/pdf", file.Content.Headers.ContentType!.MediaType);
+            Assert.AreEqual("%PDF-1.4 test", await file.Content.ReadAsStringAsync());
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + second);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "<iframe class=\"reader__pdf\" src=\"/api/v1/reading/assets/" + second + "/file\"");
         }
 
         [TestMethod]

@@ -1,12 +1,16 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Reading;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Nas;
+using Jularr.Integrations.Logic.Storage;
+using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.User.Reading.V1
 {
@@ -126,6 +130,103 @@ namespace Jularr.Backend.Service.User.Reading.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/reading/assets/{mediaAssetId:long}/source")]
+    public sealed class ReadReadingSourceV1 : UserService<ReadingAssetParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingSourceV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadingAssetParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
+        protected override ServicePermission GetPermission(ReadingAssetParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // EPUB and comics are prepared; a book that is only a PDF opens as one.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    work."Id" AS "WorkId",
+                    work."CanonicalTitle" AS "Title",
+                    CASE
+                        WHEN bool_or(file."RelativePath" ~* '\.epub$') THEN 1
+                        WHEN bool_or(file."RelativePath" ~* '\.(cbz|cbr|cb7)$') THEN 4
+                        ELSE 2
+                    END::smallint AS "ReadingFormatTypeId"
+                FROM
+                    "MediaAssets" AS asset
+                    JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                    JOIN "Works" AS work ON work."Id" = asset."WorkId"
+                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
+                WHERE
+                    asset."Id" = @MediaAssetId
+                    AND asset."MediaAssetTypeId" IN (3, 4)
+                GROUP BY
+                    work."Id",
+                    work."CanonicalTitle";
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return await Context.ReadSql.ReadOptionalAsync<ReadingSourceV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/reading/assets/{mediaAssetId:long}/file")]
+    public sealed class ReadReadingFileV1 : UserService<ReadingAssetParametersV1>
+    {
+        private readonly StorageOptions _options;
+
+        internal ReadReadingFileV1(IOptions<StorageOptions> options)
+        {
+            _options = options.Value;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingFileV1>()];
+        protected override ModuleRequirement GetInstanceModules(ReadingAssetParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
+        protected override ServicePermission GetPermission(ReadingAssetParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The newest present PDF of the book, straight from its storage.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."RelativePath",
+                    root."RelativePath" AS "RootRelativePath",
+                    mount."Id" AS "StorageMountId",
+                    mount."StorageProtocolTypeId",
+                    mount."SharePath"
+                FROM
+                    "MediaAssets" AS asset
+                    JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
+                    JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                WHERE
+                    asset."Id" = @MediaAssetId
+                    AND asset."MediaAssetTypeId" IN (3, 4)
+                    AND file."RelativePath" ~* '\.pdf$'
+                    AND file."MissingSince" IS NULL
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId)
+                ORDER BY
+                    file."ModifiedAt" DESC,
+                    file."Id"
+                LIMIT 1;
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            var source = await Context.ReadSql.ReadOptionalAsync<PlaybackStreamData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");
+            try
+            {
+                var directory = StorageFileSystem.ResolveDirectory(_options.GetConnectionPath(source.StorageProtocolTypeId, source.StorageMountId, source.SharePath), source.RootRelativePath);
+                return new ReadingFileV1(StorageFileSystem.ResolveFile(directory, source.RelativePath));
+            }
+            catch (NasMountException)
+            {
+                // Offline storage is not a missing book.
+                throw new ServiceUnavailableException("reading_unavailable");
+            }
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/toc")]
     public sealed class ReadReadingTocV1 : UserService<ReadingDocumentParametersV1>
     {
@@ -217,6 +318,59 @@ namespace Jularr.Backend.Service.User.Reading.V1
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingSectionV1>(sql, CancellationToken) ?? throw new ServiceUnavailableException("reading_unavailable");
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/search")]
+    public sealed class SearchReadingV1 : UserService<ReadingSearchParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ReadingSearchHitV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadingSearchParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
+        protected override ServicePermission GetPermission(ReadingSearchParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The cached sections' text without markup; the first 50 sections that contain the words.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    section."SectionIndex",
+                    document."Structure" -> 'Sections' -> section."SectionIndex" ->> 'Title' AS "Title",
+                    btrim(substring(section."Text" FROM greatest(1, strpos(lower(section."Text"), lower(@Query)) - 120) FOR 300)) AS "Snippet",
+                    ((length(section."Text") - length(replace(lower(section."Text"), lower(@Query), ''))) / length(@Query))::integer AS "Matches"
+                FROM
+                    "ReadingDocuments" AS document
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            substring(resource."Path" FROM 10)::integer AS "SectionIndex",
+                            regexp_replace(regexp_replace(convert_from(resource."Bytes", 'UTF8'), '<[^>]*>', ' ', 'g'), '\s+', ' ', 'g') AS "Text"
+                        FROM
+                            "ReadingResources" AS resource
+                        WHERE
+                            resource."ReadingDocumentId" = document."Id"
+                            AND resource."Path" LIKE ':section/%'
+                    ) AS section
+                WHERE
+                    document."Id" = @DocumentId
+                    AND strpos(lower(section."Text"), lower(@Query)) > 0
+                    AND EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "StoredFiles" AS file
+                            JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                            JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                        WHERE
+                            file."Id" = document."StoredFileId"
+                    )
+                ORDER BY
+                    section."SectionIndex"
+                LIMIT 50;
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<ReadingSearchHitV1>(await Context.ReadSql.ReadListAsync<ReadingSearchHitV1>(sql, CancellationToken));
         }
     }
 

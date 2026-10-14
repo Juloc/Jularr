@@ -198,4 +198,77 @@ namespace Jularr.Backend.Data.User.Reading.V1
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
         public bool IsCompleted { get; }
     }
+
+    public sealed class ReadingSearchParametersV1 : BaseParameters
+    {
+        public ReadingSearchParametersV1(long documentId, string query)
+        {
+            DocumentId = documentId;
+            Query = query;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Query))]
+        public string Query { get; }
+    }
+
+    // A section containing the words, with the text around the first match.
+    public sealed class ReadingSearchHitV1 : BaseResponse
+    {
+        public ReadingSearchHitV1(int sectionIndex, string? title, string snippet, int matches)
+        {
+            SectionIndex = sectionIndex;
+            Title = title;
+            Snippet = snippet;
+            Matches = matches;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Snippet))]
+        public string Snippet { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Count))]
+        public int Matches { get; }
+    }
+
+    // How the book opens: prepared text or pages, else its PDF in the browser's own viewer.
+    public sealed class ReadingSourceV1 : BaseResponse
+    {
+        public ReadingSourceV1(long workId, string title, ReadingFormatType readingFormatTypeId)
+        {
+            WorkId = workId;
+            Title = title;
+            ReadingFormatTypeId = readingFormatTypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingFormatTypeId))]
+        public ReadingFormatType ReadingFormatTypeId { get; }
+    }
+
+    public sealed class ReadingFileV1 : BaseResponse, IFileOutput
+    {
+        public ReadingFileV1(string filePath)
+        {
+            FilePath = filePath;
+        }
+
+        [JsonIgnore]
+        public string FilePath { get; }
+
+        [JsonIgnore]
+        public string ContentType => "application/pdf";
+    }
 }

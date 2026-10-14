@@ -102,6 +102,7 @@ namespace Jularr.Frontend.Framework
     public sealed class Li(params IUiComponent[] children) : HtmlElement("li", children);
     public sealed class A(params IUiComponent[] children) : HtmlElement("a", children);
     public sealed class Input() : HtmlElement("input");
+    public sealed class TextArea() : HtmlElement("textarea");
     public sealed class Img() : HtmlElement("img");
     public sealed class TableElement(params IUiComponent[] children) : HtmlElement("table", children);
     public sealed class Thead(params IUiComponent[] children) : HtmlElement("thead", children);

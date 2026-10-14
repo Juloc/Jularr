@@ -1,5 +1,6 @@
 import "./reader.scss";
 import { progressReporter } from "../Tracking/Progress";
+import { findings, highlights } from "./highlights";
 
 // Reader client: settings, exact block position and progress reporting.
 interface ReaderSettings {
@@ -32,6 +33,8 @@ if (reader) {
 
     apply();
     restore();
+    highlights(reader, content, section);
+    if (reader.dataset.query) findings(content, reader.dataset.query);
 
     // Panels and settings.
     reader.querySelectorAll<HTMLButtonElement>("[data-action]").forEach(button => button.addEventListener("click", () => toggle(button)));
@@ -46,12 +49,12 @@ if (reader) {
 
     // Paged mode turns pages; the edges continue to the neighbouring section.
     document.addEventListener("keydown", event => {
-        if (event.target instanceof HTMLInputElement) return;
+        if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
         if (event.key === "ArrowRight" || event.key === "PageDown") page(1, event);
         if (event.key === "ArrowLeft" || event.key === "PageUp") page(-1, event);
     });
     content.addEventListener("click", event => {
-        if (settings.mode !== "paged" || (event.target as HTMLElement).closest("a")) return;
+        if (settings.mode !== "paged" || (event.target as HTMLElement).closest("a, mark")) return;
         page(event.clientX > window.innerWidth / 2 ? 1 : -1, event);
     });
 
@@ -91,11 +94,13 @@ if (reader) {
         });
     }
 
-    // The saved block of this section, unless the address names an anchor.
+    // A note's block, else the saved block of this section, unless the address names an anchor.
     function restore() {
+        const linked = new URLSearchParams(location.search).get("b");
         const match = /^s(\d+)\/b(\d+)$/.exec(reader!.dataset.locator ?? "");
-        if (location.hash || !match || Number(match[1]) !== section) return;
-        content.querySelector(`[data-b="${match[2]}"]`)?.scrollIntoView({ block: "start" });
+        const block = linked ?? (match && Number(match[1]) === section ? match[2] : null);
+        if (location.hash || block === null) return;
+        content.querySelector(`[data-b="${block}"]`)?.scrollIntoView({ block: "start" });
     }
 
     function page(direction: number, event: Event) {

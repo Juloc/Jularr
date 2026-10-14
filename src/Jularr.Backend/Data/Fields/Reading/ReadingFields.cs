@@ -34,5 +34,7 @@ namespace Jularr.Backend.Data.Fields.Reading
         public static readonly IntField CacheBudgetWorks = new() { Minimum = 0, Maximum = 10_000 };
         public static readonly DateTimeField ProtectedSince = new();
         public static readonly IntField Count = new() { Minimum = 0 };
+        public static readonly StringField Query = new() { MinimumLength = 2, MaximumLength = 100, AllowBlank = false, Trim = true, Format = Enums.Field.StringFormat.SingleLine };
+        public static readonly StringField Snippet = new() { MaximumLength = 400 };
     }
 }

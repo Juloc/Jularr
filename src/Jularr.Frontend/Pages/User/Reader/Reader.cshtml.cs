@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
@@ -7,14 +8,21 @@ using Jularr.Backend.Service.User.Reading.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.Reader
 {
-    public sealed class ReaderModel(OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
+        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+        private ReadingSourceV1? _source;
         private ReadingDocumentV1? _document;
         private ReadingSectionV1? _section;
         private IReadOnlyList<ReadingTocEntryV1> _toc = [];
+        private IReadOnlyList<ReadingAnnotationV1> _marks = [];
+        private PageResult<ReadingAnnotationV1>? _notes;
+        private IReadOnlyList<ReadingSearchHitV1>? _hits;
 
         [BindProperty(SupportsGet = true)]
         public long Id { get; set; }
@@ -25,10 +33,23 @@ namespace Jularr.Frontend.Pages.User.Reader
         [BindProperty(SupportsGet = true, Name = "p")]
         public int? PageIndex { get; set; }
 
+        [BindProperty(SupportsGet = true, Name = "n")]
+        public int NotesPage { get; set; } = 1;
+
+        [BindProperty(SupportsGet = true, Name = "q")]
+        public string? Query { get; set; }
+
         protected override void Define(Page page)
         {
             page.Title("reader.title");
             page.Shell = false;
+            if (_source is { ReadingFormatTypeId: ReadingFormatType.Pdf } pdf)
+            {
+                page.Asset("Modules/Reader/reader.entry.ts");
+                page.Content.Add(PdfView(pdf));
+                return;
+            }
+
             if (_document is { ReadingFormatTypeId: ReadingFormatType.Comic } comic)
             {
                 page.Asset("Modules/Reader/comic.entry.ts");
@@ -53,6 +74,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 new A(new Text("common.back")).Class("button").Attribute("href", "/Details/" + document.WorkId.ToString(CultureInfo.InvariantCulture)),
                 new Div(new H1(new ValueText(document.Title)).Class("reader__title"), new P(new ValueText(current.Title ?? "")).Class("reader__chapter")).Class("reader__heading"),
                 new Button(new Text("reader.contents")).Class("button").Attribute("data-action", "contents").Attribute("aria-expanded", "false"),
+                new Button(new Text("reader.notes")).Class("button").Attribute("data-action", "notes").Attribute("aria-expanded", NotesPage > 1 ? "true" : "false"),
+                new Button(new Text("reader.search")).Class("button").Attribute("data-action", "search").Attribute("aria-expanded", _hits is null ? "false" : "true"),
                 new Button(new Text("reader.settings")).Class("button").Attribute("data-action", "settings").Attribute("aria-expanded", "false")
             ).Class("reader__top");
 
@@ -61,6 +84,8 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("href", "?s=" + entry.SectionIndex.ToString(CultureInfo.InvariantCulture) + (entry.Anchor is null ? "" : "#" + Uri.EscapeDataString(entry.Anchor)))
                 .Attribute("data-level", entry.Level.ToString(CultureInfo.InvariantCulture)))]).Class("reader__panel").Attribute("data-panel", "contents").Attribute("hidden", "hidden")
                 .Attribute("aria-label", texts["reader.contents"]);
+            var notes = Notes(index);
+            var searching = Search(index);
             var settings = new Div(
                 Setting("reader.fontSize", [("smaller", "reader.smaller"), ("larger", "reader.larger")], "size"),
                 Setting("reader.theme", [("light", "reader.theme.light"), ("sepia", "reader.theme.sepia"), ("dark", "reader.theme.dark")], "theme"),
@@ -79,8 +104,12 @@ namespace Jularr.Frontend.Pages.User.Reader
             page.Content.Add(new Div(
                 top,
                 contents,
+                notes,
+                searching,
                 settings,
                 new ReaderSection(current),
+                Toolbar(),
+                Popover(),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"),
                 new Div([.. navigation]).Class("reader__bottom")
             ).Class("reader")
@@ -92,12 +121,32 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-before", current.CharactersBefore.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-characters", current.Characters.ToString(CultureInfo.InvariantCulture))
                 .Attribute("data-total", current.TotalCharacters.ToString(CultureInfo.InvariantCulture))
-                .Attribute("data-locator", document.Locator ?? ""));
+                .Attribute("data-locator", document.Locator ?? "")
+                .Attribute("data-annotations-url", "/api/v1/reading/assets/" + asset + "/annotations")
+                .Attribute("data-annotations", JsonSerializer.Serialize(_marks, Json))
+                .Attribute("data-note-label", texts["reader.note"])
+                .Attribute("data-query", Query ?? ""));
             if (!document.IsCached)
             {
                 page.Content.Add(new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status"));
             }
         }
+
+        // The browser's own PDF viewer; the link serves browsers without one.
+        private IUiComponent PdfView(ReadingSourceV1 source)
+        {
+            var file = "/api/v1/reading/assets/" + Id.ToString(CultureInfo.InvariantCulture) + "/file";
+            return new Div(
+                new Div(
+                    new A(new Text("common.back")).Class("button").Attribute("href", "/Details/" + source.WorkId.ToString(CultureInfo.InvariantCulture)),
+                    new Div(new H1(new ValueText(source.Title)).Class("reader__title")).Class("reader__heading"),
+                    new A(new Text("reader.openPdf")).Class("button").Attribute("href", file).Attribute("target", "_blank").Attribute("rel", "noopener")
+                ).Class("reader__top"),
+                new Frame().Class("reader__pdf").Attribute("src", file).Attribute("title", source.Title)
+            ).Class("reader reader--pdf");
+        }
+
+        private sealed class Frame() : HtmlElement("iframe");
 
         // One page at a time with links that work without the script; the script adds spreads, direction and preloading.
         private IUiComponent ComicView(ReadingDocumentV1 document)
@@ -138,6 +187,74 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-page-label", texts["reader.comic.page"]);
         }
 
+        // The book's highlights in reading order; each leads to its passage and can go without the script.
+        private IUiComponent Notes(int index)
+        {
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            var panel = new List<IUiComponent>();
+            if (_notes is not { Items.Count: > 0 } notes)
+            {
+                panel.Add(new P(new Text("reader.notesEmpty")));
+            }
+            else
+            {
+                panel.Add(new Ul([.. notes.Items.Select(note => new Li([
+                    new A(new ValueText(note.Quote)).Class("reader__note-quote").Attribute("data-color", note.HighlightColorTypeId.ToString())
+                        .Attribute("href", "?s=" + note.SectionIndex.ToString(CultureInfo.InvariantCulture) + "&b=" + note.StartBlock.ToString(CultureInfo.InvariantCulture)),
+                    .. note.Note is { } text ? new IUiComponent[] { new P(new ValueText(text)).Class("reader__note-text") } : [],
+                    new Form<ReadingAnnotationParametersV1>(form => form.Submit("reader.deleteNote"),
+                        "/Read/" + Id.ToString(CultureInfo.InvariantCulture) + "?handler=DeleteNote&s=" + index.ToString(CultureInfo.InvariantCulture) + "&noteId=" + note.Id.ToString(CultureInfo.InvariantCulture), csrf,
+                        new ReadingAnnotationParametersV1(Id, note.Id))]).Class("reader__note"))]).Class("reader__notes"));
+                var paging = new List<IUiComponent>();
+                if (notes.Page > 1) paging.Add(new A(new Text("common.previous")).Attribute("href", NotesAddress(index, notes.Page - 1)));
+                if (notes.Items.Count == notes.PageSize) paging.Add(new A(new Text("common.next")).Attribute("href", NotesAddress(index, notes.Page + 1)));
+                if (paging.Count > 0) panel.Add(new Nav([.. paging]).Attribute("aria-label", texts["reader.notesPages"]));
+            }
+
+            var div = new Div([.. panel]).Class("reader__panel").Attribute("data-panel", "notes").Attribute("aria-label", texts["reader.notes"]);
+            return NotesPage > 1 ? div : div.Attribute("hidden", "hidden");
+        }
+
+        // Sections with the words; the script marks them in the opened section.
+        private IUiComponent Search(int index)
+        {
+            var content = new List<IUiComponent> { new SearchBox("/Read/" + Id.ToString(CultureInfo.InvariantCulture), "reader.search", Query, new Dictionary<string, string> { ["s"] = index.ToString(CultureInfo.InvariantCulture) }) };
+            if (_hits is { } hits)
+            {
+                content.Add(hits.Count == 0
+                    ? new P(new Text("reader.searchEmpty"))
+                    : new Ul([.. hits.Select(hit => new Li(
+                        new A(new ValueText(hit.Title ?? (hit.SectionIndex + 1).ToString(CultureInfo.InvariantCulture))).Attribute("href", "?s=" + hit.SectionIndex.ToString(CultureInfo.InvariantCulture)
+                            + "&q=" + Uri.EscapeDataString(Query!)),
+                        new P(new ValueText("… " + hit.Snippet + " …")).Class("reader__note-text")).Class("reader__note"))]).Class("reader__notes"));
+            }
+
+            var div = new Div([.. content]).Class("reader__panel").Attribute("data-panel", "search").Attribute("aria-label", texts["reader.search"]);
+            return _hits is null ? div.Attribute("hidden", "hidden") : div;
+        }
+
+        // Shown by the script: colours for a selection, and a note for a highlight.
+        private static IUiComponent[] Colors() => [.. Enum.GetValues<HighlightColorType>().Select(color => new Button(new Text("reader.highlight." + color)).Class("button reader__color")
+            .Attribute("data-color", ((byte)color).ToString(CultureInfo.InvariantCulture)))];
+
+        private static IUiComponent Toolbar() => new Div([.. Colors(), new Button(new Text("reader.note")).Attribute("data-role", "add-note")])
+            .Class("reader__toolbar").Attribute("data-role", "toolbar").Attribute("hidden", "hidden");
+
+        private IUiComponent Popover() => new Div(
+            new TextArea().Attribute("aria-label", texts["reader.note"]).Attribute("maxlength", "4000").Attribute("rows", "4"),
+            new Div([.. Colors()]).Class("reader__choices"),
+            new Div(new Button(new Text("reader.saveNote")).Primary().Attribute("data-role", "save-note"), new Button(new Text("reader.deleteNote")).Attribute("data-role", "delete-note"))
+                .Class("reader__choices")
+        ).Class("reader__popover").Attribute("data-role", "popover").Attribute("hidden", "hidden");
+
+        private static string NotesAddress(int section, int page) => "?s=" + section.ToString(CultureInfo.InvariantCulture) + "&n=" + page.ToString(CultureInfo.InvariantCulture);
+
+        public async Task<IActionResult> OnPostDeleteNoteAsync([BindRequired] long noteId)
+        {
+            await deleteNote.ExecuteAsync<UpdateResult>(new ReadingAnnotationParametersV1(Id, noteId), default, HttpContext.RequestAborted);
+            return LocalRedirect("/Read/" + Id.ToString(CultureInfo.InvariantCulture) + "?s=" + (SectionIndex ?? 0).ToString(CultureInfo.InvariantCulture));
+        }
+
         private static string PagePath(int index) => ":page/" + index.ToString("D5", CultureInfo.InvariantCulture);
 
         public async Task<IActionResult> OnGetAsync()
@@ -150,6 +267,12 @@ namespace Jularr.Frontend.Pages.User.Reader
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
+            _source = await readSource.ExecuteAsync<ReadingSourceV1>(new ReadingAssetParametersV1(Id), ct);
+            if (_source.ReadingFormatTypeId == ReadingFormatType.Pdf)
+            {
+                return;
+            }
+
             _document = await open.ExecuteAsync<ReadingDocumentV1>(new ReadingAssetParametersV1(Id), default, ct);
             if (_document.ReadingFormatTypeId == ReadingFormatType.Comic)
             {
@@ -163,6 +286,12 @@ namespace Jularr.Frontend.Pages.User.Reader
             index = Math.Clamp(index, 0, Math.Max(0, _document.SectionCount - 1));
             _section = await section.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(_document.DocumentId, index), ct);
             _toc = await toc.ExecuteAsync<BaseDataList<ReadingTocEntryV1>>(new ReadingDocumentParametersV1(_document.DocumentId), ct);
+            _marks = await readMarks.ExecuteAsync<BaseDataList<ReadingAnnotationV1>>(new ReadingSectionAnnotationsParametersV1(Id, index), ct);
+            _notes = await readNotes.ExecuteAsync<PageResult<ReadingAnnotationV1>>(new ReadingAnnotationsParametersV1(Id, Math.Max(1, NotesPage)), ct);
+            if (Query is { Length: > 0 })
+            {
+                _hits = await search.ExecuteAsync<BaseDataList<ReadingSearchHitV1>>(new ReadingSearchParametersV1(_document.DocumentId, Query), ct);
+            }
         }
 
         private IUiComponent Setting(string labelKey, (string Value, string LabelKey)[] options, string name) =>
