@@ -19,13 +19,7 @@ namespace Jularr.E2E.Tests
             await page.Locator("form button[type=submit]").Last.ClickAsync();
             await page.WaitForURLAsync(url => new Uri(url).AbsolutePath != "/Setup");
 
-            await page.GotoAsync("/Account/Logout");
-            await Steps.SubmitAsync(page, Steps.FormWith(page, "Sign out"));
-            await page.GotoAsync("/Account/Login");
-            await page.FillAsync("[name=Email]", Email);
-            await page.FillAsync("[name=Password]", Password);
-            await page.Locator("form button[type=submit]").First.ClickAsync();
-            await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
+            await Steps.SignOutAndInAsync(page);
         }
     }
 }

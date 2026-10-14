@@ -22,7 +22,7 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                await PrepareAsync(session, fakes, folders);
+                await PrepareAsync(page, fakes, folders);
 
                 // The download is still running when Jularr stops.
                 fakes.HoldDownloads = true;
@@ -32,15 +32,17 @@ namespace Jularr.E2E.Tests
                 await Steps.GrabAsync(page, Film);
                 await jularr.RestartAsync();
 
-                // Still signed in; the running job is picked up again and imported once it finishes.
+                // Still signed in; the running job, not a new one, is picked up again and imported once it finishes.
                 await page.GotoAsync("/Admin/Activity");
-                StringAssert.Contains(await page.Locator("main").InnerTextAsync(), FakeServices.MovieTitle);
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Downloading");
                 fakes.FinishDownloads();
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
+                Assert.AreEqual(1, fakes.Grabbed.Count);
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count());
 
                 // Every database connection ends as in a PostgreSQL restart; pages work again without restarting Jularr.
-                await jularr.DropConnectionsAsync();
+                await page.GotoAsync("/Library");
+                Assert.IsTrue(await jularr.DropConnectionsAsync() > 0, "The host held no database connection to lose.");
                 await RecoverAsync(page, details);
                 session.Problems.Clear();
                 await page.GotoAsync("/Library");
@@ -69,7 +71,7 @@ namespace Jularr.E2E.Tests
 
             try
             {
-                await PrepareAsync(session, fakes, folders);
+                await PrepareAsync(page, fakes, folders);
 
                 // A broken download lands in To-Do; after Retry the broken release is blocked and the next good one is taken.
                 fakes.FailDownloads = true;
@@ -77,17 +79,18 @@ namespace Jularr.E2E.Tests
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, Film);
-                var failed = await WaitForToDoAsync(page, "Download failed");
+                var failed = await WaitForFailedDownloadAsync(page);
                 fakes.FailDownloads = false;
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
                 await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = Film.Title }).InnerTextAsync(), "Failed or blocked before");
 
-                // The retried search may already have taken it in the background.
+                // The retried search may take it in the background first; then the page says it is already downloading.
                 if (!fakes.Grabbed.Contains(fakes.NzbAddress(LowerFilm).ToString()))
                 {
-                    await Steps.GrabAsync(page, LowerFilm);
+                    await page.Locator("tr", new() { HasText = LowerFilm.Title }).Locator("form")
+                        .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Select and download" }) }).Locator("button[type=submit]").ClickAsync();
                 }
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
@@ -95,7 +98,7 @@ namespace Jularr.E2E.Tests
 
                 // The library folder disappears: its state says so, browsing goes on, nothing plays.
                 var offline = folders.Library + ".offline";
-                Directory.Move(folders.Library, offline);
+                await MoveAsync(folders.Library, offline);
                 StringAssert.Contains(await CheckLibraryAsync(page), "Offline");
                 // Playing says why it cannot start; only the refused start itself answers 503.
                 await page.GotoAsync(details);
@@ -105,8 +108,8 @@ namespace Jularr.E2E.Tests
                 Assert.IsTrue(session.Problems.All(problem => problem.Contains("503", StringComparison.Ordinal)), string.Join(Environment.NewLine, session.Problems));
                 session.Problems.Clear();
 
-                // Back again, the film plays as before.
-                Directory.Move(offline, folders.Library);
+                // Back again, it can be played as before.
+                await MoveAsync(offline, folders.Library);
                 StringAssert.Contains(await CheckLibraryAsync(page), "Online");
                 await page.GotoAsync(details);
                 Assert.IsTrue(await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).CountAsync() > 0);
@@ -126,13 +129,13 @@ namespace Jularr.E2E.Tests
             ["Storage:LocalPaths:0"] = folders.Library
         });
 
-        private static async Task PrepareAsync(BrowserSession session, FakeServices fakes, Folders folders)
+        private static async Task PrepareAsync(IPage page, FakeServices fakes, Folders folders)
         {
-            await Owner.SetUpAndSignInAsync(session.Page);
-            await Steps.SetTmdbKeyAsync(session.Page);
-            await Steps.AddLibraryAsync(session.Page, folders.Library, new LibraryPath("Movies", "Movie"));
-            await Steps.AddUsenetAsync(session.Page, fakes, "2000,2040");
-            await Steps.RequestAsync(session.Page, "Bunny", FakeServices.MovieTitle);
+            await Owner.SetUpAndSignInAsync(page);
+            await Steps.SetTmdbKeyAsync(page);
+            await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"));
+            await Steps.AddUsenetAsync(page, fakes, "2000,2040");
+            await Steps.RequestAsync(page, "Bunny", FakeServices.MovieTitle);
         }
 
         // Pages may fail while the connections are gone; within half a minute they answer again.
@@ -152,14 +155,14 @@ namespace Jularr.E2E.Tests
             }
         }
 
-        // The To-Do row of the film once the download monitor reports the failure.
-        private static async Task<ILocator> WaitForToDoAsync(IPage page, string reason)
+        // The To-Do row once the download monitor reports the failure.
+        private static async Task<ILocator> WaitForFailedDownloadAsync(IPage page)
         {
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (DateTime.UtcNow < deadline)
             {
                 await page.GotoAsync("/Admin/Activity?Tab=ToDo");
-                var row = page.Locator("tr", new() { HasText = reason });
+                var row = page.Locator("tr", new() { HasText = "Download failed" });
                 if (await row.CountAsync() > 0)
                 {
                     return row.First;
@@ -169,8 +172,24 @@ namespace Jularr.E2E.Tests
                 await page.WaitForTimeoutAsync(3000);
             }
 
-            Assert.Fail("No To-Do entry \"" + reason + "\" within two minutes.");
-            return page.Locator("tr");
+            throw new AssertFailedException("No failed download in To-Do within two minutes.");
+        }
+
+        // Another process may hold a file inside for a moment.
+        private static async Task MoveAsync(string from, string to)
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    Directory.Move(from, to);
+                    return;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException && attempt < 10)
+                {
+                    await Task.Delay(300);
+                }
+            }
         }
 
         // Checks the library connection and reports the state it shows.

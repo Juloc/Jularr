@@ -21,7 +21,7 @@ namespace Jularr.Backend.Service.Core
         // Background requests learn they are signed out; only page visits go to the sign-in page, whose new antiforgery cookie would spoil an open form.
         public override Task RedirectToLogin(RedirectContext<CookieAuthenticationOptions> context)
         {
-            if (context.Request.Headers["Sec-Fetch-Mode"].ToString() is { Length: > 0 } mode && mode != "navigate")
+            if (context.Request.Headers["Sec-Fetch-Mode"].ToString() is "cors" or "same-origin" or "no-cors")
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return Task.CompletedTask;
