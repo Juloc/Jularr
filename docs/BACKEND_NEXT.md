@@ -102,6 +102,18 @@ and commit together. No migration, active-database installation or extra server.
   Audiobooks are a Book subtype with their own library and requests. AniList sign-in
   uses an application each administrator registers. ScreenScraper waits; IGDB and
   libretro thumbnails cover games.
+- Owner mandate of 14 October 2026 (complete basic functions and Arr+): full Arr+
+  management with the scope of Radarr, Sonarr, Lidarr (issue #1022), Readarr, Bazarr,
+  Prowlarr and Seerr, none of them needed at runtime, and every basic user function are
+  mandatory scope. Order: A finish K24/K24b (devices switch profiles of their account
+  with the PIN but neither create nor delete them; trusted reverse proxies in the
+  instance settings; the approval binds the inspected pairing); B a full Playwright
+  path from setup to play/read and resume for films, series, anime, music, books,
+  light novels and manga with the failure cases, against fixtures and fake services,
+  never live services; C Arr+ coverage, shared parts first; D every user page against
+  its spec with real media. Remote control over SignalR stays planned and blocks
+  nothing. Each package: gap audit, implementation, tests, audit, CI, integration and
+  an update of the [feature matrix](FEATURE_MATRIX.md).
 - Jularr is a standalone Arr system. Sonarr/Radarr/Prowlarr are optional one-time
   takeover sources only: preserve monitoring state, roots, naming and indexer
   settings where supported, preview unsupported mappings and require explicit

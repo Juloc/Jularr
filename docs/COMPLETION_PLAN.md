@@ -1,7 +1,8 @@
 # Clean-start completion plan
 
 Owner decisions are in [BACKEND_NEXT](BACKEND_NEXT.md); owners and tests in
-[CODEMAP](CODEMAP.md). One branch, bundled commit and PR per package, a module
+[CODEMAP](CODEMAP.md); what is planned, implemented, tested and verified end to end in the
+[feature matrix](FEATURE_MATRIX.md). One branch, bundled commit and PR per package, a module
 audit before integration. Each package lists its acceptance; tests stay focused.
 
 | # | Package | Acceptance |
@@ -34,6 +35,25 @@ audit before integration. Each package lists its acceptance; tests stay focused.
 | K25 | Instant play while downloading | Playback starts before the download completes and never plays a broken file |
 | K26 | Home layout editor, personal API keys, LAN discovery, Manga upload | Each is a switchable module |
 | P2 | Email verification (SMTP), TOTP/WebAuthn/passkeys (library needs approval), branding | |
+
+Packages of the mandate of 14 October, after K24b, from the gaps in the feature matrix:
+
+| # | Package | Acceptance |
+| --- | --- | --- |
+| B1 | E2E base: fake TMDB, Newznab and SABnzbd servers the separately started host can reach, configurable provider addresses, a worker trigger, small lawful media fixtures, FFmpeg on the runner, setup driven through the UI, a restartable instance | A test sets up a fresh instance only through the browser and reaches a configured library |
+| B2 | E2E film and series path: scan, match, discover, request, Wanted, search, release, download, import, play, progress, sign out and in, resume | Passes in CI without live services |
+| B3 | E2E music, books, light novels and manga to play and read | Passes in CI without live services |
+| B4 | E2E failure cases: database restart, NAS outage, download retry, restart mid-operation, missing metadata, ambiguous release, permissions, tracks, transcoding error, upgrade, HTTP 5xx and script errors | Each ends visible and recoverable; failures keep screenshots and logs |
+| C1 | Monitoring of seasons, episodes, specials, volumes, albums and tracks; missing and cutoff-unmet lists; new-release detection tested | Unmonitored units are never searched |
+| C2 | Indexers (#864): keyless Newznab, presets, health with backoff, limits, media scope | A failing indexer backs off while others search |
+| C3 | Release rules (#865): rule effects, fallback ladder, identity confidence, delay | Every decision names its rule |
+| C4 | Discover and requests for music, books, manga, light novels, games and anime | A user finds and requests each enabled type |
+| C5 | Music (#1022): artists, discographies, editions and media, multi-format, tags, retag preview, duplicates | An artist's new album is found and imported with correct tags |
+| C6 | Books: authors, series, editions, format upgrades; audiobooks as Book subtype | A series' new volume is found; an audiobook plays by chapter |
+| C7 | Subtitles: manual search, status and history page, forced flags, quotas | A missing subtitle can be searched and chosen by hand |
+| C8 | Takeover tests for Sonarr and Prowlarr, Lidarr and Readarr sources, profiles and roots | The old programs can be switched off after one takeover |
+| C9 | Re-match a Work to another provider id; daily and absolute episode numbering | A wrongly matched film is corrected without losing files |
+| D1 | Every user page against its spec with real media: Discover, Details, Library, Watchlist, Player, Reader (bookmarks, PDF conversion), Requests, Settings, Calendar, Collections, responsive layouts | No empty error pages or actions without effect |
 
 K14-K26 close the gaps of a parity audit against Alpha-90 (`dev`, 14 October 2026); language
 learning, AI and TTS stay out of scope until the owner schedules them.
