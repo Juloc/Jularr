@@ -345,6 +345,8 @@ parallele Jobs. Konfiguration: `Media:FfmpegPath`, `Media:TranscodeCachePath`,
 `Media:HardwareAccelerationArguments` mit Software-Fallback. Vorschaubilder beim Spulen
 (Modul „Trickplay“, standardmäßig aus) rendert ein Hintergrund-Worker mit FFmpeg nach
 `Media:TrickplayPath`; ohne diesen Ordner gibt es keine.
+Metadaten-Spiegel ersetzen die Adressen von TMDB, MusicBrainz, AniList und Open Library über
+`Providers:Tmdb`, `Providers:MusicBrainz`, `Providers:AniList` und `Providers:OpenLibrary` (HTTPS, auf dem eigenen Rechner auch HTTP).
 Filme nennen ihre TMDB-Filmreihe (Modul „Franchises“, eigene Seite `/Franchise/{id}`). Jede Datei
 behält die Release-Angaben ihres Namens (Gruppe, Qualität, Edition, Proper); Admin → Bibliothek → Benennung
 legt die Namen von Film- und Folgendateien mit Sonarr-artigen Platzhaltern fest. Ein selbstsigniertes

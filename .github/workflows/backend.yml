@@ -89,9 +89,9 @@ jobs:
       - run: dotnet test tests/Jularr.E2E.Tests --configuration Release --no-build
         env:
           JULARR_TEST_FFMPEG: /usr/bin/ffmpeg
-      - name: Keep screenshots of a failed run
+      - name: Keep the evidence of a failed run
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-screenshots
+          name: e2e-evidence
           path: TestResults/e2e

@@ -199,12 +199,12 @@ namespace Jularr.E2E.Tests
             return ((IPEndPoint)listener.LocalEndpoint).Port;
         }
 
-        // Host output joins the test output, so a failure shows the server side too.
+        // Host output joins the evidence, so a failure shows the server side too.
         private static void Output(string? line)
         {
             if (line is not null)
             {
-                Console.WriteLine("[jularr] " + line);
+                Evidence.Log("[jularr] " + line);
             }
         }
     }

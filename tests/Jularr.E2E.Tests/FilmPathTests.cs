@@ -8,6 +8,8 @@ namespace Jularr.E2E.Tests
     [TestClass]
     public sealed class FilmPathTests
     {
+        private static readonly TimeSpan MediaTimeout = TimeSpan.FromSeconds(30);
+
         [ClassInitialize]
         public static void InstallBrowser(TestContext _)
         {
@@ -22,16 +24,13 @@ namespace Jularr.E2E.Tests
         public async Task Film_FromSetupToRequestDownloadImportPlayAndResume()
         {
             var ffmpeg = Environment.GetEnvironmentVariable("JULARR_TEST_FFMPEG");
-            var downloads = Directory.CreateTempSubdirectory("jularr-e2e-downloads-").FullName;
-            var library = Directory.CreateTempSubdirectory("jularr-e2e-library-").FullName;
-            Directory.CreateDirectory(Path.Combine(library, "Movies"));
-            await using var fakes = await FakeServices.StartAsync(downloads);
-            fakes.Complete = folder => WriteFilmAsync(ffmpeg, folder);
+            using var folders = new Folders();
+            var film = await WriteFilmAsync(ffmpeg, folders.Fixtures);
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads, film);
             await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
             {
                 ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
-                ["Storage:LocalPaths:0"] = library,
-                ["Storage:LocalPaths:1"] = downloads,
+                ["Storage:LocalPaths:0"] = folders.Library,
                 ["Media:FfmpegPath"] = ffmpeg ?? "",
                 ["Media:FfprobePath"] = ffmpeg is null ? "" : Path.Combine(Path.GetDirectoryName(ffmpeg)!, Path.GetFileName(ffmpeg).Replace("ffmpeg", "ffprobe", StringComparison.Ordinal))
             });
@@ -53,7 +52,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Storage");
                 await page.GetByRole(AriaRole.Link, new() { Name = "Add local path" }).ClickAsync();
                 await page.FillAsync("form [name=Name]", "Library");
-                await page.SelectOptionAsync("form [name=SharePath]", library);
+                await page.SelectOptionAsync("form [name=SharePath]", folders.Library);
                 await page.SelectOptionAsync("form [name=IsReadOnly]", "False");
                 await Submit(page, page.Locator("form", new() { Has = page.Locator("[name=SharePath]") }));
                 await page.GetByRole(AriaRole.Link, new() { Name = "Browse folders" }).ClickAsync();
@@ -78,7 +77,7 @@ namespace Jularr.E2E.Tests
                 await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());
                 await page.FillAsync("form [name=ApiKey]", FakeServices.ClientKey);
                 await page.FillAsync("form [name=RemotePath]", "/downloads");
-                await page.FillAsync("form [name=LocalPath]", downloads);
+                await page.FillAsync("form [name=LocalPath]", folders.Downloads);
                 await Submit(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
 
                 // The film is found in Discover and requested; the Owner's request is approved at once.
@@ -88,17 +87,20 @@ namespace Jularr.E2E.Tests
                 await card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }).ClickAsync();
                 await Submit(page, FormWith(page, "Request this work"));
 
-                // Wanted searches the indexer, shows every candidate with its decision, and downloads the chosen one.
+                // Wanted searches the indexer and shows every candidate with its decision; the chosen one is downloaded.
+                fakes.OfferReleases();
                 await page.GotoAsync("/Admin/Wanted");
                 await page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
                 await Submit(page, FormWith(page, "Start search"));
-                StringAssert.Contains(await page.Locator("main").InnerTextAsync(), "Other.Movie.2008");
-                await Submit(page, page.Locator("tr", new() { HasText = FakeServices.Release }).Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Select and download" }) }));
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = FakeServices.OtherRelease }).InnerTextAsync(), "Different title");
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = FakeServices.Release }).InnerTextAsync(), "Only eligible release");
+                await Submit(page, page.Locator("tr", new() { HasText = FakeServices.Release }).Locator("form")
+                    .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Select and download" }) }));
                 CollectionAssert.AreEqual(new[] { new Uri(fakes.Address, "newznab/getnzb/bunny").ToString() }, fakes.Grabbed.ToArray());
 
                 // The download monitor imports the finished job into the library.
                 var details = await WaitForAvailableAsync(page);
-                Assert.IsTrue(Directory.EnumerateFiles(library, "*.webm", SearchOption.AllDirectories).Any(), "The film was not imported into the library.");
+                Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film was not imported once.");
 
                 // Playing needs a real file; FFmpeg makes one.
                 if (ffmpeg is null)
@@ -107,26 +109,28 @@ namespace Jularr.E2E.Tests
                 }
 
                 await page.GotoAsync(details);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Play" }).First.ClickAsync();
-                var video = page.Locator("video");
-                await video.EvaluateAsync("video => new Promise((resolve, reject) => { if (video.readyState >= 2) resolve(); video.onloadeddata = resolve; video.onerror = () => reject(video.error && video.error.message); })");
-                await video.EvaluateAsync("video => { video.currentTime = 4; return video.play(); }");
-                await page.WaitForTimeoutAsync(1500);
-                await video.EvaluateAsync("video => video.pause()");
-                await page.WaitForTimeoutAsync(1500);
+                await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First.ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = (float)MediaTimeout.TotalMilliseconds });
+                await page.Locator("video").EvaluateAsync("video => { video.currentTime = 4; return video.play(); }");
+                await page.WaitForFunctionAsync("() => document.querySelector('video').currentTime > 5", null, new() { Timeout = (float)MediaTimeout.TotalMilliseconds });
+
+                // Pausing saves the position.
+                await page.RunAndWaitForResponseAsync(() => page.Locator("video").EvaluateAsync("video => video.pause()"),
+                    response => response.Request.Method == "PUT" && response.Ok, new() { Timeout = (float)MediaTimeout.TotalMilliseconds });
 
                 // Signed out and in again, the film continues where it stopped.
-                await context.ClearCookiesAsync();
+                await page.GotoAsync("/Account/Logout");
+                await Submit(page, FormWith(page, "Sign out"));
                 await page.GotoAsync("/Account/Login");
                 await page.FillAsync("[name=Email]", Owner.Email);
                 await page.FillAsync("[name=Password]", Owner.Password);
                 await page.Locator("form button[type=submit]").First.ClickAsync();
                 await page.WaitForURLAsync(url => !url.Contains("/Account/Login", StringComparison.Ordinal));
                 await page.GotoAsync(details);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Play" }).First.ClickAsync();
-                await video.EvaluateAsync("video => new Promise(resolve => { if (video.readyState >= 1) resolve(); video.onloadedmetadata = resolve; })");
-                var resumed = await video.EvaluateAsync<double>("video => new Promise(resolve => setTimeout(() => resolve(video.currentTime), 1000))");
-                Assert.IsTrue(resumed >= 3, "Playback started at " + resumed + " s instead of continuing.");
+                await page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First.ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = (float)MediaTimeout.TotalMilliseconds });
+                var resumed = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
+                Assert.IsTrue(resumed >= 4.5, "Playback started at " + resumed + " s instead of continuing.");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), problems.ToArray());
             }
@@ -134,11 +138,6 @@ namespace Jularr.E2E.Tests
             {
                 await Evidence.SaveAsync(page, "film-path");
                 throw;
-            }
-            finally
-            {
-                Directory.Delete(downloads, true);
-                Directory.Delete(library, true);
             }
         }
 
@@ -153,12 +152,13 @@ namespace Jularr.E2E.Tests
                 if (await card.CountAsync() > 0)
                 {
                     await card.First.ClickAsync();
-                    if (await page.GetByRole(AriaRole.Link, new() { Name = "Play" }).CountAsync() > 0)
+                    if (await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).CountAsync() > 0)
                     {
                         return new Uri(page.Url).PathAndQuery;
                     }
                 }
 
+                // The download monitor runs every fifteen seconds.
                 await page.WaitForTimeoutAsync(3000);
             }
 
@@ -167,28 +167,29 @@ namespace Jularr.E2E.Tests
         }
 
         // A short test pattern with sound, as WebM the browser plays directly; without FFmpeg only bytes for the import.
-        private static async Task WriteFilmAsync(string? ffmpeg, string folder)
+        private static async Task<string> WriteFilmAsync(string? ffmpeg, string folder)
         {
-            Directory.CreateDirectory(folder);
-            var file = Path.Combine(folder, FakeServices.Release + ".webm");
+            var file = Path.Combine(folder, "film.webm");
             if (ffmpeg is null)
             {
                 await File.WriteAllBytesAsync(file, new byte[64 * 1024]);
-                return;
+                return file;
             }
 
-            using var process = Process.Start(new ProcessStartInfo(ffmpeg, ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=24:duration=12",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=12", "-c:v", "libvpx-vp9", "-b:v", "200k", "-c:a", "libopus", "-shortest", "-y", file])
+            using var process = Process.Start(new ProcessStartInfo(ffmpeg, ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=24:duration=10",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=10", "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "200k",
+                "-c:a", "libopus", "-shortest", "-y", file])
             { RedirectStandardError = true })!;
             var errors = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
             Assert.AreEqual(0, process.ExitCode, errors);
+            return file;
         }
 
         private static ILocator FormWith(IPage page, string button) =>
             page.Locator("main form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = button, Exact = true }) });
 
-        // Submits and waits for the page that answers.
+        // Submits, waits for the answering page and fails on the error it shows.
         private static async Task Submit(IPage page, ILocator form)
         {
             await page.RunAndWaitForNavigationAsync(() => form.Locator("button[type=submit]").Last.ClickAsync());
@@ -212,6 +213,35 @@ namespace Jularr.E2E.Tests
                 if (response.Status >= 500) problems.Enqueue(response.Url + ": HTTP " + response.Status);
             };
             return problems;
+        }
+
+        // Fixture, download and library folders; disposed after the instance, which may still hold files.
+        private sealed class Folders : IDisposable
+        {
+            private readonly string _root = Directory.CreateTempSubdirectory("jularr-e2e-film-").FullName;
+
+            public Folders()
+            {
+                Directory.CreateDirectory(Fixtures);
+                Directory.CreateDirectory(Downloads);
+                Directory.CreateDirectory(Path.Combine(Library, "Movies"));
+            }
+
+            public string Fixtures => Path.Combine(_root, "fixtures");
+            public string Downloads => Path.Combine(_root, "downloads");
+            public string Library => Path.Combine(_root, "library");
+
+            public void Dispose()
+            {
+                try
+                {
+                    Directory.Delete(_root, true);
+                }
+                catch (IOException exception)
+                {
+                    Evidence.Log("[test] " + _root + " stays: " + exception.Message);
+                }
+            }
         }
     }
 }

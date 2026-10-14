@@ -112,12 +112,9 @@ namespace Jularr.Backend.Service.Core
             services.Configure<StorageOptions>(configuration.GetSection("Storage"));
             services.AddSingleton(new NasMountClient { SocketPath = configuration["Storage:MountHelperSocket"] });
             services.Configure<MediaOptions>(configuration.GetSection("Media"));
-            var providers = configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions();
-            if (providers.Addresses.Any(address => !address.IsAbsoluteUri || address.Scheme is not ("http" or "https") || !address.AbsolutePath.EndsWith('/')
-                || address.UserInfo.Length > 0 || address.Query.Length > 0))
-            {
-                throw new InvalidOperationException("Provider addresses must be http or https addresses ending in a slash.");
-            }
+
+            // Metadata mirrors.
+            var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
             services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
             services.AddSingleton(new MediaTranscoder { ExecutablePath = configuration["Media:FfmpegPath"] });
             services.AddSingleton(new ArchiveTools { Par2Path = configuration["Usenet:Par2Path"], SevenZipPath = configuration["Usenet:SevenZipPath"] });

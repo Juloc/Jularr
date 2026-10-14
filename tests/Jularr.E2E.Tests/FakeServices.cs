@@ -13,54 +13,54 @@ namespace Jularr.E2E.Tests
         public const string TmdbToken = "eyJ-e2e-read-token";
         public const string IndexerKey = "e2e-indexer-key";
         public const string ClientKey = "e2e-client-key";
-        public const int MovieId = 10378;
         public const string MovieTitle = "Big Buck Bunny";
         public const string Release = "Big.Buck.Bunny.2008.1080p.WEB-DL.H264-JLR";
+        public const string OtherRelease = "Other.Movie.2008.1080p.WEB-DL.H264-JLR";
 
         private readonly WebApplication _app;
+        private readonly string _film;
         private readonly ConcurrentQueue<string> _grabbed = new();
+        private volatile bool _released;
         private volatile bool _completed;
 
-        private FakeServices(WebApplication app, Uri address, string downloads)
+        private FakeServices(WebApplication app, Uri address, string downloads, string film)
         {
             _app = app;
             Address = address;
             Downloads = downloads;
+            _film = film;
         }
 
         public Uri Address { get; }
+
+        public Uri Tmdb3 => new(Address, "tmdb/3/");
 
         // Where SABnzbd puts finished jobs; Jularr maps "/downloads" here.
         public string Downloads { get; }
 
         public IReadOnlyCollection<string> Grabbed => _grabbed;
 
-        // The file a finished download leaves behind.
-        public Func<string, Task>? Complete { get; set; }
-
-        public static async Task<FakeServices> StartAsync(string downloads)
+        // The film the finished job contains.
+        public static async Task<FakeServices> StartAsync(string downloads, string film)
         {
             var port = FreePort();
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:" + port);
             var app = builder.Build();
-            var services = new FakeServices(app, new Uri("http://127.0.0.1:" + port + "/"), downloads);
+            var services = new FakeServices(app, new Uri("http://127.0.0.1:" + port + "/"), downloads, film);
 
-            // Every call joins the test output, so a failure shows what Jularr asked for.
+            // Every call joins the evidence, so a failure shows what Jularr asked for.
             app.Use(async (http, next) =>
             {
                 try
                 {
                     await next(http);
+                    Evidence.Log("[fake] " + http.Request.Method + " " + http.Request.Path + " " + http.Response.StatusCode);
                 }
                 catch (Exception exception)
                 {
-                    Console.WriteLine("[fake] " + exception);
+                    Evidence.Log("[fake] " + http.Request.Method + " " + http.Request.Path + " failed: " + exception);
                     throw;
-                }
-                finally
-                {
-                    Console.WriteLine("[fake] " + http.Request.Method + " " + http.Request.Path + " " + http.Response.StatusCode);
                 }
             });
             app.MapGet("/tmdb/3/{**path}", services.Tmdb);
@@ -71,7 +71,8 @@ namespace Jularr.E2E.Tests
             return services;
         }
 
-        public Uri Tmdb3 => new(Address, "tmdb/3/");
+        // The releases appear only now, so no automatic search grabs before the manual one.
+        public void OfferReleases() => _released = true;
 
         public ValueTask DisposeAsync() => _app.DisposeAsync();
 
@@ -116,14 +117,18 @@ namespace Jularr.E2E.Tests
                     """, "application/xml");
             }
 
-            var address = new Uri(Address, "newznab/getnzb/bunny");
-            return Results.Text($"""
-                <rss><channel>
-                  <item><title>{Release}</title><guid>bunny</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><category>2040</category><enclosure url="{address}" length="400000000" /></item>
-                  <item><title>Other.Movie.2008.1080p.WEB-DL.H264-JLR</title><guid>other</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><category>2040</category><enclosure url="{new Uri(Address, "newznab/getnzb/other")}" length="400000000" /></item>
-                </channel></rss>
-                """, "application/xml");
+            return Results.Text(_released
+                ? $"""
+                    <rss><channel>
+                      {Item(Release, "bunny")}
+                      {Item(OtherRelease, "other")}
+                    </channel></rss>
+                    """
+                : "<rss><channel></channel></rss>", "application/xml");
         }
+
+        private string Item(string title, string guid) =>
+            $"""<item><title>{title}</title><guid>{guid}</guid><pubDate>Mon, 05 Oct 2026 10:00:00 +0000</pubDate><category>2040</category><enclosure url="{new Uri(Address, "newznab/getnzb/" + guid)}" length="400000000" /></item>""";
 
         // Takes the request, not the context, so its result is written.
         private async Task<IResult> Sabnzbd(HttpRequest request)
@@ -137,14 +142,10 @@ namespace Jularr.E2E.Tests
             switch (form["mode"].ToString())
             {
                 case "addurl":
+                    // The job finishes at once: its file appears, then the history reports it.
                     _grabbed.Enqueue(form["name"].ToString());
-
-                    // The job finishes at once: its files appear, then the history reports them.
-                    if (Complete is { } complete)
-                    {
-                        await complete(Path.Combine(Downloads, Release));
-                    }
-
+                    var folder = Directory.CreateDirectory(Path.Combine(Downloads, Release)).FullName;
+                    File.Copy(_film, Path.Combine(folder, Release + Path.GetExtension(_film)), overwrite: true);
                     _completed = true;
                     return Json("""{"status":true,"nzo_ids":["SABnzbd_nzo_e2e"]}""");
                 case "queue":

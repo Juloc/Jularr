@@ -8,6 +8,14 @@ namespace Jularr.Backend.Service.Core
         public Uri AniList { get; set; } = new("https://graphql.anilist.co/");
         public Uri OpenLibrary { get; set; } = new("https://openlibrary.org/");
 
-        internal IEnumerable<Uri> Addresses => [Tmdb, MusicBrainz, AniList, OpenLibrary];
+        // Keys travel along, so plain HTTP only stays on this machine.
+        internal ProviderOptions Validated()
+        {
+            Uri[] addresses = [Tmdb, MusicBrainz, AniList, OpenLibrary];
+            return addresses.All(address => address.IsAbsoluteUri && (address.Scheme == "https" || address.Scheme == "http" && address.IsLoopback)
+                && address.AbsolutePath.EndsWith('/') && address.UserInfo.Length == 0 && address.Query.Length == 0)
+                ? this
+                : throw new InvalidOperationException("Provider addresses must be HTTPS addresses ending in a slash; plain HTTP only on loopback.");
+        }
     }
 }
