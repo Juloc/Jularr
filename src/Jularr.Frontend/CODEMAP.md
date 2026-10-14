@@ -21,6 +21,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Original artwork](Modules/Appearance/Original/README.md), [skin styles](Modules/Appearance/Theme.scss): Washi, blossoms, landscapes and mascot; shared Hero fallback, no provider-art tinting.
 - [ByteSize.cs](Framework/ByteSize.cs): file and volume sizes in decimal units for every page.
 - [FactList](Framework/Components/FactList.cs): labelled numbers and states (statistics, system overview).
+- [Sparkline](Framework/Components/Sparkline.cs): a server-drawn line over evenly spaced values (system performance).
 - [MediaCard](Framework/Components/MediaCard.cs): Continue progress (time left, or the read share for books and comics), top-corner status/availability, up to three genres and centered hover/focus actions.
 - [MediaPreview](Framework/Components/MediaPreview.cs), [client](Framework/Components/MediaPreview.ts), [tests](Tools/media-preview.test.mjs): opt-in status links, inert SSR content and one native modal; official trailer embed on Play, released on close. Design examples await real trailer/request/download service fields.
 - [MediaAvailability](Framework/Components/MediaAvailability.cs): noninteractive, background-free status symbol with monitored-unit counts; MediaCard composes its separate hint/preview target.
@@ -40,7 +41,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Game](Pages/User/Game/Game.cshtml.cs), [client](Modules/Game/game.entry.ts), [helpers](Modules/Game/Game.ts), [tests](Tools/game.test.mjs): EmulatorJS from `/emulator/` (installed by [emulator-assets.mjs](Tools/emulator-assets.mjs) during the build), the page's connections limited to Jularr; the profile's save memory replaces the browser copy at start and uploads when the emulator flushes it, save states travel gzip-compressed through the emulator's own Save/Load State, play time is reported while the game runs visibly.
 - [Progress transport](Modules/Tracking/Progress.ts): serialized acknowledged writes, finite transient retries and visible unsaved state for Reader/Player.
 - [Requests](Pages/User/Requests/Requests.cshtml.cs): profile queue and authorized source confirmation.
-- [Statistics](Pages/User/Statistics/Statistics.cshtml.cs): the profile's numbers for 7 days, 30 days, a year or all time. [System](Pages/Admin/System/System.cshtml.cs): the Owner's overview with links to the pages that act.
+- [Statistics](Pages/User/Statistics/Statistics.cshtml.cs): the profile's numbers for 7 days, 30 days, a year or all time. [System](Pages/Admin/System/System.cshtml.cs): the Owner's overview with links to the pages that act, performance of the process and its services, recent warnings and errors.
 - [Calendar](Pages/User/Calendar/Calendar.cshtml.cs): two weeks of upcoming releases grouped by day, earlier and later weeks.
 - [Collections](Pages/User/Collections/Collections.cshtml.cs), [one collection](Pages/User/Collection/Collection.cshtml.cs): list and creation, Works grid with name and filter editing; Details adds to and removes from hand-picked ones.
 - [Notifications](Pages/User/Notifications/Notifications.cshtml.cs): the profile's inbox, mark as read and one switch per kind; the bell with its unread count sits in the [Shell](Pages/Shared/Shell.cs) header (count read once per request by `UiText`).

@@ -794,6 +794,8 @@ namespace Jularr.Frontend.Localization
             new("system.performance", "Performance"),
             new("system.performance.processor", "Processor"),
             new("system.performance.memory", "Memory"),
+            new("system.performance.processorHistory", "Processor use over the last six hours"),
+            new("system.performance.memoryHistory", "Memory use over the last six hours"),
             new("system.performance.service", "Service"),
             new("system.performance.calls", "Calls"),
             new("system.performance.errors", "Errors"),

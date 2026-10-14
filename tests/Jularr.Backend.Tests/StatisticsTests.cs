@@ -74,7 +74,7 @@ namespace Jularr.Backend.Tests
 
             // Every service call of the last hour counts, the slowest in total first.
             using var timings = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/timings");
-            var timing = (await timings.Content.ReadFromJsonAsync<Jularr.Backend.Data.Common.BaseDataList<ServiceTimingV1>>())!.Single(item => item.Service == "ReadSystemHealthV1");
+            var timing = (await timings.Content.ReadFromJsonAsync<Jularr.Backend.Data.Common.BaseDataList<ServiceTimingV1>>())!.Single(item => item.Service == "Admin/ReadSystemHealthV1");
             Assert.IsTrue(timing.Count >= 3);
             Assert.AreEqual(0L, timing.Errors);
             StringAssert.Contains(html, "ReadSystemHealthV1");

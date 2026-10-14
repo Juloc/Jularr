@@ -43,10 +43,10 @@ namespace Jularr.Frontend.Pages.Admin.System
             {
                 var latest = _resources[^1];
                 performance.Add(new FactList([
-                    ("system.performance.processor", new ValueText(latest.ProcessorPercent.ToString("0.#", CultureInfo.CurrentCulture) + " %")),
-                    ("system.performance.memory", new ValueText(ByteSize.Format(latest.MemoryBytes)))]));
-                performance.Add(new Sparkline([.. _resources.Select(sample => (double)sample.ProcessorPercent)], "system.performance.processor"));
-                performance.Add(new Sparkline([.. _resources.Select(sample => (double)sample.MemoryBytes)], "system.performance.memory"));
+                    ("system.performance.processor", new Div([new ValueText(latest.ProcessorPercent.ToString("0.#", CultureInfo.CurrentCulture) + " %"),
+                        new Sparkline([.. _resources.Select(sample => (double)sample.ProcessorPercent)], "system.performance.processorHistory", 100)])),
+                    ("system.performance.memory", new Div([new ValueText(ByteSize.Format(latest.MemoryBytes)),
+                        new Sparkline([.. _resources.Select(sample => (double)sample.MemoryBytes)], "system.performance.memoryHistory")]))]));
             }
 
             performance.Add(_timings.Count > 0
