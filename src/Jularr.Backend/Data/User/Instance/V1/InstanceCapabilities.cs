@@ -10,8 +10,9 @@ namespace Jularr.Backend.Data.User.Instance.V1
     {
         public InstanceCapabilitiesDetailsV1(bool canReadMedia, bool canManageMedia, bool canUpdateWatchlist, bool canRequest, bool canManageRequests, bool canManageWanted, bool canAcquire, bool canPlay, bool canRead,
             bool canManageProfiles, bool canPlayGames, bool canNotify, bool canCollect, bool canSeeCalendar, bool canSeeStatistics, bool canAdminister, bool canManageStorage,
-            bool canGroupUnits)
+            bool canGroupUnits, bool canArrangeHome)
         {
+            CanArrangeHome = canArrangeHome;
             CanGroupUnits = canGroupUnits;
             CanAdminister = canAdminister;
             CanManageStorage = canManageStorage;
@@ -70,5 +71,8 @@ namespace Jularr.Backend.Data.User.Instance.V1
 
         // Staff name sections of a Work's units.
         public bool CanGroupUnits { get; }
+
+        // The profile orders and hides its home shelves.
+        public bool CanArrangeHome { get; }
     }
 }

@@ -1,21 +1,27 @@
 using System.Globalization;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Localization.V1;
+using Jularr.Backend.Data.User.Home.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
+using Jularr.Backend.Service.User.Home.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Modules.Appearance;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.Settings
 {
     public sealed class SettingsModel(ReadAuthenticationV1 authentication, ReadProfileV1 readProfile, UpdateProfileV1 updateProfile, ReadProfileMediaV1 readMedia, UpdateProfileMediaV1 updateMedia,
-        UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery, UiText texts) : JularrPage
+        UpdateProfilePinV1 updatePin, RemoveProfilePinV1 removePin, DeleteProfileV1 deleteProfile, ReadUiLocalesV1 readLocales, ReadHomeLayoutV1 readLayout, SaveHomeLayoutV1 saveLayout,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        private IReadOnlyList<HomeShelfV1> _layout = [];
         private AuthenticationResultV1? _authentication;
         private ReadProfileResultV1? _profile;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
@@ -107,6 +113,23 @@ namespace Jularr.Frontend.Pages.User.Settings
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             }
 
+            // Home shelves in their order; each moves or hides with one button.
+            if (_layout.Count > 0)
+            {
+                var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+                page.Content.Add(new UiSection("home.layout", [new Table<HomeShelfV1>(_layout)
+                    .Resource(shelf => shelf.HomeShelfTypeId, "home.shelf", type => "home.shelf." + type)
+                    .Content("table.status", shelf => new Text(shelf.IsHidden ? "home.hidden" : "home.shown"))
+                    .Content("common.actions", shelf =>
+                    {
+                        var index = _layout.ToList().IndexOf(shelf);
+                        return new Div([
+                            .. index > 0 ? new IUiComponent[] { HomeAction(shelf, "Up", "home.moveUp", csrf) } : [],
+                            .. index + 1 < _layout.Count ? new IUiComponent[] { HomeAction(shelf, "Down", "home.moveDown", csrf) } : [],
+                            HomeAction(shelf, shelf.IsHidden ? "Show" : "Hide", shelf.IsHidden ? "home.show" : "home.hide", csrf)]);
+                    })]));
+            }
+
             page.Content.Add(new UiSection("settings.account", [
                 new A(new Text("settings.sessions")).Class("button").Attribute("href", "/Account/Sessions"),
                 .. (texts.Capabilities?.CanManageProfiles is true
@@ -184,6 +207,27 @@ namespace Jularr.Frontend.Pages.User.Settings
             return RedirectToPage("/User/Settings/Settings");
         }
 
+        private IUiComponent HomeAction(HomeShelfV1 shelf, string action, string labelKey, string? csrf) =>
+            new Form<HomeLayoutParametersV1>(form => form.Submit(labelKey), "/Settings?handler=Home&shelf=" + shelf.HomeShelfTypeId + "&action=" + action, csrf, new HomeLayoutParametersV1());
+
+        public async Task<IActionResult> OnPostHomeAsync([BindRequired] HomeShelfType shelf, [BindRequired] string action)
+        {
+            // The whole order is saved; one shelf moves or changes its visibility.
+            var layout = (await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted)).ToList();
+            var index = layout.FindIndex(item => item.HomeShelfTypeId == shelf);
+            var target = action switch { "Up" => index - 1, "Down" => index + 1, _ => index };
+            if (index >= 0 && target >= 0 && target < layout.Count)
+            {
+                (layout[index], layout[target]) = (layout[target], layout[index]);
+            }
+
+            bool Hidden(HomeShelfV1 item) => item.HomeShelfTypeId != shelf ? item.IsHidden : action switch { "Hide" => true, "Show" => false, _ => item.IsHidden };
+            var hidden = layout.Where(Hidden).Select(item => item.HomeShelfTypeId.ToString()).ToArray();
+            await saveLayout.ExecuteAsync<UpdateResult>(new HomeLayoutParametersV1(), new SaveHomeLayoutDataV1([.. layout.Select(item => item.HomeShelfTypeId.ToString())], hidden),
+                HttpContext.RequestAborted);
+            return RedirectToPage("/User/Settings/Settings");
+        }
+
         public async Task<IActionResult> OnPostPinAsync(string? pin)
         {
             _savingPin = true;
@@ -221,6 +265,10 @@ namespace Jularr.Frontend.Pages.User.Settings
                 _profile = await readProfile.ExecuteAsync<ReadProfileResultV1>(new ReadProfileParametersV1(profileId), token);
                 _media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), token);
                 _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
+                if (texts.Capabilities?.CanArrangeHome is true)
+                {
+                    _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), token);
+                }
             }
         }
     }

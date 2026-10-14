@@ -351,4 +351,20 @@ CREATE TABLE "WorkUnitGroups" (
 );
 CREATE INDEX "IX_WorkUnitGroups_Work" ON "WorkUnitGroups" ("WorkId");
 
+-- The home page's own shelves; a profile without rows sees them in this order.
+CREATE TABLE "HomeShelfTypes" (
+    "Id" smallint PRIMARY KEY,
+    "Key" varchar(32) NOT NULL UNIQUE
+);
+INSERT INTO "HomeShelfTypes" ("Id", "Key") VALUES (1, 'ContinueWatching'), (2, 'ContinueListening'), (3, 'ContinueReading'), (4, 'RecentlyAdded'), (5, 'Recommendations');
+
+CREATE TABLE "ProfileHomeShelves" (
+    "ProfileId" bigint NOT NULL REFERENCES "Profiles" ("Id") ON DELETE CASCADE,
+    "HomeShelfTypeId" smallint NOT NULL REFERENCES "HomeShelfTypes" ("Id"),
+    "Position" smallint NOT NULL CHECK ("Position" > 0),
+    "IsHidden" boolean NOT NULL DEFAULT FALSE,
+    PRIMARY KEY ("ProfileId", "HomeShelfTypeId"),
+    UNIQUE ("ProfileId", "Position")
+);
+
 COMMIT;

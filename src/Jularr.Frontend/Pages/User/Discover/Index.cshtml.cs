@@ -4,10 +4,12 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Discover.V1;
+using Jularr.Backend.Data.User.Home.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.User.Discover.V1;
+using Jularr.Backend.Service.User.Home.V1;
 using Jularr.Backend.Service.User.Library.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
@@ -16,7 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.User.Discover
 {
     public sealed class IndexModel(ReadAuthenticationV1 authentication, ReadProfileMediaV1 readMedia, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search, ReadContinueV1 continuation,
-        ReadLibraryV1 library, UiText texts, FrontendAssets assets) : JularrPage
+        ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets) : JularrPage
     {
         // Only types with a real discovery provider; Books, Manga and Light Novels follow with their providers.
         private static readonly (string Slug, MediaType Type, DiscoverFeedType[] Feeds)[] Types =
@@ -29,6 +31,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IReadOnlyList<DiscoverItemV1>? _results;
         private IReadOnlyList<ContinueItemV1> _continue = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
+        private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
         private HashSet<MediaType>? _listed;
 
@@ -115,23 +118,35 @@ namespace Jularr.Frontend.Pages.User.Discover
             DefineFeatured(featured);
             page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
 
-            // Watching, listening and reading continue on their own shelves.
+            // Watching, listening and reading continue on their own shelves, in the profile's order.
             var continuing = _continue.Where(item => selected.Slug is null || item.MediaTypeId == selected.Type).ToList();
             var canPlay = texts.Capabilities?.CanPlay is true;
-            page.Content.Add(ContinueShelf("discover.continueWatching", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Video) : []));
-            page.Content.Add(ContinueShelf("discover.continueListening", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Audio) : []));
-            page.Content.Add(ContinueShelf("media.continueReading", texts.Capabilities?.CanRead is true ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []));
-            page.Content.Add(new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture),
-                item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]));
+            foreach (var shelf in _layout.Where(shelf => !shelf.IsHidden))
+            {
+                page.Content.Add(shelf.HomeShelfTypeId switch
+                {
+                    HomeShelfType.ContinueWatching => ContinueShelf("discover.continueWatching", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Video) : []),
+                    HomeShelfType.ContinueListening => ContinueShelf("discover.continueListening", canPlay ? continuing.Where(item => item.MediaAssetTypeId == MediaAssetType.Audio) : []),
+                    HomeShelfType.ContinueReading => ContinueShelf("media.continueReading",
+                        texts.Capabilities?.CanRead is true ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
+                    HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title,
+                        "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]),
+                    _ => Recommendations(selected.Slug)
+                });
+            }
+        }
 
+        private IUiComponent Recommendations(string? slug)
+        {
             var recommendations = new Page();
             DefineRecommendations(recommendations);
             if (_shelves.Count == 0 && !_providerUnavailable)
             {
                 recommendations.Content.Add(new A(new Text("discover.loadRecommendations")).Class("button").Attribute("data-discover-recommendations", "true")
-                    .Attribute("href", Address(selected.Slug, null, 1) + (selected.Slug is null ? "?" : "&") + "handler=Recommendations"));
+                    .Attribute("href", Address(slug, null, 1) + (slug is null ? "?" : "&") + "handler=Recommendations"));
             }
-            page.Content.Add(new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations"));
+
+            return new Div([.. recommendations.Content]).Attribute("id", "discover-recommendations");
         }
 
         private MediaShelf ContinueShelf(string titleKey, IEnumerable<ContinueItemV1> items) => new(assets, titleKey, null, [.. items.Select(item =>
@@ -243,6 +258,11 @@ namespace Jularr.Frontend.Pages.User.Discover
             }
 
             // Local shelves never wait for the provider.
+            if (texts.Capabilities?.CanArrangeHome is true)
+            {
+                _layout = await readLayout.ExecuteAsync<BaseDataList<HomeShelfV1>>(new HomeLayoutParametersV1(), HttpContext.RequestAborted);
+            }
+
             if (texts.Capabilities?.CanPlay is true || texts.Capabilities?.CanRead is true)
             {
                 _continue = await continuation.ExecuteAsync<BaseDataList<ContinueItemV1>>(new ReadContinueParametersV1(), HttpContext.RequestAborted);
