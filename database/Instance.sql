@@ -11,6 +11,9 @@ CREATE TABLE "InstanceSettings" (
     -- Finished activity leaves after this many days or once it takes more room than this.
     "HistoryRetentionDays" smallint NOT NULL DEFAULT 30 CHECK ("HistoryRetentionDays" BETWEEN 1 AND 3650),
     "HistoryMegabytes" integer NOT NULL DEFAULT 10 CHECK ("HistoryMegabytes" BETWEEN 1 AND 100000),
+    -- Collections per profile and named sections per title; lists show all of them.
+    "CollectionLimit" smallint NOT NULL DEFAULT 100 CHECK ("CollectionLimit" BETWEEN 1 AND 1000),
+    "UnitGroupLimit" smallint NOT NULL DEFAULT 100 CHECK ("UnitGroupLimit" BETWEEN 1 AND 1000),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
 );
 

@@ -30,7 +30,9 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                     settings."UsersConfirmSources",
                     settings."LibraryScanIntervalHours",
                     settings."HistoryRetentionDays",
-                    settings."HistoryMegabytes"
+                    settings."HistoryMegabytes",
+                    settings."CollectionLimit",
+                    settings."UnitGroupLimit"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE
@@ -52,7 +54,8 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
         {
             // Use the canonical writer.
             await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks, Data.UsersConfirmSources,
-                Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes), CancellationToken);
+                Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes,
+                Data.CollectionLimit, Data.UnitGroupLimit), CancellationToken);
             return new UpdateResult(true);
         }
     }

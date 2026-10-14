@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Media
     {
         public static async Task<long> CreateCollectionAsync(this LogicContext ctx, CollectionSaveData data, CancellationToken ct)
         {
-            // A profile keeps at most 100 collections, so every list shows all of them.
+            // A profile keeps at most the Admin's number of collections, so every list shows all of them.
             await ctx.LockProfileAsync(data.ProfileId, ct);
 
             var sql = new SqlStatement();
@@ -23,7 +23,8 @@ namespace Jularr.Backend.Logic.Media
                     "Profiles" AS profile
                 WHERE
                     profile."Id" = @ProfileId
-                    AND (SELECT count(*) FROM "Collections" AS collection WHERE collection."ProfileId" = profile."Id") < 100;
+                    AND (SELECT count(*) FROM "Collections" AS collection WHERE collection."ProfileId" = profile."Id")
+                        < (SELECT settings."CollectionLimit" FROM "InstanceSettings" AS settings WHERE settings."Id" = 1);
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ReadOptionalAsync<ProfileParameters>(sql, ct) is null)

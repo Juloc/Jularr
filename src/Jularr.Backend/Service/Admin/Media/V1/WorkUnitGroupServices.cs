@@ -18,7 +18,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // At most 100 per Work, in unit order.
+            // All of a Work's sections, in unit order; the largest limit bounds the read.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -36,7 +36,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 ORDER BY
                     coalesce(unitGroup."FirstParentNumber", 0),
                     unitGroup."FirstNumber"
-                LIMIT 100;
+                LIMIT 1000;
                 """;
             sql.Parameters.Add(Parameters);
             return new BaseDataList<WorkUnitGroupV1>(await Context.ReadSql.ReadListAsync<WorkUnitGroupV1>(sql, CancellationToken));

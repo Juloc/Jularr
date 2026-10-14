@@ -49,7 +49,7 @@ namespace Jularr.Backend.Logic.Media
                 throw new DataValidationException(nameof(data.LastNumber), "out_of_range");
             }
 
-            // A unit belongs to at most one section; 100 sections per Work keep the editor complete.
+            // A unit belongs to at most one section; the Admin's number of sections per Work keeps the editor complete.
             sql = new SqlStatement();
             sql.Statement =
                 """
@@ -78,7 +78,8 @@ namespace Jularr.Backend.Logic.Media
                     "Works" AS work
                 WHERE
                     work."Id" = @WorkId
-                    AND (SELECT count(*) FROM "WorkUnitGroups" AS unitGroup WHERE unitGroup."WorkId" = work."Id") < 100;
+                    AND (SELECT count(*) FROM "WorkUnitGroups" AS unitGroup WHERE unitGroup."WorkId" = work."Id")
+                        < (SELECT settings."UnitGroupLimit" FROM "InstanceSettings" AS settings WHERE settings."Id" = 1);
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ReadOptionalAsync<WorkIdData>(sql, ct) is null)

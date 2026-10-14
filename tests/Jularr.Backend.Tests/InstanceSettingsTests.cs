@@ -34,10 +34,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""));
 
             // Commit the shared configuration.
-            using var changed = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Home", 1, 1, libraryScanIntervalHours: 12, historyMegabytes: 25));
+            using var changed = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Home", 1, 1, libraryScanIntervalHours: 12, historyMegabytes: 25, collectionLimit: 3));
             Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
             Assert.AreEqual((short)12, await host.ScalarAsync("SELECT \"LibraryScanIntervalHours\" FROM \"InstanceSettings\""));
             Assert.AreEqual(25, await host.ScalarAsync("SELECT \"HistoryMegabytes\" FROM \"InstanceSettings\""));
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"CollectionLimit\" FROM \"InstanceSettings\""));
+            Assert.AreEqual((short)100, await host.ScalarAsync("SELECT \"UnitGroupLimit\" FROM \"InstanceSettings\""));
             Assert.AreEqual((short)30, await host.ScalarAsync("SELECT \"HistoryRetentionDays\" FROM \"InstanceSettings\""));
             using var stale = await host.SendAsync(HttpMethod.Put, Route, new UpdateInstanceSettingsDataV1("Stale", 2, 1));
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);

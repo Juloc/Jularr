@@ -49,10 +49,13 @@ namespace Jularr.Frontend.Pages.Admin.Instance
                     form.Number(item => item.LibraryScanIntervalHours, "admin.instance.libraryScanIntervalHours");
                     form.Number(item => item.HistoryRetentionDays, "admin.instance.historyRetentionDays");
                     form.Number(item => item.HistoryMegabytes, "admin.instance.historyMegabytes");
+                    form.Number(item => item.CollectionLimit, "admin.instance.collectionLimit");
+                    form.Number(item => item.UnitGroupLimit, "admin.instance.unitGroupLimit");
                     form.Submit("common.save");
                 }, Home, antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateInstanceSettingsDataV1(settings.Name, settings.UiLocaleId, settings.Version, settings.ReadingCacheMegabytes, settings.ReadingCacheWorks, settings.UsersConfirmSources,
-                        settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes), _moduleId is null && _mediaInput is null ? FormError : null));
+                        settings.LibraryScanIntervalHours, settings.HistoryRetentionDays, settings.HistoryMegabytes, settings.CollectionLimit,
+                        settings.UnitGroupLimit), _moduleId is null && _mediaInput is null ? FormError : null));
 
                 if (TempData["InstanceSaved"] is true)
                 {
@@ -108,11 +111,12 @@ namespace Jularr.Frontend.Pages.Admin.Instance
         }
 
         public async Task<IActionResult> OnPostAsync(string? name, long uiLocaleId, long version, int? readingCacheMegabytes, int? readingCacheWorks,
-            bool? usersConfirmSources, int? libraryScanIntervalHours, int? historyRetentionDays, int? historyMegabytes)
+            bool? usersConfirmSources, int? libraryScanIntervalHours, int? historyRetentionDays, int? historyMegabytes,
+            int? collectionLimit, int? unitGroupLimit)
         {
             // Save through the service.
             _input = new UpdateInstanceSettingsDataV1(name ?? "", uiLocaleId, version, readingCacheMegabytes, readingCacheWorks, usersConfirmSources, libraryScanIntervalHours,
-                historyRetentionDays, historyMegabytes);
+                historyRetentionDays, historyMegabytes, collectionLimit, unitGroupLimit);
             await update.ExecuteAsync<UpdateResult>(new UpdateInstanceSettingsParametersV1(), _input, HttpContext.RequestAborted);
             TempData["InstanceSaved"] = true;
             return LocalRedirect(Home);

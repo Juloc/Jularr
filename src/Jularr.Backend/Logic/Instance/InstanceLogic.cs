@@ -26,6 +26,8 @@ namespace Jularr.Backend.Logic.Instance
                     "LibraryScanIntervalHours" = coalesce(@LibraryScanIntervalHours, settings."LibraryScanIntervalHours"),
                     "HistoryRetentionDays" = coalesce(@HistoryRetentionDays, settings."HistoryRetentionDays"),
                     "HistoryMegabytes" = coalesce(@HistoryMegabytes, settings."HistoryMegabytes"),
+                    "CollectionLimit" = coalesce(@CollectionLimit, settings."CollectionLimit"),
+                    "UnitGroupLimit" = coalesce(@UnitGroupLimit, settings."UnitGroupLimit"),
                     "Version" = settings."Version" + 1
                 WHERE
                     settings."Id" = 1

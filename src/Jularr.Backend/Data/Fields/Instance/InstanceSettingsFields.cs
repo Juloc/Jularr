@@ -15,5 +15,7 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly IntField LibraryScanIntervalHours = new() { Minimum = 0, Maximum = 720 };
         public static readonly IntField HistoryRetentionDays = new() { Minimum = 1, Maximum = 3650 };
         public static readonly IntField HistoryMegabytes = new() { Minimum = 1, Maximum = 100000 };
+        public static readonly IntField CollectionLimit = new() { Minimum = 1, Maximum = 1000 };
+        public static readonly IntField UnitGroupLimit = new() { Minimum = 1, Maximum = 1000 };
     }
 }
