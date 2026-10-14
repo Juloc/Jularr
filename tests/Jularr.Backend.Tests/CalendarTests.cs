@@ -17,7 +17,7 @@ namespace Jularr.Backend.Tests
             await using var host = await Host.CreateAsync(razor: true, media: true);
             var today = DateTime.UtcNow.Date;
             await host.Fixture.RunSqlAsync($$"""
-                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 2, 'Watched Show'), (20, 2, 'Unknown Show'), (30, 2, 'Requested Show');
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle", "ReleasedOn") VALUES (10, 2, 'Watched Show', '{{today.AddDays(4):yyyy-MM-dd}}'), (20, 2, 'Unknown Show', NULL), (30, 2, 'Requested Show', NULL);
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number") VALUES (100, 10, 1, 1), (200, 20, 1, 1), (300, 30, 1, 2);
                 INSERT INTO "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn") VALUES
                     (10, 100, 2, 3, 'Next Week', '{{today.AddDays(7):yyyy-MM-dd}}'),
@@ -32,7 +32,7 @@ namespace Jularr.Backend.Tests
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
 
-            // Two weeks from today: the requested episode, the watchlisted movie on its release day, then the watchlisted episode; nothing of unrelated Works.
+            // Two weeks from today: the requested episode, the watchlisted movie on its release day, then the watchlisted episode; a Work with units appears by its units only, nothing of unrelated Works.
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/calendar?from=" + today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&days=14");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             var entries = (await read.Content.ReadFromJsonAsync<BaseDataList<CalendarEntryV1>>())!;
