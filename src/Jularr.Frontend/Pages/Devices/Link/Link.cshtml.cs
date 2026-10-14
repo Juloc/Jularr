@@ -14,7 +14,6 @@ namespace Jularr.Frontend.Pages.Devices.Link
     [EnableRateLimiting("public")]
     public sealed partial class LinkModel(StartDevicePairingV1 start, ClaimDevicePairingV1 claim, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
-        private const string PairingCookie = "jularr.device_pairing";
         private string? _code;
 
         protected override void Define(Page page)
@@ -53,7 +52,7 @@ namespace Jularr.Frontend.Pages.Devices.Link
 
                 if (result is { IsPaired: true })
                 {
-                    Response.Cookies.Delete(PairingCookie, CookieOptions());
+                    Response.Cookies.Delete(ServiceApi.DevicePairingCookieName, CookieOptions());
                     await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
                     return LocalRedirect("/");
                 }
@@ -66,7 +65,7 @@ namespace Jularr.Frontend.Pages.Devices.Link
                 }
                 else
                 {
-                    Response.Cookies.Delete(PairingCookie, CookieOptions());
+                    Response.Cookies.Delete(ServiceApi.DevicePairingCookieName, CookieOptions());
                 }
             }
 
@@ -80,13 +79,13 @@ namespace Jularr.Frontend.Pages.Devices.Link
                 HttpContext.RequestAborted);
             var options = CookieOptions();
             options.Expires = started.ExpiresAt;
-            Response.Cookies.Append(PairingCookie, started.PairingId.ToString("D") + "." + started.Code, options);
+            Response.Cookies.Append(ServiceApi.DevicePairingCookieName, started.PairingId.ToString("D") + "." + started.Code, options);
             return LocalRedirect("/Devices/Link");
         }
 
         private (Guid Id, string Code)? Pairing()
         {
-            var match = Request.Cookies[PairingCookie] is { } value ? PairingValue().Match(value) : Match.Empty;
+            var match = Request.Cookies[ServiceApi.DevicePairingCookieName] is { } value ? PairingValue().Match(value) : Match.Empty;
             return match.Success ? (Guid.Parse(match.Groups["id"].Value), match.Groups["code"].Value) : null;
         }
 

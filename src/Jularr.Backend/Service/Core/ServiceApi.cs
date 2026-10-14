@@ -60,6 +60,7 @@ namespace Jularr.Backend.Service.Core
     public static class ServiceApi
     {
         public const string AuthenticationNonceCookieName = "jularr.auth_nonce";
+        public const string DevicePairingCookieName = "jularr.device_pairing";
         public const string AdminPolicyName = "jularr.admin";
         public const string StorageReadPolicyName = "storage.read";
         public const string RulesReadPolicyName = "rules.read";
