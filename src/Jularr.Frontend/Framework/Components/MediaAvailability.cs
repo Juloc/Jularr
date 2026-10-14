@@ -53,7 +53,6 @@ namespace Jularr.Frontend.Framework
                 .Attribute("role", "img").Attribute("aria-label", GetLabel(texts)).WriteTo(writer, encoder, texts);
         }
 
-        private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);
         private sealed class Circle : HtmlElement
         {
             public Circle() : base("circle")

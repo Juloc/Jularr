@@ -3,18 +3,20 @@ using System.Text.Encodings.Web;
 
 namespace Jularr.Frontend.Framework
 {
-    // A small line over evenly spaced values, scaled to their maximum; drawn by the server.
-    public sealed class Sparkline(IReadOnlyList<double> values, string labelKey) : IUiComponent
+    // A small line over evenly spaced values, scaled to a fixed maximum or else to their own; drawn by the server.
+    public sealed class Sparkline(IReadOnlyList<double> values, string labelKey, double? maximum = null) : IUiComponent
     {
         private const int Width = 360;
         private const int Height = 64;
 
         public void WriteTo(TextWriter writer, HtmlEncoder encoder, UiText texts)
         {
-            var maximum = values.Count > 0 ? Math.Max(values.Max(), double.Epsilon) : 1;
-            var step = values.Count > 1 ? Width / (double)(values.Count - 1) : 0;
-            var points = string.Join(' ', values.Select((value, index) =>
-                string.Create(CultureInfo.InvariantCulture, $"{index * step:0.#},{Height - value / maximum * (Height - 2) - 1:0.#}")));
+            // A single sample is a flat line across.
+            IReadOnlyList<double> line = values.Count == 1 ? [values[0], values[0]] : values;
+            var top = maximum ?? (line.Count > 0 ? Math.Max(line.Max(), double.Epsilon) : 1);
+            var step = line.Count > 1 ? Width / (double)(line.Count - 1) : 0;
+            var points = string.Join(' ', line.Select((value, index) =>
+                string.Create(CultureInfo.InvariantCulture, $"{index * step:0.#},{Height - Math.Clamp(value / top, 0, 1) * (Height - 2) - 1:0.#}")));
             new Svg(new Polyline().Attribute("points", points).Attribute("fill", "none").Attribute("stroke", "currentColor").Attribute("stroke-width", "1.5")
                     .Attribute("vector-effect", "non-scaling-stroke"))
                 .Class("sparkline")
@@ -26,8 +28,5 @@ namespace Jularr.Frontend.Framework
                 .Attribute("aria-label", texts[labelKey])
                 .WriteTo(writer, encoder, texts);
         }
-
-        private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);
-        private sealed class Polyline() : HtmlElement("polyline");
     }
 }

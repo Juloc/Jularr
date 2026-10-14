@@ -128,7 +128,6 @@ namespace Jularr.Backend.Data.Admin.System.V1
         [DataField(typeof(PerformanceFields), nameof(PerformanceFields.At))]
         public DateTime At { get; }
 
-        // Share of all processors.
         [DataField(typeof(PerformanceFields), nameof(PerformanceFields.ProcessorPercent))]
         public decimal ProcessorPercent { get; }
 

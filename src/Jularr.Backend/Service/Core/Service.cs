@@ -91,7 +91,7 @@ namespace Jularr.Backend.Service.Core
             return (TOutput)await RunAsync(parameters, data, typeof(TOutput), definition, cancellationToken);
         }
 
-        // Every call counts towards the Owner's performance view; refused and invalid calls too.
+        // Every call counts towards the Owner's performance view; only server faults count as errors, not refused or invalid calls.
         private async Task<IServiceOutput> RunAsync(TParameters parameters, TData data, Type resultType, ServiceDefinition definition, CancellationToken cancellationToken)
         {
             var started = Stopwatch.GetTimestamp();
@@ -100,14 +100,14 @@ namespace Jularr.Backend.Service.Core
             {
                 return await RunCoreAsync(parameters, data, resultType, definition, cancellationToken);
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException && ServiceError.FromException(exception).StatusCode >= 500)
             {
                 failed = true;
                 throw;
             }
             finally
             {
-                Runtime.Timings?.Record(GetType().Name, Stopwatch.GetElapsedTime(started), failed);
+                Runtime.Timings?.Record(Area + "/" + GetType().Name, Stopwatch.GetElapsedTime(started), failed);
             }
         }
 

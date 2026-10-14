@@ -21,8 +21,5 @@ namespace Jularr.Frontend.Framework
                 .Attribute("focusable", "false")
                 .WriteTo(writer, encoder, texts);
         }
-
-        private sealed class Svg(params IUiComponent[] content) : HtmlElement("svg", content);
-        private sealed class Use() : HtmlElement("use");
     }
 }
