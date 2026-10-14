@@ -71,9 +71,9 @@ namespace Jularr.Backend.Logic.Media
             sql.Statement = workId is null
                 ? """
                   INSERT INTO
-                      "Works" ("MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear")
+                      "Works" ("MediaTypeId", "MediaSubtypeId", "CanonicalTitle", "ReleaseYear", "ReleasedOn")
                   VALUES
-                      (@MediaTypeId, @MediaSubtypeId, @CanonicalTitle, @ReleaseYear)
+                      (@MediaTypeId, @MediaSubtypeId, @CanonicalTitle, @ReleaseYear, @ReleasedOn)
                   RETURNING
                       "Id";
                   """
@@ -82,6 +82,7 @@ namespace Jularr.Backend.Logic.Media
                       "Works" AS work
                   SET
                       "ReleaseYear" = COALESCE(work."ReleaseYear", @ReleaseYear),
+                      "ReleasedOn" = COALESCE(@ReleasedOn, work."ReleasedOn"),
                       "MediaSubtypeId" = CASE WHEN work."IsMediaSubtypeManual" THEN work."MediaSubtypeId" ELSE COALESCE(@MediaSubtypeId, work."MediaSubtypeId") END,
                       "UpdatedAt" = now()
                   WHERE

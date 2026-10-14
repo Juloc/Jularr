@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.Logic.Media
     internal sealed class WorkMetadataData : BaseData
     {
         public WorkMetadataData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,
-            string units, string facts, string providerKey)
+            string units, string facts, string providerKey, DateOnly? releasedOn = null)
         {
+            ReleasedOn = releasedOn;
             ProviderKey = providerKey;
             Facts = facts;
             MediaTypeId = mediaTypeId;
@@ -45,6 +46,10 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
         public int? ReleaseYear { get; }
+
+        // The provider's date wins; none keeps the stored one.
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleasedOn))]
+        public DateOnly? ReleasedOn { get; }
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIdentities))]
         public string ExternalIdentities { get; }

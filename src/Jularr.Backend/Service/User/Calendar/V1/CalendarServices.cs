@@ -16,10 +16,11 @@ namespace Jularr.Backend.Service.User.Calendar.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Episodes, volumes and tracks of the profile's Works: watchlisted, requested by it or already in the library.
+            // Episodes, volumes and tracks, or the Work itself without units, of the profile's Works: watchlisted, requested by it or already in the library.
             var sql = new SqlStatement();
             sql.Statement =
                 """
+                (
                 SELECT
                     unit."ReleasedOn" AS "Day",
                     work."Id" AS "WorkId",
@@ -66,11 +67,59 @@ namespace Jularr.Backend.Service.User.Calendar.V1
                         OR EXISTS (SELECT 1 FROM "AcquisitionRequests" AS request WHERE request."WorkId" = work."Id" AND request."RequestedByProfileId" = @ProfileId)
                         OR EXISTS (SELECT 1 FROM "MediaAssets" AS asset WHERE asset."WorkId" = work."Id")
                     )
+                )
+                UNION ALL
+                (
+                SELECT
+                    work."ReleasedOn" AS "Day",
+                    work."Id" AS "WorkId",
+                    work."MediaTypeId",
+                    work."CanonicalTitle" AS "Title",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Poster'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "PosterUrl",
+                    NULL AS "WorkUnitTypeId",
+                    NULL AS "UnitNumber",
+                    NULL AS "ParentUnitNumber",
+                    NULL AS "UnitTitle",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                        WHERE
+                            asset."WorkId" = work."Id"
+                    ) AS "IsAvailable",
+                    entry."WorkId" IS NOT NULL AS "IsWatchlisted"
+                FROM
+                    "Works" AS work
+                    JOIN "ProfileWorks" AS visible ON visible."ProfileId" = @ProfileId AND visible."WorkId" = work."Id" AND NOT visible."IsHidden"
+                    LEFT JOIN "WatchlistEntries" AS entry ON entry."ProfileId" = @ProfileId AND entry."WorkId" = work."Id"
+                WHERE
+                    work."ReleasedOn" >= @From
+                    AND work."ReleasedOn" < @From + @Days
+                    AND NOT EXISTS (SELECT 1 FROM "WorkUnits" AS unit WHERE unit."WorkId" = work."Id")
+                    AND (
+                        entry."WorkId" IS NOT NULL
+                        OR EXISTS (SELECT 1 FROM "AcquisitionRequests" AS request WHERE request."WorkId" = work."Id" AND request."RequestedByProfileId" = @ProfileId)
+                        OR EXISTS (SELECT 1 FROM "MediaAssets" AS asset WHERE asset."WorkId" = work."Id")
+                    )
+                )
                 ORDER BY
-                    unit."ReleasedOn",
-                    work."CanonicalTitle",
-                    parent."Number" NULLS FIRST,
-                    unit."Number"
+                    "Day",
+                    "Title",
+                    "ParentUnitNumber" NULLS FIRST,
+                    "UnitNumber" NULLS FIRST
                 LIMIT 500;
                 """;
             sql.Parameters.Add(Parameters);

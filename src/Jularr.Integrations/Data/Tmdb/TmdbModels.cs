@@ -80,8 +80,9 @@ namespace Jularr.Integrations.Data.Tmdb
     {
         public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,
             IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries, int? collectionId = null,
-            string? collectionName = null)
+            string? collectionName = null, DateOnly? releasedOn = null)
         {
+            ReleasedOn = releasedOn;
             CollectionId = collectionId;
             CollectionName = collectionName;
             GenreIds = genreIds;
@@ -105,6 +106,7 @@ namespace Jularr.Integrations.Data.Tmdb
         public string Title { get; }
         public string? OriginalTitle { get; }
         public int? Year { get; }
+        public DateOnly? ReleasedOn { get; }
         public string? Overview { get; }
         public string? PosterPath { get; }
         public string? BackdropPath { get; }

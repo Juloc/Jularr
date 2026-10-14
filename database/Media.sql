@@ -42,6 +42,8 @@ CREATE TABLE "Works" (
     "MediaSubtypeId" smallint NULL,
     "IsMediaSubtypeManual" boolean NOT NULL DEFAULT FALSE,
     "FranchiseId" bigint NULL REFERENCES "Franchises" ("Id") ON DELETE SET NULL,
+    -- The provider's first release; a Work with units dates those instead.
+    "ReleasedOn" date NULL,
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0),
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),

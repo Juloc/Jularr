@@ -41,8 +41,8 @@ namespace Jularr.Frontend.Pages.User.Calendar
                     new H2(new ValueText(day.Key.ToString("D", CultureInfo.CurrentCulture))),
                     new Ul([.. day.Select(entry => new Li([
                         new A(new ValueText(entry.Title)).Attribute("href", "/Details/" + entry.WorkId.ToString(CultureInfo.InvariantCulture)),
-                        new Span(new ValueText(string.Join(" · ", new[] { MediaUnitLabel.Format(texts, entry.WorkUnitTypeId, entry.UnitNumber, entry.ParentUnitNumber), entry.UnitTitle }
-                            .OfType<string>()))).Class("calendar__unit"),
+                        .. entry.WorkUnitTypeId is null ? Array.Empty<IUiComponent>() : [new Span(new ValueText(string.Join(" · ", new[] { MediaUnitLabel.Format(texts, entry.WorkUnitTypeId, entry.UnitNumber, entry.ParentUnitNumber), entry.UnitTitle }
+                            .OfType<string>()))).Class("calendar__unit")],
                         .. entry.IsAvailable ? new IUiComponent[] { new Span(new Text("library.present")).Class("calendar__state") } : []]).Class("calendar__entry"))])).Class("calendar__day"));
             }
         }

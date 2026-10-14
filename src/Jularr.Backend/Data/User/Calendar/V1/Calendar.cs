@@ -21,7 +21,7 @@ namespace Jularr.Backend.Data.User.Calendar.V1
 
     public sealed class CalendarEntryV1 : BaseResponse
     {
-        public CalendarEntryV1(DateOnly day, long workId, MediaType mediaTypeId, string title, string? posterUrl, WorkUnitType workUnitTypeId, decimal unitNumber, decimal? parentUnitNumber,
+        public CalendarEntryV1(DateOnly day, long workId, MediaType mediaTypeId, string title, string? posterUrl, WorkUnitType? workUnitTypeId, decimal? unitNumber, decimal? parentUnitNumber,
             string? unitTitle, bool isAvailable, bool isWatchlisted)
         {
             Day = day;
@@ -52,11 +52,12 @@ namespace Jularr.Backend.Data.User.Calendar.V1
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
         public string? PosterUrl { get; }
 
-        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId))]
-        public WorkUnitType WorkUnitTypeId { get; }
+        // None for a Work released as a whole, such as a movie.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId), false)]
+        public WorkUnitType? WorkUnitTypeId { get; }
 
-        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber))]
-        public decimal UnitNumber { get; }
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
+        public decimal? UnitNumber { get; }
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
