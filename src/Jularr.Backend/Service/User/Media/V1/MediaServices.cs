@@ -186,14 +186,19 @@ namespace Jularr.Backend.Service.User.Media.V1
                             JOIN "InstanceModules" AS module ON module."Key" = 'UnitGroups' AND module."IsEnabled"
                         WHERE
                             unitGroup."WorkId" = asset."WorkId"
-                            AND (coalesce(parent."Number", 0), unit."Number") >= (coalesce(unitGroup."FirstParentNumber", 0), unitGroup."FirstNumber")
-                            AND (coalesce(parent."Number", 0), unit."Number") <= (coalesce(unitGroup."LastParentNumber", 0), unitGroup."LastNumber")
+                            AND (section."ParentNumber", section."Number") >= (coalesce(unitGroup."FirstParentNumber", 0), unitGroup."FirstNumber")
+                            AND (section."ParentNumber", section."Number") <= (coalesce(unitGroup."LastParentNumber", 0), unitGroup."LastNumber")
                         LIMIT 1
                     ) AS "GroupName"
                 FROM
                     "MediaAssets" AS asset
                     LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            CASE WHEN unit."WorkUnitTypeId" = 4 THEN 0 ELSE coalesce(parent."Number", 0) END AS "ParentNumber",
+                            CASE WHEN unit."WorkUnitTypeId" = 4 THEN parent."Number" ELSE unit."Number" END AS "Number"
+                    ) AS section
                     LEFT JOIN "MediaProgress" AS progress ON progress."ProfileId" = @ProfileId
                         AND progress."WorkId" = asset."WorkId"
                         AND progress."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"

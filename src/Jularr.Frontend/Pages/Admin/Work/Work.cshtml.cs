@@ -94,7 +94,7 @@ namespace Jularr.Frontend.Pages.Admin.Work
             return RedirectToPage("/Admin/Work/Work", new { id = Id });
         }
 
-        public async Task<IActionResult> OnPostGroupAsync(string? name, decimal? firstParentNumber, decimal firstNumber, decimal? lastParentNumber, decimal lastNumber)
+        public async Task<IActionResult> OnPostGroupAsync(string? name, decimal? firstParentNumber, [BindRequired] decimal firstNumber, decimal? lastParentNumber, [BindRequired] decimal lastNumber)
         {
             _groupInput = new CreateWorkUnitGroupDataV1(name ?? "", firstParentNumber, firstNumber, lastParentNumber, lastNumber);
             await createGroup.ExecuteAsync<CreateWorkUnitGroupResultV1>(new WorkParametersV1(Id), _groupInput, HttpContext.RequestAborted);

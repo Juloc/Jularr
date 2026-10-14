@@ -18,7 +18,7 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         public long WorkUnitGroupId { get; }
     }
 
-    // One section from the first to the last unit, both included; the parent is the season where units have one.
+    // Both ends are included.
     public sealed class WorkUnitGroupV1 : BaseResponse
     {
         public WorkUnitGroupV1(long id, string name, decimal? firstParentNumber, decimal firstNumber, decimal? lastParentNumber, decimal lastNumber)
