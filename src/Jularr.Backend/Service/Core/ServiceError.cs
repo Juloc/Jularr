@@ -13,6 +13,7 @@ namespace Jularr.Backend.Service.Core
     public sealed class ServiceError
     {
         private const string DetailItem = "Jularr.ServiceErrorDetail";
+        private const string LoggedItem = "Jularr.ServiceErrorLogged";
 
         private ServiceError(int statusCode, string code, string? field = null, string? validationCode = null)
         {
@@ -28,7 +29,7 @@ namespace Jularr.Backend.Service.Core
         // A code without text reads as an unknown error.
         public bool IsDefined => ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey(Code))
             && (ValidationCode is null || ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey("validation." + ValidationCode)));
-        public string ResourceKey => ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey(Code)) ? ServiceErrorResources.GetKey(Code) : ServiceErrorResources.GetKey("internal_error");
+        public string ResourceKey => IsDefined ? ServiceErrorResources.GetKey(Code) : ServiceErrorResources.GetKey("internal_error");
         public string? Field { get; }
         public string? ValidationCode { get; }
         public string? FieldResourceKey => ValidationCode is not null && ServiceErrorResources.IsDefined(ServiceErrorResources.GetKey("validation." + ValidationCode))
@@ -42,18 +43,22 @@ namespace Jularr.Backend.Service.Core
         public static ServiceError Describe(Exception exception, HttpContext context, ILogger logger)
         {
             var error = FromException(exception);
-            if (error.StatusCode < StatusCodes.Status500InternalServerError && error.IsDefined)
+            var logged = context.Items.TryGetValue(LoggedItem, out var previous) && ReferenceEquals(previous, exception);
+            context.Items[LoggedItem] = exception;
+            if (error.IsDefined && error.Code != "internal_error")
             {
+                // A known error keeps the cause it wraps in the log.
+                if (!logged && exception.InnerException is { } cause)
+                {
+                    logger.LogWarning(cause, "{Code} on {Path}.", error.Code, context.Request.Path);
+                }
+
                 return error;
             }
 
-            if (error.IsDefined)
+            if (!logged)
             {
-                logger.LogError(exception, "{Code} on {Path}.", error.Code, context.Request.Path);
-            }
-            else
-            {
-                logger.LogError(exception, "{Code} on {Path} has no error text.", error.Code, context.Request.Path);
+                logger.LogError(exception, error.IsDefined ? "{Code} on {Path}." : "{Code} on {Path} has no error text.", error.Code, context.Request.Path);
             }
 
             return context.Items.TryGetValue(DetailItem, out var shows) && shows is true

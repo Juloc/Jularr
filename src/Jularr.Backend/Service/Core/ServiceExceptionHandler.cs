@@ -14,7 +14,7 @@ namespace Jularr.Backend.Service.Core
                 return true;
             }
 
-            // Share sanitized error contracts.
+            // One error contract; only administrators read an unknown error's message.
             var error = ServiceError.Describe(exception, context, logger);
             var extensions = new Dictionary<string, object?>
             {
