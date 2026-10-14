@@ -33,6 +33,7 @@ namespace Jularr.Frontend.Pages.User.Collection
             page.Title("collections.title");
             page.Navigation("collections.title");
             page.Asset("Pages/User/Collection/Collection.entry.scss");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             if (_collection is not { } collection)
             {
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));

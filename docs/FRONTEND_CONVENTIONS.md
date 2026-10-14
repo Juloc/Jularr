@@ -285,13 +285,16 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
-- Media cards place request/resume actions centrally over artwork on hover/focus,
-  with reachable touch controls. Show at most three important, Backend-ordered
-  genres. Series lifecycle belongs top-left; monitored-unit availability belongs
-  top-right (green complete, proportional yellow partial, red missing, purple
-  downloading, blue searching/queued). Never infer completeness from coarse
-  availability. Audio/subtitle icons show an available preferred language flag,
-  otherwise distinct language counts; do not infer a country from a language code.
+- Media cards use the canonical `MediaCard`: a portrait cover, hover/focus information
+  panel from the title downward and actions over the artwork. Native links/forms
+  remain usable without JavaScript; touch reveals important actions without hover.
+  Series lifecycle appears top-left on reveal. Availability is a top-right dot
+  with a small contrast halo, expanding into a compact icon/text capsule:
+  green complete, proportional yellow partial, purple downloading, blue
+  searching/queued, gray requested, no dot for missing. Never infer monitored-unit
+  completeness from coarse availability. Use at most three Backend-ordered genres,
+  shared icon/semantic-color Tags and supplied preferred language flags or distinct
+  language counts; never infer a country from a language code.
   Shelves hide native scrollbars and use shared local chevrons while retaining
   native touch/keyboard scrolling, without navigation-only server reads.
 - Truncated visible text (`text-overflow: ellipsis`, line clamping or text clipped by
@@ -317,6 +320,12 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   disabled component states. They must not start library playback or pretend to
   perform business actions. An explicitly requested promotional trailer may load
   its official provider embed after Play, without a playback session or progress.
+- The approved shared Card may start a supplied official trailer after a two-second
+  mouse hover, muted. Its landscape surface replaces the poster entirely; actions
+  stay over video and the information panel starts below it. Use viewport-bounded
+  positioning above scrolling shelves, leaving their slots unchanged. Leaving,
+  scrolling, resizing, hiding or unloading releases the embed. Missing trailer or
+  metadata contracts must not cause per-card provider requests or fabricated data.
   Reuse real components and approved references, not copies.
 - Before completing a change, check the
   [CODEMAP](../src/Jularr.Frontend/CODEMAP.md),

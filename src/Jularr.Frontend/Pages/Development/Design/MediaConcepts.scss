@@ -1,0 +1,194 @@
+// Development-only compositions, shared controls.
+.design-lab {
+    &__concept-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 20px; }
+    &__concept-option {
+        min-width: 0;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+
+        h3 { margin: 0 0 16px; font-size: 14px; font-weight: 600; }
+    }
+    &__concept-canvas { display: grid; align-items: center; min-height: 390px; }
+    &__concept {
+        position: relative;
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+        padding: 12px;
+        border-radius: 24px;
+        background: var(--surface-hover);
+    }
+    &__concept-art {
+        display: block;
+        min-width: 0;
+        height: 190px;
+        overflow: hidden;
+        border-radius: 20px;
+
+        .media-image { width: 100%; height: 100%; object-fit: cover; }
+    }
+    &__concept-heading { display: grid; gap: 4px; min-width: 0; }
+    &__concept-title { font-size: 18px; font-weight: 650; overflow-wrap: anywhere; }
+    &__concept-meta { color: var(--muted); font-size: 12px; }
+    &__concept-genres { display: flex; flex-wrap: wrap; gap: 6px; }
+    &__concept-genres .tag { padding: 3px 9px; background: var(--surface); font-size: 11px; }
+    &__concept-status {
+        position: absolute;
+        inset: 14px 14px auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+
+        .icon-info__trigger { background: none; }
+    }
+    &__concept-series { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+    &__concept-series .tag { background: var(--surface); padding: 4px 10px; font-size: 11px; }
+    &__concept-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    &__concept-actions .button { font-size: 12px; padding: 8px 10px; }
+    &__concept-summary { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    &__concept-progress { width: 100%; height: 5px; border: 0; accent-color: var(--accent); }
+
+    // 01 — Artwork first.
+    &__concept--poster {
+        max-width: 230px;
+        margin-inline: auto;
+        background: none;
+        padding: 0;
+
+        .design-lab__concept-art { height: 260px; }
+        .design-lab__concept-status { inset: 4px 4px auto; }
+    }
+
+    // 02 — Overlapping opaque caption.
+    &__concept--caption {
+        background: none;
+        padding: 0;
+
+        .design-lab__concept-art { height: 260px; border-radius: 32px; }
+        .design-lab__concept-heading { z-index: 1; margin: -44px 14px 0; padding: 14px; border-radius: 24px; background: var(--surface); border: 1px solid var(--border); }
+        .design-lab__concept-genres, .design-lab__concept-actions { justify-content: center; }
+    }
+
+    // 03 — Rounded portrait silhouette.
+    &__concept--pill {
+        background: none;
+        justify-items: center;
+        text-align: center;
+
+        .design-lab__concept-art { width: 174px; height: 240px; border-radius: 100px; }
+        .design-lab__concept-status { position: static; width: 100%; order: -1; }
+    }
+
+    // 04 — Dense horizontal list item.
+    &__concept--row {
+        grid-template-columns: 90px minmax(0, 1fr);
+        grid-template-areas: "art heading" "art genres" "art actions" "status status";
+        background: var(--accent-soft);
+
+        .design-lab__concept-art { grid-area: art; height: 172px; border-radius: 40px; }
+        .design-lab__concept-heading { grid-area: heading; }
+        .design-lab__concept-genres { grid-area: genres; }
+        .design-lab__concept-actions { grid-area: actions; flex-direction: column; align-items: flex-start; }
+        .design-lab__concept-status { grid-area: status; position: static; }
+    }
+
+    // 05 — Wide, synopsis-led banner.
+    &__concept--cinema {
+        border: 1px solid var(--border);
+        background: var(--surface);
+
+        .design-lab__concept-art { height: 135px; }
+        .design-lab__concept-title { font-size: 24px; }
+        .design-lab__concept-summary { order: 1; }
+        .design-lab__concept-actions { order: 2; }
+    }
+
+    // 06 — Poster beside editorial context.
+    &__concept--editorial {
+        grid-template-columns: 105px minmax(0, 1fr);
+        grid-template-areas: "art heading" "art genres" "art actions" "status status" "summary summary";
+        padding: 0;
+        background: none;
+
+        .design-lab__concept-art { grid-area: art; height: 180px; border-radius: 12px 40px 12px 12px; }
+        .design-lab__concept-heading { grid-area: heading; align-content: end; }
+        .design-lab__concept-genres { grid-area: genres; }
+        .design-lab__concept-actions { grid-area: actions; flex-direction: column; align-items: flex-start; }
+        .design-lab__concept-status { grid-area: status; position: static; border-block: 1px solid var(--border); }
+        .design-lab__concept-summary { grid-area: summary; }
+    }
+
+    // 07 — Square cover and compact footer.
+    &__concept--album {
+        background: none;
+        padding: 0;
+
+        .design-lab__concept-art { height: auto; aspect-ratio: 1; border-radius: 40px; }
+        .design-lab__concept-heading { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+        .design-lab__concept-genres .tag { border-color: var(--border); }
+    }
+
+    // 08 — Broad artwork mat.
+    &__concept--gallery {
+        padding: 18px;
+        border: 1px solid var(--border);
+        border-radius: 40px 40px 20px 20px;
+        background: var(--surface);
+
+        .design-lab__concept-art { height: 200px; border-radius: 8px; }
+        .design-lab__concept-heading { text-align: center; }
+        .design-lab__concept-status { inset: 20px 20px auto; }
+        .design-lab__concept-genres, .design-lab__concept-actions { justify-content: center; }
+    }
+
+    // 09 — Landscape with attached action dock.
+    &__concept--dock {
+        padding: 0;
+        gap: 0;
+        border: 1px solid var(--border);
+
+        .design-lab__concept-art { height: 190px; border-radius: 24px 24px 0 0; }
+        .design-lab__concept-heading, .design-lab__concept-genres { padding: 12px 14px 0; }
+        .design-lab__concept-actions { margin-top: 14px; padding: 10px; border-radius: 24px; background: var(--surface); justify-content: space-between; }
+    }
+
+    // 10 — Segmented cinema ticket.
+    &__concept--ticket {
+        padding: 0;
+        gap: 0;
+        border: 1px solid var(--border);
+        background: var(--surface);
+
+        .design-lab__concept-art { height: 145px; border-radius: 24px 24px 0 0; }
+        .design-lab__concept-heading { padding: 14px; border-bottom: 1px dashed var(--border); }
+        .design-lab__concept-genres, .design-lab__concept-actions, .design-lab__concept-summary { padding: 10px 14px; }
+        .design-lab__concept-summary { order: 1; border-top: 1px dashed var(--border); }
+        .design-lab__concept-actions { order: 2; }
+    }
+
+    // 11 — Separate status rail.
+    &__concept--rail {
+        padding: 0 56px 0 0;
+        background: none;
+
+        .design-lab__concept-art { height: 240px; border-radius: 24px; }
+        .design-lab__concept-status { inset: 0 0 auto auto; width: 48px; flex-direction: column; padding: 4px 0; background: var(--surface-hover); border-radius: 24px; }
+        .design-lab__concept-series { writing-mode: vertical-rl; min-height: 90px; }
+        .design-lab__concept-series .tag { padding: 10px 5px; }
+    }
+
+    // 12 — Resume line and transport footer.
+    &__concept--timeline {
+        padding: 0;
+        background: none;
+        border-inline-start: 3px solid var(--accent);
+        border-radius: 0;
+
+        .design-lab__concept-art { height: 150px; margin-left: 12px; border-radius: 8px 40px 8px 8px; }
+        .design-lab__concept-heading, .design-lab__concept-genres, .design-lab__concept-actions { margin-left: 12px; }
+        .design-lab__concept-progress { order: 1; }
+        .design-lab__concept-actions { order: 2; }
+    }
+}

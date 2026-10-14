@@ -4,111 +4,54 @@
 
 .media-card {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    width: 160px;
+    width: 230px;
+    aspect-ratio: 2 / 3;
     flex: 0 0 auto;
-    gap: 6px;
     min-width: 0;
     scroll-snap-align: start;
 
-    &__link {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        color: var(--text);
-        text-decoration: none;
-    }
-
-    &__art {
-        aspect-ratio: 2 / 3;
-        overflow: hidden;
-        border-radius: 10px;
-        background: var(--surface);
-    }
-
-    &__art .media-image {
-        height: 100%;
-    }
-
-    &__placeholder {
-        display: flex;
-        height: 100%;
-        align-items: center;
-        justify-content: center;
-        padding: 12px;
-        color: var(--muted);
-        text-align: center;
-    }
-
-    &__title {
-        font-weight: 600;
-        line-height: 1.3;
-        overflow-wrap: anywhere;
-    }
-
-    &__meta {
-        color: var(--muted);
-        font-size: 13px;
-    }
-
-    &__genres,
-    &__languages {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 10px;
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.5;
-        overflow-wrap: anywhere;
-    }
-
-    &__language { display: inline-flex; align-items: center; gap: 6px; }
-
-    &__languages .icon-info {
-        .icon-info__label,
-        .icon-info__trigger::after { top: auto; bottom: 100%; }
-    }
-    &__languages .icon-info:last-child {
-        .icon-info__label,
-        .icon-info__trigger::after { left: auto; right: 0; }
-    }
-
-    &__genres .tag { padding: 2px 7px; font-size: 11px; }
-
-    &__overlay {
-        position: absolute;
-        inset: 0 0 auto;
-        aspect-ratio: 2 / 3;
-        pointer-events: none;
-    }
-
+    &__surface { position: absolute; inset: 0; isolation: isolate; border-radius: 24px; background: var(--surface); }
+    &__art { display: block; width: 100%; height: 100%; border-radius: inherit; }
+    &__art .media-image { height: 100%; border-radius: inherit; object-fit: cover; }
+    &__placeholder { display: grid; height: 100%; place-items: center; padding: 16px; color: var(--muted); text-align: center; }
     &__series {
         position: absolute;
-        top: 6px;
-        left: 6px;
-        max-width: calc(100% - 62px);
-        display: flex;
-        align-items: flex-start;
-
-        &--link { align-items: center; min-height: 44px; pointer-events: auto; text-decoration: none; }
-        .tag { padding: 4px 7px; font-size: 11px; }
+        top: 12px;
+        left: 12px;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity .25s;
+        text-decoration: none;
+        .tag { height: 24px; padding: 4px 8px; font-size: 11px; line-height: 16px; background: var(--surface); }
     }
-
-    &__availability {
+    &__content {
         position: absolute;
-        top: 2px;
-        right: 2px;
-        pointer-events: auto;
-
-        // Bare status, full touch target.
-        .icon-info__trigger { background: none; }
-        .icon-info__label,
-        .icon-info__trigger::after { left: auto; right: 0; }
+        inset: auto 0 0;
+        display: grid;
+        gap: 10px;
+        padding: 16px;
+        border-radius: 24px;
+        background: var(--surface);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(18px);
+        transition: opacity .25s, transform .3s;
     }
-
-    &__action-area { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
-
+    &__title { margin: 0; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+    &__title a { color: var(--text); text-decoration: none; }
+    &__meta { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12px; }
+    &__overview { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+    &__state { color: var(--muted); font-size: 12px; }
+    &__actions { position: absolute; left: 16px; bottom: calc(100% + 12px); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: calc(100% - 32px); }
+    &__actions .button { padding: 8px 12px; font-size: 12px; }
+    &__actions form { margin: 0; }
+    &__genres, &__languages { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+    &__genres .tag { height: 24px; padding: 4px 8px; font-size: 11px; line-height: 16px; }
+    &__language { display: inline-flex; align-items: center; gap: 6px; > .ui-icon { width: 18px; height: 18px; flex: 0 0 auto; } }
+    &__languages .icon-info { .icon-info__label, .icon-info__trigger::after { top: auto; bottom: 100%; } }
+    &__languages .icon-info:last-child { .icon-info__label, .icon-info__trigger::after { left: auto; right: 0; } }
+    &__trailer { position: absolute; inset: 0 0 auto; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 24px 24px 0 0; pointer-events: none; }
+    &__trailer iframe { display: block; width: 100%; height: 100%; border: 0; }
     &__progress {
         appearance: none;
         width: 100%;
@@ -117,50 +60,51 @@
         border-radius: var(--radius-control);
         background: var(--border);
         color: var(--accent);
-
         &::-webkit-progress-bar { background: var(--border); border-radius: var(--radius-control); }
         &::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-control); }
         &::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-control); }
     }
 
-    &__status {
-        padding: 4px 8px;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-control);
-        font-size: 13px;
-        color: var(--muted);
-        text-align: center;
-        overflow-wrap: anywhere;
+    // Keyboard and touch reveal.
+    &__surface:focus-within, &__surface[data-open] {
+        z-index: 2;
+        .media-card__content { opacity: 1; visibility: visible; transform: none; }
+        .media-card__series { opacity: 1; visibility: visible; }
     }
 
-    // Hover, keyboard and touch.
-    &__action {
-        max-width: calc(100% - 20px);
-        font-size: 13px;
-        white-space: normal;
-        overflow-wrap: anywhere;
-        pointer-events: none;
+    // Float above scrolling shelves.
+    &__surface[data-expanded] {
+        position: fixed;
+        z-index: 20;
+        inset: auto;
+        top: var(--preview-top);
+        left: var(--preview-left);
+        width: var(--preview-width);
+        height: auto;
+        .media-card__art { display: none; }
+        .media-card__trailer { position: relative; inset: auto; }
+        .media-card__content { position: relative; inset: auto; border-radius: 0 0 24px 24px; }
     }
-
-    &:hover &__action-area,
-    &:focus-within &__action-area { opacity: 1; }
-
-    &:hover &__action,
-    &:focus-within &__action { pointer-events: auto; }
-
+    @media (hover: hover) and (pointer: fine) {
+        &__surface:hover {
+            z-index: 2;
+            &[data-expanded] { z-index: 20; }
+            .media-card__content { opacity: 1; visibility: visible; transform: none; }
+            .media-card__series { opacity: 1; visibility: visible; }
+        }
+    }
     @media (hover: none), (pointer: coarse) {
-        &__action-area { opacity: 1; }
-        &__action { pointer-events: auto; }
+        &__content { opacity: 1; visibility: visible; transform: none; }
+        &__overview, &__genres, &__languages { display: none; }
+        &__surface[data-open] { .media-card__overview, .media-card__genres, .media-card__languages { display: flex; } }
     }
+    @media (prefers-reduced-motion: reduce) { &__content, &__series { transition: none; } }
 }
 
-// Grids reuse the card at a fluid width.
 .media-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 20px 16px;
-
-    .media-card {
-        width: auto;
-    }
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+    justify-items: center;
+    gap: 24px;
+    .media-card { width: 100%; max-width: 260px; }
 }

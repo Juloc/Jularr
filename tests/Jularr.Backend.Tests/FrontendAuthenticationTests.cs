@@ -66,12 +66,14 @@ namespace Jularr.Backend.Tests
             var card = new MediaCard("<Title>", "/Details/1", null, null, "media.state.InProgress", "media.continue", "/Player/2")
                 .SeriesStatus("media.series.Continuing").Availability(availability)
                 .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 3, null, 6)
-                .Genres(new ValueText("<Genre>"), new ValueText("Second"), new ValueText("Third"), new ValueText("Fourth")).Continue(30000, 90000);
+                .Genres(new ValueText("<Genre>"), new ValueText("Second"), new ValueText("Third"), new ValueText("Fourth")).Continue(30000, 90000)
+                .Information("<Overview>", "8.4").Trailer("ayi6VfCKBcA");
             using var writer = new StringWriter();
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
             StringAssert.Contains(html, "&lt;Title&gt;");
-            StringAssert.Contains(html, "class=\"media-card__series\"><span class=\"tag\">" + texts["media.series.Continuing"]);
+            StringAssert.Contains(html, "class=\"media-card__series\"><span class=\"tag tag--neutral\">" + texts["media.series.Continuing"]);
+            Assert.AreEqual(4, Regex.Matches(html, "class=\"tag tag--neutral\"").Count);
             StringAssert.Contains(html, "stroke-dasharray=\"75 100\"");
             StringAssert.Contains(html, "#icon-flag-de");
             StringAssert.Contains(html, "aria-label=\"" + string.Format(CultureInfo.CurrentCulture, texts["media.languagePreferred"], texts["media.dubs"], texts["design.languageGerman"]) + "\"");
@@ -80,7 +82,12 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains("Fourth", StringComparison.Ordinal));
             StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\" aria-label=\"" + texts["media.progress"] + "\"");
             StringAssert.Contains(html, string.Format(CultureInfo.CurrentCulture, texts["media.minutesLeft"], 1));
-            StringAssert.Contains(html, "class=\"media-card__action-area\"><a class=\"button button--primary media-card__action\" href=\"/Player/2\"");
+            StringAssert.Contains(html, "class=\"media-card__actions\"><a class=\"button button--primary media-card__action\" href=\"/Player/2\"");
+            StringAssert.Contains(html, "&lt;Overview&gt;");
+            StringAssert.Contains(html, "data-trailer-id=\"ayi6VfCKBcA\"");
+            StringAssert.Contains(html, "data-media-card=\"true\"");
+            Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
+            Assert.ThrowsExactly<ArgumentException>(() => card.Trailer("../../bad"));
             Assert.IsFalse(html.Contains("class=\"media-card__status\"", StringComparison.Ordinal));
 
             // Unknown duration has no percentage.
@@ -106,6 +113,11 @@ namespace Jularr.Backend.Tests
             symbolWriter.GetStringBuilder().Clear();
             availability.WriteTo(symbolWriter, HtmlEncoder.Default, texts);
             Assert.AreEqual(symbolHtml, symbolWriter.ToString());
+
+            // Missing means no local dot.
+            writer.GetStringBuilder().Clear();
+            new MediaAvailability(assets, MediaAvailabilityState.Missing).Badge("/Details/1").WriteTo(writer, HtmlEncoder.Default, texts);
+            Assert.AreEqual("", writer.ToString());
 
             // Inert artwork, no embedded player.
             writer.GetStringBuilder().Clear();
@@ -188,6 +200,45 @@ namespace Jularr.Backend.Tests
         [DataRow(4_000_000_000_000L, "4.0 TB")]
         public void ByteSize_Format_UsesDecimalUnits(long bytes, string expected) =>
             Assert.AreEqual(expected.Replace(".", CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator, StringComparison.Ordinal), ByteSize.Format(bytes));
+
+        [TestMethod]
+        [DataRow("Development", HttpStatusCode.OK)]
+        [DataRow("Production", HttpStatusCode.NotFound)]
+        public async Task DesignConcepts_EnvironmentGate_RendersOnlyTwelveDevelopmentLayouts(string environment, HttpStatusCode expected)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            host.Services.GetRequiredService<IHostEnvironment>().EnvironmentName = environment;
+            using var response = await host.SendAsync(HttpMethod.Get, "/Design?pane=concepts");
+            Assert.AreEqual(expected, response.StatusCode);
+            if (expected != HttpStatusCode.OK) return;
+
+            var html = await response.Content.ReadAsStringAsync();
+            Assert.AreEqual(12, Regex.Matches(html, "class=\"design-lab__concept-option\"").Count);
+            Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
+            Assert.AreEqual(1, Regex.Matches(html, "<template\\b").Count);
+            Assert.AreEqual(12, Regex.Matches(html, "disabled=\"disabled\"").Count);
+            Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        [DataRow("Development", HttpStatusCode.OK)]
+        [DataRow("Production", HttpStatusCode.NotFound)]
+        public async Task DesignCover_EnvironmentGate_RendersOnlyIllustrativeStates(string environment, HttpStatusCode expected)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            host.Services.GetRequiredService<IHostEnvironment>().EnvironmentName = environment;
+            using var response = await host.SendAsync(HttpMethod.Get, "/Design?pane=cover");
+            Assert.AreEqual(expected, response.StatusCode);
+            if (expected != HttpStatusCode.OK) return;
+
+            var html = await response.Content.ReadAsStringAsync();
+            Assert.AreEqual(6, Regex.Matches(html, "data-media-card=\"true\"").Count);
+            Assert.AreEqual(5, Regex.Matches(html, "class=\"media-availability-badge media-availability-badge--").Count);
+            Assert.AreEqual(12, Regex.Matches(html, "disabled=\"disabled\"").Count);
+            StringAssert.Contains(html, "media-availability-badge--requested");
+            Assert.IsFalse(html.Contains("design-cover__", StringComparison.Ordinal));
+            Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
+        }
 
         [TestMethod]
         public async Task Razor_PageFolders_PreservePublicRoutes()

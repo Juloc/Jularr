@@ -3,6 +3,17 @@
 @use "../../../Framework/Components/MediaCard";
 @use "../../../Framework/Components/MediaPreview";
 @use "../../../Modules/Player/player";
+@use "MediaConcepts";
+
+
+.design-cover-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+    justify-items: center;
+    gap: 36px;
+    padding: 24px;
+    .media-card { width: 100%; max-width: 260px; }
+}
 
 .design-lab {
     &__buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }

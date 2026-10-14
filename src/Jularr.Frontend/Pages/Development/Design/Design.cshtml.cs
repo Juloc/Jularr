@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Pages.Development.Design
             page.Asset("Pages/Development/Design/Design.entry.scss");
             page.Asset("Framework/Components/MediaShelf.entry.ts");
             page.Asset("Framework/Components/MediaPreview.entry.ts");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             page.Asset("Modules/Appearance/appearance.entry.scss");
 
             // Shared appearance controls.
@@ -32,6 +33,16 @@ namespace Jularr.Frontend.Pages.Development.Design
                 items.Add(new P(new Text("design.introduction")));
                 items.Add(new Appearance());
             }));
+            if (_pane == "concepts")
+            {
+                DefineMediaConcepts(page);
+                return;
+            }
+            if (_pane == "cover")
+            {
+                DefineCoverPreview(page);
+                return;
+            }
             page.Content.Add(new NavigationTabs([
                 new("design.controls", "/Design#controls", false), new("design.forms", "/Design#forms", false),
                 new("design.media", "/Design#media", false), new("design.player", "/Design#player", false)
@@ -120,6 +131,9 @@ namespace Jularr.Frontend.Pages.Development.Design
             AddPreview("preview-your-name-discover", "Your Name.", "your-name-poster.jpg", "2016", "media.state.NotRequested", MediaAvailabilityState.Missing);
             AddPreview("preview-suzume-discover", "Suzume", "suzume-poster.jpg", "2022", "request.status.Approved", MediaAvailabilityState.Downloading);
             page.Content.Add(new Div(new UiSection("design.media", [
+                new Div(new UiSection("design.mediaVariants", [
+                    new A(new Text("design.mediaConcepts")).Class("button button--primary").Attribute("href", "/Design?pane=concepts#media-variants")
+                ])).Attribute("id", "media-variants"),
                 new MediaHero(texts["design.exampleTitle"], assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), texts["design.exampleContext"],
                     texts["design.exampleOverview"], "design.primary", "/Design#player", "/Design#media"),
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
@@ -152,7 +166,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                         .Availability(new MediaAvailability(assets, MediaAvailabilityState.Missing)).Genres(new Text("design.genreDrama")),
                     new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Requested")
                         .Preview("preview-suzume-discover")
-                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Downloading)).Genres(new Text("design.tagGenre"))
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Requested)).Genres(new Text("design.tagGenre"))
                 ]),
                 new P(new Text("design.imageCredit"), new ValueText(" "),
                     new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images")),
@@ -211,10 +225,91 @@ namespace Jularr.Frontend.Pages.Development.Design
                     .Number(item => item.ReleaseYear, "media.year").Checkbox("design.selected").Submit("common.save"), data: example, error: failure);
         }
 
+        private void DefineMediaConcepts(Page page)
+        {
+            // Workshop-only layout compositions.
+            var layouts = new[] { "poster", "caption", "pill", "row", "cinema", "editorial", "album", "gallery", "dock", "ticket", "rail", "timeline" };
+            var cards = layouts.Select((layout, index) => (IUiComponent)new Section(
+                new H3(new ValueText((index + 1).ToString("00", CultureInfo.InvariantCulture) + " · "), new Text("design.concept." + layout)),
+                new Div(Concept(layout)).Class("design-lab__concept-canvas")).Class("design-lab__concept-option")).ToArray();
+            page.Content.Add(new P(new Text("design.mediaNotice")));
+            page.Content.Add(new Div(new UiSection("design.mediaConcepts", [new Div(cards).Class("design-lab__concept-grid")])).Attribute("id", "media-variants"));
+
+            // One real preview control.
+            page.Content.Add(MediaPreview.Host(assets, texts));
+            page.Content.Add(new MediaPreview("concept-preview", assets, "Your Name.", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"),
+                assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), "2016", texts["design.conceptSummary"])
+                .Trailer("k4xGqY5IDBE").Content(new P(new Text("design.exampleStatus"))));
+
+            IUiComponent Concept(string layout)
+            {
+                var landscape = layout is "cinema" or "dock" or "timeline";
+                var image = landscape ? "your-name-backdrop.jpg" : "your-name-poster.jpg";
+                var availability = new MediaAvailability(assets, MediaAvailabilityState.Available);
+
+                // Reuse canonical UI pieces.
+                var art = new A(new MediaImage(assets.ImageUrl("Pages/Development/Design/Images/" + image), "Your Name.", landscape ? 1280 : 342, landscape ? 720 : 513))
+                    .Class("design-lab__concept-art").Attribute("href", "/Design?pane=concepts#media-variants")
+                    .Attribute("data-preview-open", "concept-preview").Attribute("aria-haspopup", "dialog");
+                var heading = new Div(new Span(new ValueText("Your Name.")).Class("design-lab__concept-title"),
+                    new Span(new ValueText("2016 · "), new Text("media.type.Movie")).Class("design-lab__concept-meta")).Class("design-lab__concept-heading");
+                var statuses = new Div(new A(new Tag(new Text("media.series.Ended")).Neutral()).Class("design-lab__concept-series")
+                        .Attribute("href", "/Design?pane=concepts#media-variants").Attribute("data-preview-open", "concept-preview").Attribute("aria-haspopup", "dialog"),
+                    new IconInfo(availability, availability.GetLabel(texts)).Preview("concept-preview", "/Design?pane=concepts#media-variants"))
+                    .Class("design-lab__concept-status");
+                var genres = new Div(new Tag(new Text("design.genreDrama")).Neutral(), new Tag(new Text("design.genreRomance")).Neutral()).Class("design-lab__concept-genres");
+                var actions = new Div(new Button(new Icon("player-play", assets), new Text("media.continue")).Primary().Disabled(),
+                    new A(new Icon("bookmark", assets), new Text("media.details")).Class("button")
+                        .Attribute("href", "/Design?pane=concepts#media-variants").Attribute("data-preview-open", "concept-preview").Attribute("aria-haspopup", "dialog"))
+                    .Class("design-lab__concept-actions");
+
+                var content = new List<IUiComponent> { art, heading, statuses, genres, actions };
+                if (layout is "cinema" or "editorial" or "ticket")
+                    content.Add(new P(new Text("design.conceptSummary")).Class("design-lab__concept-summary"));
+                if (layout == "timeline")
+                    content.Add(new ConceptProgress().Attribute("max", "100").Attribute("value", "42").Attribute("aria-label", texts["media.progress"]).Class("media-card__progress design-lab__concept-progress"));
+
+                return new Div([.. content]).Class("design-lab__concept design-lab__concept--" + layout);
+            }
+        }
+
+        private void DefineCoverPreview(Page page)
+        {
+            page.Content.Add(new P(new Text("design.coverNotice")));
+            var states = new[] { "available", "downloading", "searching", "partial", "requested", "none" };
+            page.Content.Add(new Div(states.Select(state => Card(state)).ToArray()).Class("design-cover-grid").Attribute("id", "media-variants"));
+
+            IUiComponent Card(string state)
+            {
+                // Production control, illustrative data.
+                var card = new MediaCard("Your Name.", "/Design?pane=cover#media-variants", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"),
+                    "2016", "media.state.NotRequested")
+                    .SeriesStatus("media.series.Ended", new Icon("calendar", assets)).Information(texts["design.conceptSummary"], "8.4").Trailer("k4xGqY5IDBE")
+                    .Genres(new Tag(new Icon("reading", assets), new Text("design.genreDrama")).Tone("blue"),
+                        new Tag(new Icon("star", assets), new Text("design.genreRomance")).Tone("pink"))
+                    .Actions(new Button(new Icon(state is "requested" or "none" ? "requests" : "player-play", assets),
+                            new Text(state is "requested" or "none" ? "request.create" : "player.play")).Primary().Disabled(),
+                        new Button(new Icon("bookmark", assets)).Disabled().Attribute("aria-label", texts["nav.watchlist"]));
+                if (state != "none")
+                {
+                    var availability = state switch
+                    {
+                        "available" => MediaAvailabilityState.Available,
+                        "downloading" => MediaAvailabilityState.Downloading,
+                        "searching" => MediaAvailabilityState.Searching,
+                        "partial" => MediaAvailabilityState.Partial,
+                        _ => MediaAvailabilityState.Requested
+                    };
+                    card.Availability(new MediaAvailability(assets, availability, 18, 24));
+                }
+                return card;
+            }
+        }
+
         public IActionResult OnGet(string? pane)
         {
             if (!environment.IsDevelopment()) return NotFound();
-            if (pane is not null and not ("components" or "layouts")) return NotFound();
+            if (pane is not null and not ("components" or "layouts" or "concepts" or "cover")) return NotFound();
 
             _pane = pane ?? "components";
             PreparePage();
@@ -223,5 +318,6 @@ namespace Jularr.Frontend.Pages.Development.Design
         }
 
         private sealed class Fieldset(params IUiComponent[] content) : HtmlElement("fieldset", content);
+        private sealed class ConceptProgress() : HtmlElement("progress");
     }
 }
