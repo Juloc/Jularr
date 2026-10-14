@@ -6,11 +6,11 @@ using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Jularr.Frontend.Pages.Devices.Pair
+namespace Jularr.Frontend.Pages.User.DevicePair
 {
     // A code a TV or app shows: first the device it belongs to is shown, then it is confirmed for the signed-in profile.
     // The QR code opens this page with the code filled in.
-    public sealed class PairModel(ReadDevicePairingV1 read, ApproveDevicePairingV1 approve, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class DevicePairModel(ReadDevicePairingV1 read, ApproveDevicePairingV1 approve, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private DevicePairingRequestV1? _device;
 

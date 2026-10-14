@@ -7,12 +7,12 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
-namespace Jularr.Frontend.Pages.Devices.Link
+namespace Jularr.Frontend.Pages.Account.DeviceLink
 {
     // A TV or another browser without a keyboard: it shows a code and a QR code, a signed-in phone confirms it, and this page signs in.
     // The pairing belongs to the browser that asked for it (a strict cookie), so no link can sign someone else in.
     [EnableRateLimiting(ServiceApi.DevicePairingRateLimit)]
-    public sealed partial class LinkModel(StartDevicePairingV1 start, ClaimDevicePairingV1 claim, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed partial class DeviceLinkModel(StartDevicePairingV1 start, ClaimDevicePairingV1 claim, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private string? _code;
 

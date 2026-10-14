@@ -35,7 +35,7 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizePage("/Admin/System/System", ServiceApi.InstanceSettingsReadPolicyName);
             conventions.AllowAnonymousToPage("/Account/Login/Login");
             conventions.AllowAnonymousToPage("/Setup/Start/Start");
-            conventions.AllowAnonymousToPage("/Devices/Link/Link");
+            conventions.AllowAnonymousToPage("/Account/DeviceLink/DeviceLink");
             conventions.AllowAnonymousToPage("/Development/ShellPreview/ShellPreview");
             return conventions;
         }
