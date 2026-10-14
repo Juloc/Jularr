@@ -41,7 +41,19 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                     file."MediaAssetId",
                     work."Id" AS "WorkId",
                     work."CanonicalTitle" AS "WorkTitle",
-                    (SELECT rom."Name" FROM "GameRoms" AS rom WHERE rom."Sha1" = file."Sha1" ORDER BY rom."GameRomCatalogId" LIMIT 1) AS "RomName"
+                    (SELECT rom."Name" FROM "GameRoms" AS rom WHERE rom."Sha1" = file."Sha1" ORDER BY rom."GameRomCatalogId" LIMIT 1) AS "RomName",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS other
+                            JOIN "StoredFiles" AS present ON present."MediaAssetId" = other."Id" AND present."MissingSince" IS NULL
+                        WHERE
+                            other."WorkId" = asset."WorkId"
+                            AND other."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
+                            AND other."MediaAssetTypeId" = asset."MediaAssetTypeId"
+                            AND other."Id" <> asset."Id"
+                    ) AS "HasOtherVersions"
                 FROM
                     "StoredFiles" AS file
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
@@ -93,7 +105,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 var title = Limit(path.Title);
                 var match = matches.FirstOrDefault(item => item.MediaTypeId == row.MediaTypeId && item.Title == title.ToLowerInvariant());
                 return new LibraryFileDetailsV1(row.Id, row.LibraryRootId, row.LibraryRootName, row.MediaTypeId, row.RelativePath, row.SizeBytes, row.MissingSince, row.MediaAssetId,
-                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber);
+                    row.WorkId, row.WorkTitle, title, match?.WorkId, path.WorkUnitTypeId, path.UnitNumber, path.ParentUnitNumber, row.HasOtherVersions);
             }).ToArray();
             return new PageResult<LibraryFileDetailsV1>(items, Page);
         }
@@ -111,8 +123,11 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
+            // Identified by hand, so imports leave it alone.
             var data = new StoredFileAssignmentData(Parameters.StoredFileId, Data.WorkId, Data.Title, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, Data.GamePlatformId);
-            return new AssignLibraryFileResultV1((await Context.AssignStoredFileAsync(data, CancellationToken)).Id);
+            var asset = await Context.AssignStoredFileAsync(data, CancellationToken);
+            await Context.ProtectMediaAssetAsync(asset, CancellationToken);
+            return new AssignLibraryFileResultV1(asset.Id);
         }
     }
 

@@ -23,7 +23,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 """
                 SELECT
                     settings."KeepsReleases",
-                    settings."RecyclesInLibraries",
+                    settings."RecycleModeId",
                     settings."RecycleStorageMountId",
                     settings."RecyclePath",
                     settings."RecycleDays",
@@ -47,8 +47,45 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.SaveReplacementSettingsAsync(new ReplacementSettingsSaveData(Data.KeepsReleases, Data.RecyclesInLibraries, Data.RecycleStorageMountId, Data.RecyclePath,
+            await Context.SaveReplacementSettingsAsync(new ReplacementSettingsSaveData(Data.KeepsReleases, Data.RecycleModeId, Data.RecycleStorageMountId, Data.RecyclePath,
                 Data.RecycleDays, Data.Version), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/library/files/{storedFileId:long}/keep-only")]
+    public sealed class KeepOnlyLibraryFileV1 : AdminService<StoredFileParametersV1, NoData>
+    {
+        private readonly LibraryReplacements _replacements;
+
+        internal KeepOnlyLibraryFileV1(LibraryReplacements replacements)
+        {
+            _replacements = replacements;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(StoredFileParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(StoredFileParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The administrator's confirmation: the other versions of this file's film, episode or volume go, also better ones.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    file."MediaAssetId" AS "Id"
+                FROM
+                    "StoredFiles" AS file
+                WHERE
+                    file."Id" = @StoredFileId
+                    AND file."MediaAssetId" IS NOT NULL;
+                """;
+            sql.Parameters.Add(Parameters);
+            var asset = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSql.ReadOptionalAsync<MediaAssetIdData>(sql, ct), CancellationToken)
+                ?? throw new KeyNotFoundException("The file has no version to keep.");
+            await _replacements.KeepOnlyAsync(Context, asset.Id, CancellationToken);
             return new UpdateResult(true);
         }
     }

@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Fields.Instance;
 using Jularr.Backend.Data.Fields.Library;
@@ -10,12 +11,12 @@ namespace Jularr.Backend.Data.Logic.Library
     // Where replaced files go: inside their library, into one folder of a storage connection, or nowhere.
     internal sealed class ReplacementSettingsData : BaseData
     {
-        public ReplacementSettingsData(bool keepsReleases, bool recyclesInLibraries, long? recycleStorageMountId, StorageProtocolType? storageProtocolTypeId, string? sharePath,
+        public ReplacementSettingsData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, StorageProtocolType? storageProtocolTypeId, string? sharePath,
             bool? isReadOnly, string? recyclePath, int recycleDays)
         {
             IsReadOnly = isReadOnly;
             KeepsReleases = keepsReleases;
-            RecyclesInLibraries = recyclesInLibraries;
+            RecycleModeId = recycleModeId;
             RecycleStorageMountId = recycleStorageMountId;
             StorageProtocolTypeId = storageProtocolTypeId;
             SharePath = sharePath;
@@ -26,8 +27,8 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.KeepsReleases))]
         public bool KeepsReleases { get; }
 
-        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecyclesInLibraries))]
-        public bool RecyclesInLibraries { get; }
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleModeId))]
+        public RecycleMode RecycleModeId { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleStorageMountId))]
         public long? RecycleStorageMountId { get; }
@@ -50,10 +51,10 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class ReplacementSettingsSaveData : BaseData
     {
-        public ReplacementSettingsSaveData(bool keepsReleases, bool recyclesInLibraries, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version)
+        public ReplacementSettingsSaveData(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version)
         {
             KeepsReleases = keepsReleases;
-            RecyclesInLibraries = recyclesInLibraries;
+            RecycleModeId = recycleModeId;
             RecycleStorageMountId = recycleStorageMountId;
             RecyclePath = recyclePath;
             RecycleDays = recycleDays;
@@ -63,8 +64,8 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.KeepsReleases))]
         public bool KeepsReleases { get; }
 
-        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecyclesInLibraries))]
-        public bool RecyclesInLibraries { get; }
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleModeId))]
+        public RecycleMode RecycleModeId { get; }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.RecycleStorageMountId))]
         public long? RecycleStorageMountId { get; }
@@ -81,22 +82,31 @@ namespace Jularr.Backend.Data.Logic.Library
 
     internal sealed class ReplacingAssetsData : BaseData
     {
-        public ReplacingAssetsData(long[] mediaAssetIds)
+        public ReplacingAssetsData(long[] mediaAssetIds, bool isConfirmed)
         {
             MediaAssetIds = mediaAssetIds;
+            IsConfirmed = isConfirmed;
         }
 
-        // The assets an import just created.
+        // The assets that take the place of the earlier ones.
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Ids))]
         public long[] MediaAssetIds { get; }
+
+        // An administrator chose them: assets added by hand go too.
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsManual))]
+        public bool IsConfirmed { get; }
     }
 
     // A file of an earlier asset of the same film, episode or volume, with the library it lies in.
     internal sealed class ReplacedFileData : BaseData
     {
         public ReplacedFileData(long newMediaAssetId, long storedFileId, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string rootPath,
-            string relativePath)
+            string relativePath, string? earlierQualityKey, int earlierRevision, string? newQualityKey, int newRevision)
         {
+            EarlierQualityKey = earlierQualityKey;
+            EarlierRevision = earlierRevision;
+            NewQualityKey = newQualityKey;
+            NewRevision = newRevision;
             NewMediaAssetId = newMediaAssetId;
             StoredFileId = storedFileId;
             StorageMountId = storageMountId;
@@ -126,6 +136,18 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
         public string RelativePath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
+        public string? EarlierQualityKey { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Revision))]
+        public int EarlierRevision { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
+        public string? NewQualityKey { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Revision))]
+        public int NewRevision { get; }
     }
 
     internal sealed class RetiredFilesData : BaseData
@@ -135,21 +157,27 @@ namespace Jularr.Backend.Data.Logic.Library
             Files = files;
         }
 
-        // JSON rows of StoredFileId and NewMediaAssetId: files gone from the library whose history moves to the new asset.
+        // JSON rows of StoredFileId and NewMediaAssetId: files gone from the library whose history moves to the new asset;
+        // recycled ones add StorageMountId, FolderPath and RecycledPath.
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Payload))]
         public string Files { get; }
     }
 
-    // A library folder holding a recycle folder.
-    internal sealed class RecycleLibraryData : BaseData
+    // A file Jularr put into a recycle folder.
+    internal sealed class RecycledFileData : BaseData
     {
-        public RecycleLibraryData(long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string rootPath)
+        public RecycledFileData(long id, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath, string folderPath, string relativePath)
         {
+            Id = id;
             StorageMountId = storageMountId;
             StorageProtocolTypeId = storageProtocolTypeId;
             SharePath = sharePath;
-            RootPath = rootPath;
+            FolderPath = folderPath;
+            RelativePath = relativePath;
         }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long Id { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
@@ -160,7 +188,21 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.SharePath))]
         public string SharePath { get; }
 
-        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
-        public string RootPath { get; }
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FolderPath))]
+        public string FolderPath { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.RelativePath))]
+        public string RelativePath { get; }
+    }
+
+    internal sealed class RecycledFileIdsData : BaseData
+    {
+        public RecycledFileIdsData(long[] ids)
+        {
+            Ids = ids;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Ids))]
+        public long[] Ids { get; }
     }
 }

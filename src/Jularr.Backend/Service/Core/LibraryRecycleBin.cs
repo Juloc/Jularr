@@ -1,24 +1,25 @@
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Logic.Storage;
 
 namespace Jularr.Backend.Service.Core
 {
-    // Replaced library files: moved into a recycle folder, or deleted when none is set; nothing is lost when a move fails.
+    // Replaced library files: deleted or moved into a recycle folder, as configured; nothing is lost when a step fails.
     internal static class LibraryRecycleBin
     {
-        // The recycle folder for a file of this library: inside it in simple mode, the configured folder, or none for deletion.
-        // A configured folder that cannot be used keeps the file where it is.
-        public static string? Folder(StorageOptions storage, ReplacementSettingsData settings, string libraryDirectory)
+        // Where a file of this library goes; null deletes it. A configured folder that cannot be used keeps the file where it is.
+        public static RecycleFolder? Folder(StorageOptions storage, ReplacementSettingsData settings, ReplacedFileData file)
         {
-            if (settings.RecyclesInLibraries)
-            {
-                return Path.Combine(libraryDirectory, StorageFileSystem.RecycleFolder);
-            }
-
-            if (settings.RecycleStorageMountId is null)
+            if (settings.RecycleModeId == RecycleMode.Delete)
             {
                 return null;
+            }
+
+            if (settings.RecycleModeId == RecycleMode.LibraryFolder)
+            {
+                var folderPath = file.RootPath.Length == 0 ? StorageFileSystem.RecycleFolder : file.RootPath + "/" + StorageFileSystem.RecycleFolder;
+                return Prepare(storage.GetConnectionPath(file.StorageProtocolTypeId, file.StorageMountId, file.SharePath), file.StorageMountId, folderPath);
             }
 
             if (settings is not { RecycleStorageMountId: { } mountId, StorageProtocolTypeId: { } protocol, SharePath: { } share, IsReadOnly: false, RecyclePath: { } path })
@@ -26,87 +27,70 @@ namespace Jularr.Backend.Service.Core
                 throw new NasMountException("storage_unavailable");
             }
 
-            // The connection itself must be there before anything is created below it.
-            var connection = storage.GetConnectionPath(protocol, mountId, share);
-            Directory.CreateDirectory(Path.Combine(StorageFileSystem.ResolveDirectory(connection, ""), path.Replace('/', Path.DirectorySeparatorChar)));
-            return StorageFileSystem.ResolveDirectory(connection, path);
+            return Prepare(storage.GetConnectionPath(protocol, mountId, share), mountId, path);
         }
 
-        // False when the file stays where it is.
-        public static bool Recycle(string source, string? recycleDirectory, string relativeTarget)
+        // The relative path of the moved file inside the folder, "" when deleted, null when it stays.
+        public static string? Recycle(string source, RecycleFolder? folder, string relativeTarget)
         {
-            string target;
             try
             {
-                if (recycleDirectory is null)
+                if (folder is null)
                 {
                     File.Delete(source);
-                    return true;
+                    return "";
                 }
 
-                // The time of recycling decides when it leaves; an earlier file of that name is kept beside it.
-                target = Path.Combine(recycleDirectory, relativeTarget.Replace('/', Path.DirectorySeparatorChar));
+                // An earlier recycled file of that name is kept beside it.
+                var target = Path.Combine(folder.Directory, relativeTarget.Replace('/', Path.DirectorySeparatorChar));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 if (File.Exists(target))
                 {
-                    target = Path.Combine(Path.GetDirectoryName(target)!, Path.GetFileNameWithoutExtension(target) + "." + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + Path.GetExtension(target));
+                    var stamp = "." + DateTime.UtcNow.ToString("yyyyMMddHHmmss", global::System.Globalization.CultureInfo.InvariantCulture);
+                    target = Path.Combine(Path.GetDirectoryName(target)!, Path.GetFileNameWithoutExtension(target) + stamp + Path.GetExtension(target));
                 }
 
                 File.Move(source, target, false);
+                return Path.GetRelativePath(folder.Directory, target).Replace(Path.DirectorySeparatorChar, '/');
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
+        // A recycled file leaves with the folders it leaves empty, up to the recycle folder; false when it has to wait.
+        public static bool Delete(string folder, string relativePath)
+        {
+            try
+            {
+                var file = new FileInfo(Path.Combine(folder, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+                if (file.Exists)
+                {
+                    file.Delete();
+                }
+
+                for (var directory = file.Directory; directory is not null && directory.FullName.Length > folder.Length
+                    && directory.FullName.StartsWith(folder, StringComparison.Ordinal) && directory.Exists && !directory.EnumerateFileSystemInfos().Any(); directory = directory.Parent)
+                {
+                    directory.Delete();
+                }
+
+                return true;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 return false;
             }
-
-            try
-            {
-                File.SetLastWriteTimeUtc(target, DateTime.UtcNow);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Moved all the same; it leaves by its own time.
-            }
-
-            return true;
         }
 
-        // Files recycled longer ago than the given days leave, then the folders they leave empty.
-        public static void Clean(string recycleDirectory, int days, DateTime now)
+        // The connection itself must be there before anything is created below it.
+        private static RecycleFolder Prepare(string connection, long storageMountId, string folderPath)
         {
-            if (days <= 0 || !Directory.Exists(recycleDirectory))
-            {
-                return;
-            }
-
-            // What cannot go now is tried again on the next pass.
-            var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
-            foreach (var file in new DirectoryInfo(recycleDirectory).EnumerateFiles("*", options).Where(file => file.LastWriteTimeUtc < now.AddDays(-days)))
-            {
-                Try(file.Delete);
-            }
-
-            foreach (var directory in new DirectoryInfo(recycleDirectory).EnumerateDirectories("*", options).OrderByDescending(directory => directory.FullName.Length))
-            {
-                Try(() =>
-                {
-                    if (!directory.EnumerateFileSystemInfos().Any())
-                    {
-                        directory.Delete();
-                    }
-                });
-            }
-        }
-
-        private static void Try(Action delete)
-        {
-            try
-            {
-                delete();
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-            }
+            Directory.CreateDirectory(Path.Combine(StorageFileSystem.ResolveDirectory(connection, ""), folderPath.Replace('/', Path.DirectorySeparatorChar)));
+            return new RecycleFolder(StorageFileSystem.ResolveDirectory(connection, folderPath), storageMountId, folderPath);
         }
     }
+
+    internal sealed record RecycleFolder(string Directory, long StorageMountId, string FolderPath);
 }

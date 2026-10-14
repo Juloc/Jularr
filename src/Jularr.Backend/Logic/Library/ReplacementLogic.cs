@@ -1,7 +1,10 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 
 namespace Jularr.Backend.Logic.Library
 {
@@ -15,7 +18,7 @@ namespace Jularr.Backend.Logic.Library
                 """
                 SELECT
                     settings."KeepsReleases",
-                    settings."RecyclesInLibraries",
+                    settings."RecycleModeId",
                     settings."RecycleStorageMountId",
                     mount."StorageProtocolTypeId",
                     mount."SharePath",
@@ -33,12 +36,18 @@ namespace Jularr.Backend.Logic.Library
             return ctx.ReadRequiredAsync<ReplacementSettingsData>(sql, ct);
         }
 
-        public static async Task SaveReplacementSettingsAsync(this LogicContext ctx, ReplacementSettingsSaveData data, CancellationToken ct)
+        public static async Task SaveReplacementSettingsAsync(this LogicContext ctx, ReplacementSettingsSaveData input, CancellationToken ct)
         {
-            if ((data.RecycleStorageMountId is null) != (data.RecyclePath is null))
+            var data = input;
+
+            // Only the own folder names a place; the other modes forget it.
+            if (data.RecycleModeId == RecycleMode.OwnFolder && (data.RecycleStorageMountId is null || data.RecyclePath is null))
             {
                 throw new DataValidationException(nameof(data.RecyclePath), "required");
             }
+
+            data = data.RecycleModeId == RecycleMode.OwnFolder ? data
+                : new ReplacementSettingsSaveData(data.KeepsReleases, data.RecycleModeId, null, null, data.RecycleDays, data.Version);
 
             // The settings row stays locked, so a pattern edit waits and sees the new choice.
             var sql = new SqlStatement();
@@ -48,7 +57,7 @@ namespace Jularr.Backend.Logic.Library
                     "InstanceSettings" AS settings
                 SET
                     "KeepsReleases" = @KeepsReleases,
-                    "RecyclesInLibraries" = @RecyclesInLibraries,
+                    "RecycleModeId" = @RecycleModeId,
                     "RecycleStorageMountId" = @RecycleStorageMountId,
                     "RecyclePath" = @RecyclePath,
                     "RecycleDays" = @RecycleDays,
@@ -105,7 +114,7 @@ namespace Jularr.Backend.Logic.Library
         public static Task<IReadOnlyList<ReplacedFileData>> ReadReplacedFilesAsync(this LogicContext ctx, ReplacingAssetsData data, CancellationToken ct)
         {
             // Files of other assets of the same kind, edition, Work and unit on writable libraries; books and comics only of the same format,
-            // games keep one asset per platform.
+            // games keep one asset per platform, and assets added by hand only go on an administrator's confirmation.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -116,7 +125,11 @@ namespace Jularr.Backend.Logic.Library
                     mount."StorageProtocolTypeId",
                     mount."SharePath",
                     root."RelativePath" AS "RootPath",
-                    file."RelativePath"
+                    file."RelativePath",
+                    earlierMedia."QualityKey" AS "EarlierQualityKey",
+                    earlierMedia."Revision" AS "EarlierRevision",
+                    replacingMedia."QualityKey" AS "NewQualityKey",
+                    replacingMedia."Revision" AS "NewRevision"
                 FROM
                     "MediaAssets" AS replacing
                     JOIN "WorkVersions" AS version ON version."Id" = replacing."WorkVersionId"
@@ -127,13 +140,32 @@ namespace Jularr.Backend.Logic.Library
                     JOIN "WorkVersions" AS earlierVersion ON earlierVersion."Id" = earlier."WorkVersionId" AND earlierVersion."WorkEditionId" = version."WorkEditionId"
                     JOIN LATERAL (
                         SELECT
-                            min(main."RelativePath") AS "RelativePath"
+                            main."RelativePath",
+                            main."QualityKey",
+                            main."Revision"
                         FROM
                             "StoredFiles" AS main
                         WHERE
                             main."MediaAssetId" = earlier."Id"
                             AND NOT main."IsSubtitle"
+                        ORDER BY
+                            main."Id"
+                        LIMIT 1
                     ) AS earlierMedia ON TRUE
+                    JOIN LATERAL (
+                        SELECT
+                            main."RelativePath",
+                            main."QualityKey",
+                            main."Revision"
+                        FROM
+                            "StoredFiles" AS main
+                        WHERE
+                            main."MediaAssetId" = replacing."Id"
+                            AND NOT main."IsSubtitle"
+                        ORDER BY
+                            main."Id"
+                        LIMIT 1
+                    ) AS replacingMedia ON TRUE
                     JOIN "StoredFiles" AS file ON file."MediaAssetId" = earlier."Id"
                     JOIN "LibraryRoots" AS root ON root."Id" = file."LibraryRootId"
                     JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
@@ -142,18 +174,10 @@ namespace Jularr.Backend.Logic.Library
                     AND replacing."MediaAssetTypeId" <> 5
                     AND file."MissingSince" IS NULL
                     AND NOT mount."IsReadOnly"
+                    AND (@IsConfirmed OR NOT earlier."IsManual")
                     AND (
                         replacing."MediaAssetTypeId" IN (1, 2)
-                        OR EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                "StoredFiles" AS media
-                            WHERE
-                                media."MediaAssetId" = replacing."Id"
-                                AND NOT media."IsSubtitle"
-                                AND lower(substring(media."RelativePath" FROM '\.[^./]+$')) = lower(substring(earlierMedia."RelativePath" FROM '\.[^./]+$'))
-                        )
+                        OR lower(substring(replacingMedia."RelativePath" FROM '\.[^./]+$')) = lower(substring(earlierMedia."RelativePath" FROM '\.[^./]+$'))
                     )
                 ORDER BY
                     file."Id";
@@ -168,7 +192,22 @@ namespace Jularr.Backend.Logic.Library
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH retired AS (
+                WITH recycled AS (
+                    INSERT INTO
+                        "RecycledFiles" ("StorageMountId", "FolderPath", "RelativePath")
+                    SELECT
+                        item."StorageMountId",
+                        item."FolderPath",
+                        item."RecycledPath"
+                    FROM
+                        jsonb_to_recordset(@Files::jsonb) AS item("StorageMountId" bigint, "FolderPath" text, "RecycledPath" text)
+                    WHERE
+                        item."RecycledPath" IS NOT NULL
+                    ON CONFLICT ("StorageMountId", "FolderPath", "RelativePath") DO UPDATE
+                    SET
+                        "RecycledAt" = now()
+                ),
+                retired AS (
                     SELECT
                         item."StoredFileId",
                         item."NewMediaAssetId",
@@ -247,26 +286,75 @@ namespace Jularr.Backend.Logic.Library
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        // Libraries whose recycle folder may hold files.
-        public static Task<IReadOnlyList<RecycleLibraryData>> ReadRecycleLibrariesAsync(this LogicContext ctx, CancellationToken ct)
+        // A new release replaces an earlier one when its quality ranks higher, or the same with a later revision (proper, repack).
+        // A new release of unknown quality is never better.
+        public static bool IsBetter(QualityProfile profile, ReplacedFileData file)
+        {
+            var earlier = UpgradePolicy.RankOf(profile, file.EarlierQualityKey);
+            var replacing = UpgradePolicy.RankOf(profile, file.NewQualityKey);
+            return replacing != int.MaxValue && (replacing < earlier || replacing == earlier && file.NewRevision > file.EarlierRevision);
+        }
+
+        // An asset an administrator added by hand stays through imports.
+        public static async Task ProtectMediaAssetAsync(this LogicContext ctx, MediaAssetIdData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "MediaAssets" AS asset
+                SET
+                    "IsManual" = TRUE
+                WHERE
+                    asset."Id" = @Id;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new KeyNotFoundException("The media asset was not found.");
+            }
+        }
+
+        // Recycled files older than the configured days; none while they are kept.
+        public static Task<IReadOnlyList<RecycledFileData>> ReadExpiredRecycledFilesAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
+                    recycled."Id",
                     mount."Id" AS "StorageMountId",
                     mount."StorageProtocolTypeId",
                     mount."SharePath",
-                    root."RelativePath" AS "RootPath"
+                    recycled."FolderPath",
+                    recycled."RelativePath"
                 FROM
-                    "LibraryRoots" AS root
-                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                    "RecycledFiles" AS recycled
+                    JOIN "StorageMounts" AS mount ON mount."Id" = recycled."StorageMountId"
+                    CROSS JOIN "InstanceSettings" AS settings
                 WHERE
-                    NOT mount."IsReadOnly"
+                    settings."Id" = 1
+                    AND settings."RecycleDays" > 0
+                    AND recycled."RecycledAt" < now() - make_interval(days => settings."RecycleDays")
                 ORDER BY
-                    root."Id";
+                    recycled."RecycledAt"
+                LIMIT 1000;
                 """;
-            return ctx.ReadSql.ReadListAsync<RecycleLibraryData>(sql, ct);
+            return ctx.ReadSql.ReadListAsync<RecycledFileData>(sql, ct);
+        }
+
+        public static async Task ForgetRecycledFilesAsync(this LogicContext ctx, RecycledFileIdsData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "RecycledFiles" AS recycled
+                WHERE
+                    recycled."Id" = ANY (@Ids);
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
     }
 }

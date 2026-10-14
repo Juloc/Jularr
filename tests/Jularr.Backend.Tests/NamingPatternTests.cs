@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.System.Library.V1;
 using Jularr.Backend.Logic.Library;
@@ -87,50 +88,58 @@ namespace Jularr.Backend.Tests
             Directory.CreateDirectory(Path.Combine(storage.Path, mountId.ToString(), "Movies"));
             await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library?Tab=Naming");
-            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Replaced files");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library?Tab=Versions");
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Now: an imported better release deletes the earlier file at once.");
             const string route = "/api/v1/admin/library/replacement";
             using var read = await host.SendAsync(HttpMethod.Get, route);
             var settings = (await read.Content.ReadFromJsonAsync<ReplacementSettingsV1>())!;
-            Assert.AreEqual((false, false, 7), (settings.KeepsReleases, settings.RecyclesInLibraries, settings.RecycleDays));
+            Assert.AreEqual((false, RecycleMode.Delete, 7), (settings.KeepsReleases, settings.RecycleModeId, settings.RecycleDays));
 
             // Several releases need names that tell them apart, now and in later pattern edits.
             await host.Fixture.RunSqlAsync("UPDATE \"NamingPatterns\" SET \"Pattern\" = '{Title}/S{Season:00}/{Title} S{Season:00}E{Episode:00}' WHERE \"MediaTypeId\" = 2");
-            using var untold = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(true, false, null, null, 7, settings.Version));
+            using var untold = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(true, RecycleMode.Delete, null, null, 7, settings.Version));
             StringAssert.Contains(await untold.Content.ReadAsStringAsync(), "naming_needs_release_token");
             await host.Fixture.RunSqlAsync($"UPDATE \"NamingPatterns\" SET \"Pattern\" = '{Defaults[MediaType.Series]}' WHERE \"MediaTypeId\" = 2");
-            using var kept = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(true, false, null, null, 7, settings.Version));
+            using var kept = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(true, RecycleMode.Delete, null, null, 7, settings.Version));
             Assert.AreEqual(HttpStatusCode.OK, kept.StatusCode, await kept.Content.ReadAsStringAsync());
             var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2"))!;
             using var plain = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}/{Title} S{Season:00}E{Episode:00}", version));
             StringAssert.Contains(await plain.Content.ReadAsStringAsync(), "naming_needs_release_token");
 
-            // A recycle folder lies outside every library.
-            using var inside = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(false, false, mountId, "Movies/Old", 3, settings.Version + 1));
+            // An own recycle folder needs its place, outside every library.
+            using var nowhere = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(false, RecycleMode.OwnFolder, null, null, 3, settings.Version + 1));
+            StringAssert.Contains(await nowhere.Content.ReadAsStringAsync(), "required");
+            using var inside = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(false, RecycleMode.OwnFolder, mountId, "Movies/Old", 3, settings.Version + 1));
             StringAssert.Contains(await inside.Content.ReadAsStringAsync(), "invalid_value");
-            using var folder = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(false, false, mountId, "Recycle", 3, settings.Version + 1));
+            using var folder = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(false, RecycleMode.OwnFolder, mountId, "Recycle", 3, settings.Version + 1));
             Assert.AreEqual(HttpStatusCode.OK, folder.StatusCode, await folder.Content.ReadAsStringAsync());
 
-            // Files recycled longer ago than the days leave, from the folder and from a library's own recycle folder.
-            var old = Path.Combine(storage.Path, mountId.ToString(), "Recycle", "Movies", "Old Film.mkv");
+            // Only files Jularr recycled and registered leave after their days; anything else in the folder stays.
+            var old = Path.Combine(storage.Path, mountId.ToString(), "Recycle", "Movies", "Old Film", "Old Film.mkv");
             var fresh = Path.Combine(storage.Path, mountId.ToString(), "Recycle", "Movies", "New Film.mkv");
-            var library = Path.Combine(storage.Path, mountId.ToString(), "Movies", ".jularr-recycle", "Earlier Film.mkv");
-            foreach (var file in new[] { old, fresh, library })
+            var foreign = Path.Combine(storage.Path, mountId.ToString(), "Recycle", "Notes", "kept.txt");
+            foreach (var file in new[] { old, fresh, foreign })
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(file)!);
                 File.WriteAllText(file, "x");
             }
 
-            File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-4));
-            File.SetLastWriteTimeUtc(library, DateTime.UtcNow.AddDays(-4));
+            File.SetLastWriteTimeUtc(foreign, DateTime.UtcNow.AddDays(-30));
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "RecycledFiles" ("StorageMountId", "FolderPath", "RelativePath", "RecycledAt") VALUES
+                    ({mountId}, 'Recycle', 'Movies/Old Film/Old Film.mkv', now() - interval '4 days'),
+                    ({mountId}, 'Recycle', 'Movies/New Film.mkv', now());
+                """);
             await using (var scope = host.Services.CreateAsyncScope())
             {
                 await scope.ServiceProvider.GetRequiredService<CleanRecycleBinsV1>().ExecuteAsync<UpdateResult>(new CleanRecycleBinsParametersV1(), default);
             }
 
             Assert.IsFalse(File.Exists(old));
-            Assert.IsFalse(File.Exists(library));
+            Assert.IsFalse(Directory.Exists(Path.GetDirectoryName(old)));
             Assert.IsTrue(File.Exists(fresh));
+            Assert.IsTrue(File.Exists(foreign));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"RecycledFiles\""));
         }
     }
 }

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Library;
@@ -8,7 +10,8 @@ using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Core
 {
-    // After an import: the earlier files of the same film, episode, track or volume leave the library, unless several releases are kept.
+    // Earlier files of the same film, episode, track or volume leave the library: after an import when the new release is better,
+    // or when an administrator keeps only one version. Several kept releases stay.
     internal sealed class LibraryReplacements
     {
         private readonly StorageOptions _storage;
@@ -18,33 +21,53 @@ namespace Jularr.Backend.Service.Core
             _storage = storage.Value;
         }
 
-        public async Task ReplaceAsync(LogicContext context, IReadOnlyList<long> newMediaAssetIds, CancellationToken ct)
+        // After an import; without a profile nothing is known to be better.
+        public async Task ReplaceAsync(LogicContext context, IReadOnlyList<long> newMediaAssetIds, QualityProfile? profile, CancellationToken ct)
         {
-            if (newMediaAssetIds.Count == 0)
+            if (newMediaAssetIds.Count == 0 || profile is null)
             {
                 return;
             }
 
             var (settings, files) = await context.ExecuteBatchAsync(async (ctx, token) =>
-                (await ctx.ReadReplacementSettingsAsync(token), await ctx.ReadReplacedFilesAsync(new ReplacingAssetsData([.. newMediaAssetIds]), token)), ct);
-            if (settings.KeepsReleases || files.Count == 0)
+                (await ctx.ReadReplacementSettingsAsync(token), await ctx.ReadReplacedFilesAsync(new ReplacingAssetsData([.. newMediaAssetIds], false), token)), ct);
+            if (!settings.KeepsReleases)
             {
-                return;
+                await RetireAsync(context, settings, files.Where(file => ReplacementLogic.IsBetter(profile, file)).ToArray(), ct);
             }
+        }
 
-            // A file that cannot be moved, on an unreachable library or with an unusable recycle folder, stays as a further version.
+        // An administrator's choice: every other version of the same kind, edition and format goes, whatever its quality.
+        public async Task KeepOnlyAsync(LogicContext context, long mediaAssetId, CancellationToken ct)
+        {
+            var (settings, files) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                (await ctx.ReadReplacementSettingsAsync(token), await ctx.ReadReplacedFilesAsync(new ReplacingAssetsData([mediaAssetId], true), token)), ct);
+            await RetireAsync(context, settings, files, ct);
+        }
+
+        // A file that cannot be moved, on an unreachable library or with an unusable recycle folder, stays as a further version.
+        private async Task RetireAsync(LogicContext context, ReplacementSettingsData settings, IReadOnlyList<ReplacedFileData> files, CancellationToken ct)
+        {
             var retired = new List<object>();
             foreach (var file in files.DistinctBy(file => file.StoredFileId))
             {
+                ct.ThrowIfCancellationRequested();
                 try
                 {
                     var library = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(file.StorageProtocolTypeId, file.StorageMountId, file.SharePath), file.RootPath);
-                    var target = settings.RecyclesInLibraries || file.RootPath.Length == 0 ? file.RelativePath : file.RootPath + "/" + file.RelativePath;
                     var source = StorageFileSystem.ResolveFile(library, file.RelativePath);
-                    var folder = LibraryRecycleBin.Folder(_storage, settings, library);
-                    if (await Task.Run(() => LibraryRecycleBin.Recycle(source, folder, target), ct))
+                    var folder = LibraryRecycleBin.Folder(_storage, settings, file);
+                    var target = settings.RecycleModeId == RecycleMode.OwnFolder && file.RootPath.Length > 0 ? file.RootPath + "/" + file.RelativePath : file.RelativePath;
+                    if (await Task.Run(() => LibraryRecycleBin.Recycle(source, folder, target), ct) is { } recycled)
                     {
-                        retired.Add(new { file.StoredFileId, file.NewMediaAssetId });
+                        retired.Add(new
+                        {
+                            file.StoredFileId,
+                            file.NewMediaAssetId,
+                            folder?.StorageMountId,
+                            folder?.FolderPath,
+                            RecycledPath = recycled.Length == 0 ? null : recycled
+                        });
                     }
                 }
                 catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)

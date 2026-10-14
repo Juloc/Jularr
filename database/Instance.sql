@@ -18,13 +18,13 @@ CREATE TABLE "InstanceSettings" (
     "SubtitleLanguages" varchar(2)[] NOT NULL DEFAULT '{}' CHECK (cardinality("SubtitleLanguages") <= 10),
     -- An import replaces the earlier file of a film, episode or volume unless several releases are kept.
     "KeepsReleases" boolean NOT NULL DEFAULT FALSE,
-    -- Replaced files go to a recycle folder inside their library (simple mode) or to one folder on a storage connection;
-    -- without either they are deleted. Recycled files leave after this many days, 0 keeps them.
-    "RecyclesInLibraries" boolean NOT NULL DEFAULT FALSE,
+    -- Replaced files are deleted (1), moved to a recycle folder inside their library (2) or to one folder on a storage connection (3).
+    -- Recycled files leave after this many days, 0 keeps them.
+    "RecycleModeId" smallint NOT NULL DEFAULT 1 CHECK ("RecycleModeId" BETWEEN 1 AND 3),
     "RecycleStorageMountId" bigint NULL,
     "RecyclePath" varchar(500) NULL CHECK ("RecyclePath" IS NULL OR length("RecyclePath") > 0 AND "RecyclePath" NOT LIKE '/%'),
     "RecycleDays" smallint NOT NULL DEFAULT 7 CHECK ("RecycleDays" BETWEEN 0 AND 3650),
-    CHECK (("RecycleStorageMountId" IS NULL) = ("RecyclePath" IS NULL)),
+    CHECK (("RecycleModeId" = 3) = ("RecycleStorageMountId" IS NOT NULL) AND ("RecycleStorageMountId" IS NULL) = ("RecyclePath" IS NULL)),
     "Version" bigint NOT NULL DEFAULT 1 CHECK ("Version" > 0)
 );
 

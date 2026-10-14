@@ -3,6 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Library.V1;
 using Jularr.Backend.Service.Admin.Storage.V1;
@@ -18,12 +19,13 @@ namespace Jularr.Frontend.Pages.Admin.Library
         Unmatched = 1,
         Files = 2,
         Rename = 3,
-        Naming = 4
+        Naming = 4,
+        Versions = 5
     }
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
         ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, ReadReplacementSettingsV1 readReplacement,
-        UpdateReplacementSettingsV1 updateReplacement, ReadStorageMountsV1 readMounts, IAntiforgery antiforgery, UiText texts) : JularrPage
+        UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ReadStorageMountsV1 readMounts, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private ReplacementSettingsV1? _replacement;
         private UpdateReplacementSettingsDataV1? _replacementInput;
@@ -46,7 +48,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
         {
             page.Title("admin.library.title");
             page.Navigation("nav.admin");
-            page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>().Where(tab => tab is not (LibraryTab.Rename or LibraryTab.Naming) || CanRename)
+            page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>().Where(tab => tab is not (LibraryTab.Rename or LibraryTab.Naming or LibraryTab.Versions) || CanRename)
                 .Select(tab => new NavigationTab("library.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.library.title"));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
@@ -113,22 +115,24 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 }
             }
 
-            // What an import does with the earlier file of the same film or episode.
+            // What an import does with the earlier file of the same film or episode; the current behaviour is spelled out above the form.
             if (_replacement is { } replacement)
             {
+                var modes = Enum.GetValues<RecycleMode>().Select(mode => new SelectOption(mode.ToString(), texts["library.replacement.mode." + mode]));
                 var mounts = (_mounts?.Items ?? []).Where(mount => !mount.IsReadOnly)
-                    .Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name)).Prepend(new SelectOption("", texts["library.replacement.noFolder"]));
-                page.Content.Add(new UiSection("library.replacement.title", [new Form<UpdateReplacementSettingsDataV1>(form =>
+                    .Select(mount => new SelectOption(mount.Id.ToString(CultureInfo.InvariantCulture), mount.Name)).Prepend(new SelectOption("", "-"));
+                page.Content.Add(new P(new Text("library.replacement.current." + replacement.RecycleModeId)));
+                page.Content.Add(new Form<UpdateReplacementSettingsDataV1>(form =>
                 {
                     form.Hidden(item => item.Version);
                     form.Toggle(item => item.KeepsReleases, "library.replacement.keepsReleases");
-                    form.Toggle(item => item.RecyclesInLibraries, "library.replacement.inLibraries");
+                    form.Select(item => item.RecycleModeId, "library.replacement.mode", modes);
                     form.Select(item => item.RecycleStorageMountId, "library.replacement.mount", mounts);
                     form.Text(item => item.RecyclePath, "library.replacement.path");
                     form.Number(item => item.RecycleDays, "library.replacement.days");
                     form.Submit("common.save");
-                }, Address(handler: "Replacement"), csrf, _replacementInput ?? new UpdateReplacementSettingsDataV1(replacement.KeepsReleases, replacement.RecyclesInLibraries,
-                    replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version), _replacementInput is null ? null : FormError)]));
+                }, Address(handler: "Replacement"), csrf, _replacementInput ?? new UpdateReplacementSettingsDataV1(replacement.KeepsReleases, replacement.RecycleModeId,
+                    replacement.RecycleStorageMountId, replacement.RecyclePath, replacement.RecycleDays, replacement.Version), _replacementInput is null ? null : FormError));
             }
 
             if (FormError is not null && _failedFileId is null && _failedPattern is null && _replacementInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
@@ -162,9 +166,23 @@ namespace Jularr.Frontend.Pages.Admin.Library
             }, Address(handler: "Assign") + "&storedFileId=" + file.Id.ToString(CultureInfo.InvariantCulture), csrf, input, _failedFileId == file.Id ? FormError : null);
         }
 
-        private Form<StoredFileParametersV1> Release(LibraryFileDetailsV1 file, string? csrf) =>
-            new(form => form.Submit("library.unassign"), Address(handler: "Unassign") + "&storedFileId=" + file.Id.ToString(CultureInfo.InvariantCulture), csrf,
+        // Keeping one version is the administrator's confirmation, also against a better one.
+        private Div Release(LibraryFileDetailsV1 file, string? csrf)
+        {
+            var id = file.Id.ToString(CultureInfo.InvariantCulture);
+            var unassign = new Form<StoredFileParametersV1>(form => form.Submit("library.unassign"), Address(handler: "Unassign") + "&storedFileId=" + id, csrf,
                 new StoredFileParametersV1(file.Id));
+            return file.HasOtherVersions
+                ? new Div(unassign, new Form<StoredFileParametersV1>(form => form.Submit("library.keepOnly"), Address(handler: "KeepOnly") + "&storedFileId=" + id, csrf,
+                    new StoredFileParametersV1(file.Id)))
+                : new Div(unassign);
+        }
+
+        public async Task<IActionResult> OnPostKeepOnlyAsync([BindRequired] long storedFileId)
+        {
+            await keepOnly.ExecuteAsync<UpdateResult>(new StoredFileParametersV1(storedFileId), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -195,9 +213,9 @@ namespace Jularr.Frontend.Pages.Admin.Library
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, bool recyclesInLibraries, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version)
+        public async Task<IActionResult> OnPostReplacementAsync(bool keepsReleases, RecycleMode recycleModeId, long? recycleStorageMountId, string? recyclePath, int recycleDays, long version)
         {
-            _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recyclesInLibraries, recycleStorageMountId, recyclePath, recycleDays, version);
+            _replacementInput = new UpdateReplacementSettingsDataV1(keepsReleases, recycleModeId, recycleStorageMountId, recyclePath, recycleDays, version);
             await updateReplacement.ExecuteAsync<UpdateResult>(new ReplacementSettingsParametersV1(), _replacementInput, HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
@@ -213,7 +231,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            if (Tab is LibraryTab.Rename or LibraryTab.Naming && !CanRename)
+            if (Tab is LibraryTab.Rename or LibraryTab.Naming or LibraryTab.Versions && !CanRename)
             {
                 Tab = LibraryTab.Files;
             }
@@ -221,6 +239,11 @@ namespace Jularr.Frontend.Pages.Admin.Library
             if (Tab == LibraryTab.Naming)
             {
                 _patterns = await readPatterns.ExecuteAsync<BaseDataList<NamingPatternV1>>(new ReadNamingPatternsParametersV1(), ct);
+                return;
+            }
+
+            if (Tab == LibraryTab.Versions)
+            {
                 _replacement = await readReplacement.ExecuteAsync<ReplacementSettingsV1>(new ReplacementSettingsParametersV1(), ct);
                 _mounts = await readMounts.ExecuteAsync<PageResult<StorageMountDetailsV1>>(new ReadStorageMountsParametersV1(1, 100), ct);
                 return;

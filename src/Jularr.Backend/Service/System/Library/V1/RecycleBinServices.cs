@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
+using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.System.Library.V1;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.Core;
@@ -13,12 +14,10 @@ namespace Jularr.Backend.Service.System.Library.V1
     public sealed class CleanRecycleBinsV1 : SystemService<CleanRecycleBinsParametersV1, NoData>
     {
         private readonly StorageOptions _storage;
-        private readonly TimeProvider _time;
 
-        internal CleanRecycleBinsV1(IOptions<StorageOptions> storage, TimeProvider time)
+        internal CleanRecycleBinsV1(IOptions<StorageOptions> storage)
         {
             _storage = storage.Value;
-            _time = time;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -28,35 +27,32 @@ namespace Jularr.Backend.Service.System.Library.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // Every library's own recycle folder, also after a change of mode, and the configured folder; unreachable ones wait.
-            var (settings, libraries) = await Context.ExecuteBatchAsync(async (ctx, ct) => (await ctx.ReadReplacementSettingsAsync(ct), await ctx.ReadRecycleLibrariesAsync(ct)), CancellationToken);
-            var now = _time.GetUtcNow().UtcDateTime;
-            foreach (var library in libraries)
+            // Only files Jularr recycled and registered leave, never anything else in those folders; unreachable ones wait.
+            var expired = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadExpiredRecycledFilesAsync(ct), CancellationToken);
+            var gone = new List<long>();
+            foreach (var file in expired)
             {
                 try
                 {
-                    var directory = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(library.StorageProtocolTypeId, library.StorageMountId, library.SharePath), library.RootPath);
-                    LibraryRecycleBin.Clean(Path.Combine(directory, StorageFileSystem.RecycleFolder), settings.RecycleDays, now);
+                    var folder = StorageFileSystem.ResolveDirectory(_storage.GetConnectionPath(file.StorageProtocolTypeId, file.StorageMountId, file.SharePath), file.FolderPath);
+                    if (LibraryRecycleBin.Delete(folder, file.RelativePath))
+                    {
+                        gone.Add(file.Id);
+                    }
                 }
-                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
+                catch (NasMountException)
                 {
                     // Cleaned on a later pass.
                 }
             }
 
-            if (!settings.RecyclesInLibraries)
+            if (gone.Count > 0)
             {
-                try
+                await Context.ExecuteBatchAsync(async (ctx, ct) =>
                 {
-                    if (LibraryRecycleBin.Folder(_storage, settings, "") is { } folder)
-                    {
-                        LibraryRecycleBin.Clean(folder, settings.RecycleDays, now);
-                    }
-                }
-                catch (Exception exception) when (exception is NasMountException or IOException or UnauthorizedAccessException)
-                {
-                    // Cleaned on a later pass.
-                }
+                    await ctx.ForgetRecycledFilesAsync(new RecycledFileIdsData([.. gone]), ct);
+                    return true;
+                }, CancellationToken);
             }
 
             return new UpdateResult(true);

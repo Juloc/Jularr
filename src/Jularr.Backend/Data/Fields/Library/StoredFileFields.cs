@@ -6,6 +6,8 @@ namespace Jularr.Backend.Data.Fields.Library
     public static class StoredFileFields
     {
         public static readonly LongField Id = new() { Minimum = 1 };
+        public static readonly LongArrayField Ids = new() { Minimum = 1, MaximumLength = 1000 };
+        public static readonly StringField FolderPath = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, Format = StringFormat.RelativePath };
         public static readonly StringField RelativePath = new(NpgsqlDbType.Varchar) { MaximumLength = 2048, AllowBlank = false, Format = StringFormat.RelativePath };
         public static readonly LongField SizeBytes = new() { Minimum = 0 };
         public static readonly DateTimeField ModifiedAt = new();
@@ -17,6 +19,7 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly LongField BitRate = new() { Minimum = 0, Required = false };
         public static readonly StringField Sha1 = new(NpgsqlDbType.Varchar) { MaximumLength = 40, Required = false };
         public static readonly BoolField IsAvailable = new();
+        public static readonly BoolField HasOtherVersions = new();
         public static readonly BoolField OnlyUnmatched = new();
         public static readonly LongField FileCount = new() { Minimum = 0 };
         public static readonly StringField Payload = new() { AllowBlank = false };

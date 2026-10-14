@@ -127,7 +127,7 @@ namespace Jularr.Backend.Tests
             // The film's earlier release, already played, is replaced: in simple mode it waits in the library's recycle folder.
             File.WriteAllText(Path.Combine(library, "Example Movie (2020) [DVD].mkv"), "earlier");
             await host.Fixture.RunSqlAsync("""
-                UPDATE "InstanceSettings" SET "RecyclesInLibraries" = TRUE;
+                UPDATE "InstanceSettings" SET "RecycleModeId" = 2;
                 INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT 900, "Id" FROM "Works";
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT 900, "Id", 900 FROM "Works";
                 INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
@@ -142,6 +142,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("existing", File.ReadAllText(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
             Assert.AreEqual("earlier", File.ReadAllText(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle", "Example Movie (2020)", "Example Movie (2020) [DVD].mkv")));
+            Assert.AreEqual("Movies/.jularr-recycle", await host.ScalarAsync("SELECT \"FolderPath\" FROM \"RecycledFiles\""));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\" WHERE \"Id\" = 900"));
             Assert.AreEqual("Example Movie (2020)/Example Movie (2020) [WEB-1080p] (2).mkv", await host.ScalarAsync(
                 "SELECT file.\"RelativePath\" FROM \"PlaybackSessions\" AS session JOIN \"StoredFiles\" AS file ON file.\"Id\" = session.\"StoredFileId\""));
@@ -351,7 +352,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Movie_UpgradeWithoutRecycleFolder_DeletesOnlyTheEarlierFileOfThatFormat()
+        public async Task Movie_Upgrade_ReplacesOnlyWorseAutomaticVersionsUntilTheAdministratorKeepsOne()
         {
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
@@ -360,13 +361,20 @@ namespace Jularr.Backend.Tests
             var wantedId = await CreateWantedMovieAsync(host);
             var library = Path.Combine(storage.Path, "1", "Movies", "Example Movie (2020)");
             Directory.CreateDirectory(library);
-            File.WriteAllText(Path.Combine(library, "Example Movie (2020) [DVD].mkv"), "earlier");
+            foreach (var name in new[] { "DVD", "Manual", "Bluray" })
+            {
+                File.WriteAllText(Path.Combine(library, "Example Movie (2020) [" + name + "].mkv"), name);
+            }
+
+            // An unknown earlier release, one added by hand and a better one.
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT 900, "Id" FROM "Works";
-                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT 900, "Id", 900 FROM "Works";
-                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
-                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
-                    SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020) [DVD].mkv', 7, now(), now(), 900 FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT version, "Id", 900 FROM "Works", unnest(ARRAY[900, 901, 902]) AS version;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId", "IsManual") SELECT asset, "Id", asset, 1, asset = 901 FROM "Works", unnest(ARRAY[900, 901, 902]) AS asset;
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey")
+                    SELECT item.id, root."Id", 'Example Movie (2020)/Example Movie (2020) [' || item.name || '].mkv', 3, now(), now(), item.id, item.quality
+                    FROM "LibraryRoots" AS root, (VALUES (900, 'DVD', NULL), (901, 'Manual', NULL), (902, 'Bluray', 'BLURAY-1080p')) AS item(id, name, quality)
+                    WHERE root."RelativePath" = 'Movies';
                 """);
 
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
@@ -380,11 +388,21 @@ namespace Jularr.Backend.Tests
             usenet.History = $$$"""{"history":{"slots":[{"nzo_id":"SABnzbd_nzo_1","name":"Example","status":"Completed","storage":"/downloads/{{{Feature}}}"}]}}""";
             await RunAsync<MonitorDownloadsV1>(host);
 
-            // Without a recycle folder the earlier file is deleted, as Sonarr does.
+            // Deleted by default: only the worse automatic release; the manual and the better one stay.
             Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p].mkv")));
             Assert.IsFalse(File.Exists(Path.Combine(library, "Example Movie (2020) [DVD].mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [Manual].mkv")));
+            Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [Bluray].mkv")));
             Assert.IsFalse(Directory.Exists(Path.Combine(storage.Path, "1", "Movies", ".jularr-recycle")));
-            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"Id\" = 900"));
+
+            // Keeping only the new version is the administrator's confirmation.
+            var newFile = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%WEB-1080p].mkv'"))!;
+            using var files = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/files?onlyUnmatched=false");
+            Assert.IsTrue((await files.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.Admin.Library.V1.LibraryFileDetailsV1>>())!.Items.Single(file => file.Id == newFile).HasOtherVersions);
+            using var kept = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/library/files/" + newFile + "/keep-only");
+            Assert.AreEqual(HttpStatusCode.OK, kept.StatusCode, await kept.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, Directory.GetFiles(library).Length);
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"MediaAssets\""));
         }
 
         [TestMethod]

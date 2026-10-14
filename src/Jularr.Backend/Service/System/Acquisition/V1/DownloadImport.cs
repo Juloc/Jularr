@@ -25,7 +25,8 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
-            var (root, patterns) = await context.ExecuteBatchAsync(async (ctx, token) => (await ctx.ReadImportRootAsync(download.WantedItemId, token), await ctx.ReadNamingPatternsAsync(token)), ct);
+            var (root, patterns, target) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                (await ctx.ReadImportRootAsync(download.WantedItemId, token), await ctx.ReadNamingPatternsAsync(token), await ctx.ReadWantedTargetAsync(download.WantedItemId, token)), ct);
             if (root is null)
             {
                 await AttentionAsync(context, download.OperationId, "import_no_library", null, ct);
@@ -105,7 +106,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 await ctx.QueueLibraryScanAsync(new OperationCreationData(OperationKind.LibraryScan, root.Id, null), token);
                 return assigned;
             }, ct);
-            await replacements.ReplaceAsync(context, assets, ct);
+            await replacements.ReplaceAsync(context, assets, target.Definition is null ? null : AcquisitionSelectionLogic.ReadProfile(target), ct);
 
             // A connected Plex shows the title right away.
             await plex.RefreshAsync(context, download.MediaTypeId, ct);

@@ -40,8 +40,9 @@ namespace Jularr.Backend.Data.Admin.Library.V1
     {
         public LibraryFileDetailsV1(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, string relativePath, long sizeBytes, DateTime? missingSince,
             long? mediaAssetId, long? workId, string? workTitle, string suggestedTitle, long? suggestedWorkId, WorkUnitType? suggestedWorkUnitTypeId, decimal? suggestedUnitNumber,
-            decimal? suggestedParentUnitNumber)
+            decimal? suggestedParentUnitNumber, bool hasOtherVersions)
         {
+            HasOtherVersions = hasOtherVersions;
             Id = id;
             LibraryRootId = libraryRootId;
             LibraryRootName = libraryRootName;
@@ -103,6 +104,10 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? SuggestedParentUnitNumber { get; }
+
+        // Another version of the same film, episode or volume is in the library.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.HasOtherVersions))]
+        public bool HasOtherVersions { get; }
     }
 
     public sealed class AssignLibraryFileDataV1 : BaseData

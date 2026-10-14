@@ -19,7 +19,7 @@ namespace Jularr.Backend.Data.Fields.Instance
         public static readonly IntField UnitGroupLimit = new() { Minimum = 1, Maximum = 1000 };
         public static readonly StringArrayField SubtitleLanguages = new() { MaximumLength = 10, SplitsCommas = true };
         public static readonly BoolField KeepsReleases = new();
-        public static readonly BoolField RecyclesInLibraries = new();
+        public static readonly EnumField RecycleModeId = new(typeof(Enums.Library.RecycleMode));
         public static readonly LongField RecycleStorageMountId = new() { Minimum = 1, Required = false };
         public static readonly StringField RecyclePath = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false, Trim = true, Format = Enums.Field.StringFormat.RelativePath };
         public static readonly IntField RecycleDays = new() { Minimum = 0, Maximum = 3650 };

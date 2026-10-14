@@ -271,6 +271,8 @@ CREATE TABLE "MediaAssets" (
     "WorkVersionId" bigint NOT NULL,
     "WorkUnitId" bigint NULL,
     "MediaAssetTypeId" smallint NOT NULL REFERENCES "MediaAssetTypes" ("Id"),
+    -- Added by hand (assigned or uploaded by an administrator); imports never replace it.
+    "IsManual" boolean NOT NULL DEFAULT FALSE,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     FOREIGN KEY ("WorkId", "WorkVersionId") REFERENCES "WorkVersions" ("WorkId", "Id") ON DELETE CASCADE,
     FOREIGN KEY ("WorkId", "WorkUnitId") REFERENCES "WorkUnits" ("WorkId", "Id") ON DELETE CASCADE
