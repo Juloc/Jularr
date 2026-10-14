@@ -88,7 +88,8 @@ Emulation module for them.
 
 `Library.sql` follows Media, Acquisition and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative
-inventory with probe facts (former MediaTechnicalAnalyses columns, the SHA-1 of game ROMs), MediaTracks hold
+inventory with probe facts (former MediaTechnicalAnalyses columns, the SHA-1 of game ROMs) and release facts (release name,
+group, quality key, edition, revision; from the grabbed release on import, otherwise from the file or folder name), MediaTracks hold
 probed streams, and Operations/OperationTypes/OperationStatusTypes are the shared
 background-operation owner, starting with library scans. Offline storage never
 deletes inventory; only complete scans mark assigned files missing.

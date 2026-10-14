@@ -7,26 +7,52 @@ namespace Jularr.Backend.Logic.Library
     {
         public static Task<int> UpsertStoredFilesAsync(this LogicContext ctx, StoredFileBatchData data, CancellationToken ct)
         {
-            // Changed files lose their analysis.
+            // Changed files lose their analysis and take the new release facts; unchanged ones keep theirs, also after a rename.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
-                    "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt")
+                    "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "ReleaseName", "ReleaseGroup", "QualityKey", "Edition", "Revision")
                 SELECT
                     @LibraryRootId,
                     item."RelativePath",
                     item."SizeBytes",
                     item."ModifiedAt",
-                    @SeenAt
+                    @SeenAt,
+                    item."ReleaseName",
+                    item."ReleaseGroup",
+                    item."QualityKey",
+                    item."Edition",
+                    coalesce(item."Revision", 1)
                 FROM
-                    jsonb_to_recordset(@Files::jsonb) AS item("RelativePath" text, "SizeBytes" bigint, "ModifiedAt" timestamptz)
+                    jsonb_to_recordset(@Files::jsonb) AS item("RelativePath" text, "SizeBytes" bigint, "ModifiedAt" timestamptz, "ReleaseName" text, "ReleaseGroup" text, "QualityKey" text,
+                        "Edition" text, "Revision" smallint)
                 ON CONFLICT ("LibraryRootId", "RelativePath") DO UPDATE
                 SET
                     "SizeBytes" = EXCLUDED."SizeBytes",
                     "ModifiedAt" = EXCLUDED."ModifiedAt",
                     "LastSeenAt" = EXCLUDED."LastSeenAt",
                     "MissingSince" = NULL,
+                    "ReleaseName" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" AND "StoredFiles"."ReleaseName" IS NOT NULL THEN "StoredFiles"."ReleaseName"
+                        ELSE EXCLUDED."ReleaseName"
+                    END,
+                    "ReleaseGroup" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" AND "StoredFiles"."ReleaseName" IS NOT NULL THEN "StoredFiles"."ReleaseGroup"
+                        ELSE EXCLUDED."ReleaseGroup"
+                    END,
+                    "QualityKey" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" AND "StoredFiles"."ReleaseName" IS NOT NULL THEN "StoredFiles"."QualityKey"
+                        ELSE EXCLUDED."QualityKey"
+                    END,
+                    "Edition" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" AND "StoredFiles"."ReleaseName" IS NOT NULL THEN "StoredFiles"."Edition"
+                        ELSE EXCLUDED."Edition"
+                    END,
+                    "Revision" = CASE
+                        WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" AND "StoredFiles"."ReleaseName" IS NOT NULL THEN "StoredFiles"."Revision"
+                        ELSE EXCLUDED."Revision"
+                    END,
                     "ProbedAt" = CASE
                         WHEN "StoredFiles"."SizeBytes" = EXCLUDED."SizeBytes" AND "StoredFiles"."ModifiedAt" = EXCLUDED."ModifiedAt" THEN "StoredFiles"."ProbedAt"
                     END,

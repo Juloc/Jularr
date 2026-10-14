@@ -60,6 +60,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             var imported = new List<ImportedFile>();
+            var facts = ReleaseFacts.Of(download.Title);
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
             foreach (var group in placements.GroupBy(placement => placement.Group))
             {
@@ -75,7 +76,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     await Task.Run(() => StorageFileTransfer.HardlinkOrCopy(sourceFile, destination), ct);
 
                     var info = new FileInfo(destination);
-                    imported.Add(new ImportedFile(relativePath, info.Length, Truncate(info.LastWriteTimeUtc)));
+                    imported.Add(new ImportedFile(relativePath, info.Length, Truncate(info.LastWriteTimeUtc), facts));
                     if (placement.IsMedia)
                     {
                         media.Add((relativePath, placement));
@@ -132,16 +133,26 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
         private sealed class ImportedFile
         {
-            public ImportedFile(string relativePath, long sizeBytes, DateTime modifiedAt)
+            public ImportedFile(string relativePath, long sizeBytes, DateTime modifiedAt, ReleaseFact? facts)
             {
                 RelativePath = relativePath;
                 SizeBytes = sizeBytes;
                 ModifiedAt = modifiedAt;
+                ReleaseName = facts?.ReleaseName;
+                ReleaseGroup = facts?.ReleaseGroup;
+                QualityKey = facts?.QualityKey;
+                Edition = facts?.Edition;
+                Revision = facts?.Revision;
             }
 
             public string RelativePath { get; }
             public long SizeBytes { get; }
             public DateTime ModifiedAt { get; }
+            public string? ReleaseName { get; }
+            public string? ReleaseGroup { get; }
+            public string? QualityKey { get; }
+            public string? Edition { get; }
+            public int? Revision { get; }
         }
     }
 }

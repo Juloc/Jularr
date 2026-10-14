@@ -131,6 +131,10 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(File.Exists(Path.Combine(library, "Example Movie (2020) [WEB-1080p] (2).en.srt")));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"StoredFiles\" WHERE \"MediaAssetId\" IS NOT NULL"));
             Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionReleaseStatusTypeId\" FROM \"AcquisitionReleases\""));
+
+            // The grabbed release names the imported file's facts.
+            Assert.AreEqual("GRP", await host.ScalarAsync("SELECT \"ReleaseGroup\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%(2).mkv'"));
+            Assert.AreEqual("WEB-1080p", await host.ScalarAsync("SELECT \"QualityKey\" FROM \"StoredFiles\" WHERE \"RelativePath\" LIKE '%(2).mkv'"));
             Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 1 AND \"OperationStatusTypeId\" = 1"));
             using var history = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId + "/releases");

@@ -33,6 +33,12 @@ CREATE TABLE "StoredFiles" (
     "DurationMs" bigint NULL CHECK ("DurationMs" >= 0),
     "BitRate" bigint NULL CHECK ("BitRate" >= 0),
     "Sha1" varchar(40) NULL CHECK ("Sha1" ~ '^[0-9a-f]{40}$'),
+    -- What the release name says: group, quality, edition and revision (2 for a proper or repack); the probe reports the streams.
+    "ReleaseName" varchar(500) NULL,
+    "ReleaseGroup" varchar(64) NULL,
+    "QualityKey" varchar(64) NULL,
+    "Edition" varchar(64) NULL,
+    "Revision" smallint NOT NULL DEFAULT 1 CHECK ("Revision" BETWEEN 1 AND 9),
     "TrickplayFrames" integer NULL CHECK ("TrickplayFrames" > 0),
     "TrickplayCheckedAt" timestamptz NULL,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),

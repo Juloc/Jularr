@@ -26,5 +26,10 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly StringField RenameFingerprint = new() { MinimumLength = 64, MaximumLength = 64, AllowBlank = false, Format = StringFormat.SingleLine };
         public static readonly IntField RenamedCount = new() { Minimum = 0 };
         public static readonly IntField SkippedCount = new() { Minimum = 0 };
+        public static readonly StringField ReleaseName = new() { MaximumLength = 500, Required = false };
+        public static readonly StringField ReleaseGroup = new() { MaximumLength = 64, Required = false };
+        public static readonly StringField QualityKey = new() { MaximumLength = 64, Required = false };
+        public static readonly StringField Edition = new() { MaximumLength = 64, Required = false };
+        public static readonly IntField Revision = new() { Minimum = 1, Maximum = 9 };
     }
 }
