@@ -37,6 +37,11 @@ namespace Jularr.Frontend.Pages.Admin.System
                 .Content("table.titles", item => new ValueText(item.Count.ToString(CultureInfo.CurrentCulture)))
                 .Content("table.size", item => new ValueText(ByteSize.Format(item.Bytes)))]));
 
+            if (!texts.CanDiagnose())
+            {
+                return;
+            }
+
             // Load of this process over the last hours and what took the time during the last hour.
             var performance = new List<IUiComponent>();
             if (_resources.Count > 0)
@@ -81,6 +86,11 @@ namespace Jularr.Frontend.Pages.Admin.System
         protected override async Task LoadDataAsync()
         {
             _health = await read.ExecuteAsync<SystemHealthV1>(new ReadSystemHealthParametersV1(), HttpContext.RequestAborted);
+            if (!texts.CanDiagnose())
+            {
+                return;
+            }
+
             _logs = await readLogs.ExecuteAsync<BaseDataList<RecentLogV1>>(new ReadRecentLogsParametersV1(), HttpContext.RequestAborted);
             _resources = await readResources.ExecuteAsync<BaseDataList<ResourceSampleV1>>(new ReadPerformanceParametersV1(), HttpContext.RequestAborted);
             _timings = await readTimings.ExecuteAsync<BaseDataList<ServiceTimingV1>>(new ReadPerformanceParametersV1(), HttpContext.RequestAborted);

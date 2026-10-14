@@ -10,7 +10,16 @@ namespace Jularr.Backend.Service.Core
         private const int Capacity = 500;
         private readonly ConcurrentQueue<RecentLogEntry> _entries = new();
 
+        // Follows the Diagnostics module.
+        public bool IsEnabled { get; private set; } = true;
+
         public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
+
+        public void Enable(bool enabled)
+        {
+            IsEnabled = enabled;
+            if (!enabled) _entries.Clear();
+        }
 
         // Newest first.
         public IReadOnlyList<RecentLogEntry> Read(int count) => [.. _entries.Reverse().Take(count)];
@@ -31,7 +40,7 @@ namespace Jularr.Backend.Service.Core
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-            public bool IsEnabled(LogLevel logLevel) => logLevel is >= LogLevel.Warning and < LogLevel.None;
+            public bool IsEnabled(LogLevel logLevel) => owner.IsEnabled && logLevel is >= LogLevel.Warning and < LogLevel.None;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {

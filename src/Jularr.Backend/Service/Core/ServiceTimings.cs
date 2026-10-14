@@ -9,8 +9,22 @@ namespace Jularr.Backend.Service.Core
         private const int SliceCount = 12;
         private readonly ConcurrentDictionary<string, Slice[]> _services = new(StringComparer.Ordinal);
 
+        // Follows the Diagnostics module.
+        public bool IsEnabled { get; private set; } = true;
+
+        public void Enable(bool enabled)
+        {
+            IsEnabled = enabled;
+            if (!enabled) _services.Clear();
+        }
+
         public void Record(string service, TimeSpan duration, bool failed)
         {
+            if (!IsEnabled)
+            {
+                return;
+            }
+
             var index = time.GetUtcNow().UtcTicks / SliceLength.Ticks;
             var slices = _services.GetOrAdd(service, _ => [.. Enumerable.Range(0, SliceCount).Select(_ => new Slice())]);
             var slice = slices[index % SliceCount];

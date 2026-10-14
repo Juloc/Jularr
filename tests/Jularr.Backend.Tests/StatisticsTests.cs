@@ -80,6 +80,16 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "ReadSystemHealthV1");
             using var resources = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/resources");
             Assert.AreEqual(HttpStatusCode.OK, resources.StatusCode);
+
+            // Without the Diagnostics module the System page keeps its overview only.
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Diagnostics'");
+            using var noLogs = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
+            Assert.AreEqual(HttpStatusCode.Forbidden, noLogs.StatusCode);
+            using var plainPage = await host.SendAsync(HttpMethod.Get, "/Admin/System");
+            var plain = await plainPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, plainPage.StatusCode, plain);
+            Assert.IsFalse(plain.Contains("Import of Film failed.", StringComparison.Ordinal));
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Diagnostics'");
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
             Assert.AreEqual(HttpStatusCode.Forbidden, manager.StatusCode);

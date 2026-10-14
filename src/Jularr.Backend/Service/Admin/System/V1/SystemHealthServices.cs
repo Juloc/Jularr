@@ -98,7 +98,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<RecentLogV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadRecentLogsParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(ReadRecentLogsParametersV1 parameters) => ModuleRequirement.All("Diagnostics");
         protected override ServicePermission GetPermission(ReadRecentLogsParametersV1 parameters, Type resultType) => new("instance.settings.read");
 
         // The newest 100 warnings and errors since the start.
@@ -117,7 +117,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ResourceSampleV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.All("Diagnostics");
         protected override ServicePermission GetPermission(ReadPerformanceParametersV1 parameters, Type resultType) => new("instance.settings.read");
 
         // Oldest first, since the start.
@@ -136,7 +136,7 @@ namespace Jularr.Backend.Service.Admin.System.V1
         }
 
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ServiceTimingV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(ReadPerformanceParametersV1 parameters) => ModuleRequirement.All("Diagnostics");
         protected override ServicePermission GetPermission(ReadPerformanceParametersV1 parameters, Type resultType) => new("instance.settings.read");
 
         // The 20 services that took the most time during the last hour.

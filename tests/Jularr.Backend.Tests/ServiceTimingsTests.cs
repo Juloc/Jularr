@@ -28,6 +28,11 @@ namespace Jularr.Backend.Tests
             clock.Advance(TimeSpan.FromMinutes(25));
             timings.Record("User/ReadB", TimeSpan.FromMilliseconds(7), false);
             Assert.AreEqual(1L, timings.Read(20).Single().Count);
+
+            // Switched off, nothing is kept or recorded.
+            timings.Enable(false);
+            timings.Record("User/ReadC", TimeSpan.FromMilliseconds(1), false);
+            Assert.AreEqual(0, timings.Read(20).Count);
         }
 
         private sealed class Clock : TimeProvider

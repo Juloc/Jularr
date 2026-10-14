@@ -800,6 +800,7 @@ namespace Jularr.Frontend.Localization
             new("home.show", "Show"),
             new("instance.module.HomeLayout", "Personal home page order"),
             new("instance.module.Trickplay", "Thumbnails while seeking"),
+            new("instance.module.Diagnostics", "Diagnostics in memory"),
             new("instance.module.Franchises", "Film series"),
             new("system.performance", "Performance"),
             new("system.performance.processor", "Processor"),
