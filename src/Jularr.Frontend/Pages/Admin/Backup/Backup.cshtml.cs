@@ -50,7 +50,7 @@ namespace Jularr.Frontend.Pages.Admin.Backup
             {
                 yield return new Form<RestoreBackupDataV1>(form =>
                 {
-                    if (item.IsSealed) form.Password(data => data.Passphrase, "admin.backup.passphrase", "off");
+                    if (item.IsSealed) form.Password(data => data.Passphrase, "admin.backup.passphrase", "current-password");
                     form.Submit("admin.backup.restore");
                 }, Home + "?handler=Restore&name=" + item.Name, csrf, new RestoreBackupDataV1(null), _failedRestore == item.Name ? FormError : null);
             }

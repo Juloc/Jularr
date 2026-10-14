@@ -54,7 +54,7 @@ namespace Jularr.Backend.Data.Admin.Backup.V1
             Passphrase = passphrase;
         }
 
-        [DataField(typeof(BackupFields), nameof(BackupFields.Passphrase), false)]
+        [DataField(typeof(BackupFields), nameof(BackupFields.Passphrase))]
         public string? Passphrase { get; }
     }
 

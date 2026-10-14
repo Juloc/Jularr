@@ -86,36 +86,57 @@ namespace Jularr.Backend.Service.Core
             var nonce = RandomNumberGenerator.GetBytes(12);
             var tag = new byte[16];
             var sealedKeys = new byte[plain.Length];
-            using (var aes = new AesGcm(Derive(passphrase, salt), tag.Length))
+            var secret = Derive(passphrase, salt);
+            try
             {
+                using var aes = new AesGcm(secret, tag.Length);
                 aes.Encrypt(nonce, plain, sealedKeys, tag);
             }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(secret);
+                CryptographicOperations.ZeroMemory(plain);
+            }
 
-            CryptographicOperations.ZeroMemory(plain);
             File.WriteAllBytes(file, [.. SealedMagic, .. salt, .. nonce, .. tag, .. sealedKeys]);
         }
 
         // A wrong passphrase changes nothing.
         public static void UnsealKeys(string file, string? to, string passphrase)
         {
+            // Without a key folder there is nothing to bring back, as with plain copies.
+            if (to is null)
+            {
+                return;
+            }
+
             var content = File.ReadAllBytes(file);
-            if (to is null || content.Length < 48 || !content.AsSpan(0, 4).SequenceEqual(SealedMagic))
+            if (content.Length < 48 || !content.AsSpan(0, 4).SequenceEqual(SealedMagic))
             {
                 throw new CryptographicException("The key ring file is unreadable.");
             }
 
             var plain = new byte[content.Length - 48];
-            using (var aes = new AesGcm(Derive(passphrase, content[4..20]), 16))
+            var secret = Derive(passphrase, content[4..20]);
+            try
             {
-                aes.Decrypt(content.AsSpan(20, 12), content.AsSpan(48), content.AsSpan(32, 16), plain);
-            }
+                using (var aes = new AesGcm(secret, 16))
+                {
+                    aes.Decrypt(content.AsSpan(20, 12), content.AsSpan(48), content.AsSpan(32, 16), plain);
+                }
 
-            CreatePrivate(to);
-            using var zip = new ZipArchive(new MemoryStream(plain), ZipArchiveMode.Read);
-            foreach (var entry in zip.Entries.Where(entry => entry.Name == entry.FullName && entry.Name.EndsWith(".xml", StringComparison.Ordinal)))
+                CreatePrivate(to);
+                using var zip = new ZipArchive(new MemoryStream(plain), ZipArchiveMode.Read);
+                foreach (var entry in zip.Entries.Where(entry => entry.Name == entry.FullName && entry.Name.EndsWith(".xml", StringComparison.Ordinal)))
+                {
+                    var target = Path.Combine(to, entry.Name);
+                    if (!File.Exists(target)) entry.ExtractToFile(target);
+                }
+            }
+            finally
             {
-                var target = Path.Combine(to, entry.Name);
-                if (!File.Exists(target)) entry.ExtractToFile(target);
+                CryptographicOperations.ZeroMemory(secret);
+                CryptographicOperations.ZeroMemory(plain);
             }
         }
 
