@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Library;
 
 namespace Jularr.Backend.Data.Admin.Library.V1
@@ -82,5 +83,54 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.SkippedCount))]
         public int SkippedCount { get; }
+    }
+
+    public sealed class ReadNamingPatternsParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class NamingPatternParametersV1 : BaseParameters
+    {
+        public NamingPatternParametersV1(MediaType mediaTypeId)
+        {
+            MediaTypeId = mediaTypeId;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+    }
+
+    public sealed class NamingPatternV1 : BaseResponse
+    {
+        public NamingPatternV1(MediaType mediaTypeId, string pattern, long version)
+        {
+            MediaTypeId = mediaTypeId;
+            Pattern = pattern;
+            Version = version;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Pattern))]
+        public string Pattern { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
+        public long Version { get; }
+    }
+
+    public sealed class UpdateNamingPatternDataV1 : BaseData
+    {
+        public UpdateNamingPatternDataV1(string pattern, long version)
+        {
+            Pattern = pattern;
+            Version = version;
+        }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Pattern))]
+        public string Pattern { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
+        public long Version { get; }
     }
 }

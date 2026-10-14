@@ -10,8 +10,12 @@ namespace Jularr.Backend.Data.Logic.Library
     {
         public LibraryRenameFileData(long id, long libraryRootId, string libraryRootName, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string relativePath, DateTime? missingSince,
             long? mediaAssetId, string? canonicalTitle, int? releaseYear, string? author, WorkUnitType? workUnitTypeId, decimal? unitNumber, string? unitTitle, decimal? parentUnitNumber,
-            int? width)
+            string? qualityKey, string? releaseGroup, string? edition, int revision, int? width)
         {
+            QualityKey = qualityKey;
+            ReleaseGroup = releaseGroup;
+            Edition = edition;
+            Revision = revision;
             Width = width;
             Id = id;
             LibraryRootId = libraryRootId;
@@ -74,6 +78,18 @@ namespace Jularr.Backend.Data.Logic.Library
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber), false)]
         public decimal? ParentUnitNumber { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
+        public string? QualityKey { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.ReleaseGroup))]
+        public string? ReleaseGroup { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Edition))]
+        public string? Edition { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Revision))]
+        public int Revision { get; }
 
         // The analysed video width, for a quality tag the name lacks.
         [DataField(typeof(MediaTrackFields), nameof(MediaTrackFields.Width))]

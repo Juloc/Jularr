@@ -27,7 +27,7 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files,
-            string? author = null, int trackCount = 0, string? platform = null)
+            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts = null, string? author = null, int trackCount = 0, string? platform = null)
         {
             if (mediaType == MediaType.Book)
             {
@@ -45,14 +45,14 @@ namespace Jularr.Backend.Logic.Acquisition
             }
 
             var videos = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Video && !MediaPathParser.IsSample(file.RelativePath)).ToArray();
-            var quality = LibraryNaming.Quality(qualityKey);
             var placements = new List<ImportPlacementData>();
             if (mediaType == MediaType.Movie)
             {
                 // The largest video is the feature.
                 if (videos.MaxBy(video => video.SizeBytes) is { } feature)
                 {
-                    AddGroup(placements, files, feature, LibraryNaming.Movie(title, year, quality), null, null, null);
+                    AddGroup(placements, files, feature, LibraryNaming.Video(patterns, MediaType.Movie,
+                        new NamingValues(title, year, null, null, null, qualityKey, facts?.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)), null, null, null);
                 }
 
                 return placements;
@@ -66,7 +66,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     continue;
                 }
 
-                AddGroup(placements, files, video, LibraryNaming.Episode(title, season, episode, quality), WorkUnitType.Episode, episode, season);
+                AddGroup(placements, files, video, LibraryNaming.Video(patterns, MediaType.Series,
+                    new NamingValues(title, year, season, episode, null, qualityKey, facts?.ReleaseGroup ?? parsed.ReleaseGroup, facts?.Edition, facts?.Revision ?? 1)), WorkUnitType.Episode, episode, season);
             }
 
             return placements;

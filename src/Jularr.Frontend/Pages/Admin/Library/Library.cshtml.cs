@@ -15,15 +15,19 @@ namespace Jularr.Frontend.Pages.Admin.Library
     {
         Unmatched = 1,
         Files = 2,
-        Rename = 3
+        Rename = 3,
+        Naming = 4
     }
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
-        ApplyLibraryRenamesV1 applyRenames, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const int RenamePageSize = 100;
         private PageResult<LibraryFileDetailsV1>? _files;
         private LibraryRenamePlanV1? _renames;
+        private IReadOnlyList<NamingPatternV1>? _patterns;
+        private UpdateNamingPatternDataV1? _patternInput;
+        private MediaType? _failedPattern;
         private long? _failedFileId;
 
         [BindProperty(SupportsGet = true)]
@@ -36,7 +40,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
         {
             page.Title("admin.library.title");
             page.Navigation("nav.admin");
-            page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>().Where(tab => tab != LibraryTab.Rename || CanRename)
+            page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>().Where(tab => tab is not (LibraryTab.Rename or LibraryTab.Naming) || CanRename)
                 .Select(tab => new NavigationTab("library.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.library.title"));
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
@@ -86,7 +90,24 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 Paging(page, PageNumber, renames.Items.Count == RenamePageSize);
             }
 
-            if (FormError is not null && _failedFileId is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            // Names of movie and episode files for imports and renames.
+            if (_patterns is { } patterns)
+            {
+                page.Content.Add(new P(new Text("library.naming.tokens")));
+                foreach (var pattern in patterns)
+                {
+                    var failed = _failedPattern == pattern.MediaTypeId;
+                    page.Content.Add(new Form<UpdateNamingPatternDataV1>(form =>
+                    {
+                        form.Hidden(item => item.Version);
+                        form.Text(item => item.Pattern, "library.naming." + pattern.MediaTypeId);
+                        form.Submit("common.save");
+                    }, Address(handler: "Naming") + "&mediaTypeId=" + pattern.MediaTypeId, csrf, failed && _patternInput is not null ? _patternInput : new UpdateNamingPatternDataV1(pattern.Pattern, pattern.Version),
+                        failed ? FormError : null));
+                }
+            }
+
+            if (FormError is not null && _failedFileId is null && _failedPattern is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         private Form<AssignLibraryFileDataV1> Assignment(LibraryFileDetailsV1 file, string? csrf)
@@ -142,6 +163,14 @@ namespace Jularr.Frontend.Pages.Admin.Library
             return LocalRedirect(Address());
         }
 
+        public async Task<IActionResult> OnPostNamingAsync([BindRequired] MediaType mediaTypeId, string? pattern, long version)
+        {
+            _failedPattern = mediaTypeId;
+            _patternInput = new UpdateNamingPatternDataV1(pattern ?? "", version);
+            await updatePattern.ExecuteAsync<UpdateResult>(new NamingPatternParametersV1(mediaTypeId), _patternInput, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
         public async Task<IActionResult> OnPostRenameAsync([BindRequired] string fingerprint)
         {
             var result = await applyRenames.ExecuteAsync<ApplyLibraryRenamesResultV1>(new LibraryRenamesParametersV1(), new ApplyLibraryRenamesDataV1(fingerprint), HttpContext.RequestAborted);
@@ -153,9 +182,15 @@ namespace Jularr.Frontend.Pages.Admin.Library
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            if (Tab == LibraryTab.Rename && !CanRename)
+            if (Tab is LibraryTab.Rename or LibraryTab.Naming && !CanRename)
             {
                 Tab = LibraryTab.Files;
+            }
+
+            if (Tab == LibraryTab.Naming)
+            {
+                _patterns = await readPatterns.ExecuteAsync<BaseDataList<NamingPatternV1>>(new ReadNamingPatternsParametersV1(), ct);
+                return;
             }
 
             if (Tab == LibraryTab.Rename)

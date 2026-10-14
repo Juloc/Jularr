@@ -431,7 +431,7 @@ namespace Jularr.Backend.Tests
         {
             static LibraryRenameFileData File(long id, MediaType type, string path, string? title, WorkUnitType? unit = null, decimal? number = null, decimal? parent = null,
                 MediaSubtype? subtype = null, string? unitTitle = null, DateTime? missing = null, int? width = null) =>
-                new(id, 1, "Library", type, subtype, path, missing, title is null ? null : id, title, 2019, "Artist A, Artist B", unit, number, unitTitle, parent, width);
+                new(id, 1, "Library", type, subtype, path, missing, title is null ? null : id, title, 2019, "Artist A, Artist B", unit, number, unitTitle, parent, null, null, null, 1, width);
 
             var plan = LibraryRenameLogic.Plan([
                 File(1, MediaType.Series, "show/s1/ep2 [WEBDL-1080p].mkv", "Show", WorkUnitType.Episode, 2m, 1m),
@@ -441,7 +441,7 @@ namespace Jularr.Backend.Tests
                 File(5, MediaType.Movie, "gone.mkv", "Gone", missing: DateTime.UtcNow),
                 File(6, MediaType.Movie, "kept (2019)/KEPT (2019).mkv", "Kept"),
                 File(7, MediaType.Book, "loose.epub", "Book"),
-                File(8, MediaType.Movie, "wide.mkv", "Wide", width: 1920)]);
+                File(8, MediaType.Movie, "wide.mkv", "Wide", width: 1920)], NamingPatternTests.Defaults);
 
             CollectionAssert.AreEqual(new[]
             {

@@ -43,6 +43,10 @@ namespace Jularr.Backend.Logic.Library
                     unit."Number" AS "UnitNumber",
                     unit."Title" AS "UnitTitle",
                     parent."Number" AS "ParentUnitNumber",
+                    file."QualityKey",
+                    file."ReleaseGroup",
+                    file."Edition",
+                    file."Revision",
                     (
                         SELECT
                             max(track."Width")
@@ -77,7 +81,7 @@ namespace Jularr.Backend.Logic.Library
             return ctx.ReadSql.ReadListAsync<LibraryRenameFileData>(sql, ct);
         }
 
-        public static IReadOnlyList<LibraryRenameData> Plan(IReadOnlyList<LibraryRenameFileData> files)
+        public static IReadOnlyList<LibraryRenameData> Plan(IReadOnlyList<LibraryRenameFileData> files, IReadOnlyDictionary<MediaType, string> patterns)
         {
             var renames = new List<LibraryRenameData>();
             foreach (var root in files.GroupBy(file => file.LibraryRootId))
@@ -96,7 +100,7 @@ namespace Jularr.Backend.Logic.Library
                 foreach (var file in media)
                 {
                     var current = Stem(file.RelativePath);
-                    if (Target(file) is not { } target || IsNamed(current, target))
+                    if (Target(file, patterns) is not { } target || IsNamed(current, target))
                     {
                         continue;
                     }
@@ -134,7 +138,7 @@ namespace Jularr.Backend.Logic.Library
         }
 
         // Only identities with a fixed layout are renamed; games keep their release folders.
-        private static string? Target(LibraryRenameFileData file)
+        private static string? Target(LibraryRenameFileData file, IReadOnlyDictionary<MediaType, string> patterns)
         {
             if (file.CanonicalTitle is not { } title)
             {
@@ -143,8 +147,8 @@ namespace Jularr.Backend.Logic.Library
 
             return (file.MediaTypeId, file.WorkUnitTypeId) switch
             {
-                (MediaType.Movie, null) => LibraryNaming.Movie(title, file.ReleaseYear, QualityOf(file)),
-                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => LibraryNaming.Episode(title, season, file.UnitNumber!.Value, QualityOf(file)),
+                (MediaType.Movie, null) => LibraryNaming.Video(patterns, MediaType.Movie, Values(file, title, null, null)),
+                (MediaType.Series, WorkUnitType.Episode) when file.ParentUnitNumber is { } season => LibraryNaming.Video(patterns, MediaType.Series, Values(file, title, season, file.UnitNumber)),
                 (MediaType.Book, null or WorkUnitType.Volume) when file.MediaSubtypeId == MediaSubtype.Manga => LibraryNaming.Volume(title, file.UnitNumber),
                 (MediaType.Book, null) => LibraryNaming.Book(title, file.ReleaseYear, file.Author),
                 (MediaType.Music, WorkUnitType.Track) when file.UnitTitle is { } name => LibraryNaming.Track(file.Author, title, file.ReleaseYear, file.UnitNumber!.Value, name),
@@ -152,16 +156,19 @@ namespace Jularr.Backend.Logic.Library
             };
         }
 
-        // The quality tag an import gave the name stays; otherwise the analysed width names the resolution, wide formats included.
-        private static string QualityOf(LibraryRenameFileData file) => QualityTag().Match(Path.GetFileNameWithoutExtension(file.RelativePath)) is { Success: true } match
-            ? LibraryNaming.Quality(match.Groups[1].Value)
-            : LibraryNaming.Quality(file.Width switch
+        private static NamingValues Values(LibraryRenameFileData file, string title, decimal? season, decimal? episode) =>
+            new(title, file.ReleaseYear, season, episode, file.UnitTitle, QualityOf(file), file.ReleaseGroup, file.Edition, file.Revision);
+
+        // The quality tag the name already carries, else the stored release quality, else the analysed width, wide formats included.
+        private static string? QualityOf(LibraryRenameFileData file) => QualityTag().Match(Path.GetFileNameWithoutExtension(file.RelativePath)) is { Success: true } match
+            ? match.Groups[1].Value
+            : file.QualityKey ?? file.Width switch
             {
                 >= 3500 => "2160p",
                 >= 1800 => "1080p",
                 >= 1200 => "720p",
                 _ => null
-            });
+            };
 
         // A counted alternative is already in place.
         private static bool IsNamed(string current, string target) => current.Equals(target, StringComparison.OrdinalIgnoreCase)

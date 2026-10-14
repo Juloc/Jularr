@@ -158,7 +158,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         protected override async Task<IServiceOutput> OnRead()
         {
             // The whole plan is fingerprinted; one page is shown.
-            var renames = LibraryRenameLogic.Plan(await Context.ReadLibraryRenameFilesAsync(CancellationToken));
+            var renames = LibraryRenameLogic.Plan(await Context.ReadLibraryRenameFilesAsync(CancellationToken), await Context.ReadNamingPatternsAsync(CancellationToken));
             var items = renames.Skip((Page.Page - 1) * Page.PageSize).Take(Page.PageSize)
                 .Select(rename => new LibraryRenameV1(rename.StoredFileId, rename.LibraryRootName, rename.RelativePath, rename.TargetPath));
             return new LibraryRenamePlanV1(new BaseDataList<LibraryRenameV1>(items), LibraryRenameLogic.Fingerprint(renames));
@@ -184,7 +184,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         {
             var (renames, roots) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                var plan = LibraryRenameLogic.Plan(await ctx.ReadLibraryRenameFilesAsync(ct));
+                var plan = LibraryRenameLogic.Plan(await ctx.ReadLibraryRenameFilesAsync(ct), await ctx.ReadNamingPatternsAsync(ct));
                 var locations = new List<LibraryRootLocationData>();
                 foreach (var rootId in plan.Select(rename => rename.LibraryRootId).Distinct())
                 {
@@ -299,6 +299,46 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             }
 
             return recorded;
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/library/naming")]
+    public sealed class ReadNamingPatternsV1 : AdminService<ReadNamingPatternsParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<NamingPatternV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadNamingPatternsParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadNamingPatternsParametersV1 parameters, Type resultType) => new("storage.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    pattern."MediaTypeId",
+                    pattern."Pattern",
+                    pattern."Version"
+                FROM
+                    "NamingPatterns" AS pattern
+                ORDER BY
+                    pattern."MediaTypeId";
+                """;
+            return new BaseDataList<NamingPatternV1>(await Context.ReadSql.ReadListAsync<NamingPatternV1>(sql, CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/library/naming/{mediaTypeId}")]
+    public sealed class UpdateNamingPatternV1 : AdminService<NamingPatternParametersV1, UpdateNamingPatternDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(NamingPatternParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(NamingPatternParametersV1 parameters, Type resultType) => new("storage.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, Data.Pattern, Data.Version), CancellationToken);
+            return new UpdateResult(true);
         }
     }
 }

@@ -153,9 +153,9 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "FR" }, Judge("Example Manga (French) (Digital)").Languages!.ToArray());
 
             // A file holding several volumes is no single volume.
-            Assert.AreEqual(0, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow)]).Count);
+            Assert.AreEqual(0, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow)], NamingPatternTests.Defaults).Count);
             Assert.AreEqual(1, ImportPlacementLogic.Plan(MediaType.Book, MediaSubtype.Manga, "Example Manga", null, null, [new("Example Manga v01-03.cbz", 1000, DateTime.UtcNow),
-                new("Example Manga v04.cbz", 1000, DateTime.UtcNow)]).Count);
+                new("Example Manga v04.cbz", 1000, DateTime.UtcNow)], NamingPatternTests.Defaults).Count);
 
             static ReleaseJudgement<MangaIdentityMatch> Judge(string title) => MangaReleaseJudge.Judge(["Example Manga"], null,
                 new ReleaseOffer(title, 1, "Indexer", 25, "guid", new Uri("https://indexer.example.test/guid"), null, 1_000_000, DateTimeOffset.UtcNow, ["title"]));

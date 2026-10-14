@@ -25,7 +25,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
-            var root = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadImportRootAsync(download.WantedItemId, token), ct);
+            var (root, patterns) = await context.ExecuteBatchAsync(async (ctx, token) => (await ctx.ReadImportRootAsync(download.WantedItemId, token), await ctx.ReadNamingPatternsAsync(token)), ct);
             if (root is null)
             {
                 await AttentionAsync(context, download.OperationId, "import_no_library", null, ct);
@@ -33,7 +33,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             // Ebooks and comics must be what their names say.
-            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, download.Author, download.TrackCount, download.PlatformName)
+            var facts = ReleaseFacts.Of(download.Title);
+            var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, patterns, facts,
+                    download.Author, download.TrackCount, download.PlatformName)
                 .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
                 .ToArray();
             if (placements.Length == 0)
@@ -60,7 +62,6 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
             }
 
             var imported = new List<ImportedFile>();
-            var facts = ReleaseFacts.Of(download.Title);
             var media = new List<(string RelativePath, ImportPlacementData Placement)>();
             foreach (var group in placements.GroupBy(placement => placement.Group))
             {

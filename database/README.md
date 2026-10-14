@@ -93,6 +93,8 @@ group, quality key, edition, revision; from the grabbed release on import, other
 probed streams, and Operations/OperationTypes/OperationStatusTypes are the shared
 background-operation owner, starting with library scans. Offline storage never
 deletes inventory; only complete scans mark assigned files missing.
+NamingPatterns hold the Admin's movie and episode file names (placeholders, '/' for folders),
+seeded with the import layout.
 
 Included tables:
 

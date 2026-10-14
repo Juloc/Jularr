@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Logic.Acquisition;
 
@@ -10,20 +11,8 @@ namespace Jularr.Backend.Logic.Library
     {
         private static readonly HashSet<char> InvalidNameCharacters = [.. Path.GetInvalidFileNameChars(), '<', '>', ':', '"', '/', '\\', '|', '?', '*'];
 
-        public static string Quality(string? qualityKey) => qualityKey is { Length: > 0 } ? " [" + SafeName(qualityKey) + "]" : "";
-
-        public static string Movie(string title, int? year, string quality)
-        {
-            var folder = Folder(title, year);
-            return $"{folder}/{folder}{quality}";
-        }
-
-        public static string Episode(string title, decimal season, decimal episode, string quality)
-        {
-            var name = SafeName(title);
-            var seasonText = Number(season);
-            return $"{name}/Season {seasonText}/{name} - S{seasonText}E{Number(episode)}{quality}";
-        }
+        // Movies and episodes follow the Admin's pattern for their type.
+        public static string Video(IReadOnlyDictionary<MediaType, string> patterns, MediaType mediaType, NamingValues values) => NamingPattern.Apply(patterns[mediaType], values);
 
         public static string Book(string title, int? year, string? author) =>
             (BookReleaseJudge.Authors(author).FirstOrDefault() is { } writer ? SafeName(writer) + "/" : "") + Folder(title, year) + "/" + SafeName(title);
