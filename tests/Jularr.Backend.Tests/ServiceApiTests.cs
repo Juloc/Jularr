@@ -39,6 +39,9 @@ namespace Jularr.Backend.Tests
             ServiceError.ShowDetailTo(context, true);
             Assert.AreEqual("InvalidOperationException: private error", ServiceError.Describe(new InvalidOperationException("private error"), context, NullLogger.Instance).Detail);
             Assert.IsNull(ServiceError.Describe(new KeyNotFoundException("gone"), context, NullLogger.Instance).Detail);
+            var known = ServiceError.Describe(new ServiceUnavailableException("plex_unavailable"), context, NullLogger.Instance);
+            Assert.AreEqual("errors.plex_unavailable", known.ResourceKey);
+            Assert.IsNull(known.Detail);
         }
 
         [TestMethod]

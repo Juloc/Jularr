@@ -29,12 +29,8 @@ namespace Jularr.Frontend.Framework
 
             var logger = HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>();
             var error = ServiceError.Describe(executed.Exception, HttpContext, logger);
-            if (error.StatusCode < StatusCodes.Status500InternalServerError && executed.Exception.InnerException is { } cause)
-            {
-                logger.LogWarning(cause, "{Code} on {Path}.", error.Code, Request.Path);
-            }
 
-            // A page that cannot even show its error leaves it to the shared handler.
+            // Otherwise the shared handler answers.
             try
             {
                 executed.Result = await PrepareFailureAsync(error);
