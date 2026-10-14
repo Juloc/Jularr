@@ -14,6 +14,7 @@ using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Caching.Memory;
+using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
@@ -133,10 +134,10 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 work = await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
                 foreach (var season in work.Seasons)
                 {
-                    units.Add(new { Season = season.SeasonNumber, Episode = (int?)null, Title = Limit(season.Name), ReleasedOn = season.AirDate });
+                    units.Add(new { Season = season.SeasonNumber, Episode = (int?)null, Title = TextLimit.Cut(season.Name, 500), ReleasedOn = season.AirDate });
                     foreach (var episode in await _tmdb.ReadSeasonAsync(connection, tmdbId, season.SeasonNumber, ct))
                     {
-                        units.Add(new { Season = season.SeasonNumber, Episode = (int?)episode.EpisodeNumber, Title = Limit(episode.Name), ReleasedOn = episode.AirDate });
+                        units.Add(new { Season = season.SeasonNumber, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.AirDate });
                     }
                 }
             }
@@ -159,19 +160,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // Overview is in the instance language; image paths are language-neutral.
             var facts = new[]
             {
-                new { Key = "Overview", Value = work.Overview is { Length: > 4000 } overview ? overview[..4000] : work.Overview, Localized = true },
+                new { Key = "Overview", Value = TextLimit.Cut(work.Overview, 4000), Localized = true },
                 new { Key = "Poster", Value = TmdbClient.PosterUrl(work.PosterPath), Localized = false },
                 new { Key = "Backdrop", Value = TmdbClient.BackdropUrl(work.BackdropPath), Localized = false }
             }.Where(fact => fact.Value is not null);
             // Japanese animation is proposed as Anime unless a subtype was chosen.
             subtype ??= AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null;
-            var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), Limit(work.Title)!,
-                work.OriginalTitle == work.Title ? null : Limit(work.OriginalTitle), work.Year is >= 1800 and <= 2200 ? work.Year : null,
+            var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(work.Title, 500)!,
+                work.OriginalTitle == work.Title ? null : TextLimit.Cut(work.OriginalTitle, 500), work.Year is >= 1800 and <= 2200 ? work.Year : null,
                 JsonSerializer.Serialize(identities), JsonSerializer.Serialize(units), JsonSerializer.Serialize(facts), "tmdb", work.ReleasedOn);
             return await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
-                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, work.CollectionName is { Length: > 300 } name ? name[..300] : work.CollectionName), token);
+                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, TextLimit.Cut(work.CollectionName, 300)), token);
                 return workId;
             }, ct);
         }
@@ -190,7 +191,5 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             TmdbFailure.RateLimited => new ServiceUnavailableException("metadata_rate_limited"),
             _ => new ServiceUnavailableException("metadata_unavailable")
         };
-
-        private static string? Limit(string? value) => value is null ? null : value.Length <= 500 ? value : value[..500];
     }
 }

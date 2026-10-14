@@ -6,6 +6,7 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.OpenLibrary;
 using Jularr.Integrations.Logic.OpenLibrary;
+using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
@@ -44,11 +45,11 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             var facts = new[]
             {
-                new { Key = "Author", Value = Limit(string.Join(", ", work.Authors), 4000), Localized = false },
-                new { Key = "Overview", Value = Limit(work.Description, 4000), Localized = false },
+                new { Key = "Author", Value = TextLimit.Cut(string.Join(", ", work.Authors), 4000), Localized = false },
+                new { Key = "Overview", Value = TextLimit.Cut(work.Description, 4000), Localized = false },
                 new { Key = "Poster", Value = OpenLibraryClient.CoverUrl(work.CoverId), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
-            var data = new WorkMetadataData(MediaType.Book, subtype, Namespace, work.WorkId, Limit(work.Title, 500)!, null, work.Year is >= 1800 and <= 2200 ? work.Year : null, "[]", "[]",
+            var data = new WorkMetadataData(MediaType.Book, subtype, Namespace, work.WorkId, TextLimit.Cut(work.Title, 500)!, null, work.Year is >= 1800 and <= 2200 ? work.Year : null, "[]", "[]",
                 JsonSerializer.Serialize(facts), Namespace);
             return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
         }
@@ -59,7 +60,5 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             OpenLibraryFailure.RateLimited => new ServiceUnavailableException("metadata_rate_limited"),
             _ => new ServiceUnavailableException("metadata_unavailable")
         };
-
-        private static string? Limit(string? value, int length) => value is null ? null : value.Length <= length ? value : value[..length];
     }
 }

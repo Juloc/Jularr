@@ -45,7 +45,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 try
                 {
                     results.AddRange((await _books.SearchAsync(Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(BookMetadata.Namespace, result.WorkId,
-                        Limit(result.Title, 500)!, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, Limit(string.Join(", ", result.Authors), 4000))));
+                        TextLimit.Cut(result.Title, 500)!, null, result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000))));
                 }
                 catch (ServiceUnavailableException exception)
                 {
@@ -55,8 +55,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 if (Data.MediaSubtypeId is MediaSubtype.Manga or MediaSubtype.LightNovel)
                 {
                     results.AddRange((await _aniList.SearchBooksAsync(Data.MediaSubtypeId.Value, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(
-                        AniListMetadata.Namespace, result.Id.ToString(CultureInfo.InvariantCulture), Limit(AniListMetadata.Title(result), 500)!, Limit(result.RomajiTitle, 500),
-                        result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Description, 4000), null, Limit(string.Join(", ", result.Authors), 4000))));
+                        AniListMetadata.Namespace, result.Id.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(AniListMetadata.Title(result), 500)!, TextLimit.Cut(result.RomajiTitle, 500),
+                        result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Description, 4000), null, TextLimit.Cut(string.Join(", ", result.Authors), 4000))));
                 }
                 else if (failure is not null)
                 {
@@ -68,7 +68,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 var connection = await _games.ConnectAsync(Context, CancellationToken);
                 results.AddRange((await _games.SearchAsync(connection, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result => new MetadataSearchResultV1(GameMetadata.Namespace,
                     result.Id.ToString(CultureInfo.InvariantCulture), result.Name, null, result.Year is >= 1950 and <= 2200 ? result.Year : null,
-                    Limit(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, Limit(string.Join(", ", result.Developers), 4000))));
+                    TextLimit.Cut(string.Join(", ", result.Platforms.Select(platform => platform.Abbreviation ?? platform.Name)), 4000), null, TextLimit.Cut(string.Join(", ", result.Developers), 4000))));
             }
             else if (MusicMetadata.Handles(Data.MediaTypeId))
             {
@@ -79,8 +79,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
                 results.AddRange((await _metadata.SearchAsync(connection, Data.MediaTypeId, Data.Query, Data.ReleaseYear, CancellationToken)).Select(result =>
-                    new MetadataSearchResultV1(WorkMetadata.Namespace(Data.MediaTypeId), result.Id.ToString(CultureInfo.InvariantCulture), Limit(result.Title, 500)!,
-                        Limit(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Overview, 4000), null)));
+                    new MetadataSearchResultV1(WorkMetadata.Namespace(Data.MediaTypeId), result.Id.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(result.Title, 500)!,
+                        TextLimit.Cut(result.OriginalTitle, 500), result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000), null)));
             }
 
             // Mark results that already are Works.
@@ -104,8 +104,6 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return new BaseDataList<MetadataSearchResultV1>(results.Select(result => new MetadataSearchResultV1(result.Namespace, result.ExternalId, result.Title, result.OriginalTitle,
                 result.ReleaseYear, result.Overview, works.TryGetValue((result.Namespace, result.ExternalId), out var workId) ? workId : null, result.Author)).ToArray());
         }
-
-        private static string? Limit(string? value, int length) => value is null ? null : value.Length <= length ? value : value[..length];
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/works/metadata")]

@@ -8,6 +8,7 @@ using Jularr.Backend.Logic.Media;
 using Jularr.Integrations.Data.AniList;
 using Jularr.Integrations.Logic.AniList;
 using Microsoft.Extensions.Caching.Memory;
+using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
@@ -73,13 +74,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var title = Title(media);
             var facts = new[]
             {
-                new { Key = "Author", Value = Limit(string.Join(", ", media.Authors), 4000), Localized = false },
-                new { Key = "Overview", Value = Limit(media.Description, 4000), Localized = false },
+                new { Key = "Author", Value = TextLimit.Cut(string.Join(", ", media.Authors), 4000), Localized = false },
+                new { Key = "Overview", Value = TextLimit.Cut(media.Description, 4000), Localized = false },
                 new { Key = "Poster", Value = media.CoverUrl, Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var volumes = Enumerable.Range(1, media.Volumes ?? 0).Select(volume => new { Volume = volume });
             var data = new WorkMetadataData(MediaType.Book, AniListMatching.Subtype(media.Format) ?? MediaSubtype.Manga, Namespace, media.Id.ToString(CultureInfo.InvariantCulture),
-                Limit(title, 500)!, Limit(media.EnglishTitle is null ? media.NativeTitle : media.RomajiTitle, 500), media.Year is >= 1800 and <= 2200 ? media.Year : null, "[]",
+                TextLimit.Cut(title, 500)!, TextLimit.Cut(media.EnglishTitle is null ? media.NativeTitle : media.RomajiTitle, 500), media.Year is >= 1800 and <= 2200 ? media.Year : null, "[]",
                 JsonSerializer.Serialize(volumes), JsonSerializer.Serialize(facts), Namespace);
             return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
         }
@@ -92,7 +93,5 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             AniListFailure.RateLimited => new ServiceUnavailableException("metadata_rate_limited"),
             _ => new ServiceUnavailableException("metadata_unavailable")
         };
-
-        private static string? Limit(string? value, int length) => value is null ? null : value.Length <= length ? value : value[..length];
     }
 }

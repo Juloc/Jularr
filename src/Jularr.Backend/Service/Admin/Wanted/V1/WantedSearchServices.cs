@@ -62,7 +62,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     : evaluation.Reasons.Count > 0 ? (evaluation.Reasons[^1].Code, evaluation.Reasons[^1].Value) : ("Eligible", null);
                 return new WantedReleaseCandidateV1(evaluation.Candidate.Id, offer.Title, offer.ConnectionName, offer.SizeBytes, offer.PublishedAt?.UtcDateTime, evaluation.Score?.QualityKey,
                     evaluation.Decision switch { SelectionDecision.Eligible => ReleaseDecisionType.Eligible, SelectionDecision.ManualReview => ReleaseDecisionType.ManualReview, _ => ReleaseDecisionType.Rejected },
-                    evaluation.PreferenceScore, reason.Item1, reason.Item2 is { Length: > 1000 } value ? value[..1000] : reason.Item2);
+                    evaluation.PreferenceScore, reason.Item1, TextLimit.Cut(reason.Item2, 1000));
             }).ToArray());
         }
     }

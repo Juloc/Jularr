@@ -13,6 +13,7 @@ using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Integrations.Data.Igdb;
 using Jularr.Integrations.Logic.Igdb;
 using Microsoft.AspNetCore.DataProtection;
+using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
@@ -88,8 +89,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             var facts = new[]
             {
-                new { Key = "Developer", Value = Limit(string.Join(", ", game.Developers), 4000), Localized = false },
-                new { Key = "Overview", Value = Limit(game.Summary, 4000), Localized = false },
+                new { Key = "Developer", Value = TextLimit.Cut(string.Join(", ", game.Developers), 4000), Localized = false },
+                new { Key = "Overview", Value = TextLimit.Cut(game.Summary, 4000), Localized = false },
                 new { Key = "Poster", Value = game.CoverImageId is { } cover ? IgdbClient.CoverUrl(cover) : null, Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var data = new WorkMetadataData(MediaType.Game, null, Namespace, game.Id.ToString(CultureInfo.InvariantCulture), game.Name, game.AlternativeNames.FirstOrDefault(),
@@ -109,7 +110,5 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             IgdbFailure.RateLimited => new ServiceUnavailableException("metadata_rate_limited"),
             _ => new ServiceUnavailableException("metadata_unavailable")
         };
-
-        private static string? Limit(string? value, int length) => value is null ? null : value.Length <= length ? value : value[..length];
     }
 }

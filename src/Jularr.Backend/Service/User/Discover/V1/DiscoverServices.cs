@@ -390,10 +390,8 @@ namespace Jularr.Backend.Service.User.Discover.V1
         public static DiscoverItemV1 ToItem(MediaType mediaType, TmdbSearchResult result, IReadOnlyDictionary<int, DiscoverOverlayData> overlay)
         {
             var known = overlay.GetValueOrDefault(result.Id);
-            return new DiscoverItemV1(mediaType, result.Id, known?.WorkId, Limit(result.Title, 500)!, result.Year is >= 1800 and <= 2200 ? result.Year : null, Limit(result.Overview, 4000),
+            return new DiscoverItemV1(mediaType, result.Id, known?.WorkId, TextLimit.Cut(result.Title, 500)!, result.Year is >= 1800 and <= 2200 ? result.Year : null, TextLimit.Cut(result.Overview, 4000),
                 TmdbClient.PosterUrl(result.PosterPath), TmdbClient.BackdropUrl(result.BackdropPath), known?.MediaStateTypeId ?? MediaStateType.NotRequested, known?.PlexUrl);
         }
-
-        private static string? Limit(string? value, int length) => value is null ? null : value.Length <= length ? value : value[..length];
     }
 }
