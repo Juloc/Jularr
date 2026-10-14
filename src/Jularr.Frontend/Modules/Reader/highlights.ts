@@ -174,8 +174,9 @@ export function highlights(reader: HTMLElement, content: HTMLElement, section: n
         const range = document.createRange();
         range.setStart(start.node, start.offset);
         range.setEnd(end.node, end.offset);
-        const quote = annotation.quote.replace(/…$/, "");
-        if (!range.toString().replace(/\s+/g, " ").trim().startsWith(quote)) return;
+        // Selections add line breaks between blocks; whitespace does not count.
+        const quote = annotation.quote.replace(/…$/, "").replace(/\s+/g, "");
+        if (!range.toString().replace(/\s+/g, "").startsWith(quote)) return;
 
         const texts: Text[] = [];
         const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
