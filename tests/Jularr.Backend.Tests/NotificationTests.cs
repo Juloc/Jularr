@@ -59,6 +59,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             Assert.AreEqual(0, await UnreadAsync(host));
 
+            // Each role switches only the kinds it receives.
+            foreach (var (role, kinds) in new[] { (1, 5), (3, 4), (2, 3) })
+            {
+                await host.Fixture.RunSqlAsync($"UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = {role} WHERE \"Id\" = 41");
+                Assert.AreEqual(kinds, (await ReadAsync<BaseDataList<NotificationSettingV1>>(host, "/api/v1/notifications/settings")).Count, role.ToString());
+            }
+
             // Switched off, nothing is told and nothing is read.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Notifications'");
             using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/notifications");

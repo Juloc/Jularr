@@ -35,7 +35,7 @@ namespace Jularr.Backend.Logic.Operation
 
         public static Task<int> QueueDueLibraryScansAsync(this LogicContext ctx, OperationSinceData data, CancellationToken ct)
         {
-            // Storage known to be offline is not scanned, so a sleeping NAS stays asleep.
+            // Storage last probed offline or denied is not scanned, so a sleeping NAS stays asleep.
             var sql = new SqlStatement();
             sql.Statement =
                 """

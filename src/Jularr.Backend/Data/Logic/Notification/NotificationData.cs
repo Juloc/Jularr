@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Fields.Account;
 using Jularr.Backend.Data.Fields.Acquisition;
@@ -44,13 +45,12 @@ namespace Jularr.Backend.Data.Logic.Notification
 
     internal sealed class StaffNotificationData : BaseData
     {
-        public StaffNotificationData(NotificationType notificationTypeId, long? workId, string subject, string? link, bool ownersOnly)
+        public StaffNotificationData(NotificationType notificationTypeId, long? workId, string subject, string? link)
         {
             NotificationTypeId = notificationTypeId;
             WorkId = workId;
             Subject = subject;
             Link = link;
-            OwnersOnly = ownersOnly;
         }
 
         [DataField(typeof(NotificationFields), nameof(NotificationFields.NotificationTypeId))]
@@ -64,9 +64,6 @@ namespace Jularr.Backend.Data.Logic.Notification
 
         [DataField(typeof(NotificationFields), nameof(NotificationFields.Link))]
         public string? Link { get; }
-
-        [DataField(typeof(NotificationFields), nameof(NotificationFields.OwnersOnly))]
-        public bool OwnersOnly { get; }
     }
 
     internal sealed class NotificationMuteData : BaseData
@@ -101,5 +98,21 @@ namespace Jularr.Backend.Data.Logic.Notification
 
         [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
         public string Title { get; }
+    }
+
+    // The profile and its account's role decide which kinds it can switch.
+    internal sealed class NotificationAudienceData : BaseData
+    {
+        public NotificationAudienceData(long profileId, AccountRoleType accountRoleTypeId)
+        {
+            ProfileId = profileId;
+            AccountRoleTypeId = accountRoleTypeId;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.AccountRoleTypeId))]
+        public AccountRoleType AccountRoleTypeId { get; }
     }
 }

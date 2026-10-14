@@ -646,7 +646,7 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Parameters.Add(data);
             if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } failed)
             {
-                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadFailed, failed.WorkId, failed.Title, "/Admin/Activity", false), ct);
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadFailed, failed.WorkId, failed.Title, "/Admin/Activity"), ct);
             }
         }
 

@@ -33,6 +33,8 @@ namespace Jularr.Backend.Tests
             Assert.IsTrue(capabilities.CanReadMedia);
             Assert.IsTrue(capabilities.CanManageMedia);
             Assert.IsTrue(capabilities.CanUpdateWatchlist);
+            Assert.IsTrue(capabilities.CanAdminister);
+            Assert.IsTrue(capabilities.CanManageStorage);
 
             // Disable through the canonical writer.
             using var disabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/1", new UpdateInstanceModuleDataV1(false, 1));
@@ -57,6 +59,8 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(capabilities.CanReadMedia);
             Assert.IsFalse(capabilities.CanManageMedia);
             Assert.IsFalse(capabilities.CanUpdateWatchlist);
+            Assert.IsTrue(capabilities.CanAdminister);
+            Assert.IsFalse(capabilities.CanManageStorage);
 
             // Re-enable without recreating media.
             using var enabled = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/1", new UpdateInstanceModuleDataV1(true, 2));
@@ -76,6 +80,10 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var managerDenied = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/instance/modules/1", new UpdateInstanceModuleDataV1(false, 3));
             Assert.AreEqual(HttpStatusCode.Forbidden, managerDenied.StatusCode);
+            using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
+            capabilities = (await manager.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!;
+            Assert.IsFalse(capabilities.CanAdminister);
+            Assert.IsFalse(capabilities.CanManageStorage);
         }
 
         [TestMethod]

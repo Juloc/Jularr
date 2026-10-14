@@ -14,6 +14,5 @@ namespace Jularr.Backend.Data.Fields.Notification
         public static readonly BoolField IsRead = new();
         public static readonly BoolField IsMuted = new();
         public static readonly IntField UnreadCount = new() { Minimum = 0 };
-        public static readonly BoolField OwnersOnly = new();
     }
 }

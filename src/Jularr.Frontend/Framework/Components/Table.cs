@@ -52,6 +52,12 @@ namespace Jularr.Frontend.Framework
         {
             if (_columns.Count == 0) throw new InvalidOperationException("A typed table needs columns.");
 
+            // Headings without rows are no table; the page says why it is empty.
+            if (rows.Count == 0)
+            {
+                return;
+            }
+
             var headings = _columns
                 .Select(column => (IUiComponent)new Th(new Text(column.LabelKey)).Attribute("scope", "col"))
                 .ToArray();

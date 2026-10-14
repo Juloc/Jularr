@@ -39,26 +39,19 @@ namespace Jularr.Backend.Service.Core
             return path;
         }
 
-        public static IReadOnlyList<BackupFolder> List(string root)
-        {
-            if (!Directory.Exists(root))
-            {
-                return [];
-            }
-
-            return [.. new DirectoryInfo(root).EnumerateDirectories("jularr-*")
-                .Where(folder => Name().IsMatch(folder.Name) && File.Exists(Path.Combine(folder.FullName, DumpName)))
-                .Select(folder => new BackupFolder(folder.Name, CreatedAt(folder.Name), folder.EnumerateFiles("*", SearchOption.AllDirectories).Sum(file => file.Length), ReadFingerprint(folder.FullName) == SchemaFingerprint))
+        public static IReadOnlyList<BackupFolder> List(string root) =>
+            [.. Folders(root)
+                .Select(folder => new BackupFolder(folder.Name, CreatedAt(folder.Name), folder.EnumerateFiles("*", SearchOption.AllDirectories).Sum(file => file.Length),
+                    ReadFingerprint(folder.FullName) == SchemaFingerprint))
                 .OrderByDescending(folder => folder.Name, StringComparer.Ordinal)];
-        }
 
         // Only the name is read; sizes and manifests stay untouched.
-        public static DateTime? Newest(string root) => Directory.Exists(root)
-            ? new DirectoryInfo(root).EnumerateDirectories("jularr-*")
-                .Where(folder => Name().IsMatch(folder.Name) && File.Exists(Path.Combine(folder.FullName, DumpName)))
-                .Select(folder => (DateTime?)CreatedAt(folder.Name))
-                .Max()
-            : null;
+        public static DateTime? Newest(string root) => Folders(root).Select(folder => (DateTime?)CreatedAt(folder.Name)).Max();
+
+        // Complete backups this class made.
+        private static IEnumerable<DirectoryInfo> Folders(string root) => Directory.Exists(root)
+            ? new DirectoryInfo(root).EnumerateDirectories("jularr-*").Where(folder => Name().IsMatch(folder.Name) && File.Exists(Path.Combine(folder.FullName, DumpName)))
+            : [];
 
         // Only names this class created, never a path.
         public static string Resolve(string root, string name) =>

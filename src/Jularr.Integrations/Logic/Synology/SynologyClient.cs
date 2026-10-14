@@ -32,9 +32,10 @@ namespace Jularr.Integrations.Logic.Synology
             {
                 await CallAsync(access.BaseAddress, session, new() { ["api"] = "SYNO.Core.System", ["version"] = "1", ["method"] = restart ? "reboot" : "shutdown" }, ct);
             }
-            catch (SynologyException exception) when (exception.InnerException is HttpRequestException or TaskCanceledException or JsonException)
+            catch (SynologyException exception) when (exception.InnerException is HttpRequestException { HttpRequestError: not (HttpRequestError.ConnectionError
+                or HttpRequestError.NameResolutionError or HttpRequestError.SecureConnectionError) } or TaskCanceledException or JsonException)
             {
-                // Sent; the answer was lost. DSM refusals still surface.
+                // Sent; the answer was lost. Refusals and unreachable NAS still surface.
             }
         }
 

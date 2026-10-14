@@ -106,9 +106,10 @@ namespace Jularr.Backend.Logic.Notification
                     "Accounts" AS account
                     JOIN "Profiles" AS profile ON profile."OwnerAccountId" = account."Id"
                     JOIN "InstanceModules" AS module ON module."Key" = 'Notifications' AND module."IsEnabled"
+                    JOIN "NotificationTypes" AS type ON type."Id" = @NotificationTypeId
                 WHERE
                     account."IsEnabled"
-                    AND (account."AccountRoleTypeId" = 1 OR NOT @OwnersOnly AND account."AccountRoleTypeId" = 3)
+                    AND (account."AccountRoleTypeId" = 1 OR NOT type."IsOwnerOnly" AND account."AccountRoleTypeId" = 3)
                     AND NOT EXISTS (
                         SELECT
                             1

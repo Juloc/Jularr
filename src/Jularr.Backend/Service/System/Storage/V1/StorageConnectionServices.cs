@@ -116,7 +116,7 @@ namespace Jularr.Backend.Service.System.Storage.V1
                     // The Owner hears once the third attempt failed.
                     if (wanted && probe.StorageAvailabilityTypeId != StorageAvailabilityType.Available && candidate.ReconnectAttempts + 1 == 3)
                     {
-                        await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.StorageOffline, null, mount.Name, "/Admin/Storage?storageMountId=" + mount.Id, true), ct);
+                        await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.StorageOffline, null, mount.Name, "/Admin/Storage?storageMountId=" + mount.Id), ct);
                     }
 
                     return true;
