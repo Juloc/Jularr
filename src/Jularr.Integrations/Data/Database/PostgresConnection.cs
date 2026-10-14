@@ -11,7 +11,7 @@ namespace Jularr.Integrations.Data.Database
     }
 
     // The reason in Jularr's words; the message keeps the end of the tool's error output for the log.
-    internal sealed class PostgresToolException(string code, string output) : Exception("The PostgreSQL tool failed: " + output)
+    internal sealed class PostgresToolException(string code, string output) : Exception(output.Length > 0 ? "The PostgreSQL tool failed: " + output : "The PostgreSQL tool failed.")
     {
         public string Code { get; } = code;
     }

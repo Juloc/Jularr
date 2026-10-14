@@ -30,10 +30,9 @@ namespace Jularr.Workers
                 await using var scope = scopes.CreateAsyncScope();
                 await step(scope.ServiceProvider, ct);
             }
-            catch (SecurityException exception)
+            catch (SecurityException)
             {
-                // Its module is switched off.
-                logger.LogDebug(exception, "{Step} skipped.", name);
+                logger.LogDebug("{Step} skipped: its module is switched off.", name);
             }
             catch (Exception exception) when (!ct.IsCancellationRequested)
             {

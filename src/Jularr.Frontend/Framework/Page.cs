@@ -33,6 +33,11 @@ namespace Jularr.Frontend.Framework
                 return;
             }
 
+            if (executed.Exception.InnerException is { } cause)
+            {
+                HttpContext.RequestServices.GetRequiredService<ILogger<JularrPage>>().LogWarning(cause, "{Code} on {Path}.", error.Code, Request.Path);
+            }
+
             executed.Result = await PrepareFailureAsync(error);
             executed.ExceptionHandled = true;
         }

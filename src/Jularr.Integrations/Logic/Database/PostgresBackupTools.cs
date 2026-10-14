@@ -23,7 +23,12 @@ namespace Jularr.Integrations.Logic.Database
         public Task RestoreAsync(string file, CancellationToken ct) =>
             RunAsync(CanRestore ? PgRestorePath! : null, ["--clean", "--if-exists", "--no-owner", "--no-privileges", "--single-transaction", .. Target(), "--", file], ct);
 
-        // pg_dump and pg_restore name these causes in English whatever the server language.
+        // Only the tools' own error lines; context lines quote table rows such as password hashes.
+        private static string Errors(string output) => string.Join('\n', output.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.Contains("error:", StringComparison.Ordinal) || line.StartsWith("FATAL", StringComparison.Ordinal))
+            .Select(line => line.Length > 300 ? line[..300] : line));
+
+        // Matched in the C locale's English; anything else stays a plain failure.
         private static string Reason(string errors) =>
             errors.Contains("password authentication failed", StringComparison.OrdinalIgnoreCase) || errors.Contains("no password supplied", StringComparison.OrdinalIgnoreCase)
                 ? "backup_auth_failed"
@@ -59,6 +64,8 @@ namespace Jularr.Integrations.Logic.Database
                 start.Environment["PGPASSWORD"] = password;
             }
 
+            start.Environment["LC_MESSAGES"] = "C";
+
             Process process;
             try
             {
@@ -82,7 +89,7 @@ namespace Jularr.Integrations.Logic.Database
                 await Task.WhenAll(output, errors);
                 if (process.ExitCode != 0)
                 {
-                    var text = errors.Result.Trim();
+                    var text = Errors(errors.Result);
                     throw new PostgresToolException(Reason(text), text.Length > 2000 ? text[^2000..] : text);
                 }
             }

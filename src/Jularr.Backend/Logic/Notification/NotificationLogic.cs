@@ -42,8 +42,9 @@ namespace Jularr.Backend.Logic.Notification
                     work."CanonicalTitle" AS "Subject"
                 FROM
                     "RequestTargets" AS target
+                    JOIN "WantedItems" AS wanted ON wanted."Id" = target."WantedItemId"
+                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                     JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
-                    JOIN "Works" AS work ON work."Id" = request."WorkId"
                 WHERE
                     target."WantedItemId" = @WantedItemId
                     AND request."RequestedByProfileId" IS NOT NULL
@@ -61,9 +62,7 @@ namespace Jularr.Backend.Logic.Notification
             sql.Statement =
                 """
                 SELECT
-                    profile."Id" AS "ProfileId",
-                    @WorkId AS "WorkId",
-                    @Subject AS "Subject"
+                    profile."Id" AS "ProfileId"
                 FROM
                     "Accounts" AS account
                     JOIN "Profiles" AS profile ON profile."OwnerAccountId" = account."Id"
@@ -73,16 +72,16 @@ namespace Jularr.Backend.Logic.Notification
                     AND (account."AccountRoleTypeId" = 1 OR NOT type."IsOwnerOnly" AND account."AccountRoleTypeId" = 3);
                 """;
             sql.Parameters.Add(data);
-            var recipients = await ctx.ReadSql.ReadListAsync<NotificationRecipientData>(sql, ct);
+            var recipients = await ctx.ReadSql.ReadListAsync<ProfileParameters>(sql, ct);
             await ctx.NotifyProfilesAsync(new NotificationBatchData(data.NotificationTypeId, [.. recipients.Select(recipient => recipient.ProfileId)], data.WorkId, data.Subject, data.Link), ct);
         }
 
+        // Every recipient's row names the same Work.
         private static async Task NotifyWorkAsync(this LogicContext ctx, NotificationType type, IReadOnlyList<NotificationRecipientData> recipients, CancellationToken ct)
         {
             if (recipients.FirstOrDefault() is { } work)
             {
-                await ctx.NotifyProfilesAsync(new NotificationBatchData(type, [.. recipients.Select(recipient => recipient.ProfileId)], work.WorkId, work.Subject,
-                    "/Details/" + work.WorkId), ct);
+                await ctx.NotifyProfilesAsync(new NotificationBatchData(type, [.. recipients.Select(recipient => recipient.ProfileId)], work.WorkId, work.Subject, "/Details/" + work.WorkId), ct);
             }
         }
 
