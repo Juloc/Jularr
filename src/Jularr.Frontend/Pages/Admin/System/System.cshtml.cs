@@ -1,5 +1,6 @@
 using System.Globalization;
 using Jularr.Backend.Data.Admin.System.V1;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Admin.System.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Mvc;
@@ -7,8 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Admin.System
 {
     // Tools, queues, storage, backups and the library's size at a glance; links lead to the pages that act on them.
-    public sealed class SystemModel(ReadSystemHealthV1 read, UiText texts) : JularrPage
+    public sealed class SystemModel(ReadSystemHealthV1 read, ReadRecentLogsV1 readLogs, UiText texts) : JularrPage
     {
+        private IReadOnlyList<RecentLogV1> _logs = [];
         private SystemHealthV1? _health;
 
         protected override void Define(Page page)
@@ -31,6 +33,15 @@ namespace Jularr.Frontend.Pages.Admin.System
                 .Content("table.type", item => new Text("media.type." + item.MediaTypeId))
                 .Content("table.titles", item => new ValueText(item.Count.ToString(CultureInfo.CurrentCulture)))
                 .Content("table.size", item => new ValueText(ByteSize.Format(item.Bytes)))]));
+
+            // What went wrong since the start, newest first.
+            page.Content.Add(new UiSection("system.logs", _logs.Count > 0
+                ? [new Table<RecentLogV1>(_logs)
+                    .Content("system.logs.at", item => new ValueText(item.At.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)))
+                    .Content("system.logs.level", item => new Text("system.logs.level." + item.Level))
+                    .Text(item => item.Category, "system.logs.area")
+                    .Text(item => item.Message, "system.logs.message")]
+                : [new P(new Text("system.logs.empty"))]));
         }
 
         private static IUiComponent Link(string value, string href) => new A(new ValueText(value)).Attribute("href", href);
@@ -45,6 +56,7 @@ namespace Jularr.Frontend.Pages.Admin.System
         protected override async Task LoadDataAsync()
         {
             _health = await read.ExecuteAsync<SystemHealthV1>(new ReadSystemHealthParametersV1(), HttpContext.RequestAborted);
+            _logs = await readLogs.ExecuteAsync<BaseDataList<RecentLogV1>>(new ReadRecentLogsParametersV1(), HttpContext.RequestAborted);
         }
     }
 }

@@ -4,6 +4,8 @@ using Jularr.Backend.Data.Admin.System.V1;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Statistics.V1;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
@@ -57,6 +59,21 @@ namespace Jularr.Backend.Tests
                 using var page = await host.SendAsync(HttpMethod.Get, path);
                 Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path + await page.Content.ReadAsStringAsync());
             }
+
+            // Warnings and errors since the start, without stack traces, for the Owner only.
+            host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Jularr.Test").LogError(new InvalidOperationException("Disk said no."), "Import of {Title} failed.", "Film");
+            host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Jularr.Test").LogInformation("Routine work.");
+            using var logs = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
+            var entry = (await logs.Content.ReadFromJsonAsync<Jularr.Backend.Data.Common.BaseDataList<RecentLogV1>>())!.First(item => item.Category == "Jularr.Test");
+            Assert.AreEqual("Import of Film failed. (InvalidOperationException: Disk said no.)", entry.Message);
+            Assert.AreEqual(Jularr.Backend.Data.Enums.Instance.RecentLogLevel.Error, entry.Level);
+            using var systemPage = await host.SendAsync(HttpMethod.Get, "/Admin/System");
+            var html = await systemPage.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "Import of Film failed.");
+            Assert.IsFalse(html.Contains("Routine work.", StringComparison.Ordinal));
+            await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
+            using var manager = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/system/logs");
+            Assert.AreEqual(HttpStatusCode.Forbidden, manager.StatusCode);
         }
     }
 }

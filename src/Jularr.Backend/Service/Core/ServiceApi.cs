@@ -48,6 +48,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Jularr.Integrations.Data.Database;
 using Jularr.Integrations.Logic.Database;
 using Jularr.Integrations.Logic.Synology;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Public.Authentication.V1;
@@ -132,6 +133,10 @@ namespace Jularr.Backend.Service.Core
 
         private static IServiceCollection RegisterServices(IServiceCollection services, Assembly[] assemblies)
         {
+            // Recent warnings and errors for the Owner's system page.
+            services.TryAddSingleton<RecentLogs>();
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, RecentLogs>(provider => provider.GetRequiredService<RecentLogs>()));
+
             // Discover concrete services.
             var serviceTypes = assemblies.Distinct().SelectMany(assembly => assembly.GetTypes())
                 .Where(type => type.IsVisible && !type.IsAbstract && !type.ContainsGenericParameters && typeof(Service).IsAssignableFrom(type))

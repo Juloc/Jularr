@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Admin.System.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
@@ -8,6 +9,7 @@ using Jularr.Integrations.Logic.Database;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Usenet;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Jularr.Backend.Service.Admin.System.V1
@@ -83,5 +85,24 @@ namespace Jularr.Backend.Service.Admin.System.V1
             return new SystemHealthV1(totals.DatabaseBytes, totals.QueuedOperations, totals.FailedOperations, totals.Profiles, totals.StorageOffline, lastBackup,
                 new BaseDataList<ToolStateV1>(tools), new BaseDataList<MediaTypeCountV1>(library));
         }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/system/logs")]
+    public sealed class ReadRecentLogsV1 : AdminService<ReadRecentLogsParametersV1>
+    {
+        private readonly RecentLogs _logs;
+
+        internal ReadRecentLogsV1(RecentLogs logs)
+        {
+            _logs = logs;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<RecentLogV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadRecentLogsParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ReadRecentLogsParametersV1 parameters, Type resultType) => new("instance.settings.read");
+
+        // The newest 100 warnings and errors since the start.
+        protected override Task<IServiceOutput> OnRead() =>
+            Task.FromResult<IServiceOutput>(new BaseDataList<RecentLogV1>(_logs.Read(100).Select(entry => new RecentLogV1(entry.At, entry.Level switch { LogLevel.Critical => RecentLogLevel.Critical, LogLevel.Error => RecentLogLevel.Error, _ => RecentLogLevel.Warning }, entry.Category, entry.Message))));
     }
 }

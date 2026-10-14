@@ -1,4 +1,6 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Instance;
+using Jularr.Backend.Data.Fields.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Media;
 
@@ -81,5 +83,32 @@ namespace Jularr.Backend.Data.Admin.System.V1
 
         [DataField(typeof(StatisticsFields), nameof(StatisticsFields.Bytes))]
         public long Bytes { get; }
+    }
+
+    public sealed class ReadRecentLogsParametersV1 : BaseParameters
+    {
+    }
+
+    public sealed class RecentLogV1 : BaseResponse
+    {
+        public RecentLogV1(DateTime at, RecentLogLevel level, string category, string message)
+        {
+            At = at;
+            Level = level;
+            Category = category;
+            Message = message;
+        }
+
+        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.At))]
+        public DateTime At { get; }
+
+        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.Level))]
+        public RecentLogLevel Level { get; }
+
+        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.Category))]
+        public string Category { get; }
+
+        [DataField(typeof(RecentLogFields), nameof(RecentLogFields.Message))]
+        public string Message { get; }
     }
 }
