@@ -57,6 +57,30 @@ namespace Jularr.Backend.Data.Admin.Account.V1
         public bool HasPin { get; }
     }
 
+    public sealed class ReadProfileChoicesParametersV1 : BaseParameters
+    {
+    }
+
+    // Every profile with its account, for choosing one elsewhere.
+    public sealed class ProfileChoiceV1 : BaseResponse
+    {
+        public ProfileChoiceV1(long profileId, string displayName, string accountName)
+        {
+            ProfileId = profileId;
+            DisplayName = displayName;
+            AccountName = accountName;
+        }
+
+        [DataField(typeof(AccountProfileFields), nameof(AccountProfileFields.ProfileId))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.DisplayName))]
+        public string DisplayName { get; }
+
+        [DataField(typeof(AccountFields), nameof(AccountFields.DisplayName))]
+        public string AccountName { get; }
+    }
+
     public sealed class ProfilePinParametersV1 : BaseParameters
     {
         public ProfilePinParametersV1(long profileId)

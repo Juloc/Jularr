@@ -47,6 +47,33 @@ namespace Jularr.Backend.Service.Admin.Account.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/admin/profiles")]
+    public sealed class ReadProfileChoicesV1 : AdminService<ReadProfileChoicesParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ProfileChoiceV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadProfileChoicesParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ReadProfileChoicesParametersV1 parameters, Type resultType) => new("accounts.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id" AS "ProfileId",
+                    profile."DisplayName",
+                    account."DisplayName" AS "AccountName"
+                FROM
+                    "Profiles" AS profile
+                    JOIN "Accounts" AS account ON account."Id" = profile."OwnerAccountId"
+                ORDER BY
+                    lower(profile."DisplayName"),
+                    profile."Id";
+                """;
+            return new BaseDataList<ProfileChoiceV1>(await Context.ReadSql.ReadListAsync<ProfileChoiceV1>(sql, CancellationToken));
+        }
+    }
+
     [ServiceEndpoint("POST", "/api/v1/admin/accounts/{accountId:long}/profiles/{profileId:long}")]
     public sealed class AddAccountProfileV1 : AdminService<AccountProfileParametersV1, NoData>
     {

@@ -84,7 +84,9 @@ restarts at zero. PlaybackSessions record active and ended playback with a publi
 UUID; ended sessions are the playback history. Instance.sql seeds the Playback module.
 GameSaves keep a profile's save memory and one save state per game file, opaque to the
 server; a game's play time is its MediaProgress of type Game. Instance.sql seeds the
-Emulation module for them.
+Emulation module for them. ProviderProfileLinks tie a Jellyfin or Emby user to the profile
+it shares progress with, and ProviderProgress keeps the state last agreed per server item
+(ProgressSync module, off by default).
 
 `Library.sql` follows Media, Acquisition and Storage. LibraryRoots place logical libraries below
 one StorageMount without overlapping paths. StoredFiles are the root-relative

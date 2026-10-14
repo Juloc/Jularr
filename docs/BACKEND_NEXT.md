@@ -71,7 +71,9 @@ and commit together. No migration, active-database installation or extra server.
   and subtype needs at least one library; several are allowed and a Work may name its
   library. The Owner restricts media types per profile; profiles may also hide types.
   Provider sync (AniList, Plex, Jellyfin, Emby): progress takes the maximum except an
-  explicit rewatch, status/rating the newest change, Jularr wins ties. Offline PWA copies
+  explicit rewatch, status/rating the newest change, Jularr wins ties. Server users are
+  proposed the profile of the same name (Plex by login/e-mail) and an administrator
+  confirms; a signed-in user who connects their own server account is linked at once. Offline PWA copies
   follow a device check (server rendition or original), original download optional,
   behind a profile permission. The mini-player uses a small own navigation script with a
   full-page fallback. Translation uses Bergamot models (optional owner). Retro games play

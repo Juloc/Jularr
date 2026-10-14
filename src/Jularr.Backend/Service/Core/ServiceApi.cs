@@ -22,6 +22,7 @@ using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Gutenberg;
 using Jularr.Integrations.Logic.Opds;
 using Jularr.Integrations.Logic.OpenLibrary;
+using Jularr.Integrations.Logic.MediaServer;
 using Jularr.Integrations.Logic.Plex;
 using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Nas;
@@ -157,6 +158,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<WantedAcquisition>();
             services.TryAddTransient<WorkMetadata>();
             services.TryAddTransient<PlexServer>();
+            services.TryAddTransient<MediaServers>();
             services.TryAddTransient<BookMetadata>();
             services.TryAddTransient<GameRomIdentification>();
             services.TryAddTransient<AniListMetadata>();
@@ -243,6 +245,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<SynologyClient>(services, 30, 4, handler: SynologyClient.CreateHandler);
             AddClient<ServarrApiClient>(services, 60, 32);
             AddClient<PlexServerClient>(services, 20, 16);
+            AddClient<MediaServerClient>(services, 30, 32);
             AddClient<NewznabClient>(services, 30, 16);
             AddClient<TmdbClient>(services, 15, 4, baseAddress: new Uri("https://api.themoviedb.org/3/"));
             AddClient<SabnzbdClient>(services, 15, 16);
