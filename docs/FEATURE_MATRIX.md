@@ -34,12 +34,12 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 
 | Function | Media | Status | Owner | Tests | Missing | Acceptance |
 | --- | --- | --- | --- | --- | --- | --- |
-| Wanted target per Work | all | tested | `WantedLogic`, `WantedServices` | RequestTests, AcquisitionTests | Filters by missing, cutoff, paused | Every request and manual add has exactly one target |
-| Monitoring of seasons, episodes, specials and volumes; future units | Series, Anime, Manga | tested | `WorkUnits.IsMonitored`, `WantedItems.MonitorsNewUnits`, `WantedLogic.SetUnitMonitoringAsync`, Wanted Monitoring tab | AcquisitionTests | Albums and tracks (C5); a request completes after unmonitoring only at the next import (C1b) | Unmonitored units are never searched; new units follow the Work's rule |
+| Wanted target per Work | all | tested | `WantedLogic`, `WantedServices` | RequestTests, AcquisitionTests | Filter by paused | Every request and manual add has exactly one target |
+| Monitoring of seasons, episodes, specials and volumes; future units | Series, Anime, Manga | tested | `WorkUnits.IsMonitored`, `WantedItems.MonitorsNewUnits`, `WantedLogic.SetUnitMonitoringAsync`, Wanted Monitoring tab | AcquisitionTests | Albums and tracks (C5) | Unmonitored units are never searched; new units follow the Work's rule |
 | Manual search with reasons, choose release | all | tested | `SearchWantedV1`, `GrabWantedReleaseV1`, Wanted page | AcquisitionTests | Filter and sort of candidates | Every candidate shows score and the reason it is allowed or rejected |
 | Automatic search, backoff, upgrade re-search | all | tested | `SearchDueWantedV1`, AcquisitionWorker | AcquisitionTests | Interval test | Due targets are searched once per cycle, failures back off |
-| New-episode and new-release detection | Series, Manga, Music | implemented | `RefreshWantedMetadataV1` | – | Test | A newly aired episode becomes wanted within a day |
-| Missing and cutoff-unmet lists | all | planned | Wanted page | – | Views | Both lists match `UpgradePolicy` |
+| New-episode and new-release detection | Series, Manga | tested | `RefreshWantedMetadataV1` | AcquisitionTests | Music (C5) | A newly aired episode becomes wanted within a day |
+| Missing and cutoff-unmet lists | all | tested | `ReadWantedV1` (`WantedViewType`), Wanted page | AcquisitionTests | Automatic upgrade searches below the cutoff; until then a manual search per target | Both lists match `UpgradePolicy` |
 | Quality profiles, cutoff, upgrades without downgrade | all | tested | `AcquisitionProfileLogic`, `UpgradePolicy`, `ReplacementLogic` | AcquisitionTests | Direct cutoff test; music upgrades off by default | An upgrade stops at the cutoff and never replaces with worse |
 | Release rules, custom formats, scoring | all | tested | `ReleaseScorer`, `ReleaseSelection` | AcquisitionTests | Require/Prefer/Avoid/Reject effects, fallback ladder, identity confidence, delay (#865) | The chosen release and every rejection are explainable |
 | Release parsing and identity | all | tested | `ReleaseParser`, per-type judges | AcquisitionTests, BookTests, MangaTests, MusicTests, GameTests | Daily and absolute numbering in matching; parser tests | A release for another Work or unit is never grabbed |
@@ -58,7 +58,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Function | Status | Owner | Tests | Missing |
 | --- | --- | --- | --- | --- |
 | Movies: TMDB metadata, search, rename, history, editions, franchises | tested | `TmdbClient`, `WorkMetadata` | AcquisitionTests, DiscoverTests, ReleaseFactsTests | Re-match a Work to another TMDB id; edition choice in the UI |
-| Series: seasons, episodes, specials, season packs | tested | `WorkMetadata`, `VideoReleaseJudge` | AcquisitionTests | Monitoring levels; specials search; multi-episode and daily tests; absolute numbering for anime |
+| Series: seasons, episodes, specials, season packs | tested | `WorkMetadata`, `VideoReleaseJudge` | AcquisitionTests | Specials search; multi-episode and daily tests; absolute numbering for anime |
 | Music: MusicBrainz, Cover Art Archive, albums, tracks, FLAC/ALAC/MP3/AAC, album playback | tested | `MusicBrainzClient`, `MusicReleaseJudge` | MusicTests | Artists, discographies and their monitoring, editions/media, secondary types, multi-format, tag read/write, retag preview, duplicates (#1022) |
 | Books, manga, light novels: sources, Newznab, import, reader | tested | Book/Manga judges, sources | BookTests, MangaTests, SourceTests, ReadingTests | Author and series entities and monitoring, editions, format upgrades, chapter releases |
 | Audiobooks as Book subtype | planned | Media subtypes | – | Subtype, library/discover view, audio playback with chapters |

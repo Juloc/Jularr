@@ -33,6 +33,6 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField IsDownloading = new();
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField IsCovered = new();
-        public static readonly BoolField IsComplete = new();
+        public static readonly EnumField WantedViewTypeId = new(typeof(WantedViewType));
     }
 }

@@ -9,14 +9,18 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 {
     public sealed class ReadWantedParametersV1 : BaseParameters
     {
-        public ReadWantedParametersV1(int page = 1, int pageSize = 25)
+        public ReadWantedParametersV1(int page = 1, int pageSize = 25, WantedViewType wantedViewTypeId = WantedViewType.All)
         {
             Page = page;
             PageSize = pageSize;
+            WantedViewTypeId = wantedViewTypeId;
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.WantedViewTypeId))]
+        public WantedViewType WantedViewTypeId { get; }
     }
 
     public sealed class UpdateWantedParametersV1 : BaseParameters
