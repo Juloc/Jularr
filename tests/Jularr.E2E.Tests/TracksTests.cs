@@ -106,14 +106,15 @@ namespace Jularr.E2E.Tests
         }
 
         // The download monitor imports one episode after the other.
-        // The library scan after the import reads the tracks; until then the player offers no choice of them.
+        // The library scan after the import reads the tracks; until then the player offers no choice of them. Once played, the episode offers to resume, so the player itself is reloaded.
         private static async Task OpenWithTracksAsync(IPage page, string details, ILocator play)
         {
             var deadline = DateTime.UtcNow.AddMinutes(2);
+            await page.GotoAsync(details);
+            await play.ClickAsync();
+            var player = page.Url;
             while (true)
             {
-                await page.GotoAsync(details);
-                await play.ClickAsync();
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
                 if (await page.Locator("[data-action=audio]").CountAsync() > 0)
                 {
@@ -126,6 +127,7 @@ namespace Jularr.E2E.Tests
                 }
 
                 await Task.Delay(2000);
+                await page.GotoAsync(player);
             }
         }
 
