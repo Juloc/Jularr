@@ -159,13 +159,21 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 identities.Add(new { Namespace = "tvdb", Value = tvdb.ToString(CultureInfo.InvariantCulture) });
             }
 
-            // Overview is in the instance language; image paths are language-neutral.
+            // Texts are in the instance language; images, the trailer and studio names are language-neutral.
+            var details = work.Details;
             var facts = new[]
             {
                 new { Key = "Overview", Value = TextLimit.Cut(work.Overview, 4000), Localized = true },
                 new { Key = "Poster", Value = TmdbClient.PosterUrl(work.PosterPath), Localized = false },
-                new { Key = "Backdrop", Value = TmdbClient.BackdropUrl(work.BackdropPath), Localized = false }
-            }.Where(fact => fact.Value is not null);
+                new { Key = "Backdrop", Value = TmdbClient.BackdropUrl(work.BackdropPath), Localized = false },
+                new { Key = "Genres", Value = TextLimit.Cut(details.Genres.Count == 0 ? null : string.Join(", ", details.Genres), 4000), Localized = true },
+                new { Key = "Trailer", Value = details.TrailerKey, Localized = false },
+                new { Key = "Studio", Value = TextLimit.Cut(details.Studios.Count == 0 ? null : string.Join(", ", details.Studios), 4000), Localized = false }
+            }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
+            var credits = details.Cast.Select((person, index) => (Person: person, IsCrew: false, Position: index + 1))
+                .Concat(details.Crew.Select((person, index) => (Person: person, IsCrew: true, Position: index + 1)))
+                .Select(credit => new { credit.IsCrew, credit.Position, Name = TextLimit.Cut(credit.Person.Name, 300), Role = TextLimit.Cut(credit.Person.Role, 300),
+                    ImageUrl = TmdbClient.ProfileUrl(credit.Person.ProfilePath) });
             // Japanese animation is proposed as Anime unless a subtype was chosen.
             subtype ??= AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null;
             var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(work.Title, 500)!,
@@ -175,6 +183,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, TextLimit.Cut(work.CollectionName, 300)), token);
+                await ctx.SaveWorkCreditsAsync(new WorkCreditsData(workId, mediaType == MediaType.Movie ? details.Runtime : null, JsonSerializer.Serialize(credits)), token);
                 return workId;
             }, ct);
         }

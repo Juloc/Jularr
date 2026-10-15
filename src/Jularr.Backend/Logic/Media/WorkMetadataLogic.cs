@@ -112,6 +112,42 @@ namespace Jularr.Backend.Logic.Media
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
+        public static async Task SaveWorkCreditsAsync(this LogicContext ctx, WorkCreditsData data, CancellationToken ct)
+        {
+            // A provider that knows no length keeps the stored one.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Works"
+                SET
+                    "RuntimeMinutes" = COALESCE(@RuntimeMinutes, "RuntimeMinutes")
+                WHERE
+                    "Id" = @Id;
+
+                DELETE FROM
+                    "WorkCredits"
+                WHERE
+                    "WorkId" = @Id;
+
+                INSERT INTO
+                    "WorkCredits" ("WorkId", "IsCrew", "Position", "Name", "Role", "ImageUrl")
+                SELECT
+                    @Id,
+                    item."IsCrew",
+                    item."Position",
+                    item."Name",
+                    item."Role",
+                    item."ImageUrl"
+                FROM
+                    jsonb_to_recordset(@Credits::jsonb) AS item ("IsCrew" boolean, "Position" smallint, "Name" text, "Role" text, "ImageUrl" text)
+                WHERE
+                    length(btrim(item."Name")) > 0;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task<long> SaveWorkMetadataAsync(this LogicContext ctx, WorkMetadataData data, CancellationToken ct)
         {
             // The provider identity finds the Work again; manual edits stay.

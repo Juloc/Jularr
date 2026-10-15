@@ -98,6 +98,32 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Details_TmdbMovie_ShowsLengthGenresTrailerAndPeople()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/Movie/603/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
+
+            // Cast before crew; crew keeps only key jobs.
+            using var credits = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + workId + "/credits");
+            Assert.AreEqual(HttpStatusCode.OK, credits.StatusCode, await credits.Content.ReadAsStringAsync());
+            var people = (await credits.Content.ReadFromJsonAsync<BaseDataList<WorkCreditV1>>())!;
+            CollectionAssert.AreEqual(new[] { "Keanu Reeves", "Lana Wachowski" }, people.Select(person => person.Name).ToArray());
+            Assert.AreEqual("https://image.tmdb.org/t/p/w185/neo.jpg", people[0].ImageUrl);
+
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            var html = await details.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, html);
+            StringAssert.Contains(html, "136 min");
+            StringAssert.Contains(html, "Action, Science Fiction");
+            StringAssert.Contains(html, "Village Roadshow");
+            StringAssert.Contains(html, "https://www.youtube.com/watch?v=vKQi3bBA1y8");
+            StringAssert.Contains(html, "Neo");
+            StringAssert.Contains(html, "Director");
+        }
+
+        [TestMethod]
         public async Task Razor_HomeLibraryAndProviderTitle_RenderRealData()
         {
             await using var host = await CreateHostAsync(razor: true);
@@ -272,6 +298,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeTmdb : HttpMessageHandler
         {
             public List<Uri> Requests { get; } = [];
+            private const string MovieDetails = """ "genres":[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}],"runtime":136,"production_companies":[{"name":"Village Roadshow"}],"videos":{"results":[{"site":"YouTube","type":"Teaser","key":"aaaaaaaaaaa"},{"site":"YouTube","type":"Trailer","key":"vKQi3bBA1y8","official":true}]},"credits":{"cast":[{"name":"Keanu Reeves","character":"Neo","profile_path":"/neo.jpg"}],"crew":[{"name":"Lana Wachowski","job":"Director"},{"name":"Someone","job":"Gaffer"}]} """;
             private const string Movie = """{"id":603,"title":"The Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"A hacker learns the truth.","poster_path":"/poster.jpg","backdrop_path":"/backdrop.jpg"}""";
             private const string Show = """{"id":1399,"name":"The Matrix Show","original_name":"The Matrix Show","first_air_date":"2020-01-01","overview":"A show.","poster_path":"/show.jpg"}""";
 
@@ -287,7 +314,7 @@ namespace Jularr.Backend.Tests
                 {
                     "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
                     "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
-                    "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}}",
+                    "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails + "}",
                     "/3/movie/604" => """{"id":604,"title":"The Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","overview":"The fight goes on.","poster_path":"/reloaded.jpg","external_ids":{"imdb_id":"tt0234215"}}""",
                     _ => null
                 };

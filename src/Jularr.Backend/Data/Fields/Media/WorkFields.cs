@@ -15,6 +15,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField CanonicalTitle = new(NpgsqlDbType.Varchar) { AllowBlank = false, Trim = true, MaximumLength = 500 };
         public static readonly IntField ReleaseYear = new() { Minimum = 1800, Maximum = 2200, Required = false };
         public static readonly DateField ReleasedOn = new() { Required = false };
+        public static readonly IntField RuntimeMinutes = new() { Minimum = 1, Maximum = 1440, Required = false };
         public static readonly LongField Version = new() { Minimum = 1 };
         public static readonly DateTimeField CreatedAt = new();
         public static readonly DateTimeField UpdatedAt = new();

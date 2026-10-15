@@ -91,7 +91,7 @@ namespace Jularr.E2E.Tests
                 // Signed out and in again, both continue where they stopped.
                 await Steps.SignOutAndInAsync(page);
                 await page.GotoAsync(filmDetails);
-                var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);
+                var resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue", Exact = true }));
                 Assert.IsTrue(resumed >= 4.5, "The film started at " + resumed + " s instead of continuing.");
                 await page.GotoAsync(seriesDetails);
                 resumed = await Steps.ResumeAsync(page, page.GetByRole(AriaRole.Link, new() { Name = "Continue at" }).First);

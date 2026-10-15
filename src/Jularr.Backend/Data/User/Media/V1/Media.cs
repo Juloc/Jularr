@@ -122,8 +122,13 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId)
+            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
+            int? runtimeMinutes, string? genres, string? trailerKey, string? studio)
         {
+            RuntimeMinutes = runtimeMinutes;
+            Genres = genres;
+            TrailerKey = trailerKey;
+            Studio = studio;
             RequestStatusTypeId = requestStatusTypeId;
             IsRequestable = isRequestable;
             FranchiseId = franchiseId;
@@ -196,6 +201,45 @@ namespace Jularr.Backend.Data.User.Media.V1
         // The profile's latest request for the Work.
         [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId), false)]
         public AcquisitionRequestStatusType? RequestStatusTypeId { get; }
+
+        // A movie's length.
+        [DataField(typeof(WorkFields), nameof(WorkFields.RuntimeMinutes))]
+        public int? RuntimeMinutes { get; }
+
+        // Genre names, comma separated.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Fact))]
+        public string? Genres { get; }
+
+        // A YouTube video id.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TrailerKey))]
+        public string? TrailerKey { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Fact))]
+        public string? Studio { get; }
+    }
+
+    // A person the provider names: cast with their character, crew with their job.
+    public sealed class WorkCreditV1 : BaseResponse
+    {
+        public WorkCreditV1(string name, string? role, string? imageUrl, bool isCrew)
+        {
+            Name = name;
+            Role = role;
+            ImageUrl = imageUrl;
+            IsCrew = isCrew;
+        }
+
+        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.Role))]
+        public string? Role { get; }
+
+        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.ImageUrl))]
+        public string? ImageUrl { get; }
+
+        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.IsCrew))]
+        public bool IsCrew { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData

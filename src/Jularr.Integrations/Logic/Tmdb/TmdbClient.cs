@@ -66,7 +66,8 @@ namespace Jularr.Integrations.Logic.Tmdb
         public async Task<TmdbWork> ReadWorkAsync(TmdbConnection connection, TmdbMediaKind kind, int id, CancellationToken ct)
         {
             var path = (kind == TmdbMediaKind.Movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture);
-            using var document = await ReadAsync(connection, path, [new("append_to_response", "external_ids")], ct);
+            using var document = await ReadAsync(connection, path,
+                [new("append_to_response", "external_ids,credits,videos"), new("include_video_language", connection.Language[..Math.Min(2, connection.Language.Length)] + ",en,null")], ct);
             var root = document.RootElement;
             var result = ParseResult(kind, root) ?? throw new TmdbException(TmdbFailure.InvalidResponse, "TMDB returned a work without a title.");
             var externalIds = root.TryGetProperty("external_ids", out var ids) ? ids : default;
@@ -87,8 +88,39 @@ namespace Jularr.Integrations.Logic.Tmdb
             var collection = root.TryGetProperty("belongs_to_collection", out var series) && series.ValueKind == JsonValueKind.Object ? series : default;
             return new TmdbWork(kind, result.Id, result.Title, result.OriginalTitle, result.Year, result.Overview, result.PosterPath, result.BackdropPath,
                 Text(externalIds, "imdb_id") ?? Text(root, "imdb_id"), Int(externalIds, "tvdb_id"), seasons, genres, Text(root, "original_language"), countries, Int(collection, "id"),
-                Text(collection, "name"), Date(root, kind == TmdbMediaKind.Movie ? "release_date" : "first_air_date"));
+                Text(collection, "name"), Date(root, kind == TmdbMediaKind.Movie ? "release_date" : "first_air_date"), ParseDetails(kind, root));
         }
+
+        // Key crew only: who directed and wrote a movie and its music; a series names its creators.
+        private static readonly string[] CrewJobs = ["Director", "Screenplay", "Writer", "Novel", "Original Music Composer"];
+
+        private static TmdbDetails ParseDetails(TmdbMediaKind kind, JsonElement root)
+        {
+            var genres = Items(root, "genres").Select(genre => Text(genre, "name")).OfType<string>().ToArray();
+            var runtime = kind == TmdbMediaKind.Movie ? Int(root, "runtime")
+                : Items(root, "episode_run_time").Where(item => item.ValueKind == JsonValueKind.Number).Select(item => (int?)item.GetInt32()).FirstOrDefault();
+            var studios = Items(root, kind == TmdbMediaKind.Movie ? "production_companies" : "networks").Select(company => Text(company, "name")).OfType<string>().Take(3).ToArray();
+
+            // An official YouTube trailer first; only an id of YouTube's shape is kept.
+            var trailer = Items(root.TryGetProperty("videos", out var videos) ? videos : default, "results")
+                .Where(video => Text(video, "site") == "YouTube" && Text(video, "type") == "Trailer" && IsYouTubeKey(Text(video, "key")))
+                .OrderByDescending(video => video.TryGetProperty("official", out var official) && official.ValueKind == JsonValueKind.True)
+                .Select(video => Text(video, "key")).FirstOrDefault();
+            var credits = root.TryGetProperty("credits", out var creditList) ? creditList : default;
+            var cast = Items(credits, "cast").Select(person => Credit(person, Text(person, "character"))).OfType<TmdbCredit>().Take(15).ToArray();
+            var crew = Items(root, "created_by").Select(person => Credit(person, "Creator"))
+                .Concat(Items(credits, "crew").Where(person => CrewJobs.Contains(Text(person, "job"))).Select(person => Credit(person, Text(person, "job"))))
+                .OfType<TmdbCredit>().DistinctBy(person => (person.Name, person.Role)).Take(10).ToArray();
+            return new TmdbDetails(genres, runtime is > 0 and <= 1440 ? runtime : null, studios, trailer, cast, crew);
+        }
+
+        private static TmdbCredit? Credit(JsonElement person, string? role) =>
+            Text(person, "name") is { } name ? new TmdbCredit(name, string.IsNullOrWhiteSpace(role) ? null : role, Text(person, "profile_path")) : null;
+
+        private static IEnumerable<JsonElement> Items(JsonElement element, string name) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var list) && list.ValueKind == JsonValueKind.Array ? list.EnumerateArray() : [];
+
+        private static bool IsYouTubeKey(string? value) => value is { Length: 11 } && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
 
         public async Task<IReadOnlyList<TmdbEpisode>> ReadSeasonAsync(TmdbConnection connection, int seriesId, int seasonNumber, CancellationToken ct)
         {
@@ -182,6 +214,9 @@ namespace Jularr.Integrations.Logic.Tmdb
 
         // Episode stills in card size.
         public static string? StillUrl(string? path) => path is null ? null : "https://image.tmdb.org/t/p/w400" + path;
+
+        // Portraits of cast and crew.
+        public static string? ProfileUrl(string? path) => path is null ? null : "https://image.tmdb.org/t/p/w185" + path;
 
         // Image paths are file names below TMDB's image host.
         private static string? ImagePath(string? path) =>

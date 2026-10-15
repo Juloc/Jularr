@@ -19,8 +19,10 @@ namespace Jularr.Frontend.Pages.User.Details
 {
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
         ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
-        RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, IAntiforgery antiforgery, UiText texts) : JularrPage
+        RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits, IAntiforgery antiforgery,
+        UiText texts) : JularrPage
     {
+        private IReadOnlyList<WorkCreditV1> _credits = [];
         private IReadOnlyList<WorkSeasonV1> _seasons = [];
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
         private WorkDetailsV1? _work;
@@ -63,6 +65,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 }
 
                 page.Content.Add(new MediaHero(work.CanonicalTitle, work.BackdropUrl, string.Join(" · ", new[] { texts[MediaTypeLabel.Key(work.MediaTypeId, work.MediaSubtypeId)], work.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
+                    work.RuntimeMinutes is { } minutes ? string.Format(CultureInfo.CurrentCulture, texts["details.minutes"], minutes) : null, work.Genres, work.Studio,
                     work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }
                     .Where(part => part is not null)), work.Overview, actionKey, actionHref));
 
@@ -126,13 +129,20 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
 
+                // The trailer beside a movie's languages; all its versions open on demand.
+                var overview = new List<IUiComponent>();
+                if (work.TrailerKey is { } trailer) overview.Add(Trailer(trailer));
+                var compact = work.MediaTypeId == MediaType.Movie && _availability is { Items.Count: > 0 };
+                if (compact) overview.Add(Languages(_availability!.Items));
+                if (overview.Count > 0) page.Content.Add(new Div([.. overview]).Class("details-overview"));
+
                 // A series shows its seasons and their episodes instead of its files.
                 if (_seasons.Count > 0)
                 {
                     page.Content.Add(Series(work));
                 }
                 // Stored inventory, no storage access; named sections split it where staff defined them.
-                else if (_availability is { Items.Count: > 0 } availability)
+                else if (!compact && _availability is { Items.Count: > 0 } availability)
                 {
                     var sections = new List<IUiComponent>();
                     var start = 0;
@@ -162,6 +172,12 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("details-paging").Attribute("aria-label", texts["details.pages"]));
 
+                // Cast before crew, each with their character or job.
+                if (_credits.Count > 0)
+                {
+                    page.Content.Add(new UiSection("details.cast", [new Div([.. _credits.Select(Person)]).Class("details-people")]));
+                }
+
                 // Hand-picked collections take or give back this Work.
                 if (_collections.Count > 0)
                 {
@@ -174,6 +190,41 @@ namespace Jularr.Frontend.Pages.User.Details
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
+
+        // Opens the trailer on YouTube; the page itself frames nothing from there.
+        private static IUiComponent Trailer(string key) => new Section(
+            new H2(new Text("details.trailer")),
+            new A(new MediaImage("https://i.ytimg.com/vi/" + key + "/hqdefault.jpg", "", 480, 360), new Span(new Text("details.watchTrailer")).Class("details-trailer__play"))
+                .Class("details-trailer").Attribute("href", "https://www.youtube.com/watch?v=" + key).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"))
+            .Class("details-overview__trailer");
+
+        // Audio and subtitle languages and qualities of the present versions; the full table on demand.
+        private IUiComponent Languages(IReadOnlyList<WorkAvailabilityV1> items)
+        {
+            var present = items.Where(item => item.IsAvailable).ToArray();
+            var rows = new List<IUiComponent>();
+            void Row(string labelKey, IEnumerable<string> values)
+            {
+                var chips = values.Distinct(StringComparer.OrdinalIgnoreCase).Select(value => (IUiComponent)new Span(new ValueText(value)).Class("details-chip")).ToArray();
+                if (chips.Length > 0) rows.Add(new Div(new Dt(new Text(labelKey)), new Dd(chips)));
+            }
+
+            Row("details.audio", present.SelectMany(item => item.AudioLanguages));
+            Row("details.subtitles", present.SelectMany(item => item.SubtitleLanguages));
+            Row("details.quality", present.Select(item => item.Height).OfType<int>().OrderDescending()
+                .Select(height => height >= 2000 ? "4K" : height.ToString(CultureInfo.InvariantCulture) + "p"));
+            return new Section(
+                new H2(new Text("details.versions")),
+                rows.Count > 0 ? new Dl([.. rows]).Class("details-languages") : new Span(),
+                new Framework.Details(new Summary(new Text("common.seeAll")), Versions(items)).Class("details-versions"))
+                .Class("details-overview__versions");
+        }
+
+        private static IUiComponent Person(WorkCreditV1 credit) => new Div(
+            credit.ImageUrl is null ? new Div().Class("details-person__placeholder") : new MediaImage(credit.ImageUrl, credit.Name, 185, 278),
+            new Strong(new ValueText(credit.Name)),
+            credit.Role is null ? new Span() : new Span(new ValueText(credit.Role)).Class("details-person__role"))
+            .Class("details-person");
 
         private IUiComponent Series(WorkDetailsV1 work)
         {
@@ -291,6 +342,7 @@ namespace Jularr.Frontend.Pages.User.Details
             }
 
             _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
+            _credits = await readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
             if (texts.CanCollect())
             {
                 _collections = await readCollections.ExecuteAsync<BaseDataList<WorkCollectionV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);

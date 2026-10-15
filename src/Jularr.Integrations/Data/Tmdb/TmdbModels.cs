@@ -90,8 +90,9 @@ namespace Jularr.Integrations.Data.Tmdb
     {
         public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,
             IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries, int? collectionId,
-            string? collectionName, DateOnly? releasedOn)
+            string? collectionName, DateOnly? releasedOn, TmdbDetails? details = null)
         {
+            Details = details ?? new TmdbDetails([], null, [], null, [], []);
             ReleasedOn = releasedOn;
             CollectionId = collectionId;
             CollectionName = collectionName;
@@ -130,6 +131,46 @@ namespace Jularr.Integrations.Data.Tmdb
         // A movie's film series.
         public int? CollectionId { get; }
         public string? CollectionName { get; }
+
+        public TmdbDetails Details { get; }
+    }
+
+    // What a details page describes beyond the identity, named in the requested language.
+    internal sealed class TmdbDetails
+    {
+        public TmdbDetails(IReadOnlyList<string> genres, int? runtime, IReadOnlyList<string> studios, string? trailerKey, IReadOnlyList<TmdbCredit> cast, IReadOnlyList<TmdbCredit> crew)
+        {
+            Genres = genres;
+            Runtime = runtime;
+            Studios = studios;
+            TrailerKey = trailerKey;
+            Cast = cast;
+            Crew = crew;
+        }
+
+        public IReadOnlyList<string> Genres { get; }
+        public int? Runtime { get; }
+        public IReadOnlyList<string> Studios { get; }
+
+        // A YouTube video id.
+        public string? TrailerKey { get; }
+        public IReadOnlyList<TmdbCredit> Cast { get; }
+        public IReadOnlyList<TmdbCredit> Crew { get; }
+    }
+
+    // A person with their character or job.
+    internal sealed class TmdbCredit
+    {
+        public TmdbCredit(string name, string? role, string? profilePath)
+        {
+            Name = name;
+            Role = role;
+            ProfilePath = profilePath;
+        }
+
+        public string Name { get; }
+        public string? Role { get; }
+        public string? ProfilePath { get; }
     }
 
     // Ranked lists; Upcoming exists for movies only.

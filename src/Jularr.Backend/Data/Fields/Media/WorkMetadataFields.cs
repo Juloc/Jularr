@@ -16,6 +16,9 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly StringField ExternalIdentities = new() { AllowBlank = false };
         public static readonly StringField Units = new() { AllowBlank = false };
         public static readonly StringField Facts = new() { AllowBlank = false };
+        public static readonly StringField Credits = new() { AllowBlank = false };
+        public static readonly StringField Fact = new() { MaximumLength = 4000, Required = false };
+        public static readonly StringField TrailerKey = new() { MaximumLength = 11, Required = false };
         public static readonly StringField Platforms = new() { AllowBlank = false };
         public static readonly StringField ImageUrl = new() { MaximumLength = 500, Required = false };
         public static readonly StringArrayField ExternalIdentityList = new() { ItemMaximumLength = 200 };

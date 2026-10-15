@@ -97,6 +97,27 @@ namespace Jularr.Backend.Data.Logic.Media
         public string ProviderKey { get; }
     }
 
+    // A movie's length and the provider's people; both replace what the last import stored.
+    internal sealed class WorkCreditsData : BaseData
+    {
+        public WorkCreditsData(long id, int? runtimeMinutes, string credits)
+        {
+            Id = id;
+            RuntimeMinutes = runtimeMinutes;
+            Credits = credits;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.RuntimeMinutes))]
+        public int? RuntimeMinutes { get; }
+
+        // JSON rows of IsCrew, Position, Name, Role and ImageUrl.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Credits))]
+        public string Credits { get; }
+    }
+
     internal sealed class WorkIdentityData : BaseData
     {
         public WorkIdentityData(string @namespace, string value, long workId)

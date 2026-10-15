@@ -177,7 +177,44 @@ namespace Jularr.Backend.Service.User.Media.V1
                             request."CreatedAt" DESC,
                             request."Id" DESC
                         LIMIT 1
-                    ) AS "RequestStatusTypeId"
+                    ) AS "RequestStatusTypeId",
+                    work."RuntimeMinutes"::integer AS "RuntimeMinutes",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Genres'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "Genres",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Trailer'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "TrailerKey",
+                    (
+                        SELECT
+                            fact."Value"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                            AND fact."FactKey" = 'Studio'
+                        ORDER BY
+                            fact."IsManual" DESC
+                        LIMIT 1
+                    ) AS "Studio"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
@@ -466,6 +503,39 @@ namespace Jularr.Backend.Service.User.Media.V1
         {
             await Context.UpdateWatchlistAsync(new WatchlistData(Auth.ProfileId!.Value, Parameters.WorkId), Data.IsWatchlisted, CancellationToken);
             return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/credits")]
+    public sealed class ReadWorkCreditsV1 : UserService<WorkParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WorkCreditV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Cast before crew, each in the provider's order.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    credit."Name",
+                    credit."Role",
+                    credit."ImageUrl",
+                    credit."IsCrew"
+                FROM
+                    "WorkCredits" AS credit
+                WHERE
+                    credit."WorkId" = @WorkId
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = credit."WorkId")
+                ORDER BY
+                    credit."IsCrew",
+                    credit."Position";
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<WorkCreditV1>(await Context.ReadSql.ReadListAsync<WorkCreditV1>(sql, CancellationToken));
         }
     }
 
