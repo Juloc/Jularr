@@ -131,7 +131,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 // The trailer beside a movie's languages; all its versions open on demand.
                 var overview = new List<IUiComponent>();
-                if (work.TrailerKey is { } trailer) overview.Add(Trailer(trailer));
+                if (work.TrailerKey is { } trailer) overview.Add(new TrailerLink(trailer));
                 var compact = work.MediaTypeId == MediaType.Movie && _availability is { Items.Count: > 0 };
                 if (compact) overview.Add(Languages(_availability!.Items));
                 if (overview.Count > 0) page.Content.Add(new Div([.. overview]).Class("details-overview"));
@@ -190,11 +190,6 @@ namespace Jularr.Frontend.Pages.User.Details
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
-
-        // Opens the trailer on YouTube; the page itself frames nothing from there.
-        private static IUiComponent Trailer(string key) =>
-            new A(new MediaImage("https://i.ytimg.com/vi/" + key + "/hqdefault.jpg", "", 480, 360), new Span(new Text("details.watchTrailer")).Class("details-trailer__play"))
-                .Class("details-trailer").Attribute("href", "https://www.youtube.com/watch?v=" + key).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer");
 
         // Audio and subtitle languages and qualities of the present versions; the full table on demand.
         private IUiComponent Languages(IReadOnlyList<WorkAvailabilityV1> items)

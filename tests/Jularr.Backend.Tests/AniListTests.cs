@@ -33,7 +33,7 @@ namespace Jularr.Backend.Tests
         [TestMethod]
         public void Choose_OneFittingTitleAndYear_IsTheMatch()
         {
-            AniListMedia Media(int id, string title, int year, string format) => new(id, format, title, null, null, [], year, 12, null, null, null, [], []);
+            AniListMedia Media(int id, string title, int year, string format) => new(id, format, title, null, null, [], year, 12, null, null, null, [], [], [], null, null);
             var results = new[] { Media(1, "Example Quest", 2019, "TV"), Media(2, "Example Quest", 2019, "MOVIE"), Media(3, "Example Quest 2", 2021, "TV") };
             var formats = AniListMatching.Formats(Data.Enums.Media.MediaType.Series, Data.Enums.Media.MediaSubtype.Anime);
             Assert.AreEqual(1, AniListMatching.Choose(results, ["Example Quest!"], 2020, formats).Match?.Id);

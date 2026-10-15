@@ -563,6 +563,7 @@ namespace Jularr.Frontend.Localization
             new("discover.all", "All"),
             new("discover.type.movies", "Movies"),
             new("discover.type.series", "Series"),
+            new("discover.type.anime", "Anime"),
             new("discover.type.lightnovels", "Light novels"),
             new("discover.type.books", "Books"),
             new("discover.type.manga", "Manga"),

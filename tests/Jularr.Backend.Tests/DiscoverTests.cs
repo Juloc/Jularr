@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using AdminMedia = Jularr.Backend.Data.Admin.Media.V1;
@@ -11,6 +12,7 @@ using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Request.V1;
+using Jularr.Integrations.Logic.AniList;
 using Jularr.Integrations.Logic.Tmdb;
 using Jularr.Integrations.Data.Tmdb;
 using Microsoft.AspNetCore.WebUtilities;
@@ -121,6 +123,39 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "https://www.youtube.com/watch?v=vKQi3bBA1y8");
             StringAssert.Contains(html, "Neo");
             StringAssert.Contains(html, "Director");
+        }
+
+        [TestMethod]
+        public async Task Anime_AniListSeason_IsShownAsItselfAndRequestedAsItsTmdbSeries()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+
+            // The anime tab ranks AniList seasons.
+            using var tab = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
+            var html = await tab.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
+            StringAssert.Contains(html, "The Matrix Show Season 2");
+            StringAssert.Contains(html, "/Discover/anime/anilist/21");
+
+            // The season keeps its own trailer and cover; the missing banner comes from the TMDB series of its first season.
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/anime/21");
+            Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
+            var anime = (await read.Content.ReadFromJsonAsync<DiscoverAnimeV1>())!;
+            Assert.AreEqual("abcdefghijk", anime.TrailerKey);
+            Assert.AreEqual("https://img.anili.st/second.jpg", anime.PosterUrl);
+            Assert.AreEqual("https://image.tmdb.org/t/p/w1280/show-backdrop.jpg", anime.BackdropUrl);
+            Assert.IsNull(anime.WorkId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21?title=x");
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "https://www.youtube.com/watch?v=abcdefghijk");
+
+            // The request creates the TMDB series as Anime; the season then leads to it.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/requests", new RequestDiscoverCatalogDataV1(MediaType.Series, "anilist", "21", 1, MediaSubtype.Anime));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
+            Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
+            using var known = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21?title=x");
+            Assert.AreEqual(HttpStatusCode.Redirect, known.StatusCode);
+            Assert.AreEqual("/Details/" + workId, known.Headers.Location!.OriginalString);
         }
 
         [TestMethod]
@@ -285,7 +320,12 @@ namespace Jularr.Backend.Tests
         private static async Task<Host> CreateHostAsync(bool razor = false)
         {
             var tmdb = new FakeTmdb();
-            var host = await Host.CreateAsync(razor: razor, library: true, services: services => services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb));
+            var aniList = new FakeAniList();
+            var host = await Host.CreateAsync(razor: razor, library: true, services: services =>
+            {
+                services.AddHttpClient<TmdbClient>().ConfigurePrimaryHttpMessageHandler(() => tmdb);
+                services.AddHttpClient<AniListClient>().ConfigurePrimaryHttpMessageHandler(() => aniList);
+            });
             using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
             Assert.AreEqual(HttpStatusCode.OK, login.StatusCode, await login.Content.ReadAsStringAsync());
@@ -293,6 +333,21 @@ namespace Jularr.Backend.Tests
             using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + provider + "/secret", new SaveProviderSecretDataV1(Token));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             return host;
+        }
+
+        // The Matrix Show on AniList: a first season and a second with its own trailer and cover but no banner.
+        private sealed class FakeAniList : HttpMessageHandler
+        {
+            private const string First = """{"id":20,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show"},"synonyms":[],"startDate":{"year":2020},"episodes":12,"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":21,"type":"ANIME"}}]}}""";
+            private const string Second = """{"id":21,"type":"ANIME","format":"TV","title":{"romaji":"The Matrix Show Season 2"},"synonyms":[],"startDate":{"year":2021},"episodes":12,"description":"Season two.","coverImage":{"large":"https://img.anili.st/second.jpg"},"trailer":{"id":"abcdefghijk","site":"youtube"},"relations":{"edges":[{"relationType":"PREQUEL","node":{"id":20,"type":"ANIME"}}]}}""";
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+                var variables = body.RootElement.GetProperty("variables");
+                var json = variables.TryGetProperty("id", out var id) ? "{\"data\":{\"Media\":" + (id.GetInt32() == 20 ? First : Second) + "}}" : "{\"data\":{\"Page\":{\"media\":[" + Second + "]}}}";
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+            }
         }
 
         private sealed class FakeTmdb : HttpMessageHandler
@@ -315,6 +370,7 @@ namespace Jularr.Backend.Tests
                     "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
                     "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
                     "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails + "}",
+                    "/3/tv/1399" => Show[..^1] + ",\"backdrop_path\":\"/show-backdrop.jpg\",\"external_ids\":{\"tvdb_id\":81189},\"seasons\":[]}",
                     "/3/movie/604" => """{"id":604,"title":"The Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","overview":"The fight goes on.","poster_path":"/reloaded.jpg","external_ids":{"imdb_id":"tt0234215"}}""",
                     _ => null
                 };

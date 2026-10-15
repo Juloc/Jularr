@@ -14,9 +14,11 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.DiscoverCatalog
 {
-    // A catalog title from a Discover search; the request imports it as a Work.
-    public sealed class DiscoverCatalogModel(RequestDiscoverCatalogItemV1 request, ReadUiLocalesV1 locales, IAntiforgery antiforgery, UiText texts) : JularrPage
+    // A catalog title from Discover; the request imports it as a Work, an anime season as its TMDB series.
+    public sealed class DiscoverCatalogModel(RequestDiscoverCatalogItemV1 request, ReadDiscoverAnimeV1 readAnime, ReadUiLocalesV1 locales, IAntiforgery antiforgery, UiText texts)
+        : JularrPage
     {
+        private DiscoverAnimeV1? _anime;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
         private CreateRequestDataV1? _input;
 
@@ -40,7 +42,10 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
             page.Title("details.title");
             page.Navigation("nav.home");
             page.Asset("Pages/User/DiscoverItem/DiscoverItem.entry.scss");
-            page.Content.Add(new MediaHero(TitleText ?? ExternalId, null, Meta, null, null, null));
+            page.Content.Add(_anime is { } anime
+                ? new MediaHero(anime.Title, anime.BackdropUrl, anime.ReleaseYear?.ToString(CultureInfo.InvariantCulture), anime.Overview)
+                : new MediaHero(TitleText ?? ExternalId, null, Meta, null, null, null));
+            if (_anime?.TrailerKey is { } trailer) page.Content.Add(new Div(new TrailerLink(trailer)).Class("discover-item__trailer"));
             page.Content.Add(new P(new Text("media.state." + MediaStateType.NotRequested)).Attribute("role", "status"));
 
             if (_locales is { } languages)
@@ -62,6 +67,13 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
         public async Task<IActionResult> OnGetAsync()
         {
             await LoadDataAsync();
+
+            // A season that already is part of a Work opens the series.
+            if (_anime?.WorkId is { } workId)
+            {
+                return LocalRedirect("/Details/" + workId.ToString(CultureInfo.InvariantCulture));
+            }
+
             PreparePage();
             return Page();
         }
@@ -77,7 +89,11 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
 
         protected override async Task LoadDataAsync()
         {
-            Scope();
+            if (Scope().Subtype == MediaSubtype.Anime && Source == "anilist" && int.TryParse(ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId))
+            {
+                _anime = await readAnime.ExecuteAsync<DiscoverAnimeV1>(new DiscoverAnimeParametersV1(aniListId), default(NoData), HttpContext.RequestAborted);
+            }
+
             if (texts.CanRequest())
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);

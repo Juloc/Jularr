@@ -248,6 +248,28 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
+    [ServiceEndpoint("POST", "/api/v1/discover/anime/{aniListId:int}")]
+    public sealed class ReadDiscoverAnimeV1 : UserService<DiscoverAnimeParametersV1, NoData>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal ReadDiscoverAnimeV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DiscoverAnimeV1>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverAnimeParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverAnimeParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, MediaType.Series, MediaSubtype.Anime, Auth.ProfileId!.Value, CancellationToken);
+            return await _catalog.ReadAnimeAsync(Context, Parameters.AniListId, CancellationToken);
+        }
+    }
+
     [ServiceEndpoint("POST", "/api/v1/discover/catalog/search")]
     public sealed class SearchDiscoverCatalogV1 : UserService<DiscoverParametersV1, SearchDiscoverCatalogDataV1>
     {
@@ -265,8 +287,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
-            var results = await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            var results = Data.MediaSubtypeId == MediaSubtype.Anime ? await _catalog.SearchAnimeAsync(Context, Data.Query, CancellationToken)
+                : await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
             return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(DiscoverQueries.CatalogItem)]);
         }
     }
@@ -288,7 +311,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             var results = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, CancellationToken);
             return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(DiscoverQueries.CatalogItem)]);
         }
@@ -312,7 +335,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // The catalog identity resolves to one canonical Work before the request exists.
-            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
             var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
                 Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);
@@ -325,11 +348,38 @@ namespace Jularr.Backend.Service.User.Discover.V1
         public static DiscoverCatalogItemV1 CatalogItem(MetadataSearchResultV1 result) =>
             new(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear, result.Author, result.WorkId, result.PosterUrl);
 
-        // Films and series are discovered through TMDB; the other types through their catalogs.
-        public static Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, long profileId, CancellationToken ct) =>
-            mediaType is MediaType.Book or MediaType.Music or MediaType.Game
-                ? RequireTypeAsync(context, mediaType, profileId, ct)
-                : throw new DataValidationException("MediaTypeId", "unknown_catalog_value");
+        // Films and series are discovered through TMDB; anime series and the other types through their catalogs.
+        public static async Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct)
+        {
+            var anime = mediaType == MediaType.Series && subtype == MediaSubtype.Anime;
+            if (!anime && mediaType is not (MediaType.Book or MediaType.Music or MediaType.Game))
+            {
+                throw new DataValidationException("MediaTypeId", "unknown_catalog_value");
+            }
+
+            await RequireTypeAsync(context, mediaType, profileId, ct);
+            if (anime && (await context.ExecuteBatchAsync((ctx, token) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        category."Key",
+                        TRUE AS "IsSubtype",
+                        category."IsHidden"
+                    FROM
+                        "ProfileMediaCategories" AS category
+                    WHERE
+                        category."ProfileId" = @ProfileId
+                        AND category."MediaSubtypeId" = 1;
+                    """;
+                sql.Parameters.Add(new ProfileParameters(profileId));
+                return ctx.ReadSql.ReadListAsync<ProfileMediaV1>(sql, token);
+            }, ct)).Count == 0)
+            {
+                throw new KeyNotFoundException("The media type is not available.");
+            }
+        }
 
         public static async Task<(IReadOnlySet<MediaType> Usable, IReadOnlySet<MediaType> Listed)> ReadTypesAsync(LogicContext context, long profileId, CancellationToken ct)
         {

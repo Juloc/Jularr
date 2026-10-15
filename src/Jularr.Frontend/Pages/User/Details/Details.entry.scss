@@ -1,5 +1,6 @@
 @use "../../../Framework/Components/MediaHero";
 @use "../../../Framework/Components/EpisodeCard";
+@use "../../../Framework/Components/TrailerLink";
 
 .details-actions {
     display: flex;
@@ -111,30 +112,6 @@
     margin-bottom: 24px;
 
     h2 { margin: 0 0 12px; color: var(--accent-text); font-size: 22px; font-weight: 750; }
-}
-
-.details-trailer {
-    position: relative;
-    display: block;
-    overflow: hidden;
-    border-radius: var(--radius-panel);
-    aspect-ratio: 16 / 9;
-    background: #000;
-
-    .media-image { width: 100%; height: 100%; object-fit: cover; }
-
-    &__play {
-        position: absolute;
-        inset: auto 12px 12px;
-        padding: 8px 12px;
-        border-radius: var(--radius-control);
-        background: rgb(0 0 0 / 65%);
-        color: #fff;
-        font-weight: 700;
-    }
-
-    &:hover .details-trailer__play,
-    &:focus-visible .details-trailer__play { background: var(--accent); }
 }
 
 .details-languages-card {

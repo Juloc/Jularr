@@ -71,6 +71,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        public async Task<IReadOnlyList<AniListMedia>> ReadAnimeRankingAsync(AniListRanking ranking, CancellationToken ct)
+        {
+            try
+            {
+                return await aniList.ReadRankedAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), ranking, ct);
+            }
+            catch (AniListException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<IReadOnlyList<AniListMedia>> SearchBooksAsync(MediaSubtype subtype, string query, int? year, CancellationToken ct)
         {
             var results = await SearchAsync(AniListMediaType.Manga, AniListMatching.Formats(MediaType.Book, subtype), query, ct);

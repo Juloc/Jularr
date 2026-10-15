@@ -15,7 +15,7 @@ namespace Jularr.Integrations.Logic.AniList
         private static long _blockedUntilTicks;
 
         private const string Fields =
-            "id type format title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } "
+            "id type format title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } bannerImage trailer { id site } "
             + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { name { full } } } } relations { edges { relationType node { id type } } }";
 
         public async Task<IReadOnlyList<AniListMedia>> SearchAsync(AniListMediaType type, IReadOnlyCollection<string> formats, string query, CancellationToken ct)
@@ -69,21 +69,33 @@ namespace Jularr.Integrations.Logic.AniList
                     .Select(edge => Child(Child(edge, "node"), "name") is { } name ? Text(name, "full") : null)
                     .OfType<string>().Distinct(StringComparer.Ordinal).Take(3).ToArray()
                 : [];
-            var sequels = Child(media, "relations") is { } relations && relations.TryGetProperty("edges", out var links) && links.ValueKind == JsonValueKind.Array
-                ? links.EnumerateArray()
-                    .Where(link => Text(link, "relationType") == "SEQUEL" && Child(link, "node") is { } node && Text(node, "type") == Type(media))
-                    .Select(link => Child(link, "node")!.Value.TryGetProperty("id", out var sequel) && sequel.TryGetInt32(out var sequelId) ? sequelId : 0)
-                    .Where(sequelId => sequelId > 0).Distinct().ToArray()
-                : [];
+            var sequels = Related(media, "SEQUEL");
+            var prequels = Related(media, "PREQUEL");
             var synonyms = media.TryGetProperty("synonyms", out var names) && names.ValueKind == JsonValueKind.Array
                 ? names.EnumerateArray().Where(name => name.ValueKind == JsonValueKind.String).Select(name => name.GetString()!.Trim()).Where(name => name.Length > 0).Take(20).ToArray()
                 : [];
             var year = Child(media, "startDate") is { } start && start.TryGetProperty("year", out var value) && value.ValueKind == JsonValueKind.Number ? value.GetInt32() : (int?)null;
             var description = Text(media, "description") is { } text ? Markup().Replace(text, " ").Trim() : null;
             var cover = Child(media, "coverImage") is { } image ? Text(image, "large") : null;
+            var banner = Text(media, "bannerImage");
+
+            // Only a YouTube id of YouTube's shape is kept.
+            var trailer = Child(media, "trailer") is { } video && Text(video, "site") == "youtube" && Text(video, "id") is { Length: 11 } key
+                && key.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_') ? key : null;
             return new AniListMedia(mediaId, Text(media, "format"), romaji, Text(title, "english"), Text(title, "native"), synonyms, year, Count(media, "episodes", 5000),
-                Count(media, "volumes", 500), description, cover is not null && cover.StartsWith("https://", StringComparison.Ordinal) ? cover : null, authors, sequels);
+                Count(media, "volumes", 500), description, Https(cover), authors, sequels, prequels, Https(banner), trailer);
         }
+
+        private static string? Https(string? url) => url is not null && url.StartsWith("https://", StringComparison.Ordinal) ? url : null;
+
+        // Entries of the same type before or after this one.
+        private static int[] Related(JsonElement media, string relationType) =>
+            Child(media, "relations") is { } relations && relations.TryGetProperty("edges", out var links) && links.ValueKind == JsonValueKind.Array
+                ? links.EnumerateArray()
+                    .Where(link => Text(link, "relationType") == relationType && Child(link, "node") is { } node && Text(node, "type") == Type(media))
+                    .Select(link => Child(link, "node")!.Value.TryGetProperty("id", out var related) && related.TryGetInt32(out var relatedId) ? relatedId : 0)
+                    .Where(relatedId => relatedId > 0).Distinct().ToArray()
+                : [];
 
         private async Task<JsonDocument> PostAsync(string query, Dictionary<string, object> variables, CancellationToken ct)
         {

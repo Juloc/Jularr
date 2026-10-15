@@ -35,8 +35,12 @@ namespace Jularr.Integrations.Data.AniList
     internal sealed class AniListMedia
     {
         public AniListMedia(int id, string? format, string romajiTitle, string? englishTitle, string? nativeTitle, IReadOnlyList<string> synonyms, int? year,
-            int? episodes, int? volumes, string? description, string? coverUrl, IReadOnlyList<string> authors, IReadOnlyList<int> sequels)
+            int? episodes, int? volumes, string? description, string? coverUrl, IReadOnlyList<string> authors, IReadOnlyList<int> sequels, IReadOnlyList<int> prequels,
+            string? bannerUrl, string? trailerKey)
         {
+            Prequels = prequels;
+            BannerUrl = bannerUrl;
+            TrailerKey = trailerKey;
             Id = id;
             Format = format;
             RomajiTitle = romajiTitle;
@@ -68,5 +72,10 @@ namespace Jularr.Integrations.Data.AniList
         public IReadOnlyList<string> Authors { get; }
 
         public IReadOnlyList<int> Sequels { get; }
+        public IReadOnlyList<int> Prequels { get; }
+
+        // The wide artwork and the YouTube id of this entry's trailer.
+        public string? BannerUrl { get; }
+        public string? TrailerKey { get; }
     }
 }

@@ -104,6 +104,54 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public string? PosterUrl { get; }
     }
 
+    public sealed class DiscoverAnimeParametersV1 : BaseParameters
+    {
+        public DiscoverAnimeParametersV1(int aniListId)
+        {
+            AniListId = aniListId;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.AniListId))]
+        public int AniListId { get; }
+    }
+
+    // An anime season as AniList shows it; what AniList lacks comes from its TMDB series.
+    public sealed class DiscoverAnimeV1 : BaseResponse
+    {
+        public DiscoverAnimeV1(string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl, string? trailerKey, long? workId)
+        {
+            Title = title;
+            ReleaseYear = releaseYear;
+            Overview = overview;
+            PosterUrl = posterUrl;
+            BackdropUrl = backdropUrl;
+            TrailerKey = trailerKey;
+            WorkId = workId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Overview))]
+        public string? Overview { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? BackdropUrl { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TrailerKey))]
+        public string? TrailerKey { get; }
+
+        // The series once it is a Work.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+    }
+
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData
     {
         public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null)
