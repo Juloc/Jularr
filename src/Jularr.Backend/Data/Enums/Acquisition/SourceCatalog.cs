@@ -101,6 +101,13 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("mangadex", "MangaDex", SourceGroup.Manga, MetadataSearch | SourceCapability.Monitoring, SourceAvailability.Planned),
             new("librivox", "LibriVox", SourceGroup.Audiobooks, MetadataSearch, SourceAvailability.Planned),
             new("newznab", "Newznab indexer", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab),
+            // Well-known Newznab indexers; each needs its own account key.
+            new("nzbgeek", "NZBgeek", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://api.nzbgeek.info"),
+            new("drunkenslug", "DrunkenSlug", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://drunkenslug.com"),
+            new("nzbplanet", "NZBPlanet", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://api.nzbplanet.net"),
+            new("nzbsu", "Nzb.su", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://api.nzb.su"),
+            new("nzbfinder", "NZBFinder", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://nzbfinder.ws"),
+            new("althub", "altHUB", SourceGroup.Acquisition, SourceCapability.Search, SourceAvailability.Account, AcquisitionConnectionType.Newznab, defaultBaseUrl: "https://api.althub.co.za"),
             new("sabnzbd", "SABnzbd", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Account, AcquisitionConnectionType.Sabnzbd),
             new("native", "Jularr usenet downloader", SourceGroup.Acquisition, SourceCapability.Download, SourceAvailability.Planned),
             new("opensubtitles", "OpenSubtitles.com", SourceGroup.Subtitles, SourceCapability.Subtitles, SourceAvailability.Account, AcquisitionConnectionType.OpenSubtitles,

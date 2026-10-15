@@ -39,6 +39,7 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(before.Single(item => item.Key == "gutenberg").IsConfigured);
             Assert.IsTrue(before.Single(item => item.Key == "openlibrary").IsConfigured);
             Assert.AreEqual(SourceAvailability.ReferenceOnly, before.Single(item => item.Key == "bookwalker").SourceAvailabilityId);
+            Assert.AreEqual("https://api.nzbgeek.info", before.Single(item => item.Key == "nzbgeek").DefaultBaseUrl);
 
             // Keys and accounts are asked for, never invented.
             using var setUp = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/sources/setup");
@@ -59,6 +60,15 @@ namespace Jularr.Backend.Tests
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Reference only");
+            StringAssert.Contains(html, "/Admin/Acquisition?Type=Newznab&amp;name=NZBgeek&amp;url=https%3A%2F%2Fapi.nzbgeek.info");
+
+            // A preset opens the indexer form filled in; categories may stay empty.
+            using var preset = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition?Type=Newznab&name=NZBgeek&url=https%3A%2F%2Fapi.nzbgeek.info");
+            var form = await preset.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, preset.StatusCode, form);
+            StringAssert.Contains(form, "value=\"https://api.nzbgeek.info\"");
+            var categories = System.Text.RegularExpressions.Regex.Match(form, "<input[^>]*name=\"Categories\"[^>]*>").Value;
+            Assert.IsFalse(string.IsNullOrEmpty(categories) || categories.Contains("required"), categories);
             StringAssert.Contains(html, "/Admin/Acquisition?Type=AnnasArchive");
         }
 

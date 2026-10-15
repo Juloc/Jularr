@@ -19,7 +19,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly BoolField HasApiKey = new();
         public static readonly BoolField IsEnabled = new();
         public static readonly IntField Priority = new() { Minimum = 1, Maximum = 100 };
-        public static readonly IntArrayField Categories = new() { Minimum = 1, Maximum = 999999, MaximumLength = 50 };
+        // Empty categories use the media type ranges.
+        public static readonly IntArrayField Categories = new() { Minimum = 1, Maximum = 999999, MaximumLength = 50, Required = false };
         public static readonly StringField DownloadCategory = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField RemotePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
         public static readonly StringField LocalPath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Required = false, Trim = true, Format = StringFormat.SingleLine };
@@ -28,7 +29,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringArrayField SearchModes = new() { ItemMaximumLength = 32 };
         public static readonly StringField ServerVersion = new() { MaximumLength = 64, Required = false };
         public static readonly DateTimeField CheckedAt = new() { Required = false };
-        public static readonly IntArrayField MediaTypeIds = new() { Minimum = 1, Maximum = 7, MaximumLength = 5 };
+        public static readonly IntArrayField MediaTypeIds = new() { Minimum = 1, Maximum = 7, MaximumLength = 5, Required = false };
         public static readonly BoolField SearchesAutomatically = new();
         public static readonly IntField QueryLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
         public static readonly IntField GrabLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
