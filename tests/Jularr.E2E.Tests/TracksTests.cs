@@ -3,7 +3,7 @@ using Microsoft.Playwright;
 
 namespace Jularr.E2E.Tests
 {
-    // An episode with two audio tracks and a subtitle file plays in either language with subtitles; a broken episode says it cannot play.
+    // An episode with two audio tracks and a subtitle file plays in either language with subtitles; a broken episode stops with a visible failure.
     [TestClass]
     public sealed class TracksTests
     {
@@ -55,33 +55,49 @@ namespace Jularr.E2E.Tests
                 }
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle);
-                await WaitForPlayLinksAsync(page, details, 2);
+                var pilot = page.Locator("tr", new() { HasText = "Pilot" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
+                var brokenEpisode = page.Locator("tr", new() { HasText = "Second" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
+                await WaitForPlayableAsync(page, details, brokenEpisode);
 
-                // Both audio tracks are offered; the second one plays.
-                await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).First.ClickAsync();
+                // Both audio tracks are offered in their languages; choosing the second asks for a new plan with that stream, and the new source plays.
+                await pilot.ClickAsync();
                 await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
                 await page.Locator("[data-action=audio]").ClickAsync();
                 var audio = page.Locator("[data-panel=audio] [data-audio]");
                 Assert.AreEqual(2, await audio.CountAsync());
-                await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
-                    response => response.Request.Method == "POST" && response.Ok, new() { Timeout = Steps.MediaTimeout });
-                Assert.AreEqual("true", await audio.Nth(1).GetAttributeAsync("aria-checked"));
-                await page.WaitForFunctionAsync("() => { const video = document.querySelector('video'); return video.readyState >= 2 && !video.paused; }", null, new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual("true", await audio.Nth(0).GetAttributeAsync("aria-checked"));
+                var languages = new[] { await audio.Nth(0).GetAttributeAsync("data-language"), await audio.Nth(1).GetAttributeAsync("data-language") };
+                Assert.IsTrue(languages.All(language => !string.IsNullOrEmpty(language)) && languages[0] != languages[1], string.Join(", ", languages));
+                var stream = await audio.Nth(1).GetAttributeAsync("data-audio");
+                var source = await page.Locator("video").EvaluateAsync<string>("video => video.currentSrc");
+                var plan = await page.RunAndWaitForResponseAsync(() => audio.Nth(1).ClickAsync(),
+                    response => response.Request.Method == "POST" && response.Request.PostData?.Contains("\"audioStreamIndex\":" + stream, StringComparison.Ordinal) == true,
+                    new() { Timeout = Steps.MediaTimeout });
+                Assert.IsTrue(plan.Ok, "The plan for the second track answered " + plan.Status);
+                await page.WaitForFunctionAsync("source => document.querySelector('video').currentSrc !== source", source, new() { Timeout = Steps.MediaTimeout });
+                var switchedAt = await page.Locator("video").EvaluateAsync<double>("video => video.currentTime");
+                await page.WaitForFunctionAsync("at => document.querySelector('video').currentTime > at + 1", switchedAt, new() { Timeout = Steps.MediaTimeout });
 
-                // The subtitle file beside it is shown with its cues.
+                // The subtitle file beside it is the only subtitle, in English, with its own text.
                 await page.Locator("[data-action=subtitles]").ClickAsync();
-                await page.Locator("[data-panel=subtitles] [data-subtitle]:not([data-subtitle=''])").First.ClickAsync();
+                var subtitles = page.Locator("[data-panel=subtitles] [data-subtitle]:not([data-subtitle=''])");
+                Assert.AreEqual(1, await subtitles.CountAsync());
+                StringAssert.StartsWith(await subtitles.GetAttributeAsync("data-language") ?? "", "en");
+                await subtitles.ClickAsync();
                 await page.WaitForFunctionAsync("() => [...document.querySelector('video').textTracks].some(track => track.mode === 'showing' && track.cues && track.cues.length > 0)",
                     null, new() { Timeout = Steps.MediaTimeout });
+                Assert.AreEqual("Hello from the subtitle file.", await page.Locator("video").EvaluateAsync<string>(
+                    "video => [...video.textTracks].find(track => track.mode === 'showing').cues[0].text"));
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
 
-                // The broken file says it cannot be played; nothing else fails.
+                // The broken file stops with the player's general failure, not silently.
                 await page.GotoAsync(details);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).Last.ClickAsync();
+                await brokenEpisode.ClickAsync();
                 var status = page.Locator("[data-role=status]");
                 await Assertions.Expect(status).ToBeVisibleAsync(new() { Timeout = Steps.MediaTimeout });
-                Assert.IsFalse(string.IsNullOrWhiteSpace(await status.InnerTextAsync()), "The player shows no reason.");
-                Assert.IsTrue(session.Problems.All(problem => problem.Contains("/api/v1/playback/", StringComparison.Ordinal) || problem.Contains("Failed to load resource", StringComparison.Ordinal)
-                    || problem.Contains("MEDIA_ERR", StringComparison.Ordinal)), string.Join(Environment.NewLine, session.Problems));
+                Assert.AreEqual(await page.Locator("[data-status=failed]").TextContentAsync(), await status.TextContentAsync());
+                Assert.IsTrue(await page.Locator("video").EvaluateAsync<bool>("video => video.error !== null"), "The video reported no error.");
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }
             catch (Exception exception) when (exception is not AssertInconclusiveException)
             {
@@ -91,13 +107,13 @@ namespace Jularr.E2E.Tests
         }
 
         // The download monitor imports one episode after the other.
-        private static async Task WaitForPlayLinksAsync(IPage page, string details, int count)
+        private static async Task WaitForPlayableAsync(IPage page, string details, ILocator play)
         {
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (true)
             {
                 await page.GotoAsync(details);
-                if (await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).CountAsync() > count)
+                if (await play.CountAsync() > 0)
                 {
                     return;
                 }
