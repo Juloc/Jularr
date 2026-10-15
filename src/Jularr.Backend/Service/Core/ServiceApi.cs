@@ -20,6 +20,7 @@ using Jularr.Integrations.Logic.Libretro;
 using Jularr.Integrations.Logic.MusicBrainz;
 using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Gutenberg;
+using Jularr.Integrations.Logic.Hardcover;
 using Jularr.Integrations.Logic.Opds;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.MediaServer;
@@ -269,6 +270,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary);
+            AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover);
             AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList);
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz);
             AddClient<IgdbClient>(services, 20, 8, agent: true);

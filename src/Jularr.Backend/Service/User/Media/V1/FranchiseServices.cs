@@ -55,7 +55,7 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // The series' titles the profile may see, in release order.
+            // The series' titles the profile may see, in the series' order, then in release order.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -87,6 +87,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                     AND NOT visible."IsHidden"
                     AND work."FranchiseId" = @FranchiseId
                 ORDER BY
+                    work."FranchisePosition" NULLS LAST,
                     work."ReleaseYear" NULLS LAST,
                     work."CanonicalTitle",
                     work."Id"

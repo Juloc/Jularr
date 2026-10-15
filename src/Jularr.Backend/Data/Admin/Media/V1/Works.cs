@@ -34,8 +34,11 @@ namespace Jularr.Backend.Data.Admin.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isMediaSubtypeManual, string canonicalTitle, int? releaseYear, long version,
-            long? wantedItemId = null)
+            long? wantedItemId = null, string? franchiseName = null, decimal? franchisePosition = null, bool isFranchiseManual = false)
         {
+            FranchiseName = franchiseName;
+            FranchisePosition = franchisePosition;
+            IsFranchiseManual = isFranchiseManual;
             WantedItemId = wantedItemId;
             Id = id;
             MediaTypeId = mediaTypeId;
@@ -71,6 +74,32 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         // Its acquisition target, once it is wanted.
         [DataField(typeof(Fields.Acquisition.WantedItemFields), nameof(Fields.Acquisition.WantedItemFields.Id), false)]
         public long? WantedItemId { get; }
+
+        // Its series and place there; an administrator's choice is kept by imports.
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
+        public string? FranchiseName { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Position), false)]
+        public decimal? FranchisePosition { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.IsFranchiseManual))]
+        public bool IsFranchiseManual { get; }
+    }
+
+    // A series by name with the Work's place in it; no name leaves the series to the providers again.
+    public sealed class UpdateWorkFranchiseDataV1 : BaseData
+    {
+        public UpdateWorkFranchiseDataV1(string? franchiseName, decimal? franchisePosition)
+        {
+            FranchiseName = franchiseName;
+            FranchisePosition = franchisePosition;
+        }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
+        public string? FranchiseName { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Position), false)]
+        public decimal? FranchisePosition { get; }
     }
 
     public sealed class CreateWorkDataV1 : BaseData

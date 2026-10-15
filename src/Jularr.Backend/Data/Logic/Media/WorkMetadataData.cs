@@ -241,23 +241,51 @@ namespace Jularr.Backend.Data.Logic.Media
         public LibrarySortType LibrarySortTypeId { get; }
     }
 
-    // The provider's film series of a Work, or none.
+    // The provider's series of a Work and the Work's place in it, or none.
     internal sealed class WorkFranchiseData : BaseData
     {
-        public WorkFranchiseData(long workId, int? tmdbCollectionId, string? name)
+        public WorkFranchiseData(long workId, string? @namespace, string? externalId, string? name, decimal? position)
         {
             WorkId = workId;
-            TmdbCollectionId = tmdbCollectionId;
+            Namespace = @namespace;
+            ExternalId = externalId;
             Name = name;
+            Position = position;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
         public long WorkId { get; }
 
-        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.TmdbCollectionId), false)]
-        public int? TmdbCollectionId { get; }
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Namespace), false)]
+        public string? Namespace { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.ExternalId), false)]
+        public string? ExternalId { get; }
 
         [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
         public string? Name { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Position), false)]
+        public decimal? Position { get; }
+    }
+
+    // An administrator's series of a Work by name, or none to leave it to the providers.
+    internal sealed class WorkFranchiseChoiceData : BaseData
+    {
+        public WorkFranchiseChoiceData(long workId, string? name, decimal? position)
+        {
+            WorkId = workId;
+            Name = name;
+            Position = position;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
+        public string? Name { get; }
+
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Position), false)]
+        public decimal? Position { get; }
     }
 }

@@ -10,13 +10,14 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Work
 {
-    public sealed class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
+    public sealed class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, UpdateWorkFranchiseV1 updateFranchise, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
         DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private SearchMetadataDataV1? _matchQuery;
         private IReadOnlyList<MetadataSearchResultV1>? _matches;
         private WorkDetailsV1? _work;
         private UpdateWorkDataV1? _input;
+        private UpdateWorkFranchiseDataV1? _franchiseInput;
         private IReadOnlyList<WorkUnitGroupV1>? _groups;
         private CreateWorkUnitGroupDataV1? _groupInput;
 
@@ -49,6 +50,21 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     form.Submit("common.save");
                 }, "/Admin/Works/" + work.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _input ?? new UpdateWorkDataV1(work.CanonicalTitle, work.Version, work.ReleaseYear, work.MediaSubtypeId), _input is null ? null : FormError));
+                // The series and place an administrator chooses; an empty name returns them to the providers.
+                if (texts.Can(null, "Franchises"))
+                {
+                    page.Content.Add(new Form<UpdateWorkFranchiseDataV1>(form =>
+                    {
+                        form.Section("admin.work.series", section =>
+                        {
+                            section.Text(item => item.FranchiseName, "admin.work.seriesName");
+                            section.Number(item => item.FranchisePosition, "admin.work.seriesPosition");
+                        });
+                        form.Submit("common.save");
+                    }, Home + "?handler=Franchise", antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                        _franchiseInput ?? new UpdateWorkFranchiseDataV1(work.FranchiseName, work.FranchisePosition), _franchiseInput is null ? null : FormError));
+                }
+
                 page.Content.Add(new Form<WorkParametersV1>(form => form.Submit("admin.work.refreshMetadata"),
                     "/Admin/Works/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?handler=Refresh", antiforgery.GetAndStoreTokens(HttpContext).RequestToken, new WorkParametersV1(work.Id)));
                 // A manga volume from the Admin's own device.
@@ -155,6 +171,13 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             _input = new UpdateWorkDataV1(canonicalTitle ?? "", version, releaseYear, mediaSubtypeId);
             await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), _input, HttpContext.RequestAborted);
+            return RedirectToPage("/Admin/Work/Work", new { id = Id });
+        }
+
+        public async Task<IActionResult> OnPostFranchiseAsync(string? franchiseName, decimal? franchisePosition)
+        {
+            _franchiseInput = new UpdateWorkFranchiseDataV1(franchiseName, franchisePosition);
+            await updateFranchise.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), _franchiseInput, HttpContext.RequestAborted);
             return RedirectToPage("/Admin/Work/Work", new { id = Id });
         }
 

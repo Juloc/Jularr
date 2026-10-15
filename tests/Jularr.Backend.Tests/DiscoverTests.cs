@@ -80,7 +80,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\""))!;
             var franchiseId = (long)(await host.ScalarAsync("SELECT \"FranchiseId\" FROM \"Works\" WHERE \"Id\" = " + workId))!;
-            Assert.AreEqual("The Matrix Collection", await host.ScalarAsync("SELECT \"Name\" FROM \"Franchises\" WHERE \"TmdbCollectionId\" = 2344"));
+            Assert.AreEqual("The Matrix Collection", await host.ScalarAsync("SELECT franchise.\"Name\" FROM \"Franchises\" AS franchise JOIN \"FranchiseExternalIdentities\" AS identity ON identity.\"FranchiseId\" = franchise.\"Id\" WHERE identity.\"Namespace\" = 'tmdb' AND identity.\"Value\" = '2344'"));
 
             // The series lists its titles and the details link to it.
             using var series = await host.SendAsync(HttpMethod.Get, "/api/v1/franchises/" + franchiseId + "/works");

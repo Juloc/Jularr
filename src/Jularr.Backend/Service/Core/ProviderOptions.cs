@@ -7,11 +7,12 @@ namespace Jularr.Backend.Service.Core
         public Uri MusicBrainz { get; set; } = new("https://musicbrainz.org/ws/2/");
         public Uri AniList { get; set; } = new("https://graphql.anilist.co/");
         public Uri OpenLibrary { get; set; } = new("https://openlibrary.org/");
+        public Uri Hardcover { get; set; } = new("https://api.hardcover.app/v1/");
 
         // Keys travel along, so plain HTTP only stays on this machine.
         internal ProviderOptions Validated()
         {
-            Uri[] addresses = [Tmdb, MusicBrainz, AniList, OpenLibrary];
+            Uri[] addresses = [Tmdb, MusicBrainz, AniList, OpenLibrary, Hardcover];
             return addresses.All(address => address.IsAbsoluteUri && (address.Scheme == "https" || address.Scheme == "http" && address.IsLoopback)
                 && address.AbsolutePath.EndsWith('/') && address.UserInfo.Length == 0 && address.Query.Length == 0)
                 ? this

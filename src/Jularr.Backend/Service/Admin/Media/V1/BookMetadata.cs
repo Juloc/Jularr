@@ -1,17 +1,26 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
+using Jularr.Backend.Data.Logic.Provider;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
-using Jularr.Integrations.Data.OpenLibrary;
-using Jularr.Integrations.Logic.OpenLibrary;
+using Jularr.Backend.Logic.Provider;
+using Jularr.Backend.Service.Admin.Provider.V1;
 using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Data.Hardcover;
+using Jularr.Integrations.Data.OpenLibrary;
+using Jularr.Integrations.Logic.Hardcover;
+using Jularr.Integrations.Logic.OpenLibrary;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
 {
-    // Open Library lookups and imports for books and light novels.
-    internal sealed class BookMetadata(OpenLibraryClient openLibrary)
+    // Open Library lookups and imports for books and light novels; Hardcover, where it has a token, names their series.
+    internal sealed class BookMetadata(OpenLibraryClient openLibrary, HardcoverClient hardcover, IDataProtectionProvider protection)
     {
         public const string Namespace = "openlibrary";
 
@@ -79,15 +88,70 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
 
             var editions = WorkEditionLogic.Choose(found);
+            var series = await ReadSeriesAsync(context, found, ct);
             var people = WorkPeopleLogic.Rows(work.People)
                 .Concat(editions.SelectMany(item => WorkPeopleLogic.Rows(item.Edition.People, editionLanguage: item.Language, editionFormat: item.Format))).ToArray();
             return await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var savedId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkEditionsAsync(WorkEditionLogic.Data(savedId, editions), token);
+                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(savedId, series?.Namespace, series?.ExternalId, series?.Name, series?.Position), token);
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(savedId, Namespace, people), token);
                 return savedId;
             }, ct);
+        }
+
+        private async Task<(string Namespace, string ExternalId, string Name, decimal? Position)?> ReadSeriesAsync(LogicContext context, IReadOnlyList<OpenLibraryEdition> editions,
+            CancellationToken ct)
+        {
+            if (await ConnectHardcoverAsync(context, ct) is { } connection)
+            {
+                try
+                {
+                    if ((await hardcover.ReadSeriesAsync(connection, [.. editions.SelectMany(edition => edition.Isbns).Distinct(StringComparer.Ordinal)], ct)).FirstOrDefault() is { } found)
+                    {
+                        return ("hardcover", found.Id.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(found.Name, 300)!, found.Position);
+                    }
+                }
+                catch (HardcoverException)
+                {
+                    // Open Library's series text stays.
+                }
+            }
+
+            // Open Library's series text also names publishers' lines ("Penguin Classics"); only a numbered one is a series.
+            return editions.SelectMany(edition => edition.Series).Select(FranchiseLogic.ReadSeries).OfType<(string Name, decimal? Position)>()
+                .Where(item => item.Position is not null).Select(item => ((string Namespace, string ExternalId, string Name, decimal? Position)?)("openlibrary",
+                    FranchiseLogic.SeriesKey(item.Name), TextLimit.Cut(item.Name, 300)!, item.Position)).FirstOrDefault();
+        }
+
+        // Hardcover takes part once its token is stored and it is switched on.
+        private async Task<HardcoverConnection?> ConnectHardcoverAsync(LogicContext context, CancellationToken ct)
+        {
+            var credential = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadProviderCredentialAsync(new ProviderParameters("hardcover"), token), ct);
+            if (credential is not { IsEnabled: true, ProtectedSecret: { } secret })
+            {
+                return null;
+            }
+
+            byte[] clear;
+            try
+            {
+                clear = protection.CreateProtector(SaveProviderSecretV1.ProtectorPurpose).Unprotect(secret);
+            }
+            catch (CryptographicException)
+            {
+                return null;
+            }
+
+            try
+            {
+                return new HardcoverConnection(Encoding.UTF8.GetString(clear));
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(clear);
+            }
         }
 
         private static Exception Translate(OpenLibraryException exception) => exception.Failure switch
