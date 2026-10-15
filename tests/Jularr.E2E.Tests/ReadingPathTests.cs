@@ -34,10 +34,10 @@ namespace Jularr.E2E.Tests
                     new LibraryPath("Light Novels", "Book", "Light novel"));
                 await Steps.AddUsenetAsync(page, fakes, "7000,7020,7030");
 
-                // The novel comes from Open Library, the manga series from AniList; both are requested on their details.
+                // The novel is added from Open Library on the Works page; the manga and the light novel are found on Discover in AniList.
                 await Steps.ImportAndRequestAsync(page, "Book", null, FakeServices.BookTitle);
-                await Steps.ImportAndRequestAsync(page, "Book", "Manga", FakeServices.MangaTitle, "anilist");
-                await Steps.ImportAndRequestAsync(page, "Book", "Light novel", FakeServices.NovelTitle, "anilist");
+                await Steps.RequestFromCatalogAsync(page, "manga", FakeServices.MangaTitle, "anilist");
+                await Steps.RequestFromCatalogAsync(page, "lightnovels", FakeServices.NovelTitle, "anilist");
 
                 // Each search finds its release, offered just before; the chosen one is downloaded.
                 fakes.Offer(book);

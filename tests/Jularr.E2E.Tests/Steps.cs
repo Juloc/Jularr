@@ -129,6 +129,16 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, FormWith(page, "Request this work"));
         }
 
+        // Found in its catalog on Discover and requested on its own page.
+        public static async Task RequestFromCatalogAsync(IPage page, string type, string title, string source)
+        {
+            await page.GotoAsync("/?type=" + type + "&q=" + Uri.EscapeDataString(title));
+            var card = page.Locator(".media-card", new() { HasText = title }).Filter(new() { Has = page.Locator("a[href*='/" + type + "/" + source + "/']") }).First;
+            await card.HoverAsync();
+            await card.GetByRole(AriaRole.Link, new() { Name = "Request this work" }).ClickAsync();
+            await SubmitAsync(page, FormWith(page, "Request this work"));
+        }
+
         public static async Task OpenWantedAsync(IPage page, string title)
         {
             await page.GotoAsync("/Admin/Wanted");

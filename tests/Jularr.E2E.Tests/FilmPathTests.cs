@@ -64,6 +64,19 @@ namespace Jularr.E2E.Tests
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Movies"), "*.webm", SearchOption.AllDirectories).Count(), "The film was not imported once.");
                 Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Series"), "*.webm", SearchOption.AllDirectories).Count(), "The episode was not imported once.");
 
+                // The second episode is switched off on the Monitoring tab: nothing monitored is missing, the request completes and the Missing list drops the series.
+                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await page.GetByRole(AriaRole.Link, new() { Name = "Monitoring", Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }).ClickAsync();
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = "Episode 1" }).InnerTextAsync(), "Present");
+                await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = "Episode 2" }).Locator("form"));
+                var season = page.Locator("tr").Filter(new() { Has = page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }) });
+                StringAssert.Contains(await season.InnerTextAsync(), "Partly monitored");
+                await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");
+                Assert.AreEqual(0, await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).CountAsync(), "The series is still listed as missing.");
+                await page.GotoAsync("/Admin/Requests");
+                StringAssert.Contains(await page.Locator("tr", new() { HasText = FakeServices.SeriesTitle }).InnerTextAsync(), "Completed");
+
                 // Playing needs a real file; FFmpeg makes one.
                 if (ffmpeg is null)
                 {
