@@ -375,6 +375,7 @@ namespace Jularr.Frontend.Localization
             new("setup.step.Storage", "Storage"),
             new("setup.step.Downloads", "Downloads"),
             new("setup.step.Providers", "Providers"),
+            new("setup.step.Profiles", "Profiles"),
             new("setup.step.Media", "Existing media"),
             new("setup.step.Finish", "Finish"),
             new("setup.next", "Continue"),

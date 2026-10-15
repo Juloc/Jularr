@@ -3,6 +3,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
@@ -37,8 +38,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             page.Title("admin.profiles.title");
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.Acquisition);
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            page.Content.Add(SetupWizard.IsActive(Request) ? SetupWizard.Frame(SetupStepType.Profiles, csrf) : AdminNavigation.Acquisition);
             var editing = _selected is not null || NewFor is not null;
 
             page.Content.Add(new Split(split =>
@@ -211,9 +212,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
 
         private static string[] Terms(string? value) => value is null ? [] : [.. value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
 
-        private static string Address(long? id = null, MediaType? newFor = null, MediaSubtype? newForSubtype = null, string? handler = null)
+        private string Address(long? id = null, MediaType? newFor = null, MediaSubtype? newForSubtype = null, string? handler = null)
         {
-            var address = "/Admin/Acquisition/Profiles";
+            var address = SetupWizard.Address(Request, SetupStepType.Profiles, "/Admin/Acquisition/Profiles");
             if (id is { } profileId) address += "?AcquisitionProfileId=" + profileId.ToString(CultureInfo.InvariantCulture);
             else if (newFor is { } type) address += "?NewFor=" + type + (newForSubtype is { } subtype ? "&NewForSubtype=" + subtype : "");
             return handler is null ? address : address + (address.Contains('?') ? "&" : "?") + "handler=" + handler;

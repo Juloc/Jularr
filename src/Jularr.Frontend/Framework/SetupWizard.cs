@@ -13,6 +13,7 @@ namespace Jularr.Frontend.Framework
             [SetupStepType.Storage] = "/Setup/Storage",
             [SetupStepType.Downloads] = "/Setup/Acquisition",
             [SetupStepType.Providers] = "/Setup/Providers",
+            [SetupStepType.Profiles] = "/Setup/Profiles",
             [SetupStepType.Media] = "/Setup/Takeover",
             [SetupStepType.Finish] = "/Setup/Finish"
         };

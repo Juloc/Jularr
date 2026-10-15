@@ -66,6 +66,13 @@ namespace Jularr.Backend.Tests
             using var storage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
             Assert.AreEqual(HttpStatusCode.OK, storage.StatusCode, await storage.Content.ReadAsStringAsync());
 
+            // The profile editor is a step of its own and keeps its links inside the wizard.
+            using var profiles = await host.SendAsync(HttpMethod.Get, "/Setup/Profiles");
+            var profilesHtml = await profiles.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, profiles.StatusCode, profilesHtml);
+            StringAssert.Contains(profilesHtml, "setup-wizard");
+            StringAssert.Contains(profilesHtml, "href=\"/Setup/Profiles?NewFor=Movie\"");
+
             // Missing essentials block the end; once nothing blocks, the wizard closes.
             using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Finish");
             var blockedHtml = await blocked.Content.ReadAsStringAsync();

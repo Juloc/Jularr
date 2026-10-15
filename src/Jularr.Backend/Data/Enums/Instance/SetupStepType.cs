@@ -7,7 +7,8 @@ namespace Jularr.Backend.Data.Enums.Instance
         Storage = 2,
         Downloads = 3,
         Providers = 4,
-        Media = 5,
-        Finish = 6
+        Profiles = 5,
+        Media = 6,
+        Finish = 7
     }
 }

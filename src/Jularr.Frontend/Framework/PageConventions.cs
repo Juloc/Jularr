@@ -13,6 +13,7 @@ namespace Jularr.Frontend.Framework
             conventions.AddPageRoute("/Admin/Instance/Instance", "/Setup/Instance");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Acquisition");
             conventions.AddPageRoute("/Admin/Providers/Providers", "/Setup/Providers");
+            conventions.AddPageRoute("/Admin/Profiles/Profiles", "/Setup/Profiles");
             conventions.AddPageRoute("/Admin/Takeover/Takeover", "/Setup/Takeover");
             conventions.AddPageRoute("/Admin/Backup/Backup", "/Setup/Backup");
             conventions.AuthorizePage("/Admin/Requests/Requests", ServiceApi.RequestsReadPolicyName);
