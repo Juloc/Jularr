@@ -93,3 +93,11 @@
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 16px;
 }
+
+.details-episodes > h3 {
+    grid-column: 1 / -1;
+    margin: 8px 0 0;
+    color: var(--accent-text);
+    font-size: 17px;
+    font-weight: 700;
+}

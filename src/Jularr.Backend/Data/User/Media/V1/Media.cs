@@ -344,8 +344,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkEpisodeV1 : BaseResponse
     {
         public WorkEpisodeV1(long id, int seasonNumber, decimal number, string? title, string? overview, string? imageUrl, int? runtimeMinutes, DateOnly? releasedOn,
-            long? mediaAssetId, long? resumePositionMs, long? durationMs, bool isCompleted, MediaStateType mediaStateTypeId, bool isUpcoming)
+            long? mediaAssetId, long? resumePositionMs, long? durationMs, bool isCompleted, MediaStateType mediaStateTypeId, bool isUpcoming, string? groupName)
         {
+            GroupName = groupName;
             Id = id;
             SeasonNumber = seasonNumber;
             Number = number;
@@ -403,5 +404,9 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.IsUpcoming))]
         public bool IsUpcoming { get; }
+
+        // The staff's section the episode falls in.
+        [DataField(typeof(WorkUnitGroupFields), nameof(WorkUnitGroupFields.Name), false)]
+        public string? GroupName { get; }
     }
 }

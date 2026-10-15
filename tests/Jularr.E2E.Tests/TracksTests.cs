@@ -55,8 +55,8 @@ namespace Jularr.E2E.Tests
                 }
 
                 var details = await Steps.WaitForAvailableAsync(page, FakeServices.SeriesTitle);
-                var pilot = page.Locator("tr", new() { HasText = "Pilot" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
-                var brokenEpisode = page.Locator("tr", new() { HasText = "Second" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
+                var pilot = page.Locator(".episode-card", new() { HasText = "Pilot" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
+                var brokenEpisode = page.Locator(".episode-card", new() { HasText = "Second" }).GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true });
                 await WaitForPlayableAsync(page, details, brokenEpisode);
 
                 // Both audio tracks are offered in their languages; choosing the second asks for a new plan with that stream, and the new source plays.

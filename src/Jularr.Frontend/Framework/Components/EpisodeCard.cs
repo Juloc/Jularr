@@ -4,7 +4,7 @@ using System.Text.Encodings.Web;
 namespace Jularr.Frontend.Framework
 {
     // One episode: its still with length and progress, number, title and summary, and its state; a playable one opens the player.
-    public sealed class EpisodeCard(string label, string? title, string? overview, string? imageUrl, int? runtimeMinutes, string stateKey, string? playHref) : IUiComponent
+    public sealed class EpisodeCard(string label, string? title, string? overview, string? imageUrl, int? runtimeMinutes, string stateKey, string? playHref, string? resumeAt = null) : IUiComponent
     {
         private long? _positionMs;
         private long? _durationMs;
@@ -33,9 +33,14 @@ namespace Jularr.Frontend.Framework
                     .Attribute("value", Math.Clamp(position, 0, duration).ToString(CultureInfo.InvariantCulture)).Attribute("aria-label", texts["media.progress"]).Class("episode-card__progress"));
             }
 
-            IUiComponent still = playHref is null
-                ? new Div([.. art]).Class("episode-card__art")
-                : new A([.. art, new Span(new Text("details.play")).Class("episode-card__play")]).Class("episode-card__art").Attribute("href", playHref);
+            // The link names its action alone: play, or continue at the stored position.
+            if (playHref is not null)
+            {
+                art.Add(new A(resumeAt is null ? new Text("details.play") : new Span(new Text("details.resume"), new ValueText(" " + resumeAt))).Class("episode-card__play")
+                    .Attribute("href", playHref));
+            }
+
+            var still = new Div([.. art]).Class("episode-card__art");
             new Article(
                 still,
                 new Div(

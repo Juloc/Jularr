@@ -522,7 +522,19 @@ namespace Jularr.Backend.Service.User.Media.V1
                         WHEN episode."IsMonitored" AND EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."WorkId" = episode."WorkId" AND NOT wanted."IsPaused") THEN 2
                         ELSE 1
                     END::smallint AS "MediaStateTypeId",
-                    coalesce(episode."ReleasedOn" > current_date, FALSE) AS "IsUpcoming"
+                    coalesce(episode."ReleasedOn" > current_date, FALSE) AS "IsUpcoming",
+                    (
+                        SELECT
+                            unitGroup."Name"
+                        FROM
+                            "WorkUnitGroups" AS unitGroup
+                            JOIN "InstanceModules" AS module ON module."Key" = 'UnitGroups' AND module."IsEnabled"
+                        WHERE
+                            unitGroup."WorkId" = episode."WorkId"
+                            AND (season."Number", episode."Number") >= (coalesce(unitGroup."FirstParentNumber", 0), unitGroup."FirstNumber")
+                            AND (season."Number", episode."Number") <= (coalesce(unitGroup."LastParentNumber", 0), unitGroup."LastNumber")
+                        LIMIT 1
+                    ) AS "GroupName"
                 FROM
                     "WorkUnits" AS episode
                     JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"

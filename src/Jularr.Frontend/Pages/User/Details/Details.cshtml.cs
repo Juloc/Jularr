@@ -189,12 +189,23 @@ namespace Jularr.Frontend.Pages.User.Details
                 return current ? (IUiComponent)link.Attribute("aria-current", "page") : link;
             });
             var canPlay = texts.CanPlay();
-            var episodes = _episodes.Select(episode => (IUiComponent)new EpisodeCard(
-                    "S" + episode.SeasonNumber.ToString("00", CultureInfo.InvariantCulture) + " E" + episode.Number.ToString("00.###", CultureInfo.InvariantCulture),
-                    episode.Title, episode.Overview, episode.ImageUrl, episode.RuntimeMinutes,
-                    episode.IsUpcoming && episode.MediaStateTypeId != MediaStateType.Available ? "details.upcoming" : "media.state." + episode.MediaStateTypeId,
-                    canPlay && episode.MediaAssetId is { } asset ? "/Player/" + asset.ToString(CultureInfo.InvariantCulture) : null)
-                .Progress(episode.IsCompleted ? null : episode.ResumePositionMs, episode.DurationMs));
+            var episodes = new List<IUiComponent>();
+            string? group = null;
+            foreach (var episode in _episodes)
+            {
+                // Staff-named sections head their episodes.
+                if (episode.GroupName is { } name && name != group) episodes.Add(new H3(new ValueText(name)));
+                group = episode.GroupName;
+                var resume = episode.ResumePositionMs is > 0 and { } position && !episode.IsCompleted
+                    ? TimeSpan.FromMilliseconds(position).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : null;
+                episodes.Add(new EpisodeCard(
+                        "S" + episode.SeasonNumber.ToString("00", CultureInfo.InvariantCulture) + " E" + episode.Number.ToString("00.###", CultureInfo.InvariantCulture),
+                        episode.Title, episode.Overview, episode.ImageUrl, episode.RuntimeMinutes,
+                        episode.IsUpcoming && episode.MediaStateTypeId != MediaStateType.Available ? "details.upcoming" : "media.state." + episode.MediaStateTypeId,
+                        canPlay && episode.MediaAssetId is { } asset ? "/Player/" + asset.ToString(CultureInfo.InvariantCulture) : null, resume)
+                    .Progress(episode.IsCompleted ? null : episode.ResumePositionMs, episode.DurationMs));
+            }
+
             return new Div(
                 new Section(new H2(new Text("details.seasons")), new Nav([.. seasons]).Class("details-seasons").Attribute("aria-label", texts["details.seasons"])).Class("details-series__seasons"),
                 new Section(new H2(new Text("details.episodes")), _episodes.Count == 0 ? new P(new Text("details.noEpisodes")) : new Div([.. episodes]).Class("details-episodes"))

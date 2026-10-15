@@ -38,13 +38,15 @@
         display: grid;
         place-items: center;
         background: rgb(0 0 0 / 40%);
+        color: #fff;
         font-weight: 700;
+        text-decoration: none;
         opacity: 0;
         transition: opacity .15s ease;
     }
 
     &__art:hover &__play,
-    &__art:focus-visible &__play { opacity: 1; }
+    &__play:focus-visible { opacity: 1; }
 
     @media (hover: none), (pointer: coarse) {
         &__play { opacity: 1; background: linear-gradient(transparent 55%, rgb(0 0 0 / 50%)); place-items: end start; padding: 10px; }
