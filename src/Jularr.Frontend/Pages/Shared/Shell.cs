@@ -47,7 +47,8 @@ namespace Jularr.Frontend.Pages.Shared
             if (texts.CanManageMedia())
             {
                 secondary.Add(Group("nav.group.media", "settings",
-                    new("admin.works.title", "/Admin/Works", ""), new("admin.matches.title", "/Admin/Works/Matches", ""), new("admin.activity.title", "/Admin/Activity", "")));
+                    new("admin.works.title", "/Admin/Works", ""), new("admin.matches.title", "/Admin/Works/Matches", ""), new("admin.activity.title", "/Admin/Activity", ""),
+                    new("admin.history.title", "/Admin/History", "")));
                 secondary.Add(Group("nav.group.library", "library", [new("library.tab.Overview", "/Admin/Library", ""), new("library.tab.Unmatched", "/Admin/Library/Unmatched", ""),
                     new("library.tab.Files", "/Admin/Library/Files", ""),
                     .. texts.CanManageStorage() ? new ShellLink[] { new("library.tab.Naming", "/Admin/Library/Naming", ""), new("library.tab.Rename", "/Admin/Library/Rename", ""),

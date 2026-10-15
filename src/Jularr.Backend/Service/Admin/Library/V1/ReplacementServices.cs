@@ -86,7 +86,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             sql.Parameters.Add(Parameters);
             var asset = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSql.ReadOptionalAsync<MediaAssetIdData>(sql, ct), CancellationToken)
                 ?? throw new DataValidationException(nameof(StoredFileParametersV1.StoredFileId), "invalid_transition");
-            await _replacements.KeepOnlyAsync(Context, asset.Id, CancellationToken);
+            await _replacements.KeepOnlyAsync(Context, asset.Id, Auth.AccountId!.Value, CancellationToken);
             return new UpdateResult(true);
         }
     }

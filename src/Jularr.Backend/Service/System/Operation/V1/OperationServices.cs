@@ -49,7 +49,7 @@ namespace Jularr.Backend.Service.System.Operation.V1
         }
     }
 
-    // Activity keeps finished work as long and as much as the Admin set.
+    // Activity keeps finished work and the media history as long and as much as the Admin set.
     public sealed class PruneOperationsV1 : SystemService<PruneOperationsParametersV1, NoData>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
@@ -59,7 +59,9 @@ namespace Jularr.Backend.Service.System.Operation.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            return new UpdateResult(await Context.PruneFinishedOperationsAsync(CancellationToken) > 0);
+            var operations = await Context.PruneFinishedOperationsAsync(CancellationToken);
+            var events = await Context.PruneActivityEventsAsync(CancellationToken);
+            return new UpdateResult(operations + events > 0);
         }
     }
 

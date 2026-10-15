@@ -1,7 +1,10 @@
 using System.Text;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Logic.Playback;
@@ -44,7 +47,8 @@ namespace Jularr.Backend.Service.Core
         }
 
         // An existing file of that name stays and false is returned; the new one belongs to the video's asset.
-        public static async Task<bool> SaveAsync(LogicContext context, SubtitleSourceData source, string directory, string relativePath, byte[] bytes, CancellationToken ct)
+        public static async Task<bool> SaveAsync(LogicContext context, SubtitleSourceData source, string directory, string relativePath, byte[] bytes, CancellationToken ct,
+            long? accountId = null)
         {
             using var content = new MemoryStream(bytes);
             if (await LibraryFileWriter.WriteAsync(directory, relativePath, content, ct) is not var (length, modifiedAt))
@@ -55,6 +59,11 @@ namespace Jularr.Backend.Service.Core
             await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 await ctx.SaveSubtitleFileAsync(new SubtitleFileData(source.LibraryRootId, relativePath, length, modifiedAt, source.MediaAssetId), token);
+                if (await ctx.ReadStoredFileIdAsync(new LibraryFilePathData(source.LibraryRootId, relativePath), token) is { } file)
+                {
+                    await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.SubtitleDownloaded, storedFileId: file.Id, accountId: accountId), token);
+                }
+
                 return true;
             }, ct);
             return true;

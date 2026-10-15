@@ -142,13 +142,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>
             _offers.TryGetValue(CacheKey(wantedItemId), out Dictionary<string, ReleaseOffer>? offers) && offers!.TryGetValue(candidateId, out var offer) ? offer : null;
 
-        public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct)
+        public async Task GrabAsync(LogicContext context, WantedTargetData target, ReleaseOffer offer, string? qualityKey, IReadOnlyList<AcquisitionConnectionData> clients, CancellationToken ct,
+            long? accountId = null)
         {
             // Catalog books are downloaded by Jularr itself; the monitor takes the queued download.
             if (DirectSources.IsDirectOffer(offer.Guid) && offer.DownloadUri is { } source)
             {
                 var direct = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, offer.ConnectionId, null, null, null,
-                    source.ToString());
+                    source.ToString(), accountId);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     var reserved = await ctx.ReserveDownloadAsync(direct, token);
@@ -181,7 +182,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
                 : [];
             var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
-            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end);
+            var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end,
+                requestedByAccountId: accountId);
             var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
 
             // The best client by priority receives the release; Jularr's own downloader keeps the NZB in staging.

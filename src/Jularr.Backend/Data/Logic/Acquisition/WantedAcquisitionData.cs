@@ -198,8 +198,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class AcquisitionGrabData : BaseData
     {
         public AcquisitionGrabData(long wantedItemId, long indexerConnectionId, string releaseIdentity, string title, string? qualityKey, long downloadConnectionId, int? parentUnitNumber,
-            int? unitStart, int? unitEnd, string? sourceUrl = null)
+            int? unitStart, int? unitEnd, string? sourceUrl = null, long? requestedByAccountId = null)
         {
+            RequestedByAccountId = requestedByAccountId;
             SourceUrl = sourceUrl;
             ParentUnitNumber = parentUnitNumber;
             UnitStart = unitStart;
@@ -217,6 +218,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
         public long IndexerConnectionId { get; }
+
+        // The administrator who took it by hand; automatic grabs have none.
+        [DataField(typeof(Fields.Account.AccountFields), nameof(Fields.Account.AccountFields.Id), false)]
+        public long? RequestedByAccountId { get; }
 
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReleaseIdentity))]
         public string ReleaseIdentity { get; }

@@ -1,6 +1,7 @@
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Library.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Operation;
@@ -123,7 +124,9 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         {
             var data = new StoredFileAssignmentData(Parameters.StoredFileId, Data.WorkId, Data.Title, Data.WorkUnitTypeId, Data.UnitNumber, Data.ParentUnitNumber, Data.GamePlatformId,
                 true);
-            return new AssignLibraryFileResultV1((await Context.AssignStoredFileAsync(data, CancellationToken)).Id);
+            var asset = await Context.AssignStoredFileAsync(data, CancellationToken);
+            await Context.RecordActivityAsync(new ActivityEventData(ActivityEventType.ManualImport, storedFileId: Parameters.StoredFileId, accountId: Auth.AccountId), CancellationToken);
+            return new AssignLibraryFileResultV1(asset.Id);
         }
     }
 
@@ -296,7 +299,18 @@ namespace Jularr.Backend.Service.Admin.Library.V1
             bool recorded;
             try
             {
-                recorded = await Context.ExecuteBatchAsync((ctx, ct) => ctx.RenameStoredFileAsync(rename, ct), CancellationToken.None);
+                recorded = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                {
+                    // The history names the media file's old place; its subtitles follow it silently.
+                    var renamed = await ctx.RenameStoredFileAsync(rename, ct);
+                    if (renamed && rename.StoredFileId == rename.MediaStoredFileId)
+                    {
+                        await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.FileRenamed, storedFileId: rename.StoredFileId, accountId: Auth.AccountId,
+                            previousPath: rename.RelativePath), ct);
+                    }
+
+                    return renamed;
+                }, CancellationToken.None);
             }
             catch
             {

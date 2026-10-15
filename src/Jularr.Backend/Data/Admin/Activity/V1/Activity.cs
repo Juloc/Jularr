@@ -1,6 +1,9 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Operation;
 
@@ -115,5 +118,98 @@ namespace Jularr.Backend.Data.Admin.Activity.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl), true)]
         public string SourceLinkUrl { get; }
+    }
+
+    public sealed class ReadActivityEventsParametersV1 : BaseParameters
+    {
+        public ReadActivityEventsParametersV1(long? workId = null, int page = 1, int pageSize = 50)
+        {
+            WorkId = workId;
+            Page = page;
+            PageSize = pageSize;
+        }
+
+        // One Work's history, else everything.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        public int Page { get; }
+        public int PageSize { get; }
+    }
+
+    // What happened, with the texts it kept: the release and its quality, the indexer and client, the file's place and who did it.
+    public sealed class ActivityEventV1 : BaseResponse
+    {
+        public ActivityEventV1(long id, ActivityEventType activityEventTypeId, DateTime occurredAt, long? workId, string workTitle, WorkUnitType? workUnitTypeId, decimal? parentUnitNumber,
+            decimal? unitNumber, string? releaseTitle, string? qualityKey, string? indexerName, string? clientName, string? path, string? previousPath, string? reasonKey, string? accountName)
+        {
+            Id = id;
+            ActivityEventTypeId = activityEventTypeId;
+            OccurredAt = occurredAt;
+            WorkId = workId;
+            WorkTitle = workTitle;
+            WorkUnitTypeId = workUnitTypeId;
+            ParentUnitNumber = parentUnitNumber;
+            UnitNumber = unitNumber;
+            ReleaseTitle = releaseTitle;
+            QualityKey = qualityKey;
+            IndexerName = indexerName;
+            ClientName = clientName;
+            Path = path;
+            PreviousPath = previousPath;
+            ReasonKey = reasonKey;
+            AccountName = accountName;
+        }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ActivityEventTypeId))]
+        public ActivityEventType ActivityEventTypeId { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.OccurredAt))]
+        public DateTime OccurredAt { get; }
+
+        // The episode, volume or track, where the event names one.
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.WorkUnitTypeId))]
+        public WorkUnitType? WorkUnitTypeId { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.UnitNumber))]
+        public decimal? ParentUnitNumber { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.UnitNumber))]
+        public decimal? UnitNumber { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.QualityKey))]
+        public string? QualityKey { get; }
+
+        // The Work while it exists.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.WorkTitle))]
+        public string WorkTitle { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ReleaseTitle))]
+        public string? ReleaseTitle { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ConnectionName))]
+        public string? IndexerName { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ConnectionName))]
+        public string? ClientName { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.Path))]
+        public string? Path { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.Path))]
+        public string? PreviousPath { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ReasonKey))]
+        public string? ReasonKey { get; }
+
+        // Who did it; none is Jularr itself.
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.AccountName))]
+        public string? AccountName { get; }
     }
 }

@@ -36,22 +36,24 @@ namespace Jularr.Backend.Service.Core
                 (await ctx.ReadReplacementSettingsAsync(token), await ctx.ReadReplacedFilesAsync(new ReplacingAssetsData([.. newMediaAssetIds], false), token)), ct);
             if (!settings.KeepsReleases)
             {
-                await RetireAsync(context, settings, files.Where(file => ReplacementLogic.IsBetter(profile, file)).ToArray(), ct);
+                await RetireAsync(context, settings, files.Where(file => ReplacementLogic.IsBetter(profile, file)).ToArray(), ActivityEventType.Upgraded, null, ct);
             }
         }
 
         // An administrator's choice: every other version of the same kind, edition and format goes, whatever its quality.
-        public async Task KeepOnlyAsync(LogicContext context, long mediaAssetId, CancellationToken ct)
+        public async Task KeepOnlyAsync(LogicContext context, long mediaAssetId, long accountId, CancellationToken ct)
         {
             var (settings, files) = await context.ExecuteBatchAsync(async (ctx, token) =>
                 (await ctx.ReadReplacementSettingsAsync(token), await ctx.ReadReplacedFilesAsync(new ReplacingAssetsData([mediaAssetId], true), token)), ct);
-            await RetireAsync(context, settings, files, ct);
+            await RetireAsync(context, settings, files, ActivityEventType.FileDeleted, accountId, ct);
         }
 
-        // A file that cannot be moved, on an unreachable library or with an unusable recycle folder, stays as a further version.
-        private async Task RetireAsync(LogicContext context, ReplacementSettingsData settings, IReadOnlyList<ReplacedFileData> files, CancellationToken ct)
+        // A file that cannot be moved, on an unreachable library or with an unusable recycle folder, stays as a further version. The history names each file that went.
+        private async Task RetireAsync(LogicContext context, ReplacementSettingsData settings, IReadOnlyList<ReplacedFileData> files, ActivityEventType eventType, long? accountId,
+            CancellationToken ct)
         {
             var retired = new List<object>();
+            var gone = new List<long>();
             foreach (var file in files.DistinctBy(file => file.StoredFileId))
             {
                 ct.ThrowIfCancellationRequested();
@@ -67,6 +69,7 @@ namespace Jularr.Backend.Service.Core
                     }
                     else
                     {
+                        gone.Add(file.StoredFileId);
                         retired.Add(new
                         {
                             file.StoredFileId,
@@ -87,6 +90,11 @@ namespace Jularr.Backend.Service.Core
             {
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
+                    foreach (var storedFileId in gone)
+                    {
+                        await ctx.RecordActivityAsync(new ActivityEventData(eventType, storedFileId: storedFileId, accountId: accountId), token);
+                    }
+
                     await ctx.RetireReplacedFilesAsync(new RetiredFilesData(JsonSerializer.Serialize(retired)), token);
                     return true;
                 }, ct);
