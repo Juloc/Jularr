@@ -1,6 +1,9 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Library;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Localization;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Operation;
@@ -80,8 +83,10 @@ namespace Jularr.Backend.Data.User.Request.V1
     public sealed class RequestDetailsV1 : BaseResponse
     {
         public RequestDetailsV1(long id, long workId, string canonicalTitle, string requestedLanguage, AcquisitionRequestStatusType acquisitionRequestStatusTypeId, DateTime createdAt,
-            long? operationId = null, string? manualUrl = null)
+            long? operationId = null, string? manualUrl = null, ActivityEventType? latestStepTypeId = null, DateTime? latestStepAt = null)
         {
+            LatestStepTypeId = latestStepTypeId;
+            LatestStepAt = latestStepAt;
             OperationId = operationId;
             ManualUrl = manualUrl;
             Id = id;
@@ -116,6 +121,13 @@ namespace Jularr.Backend.Data.User.Request.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.AttentionUrl), false)]
         public string? ManualUrl { get; }
+
+        // The last step since the request: grabbed, failed, imported or upgraded.
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ActivityEventTypeId), false)]
+        public ActivityEventType? LatestStepTypeId { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.OccurredAt), false)]
+        public DateTime? LatestStepAt { get; }
     }
 
     public sealed class RequestParametersV1 : BaseParameters
@@ -142,5 +154,38 @@ namespace Jularr.Backend.Data.User.Request.V1
 
         [DataField(typeof(OperationFields), nameof(OperationFields.SourceLinkUrl), true)]
         public string SourceLinkUrl { get; }
+    }
+
+    // A step of a request as its requester sees it.
+    public sealed class RequestStepV1 : BaseResponse
+    {
+        public RequestStepV1(ActivityEventType activityEventTypeId, DateTime occurredAt, WorkUnitType? workUnitTypeId, decimal? parentUnitNumber, decimal? unitNumber, string? qualityKey)
+        {
+            ActivityEventTypeId = activityEventTypeId;
+            OccurredAt = occurredAt;
+            WorkUnitTypeId = workUnitTypeId;
+            ParentUnitNumber = parentUnitNumber;
+            UnitNumber = unitNumber;
+            QualityKey = qualityKey;
+        }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.ActivityEventTypeId))]
+        public ActivityEventType ActivityEventTypeId { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.OccurredAt))]
+        public DateTime OccurredAt { get; }
+
+        // The episode, volume or track, where the event names one.
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.WorkUnitTypeId))]
+        public WorkUnitType? WorkUnitTypeId { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.UnitNumber))]
+        public decimal? ParentUnitNumber { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.UnitNumber))]
+        public decimal? UnitNumber { get; }
+
+        [DataField(typeof(ActivityEventFields), nameof(ActivityEventFields.QualityKey))]
+        public string? QualityKey { get; }
     }
 }

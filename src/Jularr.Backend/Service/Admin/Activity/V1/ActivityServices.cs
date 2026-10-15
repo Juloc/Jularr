@@ -2,11 +2,12 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
-using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Logic.Library;
+using Jularr.Backend.Data.Logic.Operation;
 using Jularr.Backend.Infrastructure.Sql;
-using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Activity.V1
@@ -64,6 +65,55 @@ namespace Jularr.Backend.Service.Admin.Activity.V1
             sql.Parameters.Add(new ActivityFilterData(Parameters.ActivityTabTypeId));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<ActivityItemV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/activity/events")]
+    public sealed class ReadActivityEventsV1 : AdminService<ReadActivityEventsParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<ActivityEventV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadActivityEventsParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(ReadActivityEventsParametersV1 parameters, Type resultType) => new("media.read");
+        protected override PageRequest GetPageRequest(ReadActivityEventsParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Newest first, for one Work or all.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    event."Id",
+                    event."ActivityEventTypeId",
+                    event."OccurredAt",
+                    event."WorkId",
+                    event."WorkTitle",
+                    event."WorkUnitTypeId",
+                    event."ParentUnitNumber",
+                    event."UnitNumber",
+                    event."ReleaseTitle",
+                    event."QualityKey",
+                    event."IndexerName",
+                    event."ClientName",
+                    event."Path",
+                    event."PreviousPath",
+                    event."ReasonKey",
+                    account."DisplayName" AS "AccountName"
+                FROM
+                    "ActivityEvents" AS event
+                    LEFT JOIN "Accounts" AS account ON account."Id" = event."AccountId"
+                WHERE
+                    @WorkId::bigint IS NULL
+                    OR event."WorkId" = @WorkId
+                ORDER BY
+                    event."OccurredAt" DESC,
+                    event."Id" DESC
+                LIMIT @PageSize
+                OFFSET @Offset;
+                """;
+            sql.Parameters.Add(new ActivityWorkData(Parameters.WorkId));
+            sql.Page = Page;
+            return await Context.ReadSql.ReadPageAsync<ActivityEventV1>(sql, CancellationToken);
         }
     }
 

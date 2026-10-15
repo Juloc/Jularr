@@ -34,7 +34,9 @@ namespace Jularr.Backend.Service.User.Request.V1
                     request."AcquisitionRequestStatusTypeId",
                     request."CreatedAt",
                     waiting."OperationId",
-                    waiting."ManualUrl"
+                    waiting."ManualUrl",
+                    step."ActivityEventTypeId" AS "LatestStepTypeId",
+                    step."OccurredAt" AS "LatestStepAt"
                 FROM
                     "AcquisitionRequests" AS request
                 INNER JOIN
@@ -65,6 +67,21 @@ namespace Jularr.Backend.Service.User.Request.V1
                         operation."Id" DESC
                     LIMIT 1
                 ) AS waiting ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT
+                        event."ActivityEventTypeId",
+                        event."OccurredAt"
+                    FROM
+                        "ActivityEvents" AS event
+                    WHERE
+                        event."WorkId" = request."WorkId"
+                        AND event."ActivityEventTypeId" IN (1, 2, 3, 4)
+                        AND event."OccurredAt" >= request."CreatedAt"
+                    ORDER BY
+                        event."OccurredAt" DESC,
+                        event."Id" DESC
+                    LIMIT 1
+                ) AS step ON TRUE
                 WHERE
                     request."RequestedByProfileId" = @ProfileId
                 ORDER BY
@@ -77,6 +94,44 @@ namespace Jularr.Backend.Service.User.Request.V1
             sql.Parameters.Add(new AccountParameters(Auth.AccountId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<RequestDetailsV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/requests/{acquisitionRequestId:long}/steps")]
+    public sealed class ReadRequestStepsV1 : UserService<RequestParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<RequestStepV1>>()];
+        protected override ModuleRequirement GetInstanceModules(RequestParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(RequestParametersV1 parameters, Type resultType) => new("profile.requests.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // The profile's own request, the steps since it was made, the latest 50.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    event."ActivityEventTypeId",
+                    event."OccurredAt",
+                    event."WorkUnitTypeId",
+                    event."ParentUnitNumber",
+                    event."UnitNumber",
+                    event."QualityKey"
+                FROM
+                    "AcquisitionRequests" AS request
+                    JOIN "ActivityEvents" AS event ON event."WorkId" = request."WorkId" AND event."OccurredAt" >= request."CreatedAt"
+                WHERE
+                    request."Id" = @AcquisitionRequestId
+                    AND request."RequestedByProfileId" = @ProfileId
+                    AND event."ActivityEventTypeId" IN (1, 2, 3, 4)
+                ORDER BY
+                    event."OccurredAt" DESC,
+                    event."Id" DESC
+                LIMIT 50;
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<RequestStepV1>(await Context.ReadSql.ReadListAsync<RequestStepV1>(sql, CancellationToken));
         }
     }
 

@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Notification;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -7,6 +8,7 @@ using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Notification;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Logic.Notification;
 
 namespace Jularr.Backend.Logic.Acquisition
@@ -432,12 +434,13 @@ namespace Jularr.Backend.Logic.Acquisition
                         "Id"
                 )
                 INSERT INTO
-                    "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "StartedAt")
+                    "Operations" ("OperationTypeId", "OperationStatusTypeId", "AcquisitionReleaseId", "AcquisitionConnectionId", "RequestedByAccountId", "StartedAt")
                 SELECT
                     2,
                     1,
                     release."Id",
                     @DownloadConnectionId,
+                    @RequestedByAccountId,
                     now()
                 FROM
                     release
@@ -445,6 +448,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "OperationStatusTypeId" = 1,
                     "AcquisitionConnectionId" = EXCLUDED."AcquisitionConnectionId",
+                    "RequestedByAccountId" = EXCLUDED."RequestedByAccountId",
                     "ExternalId" = NULL,
                     "ProgressPercent" = NULL,
                     "SizeBytes" = NULL,
@@ -466,6 +470,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(data);
             var operation = await ctx.ReadOptionalAsync<DownloadOperationParameters>(sql, ct) ?? throw new DataValidationException("CandidateId", "in_use");
+            await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.Grabbed, operationId: operation.OperationId), ct);
             return operation.OperationId;
         }
 
@@ -717,6 +722,7 @@ namespace Jularr.Backend.Logic.Acquisition
             sql.Parameters.Add(data);
             if (await ctx.ReadOptionalAsync<FailedWorkData>(sql, ct) is { } failed)
             {
+                await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.DownloadFailed, operationId: data.OperationId, reasonKey: data.ReasonKey), ct);
                 await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.DownloadFailed, failed.WorkId, failed.Title, "/Admin/Activity"), ct);
             }
         }

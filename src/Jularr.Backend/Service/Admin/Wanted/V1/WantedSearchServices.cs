@@ -2,11 +2,14 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Data.Logic.Library;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Wanted.V1
@@ -96,7 +99,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             var offer = result.Offers[winner.Candidate.Id];
-            await _acquisition.GrabAsync(Context, target, offer, winner.Score?.QualityKey, clients, CancellationToken);
+            await _acquisition.GrabAsync(Context, target, offer, winner.Score?.QualityKey, clients, CancellationToken, Auth.AccountId);
             return new AutomaticSearchResultV1("grabbed", TextLimit.Cut(offer.Title, 1000));
         }
     }
@@ -129,7 +132,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             var quality = AcquisitionSelectionLogic.QualityKey(AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), offer.Title, target.PlatformIgdbId);
-            await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken);
+            await _acquisition.GrabAsync(Context, target, offer, quality, clients, CancellationToken, Auth.AccountId);
             return new UpdateResult(true);
         }
     }
@@ -184,6 +187,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             await Context.MarkAcquisitionReleaseAsync(new AcquisitionReleaseMarkData(Parameters.WantedItemId, Parameters.AcquisitionReleaseId, Data.AcquisitionReleaseStatusTypeId), CancellationToken);
+            if (Data.AcquisitionReleaseStatusTypeId == AcquisitionReleaseStatusType.Blocked)
+            {
+                await Context.RecordActivityAsync(new ActivityEventData(ActivityEventType.Blocked, acquisitionReleaseId: Parameters.AcquisitionReleaseId, accountId: Auth.AccountId), CancellationToken);
+            }
+
             return new UpdateResult(true);
         }
     }

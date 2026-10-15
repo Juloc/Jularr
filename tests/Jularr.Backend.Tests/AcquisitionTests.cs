@@ -2,23 +2,25 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Xml.Linq;
+using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
-using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.Common;
-using WorkEpisodeV1 = Jularr.Backend.Data.User.Media.V1.WorkEpisodeV1;
-using WorkSeasonV1 = Jularr.Backend.Data.User.Media.V1.WorkSeasonV1;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
+using Jularr.Backend.Data.User.Library.V1;
+using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Frontend.Framework;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
 using Jularr.Integrations.Data.Storage;
@@ -26,10 +28,10 @@ using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Storage;
 using Jularr.Integrations.Logic.Tmdb;
-using Jularr.Frontend.Framework;
 using Microsoft.Extensions.DependencyInjection;
-using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 using TemporaryDirectory = Jularr.Backend.Tests.LibraryTests.TemporaryDirectory;
+using WorkEpisodeV1 = Jularr.Backend.Data.User.Media.V1.WorkEpisodeV1;
+using WorkSeasonV1 = Jularr.Backend.Data.User.Media.V1.WorkSeasonV1;
 
 namespace Jularr.Backend.Tests
 {
@@ -166,6 +168,28 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(100, release.ProgressPercent);
             Assert.AreEqual(OperationType.Download, (await ReadActivityAsync(host, ActivityTabType.History)).Single().OperationTypeId);
             Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.ToDo)).Count);
+
+            // The history keeps what happened with the texts of the moment: who grabbed which release where, the imported file and the worse one it replaced.
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\""))!;
+            using var events = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/activity/events?workId=" + workId);
+            Assert.AreEqual(HttpStatusCode.OK, events.StatusCode, await events.Content.ReadAsStringAsync());
+            var happened = (await events.Content.ReadFromJsonAsync<PageResult<ActivityEventV1>>())!.Items.Reverse().ToArray();
+            CollectionAssert.AreEqual(new[] { ActivityEventType.Grabbed, ActivityEventType.Imported, ActivityEventType.Upgraded }, happened.Select(item => item.ActivityEventTypeId).ToArray());
+            Assert.AreEqual((Feature, "WEB-1080p", "SAB"), (happened[0].ReleaseTitle, happened[0].QualityKey, happened[0].ClientName));
+            Assert.IsNotNull(happened[0].AccountName);
+            StringAssert.EndsWith(happened[1].Path, "Example Movie (2020) [WEB-1080p] (2).mkv");
+            Assert.AreEqual(("WEB-720p", "Example Movie"), (happened[2].QualityKey, happened[2].WorkTitle));
+            StringAssert.EndsWith(happened[2].Path, "Example Movie (2020) [DVD].mkv");
+
+            // The requester sees the steps of their request, without releases, indexers or paths.
+            var profileId = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/auth")).Content.ReadFromJsonAsync<Jularr.Backend.Data.Public.Authentication.V1.AuthenticationResultV1>())!.ProfileId;
+            await host.Fixture.RunSqlAsync($"UPDATE \"AcquisitionRequests\" SET \"RequestedByProfileId\" = {profileId}, \"CreatedAt\" = now() - interval '1 hour'");
+            using var steps = await host.SendAsync(HttpMethod.Get, "/api/v1/requests/500/steps");
+            Assert.AreEqual(HttpStatusCode.OK, steps.StatusCode, await steps.Content.ReadAsStringAsync());
+            var stepsJson = await steps.Content.ReadAsStringAsync();
+            Assert.IsFalse(stepsJson.Contains(Feature, StringComparison.Ordinal) || stepsJson.Contains("SAB", StringComparison.Ordinal), stepsJson);
+            CollectionAssert.AreEqual(new[] { ActivityEventType.Upgraded, ActivityEventType.Imported, ActivityEventType.Grabbed },
+                (await steps.Content.ReadFromJsonAsync<BaseDataList<RequestStepV1>>())!.Select(step => step.ActivityEventTypeId).ToArray());
         }
 
         [TestMethod]

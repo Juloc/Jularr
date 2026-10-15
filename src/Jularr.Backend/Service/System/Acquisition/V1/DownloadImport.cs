@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
 using Jularr.Backend.Data.Logic.Acquisition;
@@ -97,6 +98,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     {
                         assigned.Add((await ctx.AssignStoredFileAsync(new StoredFileAssignmentData(file.Id, download.WorkId, null, placement.WorkUnitTypeId, placement.UnitNumber,
                             placement.ParentUnitNumber, download.GamePlatformId, false), token)).Id);
+                        await ctx.RecordActivityAsync(new ActivityEventData(ActivityEventType.Imported, operationId: download.OperationId, storedFileId: file.Id), token);
                     }
                 }
 

@@ -28,7 +28,10 @@ namespace Jularr.Frontend.Pages.User.Requests
                 var table = new Table<RequestDetailsV1>(requests.Items)
                     .Content("table.work", item => new A(new ValueText(item.CanonicalTitle)).Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture)))
                     .Text(item => item.RequestedLanguage, "request.language")
-                    .Resource(item => item.AcquisitionRequestStatusTypeId, "table.status", status => "request.state." + status)
+                    .Content("table.status", item => new Div(new Text("request.state." + item.AcquisitionRequestStatusTypeId),
+                        item is { LatestStepTypeId: { } step, LatestStepAt: { } at }
+                            ? new Span(new Text("request.step." + step), new ValueText(" · " + at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))).Class("request-step")
+                            : new Span()))
                     .Text(item => item.CreatedAt, "table.requestedAt");
                 if (requests.Items.Any(item => item.ManualUrl is not null))
                 {

@@ -138,7 +138,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
             // A subtitle of that language beside the video stays.
             var directory = _files.Directory(source) ?? throw new ServiceUnavailableException("storage_unavailable");
-            return new UpdateResult(await SubtitleFiles.SaveAsync(Context, source, directory, SubtitleFiles.FileName(source, chosen.Language), bytes, CancellationToken));
+            return new UpdateResult(await SubtitleFiles.SaveAsync(Context, source, directory, SubtitleFiles.FileName(source, chosen.Language), bytes, CancellationToken, Auth.AccountId));
         }
     }
 }
