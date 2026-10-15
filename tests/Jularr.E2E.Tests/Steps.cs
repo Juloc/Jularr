@@ -62,6 +62,15 @@ namespace Jularr.E2E.Tests
             await SubmitAsync(page, tmdb);
         }
 
+        // Switches a module on the Instance page; the form follows the module's description.
+        public static async Task SetModuleAsync(IPage page, string description, bool enabled)
+        {
+            await page.GotoAsync("/Admin/Instance");
+            var form = page.Locator("main p:has-text(\"" + description + "\") + form");
+            await form.Locator("[name=IsEnabled]").SelectOptionAsync(enabled ? "True" : "False");
+            await SubmitAsync(page, form);
+        }
+
         // The local folder as a writable connection with one library path per media type folder.
         public static async Task AddLibraryAsync(IPage page, string localPath, params LibraryPath[] roots)
         {
