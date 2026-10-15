@@ -65,7 +65,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             foreach (var item in due)
             {
-                // Indexers are read per target, so today's counts and backoffs stay current through the cycle.
+                // Indexers are read per search, so today's counts and backoffs stay current through the cycle.
                 (var target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     (await ctx.ReadWantedTargetAsync(item.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
                 if (target.Definition is null)
@@ -122,6 +122,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         break;
                     }
 
+                    indexers = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct), CancellationToken);
                     var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope);
                     unavailable |= result.IndexersUnavailable;
                     if (result.Selection.Winner is not { } winner)

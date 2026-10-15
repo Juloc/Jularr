@@ -140,6 +140,24 @@ namespace Jularr.Backend.Logic.Acquisition
             return await ctx.ExecuteAsyncForAffectedRows(sql, ct) > 0;
         }
 
+        public static async Task ReturnIndexerGrabAsync(this LogicContext ctx, AcquisitionConnectionParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionConnections" AS connection
+                SET
+                    "GrabCount" = connection."GrabCount" - 1
+                WHERE
+                    connection."Id" = @AcquisitionConnectionId
+                    AND connection."CountedOn" = current_date
+                    AND connection."GrabCount" > 0;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         // News servers are reached over NNTP, everything else over HTTP; the Anna's Archive member key travels in the address and only over HTTPS.
         private static void ValidateAddress(AcquisitionConnectionSaveData data)
         {
@@ -204,6 +222,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     "SearchesAutomatically" = @SearchesAutomatically,
                     "QueryLimit" = @QueryLimit,
                     "GrabLimit" = @GrabLimit,
+                    "FailureCount" = 0,
+                    "RetryAt" = NULL,
                     "ProtectedPassword" = CASE WHEN @AcquisitionConnectionTypeId = 7 THEN COALESCE(@ProtectedPassword, connection."ProtectedPassword") END,
                     "Capabilities" = CASE
                         WHEN connection."BaseUrl" = @BaseUrl AND connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId AND @ProtectedApiKey IS NULL
@@ -232,7 +252,9 @@ namespace Jularr.Backend.Logic.Acquisition
                 SET
                     "Capabilities" = COALESCE(@Capabilities::jsonb, connection."Capabilities"),
                     "CheckedAt" = statement_timestamp(),
-                    "LastErrorKey" = @ErrorKey
+                    "LastErrorKey" = @ErrorKey,
+                    "FailureCount" = CASE WHEN @ErrorKey IS NULL THEN 0 ELSE connection."FailureCount" END,
+                    "RetryAt" = CASE WHEN @ErrorKey IS NULL THEN NULL ELSE connection."RetryAt" END
                 WHERE
                     connection."Id" = @Id
                     AND connection."Version" = @Version;

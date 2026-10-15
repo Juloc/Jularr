@@ -67,7 +67,8 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var now = _time.GetUtcNow().UtcDateTime;
             var allNewznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
             var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
-            var skipped = allNewznab.Count(indexer => indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)target.MediaTypeId)) - newznab.Length;
+            var skipped = allNewznab.Count(indexer => (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)target.MediaTypeId))
+                && (!automatic || indexer.SearchesAutomatically)) - newznab.Length;
             var uses = new ConcurrentDictionary<long, IndexerUse>();
             var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
             var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
@@ -224,9 +225,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 failure ??= externalId is null ? "acquisition_grab_failed" : null;
             }
 
-            // A refused grab releases the reservation; the target is searched again later.
+            // A refused grab releases the reservation and its indexer count; the target is searched again later.
             if (failure is not null)
             {
+                await context.ExecuteBatchAsync(async (ctx, token) =>
+                {
+                    await ctx.ReturnIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token);
+                    return true;
+                }, ct);
                 await context.ExecuteBatchAsync(async (ctx, token) =>
                 {
                     await ctx.FailDownloadAsync(new DownloadFailureData(operationId, failure, DateTime.UtcNow.AddMinutes(30)), token);
@@ -251,7 +257,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var capabilities = ReadCapabilities(indexer);
             var categories = AcquisitionSelectionLogic.ReadCategories(kind, indexer.Categories, capabilities, igdbPlatform);
             var limit = Math.Min(PageLimit, capabilities?.MaximumLimit ?? PageLimit);
-            var connection = new NewznabConnection(indexer.BaseUrl, indexer.ProtectedApiKey is null ? "" : AcquisitionConnectionInput.Unprotect(_protector, indexer.ProtectedApiKey));
+            var connection = new NewznabConnection(indexer.BaseUrl, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey));
             try
             {
                 foreach (var query in queries)
