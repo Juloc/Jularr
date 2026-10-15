@@ -4,9 +4,15 @@
 .player-main .screen-player { min-height: 100dvh; }
 
 .player {
+    --surface: #202127;
+    --surface-hover: #30323a;
+    --border: #454750;
+    --text: #fff;
+    --muted: #b6bac5;
     position: relative;
     min-height: 100dvh;
     background: #000;
+    color: var(--text);
     overflow: hidden;
 
     &__video {
@@ -22,7 +28,7 @@
         position: absolute;
         inset: 0;
         display: grid;
-        grid-template-rows: auto 1fr;
+        grid-template-rows: auto 1fr auto;
         pointer-events: none;
         transition: opacity 200ms ease;
 
@@ -41,7 +47,7 @@
         background: linear-gradient(rgb(0 0 0 / 60%), transparent);
     }
 
-    &__heading { min-width: 0; }
+    &__heading { min-width: 0; flex: 1; }
 
     &__title {
         margin: 0;
@@ -57,6 +63,9 @@
     }
 
     &__transport {
+        position: absolute;
+        inset: 50% auto auto 50%;
+        transform: translate(-50%, -50%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -67,6 +76,7 @@
     }
 
     &__bottom {
+        grid-row: 3;
         align-self: end;
         display: grid;
         gap: 8px;
@@ -89,6 +99,23 @@
 
     &__timeline { width: 100%; }
 
+    // Native thumb, restrained focus.
+    &__timeline,
+    &__volume {
+        appearance: none;
+        height: 6px;
+        margin: 12px 0;
+        border-radius: 999px;
+        background: linear-gradient(to right, var(--accent) var(--played, 0%), #7c7f89 var(--played, 0%), #7c7f89 var(--buffered, 0%), #454750 var(--buffered, 0%));
+        cursor: pointer;
+
+        &::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+        &::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+        &:focus-visible { outline: none; }
+        &:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+        &:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+    }
+
     // A seek thumbnail floats above its place on the timeline.
     &__preview {
         position: absolute;
@@ -105,7 +132,7 @@
 
     &__actions {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
         gap: 12px;
     }
@@ -120,34 +147,18 @@
     &__options { justify-content: end; }
 
     &__button {
-        background: #242428;
-        display: inline-grid;
-        place-items: center;
+        width: 44px;
         min-width: 44px;
         min-height: 44px;
-        padding: 0 8px;
-        border: 0;
-        border-radius: 999px;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
-
-        &:hover { background-color: #38383e; }
-        &:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
         &[hidden] { display: none; }
-        &:disabled { opacity: .45; cursor: not-allowed; }
 
         .ui-icon { width: 24px; height: 24px; }
     }
 
     &__button--primary {
+        width: 64px;
         min-width: 64px;
         min-height: 64px;
-        background-color: var(--accent);
-        color: var(--accent-contrast);
-
-        &:hover { background-color: var(--accent-hover); }
-
         .ui-icon { width: 32px; height: 32px; }
     }
 
@@ -169,25 +180,17 @@
         min-width: 200px;
         padding: 12px;
         border-radius: 12px;
-        background: rgb(20 20 24 / 92%);
+        background: var(--surface);
+        border: 1px solid var(--border);
 
         &[hidden] { display: none; }
         p { margin: 0; }
     }
 
     &__option {
-        min-height: 40px;
-        border: 0;
-        border-radius: var(--radius-control);
-        background-color: #242428;
-        color: inherit;
-        font: inherit;
-        text-align: start;
-        padding: 0 12px;
-        cursor: pointer;
+        justify-content: start;
 
         &[aria-checked=true] { background-color: var(--accent); color: var(--accent-contrast); }
-        &:focus-visible { outline: 2px solid #fff; }
     }
 
     &__status {
@@ -219,8 +222,7 @@
 }
 
 @media (max-width: 900px) {
-    .player__actions { grid-template-columns: minmax(0, 1fr) auto; }
-    .player__transport { grid-column: 1 / -1; grid-row: 1; }
+    .player__options { flex-wrap: wrap; }
 }
 
 @media (max-width: 600px) {
@@ -244,7 +246,7 @@
         position: fixed;
         inset: auto 12px calc(12px + env(safe-area-inset-bottom)) auto;
         z-index: 40;
-        width: min(560px, calc(100% - 24px));
+        width: min(960px, calc(100% - 24px));
         min-height: 0;
     }
 
@@ -259,58 +261,61 @@
     display: flex;
     align-items: center;
     min-height: 0;
-    height: 72px;
+    height: 88px;
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow);
 
     .player__video {
         flex: none;
         width: 128px;
-        height: 72px;
+        height: 88px;
+        object-fit: cover;
     }
 
     .player__chrome {
         position: static;
+        align-self: stretch;
         flex: 1;
         min-width: 0;
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
         gap: 4px;
         padding-inline: 8px;
-        background: #121214;
+        background: var(--surface);
         opacity: 1;
     }
 
     .player__top {
         flex: 1;
         min-width: 0;
-        order: 2;
+        gap: 8px;
         padding: 0;
         background: none;
     }
 
     .player__title {
-        overflow: hidden;
         font-size: 0.9rem;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
-    .player__context { display: none; }
+    .player__transport { position: static; transform: none; }
+    .player__button--primary { width: 44px; min-width: 44px; min-height: 44px; }
 
     .player__bottom {
-        order: 1;
+        position: absolute;
+        inset: 0 0 auto;
         padding: 0;
         background: none;
     }
 
     // The timeline runs as a thin line along the top edge.
     .player__progress {
-        position: absolute;
-        inset: 0 0 auto;
+        display: block;
 
         > span { display: none; }
     }
+
+    .player__timeline { display: block; height: 4px; margin: 0; }
 
     .player__actions { display: block; }
     .player__mini-only { display: inline-grid; }
@@ -319,7 +324,14 @@
     .player__options,
     .player__panel,
     [data-action=close],
-    [data-action=minimize],
-    [data-action=previous],
-    [data-action=next] { display: none; }
+    [data-action=minimize] { display: none; }
+
+    @media (max-width: 680px) {
+        height: auto;
+        min-height: 100px;
+        .player__video { width: 90px; height: 100px; }
+        .player__chrome { grid-template-columns: 1fr; padding-block: 8px; }
+        .player__transport { grid-row: 2; }
+        [data-action=previous], [data-action=next] { display: none; }
+    }
 }

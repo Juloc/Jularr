@@ -1,0 +1,80 @@
+@use "../../../Modules/Player/player";
+
+.player-design-appearance > summary { cursor: pointer; color: var(--accent-text); padding-block: 8px; }
+
+.player-workshop {
+    --workshop-line: #353944;
+    padding-bottom: 100px;
+
+    &__notice { color: var(--muted); font-size: .85rem; }
+    &__layout { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 260px; border-radius: var(--radius-panel); overflow: hidden; background: #12141b; }
+    &__stage { min-width: 0; align-self: start; }
+
+    // Same chrome, contained stage.
+    .player:not(.player--mini) {
+        min-height: 0;
+        aspect-ratio: 16 / 9;
+        .player__video { height: 100%; object-fit: cover; }
+    }
+
+    &__sidebar { position: absolute; inset: 0 0 0 auto; width: 260px; box-sizing: border-box; overflow: auto; padding: 20px 12px; color: #fff; border-left: 1px solid var(--workshop-line); }
+    &__sidebar h2 { margin: 0; font-size: 1rem; }
+    &__sidebar p { margin: 8px 0 20px; font-size: .8rem; color: #b6bac5; }
+    &__episodes { display: grid; gap: 8px; }
+    &__episode {
+        display: grid;
+        grid-template-columns: 76px minmax(0, 1fr) 18px;
+        gap: 10px;
+        padding: 6px;
+        border-radius: 12px;
+        text-align: start;
+        background: #202127;
+        border-color: transparent;
+        color: #fff;
+
+        &:hover:not(:disabled) { background: #30323a; }
+        img { width: 76px; height: 48px; object-fit: cover; border-radius: 8px; }
+        > div { display: grid; gap: 3px; min-width: 0; font-size: .8rem; }
+        small { color: #b6bac5; font-weight: 400; }
+        .ui-icon { width: 18px; }
+    }
+
+    &__chapter-section { margin-top: 20px; }
+    &__chapter-section h2 { font-size: 1rem; }
+    &__chapters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    &__chapter {
+        display: grid;
+        gap: 6px;
+        padding: 6px;
+        text-align: start;
+        border-radius: 14px;
+        img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 9px; }
+        small { color: var(--muted); }
+    }
+
+    &__feedback { color: var(--muted); font-size: .85rem; }
+    &--mini .player {
+        position: fixed;
+        inset: auto 20px 24px;
+        z-index: 50;
+        max-width: 960px;
+        margin-inline: auto;
+    }
+
+    @media (max-width: 1100px) {
+        &__layout { grid-template-columns: 1fr; }
+        &__sidebar { position: static; width: auto; border-left: 0; border-top: 1px solid var(--workshop-line); }
+        &__episodes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 600px) {
+        &__episodes, &__chapters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        &__episode { grid-template-columns: 1fr; img { width: 100%; height: auto; } > .ui-icon { display: none; } }
+        .player:not(.player--mini) { aspect-ratio: 4 / 3; }
+        .player__top { padding: 12px; gap: 6px; }
+        .player__title { font-size: .9rem; }
+        .player__button { width: 36px; min-width: 36px; }
+        .player__button--primary { width: 52px; min-width: 52px; min-height: 52px; }
+        &--mini .player { inset: auto 10px 96px; }
+    }
+}

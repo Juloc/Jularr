@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Jularr.Frontend.Pages.Development.Design
 {
     [AllowAnonymous]
-    public sealed class DesignModel(IHostEnvironment environment, FrontendAssets assets, UiText texts) : JularrPage
+    public sealed partial class DesignModel(IHostEnvironment environment, FrontendAssets assets, UiText texts) : JularrPage
     {
         private string _pane = "components";
 
@@ -28,15 +28,24 @@ namespace Jularr.Frontend.Pages.Development.Design
             page.Asset("Modules/Appearance/appearance.entry.scss");
 
             // Shared appearance controls.
-            page.Content.Add(new Panel(items =>
+            var appearance = new Panel(items =>
             {
                 items.Add(new P(new Text("design.introduction")));
                 items.Add(new Appearance());
-            }));
+            });
+            page.Content.Add(_pane == "player"
+                ? new Details(new Summary(new Text("appearance.title")), appearance).Class("player-design-appearance")
+                : appearance);
             page.Content.Add(new NavigationTabs([
                 new("design.controls", "/Design#controls", false), new("design.forms", "/Design#forms", false),
-                new("design.media", "/Design#media", false), new("design.player", "/Design#player", false), new("design.cards.title", "/Design?pane=cards", _pane == "cards")
+                new("design.media", "/Design#media", false), new("design.player", "/Design?pane=player", _pane == "player"), new("design.cards.title", "/Design?pane=cards", _pane == "cards")
             ], "nav.tabs"));
+
+            if (_pane == "player")
+            {
+                DefinePlayer(page);
+                return;
+            }
 
             if (_pane == "cards")
             {
@@ -256,7 +265,7 @@ namespace Jularr.Frontend.Pages.Development.Design
         public IActionResult OnGet(string? pane)
         {
             if (!environment.IsDevelopment()) return NotFound();
-            if (pane is not null and not ("components" or "layouts" or "cards")) return NotFound();
+            if (pane is not null and not ("components" or "layouts" or "cards" or "player")) return NotFound();
 
             _pane = pane ?? "components";
             PreparePage();

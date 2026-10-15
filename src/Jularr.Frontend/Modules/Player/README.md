@@ -7,8 +7,13 @@ chrome. The page composition is owned by
 [the Player page](../../Pages/User/Player/Player.cshtml.cs). Icons beside this
 module use the `player-` prefix because sprite symbols are named by file name.
 
-The shared chrome places the timeline above a responsive bottom toolbar:
-volume on the left, five transport controls in the center, options on the right.
-Previous/next episode controls remain disabled until canonical episode targets
-are provided. Existing seek, play/pause, volume and display handlers are unchanged.
-The Design lab uses an optional poster only; it loads no playback client or stream.
+The shared chrome centers Previous / -10 / Play-Pause / +30 / Next over the
+video. One timeline sits above the bottom toolbar, with volume on the left and
+track/speed/display options on the right. Neighbour targets come from the
+canonical playback-item service. Buttons reuse the shared Button styles.
+
+The Development-only `/Design?pane=player` workshop composes this same control
+with illustrative episodes and chapters. Its own entry demonstrates local UI
+states, including minimize/expand, without loading the playback client, making
+API calls or starting a stream/session. Quality, casting, dual subtitles and
+real chapter/episode integration in this layout remain outside this prototype.
