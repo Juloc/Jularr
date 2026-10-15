@@ -234,11 +234,12 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReplaceProfileRulesAsync(key, rules => rules.Count < 50 ? [.. rules, stored] : throw new DataValidationException("Name", "out_of_range"), ct);
         }
 
-        // A rule changes in place and keeps its position.
-        public static Task UpdateProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int position, ReleaseScoreRule rule, CancellationToken ct)
+        // A rule changes in place and keeps its place and id.
+        public static Task UpdateProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int ruleId, ReleaseScoreRule rule, CancellationToken ct)
         {
             var stored = Checked(rule);
-            return ctx.ReplaceProfileRulesAsync(key, rules => position < rules.Count ? [.. rules.Select((existing, index) => index == position ? stored : existing)]
+            return ctx.ReplaceProfileRulesAsync(key, rules => rules.Any(existing => existing.Id == ruleId)
+                ? [.. rules.Select(existing => existing.Id == ruleId ? new ReleaseScoreRule(stored.Name, stored.Field, stored.Match, stored.Value, stored.Score) { Effect = stored.Effect, Id = ruleId } : existing)]
                 : throw new KeyNotFoundException("The rule was not found."), ct);
         }
 
@@ -279,8 +280,16 @@ namespace Jularr.Backend.Logic.Acquisition
             return new ReleaseScoreRule(rule.Name, rule.Field, rule.Match, rule.Value, score) { Effect = rule.EffectiveEffect };
         }
 
-        public static Task RemoveProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int position, CancellationToken ct) =>
-            ctx.ReplaceProfileRulesAsync(key, rules => position < rules.Count ? [.. rules.Where((_, index) => index != position)] : throw new KeyNotFoundException("The rule was not found."), ct);
+        public static Task RemoveProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int ruleId, CancellationToken ct) =>
+            ctx.ReplaceProfileRulesAsync(key, rules => rules.Any(rule => rule.Id == ruleId) ? [.. rules.Where(rule => rule.Id != ruleId)] : throw new KeyNotFoundException("The rule was not found."), ct);
+
+        // New rules take the next free id of their profile.
+        private static ReleaseScoreRule[] Numbered(ReleaseScoreRule[] rules)
+        {
+            var next = rules.Select(rule => rule.Id).DefaultIfEmpty(0).Max();
+            return [.. rules.Select(rule => rule.Id > 0 ? rule
+                : new ReleaseScoreRule(rule.Name, rule.Field, rule.Match, rule.Value, rule.Score) { Effect = rule.Effect, Id = ++next })];
+        }
 
         private static async Task ReplaceProfileRulesAsync(this LogicContext ctx, AcquisitionProfileKeyData key, Func<IReadOnlyList<ReleaseScoreRule>, ReleaseScoreRule[]> change,
             CancellationToken ct)
@@ -293,7 +302,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var stored = Definition(state);
             var definition = new AcquisitionProfileDefinition(stored.AllowedQualities, stored.QualityOrder, stored.UpgradeAllowed, stored.UpgradeCutoffQuality, stored.MinimumSizeBytes,
-                stored.MaximumSizeBytes, stored.MustContain, stored.MustNotContain, stored.RequiredRegex, stored.RejectedRegex, change(stored.ScoreRules), stored.DelayMinutes,
+                stored.MaximumSizeBytes, stored.MustContain, stored.MustNotContain, stored.RequiredRegex, stored.RejectedRegex, Numbered(change(stored.ScoreRules)), stored.DelayMinutes,
                 stored.FallbackQualities, stored.FallbackAfterHours);
             var sql = new SqlStatement();
             sql.Statement =

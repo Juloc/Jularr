@@ -11,10 +11,8 @@ namespace Jularr.Backend.Data.Public.Device.V1
 
     public sealed class StartDevicePairingDataV1 : BaseData
     {
-        // The name a browser pairs with; stored the same in every language and shown translated.
-        public const string BrowserName = "Browser";
-
-        public StartDevicePairingDataV1(string deviceName, string devicePlatform, Guid? replacesPairingId = null)
+        // Without its own name a device is shown with the default name in the reader's language.
+        public StartDevicePairingDataV1(string? deviceName, string devicePlatform, Guid? replacesPairingId = null)
         {
             DeviceName = deviceName;
             DevicePlatform = devicePlatform;
@@ -22,7 +20,7 @@ namespace Jularr.Backend.Data.Public.Device.V1
         }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
-        public string DeviceName { get; }
+        public string? DeviceName { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
         public string DevicePlatform { get; }

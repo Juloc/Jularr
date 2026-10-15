@@ -74,18 +74,22 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<long> ImportAsync(LogicContext context, IgdbConnection connection, string id, CancellationToken ct)
+        public async Task<IgdbGame> ReadAsync(IgdbConnection connection, string id, CancellationToken ct)
         {
-            // Read before the short write batch.
-            IgdbGame game;
             try
             {
-                game = await _igdb.ReadAsync(connection, int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var gameId) ? gameId : throw new KeyNotFoundException("Invalid IGDB id."), ct);
+                return await _igdb.ReadAsync(connection, int.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var gameId) ? gameId : throw new KeyNotFoundException("Invalid IGDB id."), ct);
             }
             catch (IgdbException exception)
             {
                 throw Translate(exception);
             }
+        }
+
+        public async Task<long> ImportAsync(LogicContext context, IgdbConnection connection, string id, CancellationToken ct)
+        {
+            // Read before the short write batch.
+            var game = await ReadAsync(connection, id, ct);
 
             var facts = new[]
             {

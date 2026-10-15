@@ -9,8 +9,12 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Integrations.Data.AniList;
+using Jularr.Integrations.Data.Igdb;
+using Jularr.Integrations.Data.MusicBrainz;
 using Jularr.Integrations.Data.OpenLibrary;
 using Jularr.Integrations.Data.Tmdb;
+using Jularr.Integrations.Logic.Igdb;
+using Jularr.Integrations.Logic.MusicBrainz;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.Tmdb;
 using Microsoft.Extensions.Caching.Memory;
@@ -73,7 +77,37 @@ namespace Jularr.Backend.Service.Core
         public async Task<IReadOnlyList<MetadataSearchResultV1>> SearchAnimeAsync(LogicContext context, string query, CancellationToken ct) =>
             await MarkKnownAsync(context, [.. (await aniList.SearchAsync(AniListMediaType.Anime, AniListMatching.Formats(MediaType.Series, MediaSubtype.Anime), query, ct)).Select(AniListAnime)], ct);
 
-        public async Task<DiscoverAnimeV1> ReadAnimeAsync(LogicContext context, int id, CancellationToken ct)
+        // One catalog title as its catalog describes it; its page never trusts what a link says.
+        public async Task<DiscoverCatalogEntryV1> ReadEntryAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, string @namespace, string externalId, CancellationToken ct)
+        {
+            if (mediaType == MediaType.Series && subtype == MediaSubtype.Anime && @namespace == AniListMetadata.Namespace)
+            {
+                return await ReadAnimeAsync(context, AniListId(externalId), ct);
+            }
+
+            var key = $"metadata.catalog.entry.{@namespace}.{externalId}";
+            if (!cache.TryGetValue(key, out MetadataSearchResultV1? entry))
+            {
+                entry = (mediaType, @namespace) switch
+                {
+                    (MediaType.Book, BookMetadata.Namespace) => Book(await books.ReadAsync(externalId, ct)),
+                    (MediaType.Book, AniListMetadata.Namespace) when subtype is MediaSubtype.Manga or MediaSubtype.LightNovel =>
+                        AniListBook(await aniList.ReadAsync(AniListMediaType.Manga, AniListId(externalId), ct)),
+                    (MediaType.Music, MusicMetadata.Namespace) => Album((await music.ReadAsync(externalId, ct)).Album),
+                    (MediaType.Game, GameMetadata.Namespace) => Game(await games.ReadAsync(await games.ConnectAsync(context, ct), externalId, ct)),
+                    _ => throw new KeyNotFoundException("The catalog does not hold this media type.")
+                };
+                cache.Set(key, entry, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6), Size = 1 });
+            }
+
+            var known = (await MarkKnownAsync(context, [entry!], ct))[0];
+            return new DiscoverCatalogEntryV1(known.Title, known.ReleaseYear, known.Overview, known.PosterUrl, null, null, known.WorkId) { Author = known.Author };
+        }
+
+        private static int AniListId(string externalId) =>
+            int.TryParse(externalId, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : throw new KeyNotFoundException("Invalid AniList id.");
+
+        private async Task<DiscoverCatalogEntryV1> ReadAnimeAsync(LogicContext context, int id, CancellationToken ct)
         {
             var media = await ReadAnimeEntryAsync(id, ct);
 
@@ -96,7 +130,7 @@ namespace Jularr.Backend.Service.Core
             }
 
             var known = (await MarkKnownAsync(context, [AniListAnime(media)], ct))[0].WorkId;
-            return new DiscoverAnimeV1(TextLimit.Cut(AniListMetadata.Title(media), 500)!, media.Year is >= 1800 and <= 2200 ? media.Year : null,
+            return new DiscoverCatalogEntryV1(TextLimit.Cut(AniListMetadata.Title(media), 500)!, media.Year is >= 1800 and <= 2200 ? media.Year : null,
                 TextLimit.Cut(media.Description ?? series?.Overview, 4000), media.CoverUrl ?? TmdbClient.PosterUrl(series?.PosterPath), media.BannerUrl ?? TmdbClient.BackdropUrl(series?.BackdropPath),
                 media.TrailerKey ?? series?.Details.TrailerKey, known);
         }
@@ -191,6 +225,17 @@ namespace Jularr.Backend.Service.Core
 
             return await MarkKnownAsync(context, results!, ct);
         }
+
+        private static MetadataSearchResultV1 Game(IgdbGame game) => new(GameMetadata.Namespace, game.Id.ToString(CultureInfo.InvariantCulture), game.Name, null,
+            game.Year is >= 1950 and <= 2200 ? game.Year : null, TextLimit.Cut(game.Summary, 4000), null, TextLimit.Cut(string.Join(", ", game.Developers), 4000),
+            game.CoverImageId is { } cover ? IgdbClient.CoverUrl(cover) : null);
+
+        private static MetadataSearchResultV1 Album(MusicBrainzAlbum album) => new(MusicMetadata.Namespace, album.Id, album.Title, null,
+            album.Year is >= 1800 and <= 2200 ? album.Year : null, null, null, album.Artist, MusicBrainzClient.CoverUrl(album.Id));
+
+        private static MetadataSearchResultV1 Book(OpenLibraryWork work) => new(BookMetadata.Namespace, work.WorkId, TextLimit.Cut(work.Title, 500)!, null,
+            work.Year is >= 1800 and <= 2200 ? work.Year : null, TextLimit.Cut(work.Description, 4000), null, TextLimit.Cut(string.Join(", ", work.Authors), 4000),
+            OpenLibraryClient.CoverUrl(work.CoverId));
 
         private static MetadataSearchResultV1 Book(OpenLibraryResult result) => new(BookMetadata.Namespace, result.WorkId, TextLimit.Cut(result.Title, 500)!, null,
             result.Year is >= 1800 and <= 2200 ? result.Year : null, null, null, TextLimit.Cut(string.Join(", ", result.Authors), 4000), OpenLibraryClient.CoverUrl(result.CoverId));

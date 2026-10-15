@@ -1,54 +1,41 @@
 using System.Net;
 using Jularr.Backend.Data.Enums.Sql;
-using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Instance;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
 namespace Jularr.Backend.Service.Core
 {
-    // Forwarded headers count only from configured proxies.
-    internal sealed class TrustedProxies(NpgsqlDataSource database, TimeProvider time, ILogger<TrustedProxies> logger)
+    // Forwarded headers count only from configured proxies: read once at start, replaced when the settings are saved.
+    internal sealed class TrustedProxies(SqlDatabase database, ILogger<TrustedProxies> logger) : IHostedService
     {
-        private static readonly TimeSpan Refresh = TimeSpan.FromSeconds(30);
-        private static readonly TimeSpan Retry = TimeSpan.FromSeconds(1);
-        private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(2);
-        private readonly SemaphoreSlim _reading = new(1, 1);
-        private Snapshot _current = new([], 0, DateTimeOffset.MinValue);
-        private Expectation _expected = new(0, DateTimeOffset.MinValue, DateTimeOffset.MinValue);
+        private IPNetwork[] _networks = [];
 
-        private sealed record Snapshot(IPNetwork[] Networks, long Version, DateTimeOffset ReadAt);
-
-        private sealed record Expectation(long Version, DateTimeOffset Since, DateTimeOffset Until);
-
-        // Saved settings apply with the next request.
-        public void Expect(long version) => Volatile.Write(ref _expected, new Expectation(version, time.GetUtcNow(), time.GetUtcNow().AddMinutes(1)));
-
-        public async Task ApplyAsync(HttpContext http)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
-            var current = Volatile.Read(ref _current);
-            var expected = Volatile.Read(ref _expected);
-            var now = time.GetUtcNow();
-            var waiting = current.Version < expected.Version && now < expected.Until;
-            if ((now - current.ReadAt > Refresh || waiting && (current.ReadAt < expected.Since || now - current.ReadAt > Retry)) && _reading.Wait(0))
+            try
             {
-                // One request reads; the others keep the last list.
-                try
-                {
-                    current = await ReadAsync(current, now);
-                    Volatile.Write(ref _current, current);
-                }
-                finally
-                {
-                    _reading.Release();
-                }
+                await using var sql = new SqlContext(database.DataSource);
+                await sql.BeginAsync(SqlAccessMode.ReadOnly, cancellationToken: cancellationToken);
+                Use(await new LogicContext(sql).ReadTrustedProxiesAsync(cancellationToken));
             }
-
-            Apply(http, current.Networks);
+            catch (Exception exception) when (exception is NpgsqlException or TimeoutException)
+            {
+                // Without its list no proxy is trusted; saving the settings sets it again.
+                logger.LogWarning(exception, "The trusted proxies could not be read; no proxy is trusted until the settings are saved.");
+            }
         }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public void Use(string[] networks) => Volatile.Write(ref _networks, [.. networks.Select(network => IPNetwork.Parse(network))]);
+
+        public void Apply(HttpContext http) => Apply(http, Volatile.Read(ref _networks));
 
         // Walks the chain from the nearest proxy; anything malformed changes nothing.
         internal static void Apply(HttpContext http, IReadOnlyList<IPNetwork> trusted)
@@ -111,42 +98,13 @@ namespace Jularr.Backend.Service.Core
         // The entry matching the client's position in the chain.
         private static string? Aligned(string[] values, int chainLength, int hop) =>
             values.Length == chainLength && hop < chainLength ? values[hop] : values.Length == 1 ? values[0] : null;
-
-        // A failed read keeps the last list and waits before trying again.
-        private async Task<Snapshot> ReadAsync(Snapshot current, DateTimeOffset now)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                SELECT
-                    settings."TrustedProxies"::text[] AS "TrustedProxies",
-                    settings."Version"
-                FROM
-                    "InstanceSettings" AS settings
-                WHERE
-                    settings."Id" = 1;
-                """;
-            try
-            {
-                using var timeout = new CancellationTokenSource(ReadTimeout);
-                await using var context = new SqlContext(database);
-                await context.BeginAsync(SqlAccessMode.ReadOnly, cancellationToken: timeout.Token);
-                var settings = await context.ReadSql.ReadRequiredAsync<TrustedProxiesData>(sql, timeout.Token);
-                return new Snapshot([.. settings.TrustedProxies.Select(network => IPNetwork.Parse(network))], settings.Version, now);
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
-            {
-                logger.LogWarning(exception, "The trusted proxies could not be read; the last list stays.");
-                return current with { ReadAt = now };
-            }
-        }
     }
 
     public static class TrustedProxyMiddleware
     {
         public static IApplicationBuilder UseTrustedProxies(this IApplicationBuilder app) => app.Use(async (http, next) =>
         {
-            await http.RequestServices.GetRequiredService<TrustedProxies>().ApplyAsync(http);
+            http.RequestServices.GetRequiredService<TrustedProxies>().Apply(http);
             await next(http);
         });
     }

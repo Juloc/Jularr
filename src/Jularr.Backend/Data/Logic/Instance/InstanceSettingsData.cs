@@ -68,18 +68,33 @@ namespace Jularr.Backend.Data.Logic.Instance
         public long Version { get; }
     }
 
+    internal sealed class InstancePresentationSettingsData : BaseData
+    {
+        public InstancePresentationSettingsData(string name, long uiLocaleId, string? publicUrl)
+        {
+            Name = name;
+            UiLocaleId = uiLocaleId;
+            PublicUrl = publicUrl;
+        }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.UiLocaleId))]
+        public long UiLocaleId { get; }
+
+        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.PublicUrl))]
+        public string? PublicUrl { get; }
+    }
+
     internal sealed class TrustedProxiesData : BaseData
     {
-        public TrustedProxiesData(string[] trustedProxies, long version)
+        public TrustedProxiesData(string[] trustedProxies)
         {
             TrustedProxies = trustedProxies;
-            Version = version;
         }
 
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.TrustedProxies))]
         public string[] TrustedProxies { get; }
-
-        [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.Version))]
-        public long Version { get; }
     }
 }

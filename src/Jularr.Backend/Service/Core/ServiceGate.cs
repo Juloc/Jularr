@@ -34,28 +34,10 @@ namespace Jularr.Backend.Service.Core
             }
 
             var parameters = new InstanceModuleParameters(requirement.ModuleKeys.ToArray());
-            IReadOnlyList<InstanceModuleData> modules;
-            if (canMutate)
-            {
-                modules = await context.ReadInstanceModulesAsync(parameters, cancellationToken);
-            }
-            else
-            {
-                // Read without mutation locks.
-                var sql = new SqlStatement();
-                sql.Statement =
-                    """
-                    SELECT
-                        module."Key",
-                        module."IsEnabled"
-                    FROM
-                        "InstanceModules" AS module
-                    WHERE
-                        module."Key" = ANY(@ModuleKeys);
-                    """;
-                sql.Parameters.Add(parameters);
-                modules = await context.ReadSql.ReadListAsync<InstanceModuleData>(sql, cancellationToken);
-            }
+            // Reads take no mutation locks.
+            var modules = canMutate
+                ? await context.ReadInstanceModulesAsync(parameters, cancellationToken)
+                : await context.ReadModuleStatesAsync(parameters, cancellationToken);
 
             var enabledCount = modules.Count(module => module.IsEnabled);
             if (requirement.Mode == ModuleRequirementMode.All ? enabledCount != requirement.ModuleKeys.Count : enabledCount == 0)
@@ -178,7 +160,7 @@ namespace Jularr.Backend.Service.Core
                 return [];
             }
 
-            var permissions = new List<string> { "session.self.read", "session.self.revoke", "session.self.logout", "session.profile.read", "session.profile.select",
+            var permissions = new List<string> { "session.self.read", "session.self.manage", "session.self.logout", "session.profile.read", "session.profile.select",
                 "instance.capabilities.read" };
 
             // A paired device switches profiles but neither creates nor deletes them.

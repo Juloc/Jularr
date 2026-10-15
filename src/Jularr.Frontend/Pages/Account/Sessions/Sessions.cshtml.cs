@@ -25,16 +25,16 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                 foreach (var session in _sessions.Items)
                 {
                     page.Content.Add(new UiSection(session.IsCurrent ? "session.current" : "session.other", [
-                        .. (session.DeviceName is { } device
+                        .. (session.DevicePlatform is { } platform
                             ? new IUiComponent[]
                             {
-                                new P(new ValueText(DeviceNames.Show(device, texts) + " · " + session.DevicePlatform)),
+                                new P(new ValueText(DeviceNames.Show(session.DeviceName, texts) + " · " + platform)),
                                 new Form<RenameSessionDeviceDataV1>(form =>
                                 {
                                     form.Text(item => item.DeviceName, "devices.rename");
                                     form.Submit("common.save");
                                 }, Url.Page("/Account/Sessions/Sessions", "Rename", new { sessionPublicId = session.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
-                                    new RenameSessionDeviceDataV1(DeviceNames.Show(device, texts)))
+                                    new RenameSessionDeviceDataV1(session.DeviceName))
                             }
                             : []),
                         new P(new Text("session.created"), new ValueText(session.CreatedAt.ToString("u", CultureInfo.InvariantCulture))),
@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.Account.Sessions
 
         public async Task<IActionResult> OnPostRenameAsync(Guid sessionPublicId, string? deviceName)
         {
-            await renameDevice.ExecuteAsync<UpdateResult>(new RevokeSessionParametersV1(sessionPublicId), new RenameSessionDeviceDataV1(DeviceNames.Store(deviceName ?? "", texts)), HttpContext.RequestAborted);
+            await renameDevice.ExecuteAsync<UpdateResult>(new SessionDeviceParametersV1(sessionPublicId), new RenameSessionDeviceDataV1(deviceName), HttpContext.RequestAborted);
             return RedirectToPage("/Account/Sessions/Sessions");
         }
 

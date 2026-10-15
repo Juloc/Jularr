@@ -18,8 +18,9 @@ namespace Jularr.Integrations.Logic.Servarr
             {
                 var fields = Fields(item);
                 var baseUrl = (FieldText(fields, "baseUrl") ?? "").TrimEnd('/') + (FieldText(fields, "apiPath") is { } path && path != "/api" ? path : "");
-                return new ServarrIndexer(Text(item, "name") ?? baseUrl, baseUrl, Secret(FieldText(fields, "apiKey")), Bool(item, "enable") ?? Bool(item, "enableRss") ?? true,
-                    Math.Clamp(Int(item, "priority") ?? 25, 1, 100), Categories(fields));
+                var key = FieldText(fields, "apiKey");
+                return new ServarrIndexer(Text(item, "name") ?? baseUrl, baseUrl, Secret(key), Bool(item, "enable") ?? Bool(item, "enableRss") ?? true,
+                    Math.Clamp(Int(item, "priority") ?? 25, 1, 100), Categories(fields)) { HasHiddenKey = key is not null && Secret(key) is null };
             }).Where(indexer => Uri.TryCreate(indexer.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")];
         }
 

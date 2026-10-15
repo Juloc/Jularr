@@ -729,7 +729,7 @@ namespace Jularr.Backend.Tests
             {
                 new SaveAcquisitionConnectionDataV1("Open", AcquisitionConnectionType.Newznab, "https://open.example.test/", null, true, 20, [], null, null, null),
                 new SaveAcquisitionConnectionDataV1("Broken", AcquisitionConnectionType.Newznab, "https://broken.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null),
-                new SaveAcquisitionConnectionDataV1("Books", AcquisitionConnectionType.Newznab, "https://books.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null,
+                new SaveAcquisitionConnectionDataV1("Books", AcquisitionConnectionType.Newznab, "https://books.example.test/", FakeUsenet.IndexerKey, true, 20, [7020, 7000, 7020], null, null, null,
                     mediaTypeIds: [(int)MediaType.Book]),
                 new SaveAcquisitionConnectionDataV1("Manual", AcquisitionConnectionType.Newznab, "https://manual.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null,
                     searchesAutomatically: false)
@@ -751,6 +751,10 @@ namespace Jularr.Backend.Tests
 
             async Task<object?> ColumnAsync(string name, string column) =>
                 await host.ScalarAsync($"SELECT \"{column}\" FROM \"AcquisitionConnections\" WHERE \"Name\" = '{name}'");
+
+            // Addresses and sets are stored one way: no closing slash, sorted, each value once.
+            Assert.AreEqual("https://books.example.test", await ColumnAsync("Books", "BaseUrl"));
+            CollectionAssert.AreEqual(new[] { 7000, 7020 }, (int[])(await ColumnAsync("Books", "Categories"))!);
 
             // A manual search asks every indexer serving films, also manual-only and failing ones; the failure starts a backoff.
             var wantedId = await CreateWantedMovieAsync(host);
@@ -796,6 +800,19 @@ namespace Jularr.Backend.Tests
                 new SaveAcquisitionConnectionDataV1("Broken", AcquisitionConnectionType.Newznab, "https://broken.example.test/", null, true, 20, [], null, null, null));
             Assert.AreEqual(HttpStatusCode.OK, edited.StatusCode, await edited.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" IS NULL AND \"FailureCount\" = 0 FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
+
+            // An open indexer becomes a download client only with a key; the form names the field.
+            var openId = (long)(await ColumnAsync("Open", "Id"))!;
+            using var withoutKey = await host.SendAsync(HttpMethod.Put, Connections + "/" + openId,
+                new SaveAcquisitionConnectionDataV1("Open", AcquisitionConnectionType.Sabnzbd, "https://open.example.test", null, true, 20, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.BadRequest, withoutKey.StatusCode, await withoutKey.Content.ReadAsStringAsync());
+            StringAssert.Contains(await withoutKey.Content.ReadAsStringAsync(), "required");
+
+            // The offer of a removed indexer is stale, not over a limit.
+            await host.Fixture.RunSqlAsync("DELETE FROM \"AcquisitionConnections\" WHERE \"Name\" = '" + candidate.ConnectionName + "'");
+            using var stale = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode, await stale.Content.ReadAsStringAsync());
+            StringAssert.Contains(await stale.Content.ReadAsStringAsync(), "indexer_removed");
         }
 
         [TestMethod]
@@ -945,6 +962,7 @@ namespace Jularr.Backend.Tests
             var stored = (await listed.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
             CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "No 720p", "Group GRP", "Not other" }, stored.Select(rule => rule.Name).ToArray());
             Assert.AreEqual(-5, stored[4].Score);
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, stored.Select(rule => rule.Id).ToArray());
 
             // The rejected release names its rule.
             using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
@@ -954,29 +972,31 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(("MatchesRejectRule", "No 720p"), (lower.ReasonCode, lower.ReasonValue));
             Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
 
-            // The page lists the rules; removing one keeps the others in order.
+            // The page lists the rules; removing one by its id keeps the others in order.
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Release rules");
             StringAssert.Contains(html, "Avoid -5");
             var version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-            using var removed = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + profileId + "?handler=RemoveRule&position=2",
+            using var removed = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + profileId + "?handler=RemoveRule&ruleId=" + stored[2].Id,
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["Version"] = version.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode, await removed.Content.ReadAsStringAsync());
             using var after = await host.SendAsync(HttpMethod.Get, rules);
             var kept = (await after.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
             CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "Group GRP", "Not other" }, kept.Select(rule => rule.Name).ToArray());
 
-            // A rule changes in place and keeps its position.
+            // A rule changes in place and keeps its position and id; a removed id is gone.
             var group = kept[2];
             version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-            using var changed = await host.SendAsync(HttpMethod.Put, rules + "/2", new SaveReleaseRuleDataV1("Group GRP first", group.Field, group.Match, group.Value, ReleaseRuleEffect.Prefer, 50, version));
+            using var gone = await host.SendAsync(HttpMethod.Put, rules + "/" + stored[2].Id, new SaveReleaseRuleDataV1("Again", group.Field, group.Match, group.Value, ReleaseRuleEffect.Prefer, 5, version));
+            Assert.AreEqual(HttpStatusCode.NotFound, gone.StatusCode);
+            using var changed = await host.SendAsync(HttpMethod.Put, rules + "/" + group.Id, new SaveReleaseRuleDataV1("Group GRP first", group.Field, group.Match, group.Value, ReleaseRuleEffect.Prefer, 50, version));
             Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
             using var edited = await host.SendAsync(HttpMethod.Get, rules);
             var rule = (await edited.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())![2];
-            Assert.AreEqual(("Group GRP first", 50), (rule.Name, rule.Score));
-            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId + "?rule=2");
+            Assert.AreEqual(("Group GRP first", 50, group.Id), (rule.Name, rule.Score, rule.Id));
+            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId + "?rule=" + group.Id);
             var editorHtml = await editor.Content.ReadAsStringAsync();
             StringAssert.Contains(editorHtml, "Edit rule");
             StringAssert.Contains(editorHtml, "<option value=\"" + (byte)group.Field + "\" selected=\"selected\">");

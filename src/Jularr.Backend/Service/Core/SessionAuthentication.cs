@@ -97,7 +97,7 @@ namespace Jularr.Backend.Service.Core
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId",
-                    session."DeviceName" IS NOT NULL AS "IsDevice",
+                    session."DevicePlatform" IS NOT NULL AS "IsDevice",
                     session."ExpiresAt"
                 FROM
                     "AccountSessions" AS session

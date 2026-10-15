@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
 
         // The rule being edited.
         [BindProperty(SupportsGet = true, Name = "rule")]
-        public int? RulePosition { get; set; }
+        public int? RuleId { get; set; }
 
         [BindProperty(SupportsGet = true, Name = "delete")]
         public bool ConfirmDelete { get; set; }
@@ -122,18 +122,18 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 .Content("profile.rule.effect", rule => new Span(new Text("profile.rule.effect." + rule.Effect),
                     new ValueText(rule.Score == 0 ? "" : " " + rule.Score.ToString("+0;-0", CultureInfo.InvariantCulture))))
                 .Content("common.actions", rule => new Div(
-                    new A(new Text("common.edit")).Class("button").Attribute("href", Address() + "?rule=" + rule.Position.ToString(CultureInfo.InvariantCulture)),
+                    new A(new Text("common.edit")).Class("button").Attribute("href", Address() + "?rule=" + rule.Id.ToString(CultureInfo.InvariantCulture)),
                     new Form<ReleaseRuleParametersV1>(form =>
                     {
                         form.Hidden(item => item.Version);
                         form.Submit("profile.rule.remove", rule.Name, valueHidden: true);
-                    }, Address(handler: "RemoveRule") + "&position=" + rule.Position.ToString(CultureInfo.InvariantCulture), csrf,
-                        new ReleaseRuleParametersV1(profile.Id, rule.Position, profile.Version))).Class("page-actions"));
+                    }, Address(handler: "RemoveRule") + "&ruleId=" + rule.Id.ToString(CultureInfo.InvariantCulture), csrf,
+                        new ReleaseRuleParametersV1(profile.Id, rule.Id, profile.Version))).Class("page-actions"));
 
         // A new rule, or the chosen one in place.
         private IUiComponent RuleForm(AcquisitionProfileDetailsV1 profile, string? csrf)
         {
-            var edited = RulePosition is { } position ? _rules.FirstOrDefault(rule => rule.Position == position) : null;
+            var edited = RuleId is { } ruleId ? _rules.FirstOrDefault(rule => rule.Id == ruleId) : null;
             var input = _ruleInput ?? (edited is { } rule
                 ? new SaveReleaseRuleDataV1(rule.Name, rule.Field, rule.Match, rule.Value, rule.Effect, Math.Abs(rule.Score), profile.Version)
                 : new SaveReleaseRuleDataV1("", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "", ReleaseRuleEffect.Prefer, 10, profile.Version));
@@ -150,7 +150,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     section.Number(item => item.Score, "wanted.search.score");
                 });
                 form.Submit(edited is null ? "collections.add" : "common.save");
-            }, Address(handler: "Rule") + (edited is null ? "" : "&rule=" + edited.Position.ToString(CultureInfo.InvariantCulture)), csrf, input, _ruleInput is null ? null : FormError);
+            }, Address(handler: "Rule") + (edited is null ? "" : "&rule=" + edited.Id.ToString(CultureInfo.InvariantCulture)), csrf, input, _ruleInput is null ? null : FormError);
         }
 
         // Catalog values travel as their numbers, like the form shows the stored one.
@@ -189,9 +189,9 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         {
             var id = SelectedId();
             _ruleInput = new SaveReleaseRuleDataV1(name ?? "", field, match, value ?? "", effect, score ?? 0, version);
-            if (RulePosition is { } position)
+            if (RuleId is { } ruleId)
             {
-                await updateRule.ExecuteAsync<UpdateResult>(new ReleaseRulePositionParametersV1(id, position), _ruleInput, HttpContext.RequestAborted);
+                await updateRule.ExecuteAsync<UpdateResult>(new ReleaseRuleKeyParametersV1(id, ruleId), _ruleInput, HttpContext.RequestAborted);
             }
             else
             {
@@ -201,9 +201,9 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostRemoveRuleAsync([BindRequired] int position, [BindRequired] long version)
+        public async Task<IActionResult> OnPostRemoveRuleAsync([BindRequired] int ruleId, [BindRequired] long version)
         {
-            await deleteRule.ExecuteAsync<UpdateResult>(new ReleaseRuleParametersV1(SelectedId(), position, version), default, HttpContext.RequestAborted);
+            await deleteRule.ExecuteAsync<UpdateResult>(new ReleaseRuleParametersV1(SelectedId(), ruleId, version), default, HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
 

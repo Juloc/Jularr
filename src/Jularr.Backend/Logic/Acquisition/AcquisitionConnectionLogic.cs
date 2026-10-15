@@ -126,7 +126,7 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        // A grab counts against the indexer's daily limit; false once it is reached.
+        // A grab counts against the indexer's daily limit; false once it is reached. A removed indexer's offer is stale.
         public static async Task<bool> CountIndexerGrabAsync(this LogicContext ctx, AcquisitionConnectionParameters data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -143,7 +143,26 @@ namespace Jularr.Backend.Logic.Acquisition
                     AND (connection."GrabLimit" IS NULL OR connection."CountedOn" IS DISTINCT FROM current_date OR connection."GrabCount" < connection."GrabLimit");
                 """;
             sql.Parameters.Add(data);
-            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) > 0;
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) > 0)
+            {
+                return true;
+            }
+
+            var exists = new SqlStatement();
+            exists.Statement =
+                """
+                SELECT
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "AcquisitionConnections" AS connection
+                        WHERE
+                            connection."Id" = @AcquisitionConnectionId
+                    );
+                """;
+            exists.Parameters.Add(data);
+            return (bool)(await ctx.ReadSql.ExecuteScalarAsync(exists, ct))! ? false : throw new DataValidationException("CandidateId", "indexer_removed");
         }
 
         public static async Task ReturnIndexerGrabAsync(this LogicContext ctx, AcquisitionConnectionParameters data, CancellationToken ct)
@@ -180,12 +199,14 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
+        // Download clients and subtitle providers need a key; indexers, catalogs and news servers may be open.
+        private static bool NeedsKey(AcquisitionConnectionType type) => type is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl;
+
         public static async Task<long> CreateAcquisitionConnectionAsync(this LogicContext ctx, AcquisitionConnectionSaveData data, CancellationToken ct)
         {
             ValidateAddress(data);
 
-            // Download clients and subtitle providers need a key; indexers, catalogs and news servers may be open.
-            if (data.ProtectedApiKey is null && data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl)
+            if (data.ProtectedApiKey is null && NeedsKey(data.AcquisitionConnectionTypeId))
             {
                 throw new DataValidationException("ApiKey", "required");
             }
@@ -211,7 +232,14 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             ValidateAddress(data);
 
-            // Preserve an omitted API key; a new address or type needs a new check.
+            // A stored key stays only with its type.
+            if (data.ProtectedApiKey is null && NeedsKey(data.AcquisitionConnectionTypeId)
+                && await ctx.ReadAcquisitionConnectionAsync(data.Id!.Value, ct) is var stored && (stored.AcquisitionConnectionTypeId != data.AcquisitionConnectionTypeId || stored.ProtectedApiKey is null))
+            {
+                throw new DataValidationException("ApiKey", "required");
+            }
+
+            // Preserve an omitted API key of the same type; a new address or type needs a new check.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -221,7 +249,10 @@ namespace Jularr.Backend.Logic.Acquisition
                     "Name" = @Name,
                     "AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId,
                     "BaseUrl" = @BaseUrl,
-                    "ProtectedApiKey" = COALESCE(@ProtectedApiKey, connection."ProtectedApiKey"),
+                    "ProtectedApiKey" = CASE
+                        WHEN connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId THEN COALESCE(@ProtectedApiKey, connection."ProtectedApiKey")
+                        ELSE @ProtectedApiKey
+                    END,
                     "IsEnabled" = @IsEnabled,
                     "Priority" = @Priority,
                     "Categories" = @Categories,

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Field;
 using Jularr.Backend.Data.Fields;
 
 namespace Jularr.Frontend.Framework
@@ -35,6 +36,9 @@ namespace Jularr.Frontend.Framework
 
         // File types a file field accepts.
         public string? Accept { get; init; }
+
+        // An address is typed with the address keyboard, without spelling or capitals.
+        public bool IsAddress { get; init; }
         internal Func<BaseData, object?> ReadValue { get; init; } = _ => throw new InvalidOperationException("Field access requires property metadata.");
 
         public static BaseField From<TData, TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string? labelKey = null)
@@ -84,7 +88,8 @@ namespace Jularr.Frontend.Framework
                 ReadValue = cached.Read,
                 MinimumLength = field.Field is StringField text && text.MinimumLength > 0 ? text.MinimumLength : null,
                 Scale = field.Field is DecimalField fraction ? fraction.Scale : null,
-                Accept = field.Field is FileField file ? string.Join(',', file.Extensions) : null
+                Accept = field.Field is FileField file ? string.Join(',', file.Extensions) : null,
+                IsAddress = field.Field is StringField { Format: StringFormat.HttpUrl or StringFormat.ServiceUrl }
             };
         }
     }

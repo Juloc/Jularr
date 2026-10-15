@@ -179,6 +179,8 @@ namespace Jularr.Backend.Data.Fields
 
         public bool AllowBlank { get; init; } = true;
         public bool Trim { get; init; }
+        // A base address: "http://nas/" and "http://nas" are one address.
+        public bool TrimsTrailingSlash { get; init; }
         public int MinimumLength { get; init; }
         public StringFormat Format { get; init; }
 
@@ -187,6 +189,7 @@ namespace Jularr.Backend.Data.Fields
             if (value is string text)
             {
                 if (Trim) text = text.Trim();
+                if (TrimsTrailingSlash) text = text.TrimEnd('/');
                 return Format == StringFormat.Locale && LocaleNames.TryGetValue(text, out var locale) ? locale : text;
             }
 
@@ -366,6 +369,28 @@ namespace Jularr.Backend.Data.Fields
         }
     }
 
+    // Catalog values in a list, each known.
+    public sealed class EnumArrayField : DataField
+    {
+        public EnumArrayField(Type enumType) : base(enumType.MakeArrayType(), NpgsqlDbType.Array | NpgsqlDbType.Smallint)
+        {
+            if (!enumType.IsEnum || Enum.GetUnderlyingType(enumType) != typeof(byte))
+            {
+                throw new ArgumentException("Catalog enums must be byte-backed.", nameof(enumType));
+            }
+        }
+
+        protected override void ValidateValue(object value, string name, int? maximumLength)
+        {
+            var values = (Array)value;
+            var element = ClrType.GetElementType()!;
+            if (maximumLength is { } limit && values.Length > limit || values.Cast<object>().Any(item => !Enum.IsDefined(element, item)))
+            {
+                throw new DataValidationException(name, "unknown_catalog_value");
+            }
+        }
+    }
+
     public sealed class IntArrayField : DataField
     {
         public IntArrayField() : base(typeof(int[]), NpgsqlDbType.Array | NpgsqlDbType.Integer)
@@ -374,6 +399,11 @@ namespace Jularr.Backend.Data.Fields
 
         public int Minimum { get; init; } = int.MinValue;
         public int Maximum { get; init; } = int.MaxValue;
+
+        // A set: order and repeats carry no meaning, so it is kept sorted and distinct.
+        public bool IsSet { get; init; }
+
+        public override object? Normalize(object? value) => IsSet && value is int[] values ? values.Distinct().Order().ToArray() : value;
 
         protected override void ValidateValue(object value, string name, int? maximumLength)
         {

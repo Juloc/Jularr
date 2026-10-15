@@ -43,18 +43,22 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<long> ImportAsync(LogicContext context, MediaSubtype? subtype, string workId, CancellationToken ct)
+        public async Task<OpenLibraryWork> ReadAsync(string workId, CancellationToken ct)
         {
-            // Read before the short write batch.
-            OpenLibraryWork work;
             try
             {
-                work = await openLibrary.ReadWorkAsync(workId, ct);
+                return await openLibrary.ReadWorkAsync(workId, ct);
             }
             catch (OpenLibraryException exception)
             {
                 throw Translate(exception);
             }
+        }
+
+        public async Task<long> ImportAsync(LogicContext context, MediaSubtype? subtype, string workId, CancellationToken ct)
+        {
+            // Read before the short write batch.
+            var work = await ReadAsync(workId, ct);
 
             var facts = new[]
             {

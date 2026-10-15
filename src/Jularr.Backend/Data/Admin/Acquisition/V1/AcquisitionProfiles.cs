@@ -197,9 +197,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     // A release rule; Require and Reject decide, Prefer and Avoid score, Info only names a match.
     public sealed class ReleaseRuleV1 : BaseResponse
     {
-        public ReleaseRuleV1(int position, string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score)
+        public ReleaseRuleV1(int id, string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score)
         {
-            Position = position;
+            Id = id;
             Name = name;
             Field = field;
             Match = match;
@@ -208,8 +208,8 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             Score = score;
         }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RulePosition))]
-        public int Position { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleId))]
+        public int Id { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleName))]
         public string Name { get; }
@@ -265,35 +265,35 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public long Version { get; }
     }
 
-    public sealed class ReleaseRulePositionParametersV1 : BaseParameters
+    public sealed class ReleaseRuleKeyParametersV1 : BaseParameters
     {
-        public ReleaseRulePositionParametersV1(long acquisitionProfileId, int position)
+        public ReleaseRuleKeyParametersV1(long acquisitionProfileId, int ruleId)
         {
             AcquisitionProfileId = acquisitionProfileId;
-            Position = position;
+            RuleId = ruleId;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
         public long AcquisitionProfileId { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RulePosition))]
-        public int Position { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleId))]
+        public int RuleId { get; }
     }
 
     public sealed class ReleaseRuleParametersV1 : BaseParameters
     {
-        public ReleaseRuleParametersV1(long acquisitionProfileId, int position, long version)
+        public ReleaseRuleParametersV1(long acquisitionProfileId, int ruleId, long version)
         {
             AcquisitionProfileId = acquisitionProfileId;
-            Position = position;
+            RuleId = ruleId;
             Version = version;
         }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
         public long AcquisitionProfileId { get; }
 
-        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RulePosition))]
-        public int Position { get; }
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleId))]
+        public int RuleId { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
         public long Version { get; }

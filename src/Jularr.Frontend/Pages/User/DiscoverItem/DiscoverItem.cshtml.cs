@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.User.DiscoverItem
 {
-    public sealed class DiscoverItemModel(ReadDiscoverItemV1 read, RequestDiscoverItemV1 request, ReadUiLocalesV1 locales, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class DiscoverItemModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverItemV1 read, RequestDiscoverItemV1 request, ReadUiLocalesV1 locales, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private DiscoverItemV1? _item;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
@@ -64,21 +64,22 @@ namespace Jularr.Frontend.Pages.User.DiscoverItem
         public async Task<IActionResult> OnPostAsync([BindRequired] long uiLocaleId)
         {
             _input = new CreateRequestDataV1(uiLocaleId);
-            await request.ExecuteAsync<CreateRequestResultV1>(Parameters(), _input, HttpContext.RequestAborted);
+            await request.ExecuteAsync<CreateRequestResultV1>(await ParametersAsync(), _input, HttpContext.RequestAborted);
             return RedirectToPage("/User/Requests/Requests");
         }
 
         protected override async Task LoadDataAsync()
         {
-            _item = await read.ExecuteAsync<DiscoverItemV1>(Parameters(), default, HttpContext.RequestAborted);
+            _item = await read.ExecuteAsync<DiscoverItemV1>(await ParametersAsync(), default, HttpContext.RequestAborted);
             if (texts.CanRequest())
             {
                 _locales = await locales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
             }
         }
 
-        private DiscoverItemParametersV1 Parameters() =>
-            new(DiscoverTypes.Find(Type) is { IsCatalog: false } scope ? scope.Type : throw new KeyNotFoundException("Unknown media type."), TmdbId);
+        private async Task<DiscoverItemParametersV1> ParametersAsync() =>
+            new((await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted))
+                .FirstOrDefault(scope => scope.Slug == Type && !scope.IsCatalog)?.MediaTypeId ?? throw new KeyNotFoundException("Unknown media type."), TmdbId);
 
         private string Address() => "/Discover/" + Type + "/" + TmdbId.ToString(CultureInfo.InvariantCulture);
     }

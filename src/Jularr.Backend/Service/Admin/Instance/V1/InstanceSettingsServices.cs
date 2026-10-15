@@ -49,6 +49,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
     public sealed class UpdateInstanceSettingsV1 : AdminService<UpdateInstanceSettingsParametersV1, UpdateInstanceSettingsDataV1>
     {
         private readonly TrustedProxies _proxies;
+        private string[]? _saved;
 
         internal UpdateInstanceSettingsV1(TrustedProxies proxies)
         {
@@ -62,12 +63,17 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            // Use the canonical writer.
-            await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks, Data.UsersConfirmSources,
-                Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes,
+            // Use the canonical writer; the stored proxies apply once committed.
+            await Context.UpdateInstanceSettingsAsync(new InstanceSettingsUpdateData(Data.Name, Data.UiLocaleId, Data.Version, Data.ReadingCacheMegabytes, Data.ReadingCacheWorks,
+                Data.UsersConfirmSources, Data.LibraryScanIntervalHours, Data.HistoryRetentionDays, Data.HistoryMegabytes,
                 Data.CollectionLimit, Data.UnitGroupLimit, Data.SubtitleLanguages, Data.PublicUrl, Data.TrustedProxies), CancellationToken);
-            _proxies.Expect(Data.Version + 1);
+            _saved = await Context.ReadTrustedProxiesAsync(CancellationToken);
             return new UpdateResult(true);
+        }
+
+        protected override void OnCommitted()
+        {
+            if (_saved is { } proxies) _proxies.Use(proxies);
         }
     }
 }

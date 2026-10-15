@@ -73,7 +73,7 @@ namespace Jularr.Backend.Service.User.Session.V1
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<RevokeSessionResultV1>()];
         protected override ModuleRequirement GetInstanceModules(RevokeSessionParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(RevokeSessionParametersV1 parameters, Type resultType) => new("session.self.revoke");
+        protected override ServicePermission GetPermission(RevokeSessionParametersV1 parameters, Type resultType) => new("session.self.manage");
 
         protected override async Task<IServiceOutput> OnDelete()
         {
@@ -83,12 +83,12 @@ namespace Jularr.Backend.Service.User.Session.V1
     }
 
     [ServiceEndpoint("PUT", "/api/v1/sessions/{sessionPublicId:guid}/device")]
-    public sealed class RenameSessionDeviceV1 : UserService<RevokeSessionParametersV1, RenameSessionDeviceDataV1>
+    public sealed class RenameSessionDeviceV1 : UserService<SessionDeviceParametersV1, RenameSessionDeviceDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(RevokeSessionParametersV1 parameters) => ModuleRequirement.None;
-        protected override ServicePermission GetPermission(RevokeSessionParametersV1 parameters, Type resultType) => new("session.self.revoke");
+        protected override ModuleRequirement GetInstanceModules(SessionDeviceParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(SessionDeviceParametersV1 parameters, Type resultType) => new("session.self.manage");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {

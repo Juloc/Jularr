@@ -28,6 +28,24 @@ namespace Jularr.Backend.Logic.Instance
             return await ctx.Sql.ReadListAsync<InstanceModuleData>(sql, ct);
         }
 
+        // The switches as they are, without locks; also for callers without a session.
+        public static Task<IReadOnlyList<InstanceModuleData>> ReadModuleStatesAsync(this LogicContext ctx, InstanceModuleParameters parameters, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    module."Key",
+                    module."IsEnabled"
+                FROM
+                    "InstanceModules" AS module
+                WHERE
+                    module."Key" = ANY(@ModuleKeys);
+                """;
+            sql.Parameters.Add(parameters);
+            return ctx.ReadSql.ReadListAsync<InstanceModuleData>(sql, ct);
+        }
+
         public static async Task UpdateInstanceModuleAsync(this LogicContext ctx, InstanceModuleUpdateData data, CancellationToken ct)
         {
             // Retain data when disabling.

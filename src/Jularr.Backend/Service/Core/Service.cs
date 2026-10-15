@@ -66,6 +66,11 @@ namespace Jularr.Backend.Service.Core
         protected virtual Task<IServiceOutput> OnDelete() => throw new InvalidOperationException("The Delete hook is not implemented.");
         protected virtual Task<IServiceOutput> OnExecute() => throw new InvalidOperationException("The Execute hook is not implemented.");
 
+        // Runs once the service's writes are committed: in-memory state that follows them changes only then.
+        protected virtual void OnCommitted()
+        {
+        }
+
         public override void ValidateDefinition() => _ = _definition.Value;
         public override ServiceOperationType OperationType => _definition.Value.OperationType;
         public override Type DefaultResultType => _definition.Value.DefaultResultType;
@@ -248,6 +253,7 @@ namespace Jularr.Backend.Service.Core
                     await sql.CommitAsync(cancellationToken);
                 }
 
+                OnCommitted();
                 return result;
             }
             finally

@@ -29,18 +29,22 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
-        public async Task<long> ImportAsync(LogicContext context, string id, CancellationToken ct)
+        public async Task<MusicBrainzAlbumDetails> ReadAsync(string id, CancellationToken ct)
         {
-            // Read before the short write batch.
-            MusicBrainzAlbumDetails details;
             try
             {
-                details = await musicBrainz.ReadAsync(id, ct);
+                return await musicBrainz.ReadAsync(id, ct);
             }
             catch (MusicBrainzException exception)
             {
                 throw Translate(exception);
             }
+        }
+
+        public async Task<long> ImportAsync(LogicContext context, string id, CancellationToken ct)
+        {
+            // Read before the short write batch.
+            var details = await ReadAsync(id, ct);
 
             var album = details.Album;
             var facts = new[]

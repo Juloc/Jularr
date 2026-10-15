@@ -2,12 +2,10 @@ using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.User.Home.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Profile.V1;
-using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.User.Discover.V1;
 using Jularr.Backend.Service.User.Home.V1;
 using Jularr.Backend.Service.User.Library.V1;
@@ -18,28 +16,27 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Discover
 {
-    public sealed class IndexModel(ReadAuthenticationV1 authentication, ReadProfileMediaV1 readMedia, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
+    public sealed class IndexModel(ReadDiscoverScopesV1 readScopes, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
         SearchDiscoverCatalogV1 catalogSearch, ReadDiscoverCatalogFeedV1 catalogFeeds, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets,
         IAntiforgery antiforgery) : JularrPage
     {
         private readonly List<(MediaType Type, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1> Items)> _shelves = [];
-        private readonly List<(DiscoverType Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverCatalogItemV1> Items)> _catalogShelves = [];
+        private readonly List<(DiscoverScopeV1 Scope, DiscoverFeedType Feed, IReadOnlyList<DiscoverCatalogItemV1> Items)> _catalogShelves = [];
         private IReadOnlyList<DiscoverItemV1>? _results;
         private IReadOnlyList<DiscoverCatalogItemV1>? _catalog;
         private IReadOnlyList<ContinueItemV1> _continue = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
-        private HashSet<string>? _listed;
+        private IReadOnlyList<DiscoverScopeV1>? _scopes;
 
         [BindProperty(SupportsGet = true, Name = "type")]
         public string? TypeSlug { get; set; }
 
         // The profile's listed types and subtypes only.
-        private IEnumerable<DiscoverType> Listed => DiscoverTypes.All.Where(type => _listed?.Contains(type.Type.ToString()) is true
-            && (type.Subtype is null || _listed.Contains(type.Subtype.Value.ToString())));
+        private IEnumerable<DiscoverScopeV1> Listed => _scopes ?? [];
 
-        private DiscoverType? Selected => Listed.FirstOrDefault(type => type.Slug == TypeSlug);
+        private DiscoverScopeV1? Selected => Listed.FirstOrDefault(type => type.Slug == TypeSlug);
 
         [BindProperty(SupportsGet = true, Name = "view")]
         public DiscoverFeedType? View { get; set; }
@@ -127,7 +124,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
 
             // Watching, listening and reading continue on their own shelves, in the profile's order.
-            var continuing = _continue.Where(item => selected is null || item.MediaTypeId == selected.Type).ToList();
+            var continuing = _continue.Where(item => selected is null || item.MediaTypeId == selected.MediaTypeId).ToList();
             var canPlay = texts.CanPlay();
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             foreach (var shelf in _layout.Where(shelf => !shelf.IsHidden))
@@ -189,7 +186,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 var shelves = scope.IsCatalog
                     ? _catalogShelves.Where(shelf => shelf.Scope == scope).Select(shelf => (shelf.Feed, Count: shelf.Items.Count, Cards: shelf.Items.Select(item => CatalogCard(scope, item))))
-                    : _shelves.Where(shelf => shelf.Type == scope.Type).Select(shelf => (shelf.Feed, Count: shelf.Items.Count, Cards: shelf.Items.Select(Card)));
+                    : _shelves.Where(shelf => shelf.Type == scope.MediaTypeId).Select(shelf => (shelf.Feed, Count: shelf.Items.Count, Cards: shelf.Items.Select(Card)));
                 var shown = shelves.ToList();
                 if (selected is null && shown.Any(shelf => shelf.Count > 0))
                 {
@@ -255,27 +252,27 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 if (!string.IsNullOrWhiteSpace(Query) && selected is { IsCatalog: true } scope)
                 {
-                    _catalog = await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.Type, Query, scope.Subtype),
+                    _catalog = await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.MediaTypeId, Query, scope.MediaSubtypeId),
                         HttpContext.RequestAborted);
                     return;
                 }
 
                 if (!string.IsNullOrWhiteSpace(Query))
                 {
-                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query, selected?.Type, PageNumber), HttpContext.RequestAborted);
+                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query, selected?.MediaTypeId, PageNumber), HttpContext.RequestAborted);
                     return;
                 }
 
                 if (selected is { IsCatalog: true } && View is { } catalogView && selected.Feeds.Contains(catalogView))
                 {
-                    _catalog = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(selected.Type, catalogView, selected.Subtype),
+                    _catalog = await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(selected.MediaTypeId, catalogView, selected.MediaSubtypeId),
                         HttpContext.RequestAborted);
                     return;
                 }
 
                 if (selected is not null && View is { } view && selected.Feeds.Contains(view))
                 {
-                    _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.Type, view, PageNumber), HttpContext.RequestAborted);
+                    _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.MediaTypeId, view, PageNumber), HttpContext.RequestAborted);
                     return;
                 }
             }
@@ -302,22 +299,12 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             if (shown.Contains(HomeShelfType.RecentlyAdded))
             {
-                _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected?.Type, pageSize: 20), HttpContext.RequestAborted)).Items;
+                _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected?.MediaTypeId, pageSize: 20), HttpContext.RequestAborted)).Items;
             }
         }
 
-        private async Task LoadListedAsync()
-        {
-            if (_listed is not null)
-            {
-                return;
-            }
-
-            var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted)).ProfileId
-                ?? throw new UnauthorizedAccessException("An active profile is required.");
-            var media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), HttpContext.RequestAborted);
-            _listed = [.. media.Where(item => !item.IsHidden).Select(item => item.Key)];
-        }
+        private async Task LoadListedAsync() =>
+            _scopes ??= await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
 
         private async Task LoadRecommendationsAsync()
         {
@@ -331,12 +318,12 @@ namespace Jularr.Frontend.Pages.User.Discover
                     {
                         if (scope.IsCatalog)
                         {
-                            _catalogShelves.Add((scope, feed, await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(scope.Type, feed, scope.Subtype),
+                            _catalogShelves.Add((scope, feed, await catalogFeeds.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new ReadDiscoverCatalogFeedDataV1(scope.MediaTypeId, feed, scope.MediaSubtypeId),
                                 HttpContext.RequestAborted)));
                         }
                         else
                         {
-                            _shelves.Add((scope.Type, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.Type, feed), HttpContext.RequestAborted)));
+                            _shelves.Add((scope.MediaTypeId, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.MediaTypeId, feed), HttpContext.RequestAborted)));
                         }
                     }
                     catch (ServiceUnavailableException)
@@ -357,7 +344,7 @@ namespace Jularr.Frontend.Pages.User.Discover
         }
 
         // A known title opens its Work; any other opens its request.
-        private IUiComponent CatalogCard(DiscoverType scope, DiscoverCatalogItemV1 item)
+        private IUiComponent CatalogCard(DiscoverScopeV1 scope, DiscoverCatalogItemV1 item)
         {
             var meta = string.Join(" · ", new[] { item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), item.Author }.Where(value => !string.IsNullOrWhiteSpace(value)));
             if (item.WorkId is { } workId)
@@ -366,8 +353,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                     .Bookmark(new MediaBookmark(assets, workId));
             }
 
-            var href = "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId) + "?title=" + Uri.EscapeDataString(item.Title)
-                + (meta.Length == 0 ? "" : "&meta=" + Uri.EscapeDataString(meta));
+            var href = "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId);
             return new MediaCard(assets, item.Title, href, item.PosterUrl, meta, "media.state." + MediaStateType.NotRequested, texts.CanRequest() ? "request.create" : null, texts.CanRequest() ? href : null);
         }
 
@@ -380,9 +366,9 @@ namespace Jularr.Frontend.Pages.User.Discover
             _ => (null, null)
         };
 
-        private static string DetailsHref(DiscoverItemV1 item) => item.WorkId is { } workId
+        private string DetailsHref(DiscoverItemV1 item) => item.WorkId is { } workId
             ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-            : "/Discover/" + DiscoverTypes.For(item.MediaTypeId).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture);
+            : "/Discover/" + Listed.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture);
 
         private string Address(string? slug, DiscoverFeedType? feed, int page)
         {

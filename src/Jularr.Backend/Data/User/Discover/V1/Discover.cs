@@ -10,6 +10,34 @@ namespace Jularr.Backend.Data.User.Discover.V1
     {
     }
 
+    // One Discover scope: its address, the type it lists, whether a catalog other than TMDB serves it and its feeds.
+    public sealed class DiscoverScopeV1 : BaseResponse
+    {
+        public DiscoverScopeV1(string slug, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isCatalog, DiscoverFeedType[] feeds)
+        {
+            Slug = slug;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            IsCatalog = isCatalog;
+            Feeds = feeds;
+        }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.ScopeSlug))]
+        public string Slug { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.IsCatalog))]
+        public bool IsCatalog { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverFeedTypeIds))]
+        public DiscoverFeedType[] Feeds { get; }
+    }
+
     public sealed class ReadDiscoverFeedDataV1 : BaseData
     {
         public ReadDiscoverFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, int page = 1)
@@ -104,21 +132,33 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public string? PosterUrl { get; }
     }
 
-    public sealed class DiscoverAnimeParametersV1 : BaseParameters
+    public sealed class ReadDiscoverCatalogEntryDataV1 : BaseData
     {
-        public DiscoverAnimeParametersV1(int aniListId)
+        public ReadDiscoverCatalogEntryDataV1(MediaType mediaTypeId, string @namespace, string externalId, MediaSubtype? mediaSubtypeId = null)
         {
-            AniListId = aniListId;
+            MediaTypeId = mediaTypeId;
+            Namespace = @namespace;
+            ExternalId = externalId;
+            MediaSubtypeId = mediaSubtypeId;
         }
 
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.AniListId))]
-        public int AniListId { get; }
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
     }
 
-    // An anime season as AniList shows it; what AniList lacks comes from its TMDB series.
-    public sealed class DiscoverAnimeV1 : BaseResponse
+    // A catalog title as its catalog shows it; an anime season fills what AniList lacks from its TMDB series.
+    public sealed class DiscoverCatalogEntryV1 : BaseResponse
     {
-        public DiscoverAnimeV1(string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl, string? trailerKey, long? workId)
+        public DiscoverCatalogEntryV1(string title, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl, string? trailerKey, long? workId)
         {
             Title = title;
             ReleaseYear = releaseYear;
@@ -147,9 +187,13 @@ namespace Jularr.Backend.Data.User.Discover.V1
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.TrailerKey))]
         public string? TrailerKey { get; }
 
-        // The series once it is a Work.
+        // The Work once it is one; for an anime season its series.
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
         public long? WorkId { get; }
+
+        // Author, artist or developer.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Author))]
+        public string? Author { get; init; }
     }
 
     public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData

@@ -138,14 +138,17 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/?type=books&q=Pride%20and%20Prejudice");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            StringAssert.Contains(html, "/Discover/books/openlibrary/OL66554W?title=Pride%20and%20Prejudice");
-            using var item = await host.SendAsync(HttpMethod.Get, "/Discover/books/openlibrary/OL66554W?title=Pride%20and%20Prejudice");
+            StringAssert.Contains(html, "/Discover/books/openlibrary/OL66554W\"");
+
+            // The request page names the book as Open Library does, whatever a link claims.
+            using var item = await host.SendAsync(HttpMethod.Get, "/Discover/books/openlibrary/OL66554W?title=Confirm%20your%20password");
             var form = await item.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, item.StatusCode, form);
             StringAssert.Contains(form, "Pride and Prejudice");
+            Assert.IsFalse(form.Contains("Confirm your password", StringComparison.Ordinal));
 
             // Requesting imports the Work once; the catalog then knows it.
-            using var requested = await host.SendAsync(HttpMethod.Post, "/Discover/books/openlibrary/OL66554W?title=Pride%20and%20Prejudice",
+            using var requested = await host.SendAsync(HttpMethod.Post, "/Discover/books/openlibrary/OL66554W",
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(form), ["UiLocaleId"] = "1" });
             Assert.AreEqual(HttpStatusCode.Redirect, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"))!;

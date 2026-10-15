@@ -270,6 +270,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, renamed.StatusCode, await renamed.Content.ReadAsStringAsync());
             Assert.AreEqual("Living room TV", await host.ScalarAsync("SELECT \"DeviceName\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
 
+            // Without its own name it shows the default name again, in the reader's language, and stays a device.
+            using var unnamed = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + deviceSession + "/device", new RenameSessionDeviceDataV1(" "));
+            Assert.AreEqual(HttpStatusCode.OK, unnamed.StatusCode, await unnamed.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"DeviceName\" IS NULL FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
+            using var list = await host.SendAsync(HttpMethod.Get, "/Account/Sessions");
+            StringAssert.Contains(await list.Content.ReadAsStringAsync(), "<p>Browser ");
+
             // Paired to the Owner, its requests still wait for approval.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Device request')");
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/101/requests", new Jularr.Backend.Data.User.Request.V1.CreateRequestDataV1(1));

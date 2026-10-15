@@ -47,6 +47,7 @@ namespace Jularr.Backend.Tests
             var preview = await RunAsync(host, false);
             Assert.AreEqual("takeover_will_add", preview.Single(item => item.Name == "Readable").OutcomeKey);
             Assert.AreEqual("takeover_needs_key", preview.Single(item => item.Name == "Hidden").OutcomeKey);
+            Assert.AreEqual("takeover_will_add", preview.Single(item => item.Name == "Open").OutcomeKey);
             Assert.AreEqual("https://hidden.example.test", preview.Single(item => item.Name == "Hidden").SuggestedUrl);
             Assert.AreEqual("takeover_needs_key", preview.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Client).OutcomeKey);
             Assert.AreEqual("takeover_will_want", preview.Single(item => item.Name == "The Matrix (1999)").OutcomeKey);
@@ -55,15 +56,17 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(preview.Any(item => item.Name == "Tracker"));
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
 
-            // Taking over adds the readable indexer and wants the missing movie; a second run only repeats nothing.
+            // Taking over adds the readable and the open indexer and wants the missing movie; a second run only repeats nothing.
             var applied = await RunAsync(host, true);
             Assert.AreEqual("takeover_added", applied.Single(item => item.Name == "Readable").OutcomeKey);
+            Assert.AreEqual("takeover_added", applied.Single(item => item.Name == "Open").OutcomeKey);
             Assert.AreEqual("takeover_wanted", applied.Single(item => item.Name == "The Matrix (1999)").OutcomeKey);
-            Assert.AreEqual("https://readable.example.test", await host.ScalarAsync("SELECT \"BaseUrl\" FROM \"AcquisitionConnections\""));
+            Assert.AreEqual("https://readable.example.test", await host.ScalarAsync("SELECT \"BaseUrl\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Readable'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedApiKey\" IS NULL FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Open'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
             var again = await RunAsync(host, true);
             Assert.AreEqual("takeover_exists", again.Single(item => item.Name == "Readable").OutcomeKey);
-            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"WantedItems\""));
 
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Takeover");
@@ -169,6 +172,8 @@ namespace Jularr.Backend.Tests
                            "fields":[{"name":"baseUrl","value":"https://readable.example.test"},{"name":"apiPath","value":"/api"},{"name":"apiKey","value":"readable-key"},{"name":"categories","value":[2000,2040]}]},
                           {"name":"Hidden","protocol":"usenet","implementation":"Newznab","enable":true,"priority":20,
                            "fields":[{"name":"baseUrl","value":"https://hidden.example.test"},{"name":"apiPath","value":"/api"},{"name":"apiKey","value":"********"}]},
+                          {"name":"Open","protocol":"usenet","implementation":"Newznab","enable":true,"priority":30,
+                           "fields":[{"name":"baseUrl","value":"https://open.example.test"},{"name":"apiPath","value":"/api"},{"name":"apiKey","value":""}]},
                           {"name":"Tracker","protocol":"torrent","implementation":"Torznab","enable":true,"priority":5,"fields":[]}
                         ]
                         """),

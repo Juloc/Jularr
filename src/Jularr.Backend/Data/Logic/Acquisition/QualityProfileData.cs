@@ -17,6 +17,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
             Score = score;
         }
 
+        // Unique within its profile; edits and removals name it.
+        public int Id { get; init; }
+
         public string Name { get; }
         public ReleaseRuleField Field { get; }
         public ReleaseRuleMatch Match { get; }

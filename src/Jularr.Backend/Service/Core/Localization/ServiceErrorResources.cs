@@ -59,6 +59,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.device_pairing_attempts", "Too many wrong codes; try again in ten minutes."),
             new("errors.validation.invalid_code", "This code is unknown or has expired."),
             new("errors.validation.translation_mismatch", "The translation does not fit this section."),
+            new("errors.validation.indexer_removed", "The indexer of this release was removed; search again."),
             new("errors.validation.invalid_network", "Enter IP addresses or networks such as 192.168.1.10 or 10.0.0.0/8."),
             new("errors.validation.pairing_expired", "This code has expired; show a new code on the device."),
             new("errors.acquisition_unavailable", "The indexer or download client could not be reached."),

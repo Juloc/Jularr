@@ -40,7 +40,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (!Uri.TryCreate(Data.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var address) || address.Scheme is not ("http" or "https"))
+            if (!Uri.TryCreate(Data.BaseUrl + "/", UriKind.Absolute, out var address) || address.Scheme is not ("http" or "https"))
             {
                 throw new DataValidationException(nameof(RunTakeoverDataV1.BaseUrl), "invalid_url");
             }
@@ -100,18 +100,18 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             }, CancellationToken);
             var existing = known.Select(connection => connection.BaseUrl.TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            // Connections without a readable key are completed in the connection form.
+            // Connections whose key the source hides are completed in the connection form; open indexers come as they are.
             var items = new List<TakeoverItemV1>();
             foreach (var indexer in indexers)
             {
-                items.Add(await TakeConnectionAsync(TakeoverItemType.Indexer, indexer.Name, indexer.BaseUrl, indexer.ApiKey, existing,
+                items.Add(await TakeConnectionAsync(TakeoverItemType.Indexer, indexer.Name, indexer.BaseUrl, indexer.ApiKey is null && indexer.HasHiddenKey, existing,
                     new SaveAcquisitionConnectionDataV1(Limit(indexer.Name, 128), AcquisitionConnectionType.Newznab, indexer.BaseUrl, indexer.ApiKey, indexer.IsEnabled, indexer.Priority,
                         indexer.Categories, null, null, null)));
             }
 
             foreach (var client in clients)
             {
-                items.Add(await TakeConnectionAsync(TakeoverItemType.Client, client.Name, client.BaseUrl, client.ApiKey, existing,
+                items.Add(await TakeConnectionAsync(TakeoverItemType.Client, client.Name, client.BaseUrl, client.ApiKey is null, existing,
                     new SaveAcquisitionConnectionDataV1(Limit(client.Name, 128), AcquisitionConnectionType.Sabnzbd, client.BaseUrl, client.ApiKey, client.IsEnabled, client.Priority, [],
                         client.Category is { Length: <= 64 } category ? category : null, null, null)));
             }
@@ -181,14 +181,14 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             return new BaseDataList<TakeoverItemV1>([.. items.Take(1000)]);
         }
 
-        private async Task<TakeoverItemV1> TakeConnectionAsync(TakeoverItemType type, string name, string baseUrl, string? apiKey, HashSet<string> existing, SaveAcquisitionConnectionDataV1 data)
+        private async Task<TakeoverItemV1> TakeConnectionAsync(TakeoverItemType type, string name, string baseUrl, bool needsKey, HashSet<string> existing, SaveAcquisitionConnectionDataV1 data)
         {
             if (existing.Contains(baseUrl.TrimEnd('/')))
             {
                 return new TakeoverItemV1(type, Limit(name, 500), "takeover_exists", null);
             }
 
-            if (apiKey is null)
+            if (needsKey)
             {
                 return new TakeoverItemV1(type, Limit(name, 500), "takeover_needs_key", baseUrl);
             }

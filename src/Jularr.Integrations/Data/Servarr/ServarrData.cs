@@ -51,6 +51,9 @@ namespace Jularr.Integrations.Data.Servarr
         public bool IsEnabled { get; }
         public int Priority { get; }
         public int[] Categories { get; }
+
+        // The indexer has a key the API does not show; without one it is open.
+        public bool HasHiddenKey { get; init; }
     }
 
     internal sealed class ServarrClient

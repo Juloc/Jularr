@@ -14,6 +14,7 @@ using Jularr.Backend.Data.User.Profile.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Tmdb;
@@ -312,25 +313,55 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
-    [ServiceEndpoint("POST", "/api/v1/discover/anime/{aniListId:int}")]
-    public sealed class ReadDiscoverAnimeV1 : UserService<DiscoverAnimeParametersV1, NoData>
+    [ServiceEndpoint("POST", "/api/v1/discover/catalog/entry")]
+    public sealed class ReadDiscoverCatalogEntryV1 : UserService<DiscoverParametersV1, ReadDiscoverCatalogEntryDataV1>
     {
         private readonly MetadataCatalog _catalog;
 
-        internal ReadDiscoverAnimeV1(MetadataCatalog catalog)
+        internal ReadDiscoverCatalogEntryV1(MetadataCatalog catalog)
         {
             _catalog = catalog;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DiscoverAnimeV1>()];
-        protected override ModuleRequirement GetInstanceModules(DiscoverAnimeParametersV1 parameters) => ModuleRequirement.All("Library");
-        protected override ServicePermission GetPermission(DiscoverAnimeParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<DiscoverCatalogEntryV1>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            await DiscoverQueries.RequireCatalogTypeAsync(Context, MediaType.Series, MediaSubtype.Anime, Auth.ProfileId!.Value, CancellationToken);
-            return await _catalog.ReadAnimeAsync(Context, Parameters.AniListId, CancellationToken);
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Auth.ProfileId!.Value, CancellationToken);
+            return await _catalog.ReadEntryAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+        }
+    }
+
+    // The scopes of the profile's listed media types.
+    [ServiceEndpoint("GET", "/api/v1/discover/scopes")]
+    public sealed class ReadDiscoverScopesV1 : UserService<DiscoverParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DiscoverScopeV1>>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    category."Key",
+                    category."MediaSubtypeId" IS NOT NULL AS "IsSubtype",
+                    category."IsHidden"
+                FROM
+                    "ProfileMediaCategories" AS category
+                WHERE
+                    category."ProfileId" = @ProfileId
+                    AND NOT category."IsHidden";
+                """;
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            var listed = (await Context.ReadSql.ReadListAsync<ProfileMediaV1>(sql, CancellationToken)).Select(category => category.Key).ToHashSet(StringComparer.Ordinal);
+            return new BaseDataList<DiscoverScopeV1>([.. DiscoverScopes.All.Where(scope => listed.Contains(scope.MediaTypeId.ToString())
+                && (scope.MediaSubtypeId is not { } subtype || listed.Contains(subtype.ToString())))]);
         }
     }
 
@@ -416,7 +447,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         public static async Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, MediaSubtype? subtype, long profileId, CancellationToken ct)
         {
             var anime = mediaType == MediaType.Series && subtype == MediaSubtype.Anime;
-            if (!anime && mediaType is not (MediaType.Book or MediaType.Music or MediaType.Game))
+            if (!DiscoverScopes.IsCatalog(mediaType, subtype))
             {
                 throw new DataValidationException("MediaTypeId", "unknown_catalog_value");
             }

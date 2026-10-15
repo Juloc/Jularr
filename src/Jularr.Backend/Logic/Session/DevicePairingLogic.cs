@@ -11,7 +11,7 @@ namespace Jularr.Backend.Logic.Session
     // and the device fetches its own session once; it lasts and renews like any session.
     internal static class DevicePairingLogic
     {
-        public static async Task<DevicePairingStartedData> StartDevicePairingAsync(this LogicContext ctx, string deviceName, string devicePlatform, Guid? replacesPairingId,
+        public static async Task<DevicePairingStartedData> StartDevicePairingAsync(this LogicContext ctx, string? deviceName, string devicePlatform, Guid? replacesPairingId,
             CancellationToken ct)
         {
             // Codes of expired pairings become free again; a device asking anew ends its own open code at once.

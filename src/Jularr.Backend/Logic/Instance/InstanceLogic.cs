@@ -9,6 +9,21 @@ namespace Jularr.Backend.Logic.Instance
 {
     internal static class InstanceLogic
     {
+        public static async Task<string[]> ReadTrustedProxiesAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    settings."TrustedProxies"::text[] AS "TrustedProxies"
+                FROM
+                    "InstanceSettings" AS settings
+                WHERE
+                    settings."Id" = 1;
+                """;
+            return (await ctx.ReadSql.ReadRequiredAsync<TrustedProxiesData>(sql, ct)).TrustedProxies;
+        }
+
         public static async Task UpdateInstanceSettingsAsync(this LogicContext ctx, InstanceSettingsUpdateData data, CancellationToken ct)
         {
             await ctx.RequireEnabledUiLocaleAsync(data.UiLocaleId, nameof(data.UiLocaleId), ct);

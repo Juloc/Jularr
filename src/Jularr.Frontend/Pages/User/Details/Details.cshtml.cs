@@ -22,10 +22,11 @@ namespace Jularr.Frontend.Pages.User.Details
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
         ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
         RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
-        ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
+        ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, ReadDiscoverScopesV1 readScopes, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
         private IReadOnlyList<WorkCardV1> _related = [];
         private IReadOnlyList<DiscoverItemV1> _recommendations = [];
+        private IReadOnlyList<DiscoverScopeV1> _scopes = [];
         private IReadOnlyList<WorkCreditV1> _credits = [];
         private IReadOnlyList<WorkSeasonV1> _seasons = [];
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
@@ -195,7 +196,7 @@ namespace Jularr.Frontend.Pages.User.Details
                         MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)).Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]));
                 }
 
-                page.Content.Add(new MediaShelf(assets, "details.recommendations", null, [.. _recommendations.Select(Recommendation)]));
+                page.Content.Add(new MediaShelf(assets, "details.recommendations", null, [.. _recommendations.Where(item => item.WorkId is not null || _scopes.Any(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog)).Select(Recommendation)]));
 
                 // Hand-picked collections take or give back this Work.
                 if (_collections.Count > 0)
@@ -236,7 +237,7 @@ namespace Jularr.Frontend.Pages.User.Details
         private IUiComponent Recommendation(DiscoverItemV1 item)
         {
             var card = new MediaCard(assets, item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
-                    : "/Discover/" + DiscoverTypes.For(item.MediaTypeId).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
+                    : "/Discover/" + _scopes.First(scope => scope.MediaTypeId == item.MediaTypeId && !scope.IsCatalog).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
                 item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId);
             if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
             return card;
@@ -375,6 +376,7 @@ namespace Jularr.Frontend.Pages.User.Details
             try
             {
                 _recommendations = await readRecommendations.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
+                if (_recommendations.Count > 0) _scopes = await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted);
             }
             catch (ServiceUnavailableException)
             {

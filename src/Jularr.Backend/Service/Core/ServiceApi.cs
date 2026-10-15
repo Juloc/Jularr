@@ -200,8 +200,8 @@ namespace Jularr.Backend.Service.Core
             services.AddScoped<IServiceGate, ServiceGate>();
             services.AddScoped(provider => new SessionAuthentication(provider.GetRequiredService<SqlDatabase>().DataSource));
             services.AddScoped<SessionCookieEvents>();
-            services.AddSingleton(provider => new TrustedProxies(provider.GetRequiredService<SqlDatabase>().DataSource, provider.GetRequiredService<TimeProvider>(),
-                provider.GetRequiredService<ILogger<TrustedProxies>>()));
+            services.AddSingleton<TrustedProxies>();
+            services.AddHostedService(provider => provider.GetRequiredService<TrustedProxies>());
             services.AddSingleton<DeviceTokenFailures>();
 
             // Token requests never read cookies.

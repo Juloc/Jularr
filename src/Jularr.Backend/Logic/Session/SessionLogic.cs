@@ -232,7 +232,7 @@ namespace Jularr.Backend.Logic.Session
                     profile."Id" AS "ProfileId",
                     profile."OwnerAccountId" AS "ProfileOwnerAccountId",
                     profile."UiLocaleId",
-                    session."DeviceName" IS NOT NULL AS "IsDevice",
+                    session."DevicePlatform" IS NOT NULL AS "IsDevice",
                     session."ExpiresAt"
                 FROM
                     "AccountSessions" AS session
@@ -289,7 +289,7 @@ namespace Jularr.Backend.Logic.Session
                 WHERE
                     session."PublicId" = @SessionPublicId
                     AND session."AccountId" = @AccountId
-                    AND session."DeviceName" IS NOT NULL
+                    AND session."DevicePlatform" IS NOT NULL
                     AND session."RevokedAt" IS NULL;
                 """;
             sql.Parameters.Add(session);

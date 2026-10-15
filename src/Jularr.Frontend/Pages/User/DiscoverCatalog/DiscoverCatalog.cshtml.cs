@@ -15,10 +15,11 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.DiscoverCatalog
 {
     // A catalog title from Discover; the request imports it as a Work, an anime season as its TMDB series.
-    public sealed class DiscoverCatalogModel(RequestDiscoverCatalogItemV1 request, ReadDiscoverAnimeV1 readAnime, ReadUiLocalesV1 locales, IAntiforgery antiforgery, UiText texts)
-        : JularrPage
+    public sealed class DiscoverCatalogModel(RequestDiscoverCatalogItemV1 request, ReadDiscoverScopesV1 readScopes, ReadDiscoverCatalogEntryV1 readEntry, ReadUiLocalesV1 locales,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
-        private DiscoverAnimeV1? _anime;
+        private DiscoverScopeV1? _scope;
+        private DiscoverCatalogEntryV1? _entry;
         private BaseDataList<UiLocaleDetailsV1>? _locales;
         private CreateRequestDataV1? _input;
 
@@ -31,21 +32,15 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
         [BindProperty(SupportsGet = true)]
         public string ExternalId { get; set; } = "";
 
-        [BindProperty(SupportsGet = true, Name = "title")]
-        public string? TitleText { get; set; }
-
-        [BindProperty(SupportsGet = true, Name = "meta")]
-        public string? Meta { get; set; }
-
         protected override void Define(Page page)
         {
             page.Title("details.title");
             page.Navigation("nav.home");
             page.Asset("Pages/User/DiscoverItem/DiscoverItem.entry.scss");
-            page.Content.Add(_anime is { } anime
-                ? new MediaHero(anime.Title, anime.BackdropUrl, anime.ReleaseYear?.ToString(CultureInfo.InvariantCulture), anime.Overview)
-                : new MediaHero(TitleText ?? ExternalId, null, Meta, null, null, null));
-            if (_anime?.TrailerKey is { } trailer) page.Content.Add(new Div(new TrailerLink(trailer)).Class("discover-item__trailer"));
+            if (_entry is not { } entry) return;
+            var meta = string.Join(" · ", new[] { entry.ReleaseYear?.ToString(CultureInfo.InvariantCulture), entry.Author }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            page.Content.Add(new MediaHero(entry.Title, entry.BackdropUrl, meta.Length == 0 ? null : meta, entry.Overview));
+            if (entry.TrailerKey is { } trailer) page.Content.Add(new Div(new TrailerLink(trailer)).Class("discover-item__trailer"));
             page.Content.Add(new P(new Text("media.state." + MediaStateType.NotRequested)).Attribute("role", "status"));
 
             if (_locales is { } languages)
@@ -68,8 +63,8 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
         {
             await LoadDataAsync();
 
-            // A season that already is part of a Work opens the series.
-            if (_anime?.WorkId is { } workId)
+            // A title that already is a Work, or a season of one, opens it.
+            if (_entry?.WorkId is { } workId)
             {
                 return LocalRedirect("/Details/" + workId.ToString(CultureInfo.InvariantCulture));
             }
@@ -81,18 +76,17 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
         public async Task<IActionResult> OnPostAsync([BindRequired] long uiLocaleId)
         {
             _input = new CreateRequestDataV1(uiLocaleId);
-            var scope = Scope();
-            await request.ExecuteAsync<CreateRequestResultV1>(new DiscoverParametersV1(), new RequestDiscoverCatalogDataV1(scope.Type, Source, ExternalId, uiLocaleId, scope.Subtype),
+            var scope = await ScopeAsync();
+            await request.ExecuteAsync<CreateRequestResultV1>(new DiscoverParametersV1(), new RequestDiscoverCatalogDataV1(scope.MediaTypeId, Source, ExternalId, uiLocaleId, scope.MediaSubtypeId),
                 HttpContext.RequestAborted);
             return RedirectToPage("/User/Requests/Requests");
         }
 
         protected override async Task LoadDataAsync()
         {
-            if (Scope().Subtype == MediaSubtype.Anime && Source == "anilist" && int.TryParse(ExternalId, NumberStyles.None, CultureInfo.InvariantCulture, out var aniListId))
-            {
-                _anime = await readAnime.ExecuteAsync<DiscoverAnimeV1>(new DiscoverAnimeParametersV1(aniListId), default(NoData), HttpContext.RequestAborted);
-            }
+            var scope = await ScopeAsync();
+            _entry = await readEntry.ExecuteAsync<DiscoverCatalogEntryV1>(new DiscoverParametersV1(),
+                new ReadDiscoverCatalogEntryDataV1(scope.MediaTypeId, Source, ExternalId, scope.MediaSubtypeId), HttpContext.RequestAborted);
 
             if (texts.CanRequest())
             {
@@ -100,9 +94,10 @@ namespace Jularr.Frontend.Pages.User.DiscoverCatalog
             }
         }
 
-        private DiscoverType Scope() => DiscoverTypes.Find(Type) is { IsCatalog: true } scope ? scope : throw new KeyNotFoundException("Unknown media type.");
+        private async Task<DiscoverScopeV1> ScopeAsync() => _scope ??=
+            (await readScopes.ExecuteAsync<BaseDataList<DiscoverScopeV1>>(new DiscoverParametersV1(), HttpContext.RequestAborted)).FirstOrDefault(scope => scope.Slug == Type && scope.IsCatalog)
+            ?? throw new KeyNotFoundException("Unknown media type.");
 
-        private string Address() => "/Discover/" + Uri.EscapeDataString(Type) + "/" + Uri.EscapeDataString(Source) + "/" + Uri.EscapeDataString(ExternalId)
-            + "?title=" + Uri.EscapeDataString(TitleText ?? "") + (Meta is null ? "" : "&meta=" + Uri.EscapeDataString(Meta));
+        private string Address() => "/Discover/" + Uri.EscapeDataString(Type) + "/" + Uri.EscapeDataString(Source) + "/" + Uri.EscapeDataString(ExternalId);
     }
 }

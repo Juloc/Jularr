@@ -81,7 +81,7 @@ namespace Jularr.Frontend.Pages.Account.DeviceLink
         private async Task<IActionResult> StartAsync(Guid? replaces)
         {
             var started = await start.ExecuteAsync<DevicePairingStartedV1>(new StartDevicePairingParametersV1(),
-                new StartDevicePairingDataV1(StartDevicePairingDataV1.BrowserName, "Web", replaces), HttpContext.RequestAborted);
+                new StartDevicePairingDataV1(null, "Web", replaces), HttpContext.RequestAborted);
             // A browser cookie: an expired code must still be found to be replaced.
             Response.Cookies.Append(ServiceApi.DevicePairingCookieName, started.PairingId.ToString("D") + "." + started.Code, CookieOptions());
             return LocalRedirect("/Devices/Link");

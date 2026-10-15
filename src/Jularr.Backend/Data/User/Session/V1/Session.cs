@@ -77,14 +77,27 @@ namespace Jularr.Backend.Data.User.Session.V1
         public bool EndsCurrentSession => true;
     }
 
+    // The paired device of one of the account's sessions.
+    public sealed class SessionDeviceParametersV1 : BaseParameters
+    {
+        public SessionDeviceParametersV1(Guid sessionPublicId)
+        {
+            SessionPublicId = sessionPublicId;
+        }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.PublicId))]
+        public Guid SessionPublicId { get; }
+    }
+
     public sealed class RenameSessionDeviceDataV1 : BaseData
     {
-        public RenameSessionDeviceDataV1(string deviceName)
+        public RenameSessionDeviceDataV1(string? deviceName)
         {
             DeviceName = deviceName;
         }
 
-        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName), true)]
-        public string DeviceName { get; }
+        // No name gives the device back its default name.
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName))]
+        public string? DeviceName { get; }
     }
 }

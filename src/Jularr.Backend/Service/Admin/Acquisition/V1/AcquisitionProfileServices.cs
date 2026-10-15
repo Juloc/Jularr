@@ -177,7 +177,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnRead() =>
             new BaseDataList<ReleaseRuleV1>((await Context.ReadProfileRulesAsync(Parameters.AcquisitionProfileId, CancellationToken))
-                .Select((rule, position) => new ReleaseRuleV1(position, rule.Name, rule.Field, rule.Match, rule.Value, rule.EffectiveEffect, rule.Score)).ToArray());
+                .Select(rule => new ReleaseRuleV1(rule.Id, rule.Name, rule.Field, rule.Match, rule.Value, rule.EffectiveEffect, rule.Score)).ToArray());
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules")]
@@ -196,23 +196,23 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         }
     }
 
-    [ServiceEndpoint("PUT", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{position:int}")]
-    public sealed class UpdateAcquisitionProfileRuleV1 : AdminService<ReleaseRulePositionParametersV1, SaveReleaseRuleDataV1>
+    [ServiceEndpoint("PUT", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{ruleId:int}")]
+    public sealed class UpdateAcquisitionProfileRuleV1 : AdminService<ReleaseRuleKeyParametersV1, SaveReleaseRuleDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
-        protected override ModuleRequirement GetInstanceModules(ReleaseRulePositionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
-        protected override ServicePermission GetPermission(ReleaseRulePositionParametersV1 parameters, Type resultType) => new("acquisition.manage");
+        protected override ModuleRequirement GetInstanceModules(ReleaseRuleKeyParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ReleaseRuleKeyParametersV1 parameters, Type resultType) => new("acquisition.manage");
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Data.Version), Parameters.Position,
+            await Context.UpdateProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Data.Version), Parameters.RuleId,
                 new ReleaseScoreRule(Data.Name, Data.Field, Data.Match, Data.Value, Data.Score) { Effect = Data.Effect }, CancellationToken);
             return new UpdateResult(true);
         }
     }
 
-    [ServiceEndpoint("DELETE", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{position:int}")]
+    [ServiceEndpoint("DELETE", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{ruleId:int}")]
     public sealed class DeleteAcquisitionProfileRuleV1 : AdminService<ReleaseRuleParametersV1, NoData>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
@@ -222,7 +222,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnDelete()
         {
-            await Context.RemoveProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Parameters.Version), Parameters.Position, CancellationToken);
+            await Context.RemoveProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Parameters.Version), Parameters.RuleId, CancellationToken);
             return new UpdateResult(true);
         }
     }

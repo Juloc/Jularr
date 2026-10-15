@@ -141,6 +141,12 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await CreateHostAsync(razor: true);
 
+            // The backend names the scopes of the media-type bar, anime among the catalogs.
+            using var scopes = await host.SendAsync(HttpMethod.Get, "/api/v1/discover/scopes");
+            var anime = (await scopes.Content.ReadFromJsonAsync<BaseDataList<DiscoverScopeV1>>())!.Single(scope => scope.Slug == "anime");
+            Assert.AreEqual((MediaType.Series, (MediaSubtype?)MediaSubtype.Anime, true), (anime.MediaTypeId, anime.MediaSubtypeId, anime.IsCatalog));
+            CollectionAssert.AreEqual(new[] { DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New }, anime.Feeds);
+
             // The anime tab ranks AniList seasons.
             using var tab = await host.SendAsync(HttpMethod.Get, "/?type=anime&handler=Recommendations");
             var html = await tab.Content.ReadAsStringAsync();
@@ -149,14 +155,14 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "/Discover/anime/anilist/21");
 
             // The season keeps its own trailer and cover; the missing banner comes from the TMDB series of its first season.
-            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/anime/21");
+            using var read = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/entry", new ReadDiscoverCatalogEntryDataV1(MediaType.Series, "anilist", "21", MediaSubtype.Anime));
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
-            var anime = (await read.Content.ReadFromJsonAsync<DiscoverAnimeV1>())!;
-            Assert.AreEqual("abcdefghijk", anime.TrailerKey);
-            Assert.AreEqual("https://img.anili.st/second.jpg", anime.PosterUrl);
-            Assert.AreEqual("https://image.tmdb.org/t/p/w1280/show-backdrop.jpg", anime.BackdropUrl);
-            Assert.IsNull(anime.WorkId);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21?title=x");
+            var season = (await read.Content.ReadFromJsonAsync<DiscoverCatalogEntryV1>())!;
+            Assert.AreEqual("abcdefghijk", season.TrailerKey);
+            Assert.AreEqual("https://img.anili.st/second.jpg", season.PosterUrl);
+            Assert.AreEqual("https://image.tmdb.org/t/p/w1280/show-backdrop.jpg", season.BackdropUrl);
+            Assert.IsNull(season.WorkId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
             StringAssert.Contains(await page.Content.ReadAsStringAsync(), "https://www.youtube.com/watch?v=abcdefghijk");
 
             // The request creates the TMDB series as Anime; the season then leads to it.
@@ -164,7 +170,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'tmdb_tv' AND \"Value\" = '1399'"))!;
             Assert.AreEqual((short)1, await host.ScalarAsync("SELECT \"MediaSubtypeId\" FROM \"Works\" WHERE \"Id\" = " + workId));
-            using var known = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21?title=x");
+            using var known = await host.SendAsync(HttpMethod.Get, "/Discover/anime/anilist/21");
             Assert.AreEqual(HttpStatusCode.Redirect, known.StatusCode);
             Assert.AreEqual("/Details/" + workId, known.Headers.Location!.OriginalString);
         }

@@ -5,7 +5,7 @@ namespace Jularr.Backend.Data.Logic.Session
 {
     internal sealed class DevicePairingStartData : BaseData
     {
-        public DevicePairingStartData(string code, string deviceName, string devicePlatform)
+        public DevicePairingStartData(string code, string? deviceName, string devicePlatform)
         {
             Code = code;
             DeviceName = deviceName;
@@ -16,7 +16,7 @@ namespace Jularr.Backend.Data.Logic.Session
         public string Code { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
-        public string DeviceName { get; }
+        public string? DeviceName { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
         public string DevicePlatform { get; }
@@ -36,7 +36,7 @@ namespace Jularr.Backend.Data.Logic.Session
     // What a device calls itself; it names itself, nothing verifies it.
     internal sealed class DevicePairingDeviceData : BaseData
     {
-        public DevicePairingDeviceData(long id, string deviceName, string devicePlatform)
+        public DevicePairingDeviceData(long id, string? deviceName, string devicePlatform)
         {
             Id = id;
             DeviceName = deviceName;
@@ -47,7 +47,7 @@ namespace Jularr.Backend.Data.Logic.Session
         public long Id { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
-        public string DeviceName { get; }
+        public string? DeviceName { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
         public string DevicePlatform { get; }
@@ -86,7 +86,7 @@ namespace Jularr.Backend.Data.Logic.Session
     // A pairing as the device fetches it; approved ones name the account and profile.
     internal sealed class DevicePairingStateData : BaseData
     {
-        public DevicePairingStateData(long id, string deviceName, string devicePlatform, long? approvedAccountId, long? approvedProfileId)
+        public DevicePairingStateData(long id, string? deviceName, string devicePlatform, long? approvedAccountId, long? approvedProfileId)
         {
             Id = id;
             DeviceName = deviceName;
@@ -99,7 +99,7 @@ namespace Jularr.Backend.Data.Logic.Session
         public long Id { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
-        public string DeviceName { get; }
+        public string? DeviceName { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
         public string DevicePlatform { get; }

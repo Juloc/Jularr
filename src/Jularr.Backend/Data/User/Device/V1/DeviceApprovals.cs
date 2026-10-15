@@ -10,7 +10,7 @@ namespace Jularr.Backend.Data.User.Device.V1
     // The device that waits for a code; it names itself.
     public sealed class DevicePairingRequestV1 : BaseResponse
     {
-        public DevicePairingRequestV1(long id, string deviceName, string devicePlatform, string code)
+        public DevicePairingRequestV1(long id, string? deviceName, string devicePlatform, string code)
         {
             Id = id;
             DeviceName = deviceName;
@@ -23,7 +23,7 @@ namespace Jularr.Backend.Data.User.Device.V1
         public long Id { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DeviceName))]
-        public string DeviceName { get; }
+        public string? DeviceName { get; }
 
         [DataField(typeof(DevicePairingFields), nameof(DevicePairingFields.DevicePlatform))]
         public string DevicePlatform { get; }
