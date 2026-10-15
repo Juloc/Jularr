@@ -595,6 +595,70 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Monitoring_SpecialsStartOff_ASeasonSwitchesItsEpisodes_NewUnitsFollowTheTarget()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Results = FakeUsenet.SeriesResults };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
+            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (500, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
+                """);
+
+            // Specials start unmonitored, every other episode monitored.
+            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/600/units");
+            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+            var units = (await listed.Content.ReadFromJsonAsync<BaseDataList<WantedUnitV1>>())!.ToArray();
+            var seasons = units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Season).ToDictionary(unit => (int)unit.Number);
+            var episodes = units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).ToArray();
+            Assert.IsFalse(episodes.Single(unit => unit.ParentWorkUnitId == seasons[0].Id).IsMonitored);
+            Assert.IsTrue(episodes.Where(unit => unit.ParentWorkUnitId != seasons[0].Id).All(unit => unit.IsMonitored));
+
+            // Season 1 off: only season 2's aired episode is searched.
+            using var off = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600/units/" + seasons[1].Id, new UpdateWantedUnitDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, off.StatusCode, await off.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[1].Id} AND \"IsMonitored\""));
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/s2e1" }, usenet.Grabbed);
+
+            // The Monitoring tab shows the same and switches an episode back on.
+            using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring");
+            var html = await tab.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
+            StringAssert.Contains(html, "S01E02");
+            StringAssert.Contains(html, "Not monitored");
+            var episode = episodes.First(unit => unit.ParentWorkUnitId == seasons[1].Id);
+            using var on = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&handler=Unit&workUnitId=" + episode.Id,
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["IsMonitored"] = "True" });
+            Assert.AreEqual(HttpStatusCode.Redirect, on.StatusCode, await on.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {episode.Id}"));
+
+            // A unit of another Work is not reachable through this target.
+            using var foreign = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600/units/999999", new UpdateWantedUnitDataV1(false));
+            Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
+
+            // New units follow the target's choice: not monitored once it is switched off.
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"WantedItems\""))!;
+            using var updated = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600", new UpdateWantedDataV1(false, version, monitorsNewUnits: false));
+            Assert.AreEqual(HttpStatusCode.OK, updated.StatusCode, await updated.Content.ReadAsStringAsync());
+            using var detail = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/600");
+            Assert.IsFalse((await detail.Content.ReadFromJsonAsync<WantedDetailsV1>())!.MonitorsNewUnits);
+            await host.Fixture.RunSqlAsync($"DELETE FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 2");
+            using var refreshed = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
+            Assert.AreEqual(HttpStatusCode.OK, refreshed.StatusCode, await refreshed.Content.ReadAsStringAsync());
+            Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 2"));
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 1"));
+        }
+
+        [TestMethod]
         public async Task Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately()
         {
             using var storage = new TemporaryDirectory();

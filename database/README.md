@@ -76,7 +76,8 @@ Watchlist identity is the composite ProfileId/WorkId key; it never changes
 monitoring, acquisition, files or another profile's list.
 
 Media.sql also installs the shared logical chain: WorkUnits (seasons, episodes,
-volumes, chapters and tracks in one table with a same-Work parent), WorkEditions,
+volumes, chapters and tracks in one table with a same-Work parent; episodes and volumes
+are searched only while monitored, specials start unmonitored), WorkEditions,
 WorkVersions and MediaAssets. Composite foreign keys keep every level on one Work.
 A duplicate copy of the same unit becomes another version, never a second asset in
 the same version. GamePlatforms are Jularr's platform identities (GameReleases per

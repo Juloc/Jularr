@@ -32,8 +32,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
     public sealed class UpdateWantedDataV1 : BaseData
     {
-        public UpdateWantedDataV1(bool isPaused, long version, long? acquisitionProfileId = null, long? libraryRootId = null)
+        public UpdateWantedDataV1(bool isPaused, long version, long? acquisitionProfileId = null, long? libraryRootId = null, bool? monitorsNewUnits = null)
         {
+            MonitorsNewUnits = monitorsNewUnits;
             IsPaused = isPaused;
             Version = version;
             AcquisitionProfileId = acquisitionProfileId;
@@ -50,6 +51,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
         public long? LibraryRootId { get; }
 
+        // Missing keeps the current choice.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.MonitorsNewUnits), false)]
+        public bool? MonitorsNewUnits { get; }
+
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
     }
@@ -57,8 +62,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedDetailsV1 : BaseResponse
     {
         public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId)
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits)
         {
+            MonitorsNewUnits = monitorsNewUnits;
             LibraryRootId = libraryRootId;
             PlatformName = platformName;
             MediaTypeId = mediaTypeId;
@@ -125,6 +131,76 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
         public long? LibraryRootId { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.MonitorsNewUnits))]
+        public bool MonitorsNewUnits { get; }
+    }
+
+    // A season, episode or volume of the wanted Work and whether it is searched.
+    public sealed class WantedUnitV1 : BaseResponse
+    {
+        public WantedUnitV1(long id, long? parentWorkUnitId, WorkUnitType workUnitTypeId, decimal number, string? title, DateOnly? releasedOn, bool isMonitored, bool hasMedia)
+        {
+            Id = id;
+            ParentWorkUnitId = parentWorkUnitId;
+            WorkUnitTypeId = workUnitTypeId;
+            Number = number;
+            Title = title;
+            ReleasedOn = releasedOn;
+            IsMonitored = isMonitored;
+            HasMedia = hasMedia;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId))]
+        public long Id { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId), false)]
+        public long? ParentWorkUnitId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitTypeId))]
+        public WorkUnitType WorkUnitTypeId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber))]
+        public decimal Number { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitTitle))]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleasedOn))]
+        public DateOnly? ReleasedOn { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsMonitored))]
+        public bool IsMonitored { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]
+        public bool HasMedia { get; }
+    }
+
+    public sealed class WantedUnitParametersV1 : BaseParameters
+    {
+        public WantedUnitParametersV1(long wantedItemId, long workUnitId)
+        {
+            WantedItemId = wantedItemId;
+            WorkUnitId = workUnitId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId))]
+        public long WorkUnitId { get; }
+    }
+
+    // A season applies to its episodes.
+    public sealed class UpdateWantedUnitDataV1 : BaseData
+    {
+        public UpdateWantedUnitDataV1(bool isMonitored)
+        {
+            IsMonitored = isMonitored;
+        }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsMonitored))]
+        public bool IsMonitored { get; }
     }
 
     public sealed class WantedLibraryV1 : BaseResponse

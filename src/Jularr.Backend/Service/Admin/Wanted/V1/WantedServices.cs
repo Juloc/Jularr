@@ -31,6 +31,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         work."MediaSubtypeId",
                         work."CanonicalTitle",
                         wanted."IsPaused",
+                        wanted."MonitorsNewUnits",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
                         wanted."AcquisitionProfileId",
@@ -53,6 +54,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
+                    wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
                     EXISTS (
                         SELECT
@@ -158,6 +160,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         work."MediaSubtypeId",
                         work."CanonicalTitle",
                         wanted."IsPaused",
+                        wanted."MonitorsNewUnits",
                         wanted."LastSearchedAt",
                         wanted."LastOutcomeKey",
                         wanted."AcquisitionProfileId",
@@ -178,6 +181,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."MediaSubtypeId",
                     wanted_page."CanonicalTitle",
                     wanted_page."IsPaused",
+                    wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
                     EXISTS (
                         SELECT
@@ -305,7 +309,69 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.LibraryRootId, Data.Version), CancellationToken);
+            await Context.UpdateWantedItemAsync(new WantedItemUpdateData(Parameters.WantedItemId, Data.IsPaused, Data.AcquisitionProfileId, Data.LibraryRootId, Data.MonitorsNewUnits, Data.Version), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/admin/wanted/{wantedItemId:long}/units")]
+    public sealed class ReadWantedUnitsV1 : AdminService<WantedItemParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WantedUnitV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WantedItemParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(WantedItemParametersV1 parameters, Type resultType) => new("wanted.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Seasons, episodes and volumes in their order; tracks follow their album.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    unit."Id",
+                    unit."ParentWorkUnitId",
+                    unit."WorkUnitTypeId",
+                    unit."Number",
+                    unit."Title",
+                    unit."ReleasedOn",
+                    unit."IsMonitored",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                        WHERE
+                            asset."WorkUnitId" = unit."Id"
+                    ) AS "HasMedia"
+                FROM
+                    "WantedItems" AS wanted
+                    JOIN "WorkUnits" AS unit ON unit."WorkId" = wanted."WorkId"
+                    LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                WHERE
+                    wanted."Id" = @WantedItemId
+                    AND unit."WorkUnitTypeId" IN (1, 2, 3)
+                ORDER BY
+                    coalesce(parent."Number", unit."Number"),
+                    unit."ParentWorkUnitId" NULLS FIRST,
+                    unit."Number";
+                """;
+            sql.Parameters.Add(Parameters);
+            return new BaseDataList<WantedUnitV1>(await Context.ReadSql.ReadListAsync<WantedUnitV1>(sql, CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/wanted/{wantedItemId:long}/units/{workUnitId:long}")]
+    public sealed class UpdateWantedUnitV1 : AdminService<WantedUnitParametersV1, UpdateWantedUnitDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(WantedUnitParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(WantedUnitParametersV1 parameters, Type resultType) => new("wanted.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.SetUnitMonitoringAsync(new WantedUnitMonitoringData(Parameters.WantedItemId, Parameters.WorkUnitId, Data.IsMonitored), CancellationToken);
             return new UpdateResult(true);
         }
     }

@@ -33,7 +33,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Function | Media | Status | Owner | Tests | Missing | Acceptance |
 | --- | --- | --- | --- | --- | --- | --- |
 | Wanted target per Work | all | tested | `WantedLogic`, `WantedServices` | RequestTests, AcquisitionTests | Filters by missing, cutoff, paused | Every request and manual add has exactly one target |
-| Monitoring of seasons, episodes, specials, volumes, albums, tracks; future only | Series, Anime, Manga, Music | planned | Wanted (new unit monitoring) | – | Schema and UI; specials by setting | Unmonitored units are never searched; new units follow the Work's rule |
+| Monitoring of seasons, episodes, specials and volumes; future units | Series, Anime, Manga | tested | `WorkUnits.IsMonitored`, `WantedItems.MonitorsNewUnits`, `WantedLogic.SetUnitMonitoringAsync`, Wanted Monitoring tab | AcquisitionTests | Albums and tracks (C5) | Unmonitored units are never searched; new units follow the Work's rule |
 | Manual search with reasons, choose release | all | tested | `SearchWantedV1`, `GrabWantedReleaseV1`, Wanted page | AcquisitionTests | Filter and sort of candidates | Every candidate shows score and the reason it is allowed or rejected |
 | Automatic search, backoff, upgrade re-search | all | tested | `SearchDueWantedV1`, AcquisitionWorker | AcquisitionTests | Interval test | Due targets are searched once per cycle, failures back off |
 | New-episode and new-release detection | Series, Manga, Music | implemented | `RefreshWantedMetadataV1` | – | Test | A newly aired episode becomes wanted within a day |

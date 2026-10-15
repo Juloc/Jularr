@@ -90,8 +90,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedItemUpdateData : BaseData
     {
-        public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long? libraryRootId, long version)
+        public WantedItemUpdateData(long id, bool isPaused, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits, long version)
         {
+            MonitorsNewUnits = monitorsNewUnits;
             Id = id;
             IsPaused = isPaused;
             AcquisitionProfileId = acquisitionProfileId;
@@ -111,8 +112,31 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
         public long? LibraryRootId { get; }
 
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.MonitorsNewUnits), false)]
+        public bool? MonitorsNewUnits { get; }
+
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Version))]
         public long Version { get; }
+    }
+
+    // One unit's, or a season's, monitoring for a wanted Work.
+    internal sealed class WantedUnitMonitoringData : BaseData
+    {
+        public WantedUnitMonitoringData(long wantedItemId, long workUnitId, bool isMonitored)
+        {
+            WantedItemId = wantedItemId;
+            WorkUnitId = workUnitId;
+            IsMonitored = isMonitored;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId))]
+        public long WorkUnitId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.IsMonitored))]
+        public bool IsMonitored { get; }
     }
 
     internal sealed class RequestPlatformCheckData : BaseData

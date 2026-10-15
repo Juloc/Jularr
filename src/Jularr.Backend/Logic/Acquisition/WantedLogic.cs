@@ -79,6 +79,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "IsPaused" = @IsPaused,
                     "AcquisitionProfileId" = @AcquisitionProfileId,
                     "LibraryRootId" = @LibraryRootId,
+                    "MonitorsNewUnits" = coalesce(@MonitorsNewUnits, wanted."MonitorsNewUnits"),
                     "UpdatedAt" = now(),
                     "Version" = wanted."Version" + 1
                 FROM
@@ -112,6 +113,30 @@ namespace Jularr.Backend.Logic.Acquisition
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
+            }
+        }
+    
+        // A season sets all its episodes; units of other Works are not touched.
+        public static async Task SetUnitMonitoringAsync(this LogicContext ctx, WantedUnitMonitoringData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "WorkUnits" AS unit
+                SET
+                    "IsMonitored" = @IsMonitored
+                FROM
+                    "WantedItems" AS wanted
+                WHERE
+                    wanted."Id" = @WantedItemId
+                    AND unit."WorkId" = wanted."WorkId"
+                    AND (unit."Id" = @WorkUnitId OR unit."ParentWorkUnitId" = @WorkUnitId);
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
+            {
+                throw new KeyNotFoundException("The unit is not part of this wanted Work.");
             }
         }
     }

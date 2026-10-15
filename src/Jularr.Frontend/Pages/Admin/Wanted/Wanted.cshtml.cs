@@ -15,11 +15,13 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Wanted
 {
     public sealed class WantedModel(ReadWantedV1 read, ReadWantedItemV1 readItem, UpdateWantedV1 update, SearchWantedV1 search, GrabWantedReleaseV1 grab,
-        ReadWantedReleasesV1 releases, MarkWantedReleaseV1 mark, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries, IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadWantedReleasesV1 releases, MarkWantedReleaseV1 mark, ReadAcquisitionProfilesV1 profiles, ReadWantedLibrariesV1 libraries, ReadWantedUnitsV1 readUnits,
+        UpdateWantedUnitV1 updateUnit, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private const string SearchTab = "search";
         private const string CurrentTab = "current";
         private const string HistoryTab = "history";
+        private const string MonitoringTab = "monitoring";
         private PageResult<WantedDetailsV1>? _wanted;
         private WantedDetailsV1? _selected;
         private BaseDataList<WantedReleaseCandidateV1>? _candidates;
@@ -27,6 +29,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         private BaseDataList<WantedReleaseV1>? _history;
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private IReadOnlyList<WantedLibraryV1> _libraries = [];
+        private IReadOnlyList<WantedUnitV1> _units = [];
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -81,6 +84,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
                         tabs.Add("wanted.tab.current", Address(PageNumber, selected.Id, CurrentTab), SelectedTab == CurrentTab, content => DefineCurrent(content, selected, csrf));
                         tabs.Add("wanted.tab.history", Address(PageNumber, selected.Id, HistoryTab), SelectedTab == HistoryTab, content => DefineHistory(content, selected, csrf));
+                        if (HasUnits(selected))
+                        {
+                            tabs.Add("wanted.tab.monitoring", Address(PageNumber, selected.Id, MonitoringTab), SelectedTab == MonitoringTab, content => DefineMonitoring(content, selected, csrf));
+                        }
                     }));
                 }
             }).MasterDetail(_selected is not null, Address(PageNumber)));
@@ -95,11 +102,17 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId)
+        public async Task<IActionResult> OnPostAsync([BindRequired] bool isPaused, [BindRequired] long version, long? acquisitionProfileId, long? libraryRootId, bool? monitorsNewUnits)
         {
-            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(SelectedId()), new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId),
+            await update.ExecuteAsync<UpdateResult>(new UpdateWantedParametersV1(SelectedId()), new UpdateWantedDataV1(isPaused, version, acquisitionProfileId, libraryRootId, monitorsNewUnits),
                 HttpContext.RequestAborted);
             return LocalRedirect(Address(PageNumber, WantedItemId, SelectedTab));
+        }
+
+        public async Task<IActionResult> OnPostUnitAsync([BindRequired] long workUnitId, [BindRequired] bool isMonitored)
+        {
+            await updateUnit.ExecuteAsync<UpdateResult>(new WantedUnitParametersV1(SelectedId(), workUnitId), new UpdateWantedUnitDataV1(isMonitored), HttpContext.RequestAborted);
+            return LocalRedirect(Address(PageNumber, WantedItemId, MonitoringTab));
         }
 
         public async Task<IActionResult> OnPostMarkAsync([BindRequired] long acquisitionReleaseId, [BindRequired] AcquisitionReleaseStatusType acquisitionReleaseStatusTypeId)
@@ -135,6 +148,10 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 if (SelectedTab == HistoryTab)
                 {
                     _history = await releases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(id), HttpContext.RequestAborted);
+                }
+                else if (SelectedTab == MonitoringTab)
+                {
+                    _units = await readUnits.ExecuteAsync<BaseDataList<WantedUnitV1>>(new WantedItemParametersV1(id), HttpContext.RequestAborted);
                 }
                 else if (SelectedTab == CurrentTab && CanAcquire)
                 {
@@ -217,6 +234,50 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             }
         }
 
+        // Seasons switch their episodes; new episodes and volumes follow the target's choice.
+        private void DefineMonitoring(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
+        {
+            content.Add(new Form<UpdateWantedDataV1>(form =>
+            {
+                form.Hidden(data => data.IsPaused);
+                form.Hidden(data => data.Version);
+                form.Hidden(data => data.AcquisitionProfileId);
+                form.Hidden(data => data.LibraryRootId);
+                form.Select(data => data.MonitorsNewUnits, "wanted.monitorsNewUnits",
+                    [new SelectOption("True", texts["wanted.unit.monitored"]), new SelectOption("False", texts["wanted.unit.unmonitored"])]);
+                form.Submit("common.save");
+            }, Address(PageNumber, selected.Id, MonitoringTab), csrf,
+                new UpdateWantedDataV1(selected.IsPaused, selected.Version, selected.AcquisitionProfileId, selected.LibraryRootId, selected.MonitorsNewUnits)));
+
+            var numbers = _units.ToDictionary(unit => unit.Id, unit => unit.Number);
+            content.Add(new Table<WantedUnitV1>(_units)
+                .Content("wanted.unit", unit => new ValueText(UnitName(unit, numbers)))
+                .Content("media.title", unit => new ValueText(unit.Title ?? ""))
+                .Content("wanted.unit.releasedOn", unit => new ValueText(unit.ReleasedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? ""))
+                .Content("table.status", unit => unit.WorkUnitTypeId == WorkUnitType.Season ? new Span() : new Text(unit.HasMedia ? "wanted.unit.present" : "wanted.unit.missing"))
+                .Content("wanted.unit.monitoring", unit => new Text(IsMonitored(unit) ? "wanted.unit.monitored" : "wanted.unit.unmonitored"))
+                .Content("common.actions", unit => new Form<UpdateWantedUnitDataV1>(form =>
+                {
+                    form.Hidden(data => data.IsMonitored);
+                    form.Submit(IsMonitored(unit) ? "wanted.unit.stop" : "wanted.unit.start");
+                }, Address(PageNumber, selected.Id, MonitoringTab, "Unit") + "&workUnitId=" + unit.Id.ToString(CultureInfo.InvariantCulture), csrf, new UpdateWantedUnitDataV1(!IsMonitored(unit)))));
+        }
+
+        // A season counts as monitored while one of its episodes is.
+        private bool IsMonitored(WantedUnitV1 unit) => unit.WorkUnitTypeId == WorkUnitType.Season
+            ? _units.Any(child => child.ParentWorkUnitId == unit.Id && child.IsMonitored)
+            : unit.IsMonitored;
+
+        private string UnitName(WantedUnitV1 unit, Dictionary<long, decimal> numbers) => unit.WorkUnitTypeId switch
+        {
+            WorkUnitType.Season => texts["wanted.unit.season"] + " " + unit.Number.ToString("0", CultureInfo.InvariantCulture),
+            WorkUnitType.Episode when unit.ParentWorkUnitId is { } season && numbers.TryGetValue(season, out var parent) =>
+                "S" + parent.ToString("00", CultureInfo.InvariantCulture) + "E" + unit.Number.ToString("00", CultureInfo.InvariantCulture),
+            _ => texts["wanted.unit.volume"] + " " + unit.Number.ToString("0.###", CultureInfo.InvariantCulture)
+        };
+
+        private static bool HasUnits(WantedDetailsV1 item) => item.MediaTypeId == MediaType.Series || item.MediaSubtypeId == MediaSubtype.Manga;
+
         private void DefineHistory(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
         {
             if (TempData["WantedGrabbed"] is true) content.Add(new P(new Text("wanted.grabQueued")).Attribute("role", "status"));
@@ -273,7 +334,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
         private bool CanAcquire => texts.CanAcquire();
 
-        private string SelectedTab => Tab is HistoryTab ? Tab : Tab is CurrentTab || !CanAcquire ? CurrentTab : SearchTab;
+        private string SelectedTab => Tab is HistoryTab or MonitoringTab ? Tab : Tab is CurrentTab || !CanAcquire ? CurrentTab : SearchTab;
 
         private long SelectedId() => WantedItemId ?? throw new KeyNotFoundException("No wanted item was selected.");
 
