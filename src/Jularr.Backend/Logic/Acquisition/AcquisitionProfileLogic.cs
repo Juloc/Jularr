@@ -206,8 +206,26 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        public static async Task<IReadOnlyList<ReleaseScoreRule>> ReadProfileRulesAsync(this LogicContext ctx, long id, CancellationToken ct) =>
-            Definition(await ctx.ReadAcquisitionProfileStateAsync(id, ct, locked: false)).ScoreRules;
+        public static async Task<IReadOnlyList<ReleaseScoreRule>> ReadProfileRulesAsync(this LogicContext ctx, long id, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    profile."Id",
+                    profile."MediaTypeId",
+                    profile."MediaSubtypeId",
+                    profile."IsDefault",
+                    profile."Definition"::text AS "Definition",
+                    profile."Version"
+                FROM
+                    "AcquisitionProfiles" AS profile
+                WHERE
+                    profile."Id" = @Id;
+                """;
+            sql.Parameters.Add(new AcquisitionProfileKeyData(id));
+            return Definition(await ctx.ReadRequiredAsync<AcquisitionProfileStateData>(sql, ct)).ScoreRules;
+        }
 
         // Prefer scores up and Avoid down; the other effects score nothing. A profile keeps up to 50 rules.
         public static Task AddProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, ReleaseScoreRule rule, CancellationToken ct)
@@ -275,7 +293,7 @@ namespace Jularr.Backend.Logic.Acquisition
             JsonSerializer.Deserialize<AcquisitionProfileDefinition>(state.Definition, AcquisitionSelectionLogic.DefinitionOptions)
                 ?? throw new InvalidOperationException("The acquisition profile is invalid.");
 
-        private static Task<AcquisitionProfileStateData> ReadAcquisitionProfileStateAsync(this LogicContext ctx, long id, CancellationToken ct, bool locked = true)
+        private static Task<AcquisitionProfileStateData> ReadAcquisitionProfileStateAsync(this LogicContext ctx, long id, CancellationToken ct)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -291,7 +309,8 @@ namespace Jularr.Backend.Logic.Acquisition
                     "AcquisitionProfiles" AS profile
                 WHERE
                     profile."Id" = @Id
-                """ + (locked ? " FOR UPDATE;" : ";");
+                FOR UPDATE;
+                """;
             sql.Parameters.Add(new AcquisitionProfileKeyData(id));
             return ctx.ReadRequiredAsync<AcquisitionProfileStateData>(sql, ct);
         }

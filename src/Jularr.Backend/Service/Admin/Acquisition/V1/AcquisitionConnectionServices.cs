@@ -58,7 +58,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."GrabLimit",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
-                    connection."RetryAt"
+                    connection."RetryAt",
+                    COALESCE(connection."RetryAt" > now(), FALSE) AS "IsBackedOff"
                 FROM
                     "AcquisitionConnections" AS connection
                 ORDER BY
@@ -108,7 +109,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."GrabLimit",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
-                    connection."RetryAt"
+                    connection."RetryAt",
+                    COALESCE(connection."RetryAt" > now(), FALSE) AS "IsBackedOff"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
@@ -136,13 +138,6 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            // New connections carry a key unless the source needs none; open news servers and some indexers have no login.
-            if (Data.ApiKey is null && !DirectSources.IsDirect(Data.AcquisitionConnectionTypeId)
-                && Data.AcquisitionConnectionTypeId is not (AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Newznab))
-            {
-                throw new DataValidationException(nameof(SaveAcquisitionConnectionDataV1.ApiKey), "required");
-            }
-
             // OpenSubtitles downloads need its account.
             if (Data.AcquisitionConnectionTypeId == AcquisitionConnectionType.OpenSubtitles && (Data.Username is null || Data.Password is null))
             {

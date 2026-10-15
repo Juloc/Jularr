@@ -92,9 +92,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
                         tabs.Add("wanted.tab.current", Address(PageNumber, selected.Id, CurrentTab), SelectedTab == CurrentTab, content => DefineCurrent(content, selected, csrf));
                         tabs.Add("wanted.tab.history", Address(PageNumber, selected.Id, HistoryTab), SelectedTab == HistoryTab, content => DefineHistory(content, selected, csrf));
-                        if (HasUnits(selected))
+                        if (selected.HasUnits)
                         {
-                            tabs.Add("wanted.tab.monitoring", Address(PageNumber, selected.Id, MonitoringTab), SelectedTab == MonitoringTab, content => DefineMonitoring(content, selected, csrf));
+                            tabs.Add("wanted.monitoring", Address(PageNumber, selected.Id, MonitoringTab), SelectedTab == MonitoringTab, content => DefineMonitoring(content, selected, csrf));
                         }
                     }));
                 }
@@ -166,7 +166,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 {
                     _history = await releases.ExecuteAsync<BaseDataList<WantedReleaseV1>>(new WantedItemParametersV1(id), HttpContext.RequestAborted);
                 }
-                else if (SelectedTab == MonitoringTab && HasUnits(_selected))
+                else if (SelectedTab == MonitoringTab && _selected.HasUnits)
                 {
                     _units = await readUnits.ExecuteAsync<BaseDataList<WantedUnitV1>>(new ReadWantedUnitsParametersV1(id, SeasonId), HttpContext.RequestAborted);
                 }
@@ -269,34 +269,24 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                     : new ValueText(UnitName(unit, seasons)))
                 .Content("media.title", unit => new ValueText(unit.Title ?? ""))
                 .Content("wanted.unit.releasedOn", unit => new ValueText(unit.ReleasedOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? ""))
-                .Content("table.status", unit => unit.WorkUnitTypeId == WorkUnitType.Season ? new Span() : new Text(unit.HasMedia ? "wanted.unit.present" : "wanted.unit.missing"))
-                .Content("wanted.unit.monitoring", unit => new Text(MonitoringKey(unit)))
+                .Content("table.status", unit => unit.WorkUnitTypeId == WorkUnitType.Season ? new Span() : new Text(unit.HasMedia ? "wanted.unit.present" : "library.missing"))
+                .Content("wanted.monitoring", unit => new Text(MonitoringKey(unit)))
                 .Content("common.actions", unit => unit.WorkUnitTypeId == WorkUnitType.Season && unit.Episodes == 0 ? new Span() : new Form<UpdateWantedUnitDataV1>(form =>
                 {
                     form.Hidden(data => data.IsMonitored);
-                    form.Submit(IsMonitored(unit) ? "wanted.unit.stop" : "wanted.unit.start", UnitName(unit, seasons), valueHidden: true);
-                }, MonitoringAddress(SeasonId, "Unit") + "&workUnitId=" + unit.Id.ToString(CultureInfo.InvariantCulture), csrf, new UpdateWantedUnitDataV1(!IsMonitored(unit)))));
+                    form.Submit(unit.IsMonitored ? "wanted.unit.stop" : "wanted.unit.start", UnitName(unit, seasons), valueHidden: true);
+                }, MonitoringAddress(SeasonId, "Unit") + "&workUnitId=" + unit.Id.ToString(CultureInfo.InvariantCulture), csrf, new UpdateWantedUnitDataV1(!unit.IsMonitored))));
         }
-
-        // A season counts as monitored while one of its episodes is.
-        private static bool IsMonitored(WantedUnitV1 unit) => unit.WorkUnitTypeId == WorkUnitType.Season ? unit.MonitoredEpisodes > 0 : unit.IsMonitored;
 
         private static string MonitoringKey(WantedUnitV1 unit) => unit.WorkUnitTypeId != WorkUnitType.Season
             ? unit.IsMonitored ? "wanted.unit.monitored" : "wanted.unit.unmonitored"
             : unit.MonitoredEpisodes == 0 ? "wanted.unit.unmonitored" : unit.MonitoredEpisodes < unit.Episodes ? "wanted.unit.partly" : "wanted.unit.monitored";
 
-        private string UnitName(WantedUnitV1 unit, Dictionary<long, decimal> seasons) => unit.WorkUnitTypeId switch
-        {
-            WorkUnitType.Season => texts["wanted.unit.season"] + " " + unit.Number.ToString("0", CultureInfo.InvariantCulture),
-            WorkUnitType.Episode when unit.ParentWorkUnitId is { } season && seasons.TryGetValue(season, out var parent) =>
-                "S" + parent.ToString("00", CultureInfo.InvariantCulture) + "E" + unit.Number.ToString("00", CultureInfo.InvariantCulture),
-            _ => texts["wanted.unit.volume"] + " " + unit.Number.ToString("0.###", CultureInfo.InvariantCulture)
-        };
+        private string UnitName(WantedUnitV1 unit, Dictionary<long, decimal> seasons) => MediaUnitLabel.Format(texts, unit.WorkUnitTypeId, unit.Number,
+            unit.ParentWorkUnitId is { } season && seasons.TryGetValue(season, out var parent) ? parent : null)!;
 
         private string MonitoringAddress(long? seasonId, string? handler = null) =>
             Address(PageNumber, WantedItemId, MonitoringTab, handler) + (seasonId is { } season ? "&SeasonId=" + season.ToString(CultureInfo.InvariantCulture) : "");
-
-        private static bool HasUnits(WantedDetailsV1 item) => item.MediaTypeId == MediaType.Series || item.MediaSubtypeId == MediaSubtype.Manga;
 
         private void DefineHistory(List<IUiComponent> content, WantedDetailsV1 selected, string? csrf)
         {

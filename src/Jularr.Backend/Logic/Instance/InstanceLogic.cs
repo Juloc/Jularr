@@ -68,7 +68,7 @@ namespace Jularr.Backend.Logic.Instance
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
         }
-    
+
         private static IPNetwork TrustedNetwork(string proxy, string field)
         {
             var network = IPNetwork.TryParse(proxy, out var parsed) ? parsed

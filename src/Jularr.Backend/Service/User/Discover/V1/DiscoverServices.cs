@@ -299,12 +299,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            if (!DiscoverQueries.IsCatalogType(Data.MediaTypeId))
-            {
-                throw new DataValidationException(nameof(SearchDiscoverCatalogDataV1.MediaTypeId), "unknown_catalog_value");
-            }
-
-            await DiscoverQueries.RequireTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var results = await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
             return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(result => new DiscoverCatalogItemV1(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear,
                 result.Author, result.WorkId))]);
@@ -329,12 +324,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // The catalog identity resolves to one canonical Work before the request exists.
-            if (!DiscoverQueries.IsCatalogType(Data.MediaTypeId))
-            {
-                throw new DataValidationException(nameof(RequestDiscoverCatalogDataV1.MediaTypeId), "unknown_catalog_value");
-            }
-
-            await DiscoverQueries.RequireTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
             var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
                 Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);
@@ -345,7 +335,10 @@ namespace Jularr.Backend.Service.User.Discover.V1
     internal static class DiscoverQueries
     {
         // Films and series are discovered through TMDB; the other types through their catalogs.
-        public static bool IsCatalogType(MediaType mediaType) => mediaType is MediaType.Book or MediaType.Music or MediaType.Game;
+        public static Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, long profileId, CancellationToken ct) =>
+            mediaType is MediaType.Book or MediaType.Music or MediaType.Game
+                ? RequireTypeAsync(context, mediaType, profileId, ct)
+                : throw new DataValidationException("MediaTypeId", "unknown_catalog_value");
 
         public static async Task<(IReadOnlySet<MediaType> Usable, IReadOnlySet<MediaType> Listed)> ReadTypesAsync(LogicContext context, long profileId, CancellationToken ct)
         {

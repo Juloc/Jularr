@@ -206,7 +206,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         }
 
         // A failing indexer waits before automatic searches use it again.
-        private static IUiComponent Health(AcquisitionConnectionDetailsV1 item) => item.RetryAt is { } retry && retry > DateTime.UtcNow
+        private static IUiComponent Health(AcquisitionConnectionDetailsV1 item) => item is { IsBackedOff: true, RetryAt: { } retry }
             ? new Span(new Text("acquisition.connection.backoff"), new ValueText(" " + retry.ToString("u", CultureInfo.InvariantCulture)))
             : new Text(item.CheckedAt is null ? "acquisition.connection.unchecked" : item.ErrorKey is { } error ? "errors." + error : "acquisition.connection.healthy");
 

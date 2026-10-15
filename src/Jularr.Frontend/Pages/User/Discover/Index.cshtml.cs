@@ -244,14 +244,14 @@ namespace Jularr.Frontend.Pages.User.Discover
             {
                 if (!string.IsNullOrWhiteSpace(Query) && selected is { IsCatalog: true } scope)
                 {
-                    _catalog = await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.Type, Query.Trim(), scope.Subtype),
+                    _catalog = await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.Type, Query, scope.Subtype),
                         HttpContext.RequestAborted);
                     return;
                 }
 
                 if (!string.IsNullOrWhiteSpace(Query))
                 {
-                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query.Trim(), selected?.Type, PageNumber), HttpContext.RequestAborted);
+                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query, selected?.Type, PageNumber), HttpContext.RequestAborted);
                     return;
                 }
 

@@ -31,6 +31,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly DateTimeField WantedSince = new();
         public static readonly StringField OutcomeKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly BoolField HasMedia = new();
+        public static readonly BoolField HasUnits = new();
         public static readonly BoolField IsDownloading = new();
         public static readonly BoolField IsAvailable = new();
         public static readonly BoolField IsCovered = new();

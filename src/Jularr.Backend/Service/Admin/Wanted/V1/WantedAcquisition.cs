@@ -67,8 +67,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var failures = 0;
             var allNewznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
             var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
-            var skipped = allNewznab.Count(indexer => (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)target.MediaTypeId))
-                && (!automatic || indexer.SearchesAutomatically)) - newznab.Length;
+            var skipped = allNewznab.Count(indexer => AcquisitionConnectionLogic.Serves(indexer, target.MediaTypeId, automatic)) - newznab.Length;
             var uses = new ConcurrentDictionary<long, IndexerUse>();
             var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
             var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
@@ -270,7 +269,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     for (var page = 0; page < budget.MaxPages && offers.Count < budget.MaxResults; page++)
                     {
                         // The daily query limit also holds within one search.
-                        if (indexer.QueryLimit is { } queryLimit && indexer.QueryCount + use.Queries >= queryLimit)
+                        if (!AcquisitionConnectionLogic.HasQueries(indexer, use.Queries))
                         {
                             return true;
                         }

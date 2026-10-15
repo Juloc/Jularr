@@ -63,12 +63,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             SELECT
                                 1
                             FROM
-                                "WorkUnits" AS episode
+                                "WorkUnits" AS unit
                             WHERE
-                                episode."WorkId" = wanted."WorkId"
-                                AND episode."WorkUnitTypeId" = 2
-                                AND episode."IsMonitored"
-                                AND episode."ReleasedOn" <= current_date
+                                unit."WorkId" = wanted."WorkId"
+                                AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
+                                AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                                 AND NOT EXISTS (
                                     SELECT
                                         1
@@ -76,7 +75,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                         "MediaAssets" AS asset
                                         JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                                     WHERE
-                                        asset."WorkUnitId" = episode."Id"
+                                        asset."WorkUnitId" = unit."Id"
                                 )
                         ) AS "HasMedia",
                         COALESCE((
@@ -135,7 +134,20 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         "Works" AS work ON work."Id" = wanted."WorkId"
                 ), wanted_page AS (
                     SELECT
-                        *
+                        wanted_state."Id",
+                        wanted_state."WorkId",
+                        wanted_state."MediaTypeId",
+                        wanted_state."MediaSubtypeId",
+                        wanted_state."CanonicalTitle",
+                        wanted_state."IsPaused",
+                        wanted_state."MonitorsNewUnits",
+                        wanted_state."LastSearchedAt",
+                        wanted_state."LastOutcomeKey",
+                        wanted_state."AcquisitionProfileId",
+                        wanted_state."LibraryRootId",
+                        wanted_state."GamePlatformId",
+                        wanted_state."Version",
+                        wanted_state."HasMedia"
                     FROM
                         wanted_state
                     WHERE
@@ -156,6 +168,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."IsPaused",
                     wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
+                    wanted_page."MediaTypeId" = 2 OR wanted_page."MediaSubtypeId" IS NOT DISTINCT FROM 2 AS "HasUnits",
                     wanted_page."HasMedia",
                     download."Id" IS NOT NULL AS "IsDownloading",
                     download."ProgressPercent"::integer AS "ProgressPercent",
@@ -244,6 +257,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."IsPaused",
                     wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
+                    wanted_page."MediaTypeId" = 2 OR wanted_page."MediaSubtypeId" IS NOT DISTINCT FROM 2 AS "HasUnits",
                     EXISTS (
                         SELECT
                             1
@@ -268,12 +282,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         SELECT
                             1
                         FROM
-                            "WorkUnits" AS episode
+                            "WorkUnits" AS unit
                         WHERE
-                            episode."WorkId" = wanted_page."WorkId"
-                            AND episode."WorkUnitTypeId" = 2
-                            AND episode."IsMonitored"
-                            AND episode."ReleasedOn" <= current_date
+                            unit."WorkId" = wanted_page."WorkId"
+                            AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND wanted_page."MediaSubtypeId" = 2)
+                            AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                             AND NOT EXISTS (
                                 SELECT
                                     1
@@ -281,7 +294,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                     "MediaAssets" AS asset
                                     JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                                 WHERE
-                                    asset."WorkUnitId" = episode."Id"
+                                    asset."WorkUnitId" = unit."Id"
                             )
                     ) AS "HasMedia",
                     download."Id" IS NOT NULL AS "IsDownloading",
@@ -383,7 +396,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Seasons and volumes in their order, one season's episodes when asked; tracks follow their album.
+            // Seasons and volumes in their order, one season's episodes when asked; a season is monitored while one of its episodes is.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -394,7 +407,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     unit."Number",
                     unit."Title",
                     unit."ReleasedOn",
-                    unit."IsMonitored",
+                    CASE WHEN unit."WorkUnitTypeId" = 1 THEN episodes."MonitoredEpisodes" > 0 ELSE unit."IsMonitored" END AS "IsMonitored",
                     EXISTS (
                         SELECT
                             1

@@ -131,8 +131,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 form.Select(item => item.Match, "profile.rule.match", Options<ReleaseRuleMatch>("profile.rule.match."));
                 form.Text(item => item.Value, "profile.rule.value");
                 form.Select(item => item.Effect, "profile.rule.effect", Options<ReleaseRuleEffect>("profile.rule.effect."));
-                form.Number(item => item.Score, "profile.rule.score");
-                form.Submit("profile.rule.add");
+                form.Number(item => item.Score, "wanted.search.score");
+                form.Submit("request.rule.add");
             }, Address(profile.Id, handler: "Rule"), csrf,
                 _ruleInput ?? new AddReleaseRuleDataV1("", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "", ReleaseRuleEffect.Prefer, 10, profile.Version),
                 _ruleInput is null ? null : FormError));

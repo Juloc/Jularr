@@ -115,7 +115,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(data.Version), "invalid_transition");
             }
         }
-    
+
         // A season sets all its episodes; units of other Works and other unit types are not touched.
         public static async Task SetUnitMonitoringAsync(this LogicContext ctx, WantedUnitMonitoringData data, CancellationToken ct)
         {

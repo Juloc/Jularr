@@ -66,8 +66,9 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     public sealed class WantedDetailsV1 : BaseResponse
     {
         public WantedDetailsV1(long id, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, string? platformName, bool isPaused, long version, string[] requestedLanguages, bool hasMedia,
-            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits)
+            bool isDownloading, int? progressPercent, DateTime? lastSearchedAt, string? outcomeKey, long? acquisitionProfileId, long? libraryRootId, bool monitorsNewUnits, bool hasUnits)
         {
+            HasUnits = hasUnits;
             MonitorsNewUnits = monitorsNewUnits;
             LibraryRootId = libraryRootId;
             PlatformName = platformName;
@@ -138,6 +139,10 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.MonitorsNewUnits))]
         public bool MonitorsNewUnits { get; }
+
+        // Series and Manga are monitored unit by unit.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasUnits))]
+        public bool HasUnits { get; }
     }
 
     // A season, episode or volume of the wanted Work and whether it is searched.

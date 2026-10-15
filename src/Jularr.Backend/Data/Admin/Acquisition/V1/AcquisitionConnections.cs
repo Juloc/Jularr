@@ -52,8 +52,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public AcquisitionConnectionDetailsV1(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, bool hasApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
-            DateTime? retryAt = null)
+            DateTime? retryAt = null, bool isBackedOff = false)
         {
+            IsBackedOff = isBackedOff;
             MediaTypeIds = mediaTypeIds ?? [];
             SearchesAutomatically = searchesAutomatically;
             QueryLimit = queryLimit;
@@ -149,6 +150,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAt))]
         public DateTime? RetryAt { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IsBackedOff))]
+        public bool IsBackedOff { get; }
     }
 
     public sealed class SaveAcquisitionConnectionDataV1 : BaseData

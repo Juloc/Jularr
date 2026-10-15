@@ -91,11 +91,17 @@ namespace Jularr.Backend.Logic.Acquisition
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
         }
 
-        // An indexer serves its media types; automatic searches also skip manual-only, backed-off and exhausted indexers.
+        // An indexer serves its media types, and automatic searches only when it is not manual-only.
+        public static bool Serves(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic) =>
+            (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType)) && (!automatic || indexer.SearchesAutomatically);
+
+        // Queries left today after the ones a search already used.
+        public static bool HasQueries(AcquisitionConnectionData indexer, int used) => indexer.QueryLimit is null || indexer.QueryCount + used < indexer.QueryLimit;
+
+        // Automatic searches also skip backed-off indexers and those without grabs left.
         public static bool CanSearch(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic, DateTime now) =>
-            (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType))
-            && (indexer.QueryLimit is null || indexer.QueryCount < indexer.QueryLimit)
-            && (!automatic || indexer.SearchesAutomatically && (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit));
+            Serves(indexer, mediaType, automatic) && HasQueries(indexer, 0)
+            && (!automatic || (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit));
 
         // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, an answer ends the backoff.
         public static async Task RecordIndexerUseAsync(this LogicContext ctx, IndexerUseData data, CancellationToken ct)
@@ -177,6 +183,12 @@ namespace Jularr.Backend.Logic.Acquisition
         public static async Task<long> CreateAcquisitionConnectionAsync(this LogicContext ctx, AcquisitionConnectionSaveData data, CancellationToken ct)
         {
             ValidateAddress(data);
+
+            // Download clients and subtitle providers need a key; indexers, catalogs and news servers may be open.
+            if (data.ProtectedApiKey is null && data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl)
+            {
+                throw new DataValidationException("ApiKey", "required");
+            }
 
             // Store protected configuration.
             var sql = new SqlStatement();

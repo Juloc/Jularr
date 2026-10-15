@@ -643,10 +643,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "Season 1");
             StringAssert.Contains(html, "Not monitored");
-            Assert.IsFalse(html.Contains("S01E02"), "Episodes appear only for the opened season.");
+            Assert.IsFalse(html.Contains("Episode 2"), "Episodes appear only for the opened season.");
             using var opened = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&SeasonId=" + seasons[1].Id);
             html = await opened.Content.ReadAsStringAsync();
-            StringAssert.Contains(html, "S01E02");
+            StringAssert.Contains(html, "Episode 2");
             var episode = episodes.First(unit => unit.WorkUnitTypeId == WorkUnitType.Episode);
             var other = episodes.Last(unit => unit.WorkUnitTypeId == WorkUnitType.Episode);
             using var on = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&SeasonId=" + seasons[1].Id + "&handler=Unit&workUnitId=" + episode.Id,
