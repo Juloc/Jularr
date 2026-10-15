@@ -17,7 +17,8 @@
 .auth-main > .page-screen { width: min(100%, 400px); }
 .auth-card { width: 100%; }
 
-.auth-card .ui-form > .button { width: 100%; margin-top: 6px; }
+.auth-card .ui-form__actions { margin-top: 6px; }
+.auth-card .ui-form__actions > .button { width: 100%; }
 .profile-picker { display: grid; gap: 18px; }
 .profile-picker h1 { margin: 0; font-size: 22px; }
 .profile-locked { display: flex; align-items: center; justify-content: center; gap: 8px; }

@@ -1,6 +1,27 @@
 @use "Toggle";
 
-.ui-form { display: grid; gap: 16px; }
+// Two columns of short fields where there is room, one in narrow panels; long fields, errors and the buttons take the whole row.
+.ui-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(max(min(100%, 300px), calc((100% - 24px) / 2)), 1fr));
+    align-items: start;
+    gap: 16px 24px;
+
+    & > .field-error,
+    & > .ui-field--wide,
+    & > .ui-form__actions { grid-column: 1 / -1; }
+
+    &__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
+
+    &--inline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+
+        & > .ui-field { flex: 0 1 320px; }
+        & > .ui-form__actions { justify-content: flex-start; }
+    }
+}
 .ui-field {
     display: grid;
     gap: 6px;
@@ -42,6 +63,42 @@
     &__control:focus-within > legend { color: var(--accent-text); }
     &__control:has([aria-invalid="true"]) { border-color: var(--danger); }
     &__control:has([aria-invalid="true"]) > legend { color: var(--danger); }
+}
+.ui-field__control--segmented { padding: 2px 4px 4px; }
+.ui-field__control--segmented > legend { margin-left: 10px; }
+.ui-segments { display: flex; gap: 4px; }
+.ui-segment {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+
+    & > input {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    & > span {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        padding: 0 12px;
+        border-radius: var(--radius-control);
+        color: var(--muted);
+        font-weight: 650;
+        text-align: center;
+    }
+
+    & > input:checked + span { background: var(--accent-soft); color: var(--accent-text); }
+    & > input:hover:not(:checked, :disabled) + span { background: var(--surface-hover); }
+    & > input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -2px; }
+    & > input:disabled { cursor: not-allowed; }
+    & > input:disabled + span { opacity: .75; }
 }
 fieldset.ui-field {
     margin: 0;

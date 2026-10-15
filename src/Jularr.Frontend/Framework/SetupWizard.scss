@@ -1,0 +1,11 @@
+// Steps on one row, then the way out of this step on the right.
+.setup-wizard {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+
+    & > .navigation-tabs { flex: 1 1 100%; justify-content: flex-start; }
+    & > .ui-form { margin-left: auto; }
+}

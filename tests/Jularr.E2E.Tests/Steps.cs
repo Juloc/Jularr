@@ -67,7 +67,7 @@ namespace Jularr.E2E.Tests
         {
             await page.GotoAsync("/Admin/Instance");
             var form = page.Locator("main p:has-text(\"" + description + "\") + form");
-            await form.Locator("[name=IsEnabled]").SelectOptionAsync(enabled ? "True" : "False");
+            await form.Locator("[name=IsEnabled][value=" + (enabled ? "True" : "False") + "]").CheckAsync();
             await SubmitAsync(page, form);
         }
 
@@ -78,7 +78,7 @@ namespace Jularr.E2E.Tests
             await page.GetByRole(AriaRole.Link, new() { Name = "Add local path" }).ClickAsync();
             await page.FillAsync("form [name=Name]", "Library");
             await page.SelectOptionAsync("form [name=SharePath]", localPath);
-            await page.SelectOptionAsync("form [name=IsReadOnly]", "False");
+            await page.Locator("form [name=IsReadOnly][value=False]").CheckAsync();
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=SharePath]") }));
             var connection = page.Url;
             foreach (var (folder, type, subtype) in roots)

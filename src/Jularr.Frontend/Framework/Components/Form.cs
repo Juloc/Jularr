@@ -10,6 +10,7 @@ namespace Jularr.Frontend.Framework
     {
         private static long _nextId;
         private readonly List<IUiComponent> _content = [];
+        private readonly List<IUiComponent> _actions = [];
         private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
         private readonly HashSet<string> _hiddenFields = new(StringComparer.Ordinal);
         private readonly string _id = "form-" + typeof(TData).FullName + "-" + Interlocked.Increment(ref _nextId).ToString(CultureInfo.InvariantCulture);
@@ -17,6 +18,8 @@ namespace Jularr.Frontend.Framework
         private readonly TData? _data;
         private readonly ServiceError? _error;
         private bool _isUpload;
+        private int _visibleFields;
+        private bool _hasWideField;
 
         public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null)
         {
@@ -49,7 +52,7 @@ namespace Jularr.Frontend.Framework
             var input = new Input().Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("type", "file");
             if (field.Accept is { } accept) input.Attribute("accept", accept);
             Configure(field, input);
-            AddField(field, input);
+            AddField(field, input, wide: true);
             _isUpload = true;
             return this;
         }
@@ -76,7 +79,7 @@ namespace Jularr.Frontend.Framework
             var field = Declare(selector, FieldControl.Text, labelKey);
             var input = new HtmlTextarea(new ValueText(Value(field) ?? "")).Attribute("id", _id + "-" + field.Name).Attribute("name", field.Name).Attribute("rows", "5");
             Configure(field, input);
-            AddField(field, input);
+            AddField(field, input, wide: true);
             return this;
         }
 
@@ -84,7 +87,25 @@ namespace Jularr.Frontend.Framework
         {
             var field = Declare(selector, FieldControl.Select, labelKey);
             var value = Value(field);
-            var items = options.Select(option =>
+            var choices = options.ToArray();
+
+            // Up to three short fixed choices, such as yes or no, sit side by side as one segmented control; data lists stay a select.
+            var valueType = Nullable.GetUnderlyingType(field.ValueType) ?? field.ValueType;
+            if ((valueType == typeof(bool) || valueType.IsEnum) && choices.Length is > 1 and <= MaxSegments && choices.All(option => option.Label.Length <= MaxSegmentLength))
+            {
+                var segments = choices.Select((option, index) =>
+                {
+                    var radio = new Input().Attribute("type", "radio").Attribute("id", _id + "-" + field.Name + "-" + index.ToString(CultureInfo.InvariantCulture))
+                        .Attribute("name", field.Name).Attribute("value", option.Value);
+                    if (option.Value == value) radio.Attribute("checked", "checked");
+                    Configure(field, radio);
+                    return new HtmlLabel(radio, new Span(new ValueText(option.Label))).Class("ui-segment");
+                }).ToArray<IUiComponent>();
+                AddField(field, new Div(segments).Class("ui-segments"), segmented: true);
+                return this;
+            }
+
+            var items = choices.Select(option =>
             {
                 var element = new HtmlOption(new ValueText(option.Label)).Attribute("value", option.Value);
                 if (option.Value == value)
@@ -119,7 +140,9 @@ namespace Jularr.Frontend.Framework
                 content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             }
 
-            _content.Add(new HtmlFieldset([.. content]).Class("ui-field"));
+            _content.Add(new HtmlFieldset([.. content]).Class("ui-field ui-field--wide"));
+            _visibleFields++;
+            _hasWideField = true;
             return this;
         }
 
@@ -161,7 +184,7 @@ namespace Jularr.Frontend.Framework
             if (_action is null) button.Disabled();
             else button.Submit();
 
-            _content.Add(button);
+            _actions.Add(button);
             return this;
         }
 
@@ -173,7 +196,9 @@ namespace Jularr.Frontend.Framework
                 content.Insert(0, new P(ErrorText.Of(_error)).Class("field-error").Attribute("role", "alert"));
             }
 
-            var form = new HtmlForm([.. content]).Class("ui-form");
+            // Buttons close the form; a single short field, or none, sits beside its buttons.
+            if (_actions.Count > 0) content.Add(new Div([.. _actions]).Class("ui-form__actions"));
+            var form = new HtmlForm([.. content]).Class(_visibleFields <= 1 && !_hasWideField ? "ui-form ui-form--inline" : "ui-form");
             if (_action is not null)
             {
                 form.Attribute("action", _action).Attribute("method", "post");
@@ -196,7 +221,7 @@ namespace Jularr.Frontend.Framework
             }
 
             Configure(field, input);
-            AddField(field, input);
+            AddField(field, input, wide: control == FieldControl.Text && (field.ValueType.IsArray || field.MaximumLength is null or > WideLength));
             return this;
         }
 
@@ -250,21 +275,29 @@ namespace Jularr.Frontend.Framework
             }
         }
 
-        private void AddField(BaseField field, IUiComponent input)
+        // Lists and longer texts, such as addresses, get the whole row.
+        private const int WideLength = 200;
+        private const int MaxSegments = 3;
+        private const int MaxSegmentLength = 16;
+
+        private void AddField(BaseField field, IUiComponent input, bool wide = false, bool segmented = false)
         {
-            // Label stays on the outline.
+            // Label stays on the outline; a segmented control is named by its legend.
             var content = new List<IUiComponent>
             {
                 field.Control == FieldControl.Checkbox ? input : new HtmlFieldset(
-                    new HtmlLegend(new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name)),
-                    input).Class("ui-field__control")
+                    new HtmlLegend(segmented ? new Span(new Text(field.LabelKey)).Class("ui-field__label")
+                        : new HtmlLabel(new Text(field.LabelKey)).Class("ui-field__label").Attribute("for", _id + "-" + field.Name)),
+                    input).Class(segmented ? "ui-field__control ui-field__control--segmented" : "ui-field__control")
             };
             if (_error?.Field == field.Name)
             {
                 content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("id", _id + "-" + field.Name + "-error").Attribute("role", "alert"));
             }
 
-            _content.Add(new Div([.. content]).Class("ui-field"));
+            _content.Add(new Div([.. content]).Class(wide ? "ui-field ui-field--wide" : "ui-field"));
+            _visibleFields++;
+            _hasWideField |= wide;
         }
 
         private sealed class HtmlLabel(params IUiComponent[] children) : HtmlElement("label", children);

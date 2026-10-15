@@ -196,7 +196,7 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Accounts?AccountId=42");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
-            StringAssert.Contains(html, "value=\"2\" selected=\"selected\"");
+            StringAssert.Contains(html, "value=\"2\" checked=\"checked\"");
             var csrf = Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value;
             Assert.IsFalse(html.Contains("name=\"UpdatedAt\"", StringComparison.Ordinal));
             using var update = await host.SendAsync(HttpMethod.Post, "/Admin/Accounts?AccountId=42", new Dictionary<string, string>

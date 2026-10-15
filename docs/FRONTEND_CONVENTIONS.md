@@ -93,6 +93,12 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   remain associated through `for`/id and wrap without
   truncation. Reuse `Tag` and native-checkbox `Toggle`; bind editable switches
   through `Form.Toggle` so Backend field metadata and POST values stay central.
+- `Form<T>` owns the layout: short fields share two columns where there is room and one
+  in narrow panels; multiline, file, list and long text fields, errors and the buttons take
+  the whole row, buttons at its end. A form with at most one short field sits in one row
+  beside its buttons. A select of up to three short fixed choices (Boolean or enum) renders
+  as one segmented control under the same name; data lists stay a select. Pages do not
+  restyle form grids.
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
