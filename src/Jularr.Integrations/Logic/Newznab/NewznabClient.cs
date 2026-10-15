@@ -184,7 +184,11 @@ namespace Jularr.Integrations.Logic.Newznab
         private async Task<XDocument> ReadAsync(NewznabConnection connection, string function, IReadOnlyList<KeyValuePair<string, string>> parameters, CancellationToken ct)
         {
             // The API key travels in the query, as the protocol requires; it is never logged here.
-            var query = new List<KeyValuePair<string, string>> { new("t", function), new("apikey", connection.ApiKey.Trim()), new("o", "xml") };
+            var query = new List<KeyValuePair<string, string>> { new("t", function), new("o", "xml") };
+            if (!string.IsNullOrWhiteSpace(connection.ApiKey))
+            {
+                query.Insert(1, new("apikey", connection.ApiKey.Trim()));
+            }
             query.AddRange(parameters);
             var uri = new Uri(ApiEndpoint(connection.BaseUrl) + "?" + string.Join('&', query.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value))), UriKind.Absolute);
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);

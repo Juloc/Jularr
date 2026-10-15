@@ -44,7 +44,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Release rules, custom formats, scoring | all | tested | `ReleaseScorer`, `ReleaseSelection` | AcquisitionTests | Require/Prefer/Avoid/Reject effects, fallback ladder, identity confidence, delay (#865) | The chosen release and every rejection are explainable |
 | Release parsing and identity | all | tested | `ReleaseParser`, per-type judges | AcquisitionTests, BookTests, MangaTests, MusicTests, GameTests | Daily and absolute numbering in matching; parser tests | A release for another Work or unit is never grabbed |
 | Search planner per type | all | implemented | `SearchPlanner` | inside AcquisitionTests | Rung tests (#864) | Each type searches its own staged queries within budget |
-| Indexers: Newznab, priorities, categories, capabilities | Usenet | tested | `AcquisitionConnectionServices`, `NewznabClient` | AcquisitionTests | Keyless indexers, presets, health with automatic backoff, query/grab limits, media scope (#864) | A failing indexer backs off and the others keep searching |
+| Indexers: Newznab (also keyless), priorities, categories, capabilities, media scope, manual-only, daily limits, failure backoff | Usenet | tested | `AcquisitionConnectionServices`, `NewznabClient` | AcquisitionTests | Presets and default categories (C2b) | A failing indexer backs off and the others keep searching |
 | SABnzbd and native usenet downloader | Usenet | tested | `SabnzbdClient`, Usenet | AcquisitionTests, UsenetTests | – | Downloads finish or fail visibly; par2/7-Zip present |
 | Queue, retry, blocklist, history, recovery | all | tested | `MonitorDownloadsV1`, Activity | AcquisitionTests, LibraryTests | Restart with a download in flight | After a restart every download continues or is retried |
 | Import: hardlink, copy, move, remote path mapping | all | tested | `DownloadImport`, `StorageFileTransfer` | AcquisitionTests | Move mode | Import never loses the source before the copy is verified |
@@ -68,7 +68,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 
 | Function | Status | Missing |
 | --- | --- | --- |
-| Central indexer management | tested | Presets, health backoff, limits (see Arr+ core) |
+| Central indexer management | tested | Presets (see Arr+ core) |
 | Requests for every type | tested for Movies and Series | User discovery and requests for music, books, manga, games, anime |
 | Request rules, approval, limits, quality | tested | – |
 | Request → Wanted → acquisition → available, notifications | tested | Push and e-mail wait for SMTP (P2) |

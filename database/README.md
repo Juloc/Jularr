@@ -42,7 +42,7 @@ profiles, one default) and AccountRequestRules (assignment and single-value over
 resolve through the view EffectiveRequestRules; requests record their account and
 chosen quality.
 The Arr+ core adds AcquisitionConnections (Newznab indexers, SABnzbd clients and subtitle providers in
-one table, the type's role deciding where a connection is used, protected API keys, cached capabilities, client path mapping),
+one table, the type's role deciding where a connection is used, protected API keys (indexers may be keyless), cached capabilities, client path mapping, indexer media scope, daily query and grab counts and a failure backoff),
 AcquisitionProfiles (one default per media type and subtype, JSON definition for the shared
 selection engine), search state on WantedItems and AcquisitionReleases (grabbed,
 imported, failed and blocked releases of a target: history and blocklist in one

@@ -40,7 +40,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Name",
                     connection."AcquisitionConnectionTypeId",
                     connection."BaseUrl",
-                    TRUE AS "HasApiKey",
+                    connection."ProtectedApiKey" IS NOT NULL AS "HasApiKey",
                     connection."IsEnabled",
                     connection."Priority",
                     connection."Categories",
@@ -51,7 +51,14 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."MaxConnections",
                     connection."CheckedAt",
                     connection."LastErrorKey" AS "ErrorKey",
-                    connection."Version"
+                    connection."Version",
+                    connection."MediaTypeIds",
+                    connection."SearchesAutomatically",
+                    connection."QueryLimit",
+                    connection."GrabLimit",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
+                    connection."RetryAt"
                 FROM
                     "AcquisitionConnections" AS connection
                 ORDER BY
@@ -83,7 +90,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."Name",
                     connection."AcquisitionConnectionTypeId",
                     connection."BaseUrl",
-                    TRUE AS "HasApiKey",
+                    connection."ProtectedApiKey" IS NOT NULL AS "HasApiKey",
                     connection."IsEnabled",
                     connection."Priority",
                     connection."Categories",
@@ -94,7 +101,14 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     connection."MaxConnections",
                     connection."CheckedAt",
                     connection."LastErrorKey" AS "ErrorKey",
-                    connection."Version"
+                    connection."Version",
+                    connection."MediaTypeIds",
+                    connection."SearchesAutomatically",
+                    connection."QueryLimit",
+                    connection."GrabLimit",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
+                    connection."RetryAt"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
@@ -122,8 +136,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnCreate()
         {
-            // New connections carry a key unless the source needs none; open news servers have no login.
-            if (Data.ApiKey is null && !DirectSources.IsDirect(Data.AcquisitionConnectionTypeId) && Data.AcquisitionConnectionTypeId != AcquisitionConnectionType.Usenet)
+            // New connections carry a key unless the source needs none; open news servers and some indexers have no login.
+            if (Data.ApiKey is null && !DirectSources.IsDirect(Data.AcquisitionConnectionTypeId)
+                && Data.AcquisitionConnectionTypeId is not (AcquisitionConnectionType.Usenet or AcquisitionConnectionType.Newznab))
             {
                 throw new DataValidationException(nameof(SaveAcquisitionConnectionDataV1.ApiKey), "required");
             }
@@ -207,6 +222,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
             var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId)
                 || connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl
+                || connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && connection.ProtectedApiKey is null
                 ? ""
                 : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
 
@@ -285,7 +301,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             return new AcquisitionConnectionSaveData(id, data.Name, data.AcquisitionConnectionTypeId, data.BaseUrl.TrimEnd('/'), apiKey, data.IsEnabled, data.Priority,
                 data.Categories.Distinct().Order().ToArray(), data.DownloadCategory, data.RemotePath, data.LocalPath,
                 data.AcquisitionConnectionTypeId is AcquisitionConnectionType.Opds or AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles ? data.Username : null,
-                data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password);
+                data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds.Distinct().Order().ToArray(),
+                data.SearchesAutomatically, data.QueryLimit, data.GrabLimit);
         }
 
         public static string Unprotect(IDataProtector protector, byte[]? protectedApiKey)

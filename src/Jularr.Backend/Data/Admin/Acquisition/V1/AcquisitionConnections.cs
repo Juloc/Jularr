@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
 
 namespace Jularr.Backend.Data.Admin.Acquisition.V1
@@ -50,8 +51,16 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public AcquisitionConnectionDetailsV1(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, bool hasApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
-            int? maxConnections = null)
+            int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
+            DateTime? retryAt = null)
         {
+            MediaTypeIds = mediaTypeIds ?? [];
+            SearchesAutomatically = searchesAutomatically;
+            QueryLimit = queryLimit;
+            GrabLimit = grabLimit;
+            QueryCount = queryCount;
+            GrabCount = grabCount;
+            RetryAt = retryAt;
             Username = username;
             MaxConnections = maxConnections;
             Id = id;
@@ -118,13 +127,40 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MaxConnections))]
         public int? MaxConnections { get; }
+
+        // Indexers: served media types (empty: all), automatic searches, daily limits with today's counts, and the end of a backoff.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MediaTypeIds))]
+        public int[] MediaTypeIds { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesAutomatically))]
+        public bool SearchesAutomatically { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryLimit))]
+        public int? QueryLimit { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.GrabLimit))]
+        public int? GrabLimit { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryCount))]
+        public int QueryCount { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.GrabCount))]
+        public int GrabCount { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAt))]
+        public DateTime? RetryAt { get; }
     }
 
     public sealed class SaveAcquisitionConnectionDataV1 : BaseData
     {
         public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, string? apiKey, bool isEnabled, int priority, int[] categories,
-            string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null)
+            string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null, int[]? mediaTypeIds = null,
+            bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null)
         {
+            MediaTypeIds = mediaTypeIds ?? [];
+            SearchesAutomatically = searchesAutomatically;
+            QueryLimit = queryLimit;
+            GrabLimit = grabLimit;
             Password = password;
             Username = username;
             MaxConnections = maxConnections;
@@ -190,6 +226,17 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             {
                 throw new DataValidationException(nameof(MaxConnections), "invalid_transition");
             }
+
+            // Media scope, manual-only and limits belong to indexers.
+            if (AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab && (MediaTypeIds.Length > 0 || !SearchesAutomatically || QueryLimit is not null || GrabLimit is not null))
+            {
+                throw new DataValidationException(nameof(MediaTypeIds), "invalid_transition");
+            }
+
+            if (MediaTypeIds.Any(id => !Enum.IsDefined((MediaType)id)))
+            {
+                throw new DataValidationException(nameof(MediaTypeIds), "invalid_type");
+            }
         }
 
         // OPDS catalogs and news servers may need an account; the password is the protected key.
@@ -202,6 +249,18 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         // The OpenSubtitles account password; empty keeps the saved one.
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Password))]
         public string? Password { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MediaTypeIds))]
+        public int[] MediaTypeIds { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesAutomatically))]
+        public bool SearchesAutomatically { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryLimit))]
+        public int? QueryLimit { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.GrabLimit))]
+        public int? GrabLimit { get; }
     }
 
     public sealed class CreateAcquisitionConnectionResultV1 : BaseResponse

@@ -30,9 +30,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         private readonly IDataProtector _protector;
         private readonly IMemoryCache _offers;
         private readonly StorageOptions _storage;
+        private readonly TimeProvider _time;
 
-        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers, IOptions<StorageOptions> storage)
+        public WantedAcquisition(NewznabClient newznab, SabnzbdClient sabnzbd, DirectSources direct, IDataProtectionProvider protection, IMemoryCache offers, IOptions<StorageOptions> storage,
+            TimeProvider time)
         {
+            _time = time;
             _newznab = newznab;
             _sabnzbd = sabnzbd;
             _direct = direct;
@@ -44,7 +47,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         // Where Jularr's own downloads wait until the import.
         public static string Staging(StorageOptions storage, long operationId) => Path.Combine(storage.DirectDownloadPath, operationId.ToString(CultureInfo.InvariantCulture));
 
-        public async Task<WantedSearchResult> SearchAsync(WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, CancellationToken ct, UnitScope? scope = null)
+        // Automatic searches leave out manual-only, backed-off and exhausted indexers; every indexer asked records its use.
+        public async Task<WantedSearchResult> SearchAsync(LogicContext context, WantedTargetData target, IReadOnlyList<AcquisitionConnectionData> indexers, SearchDepth depth, bool automatic,
+            CancellationToken ct, UnitScope? scope = null)
         {
             // Only targets with a profile can be ranked.
             if (target.Definition is null)
@@ -59,7 +64,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
             var failures = 0;
-            var newznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
+            var now = _time.GetUtcNow().UtcDateTime;
+            var allNewznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
+            var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
+            var skipped = allNewznab.Count(indexer => indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)target.MediaTypeId)) - newznab.Length;
+            var uses = new ConcurrentDictionary<long, IndexerUse>();
             var catalogs = kind is AcquisitionKind.Book or AcquisitionKind.LightNovel ? indexers.Where(indexer => DirectSources.IsDirect(indexer.AcquisitionConnectionTypeId)).ToArray() : [];
             var plans = newznab.ToDictionary(indexer => indexer.Id, indexer => SearchPlanner.Plan(intent, ReadCapabilities(indexer), depth));
 
@@ -91,8 +100,10 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
                 await Parallel.ForEachAsync(newznab, new ParallelOptions { MaxDegreeOfParallelism = budget.MaxConcurrentIndexers, CancellationToken = ct }, async (indexer, token) =>
                 {
-                    if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, token))
+                    var use = uses.GetOrAdd(indexer.Id, _ => new IndexerUse());
+                    if (!await SearchIndexerAsync(indexer, kind, target.PlatformIgdbId, plans[indexer.Id].Where(query => query.Tier == current), budget, offers, use, token))
                     {
+                        use.Failed = true;
                         Interlocked.Increment(ref failures);
                     }
                 });
@@ -108,8 +119,19 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var grabbable = selection.Ranked.Where(evaluation => evaluation.Decision != SelectionDecision.Rejected).Select(evaluation => evaluation.Candidate.Id).ToHashSet(StringComparer.Ordinal);
             var cached = offers.Where(pair => grabbable.Contains(pair.Key)).ToDictionary(StringComparer.Ordinal);
             _offers.Set(CacheKey(target.WantedItemId), cached, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = OfferLifetime, Size = Math.Max(1, cached.Count) });
-            var sources = catalogs.Length + newznab.Length;
-            var unavailable = sources > 0 && failures >= sources && offers.IsEmpty;
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                foreach (var (id, use) in uses)
+                {
+                    await ctx.RecordIndexerUseAsync(new IndexerUseData(id, use.Queries, !use.Failed), token);
+                }
+
+                return true;
+            }, ct);
+
+            // Indexers left out for backoff or limits count as unavailable, not as empty.
+            var sources = catalogs.Length + newznab.Length + skipped;
+            var unavailable = sources > 0 && failures + skipped >= sources && offers.IsEmpty;
             return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable));
         }
 
@@ -140,6 +162,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             if (offer.DownloadUri is null)
             {
                 throw new DataValidationException("CandidateId", "invalid_transition");
+            }
+
+            // A grab counts against its indexer's daily limit.
+            if (!await context.ExecuteBatchAsync((ctx, token) => ctx.CountIndexerGrabAsync(new AcquisitionConnectionParameters(offer.ConnectionId), token), ct))
+            {
+                throw new ServiceUnavailableException("acquisition_limit_reached");
             }
 
             // Reserve first so concurrent grabs cannot start a second download.
@@ -215,7 +243,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
         }
 
         private async Task<bool> SearchIndexerAsync(AcquisitionConnectionData indexer, AcquisitionKind kind, int? igdbPlatform, IEnumerable<PlannedQuery> queries, SearchBudget budget,
-            ConcurrentDictionary<string, ReleaseOffer> offers, CancellationToken ct)
+            ConcurrentDictionary<string, ReleaseOffer> offers, IndexerUse use, CancellationToken ct)
         {
             // A slow indexer only costs its own share.
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -223,7 +251,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var capabilities = ReadCapabilities(indexer);
             var categories = AcquisitionSelectionLogic.ReadCategories(kind, indexer.Categories, capabilities, igdbPlatform);
             var limit = Math.Min(PageLimit, capabilities?.MaximumLimit ?? PageLimit);
-            var connection = new NewznabConnection(indexer.BaseUrl, AcquisitionConnectionInput.Unprotect(_protector, indexer.ProtectedApiKey));
+            var connection = new NewznabConnection(indexer.BaseUrl, indexer.ProtectedApiKey is null ? "" : AcquisitionConnectionInput.Unprotect(_protector, indexer.ProtectedApiKey));
             try
             {
                 foreach (var query in queries)
@@ -231,6 +259,13 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     // Full pages continue up to the page budget; the result budget covers the whole search.
                     for (var page = 0; page < budget.MaxPages && offers.Count < budget.MaxResults; page++)
                     {
+                        // The daily query limit also holds within one search.
+                        if (indexer.QueryLimit is { } queryLimit && indexer.QueryCount + use.Queries >= queryLimit)
+                        {
+                            return true;
+                        }
+
+                        Interlocked.Increment(ref use.Queries);
                         var items = await _newznab.SearchAsync(connection, new NewznabQuery(query.Mode, query.Text, query.Parameters, query.AnyCategory ? [] : categories, limit, page * limit), timeout.Token);
                         foreach (var item in items)
                         {
@@ -255,6 +290,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             {
                 return false;
             }
+        }
+
+        private sealed class IndexerUse
+        {
+            public int Queries;
+            public bool Failed;
         }
 
         private static NewznabCapabilities? ReadCapabilities(AcquisitionConnectionData indexer) =>

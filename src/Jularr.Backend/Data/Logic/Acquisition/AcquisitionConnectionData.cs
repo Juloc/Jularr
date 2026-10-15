@@ -9,8 +9,15 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public AcquisitionConnectionData(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? capabilities, long version, string? username,
-            int? maxConnections, byte[]? protectedPassword)
+            int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit, int queryCount, int grabCount, DateTime? retryAt)
         {
+            MediaTypeIds = mediaTypeIds;
+            SearchesAutomatically = searchesAutomatically;
+            QueryLimit = queryLimit;
+            GrabLimit = grabLimit;
+            QueryCount = queryCount;
+            GrabCount = grabCount;
+            RetryAt = retryAt;
             ProtectedPassword = protectedPassword;
             Username = username;
             MaxConnections = maxConnections;
@@ -79,14 +86,40 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [JsonIgnore]
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedPassword), false)]
         public byte[]? ProtectedPassword { get; }
+
+        // Indexer participation; the counts are today's.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MediaTypeIds))]
+        public int[] MediaTypeIds { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesAutomatically))]
+        public bool SearchesAutomatically { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryLimit))]
+        public int? QueryLimit { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.GrabLimit))]
+        public int? GrabLimit { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryCount))]
+        public int QueryCount { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.GrabCount))]
+        public int GrabCount { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.RetryAt))]
+        public DateTime? RetryAt { get; }
     }
 
     internal sealed class AcquisitionConnectionSaveData : BaseData
     {
         public AcquisitionConnectionSaveData(long? id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, byte[]? protectedApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections, byte[]? protectedPassword)
+            int? maxConnections, byte[]? protectedPassword, int[] mediaTypeIds, bool searchesAutomatically, int? queryLimit, int? grabLimit)
         {
+            MediaTypeIds = mediaTypeIds;
+            SearchesAutomatically = searchesAutomatically;
+            QueryLimit = queryLimit;
+            GrabLimit = grabLimit;
             ProtectedPassword = protectedPassword;
             Username = username;
             MaxConnections = maxConnections;
@@ -147,6 +180,38 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         [JsonIgnore]
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.ProtectedPassword), false)]
         public byte[]? ProtectedPassword { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.MediaTypeIds))]
+        public int[] MediaTypeIds { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchesAutomatically))]
+        public bool SearchesAutomatically { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryLimit))]
+        public int? QueryLimit { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.GrabLimit))]
+        public int? GrabLimit { get; }
+    }
+
+    // What one search asked of an indexer and whether it answered.
+    internal sealed class IndexerUseData : BaseData
+    {
+        public IndexerUseData(long acquisitionConnectionId, int queryCount, bool isAvailable)
+        {
+            AcquisitionConnectionId = acquisitionConnectionId;
+            QueryCount = queryCount;
+            IsAvailable = isAvailable;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Id))]
+        public long AcquisitionConnectionId { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.QueryCount))]
+        public int QueryCount { get; }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.IsAvailable))]
+        public bool IsAvailable { get; }
     }
 
     internal sealed class AcquisitionConnectionCheckData : BaseData

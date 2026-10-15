@@ -65,7 +65,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             foreach (var item in due)
             {
-                var target = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadWantedTargetAsync(item.WantedItemId, ct), CancellationToken);
+                // Indexers are read per target, so today's counts and backoffs stay current through the cycle.
+                (var target, indexers) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    (await ctx.ReadWantedTargetAsync(item.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
                 if (target.Definition is null)
                 {
                     await RecordAsync(target.WantedItemId, "profile_missing", now.AddDays(1));
@@ -83,7 +85,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                     }
                 }
 
-                var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken);
+                var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken);
                 if (result.Selection.Winner is not { } winner)
                 {
                     // Indexer problems retry soon; empty results back off.
@@ -120,7 +122,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                         break;
                     }
 
-                    var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken, scope);
+                    var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope);
                     unavailable |= result.IndexersUnavailable;
                     if (result.Selection.Winner is not { } winner)
                     {

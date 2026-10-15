@@ -52,7 +52,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             }
 
             // A manual search shows every candidate and keeps the automatic schedule.
-            var result = await _acquisition.SearchAsync(target, indexers, SearchDepth.Normal, CancellationToken, scope);
+            var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: false, CancellationToken, scope);
             if (result.IndexersUnavailable)
             {
                 throw new ServiceUnavailableException("acquisition_unavailable");

@@ -28,6 +28,13 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringArrayField SearchModes = new() { ItemMaximumLength = 32 };
         public static readonly StringField ServerVersion = new() { MaximumLength = 64, Required = false };
         public static readonly DateTimeField CheckedAt = new() { Required = false };
+        public static readonly IntArrayField MediaTypeIds = new() { Minimum = 1, Maximum = 7, MaximumLength = 5 };
+        public static readonly BoolField SearchesAutomatically = new();
+        public static readonly IntField QueryLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
+        public static readonly IntField GrabLimit = new() { Minimum = 1, Maximum = 100000, Required = false };
+        public static readonly IntField QueryCount = new() { Minimum = 0 };
+        public static readonly IntField GrabCount = new() { Minimum = 0 };
+        public static readonly DateTimeField RetryAt = new() { Required = false };
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly BoolField IsAvailable = new();
         public static readonly LongField Version = new() { Minimum = 1 };

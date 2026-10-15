@@ -1,5 +1,6 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Infrastructure.Sql;
 
@@ -29,7 +30,14 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version",
-                    connection."ProtectedPassword"
+                    connection."ProtectedPassword",
+                    connection."MediaTypeIds",
+                    connection."SearchesAutomatically",
+                    connection."QueryLimit",
+                    connection."GrabLimit",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
+                    connection."RetryAt"
                 FROM
                     "AcquisitionConnections" AS connection
                 WHERE
@@ -61,7 +69,14 @@ namespace Jularr.Backend.Logic.Acquisition
                     connection."MaxConnections",
                     connection."Capabilities"::text AS "Capabilities",
                     connection."Version",
-                    connection."ProtectedPassword"
+                    connection."ProtectedPassword",
+                    connection."MediaTypeIds",
+                    connection."SearchesAutomatically",
+                    connection."QueryLimit",
+                    connection."GrabLimit",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
+                    CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
+                    connection."RetryAt"
                 FROM
                     "AcquisitionConnections" AS connection
                     JOIN "AcquisitionConnectionTypes" AS type ON type."Id" = connection."AcquisitionConnectionTypeId"
@@ -74,6 +89,55 @@ namespace Jularr.Backend.Logic.Acquisition
                 """;
             sql.Parameters.Add(new AcquisitionConnectionRoleParameters(role));
             return ctx.ReadSql.ReadListAsync<AcquisitionConnectionData>(sql, ct);
+        }
+
+        // An indexer serves its media types; automatic searches also skip manual-only, backed-off and exhausted indexers.
+        public static bool CanSearch(AcquisitionConnectionData indexer, MediaType mediaType, bool automatic, DateTime now) =>
+            (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)mediaType))
+            && (indexer.QueryLimit is null || indexer.QueryCount < indexer.QueryLimit)
+            && (!automatic || indexer.SearchesAutomatically && (indexer.RetryAt is null || indexer.RetryAt <= now) && (indexer.GrabLimit is null || indexer.GrabCount < indexer.GrabLimit));
+
+        // Today's queries count against the limit; a failure backs off from 5 minutes doubling up to a day, an answer ends the backoff.
+        public static async Task RecordIndexerUseAsync(this LogicContext ctx, IndexerUseData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionConnections" AS connection
+                SET
+                    "QueryCount" = CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END + @QueryCount,
+                    "GrabCount" = CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END,
+                    "CountedOn" = current_date,
+                    "FailureCount" = CASE WHEN @IsAvailable THEN 0 ELSE connection."FailureCount" + 1 END,
+                    "RetryAt" = CASE WHEN NOT @IsAvailable THEN now() + least(interval '5 minutes' * power(2, least(connection."FailureCount", 9)), interval '1 day') END,
+                    "LastErrorKey" = CASE WHEN NOT @IsAvailable THEN 'acquisition_unavailable' END,
+                    "CheckedAt" = now()
+                WHERE
+                    connection."Id" = @AcquisitionConnectionId;
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        // A grab counts against the indexer's daily limit; false once it is reached.
+        public static async Task<bool> CountIndexerGrabAsync(this LogicContext ctx, AcquisitionConnectionParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionConnections" AS connection
+                SET
+                    "QueryCount" = CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END,
+                    "GrabCount" = CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END + 1,
+                    "CountedOn" = current_date
+                WHERE
+                    connection."Id" = @AcquisitionConnectionId
+                    AND (connection."GrabLimit" IS NULL OR connection."CountedOn" IS DISTINCT FROM current_date OR connection."GrabCount" < connection."GrabLimit");
+                """;
+            sql.Parameters.Add(data);
+            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) > 0;
         }
 
         // News servers are reached over NNTP, everything else over HTTP; the Anna's Archive member key travels in the address and only over HTTPS.
@@ -102,10 +166,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 """
                 INSERT INTO
                     "AcquisitionConnections" ("Name", "AcquisitionConnectionTypeId", "BaseUrl", "ProtectedApiKey", "IsEnabled", "Priority", "Categories", "DownloadCategory",
-                        "RemotePath", "LocalPath", "Username", "MaxConnections", "ProtectedPassword")
+                        "RemotePath", "LocalPath", "Username", "MaxConnections", "ProtectedPassword", "MediaTypeIds", "SearchesAutomatically", "QueryLimit", "GrabLimit")
                 VALUES
                     (@Name, @AcquisitionConnectionTypeId, @BaseUrl, @ProtectedApiKey, @IsEnabled, @Priority, @Categories, @DownloadCategory, @RemotePath, @LocalPath, @Username,
-                        @MaxConnections, @ProtectedPassword)
+                        @MaxConnections, @ProtectedPassword, @MediaTypeIds, @SearchesAutomatically, @QueryLimit, @GrabLimit)
                 RETURNING
                     "Id";
                 """;
@@ -136,6 +200,10 @@ namespace Jularr.Backend.Logic.Acquisition
                     "LocalPath" = @LocalPath,
                     "Username" = @Username,
                     "MaxConnections" = @MaxConnections,
+                    "MediaTypeIds" = @MediaTypeIds,
+                    "SearchesAutomatically" = @SearchesAutomatically,
+                    "QueryLimit" = @QueryLimit,
+                    "GrabLimit" = @GrabLimit,
                     "ProtectedPassword" = CASE WHEN @AcquisitionConnectionTypeId = 7 THEN COALESCE(@ProtectedPassword, connection."ProtectedPassword") END,
                     "Capabilities" = CASE
                         WHEN connection."BaseUrl" = @BaseUrl AND connection."AcquisitionConnectionTypeId" = @AcquisitionConnectionTypeId AND @ProtectedApiKey IS NULL

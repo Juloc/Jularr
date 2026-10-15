@@ -4,6 +4,7 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Instance;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -54,6 +55,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         .Resource(item => item.AcquisitionConnectionTypeId, "acquisition.connection.type", value => "acquisition.connection.type." + value)
                         .Text(item => item.BaseUrl, "acquisition.connection.baseUrl")
                         .Content("table.status", Health)
+                        .Content("acquisition.connection.today", Usage)
                         .Resource(item => item.IsEnabled, "acquisition.connection.enabled", enabled => enabled ? "acquisition.connection.on" : "acquisition.connection.off")
                         .Link(item => item.Id, "common.actions", id => Address(id), "common.edit"));
                     if (PageNumber > 1) split.Primary.Add(new A(new Text("common.previous")).Attribute("href", Address(pageNumber: PageNumber - 1)));
@@ -96,10 +98,11 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         public async Task<IActionResult> OnPostAsync([BindRequired] AcquisitionConnectionType acquisitionConnectionTypeId, string? name, string? baseUrl, string? apiKey,
             [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
-            int? maxConnections, string? password)
+            int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit)
         {
             _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", Blank(apiKey), isEnabled, priority, Categories(categories),
-                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username), maxConnections, Blank(password));
+                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username), maxConnections, Blank(password), mediaTypeIds, searchesAutomatically ?? true, queryLimit,
+                grabLimit);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -138,7 +141,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionConnectionDataV1(selected.Name, selected.AcquisitionConnectionTypeId, selected.BaseUrl, null, selected.IsEnabled, selected.Priority, selected.Categories,
-                    selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections)
+                    selected.DownloadCategory, selected.RemotePath, selected.LocalPath, selected.Username, selected.MaxConnections, null, selected.MediaTypeIds,
+                    selected.SearchesAutomatically, selected.QueryLimit, selected.GrabLimit)
                 : new SaveAcquisitionConnectionDataV1(SuggestedName ?? "", type, SuggestedUrl ?? "", null, true, type is AcquisitionConnectionType.Newznab or AcquisitionConnectionType.Sabnzbd ? 25 : 50, [],
                     null, null, null));
 
@@ -171,10 +175,16 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                 form.Number(item => item.Priority, "acquisition.connection.priority");
                 form.Select(item => item.IsEnabled, "acquisition.connection.enabled", [new SelectOption("True", texts["acquisition.connection.on"]), new SelectOption("False", texts["acquisition.connection.off"])]);
 
-                // Indexer categories; empty uses the media type defaults.
+                // Indexer categories (empty uses the media type defaults), the media it serves (none: all), automatic searches and daily limits.
                 if (type == AcquisitionConnectionType.Newznab)
                 {
                     form.Text(item => item.Categories, "acquisition.connection.categories");
+                    form.Choices(item => item.MediaTypeIds, "acquisition.connection.mediaTypes", Enum.GetValues<MediaType>()
+                        .Select(media => new SelectOption(((int)media).ToString(CultureInfo.InvariantCulture), texts[MediaTypeLabel.Key(media, null)])));
+                    form.Select(item => item.SearchesAutomatically, "acquisition.connection.searches",
+                        [new SelectOption("True", texts["acquisition.connection.automatic"]), new SelectOption("False", texts["acquisition.connection.manualOnly"])]);
+                    form.Number(item => item.QueryLimit, "acquisition.connection.queryLimit");
+                    form.Number(item => item.GrabLimit, "acquisition.connection.grabLimit");
                 }
 
                 // News servers allow a limited number of sessions.
@@ -195,8 +205,18 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             }, Address(AcquisitionConnectionId, type), csrf, input, _input is null ? null : FormError);
         }
 
-        private static IUiComponent Health(AcquisitionConnectionDetailsV1 item) =>
-            new Text(item.CheckedAt is null ? "acquisition.connection.unchecked" : item.ErrorKey is { } error ? "errors." + error : "acquisition.connection.healthy");
+        // A failing indexer waits before automatic searches use it again.
+        private IUiComponent Health(AcquisitionConnectionDetailsV1 item) => item.RetryAt is { } retry && retry > DateTime.UtcNow
+            ? new Span(new Text("acquisition.connection.backoff"), new ValueText(" " + retry.ToString("u", CultureInfo.InvariantCulture)))
+            : new Text(item.CheckedAt is null ? "acquisition.connection.unchecked" : item.ErrorKey is { } error ? "errors." + error : "acquisition.connection.healthy");
+
+        // Today's queries and grabs of an indexer against its limits.
+        private IUiComponent Usage(AcquisitionConnectionDetailsV1 item) => item.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab ? new Span()
+            : new Span(new ValueText(Count(item.QueryCount, item.QueryLimit) + " "), new Text("acquisition.connection.queries"),
+                new ValueText(" · " + Count(item.GrabCount, item.GrabLimit) + " "), new Text("acquisition.connection.grabs"));
+
+        private static string Count(int count, int? limit) =>
+            count.ToString(CultureInfo.InvariantCulture) + (limit is { } value ? " / " + value.ToString(CultureInfo.InvariantCulture) : "");
 
         private long SelectedId() => AcquisitionConnectionId ?? throw new KeyNotFoundException("No connection was selected.");
 

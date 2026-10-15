@@ -682,6 +682,79 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Indexers_AFailingOneBacksOffWhileOthersSearch_ScopeManualOnlyLimitsAndKeylessHold()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            foreach (var data in new[]
+            {
+                new SaveAcquisitionConnectionDataV1("Open", AcquisitionConnectionType.Newznab, "https://open.example.test/", null, true, 20, [], null, null, null),
+                new SaveAcquisitionConnectionDataV1("Broken", AcquisitionConnectionType.Newznab, "https://broken.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null),
+                new SaveAcquisitionConnectionDataV1("Books", AcquisitionConnectionType.Newznab, "https://books.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null,
+                    mediaTypeIds: [(int)MediaType.Book]),
+                new SaveAcquisitionConnectionDataV1("Manual", AcquisitionConnectionType.Newznab, "https://manual.example.test/", FakeUsenet.IndexerKey, true, 20, [], null, null, null,
+                    searchesAutomatically: false)
+            })
+            {
+                using var created = await host.SendAsync(HttpMethod.Post, Connections, data);
+                Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            }
+
+            // Limits and media scope belong to indexers only.
+            using var refused = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("SAB 2", AcquisitionConnectionType.Sabnzbd, "https://sab2.example.test",
+                FakeUsenet.ClientKey, true, 10, [], null, null, null, queryLimit: 5));
+            Assert.AreEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+
+            int Asked(string name)
+            {
+                lock (usenet.IndexerHosts) return usenet.IndexerHosts.Count(asked => asked == name + ".example.test");
+            }
+
+            async Task<object?> ColumnAsync(string name, string column) =>
+                await host.ScalarAsync($"SELECT \"{column}\" FROM \"AcquisitionConnections\" WHERE \"Name\" = '{name}'");
+
+            // A manual search asks every indexer serving films, also manual-only and failing ones; the failure starts a backoff.
+            var wantedId = await CreateWantedMovieAsync(host);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            Assert.IsTrue(Asked("open") > 0 && Asked("manual") > 0 && Asked("broken") > 0);
+            Assert.AreEqual(0, Asked("books"));
+            Assert.AreEqual(1, await ColumnAsync("Broken", "FailureCount"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" > now() + interval '4 minutes' FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
+            Assert.AreEqual(0, await ColumnAsync("Open", "FailureCount"));
+            Assert.IsTrue((int)(await ColumnAsync("Open", "QueryCount"))! > 0);
+
+            // The automatic search leaves out the backed-off and the manual-only indexer and still grabs.
+            var (broken, manual) = (Asked("broken"), Asked("manual"));
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+            Assert.AreEqual((broken, manual), (Asked("broken"), Asked("manual")));
+
+            // An exhausted query limit stops an indexer; an exhausted grab limit refuses the grab (once the first download has failed).
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "Operations" SET "OperationStatusTypeId" = 4, "FinishedAt" = now(), "AttentionKey" = NULL, "AttentionUrl" = NULL, "SourceLinkUrl" = NULL WHERE "OperationStatusTypeId" IN (1, 2);
+                UPDATE "AcquisitionConnections" SET "QueryLimit" = "QueryCount" WHERE "Name" = 'Open';
+                UPDATE "AcquisitionConnections" SET "GrabLimit" = 1, "GrabCount" = 1, "CountedOn" = current_date WHERE "AcquisitionConnectionTypeId" = 1;
+                """);
+            var open = Asked("open");
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(open, Asked("open"));
+            var candidate = (await again.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.First();
+            using var limited = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/grab", new GrabWantedReleaseDataV1(candidate.CandidateId));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, limited.StatusCode, await limited.Content.ReadAsStringAsync());
+            StringAssert.Contains(await limited.Content.ReadAsStringAsync(), "acquisition_limit_reached");
+
+            // The administration shows the backoff and today's use.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Failing, paused until");
+            StringAssert.Contains(html, "1 / 1 ");
+        }
+
+        [TestMethod]
         public async Task Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately()
         {
             using var storage = new TemporaryDirectory();
@@ -747,8 +820,9 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path);
 
+            // Indexers may be keyless, download clients may not.
             using var missingKey = await host.SendAsync(HttpMethod.Post, Connections,
-                new SaveAcquisitionConnectionDataV1("Indexer", AcquisitionConnectionType.Newznab, "https://indexer.example.test", null, true, 10, [], null, null, null));
+                new SaveAcquisitionConnectionDataV1("SAB", AcquisitionConnectionType.Sabnzbd, "https://sab.example.test", null, true, 10, [], null, null, null));
             Assert.AreEqual(HttpStatusCode.BadRequest, missingKey.StatusCode);
             using var badUrl = await host.SendAsync(HttpMethod.Post, Connections,
                 new SaveAcquisitionConnectionDataV1("Indexer", AcquisitionConnectionType.Newznab, "ftp://indexer", "key", true, 10, [], null, null, null));
@@ -912,6 +986,7 @@ namespace Jularr.Backend.Tests
                 """;
 
             public List<string> Grabbed { get; } = [];
+            public List<string> IndexerHosts { get; } = [];
             public string Queue { get; set; } = EmptyQueue;
             public string History { get; set; } = """{"history":{"slots":[]}}""";
 
@@ -940,10 +1015,13 @@ namespace Jularr.Backend.Tests
                     return Tmdb(request);
                 }
 
-                if (request.RequestUri!.Host == "indexer.example.test")
+                // The open indexer takes no key, the broken one always fails.
+                if (request.RequestUri!.Host is "indexer.example.test" or "open.example.test" or "broken.example.test" or "books.example.test" or "manual.example.test")
                 {
+                    lock (IndexerHosts) IndexerHosts.Add(request.RequestUri.Host);
+                    if (request.RequestUri.Host == "broken.example.test") return new HttpResponseMessage(HttpStatusCode.InternalServerError);
                     var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
-                    if (query["apikey"] != IndexerKey) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+                    if (query["apikey"] != (request.RequestUri.Host == "open.example.test" ? null : IndexerKey)) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
                     return Xml(query["t"] == "caps" ? Capabilities : Results ?? MovieResults);
                 }
 
