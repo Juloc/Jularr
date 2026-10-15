@@ -48,7 +48,7 @@ CREATE TABLE "InstanceModules" (
 -- Acquisition is Arr+: automatic search, download and import, separate from manual Requests.
 -- Reading prepares books for the reader (cache, conversions); off means files are only acquired and stored.
 -- Emulation plays retro games in the browser with saves per profile.
--- Franchises shows a movie's TMDB film series on its details and its own page.
+-- Franchises shows a Work's series (film series, book series) on its details and its own page.
 -- Diagnostics keeps recent warnings, service timings and processor and memory samples in memory; off, logs stay in the container output only.
 INSERT INTO "InstanceModules" ("Key") VALUES ('Library'), ('Requests'), ('Acquisition'), ('Playback'), ('Reading'), ('Emulation'), ('Notifications'), ('Collections'), ('Calendar'), ('Statistics'), ('UnitGroups'), ('HomeLayout'), ('Franchises'), ('Diagnostics');
 -- Profiles: several profiles per account with picker and PIN; off, every account uses its main profile.

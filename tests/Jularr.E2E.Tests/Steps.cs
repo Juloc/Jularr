@@ -57,7 +57,8 @@ namespace Jularr.E2E.Tests
         public static async Task SetTmdbKeyAsync(IPage page)
         {
             await page.GotoAsync("/Admin/Providers");
-            var tmdb = page.Locator("form[action*='handler=Secret']:not(:has([name=ClientId]))");
+            // TMDB's key form follows its name and its switch; Hardcover and IGDB have their own.
+            var tmdb = page.Locator("main p:text-is('TMDB') + form + p + form[action*='handler=Secret']");
             await tmdb.Locator("[name=Secret]").FillAsync(FakeServices.TmdbToken);
             await SubmitAsync(page, tmdb);
         }

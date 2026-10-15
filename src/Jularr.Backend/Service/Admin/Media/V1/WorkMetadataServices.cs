@@ -157,9 +157,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Version",
-                    (SELECT wanted."Id" FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id" ORDER BY wanted."Id" LIMIT 1) AS "WantedItemId"
+                    (SELECT wanted."Id" FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id" ORDER BY wanted."Id" LIMIT 1) AS "WantedItemId",
+                    franchise."Name" AS "FranchiseName",
+                    work."FranchisePosition",
+                    work."IsFranchiseManual"
                 FROM
                     "Works" AS work
+                    LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId"
                 WHERE
                     work."Id" = @Id;
                 """;

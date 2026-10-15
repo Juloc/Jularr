@@ -135,7 +135,8 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."RuntimeMinutes"::integer AS "RuntimeMinutes",
                     facts."Genres",
                     facts."TrailerKey",
-                    facts."Studio"
+                    facts."Studio",
+                    CASE WHEN franchise."Id" IS NOT NULL THEN work."FranchisePosition" END AS "FranchisePosition"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"

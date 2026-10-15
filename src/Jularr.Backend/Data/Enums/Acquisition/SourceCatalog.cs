@@ -73,7 +73,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("calibreweb", "Calibre / Calibre-Web (OPDS)", SourceGroup.Books, SearchDownload, SourceAvailability.Account, AcquisitionConnectionType.Opds),
             new("annasarchive", "Anna's Archive (optional member key)", SourceGroup.Books, SearchDownload, SourceAvailability.Account, AcquisitionConnectionType.AnnasArchive, defaultBaseUrl: "https://annas-archive.org"),
             new("googlebooks", "Google Books", SourceGroup.Books, MetadataSearch | SourceCapability.Link, SourceAvailability.Planned),
-            new("hardcover", "Hardcover", SourceGroup.Books, MetadataSearch, SourceAvailability.Planned),
+            new("hardcover", "Hardcover (book series)", SourceGroup.Books, SourceCapability.Metadata, SourceAvailability.Account, providerKey: "hardcover"),
             new("wikisource", "Wikisource", SourceGroup.Books, MetadataSearch | SourceCapability.Link, SourceAvailability.Planned),
             new("internetarchive", "Internet Archive", SourceGroup.Books, MetadataSearch | SourceCapability.Link, SourceAvailability.Planned),
             new("nyt", "NYT Best Sellers", SourceGroup.Books, SourceCapability.Metadata, SourceAvailability.Planned),

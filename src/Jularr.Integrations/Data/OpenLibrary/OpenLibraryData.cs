@@ -89,5 +89,8 @@ namespace Jularr.Integrations.Data.OpenLibrary
 
         // Translators and readers as the edition names them, without ids.
         public IReadOnlyList<ProviderPerson> People { get; init; } = [];
+
+        // The series as the edition names it, such as "The Dark Tower ; 1".
+        public IReadOnlyList<string> Series { get; init; } = [];
     }
 }

@@ -102,7 +102,8 @@ namespace Jularr.Integrations.Logic.OpenLibrary
                     : [];
                 editions.Add(new OpenLibraryEdition(id, ReadString(entry, "title"), language, ReadString(entry, "physical_format"), isbns, ReadArray(entry, "publishers").FirstOrDefault(), year)
                 {
-                    People = translators
+                    People = translators,
+                    Series = ReadArray(entry, "series").Take(3).ToArray()
                 });
             }
 

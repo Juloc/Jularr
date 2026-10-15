@@ -31,9 +31,13 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Version",
-                    (SELECT wanted."Id" FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id" ORDER BY wanted."Id" LIMIT 1) AS "WantedItemId"
+                    (SELECT wanted."Id" FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id" ORDER BY wanted."Id" LIMIT 1) AS "WantedItemId",
+                    franchise."Name" AS "FranchiseName",
+                    work."FranchisePosition",
+                    work."IsFranchiseManual"
                 FROM
                     "Works" AS work
+                    LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId"
                 ORDER BY
                     work."CanonicalTitle",
                     work."Id"
@@ -65,14 +69,33 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     work."CanonicalTitle",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     work."Version",
-                    (SELECT wanted."Id" FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id" ORDER BY wanted."Id" LIMIT 1) AS "WantedItemId"
+                    (SELECT wanted."Id" FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id" ORDER BY wanted."Id" LIMIT 1) AS "WantedItemId",
+                    franchise."Name" AS "FranchiseName",
+                    work."FranchisePosition",
+                    work."IsFranchiseManual"
                 FROM
                     "Works" AS work
+                    LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId"
                 WHERE
                     work."Id" = @WorkId;
                 """;
             sql.Parameters.Add(Parameters);
             return await Context.ReadSql.ReadRequiredAsync<WorkDetailsV1>(sql, CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/works/{workId:long}/franchise")]
+    public sealed class UpdateWorkFranchiseV1 : AdminService<WorkParametersV1, UpdateWorkFranchiseDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library", "Franchises");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.ChooseWorkFranchiseAsync(new WorkFranchiseChoiceData(Parameters.WorkId, Data.FranchiseName, Data.FranchisePosition), CancellationToken);
+            return new UpdateResult(true);
         }
     }
 

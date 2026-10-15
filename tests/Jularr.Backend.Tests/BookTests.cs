@@ -17,6 +17,7 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Logic.Gutenberg;
+using Jularr.Integrations.Logic.Hardcover;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.OpenLibrary;
 using Jularr.Integrations.Logic.Sabnzbd;
@@ -178,6 +179,7 @@ namespace Jularr.Backend.Tests
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<OpenLibraryClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<GutenbergClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
+                services.AddHttpClient<HardcoverClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
             });
 
             // A writable book library, one indexer, one client and Project Gutenberg.
@@ -240,6 +242,51 @@ namespace Jularr.Backend.Tests
                 .Single(candidate => candidate.Title.StartsWith("Stolz.und", StringComparison.Ordinal)).ReleaseDecisionTypeId);
         }
 
+        [TestMethod]
+        public async Task Book_Series_FromOpenLibraryThenHardcover_AndAnAdministratorsChoiceStays()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeBookSources();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            async Task<WorkDetailsV1> ImportAsync()
+            {
+                using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+                Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+                return (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            }
+
+            async Task<string?> SeriesAsync() => (string?)await host.ScalarAsync("""
+                SELECT concat_ws(':', franchise."Name", work."FranchisePosition", identity."Namespace", work."IsFranchiseManual")
+                FROM "Works" AS work JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId"
+                LEFT JOIN "FranchiseExternalIdentities" AS identity ON identity."FranchiseId" = franchise."Id"
+                """);
+
+            // Without Hardcover, Open Library's numbered series counts; a publisher's line does not.
+            var work = await ImportAsync();
+            Assert.AreEqual("Austen Novels:2.00:openlibrary:f", await SeriesAsync());
+            Assert.AreEqual(0, sources.HardcoverRequests.Count);
+
+            // With Hardcover's token the editions' ISBNs find its series.
+            var hardcover = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'hardcover'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + hardcover + "/secret", new Jularr.Backend.Data.Admin.Provider.V1.SaveProviderSecretDataV1("Bearer hardcover-token"));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            await ImportAsync();
+            StringAssert.StartsWith(sources.HardcoverRequests.Single(), "Bearer hardcover-token ");
+            StringAssert.Contains(sources.HardcoverRequests.Single(), "9780141439518");
+            Assert.AreEqual("Jane Austen's Novels:2.00:hardcover:f", await SeriesAsync());
+
+            // An administrator's series stays through imports until its name is cleared.
+            using var chosen = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + work.Id + "/franchise", new UpdateWorkFranchiseDataV1("Favourites", 1.5m));
+            Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
+            await ImportAsync();
+            Assert.AreEqual("Favourites:1.50:t", await SeriesAsync());
+            using var cleared = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/works/" + work.Id + "/franchise", new UpdateWorkFranchiseDataV1(null, null));
+            Assert.AreEqual(HttpStatusCode.OK, cleared.StatusCode, await cleared.Content.ReadAsStringAsync());
+            await ImportAsync();
+            Assert.AreEqual("Jane Austen's Novels:2.00:hardcover:f", await SeriesAsync());
+        }
+
         private static async Task<long> CreateWantedAsync(Host host, long workId)
         {
             await host.Fixture.RunSqlAsync($"""
@@ -260,6 +307,7 @@ namespace Jularr.Backend.Tests
         internal sealed class FakeBookSources : HttpMessageHandler
         {
             public int SabGrabs { get; private set; }
+            public List<string> HardcoverRequests { get; } = [];
             public byte[] EpubBytes { get; set; } = ReadingTests.BuildEpub("Pride and Prejudice");
 
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -275,8 +323,8 @@ namespace Jularr.Backend.Tests
                             "/authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
                             "/works/OL66554W/editions.json" => Json("""
                                 {"entries":[
-                                  {"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003"},
-                                  {"key":"/books/OL2M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","publish_date":"1990"},
+                                  {"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003","series":["Penguin Classics"]},
+                                  {"key":"/books/OL2M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","publish_date":"1990","series":["Austen Novels ; 2"]},
                                   {"key":"/books/OL3M","title":"Stolz und Vorurteil","languages":[{"key":"/languages/ger"}],"physical_format":"ebook","isbn_13":["978-3-7306-0144-2"],"publishers":["Anaconda"],"publish_date":"2014","contributors":[{"role":"Translator","name":"Werner Beck"}]},
                                   {"key":"/books/OL4M","title":"Orgueil et préjugés","physical_format":"Paperback"}
                                 ]}
@@ -284,6 +332,9 @@ namespace Jularr.Backend.Tests
                             "/trending/weekly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537}]}"""),
                             _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                         };
+                    case "api.hardcover.app":
+                        HardcoverRequests.Add(request.Headers.Authorization + " " + await request.Content!.ReadAsStringAsync(cancellationToken));
+                        return Json("""{"data":{"editions":[{"book":{"id":5,"book_series":[{"position":2,"series":{"id":77,"name":"Jane Austen's Novels"}}]}}]}}""");
                     case "gutendex.example.test":
                         return Json("""{"results":[{"id":1342,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["en"],"formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1342.epub3.images"}},{"id":7,"title":"Without Epub","authors":[],"languages":["en"],"formats":{"text/plain":"x"}}]}""");
                     case "www.gutenberg.org" when uri.AbsolutePath == "/ebooks/1342.epub3.images":

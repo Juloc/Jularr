@@ -91,7 +91,8 @@ namespace Jularr.Frontend.Pages.User.Details
                 if (work.FranchiseId is { } franchiseId && work.FranchiseName is { } franchiseName && _related.Count == 0)
                 {
                     page.Content.Add(new P([new Text("details.franchise"), new ValueText(" "),
-                        new A(new ValueText(franchiseName)).Attribute("href", "/Franchise/" + franchiseId.ToString(CultureInfo.InvariantCulture))]).Class("details-franchise"));
+                        new A(new ValueText(franchiseName)).Attribute("href", "/Franchise/" + franchiseId.ToString(CultureInfo.InvariantCulture)),
+                        new ValueText(work.FranchisePosition is { } place ? " · " + place.ToString("0.##", CultureInfo.CurrentCulture) : "")]).Class("details-franchise"));
                 }
 
                 // Shared personal actions.

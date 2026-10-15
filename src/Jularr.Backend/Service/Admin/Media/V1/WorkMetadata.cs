@@ -202,7 +202,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             return await context.ExecuteBatchAsync(async (ctx, token) =>
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
-                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, TextLimit.Cut(work.CollectionName, 300)), token);
+                await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId is null ? null : "tmdb", work.CollectionId?.ToString(CultureInfo.InvariantCulture),
+                    TextLimit.Cut(work.CollectionName, 300), null), token);
                 await ctx.SaveWorkRuntimeAsync(new WorkRuntimeData(workId, mediaType == MediaType.Movie ? details.Runtime : null), token);
                 await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "tmdb", people), token);
                 return workId;

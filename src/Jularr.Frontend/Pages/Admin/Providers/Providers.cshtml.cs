@@ -52,8 +52,8 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 }, Home + "?providerId=" + provider.Id.ToString(CultureInfo.InvariantCulture), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
                     _providerId == provider.Id ? _input : new UpdateProviderDataV1(provider.IsEnabled, provider.IsEnabled), _providerId == provider.Id ? FormError : null));
 
-                // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id.
-                if (provider.Key is "tmdb" or "igdb")
+                // Metadata providers need a key; it is never shown again. IGDB adds the Twitch application id; Hardcover's token names book series.
+                if (provider.Key is "tmdb" or "igdb" or "hardcover")
                 {
                     page.Content.Add(new P(new Text(provider.HasSecret ? "admin.providers.secretSet" : "admin.providers.secretMissing")));
                     page.Content.Add(new Form<SaveProviderSecretDataV1>(form =>
@@ -248,6 +248,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             "anilist" => "AniList",
             "musicbrainz" => "MusicBrainz",
             "igdb" => "IGDB",
+            "hardcover" => "Hardcover",
             "plex" => "Plex",
             "jellyfin" => "Jellyfin",
             "emby" => "Emby",

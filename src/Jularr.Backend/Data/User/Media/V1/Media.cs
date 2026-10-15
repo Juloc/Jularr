@@ -134,8 +134,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
             string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
-            int? runtimeMinutes, string? genres, string? trailerKey, string? studio)
+            int? runtimeMinutes, string? genres, string? trailerKey, string? studio, decimal? franchisePosition = null)
         {
+            FranchisePosition = franchisePosition;
             RuntimeMinutes = runtimeMinutes;
             Genres = genres;
             TrailerKey = trailerKey;
@@ -199,6 +200,10 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
         public string? FranchiseName { get; }
+
+        // Its place in the series, where known.
+        [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Position), false)]
+        public decimal? FranchisePosition { get; }
 
         // A Work with media and without episodes or volumes to come, or with an open request of the profile, needs no request.
         [DataField(typeof(WorkFields), nameof(WorkFields.IsRequestable))]
