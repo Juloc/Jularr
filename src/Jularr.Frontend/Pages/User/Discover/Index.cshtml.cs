@@ -164,7 +164,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             var readable = ReadableMedia.IsReadable(item.MediaAssetTypeId);
             var card = new MediaCard(assets, item.Title, "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
                 MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber), "media.state.InProgress", "media.continue",
-                (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture));
+                (readable ? "/Read/" : "/Player/") + item.MediaAssetId.ToString(CultureInfo.InvariantCulture))
+                .Bookmark(new MediaBookmark(assets, item.WorkId));
             return readable ? card.ContinueReading(item.Progression) : card.Continue(item.PositionMs, item.DurationMs);
         })]);
 
@@ -350,7 +351,9 @@ namespace Jularr.Frontend.Pages.User.Discover
         private IUiComponent Card(DiscoverItemV1 item)
         {
             var (actionKey, actionHref) = Action(item);
-            return new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId, actionKey, actionHref);
+            var card = new MediaCard(assets, item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId, actionKey, actionHref);
+            if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
+            return card;
         }
 
         // A known title opens its Work; any other opens its request.
@@ -359,7 +362,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             var meta = string.Join(" · ", new[] { item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), item.Author }.Where(value => !string.IsNullOrWhiteSpace(value)));
             if (item.WorkId is { } workId)
             {
-                return new MediaCard(assets, item.Title, "/Details/" + workId.ToString(CultureInfo.InvariantCulture), item.PosterUrl, meta, "discover.known");
+                return new MediaCard(assets, item.Title, "/Details/" + workId.ToString(CultureInfo.InvariantCulture), item.PosterUrl, meta, "discover.known")
+                    .Bookmark(new MediaBookmark(assets, workId));
             }
 
             var href = "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId) + "?title=" + Uri.EscapeDataString(item.Title)

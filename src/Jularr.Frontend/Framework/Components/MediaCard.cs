@@ -84,8 +84,7 @@ namespace Jularr.Frontend.Framework
             // Independent corner controls.
             if (_availability is not null) content.Add(_availability.Badge(href, _previewId));
             else if (statusKey == "media.state.Requested") content.Add(new MediaAvailability(assets, MediaAvailabilityState.Requested).Badge(href, _previewId));
-            content.Add(new Div(_bookmark ?? new A(new Icon("bookmark", assets)).Class("button button--icon").Attribute("href", href)
-                .Attribute("aria-label", texts["media.watchlist.manage"])).Class("media-card__bookmark"));
+            if (_bookmark is not null) content.Add(new Div(_bookmark).Class("media-card__bookmark"));
 
             // Only supplied playable/request actions.
             var actions = new List<IUiComponent>();

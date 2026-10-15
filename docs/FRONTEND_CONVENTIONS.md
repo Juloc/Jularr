@@ -336,6 +336,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Bookmark mutations use the existing Details POST, typed Form, antiforgery and
   Backend watchlist service. Return only to validated local URLs. If a list does not
   supply current membership, the icon links to management in Details, not a false toggle.
+  Provider-only titles without a canonical Work ID have no bookmark action yet.
   Shelves retain native touch/keyboard scrolling and local chevrons, no visible
   scrollbar or navigation-only server reads.
 - Truncated visible text (`text-overflow: ellipsis`, line clamping or text clipped by

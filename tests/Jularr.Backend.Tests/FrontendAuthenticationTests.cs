@@ -119,6 +119,10 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "name=\"IsWatchlisted\" value=\"True\"");
             StringAssert.Contains(html, "type=\"submit\"");
             StringAssert.Contains(html, "returnUrl=%2FLibrary%3Ftype%3Dmovies");
+            writer.GetStringBuilder().Clear();
+            new MediaBookmark(assets, 1).WriteTo(writer, HtmlEncoder.Default, texts);
+            StringAssert.Contains(writer.ToString(), "href=\"/Details/1\"");
+            Assert.IsFalse(writer.ToString().Contains("<form", StringComparison.Ordinal));
         }
 
         [TestMethod]
