@@ -132,6 +132,11 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");
             Directory.CreateDirectory(Path.Combine(storage, mountId.ToString(CultureInfo.InvariantCulture), "Movies"));
             await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+
+            // A news server is no web address; the refusal names the form it takes.
+            using var web = await host.SendAsync(HttpMethod.Post, Connections,
+                new SaveAcquisitionConnectionDataV1("News", AcquisitionConnectionType.Usenet, "https://news.example.test", null, true, 10, [], null, null, null, "reader", 2));
+            StringAssert.Contains(await web.Content.ReadAsStringAsync(), "invalid_news_server_url");
             foreach (var data in new[]
             {
                 new SaveAcquisitionConnectionDataV1("Indexer", AcquisitionConnectionType.Newznab, "https://indexer.example.test/", "indexer-key", true, 10, [], null, null, null),

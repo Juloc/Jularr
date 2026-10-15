@@ -85,6 +85,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.validation.invalid_email", "Please enter a valid email address."),
             new("errors.validation.invalid_locale", "Please enter a language code supported by this server."),
             new("errors.validation.invalid_url", "Please enter an HTTP or HTTPS address."),
+            new("errors.validation.invalid_news_server_url", "Enter a news server as nntps://server, or as nntp://server without encryption."),
             new("errors.validation.invalid_host", "Please enter a hostname or IPv4 address without a scheme or path."),
             new("errors.validation.invalid_path", "Please enter a path without traversal segments."),
             new("errors.validation.invalid_mac_address", "Please enter a MAC address such as 00:11:22:AA:BB:CC."),

@@ -195,7 +195,7 @@ namespace Jularr.Backend.Logic.Acquisition
             };
             if (!valid)
             {
-                throw new DataValidationException(nameof(data.BaseUrl), "invalid_url");
+                throw new DataValidationException(nameof(data.BaseUrl), data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? "invalid_news_server_url" : "invalid_url");
             }
         }
 
