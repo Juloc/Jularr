@@ -21,13 +21,14 @@ through the UI). A row is done only at e2e. Tests name classes in `tests/Jularr.
 | Wanted, search, release choice | e2e (films, episodes, albums, books, manga, light novels) | Acquisition (Wanted, SearchPlanner, judges) | AcquisitionTests, MangaTests, path tests | Games and anime in the browser | A request becomes Wanted, finds and grabs the best allowed release |
 | Download (SABnzbd, native usenet) | e2e (SABnzbd) | `SabnzbdClient`, Usenet | AcquisitionTests, UsenetTests, path tests | Native downloader in the browser (NNTP fake) | Failure retries, then blocklists and searches again |
 | Import, library | e2e | DownloadImport, ImportPlacement | AcquisitionTests, path tests | – | The file lands in the right library and folder, the request reads available |
-| Play / read, progress | e2e (film, episode, album track with FFmpeg in CI; EPUB, comic) | Playback, Reading | PlaybackTests, ReadingTests, progress.test.mjs, path tests | Transcoding and track choice in the browser | Playback and reading start, seek and save progress |
+| Play / read, progress | e2e (film, episode, album track with FFmpeg in CI; EPUB, comic) | Playback, Reading | PlaybackTests, ReadingTests, progress.test.mjs, path tests, TracksTests | Transcoding in the browser | Playback and reading start, seek and save progress |
 | Sign out, sign in, resume | e2e | Sessions, Progress | AuthenticationTests, path tests | Another device | Progress resumes on another session and device |
 | Failure cases: restart during a download, lost database connections, failed download and Retry, offline library, 5xx and script errors | e2e | as above | FailureTests, every path test watches 5xx and script errors | – | Each case ends in a visible, recoverable state without data loss |
 | Failure cases: ambiguous release, profiles and permissions, unavailable media, upgrades with the recycle bin | e2e | as above | LibraryChangesTests, ProfilesTests | – | Each case ends in a visible, recoverable state without data loss |
-| Failure cases: missing metadata, subtitles and audio tracks, transcoding errors | tested (parts) | as above | LibraryTests, AcquisitionTests, PlaybackTests | Browser scenarios (B4c) | Each case ends in a visible, recoverable state without data loss |
+| Failure cases: subtitles and audio tracks, a file the browser cannot play | e2e | as above | TracksTests | – | Each case ends in a visible, recoverable state without data loss |
+| Failure case: missing metadata | tested | as above | LibraryTests, AcquisitionTests | Browser scenario | Each case ends in a visible, recoverable state without data loss |
 
-The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader and the remaining failure cases (B4c).
+The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader and a browser scenario for missing metadata.
 
 ## Arr+ core
 
