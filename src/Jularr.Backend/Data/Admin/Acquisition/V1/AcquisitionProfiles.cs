@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Media;
@@ -154,6 +155,96 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
         public int WantedCount { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
+        public long Version { get; }
+    }
+
+    // A release rule; Require and Reject decide, Prefer and Avoid score, Info only names a match.
+    public sealed class ReleaseRuleV1 : BaseResponse
+    {
+        public ReleaseRuleV1(int position, string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score)
+        {
+            Position = position;
+            Name = name;
+            Field = field;
+            Match = match;
+            Value = value;
+            Effect = effect;
+            Score = score;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RulePosition))]
+        public int Position { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleName))]
+        public string Name { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleField))]
+        public ReleaseRuleField Field { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleMatch))]
+        public ReleaseRuleMatch Match { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleValue))]
+        public string Value { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleEffect))]
+        public ReleaseRuleEffect Effect { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleScore))]
+        public int Score { get; }
+    }
+
+    public sealed class AddReleaseRuleDataV1 : BaseData
+    {
+        public AddReleaseRuleDataV1(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score, long version)
+        {
+            Name = name;
+            Field = field;
+            Match = match;
+            Value = value;
+            Effect = effect;
+            Score = score;
+            Version = version;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleName))]
+        public string Name { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleField))]
+        public ReleaseRuleField Field { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleMatch))]
+        public ReleaseRuleMatch Match { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleValue))]
+        public string Value { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleEffect))]
+        public ReleaseRuleEffect Effect { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RuleScore))]
+        public int Score { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
+        public long Version { get; }
+    }
+
+    public sealed class ReleaseRuleParametersV1 : BaseParameters
+    {
+        public ReleaseRuleParametersV1(long acquisitionProfileId, int position, long version)
+        {
+            AcquisitionProfileId = acquisitionProfileId;
+            Position = position;
+            Version = version;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
+        public long AcquisitionProfileId { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RulePosition))]
+        public int Position { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
         public long Version { get; }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
@@ -192,7 +193,75 @@ namespace Jularr.Backend.Logic.Acquisition
             await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
-        private static Task<AcquisitionProfileStateData> ReadAcquisitionProfileStateAsync(this LogicContext ctx, long id, CancellationToken ct)
+        public static async Task<IReadOnlyList<ReleaseScoreRule>> ReadProfileRulesAsync(this LogicContext ctx, long id, CancellationToken ct) =>
+            Definition(await ctx.ReadAcquisitionProfileStateAsync(id, ct, locked: false)).ScoreRules;
+
+        // Prefer scores up and Avoid down; the other effects score nothing. A profile keeps up to 50 rules.
+        public static Task AddProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, ReleaseScoreRule rule, CancellationToken ct)
+        {
+            if (rule.EffectiveEffect is ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid && rule.Score == 0)
+            {
+                throw new DataValidationException("Score", "required");
+            }
+
+            if (rule.Match == ReleaseRuleMatch.Regex)
+            {
+                try
+                {
+                    _ = new Regex(rule.Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+                }
+                catch (ArgumentException)
+                {
+                    throw new DataValidationException("Value", "invalid_type");
+                }
+            }
+
+            var score = rule.EffectiveEffect switch
+            {
+                ReleaseRuleEffect.Prefer => Math.Abs(rule.Score),
+                ReleaseRuleEffect.Avoid => -Math.Abs(rule.Score),
+                _ => 0
+            };
+            var stored = new ReleaseScoreRule(rule.Name, rule.Field, rule.Match, rule.Value, score) { Effect = rule.EffectiveEffect };
+            return ctx.ReplaceProfileRulesAsync(key, rules => rules.Count < 50 ? [.. rules, stored] : throw new DataValidationException("Name", "out_of_range"), ct);
+        }
+
+        public static Task RemoveProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int position, CancellationToken ct) =>
+            ctx.ReplaceProfileRulesAsync(key, rules => position < rules.Count ? [.. rules.Where((_, index) => index != position)] : throw new KeyNotFoundException("The rule was not found."), ct);
+
+        private static async Task ReplaceProfileRulesAsync(this LogicContext ctx, AcquisitionProfileKeyData key, Func<IReadOnlyList<ReleaseScoreRule>, ReleaseScoreRule[]> change,
+            CancellationToken ct)
+        {
+            var state = await ctx.ReadAcquisitionProfileStateAsync(key.Id, ct);
+            if (state.Version != key.Version)
+            {
+                throw new DataValidationException("Version", "outdated_version");
+            }
+
+            var stored = Definition(state);
+            var definition = new AcquisitionProfileDefinition(stored.AllowedQualities, stored.QualityOrder, stored.UpgradeAllowed, stored.UpgradeCutoffQuality, stored.MinimumSizeBytes,
+                stored.MaximumSizeBytes, stored.MustContain, stored.MustNotContain, stored.RequiredRegex, stored.RejectedRegex, change(stored.ScoreRules));
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionProfiles" AS profile
+                SET
+                    "Definition" = @Definition::jsonb,
+                    "Version" = profile."Version" + 1
+                WHERE
+                    profile."Id" = @Id
+                    AND profile."Version" = @Version;
+                """;
+            sql.Parameters.Add(new AcquisitionProfileDefinitionData(state.Id, JsonSerializer.Serialize(definition, AcquisitionSelectionLogic.DefinitionOptions), state.Version));
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
+        private static AcquisitionProfileDefinition Definition(AcquisitionProfileStateData state) =>
+            JsonSerializer.Deserialize<AcquisitionProfileDefinition>(state.Definition, AcquisitionSelectionLogic.DefinitionOptions)
+                ?? throw new InvalidOperationException("The acquisition profile is invalid.");
+
+        private static Task<AcquisitionProfileStateData> ReadAcquisitionProfileStateAsync(this LogicContext ctx, long id, CancellationToken ct, bool locked = true)
         {
             var sql = new SqlStatement();
             sql.Statement =
@@ -208,8 +277,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     "AcquisitionProfiles" AS profile
                 WHERE
                     profile."Id" = @Id
-                FOR UPDATE;
-                """;
+                """ + (locked ? " FOR UPDATE;" : ";");
             sql.Parameters.Add(new AcquisitionProfileKeyData(id));
             return ctx.ReadRequiredAsync<AcquisitionProfileStateData>(sql, ct);
         }

@@ -83,6 +83,15 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringArrayField MustNotContain = new() { ItemMaximumLength = 200, MaximumLength = 50 };
         public static readonly IntField WantedCount = new() { Minimum = 0 };
         public static readonly LongField Version = new() { Minimum = 1 };
+
+        // Release rules of a profile, kept in their order.
+        public static readonly IntField RulePosition = new() { Minimum = 0, Maximum = 49 };
+        public static readonly StringField RuleName = new(NpgsqlDbType.Varchar) { MaximumLength = 64, AllowBlank = false, Trim = true };
+        public static readonly EnumField RuleField = new(typeof(ReleaseRuleField));
+        public static readonly EnumField RuleMatch = new(typeof(ReleaseRuleMatch));
+        public static readonly StringField RuleValue = new(NpgsqlDbType.Varchar) { MaximumLength = 200, AllowBlank = false, Trim = true };
+        public static readonly EnumField RuleEffect = new(typeof(ReleaseRuleEffect));
+        public static readonly IntField RuleScore = new() { Minimum = -1000, Maximum = 1000 };
     }
 
     // Suggested sources of the catalog page.

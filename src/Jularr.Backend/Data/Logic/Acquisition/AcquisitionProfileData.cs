@@ -108,6 +108,25 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long Version { get; }
     }
 
+    internal sealed class AcquisitionProfileDefinitionData : BaseData
+    {
+        public AcquisitionProfileDefinitionData(long id, string definition, long version)
+        {
+            Id = id;
+            Definition = definition;
+            Version = version;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Definition))]
+        public string Definition { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
+        public long Version { get; }
+    }
+
     internal sealed class AcquisitionProfileKeyData : BaseData
     {
         public AcquisitionProfileKeyData(long id, long? version = null)

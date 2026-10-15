@@ -1,6 +1,6 @@
 namespace Jularr.Backend.Data.Enums.Acquisition
 {
-    internal enum ReleaseRuleField
+    public enum ReleaseRuleField : byte
     {
         RawTitle,
         ReleaseGroup,

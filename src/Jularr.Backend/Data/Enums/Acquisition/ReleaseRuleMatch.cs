@@ -1,6 +1,6 @@
 namespace Jularr.Backend.Data.Enums.Acquisition
 {
-    internal enum ReleaseRuleMatch
+    public enum ReleaseRuleMatch : byte
     {
         Equals,
         Contains,

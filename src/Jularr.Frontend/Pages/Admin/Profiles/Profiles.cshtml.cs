@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Profiles
 {
     public sealed class ProfilesModel(ReadAcquisitionProfilesV1 profiles, CreateAcquisitionProfileV1 create, UpdateAcquisitionProfileV1 update, DeleteAcquisitionProfileV1 delete,
-        IAntiforgery antiforgery, UiText texts) : JularrPage
+        ReadAcquisitionProfileRulesV1 readRules, AddAcquisitionProfileRuleV1 addRule, DeleteAcquisitionProfileRuleV1 deleteRule, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         // Media types with release qualities.
         private static readonly (MediaType Type, MediaSubtype? Subtype)[] Kinds = [(MediaType.Movie, null), (MediaType.Series, null), (MediaType.Book, null), (MediaType.Book, MediaSubtype.LightNovel)];
@@ -21,6 +21,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         private IReadOnlyList<AcquisitionProfileDetailsV1> _profiles = [];
         private AcquisitionProfileDetailsV1? _selected;
         private SaveAcquisitionProfileDataV1? _input;
+        private AddReleaseRuleDataV1? _ruleInput;
+        private IReadOnlyList<ReleaseRuleV1> _rules = [];
 
         [BindProperty(SupportsGet = true)]
         public long? AcquisitionProfileId { get; set; }
@@ -55,6 +57,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 if (editing)
                 {
                     split.Secondary.Add(ProfileForm(csrf));
+                    if (_selected is { } edited)
+                    {
+                        DefineRules(split.Secondary, edited, csrf);
+                    }
+
                     if (_selected is { IsDefault: false } selected)
                     {
                         split.Secondary.Add(new Form<DeleteAcquisitionProfileParametersV1>(form =>
@@ -66,7 +73,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 }
             }).MasterDetail(editing, Address()));
 
-            if (FormError is not null && _input is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+            if (FormError is not null && _input is null && _ruleInput is null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
 
         private Form<SaveAcquisitionProfileDataV1> ProfileForm(string? csrf)
@@ -93,6 +100,57 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 form.Text(item => item.MustNotContain, "profile.mustNotContain");
                 form.Submit("common.save");
             }, Address(AcquisitionProfileId, NewFor, NewForSubtype), csrf, input, _input is null ? null : FormError);
+        }
+
+        // Rules in their order; Require and Reject decide, Prefer and Avoid score, Info only names a match.
+        private void DefineRules(List<IUiComponent> content, AcquisitionProfileDetailsV1 profile, string? csrf)
+        {
+            content.Add(new H2(new Text("profile.rules")));
+            content.Add(new Table<ReleaseRuleV1>(_rules)
+                .Text(rule => rule.Name, "profile.rule.name")
+                .Content("profile.rule.condition", rule => new Span(new Text("profile.rule.field." + rule.Field), new ValueText(" "), new Text("profile.rule.match." + rule.Match),
+                    new ValueText(" " + rule.Value)))
+                .Content("profile.rule.effect", rule => new Span(new Text("profile.rule.effect." + rule.Effect),
+                    new ValueText(rule.Score == 0 ? "" : " " + rule.Score.ToString("+0;-0", CultureInfo.InvariantCulture))))
+                .Content("common.actions", rule => new Form<ReleaseRuleParametersV1>(form =>
+                {
+                    form.Hidden(item => item.Version);
+                    form.Submit("profile.rule.remove", rule.Name, valueHidden: true);
+                }, Address(profile.Id, handler: "RemoveRule") + "&position=" + rule.Position.ToString(CultureInfo.InvariantCulture), csrf,
+                    new ReleaseRuleParametersV1(profile.Id, rule.Position, profile.Version))));
+
+            content.Add(new Form<AddReleaseRuleDataV1>(form =>
+            {
+                form.Hidden(item => item.Version);
+                form.Text(item => item.Name, "profile.rule.name");
+                form.Select(item => item.Field, "profile.rule.field", Options<ReleaseRuleField>("profile.rule.field."));
+                form.Select(item => item.Match, "profile.rule.match", Options<ReleaseRuleMatch>("profile.rule.match."));
+                form.Text(item => item.Value, "profile.rule.value");
+                form.Select(item => item.Effect, "profile.rule.effect", Options<ReleaseRuleEffect>("profile.rule.effect."));
+                form.Number(item => item.Score, "profile.rule.score");
+                form.Submit("profile.rule.add");
+            }, Address(profile.Id, handler: "Rule"), csrf,
+                _ruleInput ?? new AddReleaseRuleDataV1("", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "", ReleaseRuleEffect.Prefer, 10, profile.Version),
+                _ruleInput is null ? null : FormError));
+        }
+
+        private SelectOption[] Options<TEnum>(string prefix) where TEnum : struct, Enum =>
+            [.. Enum.GetValues<TEnum>().Select(value => new SelectOption(value.ToString(), texts[prefix + value]))];
+
+        public async Task<IActionResult> OnPostRuleAsync([BindRequired] ReleaseRuleField field, [BindRequired] ReleaseRuleMatch match, [BindRequired] ReleaseRuleEffect effect,
+            [BindRequired] long version, string? name, string? value, int? score)
+        {
+            var id = AcquisitionProfileId ?? throw new KeyNotFoundException("No profile was selected.");
+            _ruleInput = new AddReleaseRuleDataV1(name ?? "", field, match, value ?? "", effect, score ?? 0, version);
+            await addRule.ExecuteAsync<UpdateResult>(new AcquisitionProfileParametersV1(id), _ruleInput, HttpContext.RequestAborted);
+            return LocalRedirect(Address(id));
+        }
+
+        public async Task<IActionResult> OnPostRemoveRuleAsync([BindRequired] int position, [BindRequired] long version)
+        {
+            var id = AcquisitionProfileId ?? throw new KeyNotFoundException("No profile was selected.");
+            await deleteRule.ExecuteAsync<UpdateResult>(new ReleaseRuleParametersV1(id, position, version), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address(id));
         }
 
         // Sensible starting points per kind.
@@ -135,6 +193,10 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), HttpContext.RequestAborted);
             _selected = AcquisitionProfileId is { } id ? _profiles.FirstOrDefault(profile => profile.Id == id) ?? throw new KeyNotFoundException("The profile was not found.") : null;
+            if (_selected is { } selected)
+            {
+                _rules = await readRules.ExecuteAsync<BaseDataList<ReleaseRuleV1>>(new AcquisitionProfileParametersV1(selected.Id), HttpContext.RequestAborted);
+            }
             if (NewFor is { } type && !Kinds.Contains((type, NewForSubtype))) NewFor = null;
         }
 

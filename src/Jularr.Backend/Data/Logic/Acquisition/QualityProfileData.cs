@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Enums.Acquisition;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
@@ -22,6 +23,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The effect of the rule.
         public ReleaseRuleEffect? Effect { get; init; }
 
+        [JsonIgnore]
         public ReleaseRuleEffect EffectiveEffect => Effect ?? (Score >= 0 ? ReleaseRuleEffect.Prefer : ReleaseRuleEffect.Avoid);
     }
 

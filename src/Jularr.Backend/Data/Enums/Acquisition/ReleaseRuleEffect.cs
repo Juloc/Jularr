@@ -1,7 +1,7 @@
 namespace Jularr.Backend.Data.Enums.Acquisition
 {
     // What a matching score rule does.
-    internal enum ReleaseRuleEffect
+    public enum ReleaseRuleEffect : byte
     {
         Prefer,
         Avoid,

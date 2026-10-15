@@ -881,6 +881,57 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task ReleaseRules_DecideByTheirEffect_AndNameThemselves()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            var wantedId = await CreateWantedMovieAsync(host);
+            var profileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"MediaTypeId\" = 1 AND \"IsDefault\""))!;
+            var rules = "/api/v1/admin/acquisition/profiles/" + profileId + "/rules";
+
+            async Task<HttpStatusCode> AddAsync(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score, long? version = null)
+            {
+                var current = version ?? (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
+                using var added = await host.SendAsync(HttpMethod.Post, rules, new AddReleaseRuleDataV1(name, field, match, value, effect, score, current));
+                return added.StatusCode;
+            }
+
+            // Prefer and Avoid need a score, patterns must be valid, an old version is refused.
+            Assert.AreEqual(HttpStatusCode.BadRequest, await AddAsync("Nothing", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "x", ReleaseRuleEffect.Avoid, 0));
+            Assert.AreEqual(HttpStatusCode.BadRequest, await AddAsync("Broken", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Regex, "([", ReleaseRuleEffect.Reject, 0));
+            Assert.AreEqual(HttpStatusCode.BadRequest, await AddAsync("Stale", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "x", ReleaseRuleEffect.Info, 0, version: 1_000));
+            Assert.AreEqual(HttpStatusCode.OK, await AddAsync("No 720p", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "720p", ReleaseRuleEffect.Reject, 0));
+            Assert.AreEqual(HttpStatusCode.OK, await AddAsync("Group GRP", ReleaseRuleField.ReleaseGroup, ReleaseRuleMatch.Equals, "GRP", ReleaseRuleEffect.Require, 0));
+            Assert.AreEqual(HttpStatusCode.OK, await AddAsync("Not other", ReleaseRuleField.RawTitle, ReleaseRuleMatch.Contains, "Other", ReleaseRuleEffect.Avoid, 5));
+            using var listed = await host.SendAsync(HttpMethod.Get, rules);
+            var stored = (await listed.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
+            CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "No 720p", "Group GRP", "Not other" }, stored.Select(rule => rule.Name).ToArray());
+            Assert.AreEqual(-5, stored[4].Score);
+
+            // The rejected release names its rule.
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            var lower = candidates.Single(candidate => candidate.Title == Lower);
+            Assert.AreEqual(ReleaseDecisionType.Rejected, lower.ReleaseDecisionTypeId);
+            Assert.AreEqual(("MatchesRejectRule", "No 720p"), (lower.ReasonCode, lower.ReasonValue));
+            Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
+
+            // The page lists the rules; removing one keeps the others in order.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + profileId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Release rules");
+            StringAssert.Contains(html, "Avoid -5");
+            var version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
+            using var removed = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + profileId + "&handler=RemoveRule&position=2",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["Version"] = version.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+            Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            using var after = await host.SendAsync(HttpMethod.Get, rules);
+            CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "Group GRP", "Not other" }, (await after.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!.Select(rule => rule.Name).ToArray());
+        }
+
+        [TestMethod]
         public async Task Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately()
         {
             using var storage = new TemporaryDirectory();

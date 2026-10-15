@@ -148,6 +148,49 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules")]
+    public sealed class ReadAcquisitionProfileRulesV1 : AdminService<AcquisitionProfileParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<ReleaseRuleV1>>()];
+        protected override ModuleRequirement GetInstanceModules(AcquisitionProfileParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(AcquisitionProfileParametersV1 parameters, Type resultType) => new("wanted.read");
+
+        protected override async Task<IServiceOutput> OnRead() =>
+            new BaseDataList<ReleaseRuleV1>((await Context.ReadProfileRulesAsync(Parameters.AcquisitionProfileId, CancellationToken))
+                .Select((rule, position) => new ReleaseRuleV1(position, rule.Name, rule.Field, rule.Match, rule.Value, rule.EffectiveEffect, rule.Score)).ToArray());
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules")]
+    public sealed class AddAcquisitionProfileRuleV1 : AdminService<AcquisitionProfileParametersV1, AddReleaseRuleDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(AcquisitionProfileParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(AcquisitionProfileParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnCreate()
+        {
+            await Context.AddProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Data.Version),
+                new ReleaseScoreRule(Data.Name, Data.Field, Data.Match, Data.Value, Data.Score) { Effect = Data.Effect }, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("DELETE", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{position:int}")]
+    public sealed class DeleteAcquisitionProfileRuleV1 : AdminService<ReleaseRuleParametersV1, NoData>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Delete;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(ReleaseRuleParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ReleaseRuleParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnDelete()
+        {
+            await Context.RemoveProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Parameters.Version), Parameters.Position, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
     internal static class AcquisitionProfileInput
     {
         public static AcquisitionProfileInputData Create(long? id, SaveAcquisitionProfileDataV1 data) =>
