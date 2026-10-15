@@ -105,8 +105,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName)
+            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName, bool isRequestable)
         {
+            IsRequestable = isRequestable;
             FranchiseId = franchiseId;
             FranchiseName = franchiseName;
             Creators = creators;
@@ -169,6 +170,10 @@ namespace Jularr.Backend.Data.User.Media.V1
 
         [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
         public string? FranchiseName { get; }
+
+        // A Work with media and without episodes or volumes to come needs no request.
+        [DataField(typeof(WorkFields), nameof(WorkFields.IsRequestable))]
+        public bool IsRequestable { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData

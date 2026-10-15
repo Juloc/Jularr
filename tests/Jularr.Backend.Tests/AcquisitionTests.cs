@@ -452,7 +452,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("https://app.plex.tv/desktop/#!/server/plexmachine1/details?key=%2Flibrary%2Fmetadata%2F11",
                 (await details.Content.ReadFromJsonAsync<Jularr.Backend.Data.User.Media.V1.WorkDetailsV1>())!.PlexUrl);
             using var page = await host.SendAsync(HttpMethod.Get, "/Details/" + movieId);
-            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Open in Plex");
+            var detailsHtml = await page.Content.ReadAsStringAsync();
+            StringAssert.Contains(detailsHtml, "Open in Plex");
+
+            // The tab names the film; a film on hand offers no request.
+            StringAssert.Contains(detailsHtml, "<title>Example Movie · ");
+            Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
             using var providers = await host.SendAsync(HttpMethod.Get, "/Admin/Providers");
             var providersHtml = await providers.Content.ReadAsStringAsync();
             StringAssert.Contains(providersHtml, "3 titles linked");

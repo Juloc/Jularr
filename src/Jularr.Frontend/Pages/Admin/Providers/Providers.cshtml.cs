@@ -43,7 +43,7 @@ namespace Jularr.Frontend.Pages.Admin.Providers
             // Render only real registry rows.
             foreach (var provider in (_providers?.Items ?? []).Where(provider => MediaServerTypes.FromProviderKey(provider.Key) is null || texts.Can(null, "ProgressSync", "Library")))
             {
-                page.Content.Add(new P(new ValueText(provider.Key)));
+                page.Content.Add(new P(new ValueText(Name(provider.Key))));
                 page.Content.Add(new Form<UpdateProviderDataV1>(form =>
                 {
                     form.Hidden(item => item.ExpectedIsEnabled);
@@ -239,5 +239,19 @@ namespace Jularr.Frontend.Pages.Admin.Providers
                 _profiles = await readProfiles.ExecuteAsync<BaseDataList<ProfileChoiceV1>>(new ReadProfileChoicesParametersV1(), HttpContext.RequestAborted);
             }
         }
+
+        // Provider names are proper names, not translations.
+        private static string Name(string key) => key switch
+        {
+            "tmdb" => "TMDB",
+            "openlibrary" => "Open Library",
+            "anilist" => "AniList",
+            "musicbrainz" => "MusicBrainz",
+            "igdb" => "IGDB",
+            "plex" => "Plex",
+            "jellyfin" => "Jellyfin",
+            "emby" => "Emby",
+            _ => key
+        };
     }
 }

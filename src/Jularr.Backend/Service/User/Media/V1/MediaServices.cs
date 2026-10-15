@@ -137,7 +137,24 @@ namespace Jularr.Backend.Service.User.Media.V1
                         LIMIT 1
                     ), ARRAY[]::text[]) AS "Creators",
                     franchise."Id" AS "FranchiseId",
-                    franchise."Name" AS "FranchiseName"
+                    franchise."Name" AS "FranchiseName",
+                    work."MediaTypeId" = 2 OR work."MediaSubtypeId" IS NOT DISTINCT FROM 2 OR NOT (EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                        WHERE
+                            asset."WorkId" = work."Id"
+                    ) OR EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkExternalIdentities" AS plex
+                        WHERE
+                            plex."WorkId" = work."Id"
+                            AND plex."Namespace" = 'plex'
+                    )) AS "IsRequestable"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"

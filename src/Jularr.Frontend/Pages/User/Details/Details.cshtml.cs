@@ -37,7 +37,7 @@ namespace Jularr.Frontend.Pages.User.Details
 
         protected override void Define(Page page)
         {
-            page.Title("details.title");
+            page.Title("details.title", _work?.CanonicalTitle);
             page.Navigation("nav.home");
             page.Asset("Pages/User/Details/Details.entry.scss");
 
@@ -85,7 +85,7 @@ namespace Jularr.Frontend.Pages.User.Details
                     new UpdateWatchlistDataV1(!work.IsWatchlisted), FormError));
 
                 // Explicit desired content language.
-                if (_locales is { } languages)
+                if (_locales is { } languages && work.IsRequestable)
                 {
                     var options = languages.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
                     var selected = languages.FirstOrDefault(locale => string.Equals(locale.Locale, texts.Locale, StringComparison.OrdinalIgnoreCase));

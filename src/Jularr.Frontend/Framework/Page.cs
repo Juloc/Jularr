@@ -98,11 +98,17 @@ namespace Jularr.Frontend.Framework
         public bool Shell { get; set; } = true;
         public bool IsPlayer { get; set; }
         public string? TitleKey { get; private set; }
+        public string? DocumentTitle { get; private set; }
         public string? NavigationKey { get; private set; }
         public List<IUiComponent> Content { get; } = [];
         public List<string> AssetEntries { get; } = [];
 
-        public void Title(string key) => TitleKey = key;
+        // The breadcrumb names the page; a document title names the shown item in the browser tab.
+        public void Title(string key, string? documentTitle = null)
+        {
+            TitleKey = key;
+            DocumentTitle = documentTitle;
+        }
         public void Asset(string entry)
         {
             if (!AssetEntries.Contains(entry, StringComparer.Ordinal)) AssetEntries.Add(entry);
@@ -114,6 +120,7 @@ namespace Jularr.Frontend.Framework
             Shell = definition.Shell;
             IsPlayer = definition.IsPlayer;
             TitleKey = definition.TitleKey;
+            DocumentTitle = definition.DocumentTitle;
             NavigationKey = definition.NavigationKey;
             Content.AddRange(definition.Content);
             foreach (var asset in definition.AssetEntries) Asset(asset);

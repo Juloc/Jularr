@@ -19,7 +19,7 @@ namespace Jularr.Frontend.Localization
             new("appearance.jularrRed", "Jularr red"),
             new("appearance.jularrPurple", "Jularr purple"),
             new("appearance.accentDefault", "Use style default"),
-            new("appearance.devicePreference", "Appearance choices are stored in this browser. Instance defaults and profile policies are not connected yet."),
+            new("appearance.devicePreference", "Appearance choices are stored in this browser."),
             new("design.title", "Design lab"),
             new("design.introduction", "A development-only component workshop. These are labeled examples, not library records or working account actions. Changes to shared components affect the real pages."),
             new("design.controls", "Buttons and icons"),

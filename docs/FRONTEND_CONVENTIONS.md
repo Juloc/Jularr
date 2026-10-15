@@ -111,7 +111,8 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 
 - **The shared Topbar breadcrumb/current-page label is the sole page title.**
   Every shelled page sets `page.Title(resourceKey)`, which the layout renders
-  in the Topbar. **Never** repeat the same title as an `H1`, `UiHeading`,
+  in the Topbar; a page showing one item may pass its name as the browser tab title
+  (`page.Title(resourceKey, name)`). **Never** repeat the same title as an `H1`, `UiHeading`,
   hero title, banner, card heading, or description at the top of the content.
   No automatic "page description" below the breadcrumb. Standalone unauthenticated
   pages without the shared Topbar (e.g. Login) may use a semantic `H1`.

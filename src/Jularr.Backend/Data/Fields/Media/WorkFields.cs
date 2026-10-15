@@ -19,6 +19,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly DateTimeField CreatedAt = new();
         public static readonly DateTimeField UpdatedAt = new();
         public static readonly BoolField IsWatchlisted = new();
+        public static readonly BoolField IsRequestable = new();
         public static readonly StringArrayField Titles = new() { ItemMaximumLength = 500 };
     }
 }
