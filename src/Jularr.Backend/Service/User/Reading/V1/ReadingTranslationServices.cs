@@ -61,7 +61,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
         protected override async Task<IServiceOutput> OnUpdate()
         {
             // One plain text per block of the section, kept beside it; the reader only ever sets them as text.
-            var blocks = ReadingTranslations.Parse(Data.Blocks) ?? throw new DataValidationException(nameof(Data.Blocks), "invalid_format");
+            var blocks = ReadingTranslations.Parse(Data.Blocks) ?? throw new DataValidationException(nameof(Data.Blocks), "translation_mismatch");
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -88,7 +88,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var section = await Context.Sql.ReadOptionalAsync<ReadingSectionBlocksData>(sql, CancellationToken) ?? throw new KeyNotFoundException("The section was not found.");
             if (section.Blocks != blocks.Count)
             {
-                throw new DataValidationException(nameof(Data.Blocks), "invalid_format");
+                throw new DataValidationException(nameof(Data.Blocks), "translation_mismatch");
             }
 
             await Context.SaveReadingResourceAsync(new ReadingResourceData(Parameters.DocumentId, ReadingTranslations.Path(Parameters.SectionIndex, Parameters.LanguageTypeId),
