@@ -29,15 +29,11 @@ namespace Jularr.Backend.Logic.Library
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
                         SELECT
-                            fact."Value"
+                            creator."Creator"
                         FROM
-                            "WorkMetadataFacts" AS fact
+                            "WorkCreators" AS creator
                         WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" IN ('Author', 'Artist')
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
+                            creator."WorkId" = work."Id"
                     ) AS "Author",
                     unit."WorkUnitTypeId",
                     unit."Number" AS "UnitNumber",

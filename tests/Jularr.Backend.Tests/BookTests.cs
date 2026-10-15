@@ -49,7 +49,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             Assert.AreEqual(1813, work.ReleaseYear);
-            Assert.AreEqual("Jane Austen", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Author'"));
+            Assert.AreEqual("Jane Austen", await host.ScalarAsync("SELECT person.\"Name\" FROM \"WorkPeople\" AS credit JOIN \"People\" AS person ON person.\"Id\" = credit.\"PersonId\" WHERE credit.\"PersonRoleId\" = 7"));
+            Assert.AreEqual("OL21594A", await host.ScalarAsync("SELECT \"Value\" FROM \"PersonExternalIdentities\" WHERE \"Namespace\" = 'openlibrary'"));
             var wantedId = await CreateWantedAsync(host, work.Id);
 
             // Identity before format: other authors and extra titles wait for a person.

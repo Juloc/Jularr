@@ -49,13 +49,21 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             var album = details.Album;
             var facts = new[]
             {
-                new { Key = "Artist", Value = album.Artist, Localized = false },
                 new { Key = "Poster", Value = MusicBrainzClient.CoverUrl(album.Id), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var tracks = details.Tracks.Select(track => new { Track = track.Number, track.Title });
             var data = new WorkMetadataData(MediaType.Music, null, Namespace, album.Id, album.Title, null, album.Year is >= 1800 and <= 2200 ? album.Year : null, "[]", JsonSerializer.Serialize(tracks),
                 JsonSerializer.Serialize(facts), Namespace, null);
-            return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
+
+            // The album's artists, and a track's own where they differ.
+            var people = WorkPeopleLogic.Rows(album.People)
+                .Concat(details.Tracks.SelectMany(track => WorkPeopleLogic.Rows(track.People, WorkUnitType.Track, null, track.Number))).ToArray();
+            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var workId = await ctx.SaveWorkMetadataAsync(data, token);
+                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, Namespace, people), token);
+                return workId;
+            }, ct);
         }
 
         private static Exception Translate(MusicBrainzException exception) => exception.Failure switch

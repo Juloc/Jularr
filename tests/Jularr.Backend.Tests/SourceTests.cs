@@ -176,7 +176,7 @@ namespace Jularr.Backend.Tests
             // The book is requested like any title; the request's target is what Anna's Archive is searched for.
             using var work = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Book, "Pride and Prejudice", 1813));
             var workId = (await work.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
-            await host.Fixture.RunSqlAsync($"INSERT INTO \"WorkMetadataFacts\" (\"WorkId\", \"FactKey\", \"Value\", \"IsManual\") VALUES ({workId}, 'Author', 'Jane Austen', TRUE)");
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"People\" (\"Id\", \"Name\") VALUES (9001, 'Jane Austen'); INSERT INTO \"WorkPeople\" (\"WorkId\", \"PersonId\", \"PersonRoleId\", \"Position\") VALUES ({workId}, 9001, 7, 1)");
             using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests", new CreateRequestDataV1(1));
             Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
             var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\" WHERE \"WorkId\" = " + workId))!;
@@ -372,7 +372,8 @@ namespace Jularr.Backend.Tests
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Book, "Pride and Prejudice", 1813));
             var work = (await created.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             await host.Fixture.RunSqlAsync($"""
-                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES ({work.Id}, 'Author', 'Jane Austen', TRUE);
+                INSERT INTO "People" ("Id", "Name") VALUES (9001, 'Jane Austen');
+                INSERT INTO "WorkPeople" ("WorkId", "PersonId", "PersonRoleId", "Position") VALUES ({work.Id}, 9001, 7, 1);
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
                 VALUES (710, {work.Id}, 202, 42, 1, 2, 41, now());
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (810, {work.Id});

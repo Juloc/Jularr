@@ -34,7 +34,8 @@ namespace Jularr.Backend.Tests
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
             await host.Fixture.RunSqlAsync("""
                 INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (10, 6, 'Album'), (20, 6, 'Other Album'), (30, 3, 'Shared Book');
-                INSERT INTO "WorkMetadataFacts" ("WorkId", "FactKey", "Value", "IsManual") VALUES (10, 'Artist', 'Earth, Wind & Fire', TRUE), (20, 'Author', 'earth, wind & fire', TRUE), (30, 'Author', 'Ann Lee, Bo Ray', TRUE);
+                INSERT INTO "People" ("Id", "Name") VALUES (1, 'Earth, Wind & Fire'), (2, 'Ann Lee'), (3, 'Bo Ray');
+                INSERT INTO "WorkPeople" ("WorkId", "PersonId", "PersonRoleId", "Position") VALUES (10, 1, 9, 1), (20, 1, 9, 1), (30, 2, 7, 1), (30, 3, 7, 2);
                 INSERT INTO "WorkUnits" ("Id", "WorkId", "WorkUnitTypeId", "Number", "Title") VALUES (101, 10, 5, 1, 'One'), (102, 10, 5, 2, 'Two'), (103, 10, 5, 3, 'Three');
                 INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (1, 10);
                 INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (1, 10, 1);
@@ -63,18 +64,20 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "data-href=\"/Player/3\"");
             StringAssert.Contains(html, "Track 1 &#xB7; One");
 
-            // An artist's name stays whole; author lists split at commas; each leads to everything credited to it.
+            // Each artist or author is one person, whatever their name contains, and leads to everything credited to them.
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/10");
-            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "href=\"/Creator?name=Earth%2C%20Wind%20%26%20Fire\"");
+            StringAssert.Contains(await details.Content.ReadAsStringAsync(), "href=\"/People/1\">Earth, Wind &amp; Fire<");
             using var book = await host.SendAsync(HttpMethod.Get, "/Details/30");
-            StringAssert.Contains(await book.Content.ReadAsStringAsync(), "href=\"/Creator?name=Bo%20Ray\"");
-            using var creator = await host.SendAsync(HttpMethod.Get, "/api/v1/creators/works?name=EARTH%2C%20WIND%20%26%20FIRE");
-            CollectionAssert.AreEquivalent(new[] { 10L }, (await creator.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
-            using var author = await host.SendAsync(HttpMethod.Get, "/api/v1/creators/works?name=earth");
-            CollectionAssert.AreEquivalent(new[] { 20L }, (await author.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
-            using var creatorPage = await host.SendAsync(HttpMethod.Get, "/Creator?name=earth");
-            Assert.AreEqual(HttpStatusCode.OK, creatorPage.StatusCode);
-            StringAssert.Contains(await creatorPage.Content.ReadAsStringAsync(), "Other Album");
+            StringAssert.Contains(await book.Content.ReadAsStringAsync(), "href=\"/People/3\">Bo Ray<");
+            using var credited = await host.SendAsync(HttpMethod.Get, "/api/v1/people/1/works");
+            Assert.AreEqual(HttpStatusCode.OK, credited.StatusCode, await credited.Content.ReadAsStringAsync());
+            CollectionAssert.AreEquivalent(new[] { 10L, 20L }, (await credited.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Media.V1.WorkCardV1>>())!.Items.Select(item => item.Id).ToArray());
+            using var personPage = await host.SendAsync(HttpMethod.Get, "/People/1");
+            var personHtml = await personPage.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, personPage.StatusCode, personHtml);
+            StringAssert.Contains(personHtml, "Other Album");
+            using var nobody = await host.SendAsync(HttpMethod.Get, "/api/v1/people/99");
+            Assert.AreEqual(HttpStatusCode.NotFound, nobody.StatusCode);
         }
 
         [TestMethod]
@@ -94,7 +97,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
             var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 5"));
-            Assert.AreEqual("Example Artist", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Artist'"));
+            Assert.AreEqual("Example Artist", await host.ScalarAsync("SELECT person.\"Name\" FROM \"WorkPeople\" AS credit JOIN \"People\" AS person ON person.\"Id\" = credit.\"PersonId\" WHERE credit.\"PersonRoleId\" = 9"));
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
                 VALUES (700, {work.Id}, 202, 42, 1, 2, 41, now());

@@ -1,3 +1,5 @@
+using Jularr.Integrations.Data.Common;
+
 namespace Jularr.Integrations.Data.MusicBrainz
 {
     internal enum MusicBrainzFailure : byte
@@ -35,6 +37,9 @@ namespace Jularr.Integrations.Data.MusicBrainz
         public string Artist { get; }
         public int? Year { get; }
         public string? PrimaryType { get; }
+
+        // The credited people with their ids at this provider.
+        public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
 
     internal sealed class MusicBrainzTrack
@@ -48,6 +53,9 @@ namespace Jularr.Integrations.Data.MusicBrainz
         // Position across all discs of the edition.
         public int Number { get; }
         public string Title { get; }
+
+        // The track's own artists where they differ from the album's.
+        public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
 
     internal sealed class MusicBrainzAlbumDetails

@@ -97,14 +97,13 @@ namespace Jularr.Backend.Data.Logic.Media
         public string ProviderKey { get; }
     }
 
-    // A movie's length and the provider's people; both replace what the last import stored.
-    internal sealed class WorkCreditsData : BaseData
+    // A movie's length; a provider that knows none keeps the stored one.
+    internal sealed class WorkRuntimeData : BaseData
     {
-        public WorkCreditsData(long id, int? runtimeMinutes, string credits)
+        public WorkRuntimeData(long id, int? runtimeMinutes)
         {
             Id = id;
             RuntimeMinutes = runtimeMinutes;
-            Credits = credits;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -112,10 +111,28 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(WorkFields), nameof(WorkFields.RuntimeMinutes))]
         public int? RuntimeMinutes { get; }
+    }
 
-        // JSON rows of IsCrew, Position, Name, Role and ImageUrl.
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Credits))]
-        public string Credits { get; }
+    // The provider's people of a Work, replacing what its last import stored.
+    internal sealed class WorkPeopleData : BaseData
+    {
+        public WorkPeopleData(long id, string @namespace, string people)
+        {
+            Id = id;
+            Namespace = @namespace;
+            People = people;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        // The provider whose person ids these are.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.PersonNamespace))]
+        public string Namespace { get; }
+
+        // JSON rows of ExternalId, Name, ImageUrl, PersonRoleId, Position, Credit and, for a unit, WorkUnitTypeId, ParentNumber and Number.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.People))]
+        public string People { get; }
     }
 
     internal sealed class WorkIdentityData : BaseData
@@ -205,17 +222,6 @@ namespace Jularr.Backend.Data.Logic.Media
 
         [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
         public LibrarySortType LibrarySortTypeId { get; }
-    }
-
-    internal sealed class CreatorData : BaseData
-    {
-        public CreatorData(string name)
-        {
-            Name = name;
-        }
-
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creator))]
-        public string Name { get; }
     }
 
     // The provider's film series of a Work, or none.

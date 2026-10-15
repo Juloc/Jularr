@@ -1,3 +1,5 @@
+using Jularr.Integrations.Data.Common;
+
 namespace Jularr.Integrations.Data.OpenLibrary
 {
     internal enum OpenLibraryFailure : byte
@@ -58,5 +60,8 @@ namespace Jularr.Integrations.Data.OpenLibrary
         public int? Year { get; }
         public string? Description { get; }
         public long? CoverId { get; }
+
+        // The credited people with their ids at this provider.
+        public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
 }

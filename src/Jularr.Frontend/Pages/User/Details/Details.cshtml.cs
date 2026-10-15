@@ -79,12 +79,12 @@ namespace Jularr.Frontend.Pages.User.Details
                     work.Platforms.Length > 0 ? string.Join(", ", work.Platforms) : null }
                     .Where(part => part is not null)), work.Overview, actionKey, actionHref));
 
-                // Each author or artist leads to their other titles.
+                // Each author, artist or studio leads to their other titles.
                 var creators = new List<IUiComponent>();
-                foreach (var creator in work.Creators)
+                foreach (var creator in _credits.Where(credit => IsCreator(credit.PersonRoleId)))
                 {
                     if (creators.Count > 0) creators.Add(new ValueText(", "));
-                    creators.Add(new A(new ValueText(creator)).Attribute("href", "/Creator?name=" + Uri.EscapeDataString(creator)));
+                    creators.Add(new A(new ValueText(creator.Name)).Attribute("href", PersonHref(creator.PersonId)));
                 }
 
                 if (creators.Count > 0) page.Content.Add(new P([.. creators]).Class("details-creators"));
@@ -183,9 +183,9 @@ namespace Jularr.Frontend.Pages.User.Details
                 }
 
                 // Cast before crew, each with their character or job.
-                if (_credits.Count > 0)
+                if (_credits.Any(credit => !IsCreator(credit.PersonRoleId)))
                 {
-                    page.Content.Add(new UiSection("details.cast", [new Div([.. _credits.Select(Person)]).Class("details-people")]));
+                    page.Content.Add(new UiSection("details.cast", [new Div([.. _credits.Where(credit => !IsCreator(credit.PersonRoleId)).Select(Person)]).Class("details-people")]));
                 }
 
                 // The other titles of its film series, then similar titles leading to their Work or their request.
@@ -243,11 +243,16 @@ namespace Jularr.Frontend.Pages.User.Details
             return card;
         }
 
-        private static IUiComponent Person(WorkCreditV1 credit) => new Div(
+        private static bool IsCreator(PersonRole role) => role is PersonRole.Author or PersonRole.Illustrator or PersonRole.Artist or PersonRole.Developer;
+
+        private static string PersonHref(long personId) => "/People/" + personId.ToString(CultureInfo.InvariantCulture);
+
+        // Cast with their character, crew with their job; each leads to the person's other titles.
+        private static IUiComponent Person(WorkCreditV1 credit) => new A(
             credit.ImageUrl is null ? new Div().Class("details-person__placeholder") : new MediaImage(credit.ImageUrl, credit.Name, 185, 278),
             new Strong(new ValueText(credit.Name)),
-            credit.Role is null ? new Span() : new Span(new ValueText(credit.Role)).Class("details-person__role"))
-            .Class("details-person");
+            credit.Credit is null ? new Span() : new Span(new ValueText(credit.Credit)).Class("details-person__role"))
+            .Class("details-person").Attribute("href", PersonHref(credit.PersonId));
 
         private IUiComponent Series(WorkDetailsV1 work)
         {

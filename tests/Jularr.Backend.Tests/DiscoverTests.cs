@@ -119,7 +119,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, credits.StatusCode, await credits.Content.ReadAsStringAsync());
             var people = (await credits.Content.ReadFromJsonAsync<BaseDataList<WorkCreditV1>>())!;
             CollectionAssert.AreEqual(new[] { "Keanu Reeves", "Lana Wachowski" }, people.Select(person => person.Name).ToArray());
-            Assert.AreEqual("https://image.tmdb.org/t/p/w185/neo.jpg", people[0].ImageUrl);
+            Assert.AreEqual(("https://image.tmdb.org/t/p/w185/neo.jpg", "Neo", PersonRole.Actor), (people[0].ImageUrl, people[0].Credit, people[0].PersonRoleId));
+            Assert.AreEqual((PersonRole.Director, "Director"), (people[1].PersonRoleId, people[1].Credit));
+
+            // A new import keeps each person, found again by their TMDB id.
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            Assert.AreEqual(HttpStatusCode.OK, again.StatusCode, await again.Content.ReadAsStringAsync());
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"People\""));
+            Assert.AreEqual(people[0].PersonId, await host.ScalarAsync("SELECT \"PersonId\" FROM \"PersonExternalIdentities\" WHERE \"Namespace\" = 'tmdb' AND \"Value\" = '6384'"));
 
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             var html = await details.Content.ReadAsStringAsync();
@@ -370,7 +377,7 @@ namespace Jularr.Backend.Tests
         private sealed class FakeTmdb : HttpMessageHandler
         {
             public List<Uri> Requests { get; } = [];
-            private const string MovieDetails = """ "genres":[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}],"runtime":136,"production_companies":[{"name":"Village Roadshow"}],"videos":{"results":[{"site":"YouTube","type":"Teaser","key":"aaaaaaaaaaa"},{"site":"YouTube","type":"Trailer","key":"vKQi3bBA1y8","official":true}]},"credits":{"cast":[{"name":"Keanu Reeves","character":"Neo","profile_path":"/neo.jpg"}],"crew":[{"name":"Lana Wachowski","job":"Director"},{"name":"Someone","job":"Gaffer"}]} """;
+            private const string MovieDetails = """ "genres":[{"id":28,"name":"Action"},{"id":878,"name":"Science Fiction"}],"runtime":136,"production_companies":[{"name":"Village Roadshow"}],"videos":{"results":[{"site":"YouTube","type":"Teaser","key":"aaaaaaaaaaa"},{"site":"YouTube","type":"Trailer","key":"vKQi3bBA1y8","official":true}]},"credits":{"cast":[{"id":6384,"name":"Keanu Reeves","character":"Neo","profile_path":"/neo.jpg"}],"crew":[{"id":9339,"name":"Lana Wachowski","job":"Director"},{"id":1,"name":"Someone","job":"Gaffer"}]} """;
             private const string Movie = """{"id":603,"title":"The Matrix","original_title":"The Matrix","release_date":"1999-03-31","overview":"A hacker learns the truth.","poster_path":"/poster.jpg","backdrop_path":"/backdrop.jpg"}""";
             private const string Show = """{"id":1399,"name":"The Matrix Show","original_name":"The Matrix Show","first_air_date":"2020-01-01","overview":"A show.","poster_path":"/show.jpg"}""";
 

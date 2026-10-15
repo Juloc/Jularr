@@ -1,8 +1,10 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jularr.Integrations.Data.AniList;
+using Jularr.Integrations.Data.Common;
 
 namespace Jularr.Integrations.Logic.AniList
 {
@@ -16,7 +18,7 @@ namespace Jularr.Integrations.Logic.AniList
 
         private const string Fields =
             "id type format title { romaji english native } synonyms startDate { year } episodes volumes description(asHtml: false) coverImage { large } bannerImage trailer { id site } "
-            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { name { full } } } } relations { edges { relationType node { id type } } }";
+            + "staff(perPage: 8, sort: RELEVANCE) { edges { role node { id name { full } } } } relations { edges { relationType node { id type } } }";
 
         public async Task<IReadOnlyList<AniListMedia>> SearchAsync(AniListMediaType type, IReadOnlyCollection<string> formats, string query, CancellationToken ct)
         {
@@ -63,12 +65,16 @@ namespace Jularr.Integrations.Logic.AniList
             }
 
             // Story and art staff name the work like book authors; sequels of the same type continue it.
-            var authors = Child(media, "staff") is { } staff && staff.TryGetProperty("edges", out var edges) && edges.ValueKind == JsonValueKind.Array
+            var people = Child(media, "staff") is { } staff && staff.TryGetProperty("edges", out var edges) && edges.ValueKind == JsonValueKind.Array
                 ? edges.EnumerateArray()
-                    .Where(edge => Text(edge, "role") is { } role && (role.Contains("Story", StringComparison.OrdinalIgnoreCase) || role.Contains("Art", StringComparison.OrdinalIgnoreCase)))
-                    .Select(edge => Child(Child(edge, "node"), "name") is { } name ? Text(name, "full") : null)
-                    .OfType<string>().Distinct(StringComparer.Ordinal).Take(3).ToArray()
+                    .Select(edge => Text(edge, "role") is { } role && (role.Contains("Story", StringComparison.OrdinalIgnoreCase) || role.Contains("Art", StringComparison.OrdinalIgnoreCase))
+                        && Child(edge, "node") is { } node && Child(node, "name") is { } name && Text(name, "full") is { } full
+                            ? new ProviderPerson(node.TryGetProperty("id", out var staffId) && staffId.ValueKind == JsonValueKind.Number ? staffId.GetInt32().ToString(CultureInfo.InvariantCulture) : null,
+                                full, role.Contains("Story", StringComparison.OrdinalIgnoreCase) ? ProviderPerson.Author : ProviderPerson.Illustrator, role)
+                            : null)
+                    .OfType<ProviderPerson>().DistinctBy(person => person.Id ?? person.Name).Take(3).ToArray()
                 : [];
+            var authors = people.Select(person => person.Name).ToArray();
             var sequels = Related(media, "SEQUEL");
             var prequels = Related(media, "PREQUEL");
             var synonyms = media.TryGetProperty("synonyms", out var names) && names.ValueKind == JsonValueKind.Array
@@ -83,7 +89,7 @@ namespace Jularr.Integrations.Logic.AniList
             var trailer = Child(media, "trailer") is { } video && Text(video, "site") == "youtube" && Text(video, "id") is { Length: 11 } key
                 && key.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_') ? key : null;
             return new AniListMedia(mediaId, Text(media, "format"), romaji, Text(title, "english"), Text(title, "native"), synonyms, year, Count(media, "episodes", 5000),
-                Count(media, "volumes", 500), description, Https(cover), authors, sequels, prequels, Https(banner), trailer);
+                Count(media, "volumes", 500), description, Https(cover), authors, sequels, prequels, Https(banner), trailer) { People = people };
         }
 
         private static string? Https(string? url) => url is not null && url.StartsWith("https://", StringComparison.Ordinal) ? url : null;

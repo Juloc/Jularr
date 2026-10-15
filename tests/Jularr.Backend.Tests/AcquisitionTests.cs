@@ -595,6 +595,14 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Works\""));
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
             Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
+
+            // An episode's guest stars and director stay with that episode; the repeat keeps one person each.
+            Assert.AreEqual("Guest Example as Visitor, Episode Director as Director", await host.ScalarAsync("""
+                SELECT string_agg(person."Name" || ' as ' || credit."Credit", ', ' ORDER BY credit."PersonRoleId")
+                FROM "WorkPeople" AS credit JOIN "People" AS person ON person."Id" = credit."PersonId" JOIN "WorkUnits" AS unit ON unit."Id" = credit."WorkUnitId"
+                WHERE unit."Number" = 1 AND unit."WorkUnitTypeId" = 2 AND unit."ParentWorkUnitId" IS NOT NULL
+                """));
+            Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"People\""));
             Assert.AreEqual("Beispiel Serie", await host.ScalarAsync("SELECT \"Title\" FROM \"WorkTitles\" WHERE \"Title\" <> 'Example Show'"));
 
             // Viewers see the seasons, specials last, and each episode with its still, summary, length and state.
@@ -1481,7 +1489,7 @@ namespace Jularr.Backend.Tests
                     "/3/search/tv" => Json("""{"results":[{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","overview":"A show."}]}"""),
                     "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189,"imdb_id":"tt0903747"},"seasons":[{"season_number":0,"name":"Specials","episode_count":1},{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":3,"poster_path":"/s1.jpg"},{"season_number":2,"name":"Season 2","air_date":"2021-04-01","episode_count":2}]}"""),
                     "/3/tv/1399/season/0" => Json("""{"episodes":[{"season_number":0,"episode_number":1,"name":"Pilot extra","air_date":"2020-01-01"}]}"""),
-                    "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01","overview":"The first.","still_path":"/one.jpg","runtime":42},{"season_number":1,"episode_number":2,"name":"Two","air_date":"2020-04-08"},{"season_number":1,"episode_number":3,"name":"Three","air_date":"2020-04-15"}]}"""),
+                    "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01","overview":"The first.","still_path":"/one.jpg","runtime":42,"guest_stars":[{"id":77,"name":"Guest Example","character":"Visitor"}],"crew":[{"id":78,"name":"Episode Director","job":"Director"},{"id":79,"name":"Grip","job":"Key Grip"}]},{"season_number":1,"episode_number":2,"name":"Two","air_date":"2020-04-08"},{"season_number":1,"episode_number":3,"name":"Three","air_date":"2020-04-15"}]}"""),
                     "/3/tv/1399/season/2" => Json($$$"""{"episodes":[{"season_number":2,"episode_number":1,"name":"Four","air_date":"2021-04-01"},{"season_number":2,"episode_number":2,"name":"Five","air_date":"{{{future}}}"}]}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };

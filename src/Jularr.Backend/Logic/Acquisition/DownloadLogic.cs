@@ -126,15 +126,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS "RequestedLocales",
                     (
                         SELECT
-                            fact."Value"
+                            creator."Creator"
                         FROM
-                            "WorkMetadataFacts" AS fact
+                            "WorkCreators" AS creator
                         WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" IN ('Author', 'Artist')
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
+                            creator."WorkId" = work."Id"
                     ) AS "Author",
                     platform."Abbreviation" AS "PlatformAbbreviation",
                     platform."IgdbId" AS "PlatformIgdbId",
@@ -576,15 +572,11 @@ namespace Jularr.Backend.Logic.Acquisition
                     platform."Name" AS "PlatformName",
                     (
                         SELECT
-                            fact."Value"
+                            creator."Creator"
                         FROM
-                            "WorkMetadataFacts" AS fact
+                            "WorkCreators" AS creator
                         WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" IN ('Author', 'Artist')
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
+                            creator."WorkId" = work."Id"
                     ) AS "Author"
                 FROM
                     "Operations" AS operation

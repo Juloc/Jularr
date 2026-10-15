@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Tmdb;
 
 namespace Jularr.Integrations.Logic.Tmdb
@@ -100,7 +101,11 @@ namespace Jularr.Integrations.Logic.Tmdb
         }
 
         // Key crew only: who directed and wrote a movie and its music; a series names its creators.
-        private static readonly string[] CrewJobs = ["Director", "Screenplay", "Writer", "Novel", "Original Music Composer"];
+        private static readonly Dictionary<string, string> CrewJobs = new(StringComparer.Ordinal)
+        {
+            ["Director"] = ProviderPerson.Director, ["Screenplay"] = ProviderPerson.Writer, ["Writer"] = ProviderPerson.Writer, ["Novel"] = ProviderPerson.Writer,
+            ["Original Music Composer"] = ProviderPerson.Composer
+        };
 
         private static TmdbDetails ParseDetails(TmdbMediaKind kind, JsonElement root)
         {
@@ -114,15 +119,18 @@ namespace Jularr.Integrations.Logic.Tmdb
                 .OrderByDescending(video => video.TryGetProperty("official", out var official) && official.ValueKind == JsonValueKind.True)
                 .Select(video => Text(video, "key")).FirstOrDefault();
             var credits = root.TryGetProperty("credits", out var creditList) ? creditList : default;
-            var cast = Items(credits, "cast").Select(person => Credit(person, Text(person, "character"))).OfType<TmdbCredit>().Take(15).ToArray();
-            var crew = Items(root, "created_by").Select(person => Credit(person, "Creator"))
-                .Concat(Items(credits, "crew").Where(person => CrewJobs.Contains(Text(person, "job"))).Select(person => Credit(person, Text(person, "job"))))
-                .OfType<TmdbCredit>().DistinctBy(person => (person.Name, person.Role)).Take(10).ToArray();
-            return new TmdbDetails(genres, runtime is > 0 and <= 1440 ? runtime : null, studios, trailer, cast, crew);
+            var cast = Items(credits, "cast").Select(person => Person(person, ProviderPerson.Actor, Text(person, "character"))).OfType<ProviderPerson>().Take(15);
+            var crew = Items(root, "created_by").Select(person => Person(person, ProviderPerson.Creator, null)).Concat(Crew(credits)).OfType<ProviderPerson>()
+                .DistinctBy(person => (person.Id ?? person.Name, person.Role)).Take(10);
+            return new TmdbDetails(genres, runtime is > 0 and <= 1440 ? runtime : null, studios, trailer, [.. cast, .. crew]);
         }
 
-        private static TmdbCredit? Credit(JsonElement person, string? role) =>
-            Text(person, "name") is { } name ? new TmdbCredit(name, string.IsNullOrWhiteSpace(role) ? null : role, Text(person, "profile_path")) : null;
+        private static IEnumerable<ProviderPerson?> Crew(JsonElement credits) =>
+            Items(credits, "crew").Select(person => Text(person, "job") is { } job && CrewJobs.TryGetValue(job, out var role) ? Person(person, role, job) : null);
+
+        private static ProviderPerson? Person(JsonElement person, string role, string? credit) =>
+            Text(person, "name") is { } name ? new ProviderPerson(Int(person, "id") is int id and > 0 ? id.ToString(CultureInfo.InvariantCulture) : null, name, role,
+                string.IsNullOrWhiteSpace(credit) ? null : credit, ProfileUrl(ImagePath(Text(person, "profile_path")))) : null;
 
         private static IEnumerable<JsonElement> Items(JsonElement element, string name) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var list) && list.ValueKind == JsonValueKind.Array ? list.EnumerateArray() : [];
@@ -136,7 +144,9 @@ namespace Jularr.Integrations.Logic.Tmdb
                 ? episodes.EnumerateArray()
                     .Where(episode => Int(episode, "episode_number") is > 0)
                     .Select(episode => new TmdbEpisode(Int(episode, "season_number") ?? seasonNumber, Int(episode, "episode_number")!.Value, Text(episode, "name"), Date(episode, "air_date"),
-                        Text(episode, "overview"), Text(episode, "still_path"), Int(episode, "runtime")))
+                        Text(episode, "overview"), Text(episode, "still_path"), Int(episode, "runtime"),
+                        [.. Items(episode, "guest_stars").Select(person => Person(person, ProviderPerson.GuestStar, Text(person, "character"))).OfType<ProviderPerson>().Take(10),
+                            .. Crew(episode).OfType<ProviderPerson>().DistinctBy(person => (person.Id ?? person.Name, person.Role)).Take(6)]))
                     .ToArray()
                 : [];
         }

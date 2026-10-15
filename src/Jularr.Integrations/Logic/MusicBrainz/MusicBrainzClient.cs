@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.MusicBrainz;
 
 namespace Jularr.Integrations.Logic.MusicBrainz
@@ -57,7 +58,7 @@ namespace Jularr.Integrations.Logic.MusicBrainz
                 return new MusicBrainzAlbumDetails(album, tracks);
             }
 
-            using var edition = await GetAsync("release/" + editionId + "?fmt=json&inc=recordings+media", ct);
+            using var edition = await GetAsync("release/" + editionId + "?fmt=json&inc=recordings+media+artist-credits", ct);
             if (edition.RootElement.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array)
             {
                 foreach (var medium in media.EnumerateArray().OrderBy(medium => medium.TryGetProperty("position", out var position) && position.TryGetInt32(out var value) ? value : 0))
@@ -69,7 +70,11 @@ namespace Jularr.Integrations.Logic.MusicBrainz
 
                     foreach (var track in entries.EnumerateArray().Take(500 - tracks.Count))
                     {
-                        tracks.Add(new MusicBrainzTrack(tracks.Count + 1, Limit(Text(track, "title") ?? "Track " + (tracks.Count + 1).ToString(CultureInfo.InvariantCulture), 500)));
+                        var artists = Artists(track);
+                        tracks.Add(new MusicBrainzTrack(tracks.Count + 1, Limit(Text(track, "title") ?? "Track " + (tracks.Count + 1).ToString(CultureInfo.InvariantCulture), 500))
+                        {
+                            People = artists.Select(artist => artist.Id).SequenceEqual(album.People.Select(artist => artist.Id)) ? [] : artists
+                        });
                     }
                 }
             }
@@ -85,13 +90,21 @@ namespace Jularr.Integrations.Logic.MusicBrainz
             }
 
             // The first credited artist names the album; featured artists rarely appear in release names.
-            var artist = group.TryGetProperty("artist-credit", out var credits) && credits.ValueKind == JsonValueKind.Array
-                ? credits.EnumerateArray().Select(credit => Text(credit, "name")).OfType<string>().FirstOrDefault() ?? ""
-                : "";
+            var artists = Artists(group);
+            var artist = artists.FirstOrDefault()?.Name ?? "";
             var date = Text(group, "first-release-date");
             var year = date is { Length: >= 4 } && int.TryParse(date.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : (int?)null;
-            return new MusicBrainzAlbum(id, Limit(title, 500), Limit(artist.Trim(), 500), year, Text(group, "primary-type"));
+            return new MusicBrainzAlbum(id, Limit(title, 500), Limit(artist.Trim(), 500), year, Text(group, "primary-type")) { People = artists };
         }
+
+        // Credited artists with their MusicBrainz ids, as credited.
+        private static ProviderPerson[] Artists(JsonElement entry) =>
+            entry.TryGetProperty("artist-credit", out var credits) && credits.ValueKind == JsonValueKind.Array
+                ? [.. credits.EnumerateArray().Select(credit => Text(credit, "name") is { } name
+                    ? new ProviderPerson(credit.TryGetProperty("artist", out var artist) && Text(artist, "id") is { } id && Mbid().IsMatch(id) ? id : null, Limit(name.Trim(), 300),
+                        ProviderPerson.Artist)
+                    : null).OfType<ProviderPerson>().Take(10)]
+                : [];
 
         private async Task<JsonDocument> GetAsync(string path, CancellationToken ct)
         {
