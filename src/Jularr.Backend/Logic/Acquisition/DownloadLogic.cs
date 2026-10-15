@@ -138,7 +138,22 @@ namespace Jularr.Backend.Logic.Acquisition
                     ) AS "Author",
                     platform."Abbreviation" AS "PlatformAbbreviation",
                     platform."IgdbId" AS "PlatformIgdbId",
-                    wanted."CreatedAt" AS "WantedSince"
+                    wanted."CreatedAt" AS "WantedSince",
+                    (
+                        SELECT
+                            available."QualityKey"
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                            JOIN jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS quality ("Key", "Position")
+                                ON lower(quality."Key") = lower(available."QualityKey")
+                        WHERE
+                            asset."WorkId" = work."Id"
+                            AND asset."WorkUnitId" IS NULL
+                        ORDER BY
+                            quality."Position"
+                        LIMIT 1
+                    ) AS "InstalledQuality"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
@@ -167,7 +182,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static Task<IReadOnlyList<WantedItemParameters>> ReadDueWantedItemsAsync(this LogicContext ctx, WantedDueData data, CancellationToken ct)
         {
-            // Whole Works without media or a running download, and Works with unclaimed missing episodes or volumes, oldest schedule first.
+            // Whole Works without media, or below their cutoff, without a running download, and Works with unclaimed missing episodes or volumes, oldest schedule first.
             // Only enabled types with a library of their own are searched.
             var sql = new SqlStatement();
             sql.Statement =
@@ -223,6 +238,25 @@ namespace Jularr.Backend.Logic.Acquisition
                                             AND game."GamePlatformId" = wanted."GamePlatformId"
                                     )
                                 )
+                        )
+                        AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "AcquisitionReleases" AS release
+                                JOIN "Operations" AS operation ON operation."AcquisitionReleaseId" = release."Id"
+                            WHERE
+                                release."WantedItemId" = wanted."Id"
+                                AND operation."OperationStatusTypeId" IN (1, 2)
+                        )
+                        OR work."MediaTypeId" IN (1, 3, 6, 7)
+                        AND EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WantedBelowCutoff" AS below
+                            WHERE
+                                below."WantedItemId" = wanted."Id"
                         )
                         AND NOT EXISTS (
                             SELECT

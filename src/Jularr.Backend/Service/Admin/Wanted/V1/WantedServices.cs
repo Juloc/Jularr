@@ -19,8 +19,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Enrich only the bounded page. Missing: nothing or a monitored aired unit without media; cutoff unmet as UpgradePolicy.Assess
-            // decides it, per unit for the best known quality of the target's profile.
+            // Enrich only the bounded page. Missing: nothing or a monitored aired unit without media; cutoff unmet: the view WantedBelowCutoff.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -78,56 +77,14 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                                         asset."WorkUnitId" = unit."Id"
                                 )
                         ) AS "HasMedia",
-                        COALESCE((
+                        EXISTS (
                             SELECT
-                                (profile."Definition" ->> 'UpgradeAllowed')::boolean
-                                AND EXISTS (
-                                    SELECT
-                                        1
-                                    FROM
-                                        "MediaAssets" AS asset
-                                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                                        JOIN jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS quality ("Key", "Position")
-                                            ON lower(quality."Key") = lower(available."QualityKey")
-                                        LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
-                                    WHERE
-                                        asset."WorkId" = wanted."WorkId"
-                                        AND (unit."Id" IS NULL OR unit."IsMonitored")
-                                        AND (
-                                            wanted."GamePlatformId" IS NULL
-                                            OR EXISTS (
-                                                SELECT
-                                                    1
-                                                FROM
-                                                    "GameReleases" AS game
-                                                WHERE
-                                                    game."WorkVersionId" = asset."WorkVersionId"
-                                                    AND game."GamePlatformId" = wanted."GamePlatformId"
-                                            )
-                                        )
-                                    GROUP BY
-                                        asset."WorkUnitId"
-                                    HAVING
-                                        min(quality."Position") > COALESCE((
-                                            SELECT
-                                                cutoff."Position"
-                                            FROM
-                                                jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS cutoff ("Key", "Position")
-                                            WHERE
-                                                lower(cutoff."Key") = lower(profile."Definition" ->> 'UpgradeCutoffQuality')
-                                            LIMIT 1
-                                        ), 1)
-                                )
+                                1
                             FROM
-                                "AcquisitionProfiles" AS profile
+                                "WantedBelowCutoff" AS below
                             WHERE
-                                profile."MediaTypeId" = work."MediaTypeId"
-                                AND (profile."Id" = wanted."AcquisitionProfileId"
-                                    OR wanted."AcquisitionProfileId" IS NULL AND profile."IsDefault" AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId"))
-                            ORDER BY
-                                profile."MediaSubtypeId" IS NULL
-                            LIMIT 1
-                        ), FALSE) AS "IsCutoffUnmet"
+                                below."WantedItemId" = wanted."Id"
+                        ) AS "IsCutoffUnmet"
                     FROM
                         "WantedItems" AS wanted
                     INNER JOIN

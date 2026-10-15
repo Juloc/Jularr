@@ -81,6 +81,13 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new CandidateEvaluation(candidate, SelectionDecision.Rejected, score, reliability, reasons);
             }
 
+            // What is no upgrade of the present quality is only taken by hand, as another version.
+            if (candidate.InstalledQuality is { } installed && !UpgradePolicy.IsUpgrade(profile, installed, score.QualityKey))
+            {
+                reasons.Add(new SelectionReason(SelectionReasonKind.Quality, "NotAnUpgrade", installed));
+                return new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons);
+            }
+
             return candidate.Identity.Confidence == IdentityConfidence.Ambiguous && !profile.AllowAmbiguousIdentity
                 ? new CandidateEvaluation(candidate, SelectionDecision.ManualReview, score, reliability, reasons)
                 : new CandidateEvaluation(candidate, SelectionDecision.Eligible, score, reliability, reasons);

@@ -122,7 +122,8 @@ namespace Jularr.Backend.Logic.Acquisition
                 {
                     SafetyRejection = blocked.Contains(offer.Identity) ? "Blocked" : judgement.SafetyRejection,
                     ContextScore = judgement.ContextScore,
-                    Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? []
+                    Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? [],
+                    InstalledQuality = scope is null && target.HasMedia ? target.InstalledQuality : null
                 };
         }
 
