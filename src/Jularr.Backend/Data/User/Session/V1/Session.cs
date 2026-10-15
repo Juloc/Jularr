@@ -1,4 +1,5 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Fields.Account;
 
 namespace Jularr.Backend.Data.User.Session.V1
@@ -21,8 +22,9 @@ namespace Jularr.Backend.Data.User.Session.V1
 
     public sealed class SessionDetailsV1 : BaseResponse
     {
-        public SessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent, string? deviceName, string? devicePlatform)
+        public SessionDetailsV1(Guid id, DateTime createdAt, DateTime expiresAt, bool isCurrent, string? deviceName, string? devicePlatform, AudioQuality audioQuality)
         {
+            AudioQuality = audioQuality;
             Id = id;
             CreatedAt = createdAt;
             ExpiresAt = expiresAt;
@@ -48,6 +50,9 @@ namespace Jularr.Backend.Data.User.Session.V1
 
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DevicePlatform))]
         public string? DevicePlatform { get; }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.AudioQuality))]
+        public AudioQuality AudioQuality { get; }
     }
 
     public sealed class RevokeSessionParametersV1 : BaseParameters
@@ -99,5 +104,16 @@ namespace Jularr.Backend.Data.User.Session.V1
         // No name gives the device back its default name.
         [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.DeviceName))]
         public string? DeviceName { get; }
+    }
+
+    public sealed class SessionAudioQualityDataV1 : BaseData
+    {
+        public SessionAudioQualityDataV1(AudioQuality audioQuality)
+        {
+            AudioQuality = audioQuality;
+        }
+
+        [DataField(typeof(AccountSessionFields), nameof(AccountSessionFields.AudioQuality))]
+        public AudioQuality AudioQuality { get; }
     }
 }

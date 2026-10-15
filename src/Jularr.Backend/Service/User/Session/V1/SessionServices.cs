@@ -29,7 +29,8 @@ namespace Jularr.Backend.Service.User.Session.V1
                     session."ExpiresAt",
                     (session."PublicId" = @SessionPublicId) AS "IsCurrent",
                     session."DeviceName",
-                    session."DevicePlatform"
+                    session."DevicePlatform",
+                    session."AudioQuality"
                 FROM
                     "AccountSessions" AS session
                 INNER JOIN
@@ -94,6 +95,22 @@ namespace Jularr.Backend.Service.User.Session.V1
         {
             await Context.RenameSessionDeviceAsync(new SessionRevocationData(Parameters.SessionPublicId, Auth.AccountId!.Value), new SessionDeviceData(Data.DeviceName, null),
                 CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    // Music on this device plays as the original or converted to a smaller size.
+    [ServiceEndpoint("PUT", "/api/v1/sessions/{sessionPublicId:guid}/audio-quality")]
+    public sealed class UpdateSessionAudioQualityV1 : UserService<SessionDeviceParametersV1, SessionAudioQualityDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(SessionDeviceParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(SessionDeviceParametersV1 parameters, Type resultType) => new("session.self.manage");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.SetSessionAudioQualityAsync(new SessionRevocationData(Parameters.SessionPublicId, Auth.AccountId!.Value), Data, CancellationToken);
             return new UpdateResult(true);
         }
     }

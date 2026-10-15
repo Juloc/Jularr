@@ -9,6 +9,7 @@ namespace Jularr.Backend.Data.Fields.Media
         public static readonly IntField TmdbId = new() { Minimum = 1 };
         public static readonly IntField AniListId = new() { Minimum = 1 };
         public static readonly StringField ExternalId = new() { MaximumLength = 64, AllowBlank = false, Format = Enums.Field.StringFormat.SingleLine };
+        public static readonly StringArrayField ExternalIds = new() { ItemMaximumLength = 64, MaximumLength = 500 };
         public static readonly StringField Author = new() { MaximumLength = 4000, Required = false };
         public static readonly StringField OriginalTitle = new(NpgsqlDbType.Varchar) { MaximumLength = 500, Required = false };
         public static readonly StringField Overview = new() { MaximumLength = 4000, Required = false };

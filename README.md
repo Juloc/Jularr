@@ -165,7 +165,7 @@ der Verbindung und werden über einen sicheren Ordner-Browser gewählt. Scans la
 im Hintergrund-Worker, automatisch nach dem in `/Admin/Instance` eingestellten Intervall (Standard 24 Stunden, 0 aus; schlafende NAS bleiben unberührt), `/Admin/Library` zeigt Inventar und Zuordnung, `/Admin/Activity` die Scans, die
 Detailseite die gespeicherte Verfügbarkeit. Dafür sind die frischen
 [Storage-](database/Storage.sql) und [Library-Baselines](database/Library.sql)
-erforderlich; `Media:FfprobePath` aktiviert die Stream-Analyse. Deployment, Rechte und
+erforderlich; `Media:FfprobePath` aktiviert die Stream-Analyse, `Media:FpcalcPath` mit einem AcoustID-Schlüssel die Musikerkennung per Fingerabdruck. Deployment, Rechte und
 offene Integration stehen in [Storage Runtime](docs/STORAGE_RUNTIME.md).
 Den tatsächlichen Umfang gegenüber dem Originalmodell zeigt der
 [Schema-Abgleich](docs/SCHEMA_SNAPSHOT_ALIGNMENT.md).

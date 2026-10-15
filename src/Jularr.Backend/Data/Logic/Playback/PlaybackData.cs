@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Playback;
@@ -12,10 +13,11 @@ namespace Jularr.Backend.Data.Logic.Playback
 {
     internal sealed class PlaybackSourceParameters : BaseData
     {
-        public PlaybackSourceParameters(long mediaAssetId, long profileId)
+        public PlaybackSourceParameters(long mediaAssetId, long profileId, Guid? sessionPublicId = null)
         {
             MediaAssetId = mediaAssetId;
             ProfileId = profileId;
+            SessionPublicId = sessionPublicId;
         }
 
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
@@ -23,13 +25,19 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
         public long ProfileId { get; }
+
+        // The device asking, for its music quality.
+        [DataField(typeof(Fields.Account.AccountSessionFields), nameof(Fields.Account.AccountSessionFields.PublicId), false)]
+        public Guid? SessionPublicId { get; }
     }
 
     internal sealed class PlaybackSourceData : BaseData
     {
         public PlaybackSourceData(long storedFileId, string relativePath, string rootRelativePath, long storageMountId, StorageProtocolType storageProtocolTypeId, string sharePath,
-            string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, long? durationMs, long? resumePositionMs)
+            string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, long? durationMs, long? resumePositionMs, long? bitRate, AudioQuality audioQuality)
         {
+            BitRate = bitRate;
+            AudioQuality = audioQuality;
             StoredFileId = storedFileId;
             RelativePath = relativePath;
             RootRelativePath = rootRelativePath;
@@ -75,6 +83,13 @@ namespace Jularr.Backend.Data.Logic.Playback
 
         [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PositionMs), false)]
         public long? ResumePositionMs { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.BitRate))]
+        public long? BitRate { get; }
+
+        // The playing device's music quality.
+        [DataField(typeof(Fields.Account.AccountSessionFields), nameof(Fields.Account.AccountSessionFields.AudioQuality))]
+        public AudioQuality AudioQuality { get; }
     }
 
     internal sealed class PlaybackTrackData : BaseData

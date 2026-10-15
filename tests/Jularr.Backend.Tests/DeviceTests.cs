@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Device.V1;
 using Jularr.Backend.Data.User.Device.V1;
@@ -276,6 +277,11 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"DeviceName\" IS NULL FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
             using var list = await host.SendAsync(HttpMethod.Get, "/Account/Sessions");
             StringAssert.Contains(await list.Content.ReadAsStringAsync(), "<p>Browser ");
+
+            // It may ask for smaller music.
+            using var smaller = await host.SendAsync(HttpMethod.Put, "/api/v1/sessions/" + deviceSession + "/audio-quality", new SessionAudioQualityDataV1(AudioQuality.Small));
+            Assert.AreEqual(HttpStatusCode.OK, smaller.StatusCode, await smaller.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)3, await host.ScalarAsync("SELECT \"AudioQuality\" FROM \"AccountSessions\" WHERE \"DevicePlatform\" = 'Web'"));
 
             // Paired to the Owner, its requests still wait for approval.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Device request')");

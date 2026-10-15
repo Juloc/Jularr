@@ -11,7 +11,10 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Data.System.Acquisition.V1;
 using Jularr.Backend.Logic.Acquisition;
+using Jularr.Backend.Logic.Library;
 using Jularr.Backend.Service.System.Acquisition.V1;
+using Jularr.Integrations.Data.Media;
+using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.MusicBrainz;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
@@ -151,6 +154,77 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "Artist/Album (2019)/01 - One", "Artist/Album (2019)/02 - Two", "Artist/Album (2019)/03 - Ten" }, tied.Select(placement => placement.TargetStem).ToArray());
             Assert.IsTrue(tied.All(placement => placement.WorkUnitTypeId == WorkUnitType.Track));
             Assert.IsTrue(ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.Defaults, null, author: "Artist", trackCount: 4).All(placement => placement.WorkUnitTypeId is null));
+        }
+
+        [TestMethod]
+        public void Music_Placement_FollowsTagsOverNames()
+        {
+            var files = new[] { "a.flac", "b.flac", "c.flac" }.Select(name => new Jularr.Integrations.Data.Storage.StorageFile(name, 1000, DateTime.UtcNow)).ToArray();
+            var tags = new Dictionary<string, AudioTags> { ["a.flac"] = new("Closing", 2, 1, null), ["b.flac"] = new("Opening", 1, 1, null), ["c.flac"] = new("Middle Song", 1, 2, null) };
+            var placed = ImportPlacementLogic.Plan(MediaType.Music, null, "Album", 2019, "FLAC", files, NamingPatternTests.Defaults, null, author: "Artist", trackCount: 3, tags: tags);
+            CollectionAssert.AreEqual(new[] { "Artist/Album (2019)/01 - Opening", "Artist/Album (2019)/02 - Middle Song", "Artist/Album (2019)/03 - Closing" },
+                placed.Select(placement => placement.TargetStem).ToArray());
+            CollectionAssert.AreEqual(new[] { "b.flac", "c.flac", "a.flac" }, placed.Select(placement => placement.SourcePath).ToArray());
+        }
+
+        [TestMethod]
+        public async Task Music_LibraryScan_AssignsFilesTaggedWithTheirAlbumInTagOrder()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeMusicSources());
+            var mountId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StorageMounts\""))!;
+            var rootId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"LibraryRoots\""))!;
+
+            // Files named in no order carry the album's MusicBrainz release group and their disc and track; an untagged file stays for a person.
+            var folder = Directory.CreateDirectory(Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture), "Music", "Unsorted")).FullName;
+            foreach (var (name, title, track) in new[] { ("b.flac", "Opening", 1u), ("a.flac", "Closing", 3u), ("c.flac", "Middle Song", 2u) })
+            {
+                WriteTaggedFlac(Path.Combine(folder, name), title, track, Album);
+            }
+
+            File.WriteAllBytes(Path.Combine(folder, "loose.flac"), new byte[100]);
+            Assert.AreEqual("Middle Song", AudioTagReader.Read(Path.Combine(folder, "c.flac"))?.Title);
+            await LibraryTests.ScanAsync(host, rootId);
+            Assert.AreEqual("Unsorted/b.flac=1 Unsorted/c.flac=2 Unsorted/a.flac=3", await host.ScalarAsync("""
+                SELECT string_agg(file."RelativePath" || '=' || unit."Number"::integer, ' ' ORDER BY unit."Number")
+                FROM "StoredFiles" AS file JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId" JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+                """));
+            Assert.AreEqual("Example Album", await host.ScalarAsync("SELECT \"CanonicalTitle\" FROM \"Works\""));
+            Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"RelativePath\" = 'Unsorted/loose.flac'"));
+        }
+
+        [TestMethod]
+        public void Music_Fingerprints_NameTheAlbumEveryFileOfAFolderMatches()
+        {
+            var answer = System.Text.Json.JsonDocument.Parse($$"""
+                {"status":"ok","results":[
+                  {"score":0.95,"recordings":[{"id":"r1","releasegroups":[{"id":"{{Album}}"},{"id":"11111111-2222-3333-4444-555555555555"}]}]},
+                  {"score":0.4,"recordings":[{"id":"r2","releasegroups":[{"id":"99999999-2222-3333-4444-555555555555"}]}]}]}
+                """);
+            var groups = Jularr.Integrations.Logic.AcoustId.AcoustIdClient.Parse(answer.RootElement);
+            CollectionAssert.AreEqual(new[] { Album, "11111111-2222-3333-4444-555555555555" }, groups.ToArray());
+            Assert.AreEqual(Album, MusicFingerprintLogic.Album([groups, [Album, "aaaaaaaa-2222-3333-4444-555555555555"]]));
+            Assert.IsNull(MusicFingerprintLogic.Album([groups, groups]));
+            Assert.IsNull(MusicFingerprintLogic.Album([groups, []]));
+            var fingerprint = AudioFingerprinter.Parse("""{"duration": 183.47, "fingerprint": "AQADtE"}""");
+            Assert.AreEqual((183, "AQADtE"), (fingerprint.DurationSeconds, fingerprint.Value));
+        }
+
+        // A FLAC stream header without audio, tagged as Picard tags an album's track.
+        private static void WriteTaggedFlac(string path, string title, uint track, string releaseGroup)
+        {
+            var info = new byte[34];
+            info[0] = 0x10;
+            info[2] = 0x10;
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(info.AsSpan(10), (44100UL << 44) | (1UL << 41) | (15UL << 36));
+            File.WriteAllBytes(path, [.. "fLaC"u8, 0x80, 0, 0, 34, .. info, .. new byte[64]]);
+            using var file = TagLib.File.Create(path);
+            file.Tag.Title = title;
+            file.Tag.Disc = 1;
+            file.Tag.Track = track;
+            file.Tag.MusicBrainzReleaseGroupId = releaseGroup;
+            file.Save();
         }
 
         [TestMethod]

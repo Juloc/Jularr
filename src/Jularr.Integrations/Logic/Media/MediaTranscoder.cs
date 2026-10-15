@@ -192,7 +192,7 @@ namespace Jularr.Integrations.Logic.Media
                 arguments.AddRange(["-force_key_frames", "expr:gte(t,n_forced*" + segment + ")"]);
             }
 
-            arguments.AddRange(request.CopyAudio ? ["-c:a", "copy"] : ["-c:a", "aac", "-ac", "2", "-b:a", "192k"]);
+            arguments.AddRange(request.CopyAudio ? ["-c:a", "copy"] : ["-c:a", "aac", "-ac", "2", "-b:a", request.AudioKilobits.ToString(CultureInfo.InvariantCulture) + "k"]);
             arguments.AddRange([
                 "-output_ts_offset", offset,
                 "-f", "hls",

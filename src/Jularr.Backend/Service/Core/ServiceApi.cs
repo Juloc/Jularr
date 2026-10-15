@@ -20,6 +20,7 @@ using Jularr.Integrations.Logic.Libretro;
 using Jularr.Integrations.Logic.MusicBrainz;
 using Jularr.Integrations.Logic.Common;
 using Jularr.Integrations.Logic.Gutenberg;
+using Jularr.Integrations.Logic.AcoustId;
 using Jularr.Integrations.Logic.Hardcover;
 using Jularr.Integrations.Logic.Opds;
 using Jularr.Integrations.Logic.OpenLibrary;
@@ -119,6 +120,7 @@ namespace Jularr.Backend.Service.Core
             var providers = (configuration.GetSection("Providers").Get<ProviderOptions>() ?? new ProviderOptions()).Validated();
             services.AddSingleton(new MediaProbeClient { ExecutablePath = configuration["Media:FfprobePath"] });
             services.AddSingleton(new MediaTranscoder { ExecutablePath = configuration["Media:FfmpegPath"] });
+            services.AddSingleton(new AudioFingerprinter { ExecutablePath = configuration["Media:FpcalcPath"] });
             services.AddSingleton(new ArchiveTools { Par2Path = configuration["Usenet:Par2Path"], SevenZipPath = configuration["Usenet:SevenZipPath"] });
 
             // Backups reach the same database.
@@ -164,6 +166,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<MediaProbeClient>();
             services.TryAddSingleton<WakeOnLanClient>();
             services.TryAddSingleton<MediaTranscoder>();
+            services.TryAddSingleton<AudioFingerprinter>();
             services.TryAddSingleton<PlaybackTranscodes>();
             services.TryAddTransient<PlaybackSubtitles>();
             services.TryAddTransient<WantedAcquisition>();
@@ -174,6 +177,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<LibraryReplacements>();
             services.TryAddTransient<BookMetadata>();
             services.TryAddTransient<GameRomIdentification>();
+            services.TryAddTransient<MusicTagIdentification>();
             services.TryAddTransient<AniListMetadata>();
             services.TryAddTransient<AniListMatcher>();
             services.TryAddTransient<MusicMetadata>();
@@ -271,6 +275,7 @@ namespace Jularr.Backend.Service.Core
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary);
             AddClient<HardcoverClient>(services, 15, 4, agent: true, baseAddress: providers.Hardcover);
+            AddClient<AcoustIdClient>(services, 15, 1, agent: true, baseAddress: providers.AcoustId);
             AddClient<AniListClient>(services, 15, 4, agent: true, baseAddress: providers.AniList);
             AddClient<MusicBrainzClient>(services, 20, 4, agent: true, baseAddress: providers.MusicBrainz);
             AddClient<IgdbClient>(services, 20, 8, agent: true);

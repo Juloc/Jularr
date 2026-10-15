@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Logic.Account;
 using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Session;
+using Jularr.Backend.Data.User.Session.V1;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Profile;
 
@@ -297,6 +298,28 @@ namespace Jularr.Backend.Logic.Session
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new KeyNotFoundException("The device was not found.");
+            }
+        }
+
+        public static async Task SetSessionAudioQualityAsync(this LogicContext ctx, SessionRevocationData session, SessionAudioQualityDataV1 quality, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AccountSessions" AS session
+                SET
+                    "AudioQuality" = @AudioQuality
+                WHERE
+                    session."PublicId" = @SessionPublicId
+                    AND session."AccountId" = @AccountId
+                    AND session."RevokedAt" IS NULL;
+                """;
+            sql.Parameters.Add(session);
+            sql.Parameters.Add(quality);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new KeyNotFoundException("The session was not found.");
             }
         }
 

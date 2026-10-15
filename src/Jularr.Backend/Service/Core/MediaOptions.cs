@@ -6,6 +6,9 @@ namespace Jularr.Backend.Service.Core
         public string? FfprobePath { get; set; }
         public string? FfmpegPath { get; set; }
 
+        // Chromaprint's fpcalc fingerprints untagged music for AcoustID.
+        public string? FpcalcPath { get; set; }
+
         // Resource budget for conversions.
         public string TranscodeCachePath { get; set; } = Path.Combine(Path.GetTempPath(), "jularr-transcode");
         public int MaxTranscodes { get; set; } = 2;

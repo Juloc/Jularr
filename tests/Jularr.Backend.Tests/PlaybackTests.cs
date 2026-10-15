@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Admin.Library.V1;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Playback;
@@ -254,6 +255,23 @@ namespace Jularr.Backend.Tests
             CollectionAssert.DoesNotContain(copy, "-hwaccel");
             CollectionAssert.DoesNotContain(copy, "-force_key_frames");
             Assert.AreEqual(2, copy.Count(argument => argument == "copy"));
+        }
+
+        [TestMethod]
+        public void Music_DeviceQuality_ConvertsOnlyClearlyLargerAudio()
+        {
+            // A lossless album track on a device asking for small music becomes 128 kbit/s AAC; a small MP3, the original setting and video stay as they are.
+            var flac = new[] { new PlaybackTrackData(0, MediaTrackType.Audio, "flac", true) };
+            Assert.AreEqual(128, PlaybackLogic.AudioKilobits(AudioQuality.Small, flac, 900_000));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.Small, [new PlaybackTrackData(0, MediaTrackType.Audio, "mp3", true)], 128_000));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.Original, flac, 900_000));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.High, flac, null));
+            Assert.IsNull(PlaybackLogic.AudioKilobits(AudioQuality.High, [new PlaybackTrackData(0, MediaTrackType.Video, "h264", true), .. flac], 9_000_000));
+            var conversion = PlaybackLogic.PlanConversion([new PlaybackTrackData(0, MediaTrackType.Audio, "aac", true)], Hls.Containers.ToHashSet(), Hls.VideoCodecs.ToHashSet(),
+                Hls.AudioCodecs.ToHashSet(), audioKilobits: 256)!;
+            Assert.AreEqual((PlaybackModeType.Transcode, false, 256), (conversion.PlaybackModeTypeId, conversion.CopyAudio, conversion.AudioKilobits));
+            var arguments = MediaTranscoder.BuildArguments(new TranscodeRequest("/music/a.flac", "/cache/s", 0, 6, null, 0, true, false, [], []) { AudioKilobits = 128 }).ToList();
+            Assert.AreEqual("128k", arguments[arguments.IndexOf("-b:a") + 1]);
         }
 
         [TestMethod]
