@@ -54,6 +54,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Navigation("nav.home");
             if (!texts.CanReadMedia())
             {
+                page.Content.Add(new P(new Text("media.notForProfile")).Attribute("role", "status"));
                 return;
             }
 

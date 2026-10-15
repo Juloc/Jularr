@@ -138,7 +138,16 @@ namespace Jularr.Backend.Service.User.Media.V1
                     ), ARRAY[]::text[]) AS "Creators",
                     franchise."Id" AS "FranchiseId",
                     franchise."Name" AS "FranchiseName",
-                    work."MediaTypeId" = 2 OR work."MediaSubtypeId" IS NOT DISTINCT FROM 2 OR NOT (EXISTS (
+                    NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "AcquisitionRequests" AS open
+                        WHERE
+                            open."WorkId" = work."Id"
+                            AND open."RequestedByProfileId" = @ProfileId
+                            AND open."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5
+                    ) AND (work."MediaTypeId" = 2 OR work."MediaSubtypeId" IS NOT DISTINCT FROM 2 OR NOT (EXISTS (
                         SELECT
                             1
                         FROM
@@ -154,7 +163,20 @@ namespace Jularr.Backend.Service.User.Media.V1
                         WHERE
                             plex."WorkId" = work."Id"
                             AND plex."Namespace" = 'plex'
-                    )) AS "IsRequestable"
+                    ))) AS "IsRequestable",
+                    (
+                        SELECT
+                            request."AcquisitionRequestStatusTypeId"
+                        FROM
+                            "AcquisitionRequests" AS request
+                        WHERE
+                            request."WorkId" = work."Id"
+                            AND request."RequestedByProfileId" = @ProfileId
+                        ORDER BY
+                            request."CreatedAt" DESC,
+                            request."Id" DESC
+                        LIMIT 1
+                    ) AS "RequestStatusTypeId"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"

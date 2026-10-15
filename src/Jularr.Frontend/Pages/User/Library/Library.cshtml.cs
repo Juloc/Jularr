@@ -43,6 +43,7 @@ namespace Jularr.Frontend.Pages.User.Library
             page.Asset("Pages/User/Library/Library.entry.scss");
             if (_items is not { } items)
             {
+                if (!texts.CanReadMedia()) page.Content.Add(new P(new Text("media.notForProfile")).Attribute("role", "status"));
                 return;
             }
 

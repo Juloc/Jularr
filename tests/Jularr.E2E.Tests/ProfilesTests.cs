@@ -83,7 +83,7 @@ namespace Jularr.E2E.Tests
                 // The user's request waits for the Owner; once approved it is searched, downloaded and arrives.
                 await Steps.RequestAsync(visitor, "Bunny", FakeServices.MovieTitle);
                 await visitor.GotoAsync("/Requests");
-                StringAssert.Contains(await visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Open");
+                StringAssert.Contains(await visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Waiting for approval");
                 await page.GotoAsync("/Admin/Requests");
                 await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).Locator("form")
                     .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Approve" }) }));
@@ -93,7 +93,7 @@ namespace Jularr.E2E.Tests
                 await Steps.GrabAsync(page, film);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);
                 await visitor.GotoAsync("/Requests");
-                StringAssert.Contains(await visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Completed");
+                StringAssert.Contains(await visitor.Locator("tr", new() { HasText = FakeServices.MovieTitle }).InnerTextAsync(), "Available");
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), owner.Problems.ToArray());
                 CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.ToArray());

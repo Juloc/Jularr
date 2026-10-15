@@ -242,7 +242,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, pause.StatusCode, await pause.Content.ReadAsStringAsync());
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsPaused\" FROM \"WantedItems\""));
             using var mine = await host.SendAsync(HttpMethod.Get, "/Requests");
-            Assert.AreEqual(HttpStatusCode.OK, mine.StatusCode, await mine.Content.ReadAsStringAsync());
+            var mineHtml = await mine.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, mine.StatusCode, mineHtml);
+
+            // The requester reads where the request stands and reaches the title; the details show it instead of a second request.
+            var requestedWork = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WantedItems\""))!;
+            StringAssert.Contains(mineHtml, "href=\"/Details/" + requestedWork + "\"");
+            StringAssert.Contains(mineHtml, "Looking for media");
+            using var requestedDetails = await host.SendAsync(HttpMethod.Get, "/Details/" + requestedWork);
+            var detailsHtml = await requestedDetails.Content.ReadAsStringAsync();
+            StringAssert.Contains(detailsHtml, "Looking for media");
+            Assert.IsFalse(detailsHtml.Contains("Request this work", StringComparison.Ordinal));
 
             // Disabled does not erase data.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Requests'");

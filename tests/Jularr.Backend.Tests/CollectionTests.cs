@@ -71,11 +71,17 @@ namespace Jularr.Backend.Tests
             // Details offers the hand-picked ones; removing works there too.
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/10");
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Favorites");
-            using var removed = await host.SendAsync(HttpMethod.Delete, Route + "/" + favorites + "/works/10");
-            Assert.AreEqual(HttpStatusCode.OK, removed.StatusCode);
-            Assert.AreEqual(0, (await WorksAsync(host, favorites)).Length);
+            // The collection page names it in the tab and removes a title; deleting asks first.
             using var page = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites);
-            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "<title>Favorites · ");
+            using var removed = await host.SendAsync(HttpMethod.Post, "/Collections/" + favorites + "?handler=Remove&workId=10",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
+            Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode, await removed.Content.ReadAsStringAsync());
+            Assert.AreEqual(0, (await WorksAsync(host, favorites)).Length);
+            using var confirm = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?delete=true");
+            StringAssert.Contains(await confirm.Content.ReadAsStringAsync(), "The titles themselves stay.");
 
             // A profile keeps at most 100 collections, so lists are always complete.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Collections\" (\"ProfileId\", \"Name\", \"IsSmart\") SELECT 101, 'List ' || n, FALSE FROM generate_series(1, 100) AS n");

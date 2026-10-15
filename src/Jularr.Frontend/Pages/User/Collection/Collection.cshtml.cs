@@ -13,7 +13,8 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Collection
 {
     // One collection: its Works, its name and, for a smart one, its filter.
-    public sealed class CollectionModel(ReadCollectionV1 read, ReadCollectionWorksV1 readWorks, UpdateCollectionV1 update, DeleteCollectionV1 delete, IAntiforgery antiforgery,
+    public sealed class CollectionModel(ReadCollectionV1 read, ReadCollectionWorksV1 readWorks, UpdateCollectionV1 update, DeleteCollectionV1 delete, RemoveCollectionWorkV1 removeWork,
+        IAntiforgery antiforgery,
         UiText texts) : JularrPage
     {
         private CollectionV1? _collection;
@@ -26,11 +27,15 @@ namespace Jularr.Frontend.Pages.User.Collection
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        // Deleting asks once more.
+        [BindProperty(SupportsGet = true)]
+        public bool Delete { get; set; }
+
         private string Home => "/Collections/" + Id.ToString(CultureInfo.InvariantCulture);
 
         protected override void Define(Page page)
         {
-            page.Title("collections.title");
+            page.Title("collections.title", _collection?.Name);
             page.Navigation("collections.title");
             page.Asset("Pages/User/Collection/Collection.entry.scss");
             if (_collection is not { } collection)
@@ -42,8 +47,15 @@ namespace Jularr.Frontend.Pages.User.Collection
             page.Content.Add(new H2(new ValueText(collection.Name)));
             if (_works is { } works)
             {
-                page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))]).Class("media-grid"));
+                // A hand-picked collection removes its titles one by one; a smart one follows its filter.
+                var removeToken = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+                page.Content.Add(new Div([.. works.Items.Select(item =>
+                {
+                    var card = new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId));
+                    return collection.IsSmart ? (IUiComponent)card : new Div(card, new Form<CollectionWorkParametersV1>(form => form.Submit("media.remove", item.CanonicalTitle, valueHidden: true),
+                        Home + "?handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), removeToken, new CollectionWorkParametersV1(collection.Id, item.Id))).Class("media-grid__entry");
+                })]).Class("media-grid"));
                 if (works.Items.Count == 0) page.Content.Add(new P(new Text(collection.IsSmart ? "collections.noMatch" : "collections.noWorks")));
                 if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Home + "?pageNumber=" + (works.Page - 1).ToString(CultureInfo.InvariantCulture)));
                 if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Class("button").Attribute("href", Home + "?pageNumber=" + (works.Page + 1).ToString(CultureInfo.InvariantCulture)));
@@ -70,7 +82,10 @@ namespace Jularr.Frontend.Pages.User.Collection
                 form.Submit("common.save");
             }, Home, csrf, _input ?? new UpdateCollectionDataV1(collection.Name, collection.Version, collection.MediaTypeId, collection.MediaSubtypeId, collection.ReleaseYearFrom,
                 collection.ReleaseYearTo, collection.OnlyAvailable, collection.OnlyUnfinished), FormError),
-                new Form<CollectionParametersV1>(form => form.Submit("collections.delete"), Home + "?handler=Delete", csrf, new CollectionParametersV1(collection.Id))]));
+                Delete
+                    ? new Form<CollectionParametersV1>(form => form.Submit("collections.delete"), Home + "?handler=Delete", csrf, new CollectionParametersV1(collection.Id))
+                    : new A(new Text("collections.delete")).Class("button").Attribute("href", Home + "?delete=true")]));
+            if (Delete) page.Content.Add(new P(new Text("collections.deleteConfirm")).Attribute("role", "alert"));
         }
 
         public async Task<IActionResult> OnGetAsync()
@@ -92,6 +107,12 @@ namespace Jularr.Frontend.Pages.User.Collection
         {
             _input = new UpdateCollectionDataV1(name ?? "", version, mediaTypeId, mediaSubtypeId, releaseYearFrom, releaseYearTo, onlyAvailable, onlyUnfinished);
             await update.ExecuteAsync<UpdateResult>(new CollectionParametersV1(Id), _input, HttpContext.RequestAborted);
+            return LocalRedirect(Home);
+        }
+
+        public async Task<IActionResult> OnPostRemoveAsync([BindRequired] long workId)
+        {
+            await removeWork.ExecuteAsync<UpdateResult>(new CollectionWorkParametersV1(Id, workId), default, HttpContext.RequestAborted);
             return LocalRedirect(Home);
         }
 

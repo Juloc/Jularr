@@ -1,9 +1,11 @@
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Acquisition;
 using Jularr.Backend.Data.Fields.Library;
 using Jularr.Backend.Data.Fields.Media;
-using Jularr.Backend.Data.Fields.Provider;
 using Jularr.Backend.Data.Fields.Playback;
+using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.User.Media.V1
 {
@@ -105,8 +107,9 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName, bool isRequestable)
+            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId)
         {
+            RequestStatusTypeId = requestStatusTypeId;
             IsRequestable = isRequestable;
             FranchiseId = franchiseId;
             FranchiseName = franchiseName;
@@ -171,9 +174,13 @@ namespace Jularr.Backend.Data.User.Media.V1
         [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Name), false)]
         public string? FranchiseName { get; }
 
-        // A Work with media and without episodes or volumes to come needs no request.
+        // A Work with media and without episodes or volumes to come, or with an open request of the profile, needs no request.
         [DataField(typeof(WorkFields), nameof(WorkFields.IsRequestable))]
         public bool IsRequestable { get; }
+
+        // The profile's latest request for the Work.
+        [DataField(typeof(AcquisitionRequestFields), nameof(AcquisitionRequestFields.AcquisitionRequestStatusTypeId), false)]
+        public AcquisitionRequestStatusType? RequestStatusTypeId { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData

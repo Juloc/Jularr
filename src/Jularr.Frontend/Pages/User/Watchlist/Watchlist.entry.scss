@@ -1,1 +1,8 @@
 @use "../../../Framework/Components/MediaCard";
+
+// A card with its personal-list action beneath.
+.media-grid__entry {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}

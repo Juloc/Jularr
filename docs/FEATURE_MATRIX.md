@@ -78,12 +78,12 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Page | Status | Tests | Missing |
 | --- | --- | --- | --- |
 | Home/Discover | tested | DiscoverTests, BookTests, MangaTests, discover.test.mjs, HomeLayoutTests | Genre/year filters |
-| Details | tested | PlaybackTests | Complete episode details; the browser tab names "Media details" instead of the work |
-| Library, Watchlist | tested | MediaTests | Filters; numbered paging |
+| Details | tested | PlaybackTests, RequestTests | Complete episode details; genres, cast, runtime, trailer, related works |
+| Library, Watchlist | tested | MediaTests | Filters, sorts by use, progress and rating; numbered paging |
 | Player | tested | PlaybackTests, navigation.test.mjs | Real transcoding in CI, casting |
-| Reader | tested | ReadingTests, reader.test.mjs, comic.test.mjs | Bookmarks; PDF conversion |
-| Login, setup, registration, profiles, sessions | e2e (setup, sign-in, registration with Owner approval, menus) | FirstRunTests, ProfilesTests, AuthenticationTests | Remaining setup steps in the browser; the sign-in page's appearance note "Instance defaults and profile policies are not connected yet" |
-| Requests, settings, calendar, collections, notifications, statistics | tested | RequestTests, CalendarTests, CollectionTests, NotificationTests, StatisticsTests | Browser tests |
+| Reader | tested | ReadingTests, reader.test.mjs, comic.test.mjs | Bookmarks; PDF conversion; progress slider and hiding chrome; comic fit and zoom |
+| Login, setup, registration, profiles, sessions | e2e (setup, sign-in, registration with Owner approval, menus) | FirstRunTests, ProfilesTests, AuthenticationTests | Remaining setup steps in the browser |
+| Requests, settings, calendar, collections, notifications, statistics | tested | RequestTests, CalendarTests, CollectionTests, NotificationTests, StatisticsTests | Browser tests; month and week calendar; request timeline and cancel; collection add-media search |
 | Responsive layout | unclear | – | Viewport tests |
 
 ## Devices and apps

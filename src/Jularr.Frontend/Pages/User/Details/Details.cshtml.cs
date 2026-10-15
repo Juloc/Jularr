@@ -112,6 +112,12 @@ namespace Jularr.Frontend.Pages.User.Details
                         _requestInput ?? (selected is null ? null : new CreateRequestDataV1(selected.Id)), _requestInput is null ? null : FormError));
                 }
 
+                // The profile's request shows its state and leads to the requests.
+                if (work.RequestStatusTypeId is { } requested && texts.CanRequest())
+                {
+                    actions.Add(new A(new Text("request.state." + requested)).Class("button").Attribute("href", "/Requests"));
+                }
+
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
 
                 // Stored inventory, no storage access; named sections split it where staff defined them.

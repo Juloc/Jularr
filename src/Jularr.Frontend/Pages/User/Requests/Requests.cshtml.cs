@@ -26,9 +26,9 @@ namespace Jularr.Frontend.Pages.User.Requests
             if (_requests is { } requests)
             {
                 var table = new Table<RequestDetailsV1>(requests.Items)
-                    .Text(item => item.CanonicalTitle, "table.work")
+                    .Content("table.work", item => new A(new ValueText(item.CanonicalTitle)).Attribute("href", "/Details/" + item.WorkId.ToString(CultureInfo.InvariantCulture)))
                     .Text(item => item.RequestedLanguage, "request.language")
-                    .Resource(item => item.AcquisitionRequestStatusTypeId, "table.status", status => "request.status." + status)
+                    .Resource(item => item.AcquisitionRequestStatusTypeId, "table.status", status => "request.state." + status)
                     .Text(item => item.CreatedAt, "table.requestedAt");
                 if (requests.Items.Any(item => item.ManualUrl is not null))
                 {

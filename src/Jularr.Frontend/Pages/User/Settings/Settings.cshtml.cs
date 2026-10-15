@@ -148,43 +148,45 @@ namespace Jularr.Frontend.Pages.User.Settings
                 new A(new Text("account.logout.title")).Class("button").Attribute("href", "/Account/Logout")
             ]));
 
-            // Expose granted administration routes.
+            // Granted administration routes in one section.
+            var administration = new List<IUiComponent>();
             if (_authentication?.Permissions.Contains("storage.read", StringComparer.Ordinal) is true)
             {
-                page.Content.Add(new A(new Text("storage.title")).Attribute("href", "/Admin/Storage"));
-                page.Content.Add(new A(new Text("setup.storage.title")).Attribute("href", "/Setup/Storage"));
+                administration.Add(new A(new Text("storage.title")).Class("button").Attribute("href", "/Admin/Storage"));
+                administration.Add(new A(new Text("setup.storage.title")).Class("button").Attribute("href", "/Setup/Storage"));
             }
 
             if (_authentication?.Permissions.Contains("acquisition.manage", StringComparer.Ordinal) is true)
             {
-                page.Content.Add(new A(new Text("admin.acquisition.title")).Attribute("href", "/Admin/Acquisition"));
-                page.Content.Add(new A(new Text("admin.profiles.title")).Attribute("href", "/Admin/Acquisition/Profiles"));
+                administration.Add(new A(new Text("admin.acquisition.title")).Class("button").Attribute("href", "/Admin/Acquisition"));
+                administration.Add(new A(new Text("admin.profiles.title")).Class("button").Attribute("href", "/Admin/Acquisition/Profiles"));
             }
 
             if (_authentication?.Permissions.Contains("instance.settings.read", StringComparer.Ordinal) is true)
             {
-                page.Content.Add(new A(new Text("admin.instance.title")).Attribute("href", "/Admin/Instance"));
+                administration.Add(new A(new Text("admin.instance.title")).Class("button").Attribute("href", "/Admin/Instance"));
             }
 
             if (_authentication?.Permissions.Contains("backup.read", StringComparer.Ordinal) is true)
             {
-                page.Content.Add(new A(new Text("admin.backup.title")).Attribute("href", "/Admin/Backup"));
+                administration.Add(new A(new Text("admin.backup.title")).Class("button").Attribute("href", "/Admin/Backup"));
             }
 
             if (_authentication?.Permissions.Contains("accounts.read", StringComparer.Ordinal) is true)
             {
-                page.Content.Add(new A(new Text("admin.accounts.title")).Attribute("href", "/Admin/Accounts"));
+                administration.Add(new A(new Text("admin.accounts.title")).Class("button").Attribute("href", "/Admin/Accounts"));
             }
 
             if (_authentication?.Permissions.Contains("localization.read", StringComparer.Ordinal) is true)
             {
-                page.Content.Add(new A(new Text("admin.localization.title")).Attribute("href", "/Admin/Localization"));
+                administration.Add(new A(new Text("admin.localization.title")).Class("button").Attribute("href", "/Admin/Localization"));
             }
 
             if (_authentication?.Permissions.Contains("providers.read", StringComparer.Ordinal) is true)
             {
-                page.Content.Add(new A(new Text("admin.providers.title")).Attribute("href", "/Admin/Providers"));
+                administration.Add(new A(new Text("admin.providers.title")).Class("button").Attribute("href", "/Admin/Providers"));
             }
+            if (administration.Count > 0) page.Content.Add(new UiSection("nav.admin", administration));
         }
 
         public async Task<IActionResult> OnGetAsync()
