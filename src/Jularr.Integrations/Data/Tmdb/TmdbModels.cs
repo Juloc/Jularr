@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Jularr.Integrations.Data.Common;
 
 namespace Jularr.Integrations.Data.Tmdb
 {
@@ -64,8 +65,9 @@ namespace Jularr.Integrations.Data.Tmdb
 
     internal sealed class TmdbEpisode
     {
-        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate, string? overview, string? stillPath, int? runtime)
+        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate, string? overview, string? stillPath, int? runtime, IReadOnlyList<ProviderPerson>? people = null)
         {
+            People = people ?? [];
             SeasonNumber = seasonNumber;
             EpisodeNumber = episodeNumber;
             Name = name;
@@ -84,6 +86,9 @@ namespace Jularr.Integrations.Data.Tmdb
 
         // Minutes.
         public int? Runtime { get; }
+
+        // Guest stars and who directed and wrote the episode.
+        public IReadOnlyList<ProviderPerson> People { get; }
     }
 
     internal sealed class TmdbWork
@@ -138,14 +143,13 @@ namespace Jularr.Integrations.Data.Tmdb
     // What a details page describes beyond the identity, named in the requested language.
     internal sealed class TmdbDetails
     {
-        public TmdbDetails(IReadOnlyList<string> genres, int? runtime, IReadOnlyList<string> studios, string? trailerKey, IReadOnlyList<TmdbCredit> cast, IReadOnlyList<TmdbCredit> crew)
+        public TmdbDetails(IReadOnlyList<string> genres, int? runtime, IReadOnlyList<string> studios, string? trailerKey, IReadOnlyList<ProviderPerson> people)
         {
             Genres = genres;
             Runtime = runtime;
             Studios = studios;
             TrailerKey = trailerKey;
-            Cast = cast;
-            Crew = crew;
+            People = people;
         }
 
         public IReadOnlyList<string> Genres { get; }
@@ -154,23 +158,8 @@ namespace Jularr.Integrations.Data.Tmdb
 
         // A YouTube video id.
         public string? TrailerKey { get; }
-        public IReadOnlyList<TmdbCredit> Cast { get; }
-        public IReadOnlyList<TmdbCredit> Crew { get; }
-    }
-
-    // A person with their character or job.
-    internal sealed class TmdbCredit
-    {
-        public TmdbCredit(string name, string? role, string? profilePath)
-        {
-            Name = name;
-            Role = role;
-            ProfilePath = profilePath;
-        }
-
-        public string Name { get; }
-        public string? Role { get; }
-        public string? ProfilePath { get; }
+        // Cast in billing order, then the key crew.
+        public IReadOnlyList<ProviderPerson> People { get; }
     }
 
     // Ranked lists; Upcoming exists for movies only.

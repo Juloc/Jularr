@@ -91,19 +91,6 @@ namespace Jularr.Backend.Service.User.Media.V1
                         ORDER BY
                             platform."Name"
                     ) AS "Platforms",
-                    coalesce((
-                        SELECT
-                            array_remove(CASE WHEN fact."FactKey" = 'Artist' THEN ARRAY[btrim(fact."Value")] ELSE regexp_split_to_array(btrim(fact."Value"), '\s*[,;]\s*') END, '')
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" IN ('Author', 'Artist')
-                        ORDER BY
-                            fact."IsManual" DESC,
-                            fact."Id"
-                        LIMIT 1
-                    ), ARRAY[]::text[]) AS "Creators",
                     franchise."Id" AS "FranchiseId",
                     franchise."Name" AS "FranchiseName",
                     NOT EXISTS (
@@ -286,17 +273,43 @@ namespace Jularr.Backend.Service.User.Media.V1
         }
     }
 
-    [ServiceEndpoint("GET", "/api/v1/creators/works")]
-    public sealed class ReadCreatorWorksV1 : UserService<ReadCreatorWorksParametersV1>
+    [ServiceEndpoint("GET", "/api/v1/people/{personId:long}")]
+    public sealed class ReadPersonV1 : UserService<PersonParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
-        protected override ModuleRequirement GetInstanceModules(ReadCreatorWorksParametersV1 parameters) => ModuleRequirement.All("Library");
-        protected override ServicePermission GetPermission(ReadCreatorWorksParametersV1 parameters, Type resultType) => new("profile.media.read");
-        protected override PageRequest GetPageRequest(ReadCreatorWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PersonV1>()];
+        protected override ModuleRequirement GetInstanceModules(PersonParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(PersonParametersV1 parameters, Type resultType) => new("profile.media.read");
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Everything the profile may see credited to this author or artist the way its details show it, oldest first.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    person."Id",
+                    person."Name",
+                    person."ImageUrl"
+                FROM
+                    "People" AS person
+                WHERE
+                    person."Id" = @PersonId;
+                """;
+            sql.Parameters.Add(Parameters);
+            return await Context.ReadSql.ReadOptionalAsync<PersonV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The person was not found.");
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/people/{personId:long}/works")]
+    public sealed class ReadPersonWorksV1 : UserService<ReadPersonWorksParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadPersonWorksParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadPersonWorksParametersV1 parameters, Type resultType) => new("profile.media.read");
+        protected override PageRequest GetPageRequest(ReadPersonWorksParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Everything the profile may see that credits the person, for the Work or one of its units, oldest first.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -326,24 +339,14 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     visible."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
-                    AND lower(@Name) = ANY(
+                    AND EXISTS (
                         SELECT
-                            lower(credit)
+                            1
                         FROM
-                            (
-                                SELECT
-                                    CASE WHEN fact."FactKey" = 'Artist' THEN ARRAY[btrim(fact."Value")] ELSE regexp_split_to_array(btrim(fact."Value"), '\s*[,;]\s*') END AS "Credits"
-                                FROM
-                                    "WorkMetadataFacts" AS fact
-                                WHERE
-                                    fact."WorkId" = work."Id"
-                                    AND fact."FactKey" IN ('Author', 'Artist')
-                                ORDER BY
-                                    fact."IsManual" DESC,
-                                    fact."Id"
-                                LIMIT 1
-                            ) AS chosen
-                            CROSS JOIN LATERAL unnest(chosen."Credits") AS credit
+                            "WorkPeople" AS credit
+                        WHERE
+                            credit."WorkId" = work."Id"
+                            AND credit."PersonId" = @PersonId
                     )
                 ORDER BY
                     work."ReleaseYear" NULLS LAST,
@@ -352,7 +355,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
-            sql.Parameters.Add(new CreatorData(Parameters.Name));
+            sql.Parameters.Add(new PersonParametersV1(Parameters.PersonId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
@@ -441,22 +444,25 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Cast before crew, each in the provider's order.
+            // The Work's own people by role, each in the provider's order; a unit's people stay with the unit.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
-                    credit."Name",
-                    credit."Role",
-                    credit."ImageUrl",
-                    credit."IsCrew"
+                    person."Id" AS "PersonId",
+                    person."Name",
+                    credit."PersonRoleId",
+                    credit."Credit",
+                    person."ImageUrl"
                 FROM
-                    "WorkCredits" AS credit
+                    "WorkPeople" AS credit
+                    JOIN "People" AS person ON person."Id" = credit."PersonId"
                 WHERE
                     credit."WorkId" = @WorkId
+                    AND credit."WorkUnitId" IS NULL
                     AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = credit."WorkId")
                 ORDER BY
-                    credit."IsCrew",
+                    credit."PersonRoleId",
                     credit."Position";
                 """;
             sql.Parameters.Add(Parameters);

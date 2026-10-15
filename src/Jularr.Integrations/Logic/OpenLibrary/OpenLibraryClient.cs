@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.OpenLibrary;
 
 namespace Jularr.Integrations.Logic.OpenLibrary
@@ -43,7 +44,7 @@ namespace Jularr.Integrations.Logic.OpenLibrary
                 : 0;
 
             // Author names need their own records; three are enough for identity.
-            var authors = new List<string>();
+            var authors = new List<ProviderPerson>();
             if (root.TryGetProperty("authors", out var entries) && entries.ValueKind == JsonValueKind.Array)
             {
                 foreach (var entry in entries.EnumerateArray().Take(3))
@@ -54,14 +55,14 @@ namespace Jularr.Integrations.Logic.OpenLibrary
                         using var record = await GetAsync(key.TrimStart('/') + ".json", ct);
                         if (ReadString(record.RootElement, "name") is { } name)
                         {
-                            authors.Add(name);
+                            authors.Add(new ProviderPerson(key["/authors/".Length..], name, ProviderPerson.Author));
                         }
                     }
                 }
             }
 
             var year = ReadString(root, "first_publish_date") is { } date && YearText().Match(date) is { Success: true } match ? int.Parse(match.Value, CultureInfo.InvariantCulture) : (int?)null;
-            return new OpenLibraryWork(workId, title, authors, year, description, cover > 0 ? cover : null);
+            return new OpenLibraryWork(workId, title, [.. authors.Select(author => author.Name)], year, description, cover > 0 ? cover : null) { People = authors };
         }
 
         private async Task<JsonDocument> GetAsync(string path, CancellationToken ct)

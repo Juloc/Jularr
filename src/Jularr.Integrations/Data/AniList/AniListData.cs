@@ -1,3 +1,5 @@
+using Jularr.Integrations.Data.Common;
+
 namespace Jularr.Integrations.Data.AniList
 {
     internal enum AniListFailure : byte
@@ -77,5 +79,8 @@ namespace Jularr.Integrations.Data.AniList
         // The wide artwork and the YouTube id of this entry's trailer.
         public string? BannerUrl { get; }
         public string? TrailerKey { get; }
+
+        // The credited people with their ids at this provider.
+        public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
 }

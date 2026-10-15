@@ -74,7 +74,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"GamePlatforms\""));
             Assert.AreEqual(2L, await host.ScalarAsync("SELECT count(*) FROM \"WorkPlatforms\""));
             Assert.AreEqual("Switch", await host.ScalarAsync("SELECT \"Abbreviation\" FROM \"GamePlatforms\" WHERE \"IgdbId\" = 130"));
-            Assert.AreEqual("Example Studio", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Developer'"));
+            Assert.AreEqual("Example Studio", await host.ScalarAsync("SELECT person.\"Name\" FROM \"WorkPeople\" AS credit JOIN \"People\" AS person ON person.\"Id\" = credit.\"PersonId\" WHERE credit.\"PersonRoleId\" = 10"));
             Assert.AreEqual("https://images.igdb.com/igdb/image/upload/t_cover_big/co1abc.jpg", await host.ScalarAsync("SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"FactKey\" = 'Poster'"));
 
             // One Twitch token serves every request; IGDB only sees the application id.

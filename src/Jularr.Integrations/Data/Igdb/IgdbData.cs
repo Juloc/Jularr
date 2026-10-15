@@ -1,3 +1,5 @@
+using Jularr.Integrations.Data.Common;
+
 namespace Jularr.Integrations.Data.Igdb
 {
     internal enum IgdbFailure : byte
@@ -69,5 +71,8 @@ namespace Jularr.Integrations.Data.Igdb
         public IReadOnlyList<IgdbPlatform> Platforms { get; }
         public IReadOnlyList<string> Developers { get; }
         public IReadOnlyList<string> AlternativeNames { get; }
+
+        // The credited people with their ids at this provider.
+        public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
 }

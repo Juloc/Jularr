@@ -150,6 +150,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             // Read everything before the short write batch.
             TmdbWork work;
             var units = new List<object>();
+            var people = new List<object>();
             try
             {
                 work = await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
@@ -161,6 +162,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                     {
                         units.Add(new { Season = season.SeasonNumber, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.AirDate,
                             Overview = TextLimit.Cut(episode.Overview, 4000), ImageUrl = TmdbClient.StillUrl(episode.StillPath), RuntimeMinutes = episode.Runtime is > 0 and <= 1440 ? episode.Runtime : null });
+                        people.AddRange(WorkPeopleLogic.Rows(episode.People, WorkUnitType.Episode, season.SeasonNumber, episode.EpisodeNumber));
                     }
                 }
             }
@@ -191,10 +193,7 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 new { Key = "Trailer", Value = details.TrailerKey, Localized = false },
                 new { Key = "Studio", Value = TextLimit.Cut(details.Studios.Count == 0 ? null : string.Join(", ", details.Studios), 4000), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
-            var credits = details.Cast.Select((person, index) => (Person: person, IsCrew: false, Position: index + 1))
-                .Concat(details.Crew.Select((person, index) => (Person: person, IsCrew: true, Position: index + 1)))
-                .Select(credit => new { credit.IsCrew, credit.Position, Name = TextLimit.Cut(credit.Person.Name, 300), Role = TextLimit.Cut(credit.Person.Role, 300),
-                    ImageUrl = TmdbClient.ProfileUrl(credit.Person.ProfilePath) });
+            people.InsertRange(0, WorkPeopleLogic.Rows(details.People));
             // Japanese animation is proposed as Anime unless a subtype was chosen.
             subtype ??= AniListMatching.IsAnime(work.GenreIds, work.OriginalLanguage, work.OriginCountries) ? MediaSubtype.Anime : null;
             var data = new WorkMetadataData(mediaType, subtype, Namespace(mediaType), tmdbId.ToString(CultureInfo.InvariantCulture), TextLimit.Cut(work.Title, 500)!,
@@ -204,7 +203,8 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             {
                 var workId = await ctx.SaveWorkMetadataAsync(data, token);
                 await ctx.SaveWorkFranchiseAsync(new WorkFranchiseData(workId, work.CollectionId, TextLimit.Cut(work.CollectionName, 300)), token);
-                await ctx.SaveWorkCreditsAsync(new WorkCreditsData(workId, mediaType == MediaType.Movie ? details.Runtime : null, JsonSerializer.Serialize(credits)), token);
+                await ctx.SaveWorkRuntimeAsync(new WorkRuntimeData(workId, mediaType == MediaType.Movie ? details.Runtime : null), token);
+                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, "tmdb", people), token);
                 return workId;
             }, ct);
         }

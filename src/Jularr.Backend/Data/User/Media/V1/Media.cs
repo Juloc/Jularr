@@ -36,17 +36,28 @@ namespace Jularr.Backend.Data.User.Media.V1
         public LibrarySortType LibrarySortTypeId { get; }
     }
 
-    public sealed class ReadCreatorWorksParametersV1 : BaseParameters
+    public sealed class PersonParametersV1 : BaseParameters
     {
-        public ReadCreatorWorksParametersV1(string name, int page = 1, int pageSize = 25)
+        public PersonParametersV1(long personId)
         {
-            Name = name;
+            PersonId = personId;
+        }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long PersonId { get; }
+    }
+
+    public sealed class ReadPersonWorksParametersV1 : BaseParameters
+    {
+        public ReadPersonWorksParametersV1(long personId, int page = 1, int pageSize = 25)
+        {
+            PersonId = personId;
             Page = page;
             PageSize = pageSize;
         }
 
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creator))]
-        public string Name { get; }
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long PersonId { get; }
 
         public int Page { get; }
         public int PageSize { get; }
@@ -122,7 +133,7 @@ namespace Jularr.Backend.Data.User.Media.V1
     public sealed class WorkDetailsV1 : BaseResponse
     {
         public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, bool isWatchlisted, int? releaseYear, string? overview, string? posterUrl, string? backdropUrl,
-            string? plexUrl, string[] platforms, string[] creators, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
+            string? plexUrl, string[] platforms, long? franchiseId, string? franchiseName, bool isRequestable, AcquisitionRequestStatusType? requestStatusTypeId,
             int? runtimeMinutes, string? genres, string? trailerKey, string? studio)
         {
             RuntimeMinutes = runtimeMinutes;
@@ -133,7 +144,6 @@ namespace Jularr.Backend.Data.User.Media.V1
             IsRequestable = isRequestable;
             FranchiseId = franchiseId;
             FranchiseName = franchiseName;
-            Creators = creators;
             Platforms = platforms;
             PlexUrl = plexUrl;
             Id = id;
@@ -183,10 +193,6 @@ namespace Jularr.Backend.Data.User.Media.V1
         [DataField(typeof(WorkFields), nameof(WorkFields.Titles))]
         public string[] Platforms { get; }
 
-        // The authors or artists, each on its own.
-        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Creators))]
-        public string[] Creators { get; }
-
         // The provider's film series, while franchises are switched on.
         [DataField(typeof(FranchiseFields), nameof(FranchiseFields.Id), false)]
         public long? FranchiseId { get; }
@@ -218,28 +224,51 @@ namespace Jularr.Backend.Data.User.Media.V1
         public string? Studio { get; }
     }
 
-    // A person the provider names: cast with their character, crew with their job.
+    // A person the provider names for a Work: who wrote or made it, the cast with their character, the crew with their job.
     public sealed class WorkCreditV1 : BaseResponse
     {
-        public WorkCreditV1(string name, string? role, string? imageUrl, bool isCrew)
+        public WorkCreditV1(long personId, string name, PersonRole personRoleId, string? credit, string? imageUrl)
         {
+            PersonId = personId;
             Name = name;
-            Role = role;
+            PersonRoleId = personRoleId;
+            Credit = credit;
             ImageUrl = imageUrl;
-            IsCrew = isCrew;
         }
 
-        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.Name))]
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long PersonId { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Name))]
         public string Name { get; }
 
-        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.Role))]
-        public string? Role { get; }
+        [DataField(typeof(PersonFields), nameof(PersonFields.PersonRoleId))]
+        public PersonRole PersonRoleId { get; }
 
-        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.ImageUrl))]
+        [DataField(typeof(PersonFields), nameof(PersonFields.Credit))]
+        public string? Credit { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.ImageUrl))]
         public string? ImageUrl { get; }
+    }
 
-        [DataField(typeof(WorkCreditFields), nameof(WorkCreditFields.IsCrew))]
-        public bool IsCrew { get; }
+    public sealed class PersonV1 : BaseResponse
+    {
+        public PersonV1(long id, string name, string? imageUrl)
+        {
+            Id = id;
+            Name = name;
+            ImageUrl = imageUrl;
+        }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(PersonFields), nameof(PersonFields.ImageUrl))]
+        public string? ImageUrl { get; }
     }
 
     public sealed class UpdateWatchlistDataV1 : BaseData

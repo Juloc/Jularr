@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Jularr.Integrations.Data.Common;
 using Jularr.Integrations.Data.Igdb;
 
 namespace Jularr.Integrations.Logic.Igdb
@@ -21,7 +22,7 @@ namespace Jularr.Integrations.Logic.Igdb
         private static DateTimeOffset _last = DateTimeOffset.MinValue;
 
         private const string Fields = "fields name,first_release_date,summary,cover.image_id,platforms.name,platforms.abbreviation,"
-            + "involved_companies.company.name,involved_companies.developer,alternative_names.name;";
+            + "involved_companies.company.id,involved_companies.company.name,involved_companies.developer,alternative_names.name;";
 
         public static string CoverUrl(string imageId) => "https://images.igdb.com/igdb/image/upload/t_cover_big/" + imageId + ".jpg";
 
@@ -50,11 +51,18 @@ namespace Jularr.Integrations.Logic.Igdb
             var platforms = Array(game, "platforms").Select(platform => Int(platform, "id") is { } platformId && Text(platform, "name") is { } platformName
                 ? new IgdbPlatform(platformId, Limit(platformName, 200), Text(platform, "abbreviation") is { } abbreviation ? Limit(abbreviation, 32) : null)
                 : null).OfType<IgdbPlatform>().Take(50).ToArray();
-            var developers = Array(game, "involved_companies").Where(company => company.TryGetProperty("developer", out var developer) && developer.ValueKind == JsonValueKind.True)
-                .Select(company => company.TryGetProperty("company", out var entry) ? Text(entry, "name") : null).OfType<string>().Distinct(StringComparer.Ordinal).Take(3).ToArray();
+            var studios = Array(game, "involved_companies").Where(company => company.TryGetProperty("developer", out var developer) && developer.ValueKind == JsonValueKind.True)
+                .Select(company => company.TryGetProperty("company", out var entry) && Text(entry, "name") is { } studio
+                    ? new ProviderPerson(Int(entry, "id")?.ToString(CultureInfo.InvariantCulture), Limit(studio, 300), ProviderPerson.Developer)
+                    : null)
+                .OfType<ProviderPerson>().DistinctBy(studio => studio.Id ?? studio.Name).Take(3).ToArray();
+            var developers = studios.Select(studio => studio.Name).Distinct(StringComparer.Ordinal).ToArray();
             var alternatives = Array(game, "alternative_names").Select(alternative => Text(alternative, "name")).OfType<string>().Where(alternative => alternative.Length <= 500).Take(10).ToArray();
             var cover = game.TryGetProperty("cover", out var image) ? Text(image, "image_id") : null;
-            return new IgdbGame(id, Limit(name, 500), released, Text(game, "summary"), cover is not null && ImageId().IsMatch(cover) ? cover : null, platforms, developers, alternatives);
+            return new IgdbGame(id, Limit(name, 500), released, Text(game, "summary"), cover is not null && ImageId().IsMatch(cover) ? cover : null, platforms, developers, alternatives)
+            {
+                People = studios
+            };
         }
 
         private async Task<JsonDocument> QueryAsync(IgdbConnection connection, string endpoint, string body, CancellationToken ct)

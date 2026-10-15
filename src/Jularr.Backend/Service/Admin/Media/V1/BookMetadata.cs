@@ -58,13 +58,18 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
             var facts = new[]
             {
-                new { Key = "Author", Value = TextLimit.Cut(string.Join(", ", work.Authors), 4000), Localized = false },
                 new { Key = "Overview", Value = TextLimit.Cut(work.Description, 4000), Localized = false },
                 new { Key = "Poster", Value = OpenLibraryClient.CoverUrl(work.CoverId), Localized = false }
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var data = new WorkMetadataData(MediaType.Book, subtype, Namespace, work.WorkId, TextLimit.Cut(work.Title, 500)!, null, work.Year is >= 1800 and <= 2200 ? work.Year : null, "[]", "[]",
                 JsonSerializer.Serialize(facts), Namespace, null);
-            return await context.ExecuteBatchAsync((ctx, token) => ctx.SaveWorkMetadataAsync(data, token), ct);
+            var people = WorkPeopleLogic.Rows(work.People).ToArray();
+            return await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                var workId = await ctx.SaveWorkMetadataAsync(data, token);
+                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, Namespace, people), token);
+                return workId;
+            }, ct);
         }
 
         private static Exception Translate(OpenLibraryException exception) => exception.Failure switch
