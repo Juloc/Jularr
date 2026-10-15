@@ -113,6 +113,23 @@ namespace Jularr.Backend.Data.Logic.Media
         public int? RuntimeMinutes { get; }
     }
 
+    // A book's catalog editions, found again by language and format.
+    internal sealed class WorkEditionsData : BaseData
+    {
+        public WorkEditionsData(long id, string editions)
+        {
+            Id = id;
+            Editions = editions;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        // JSON rows of LanguageCode, EditionFormatId, Title, Publisher, ReleaseYear and Identities (Namespace, Value).
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Editions))]
+        public string Editions { get; }
+    }
+
     // The provider's people of a Work, replacing what its last import stored.
     internal sealed class WorkPeopleData : BaseData
     {

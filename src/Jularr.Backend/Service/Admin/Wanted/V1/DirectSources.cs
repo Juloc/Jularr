@@ -49,8 +49,9 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         public async Task<IReadOnlyList<ReleaseOffer>?> SearchAsync(AcquisitionConnectionData source, WantedTargetData target, CancellationToken ct)
         {
-            // Named like book releases so the shared judge decides.
-            var query = string.Join(' ', new[] { target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }.Where(part => !string.IsNullOrWhiteSpace(part)));
+            // Named like book releases so the shared judge decides; an edition in the requested language is asked for by its title, Anna's Archive by its ISBN.
+            var query = string.Join(' ', new[] { target.EditionTitles.FirstOrDefault() ?? target.CanonicalTitle, BookReleaseJudge.Authors(target.Author).FirstOrDefault() }
+                .Where(part => !string.IsNullOrWhiteSpace(part)));
             try
             {
                 switch (source.AcquisitionConnectionTypeId)
@@ -63,7 +64,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             Offer(source, "opds:" + Hash(book.Id) + ":" + link.Format, book.Authors, book.Title, book.Language, link.Format, link.Uri, null)))];
                     case AcquisitionConnectionType.AnnasArchive:
                         var site = Catalog(source);
-                        return [.. (await _annas.SearchAsync(site, query, ct)).Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
+                        return [.. (await _annas.SearchAsync(site, target.Isbns.FirstOrDefault() ?? query, ct)).Select(record => Offer(source, "annas:" + record.Md5 + ":" + record.Extension,
                             record.Author is null ? [] : [record.Author], record.Title, record.Language, record.Extension, AnnasArchiveClient.RecordUri(site, record.Md5), record.SizeBytes))];
                     default:
                         return [];

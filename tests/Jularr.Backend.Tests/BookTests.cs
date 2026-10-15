@@ -201,11 +201,50 @@ namespace Jularr.Backend.Tests
             return host;
         }
 
+        [TestMethod]
+        public async Task Book_Editions_KeepLanguageFormatAndIsbn_AndARequestFindsItsLanguagesTitle()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeBookSources());
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Book, "OL66554W"));
+            Assert.AreEqual(HttpStatusCode.OK, imported.StatusCode, await imported.Content.ReadAsStringAsync());
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+
+            // One edition per language and format, the one with an ISBN first; one without a language is left out. The translator belongs to their edition.
+            Assert.AreEqual("de:2:Stolz und Vorurteil:Anaconda:2014, en:1:Pride and Prejudice:Penguin:2003", await host.ScalarAsync("""
+                SELECT string_agg(concat_ws(':', "LanguageCode", "EditionFormatId", "Title", "Publisher", "ReleaseYear"), ', ' ORDER BY "LanguageCode")
+                FROM "WorkEditions" WHERE "LanguageCode" IS NOT NULL
+                """));
+            Assert.AreEqual("9783730601442", await host.ScalarAsync("""
+                SELECT identity."Value" FROM "WorkEditionExternalIdentities" AS identity JOIN "WorkEditions" AS edition ON edition."Id" = identity."WorkEditionId"
+                WHERE edition."LanguageCode" = 'de' AND identity."Namespace" = 'isbn'
+                """));
+            Assert.AreEqual("Werner Beck", await host.ScalarAsync("""
+                SELECT person."Name" FROM "WorkPeople" AS credit JOIN "People" AS person ON person."Id" = credit."PersonId"
+                JOIN "WorkEditions" AS edition ON edition."Id" = credit."WorkEditionId" WHERE credit."PersonRoleId" = 12 AND edition."LanguageCode" = 'de'
+                """));
+            using var credits = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id + "/credits");
+            CollectionAssert.AreEqual(new[] { "Jane Austen" }, (await credits.Content.ReadFromJsonAsync<BaseDataList<Jularr.Backend.Data.User.Media.V1.WorkCreditV1>>())!.Select(person => person.Name).ToArray());
+
+            // Asked for in German, the German edition's title matches its releases; in English they stay another book.
+            var wantedId = await CreateWantedAsync(host, work.Id);
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionRequests\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'de-DE')");
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            var translated = candidates.Single(candidate => candidate.Title.StartsWith("Stolz.und", StringComparison.Ordinal));
+            Assert.AreEqual((ReleaseDecisionType.Eligible, "EPUB"), (translated.ReleaseDecisionTypeId, translated.QualityKey));
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionRequests\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'en-GB')");
+            using var english = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            Assert.AreEqual(ReleaseDecisionType.Rejected, (await english.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!
+                .Single(candidate => candidate.Title.StartsWith("Stolz.und", StringComparison.Ordinal)).ReleaseDecisionTypeId);
+        }
+
         private static async Task<long> CreateWantedAsync(Host host, long workId)
         {
             await host.Fixture.RunSqlAsync($"""
                 INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
-                VALUES (700, {workId}, 202, 42, 1, 2, 41, now());
+                VALUES (700, {workId}, 202, 42, 2, 2, 41, now());
                 INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (800, {workId});
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (700, 800);
                 """);
@@ -234,6 +273,14 @@ namespace Jularr.Backend.Tests
                             "/search.json" => Json("""{"docs":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537,"isbn":["9780141439518"]}]}"""),
                             "/works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"covers":[14348537],"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
                             "/authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
+                            "/works/OL66554W/editions.json" => Json("""
+                                {"entries":[
+                                  {"key":"/books/OL1M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","isbn_13":["9780141439518"],"publishers":["Penguin"],"publish_date":"2003"},
+                                  {"key":"/books/OL2M","title":"Pride and Prejudice","languages":[{"key":"/languages/eng"}],"physical_format":"Paperback","publish_date":"1990"},
+                                  {"key":"/books/OL3M","title":"Stolz und Vorurteil","languages":[{"key":"/languages/ger"}],"physical_format":"ebook","isbn_13":["978-3-7306-0144-2"],"publishers":["Anaconda"],"publish_date":"2014","contributors":[{"role":"Translator","name":"Werner Beck"}]},
+                                  {"key":"/books/OL4M","title":"Orgueil et préjugés","physical_format":"Paperback"}
+                                ]}
+                                """),
                             "/trending/weekly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537}]}"""),
                             _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                         };
@@ -249,6 +296,7 @@ namespace Jularr.Backend.Tests
                               <item><title>Seth Grahame-Smith - Pride and Prejudice and Zombies (epub)</title><guid>zombies</guid><link>https://indexer.example.test/getnzb/zombies</link><size>1000000</size></item>
                               <item><title>Pride.and.Prejudice.Retold.2019.EPUB</title><guid>retold</guid><link>https://indexer.example.test/getnzb/retold</link><size>1000000</size></item>
                               <item><title>Jane.Austen.Pride.and.Prejudice.1813.PDF</title><guid>pdf</guid><link>https://indexer.example.test/getnzb/pdf</link><size>2000000</size></item>
+                              <item><title>Stolz.und.Vorurteil.Jane.Austen.2014.German.EPUB</title><guid>german</guid><link>https://indexer.example.test/getnzb/german</link><size>1000000</size></item>
                             </channel></rss>
                             """);
                     default:

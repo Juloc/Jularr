@@ -13,6 +13,8 @@ namespace Jularr.Integrations.Data.Common
         public const string Illustrator = "Illustrator";
         public const string Artist = "Artist";
         public const string Developer = "Developer";
+        public const string Narrator = "Narrator";
+        public const string Translator = "Translator";
 
         public ProviderPerson(string? id, string name, string role, string? credit = null, string? imageUrl = null)
         {

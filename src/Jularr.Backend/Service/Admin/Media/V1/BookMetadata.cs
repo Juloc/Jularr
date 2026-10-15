@@ -67,12 +67,26 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }.Where(fact => !string.IsNullOrWhiteSpace(fact.Value));
             var data = new WorkMetadataData(MediaType.Book, subtype, Namespace, work.WorkId, TextLimit.Cut(work.Title, 500)!, null, work.Year is >= 1800 and <= 2200 ? work.Year : null, "[]", "[]",
                 JsonSerializer.Serialize(facts), Namespace, null);
-            var people = WorkPeopleLogic.Rows(work.People).ToArray();
+            // Editions are a bonus: without them the book is still the book.
+            IReadOnlyList<OpenLibraryEdition> found;
+            try
+            {
+                found = await openLibrary.ReadEditionsAsync(workId, ct);
+            }
+            catch (OpenLibraryException)
+            {
+                found = [];
+            }
+
+            var editions = WorkEditionLogic.Choose(found);
+            var people = WorkPeopleLogic.Rows(work.People)
+                .Concat(editions.SelectMany(item => WorkPeopleLogic.Rows(item.Edition.People, editionLanguage: item.Language, editionFormat: item.Format))).ToArray();
             return await context.ExecuteBatchAsync(async (ctx, token) =>
             {
-                var workId = await ctx.SaveWorkMetadataAsync(data, token);
-                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(workId, Namespace, people), token);
-                return workId;
+                var savedId = await ctx.SaveWorkMetadataAsync(data, token);
+                await ctx.SaveWorkEditionsAsync(WorkEditionLogic.Data(savedId, editions), token);
+                await ctx.SaveWorkPeopleAsync(WorkPeopleLogic.Data(savedId, Namespace, people), token);
+                return savedId;
             }, ct);
         }
 

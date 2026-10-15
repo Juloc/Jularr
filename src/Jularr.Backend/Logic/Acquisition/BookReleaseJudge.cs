@@ -20,7 +20,10 @@ namespace Jularr.Backend.Logic.Acquisition
             ["epub"] = "EPUB", ["kepub"] = "EPUB", ["azw3"] = "AZW3", ["azw"] = "AZW3", ["mobi"] = "MOBI", ["pdf"] = "PDF"
         };
 
-        public static ReleaseJudgement<BookIdentityMatch> Judge(string title, string? author, ReleaseOffer offer)
+        public static ReleaseJudgement<BookIdentityMatch> Judge(string title, string? author, ReleaseOffer offer) => Judge([title], author, offer);
+
+        // The work's title or the title of an edition in a requested language.
+        public static ReleaseJudgement<BookIdentityMatch> Judge(IReadOnlyList<string> titles, string? author, ReleaseOffer offer)
         {
             if (offer.DownloadUri is null)
             {
@@ -29,7 +32,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var parsed = Parse(offer.Title);
             var words = ReleaseWords.Words(offer.Title, Noise);
-            var wanted = ReleaseWords.Words(title, Noise);
+            var wanted = titles.Select(title => ReleaseWords.Words(title, Noise)).FirstOrDefault(candidate => candidate.Count > 0 && candidate.All(words.Contains))
+                ?? ReleaseWords.Words(titles[0], Noise);
             var languages = ReleaseWords.ReadLanguages(offer.Title);
             var viaId = offer.Stages.Contains("id");
             if (wanted.Count == 0 || !wanted.All(words.Contains))

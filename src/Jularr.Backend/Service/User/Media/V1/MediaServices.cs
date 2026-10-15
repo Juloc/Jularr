@@ -444,7 +444,7 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // The Work's own people by role, each in the provider's order; a unit's people stay with the unit.
+            // The Work's own people by role, each in the provider's order; a unit's or an edition's people stay with it.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -460,6 +460,7 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     credit."WorkId" = @WorkId
                     AND credit."WorkUnitId" IS NULL
+                    AND credit."WorkEditionId" IS NULL
                     AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = credit."WorkId")
                 ORDER BY
                     credit."PersonRoleId",

@@ -64,4 +64,30 @@ namespace Jularr.Integrations.Data.OpenLibrary
         // The credited people with their ids at this provider.
         public IReadOnlyList<ProviderPerson> People { get; init; } = [];
     }
+
+    // One printing of a work: its language (a MARC code such as "ger"), format, ISBNs, publisher and year; translators where named.
+    internal sealed class OpenLibraryEdition
+    {
+        public OpenLibraryEdition(string editionId, string? title, string? language, string? physicalFormat, IReadOnlyList<string> isbns, string? publisher, int? year)
+        {
+            EditionId = editionId;
+            Title = title;
+            Language = language;
+            PhysicalFormat = physicalFormat;
+            Isbns = isbns;
+            Publisher = publisher;
+            Year = year;
+        }
+
+        public string EditionId { get; }
+        public string? Title { get; }
+        public string? Language { get; }
+        public string? PhysicalFormat { get; }
+        public IReadOnlyList<string> Isbns { get; }
+        public string? Publisher { get; }
+        public int? Year { get; }
+
+        // Translators and readers as the edition names them, without ids.
+        public IReadOnlyList<ProviderPerson> People { get; init; } = [];
+    }
 }

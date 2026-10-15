@@ -71,7 +71,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             return new SearchIntent(kind, target.CanonicalTitle)
             {
-                Aliases = target.Titles, Year = target.ReleaseYear, Creator = target.Author, ExternalIds = ids, Season = kind == AcquisitionKind.Manga ? null : scope?.ParentNumber,
+                Aliases = [.. target.Titles, .. target.EditionTitles], Year = target.ReleaseYear, Creator = target.Author, ExternalIds = ids, Season = kind == AcquisitionKind.Manga ? null : scope?.ParentNumber,
                 Episode = kind == AcquisitionKind.Manga ? null : scope?.UnitNumber, Volume = kind == AcquisitionKind.Manga ? scope?.UnitNumber : null,
                 AbsoluteEpisode = kind == AcquisitionKind.Anime && scope?.UnitNumber is not null ? scope.Unit.Absolute : null,
                 AirDate = kind == AcquisitionKind.Tv && scope is { UnitNumber: not null, ParentNumber: >= 1900 } ? scope.Unit.ReleasedOn : null
@@ -110,7 +110,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var blocked = target.ReleaseIdentities.ToHashSet(StringComparer.Ordinal);
             return ReleaseSelectionEngine.Select(profile, [.. offers.Select(offer => kind switch
             {
-                AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge(target.CanonicalTitle, target.Author, offer)),
+                AcquisitionKind.Book or AcquisitionKind.LightNovel => Candidate(offer, BookReleaseJudge.Judge([target.CanonicalTitle, .. target.EditionTitles], target.Author, offer)),
                 AcquisitionKind.Manga => Candidate(offer, MangaReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], scope, offer)),
                 AcquisitionKind.Music => Candidate(offer, MusicReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.Author, offer)),
                 AcquisitionKind.Game => Candidate(offer, GameReleaseJudge.Judge([target.CanonicalTitle, .. target.Titles], target.PlatformIgdbId, target.PlatformAbbreviation, offer)),

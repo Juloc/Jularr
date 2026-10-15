@@ -25,8 +25,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
-            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, DateTime wantedSince = default, string? installedQuality = null)
+            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, DateTime wantedSince = default, string? installedQuality = null,
+            string[]? editionTitles = null, string[]? isbns = null)
         {
+            EditionTitles = editionTitles ?? [];
+            Isbns = isbns ?? [];
             WantedSince = wantedSince;
             InstalledQuality = installedQuality;
             Author = author;
@@ -121,6 +124,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The best quality of the profile among the Work's own present files; an upgrade must beat it.
         [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
         public string? InstalledQuality { get; }
+
+        // The titles and ISBNs of the editions in the requested languages.
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.EditionTitles))]
+        public string[] EditionTitles { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Isbns))]
+        public string[] Isbns { get; }
     }
 
     internal sealed class UnitStateData : BaseData

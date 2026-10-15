@@ -30,7 +30,7 @@ namespace Jularr.Backend.Logic.Media
                     "WorkEditions" ("WorkId")
                 VALUES
                     (@Id)
-                ON CONFLICT ("WorkId", "Name") DO UPDATE
+                ON CONFLICT ("WorkId", "Name", "LanguageCode", "EditionFormatId") DO UPDATE
                 SET
                     "WorkId" = EXCLUDED."WorkId"
                 RETURNING

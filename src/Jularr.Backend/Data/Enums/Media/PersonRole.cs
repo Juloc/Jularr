@@ -12,6 +12,8 @@ namespace Jularr.Backend.Data.Enums.Media
         Author = 7,
         Illustrator = 8,
         Artist = 9,
-        Developer = 10
+        Developer = 10,
+        Narrator = 11,
+        Translator = 12
     }
 }

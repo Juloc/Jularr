@@ -149,11 +149,43 @@ namespace Jularr.Backend.Logic.Acquisition
                         ORDER BY
                             quality."Position"
                         LIMIT 1
-                    ) AS "InstalledQuality"
+                    ) AS "InstalledQuality",
+                    ARRAY(
+                        SELECT DISTINCT
+                            edition."Title"
+                        FROM
+                            "WorkEditions" AS edition
+                        WHERE
+                            edition."WorkId" = work."Id"
+                            AND edition."LanguageCode" = ANY(requested."Languages")
+                            AND edition."Title" IS NOT NULL
+                            AND edition."Title" <> work."CanonicalTitle"
+                    ) AS "EditionTitles",
+                    ARRAY(
+                        SELECT DISTINCT
+                            identity."Value"
+                        FROM
+                            "WorkEditions" AS edition
+                            JOIN "WorkEditionExternalIdentities" AS identity ON identity."WorkEditionId" = edition."Id" AND identity."Namespace" = 'isbn'
+                        WHERE
+                            edition."WorkId" = work."Id"
+                            AND edition."LanguageCode" = ANY(requested."Languages")
+                    ) AS "Isbns"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"
                     LEFT JOIN "GamePlatforms" AS platform ON platform."Id" = wanted."GamePlatformId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            array_agg(DISTINCT lower(split_part(locale."Locale", '-', 1))) AS "Languages"
+                        FROM
+                            "RequestTargets" AS target
+                            JOIN "AcquisitionRequests" AS request ON request."Id" = target."AcquisitionRequestId"
+                            JOIN "UiLocales" AS locale ON locale."Id" = request."UiLocaleId"
+                        WHERE
+                            target."WantedItemId" = wanted."Id"
+                            AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 6
+                    ) AS requested ON TRUE
                     LEFT JOIN LATERAL (
                         SELECT
                             candidate."Id",

@@ -65,6 +65,50 @@ namespace Jularr.Integrations.Logic.OpenLibrary
             return new OpenLibraryWork(workId, title, [.. authors.Select(author => author.Name)], year, description, cover > 0 ? cover : null) { People = authors };
         }
 
+        // The work's editions; one page is enough to know its languages and formats.
+        public async Task<IReadOnlyList<OpenLibraryEdition>> ReadEditionsAsync(string workId, CancellationToken ct)
+        {
+            if (!WorkId().IsMatch(workId))
+            {
+                throw new OpenLibraryException(OpenLibraryFailure.NotFound, "Invalid Open Library work id.");
+            }
+
+            using var document = await GetAsync("works/" + workId + "/editions.json?limit=100", ct);
+            if (!document.RootElement.TryGetProperty("entries", out var entries) || entries.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var editions = new List<OpenLibraryEdition>();
+            foreach (var entry in entries.EnumerateArray().Where(entry => entry.ValueKind == JsonValueKind.Object))
+            {
+                var id = ReadString(entry, "key")?.Split('/').Last();
+                if (id is null || !EditionId().IsMatch(id))
+                {
+                    continue;
+                }
+
+                var language = entry.TryGetProperty("languages", out var languages) && languages.ValueKind == JsonValueKind.Array
+                    ? languages.EnumerateArray().Select(item => ReadString(item, "key")?.Split('/').Last()).FirstOrDefault(code => code is { Length: 3 } && code.All(char.IsAsciiLetterLower))
+                    : null;
+                var isbns = ReadArray(entry, "isbn_13").Concat(ReadArray(entry, "isbn_10")).Select(isbn => isbn.Replace("-", "", StringComparison.Ordinal))
+                    .Where(isbn => isbn.Length is 10 or 13 && isbn[..^1].All(char.IsAsciiDigit)).Distinct(StringComparer.Ordinal).Take(10).ToArray();
+                var year = ReadString(entry, "publish_date") is { } date && YearText().Match(date) is { Success: true } match ? int.Parse(match.Value, CultureInfo.InvariantCulture) : (int?)null;
+                var translators = entry.TryGetProperty("contributors", out var contributors) && contributors.ValueKind == JsonValueKind.Array
+                    ? contributors.EnumerateArray()
+                        .Where(contributor => ReadString(contributor, "role")?.Contains("Translat", StringComparison.OrdinalIgnoreCase) == true)
+                        .Select(contributor => ReadString(contributor, "name")).OfType<string>().Take(5)
+                        .Select(name => new ProviderPerson(null, name, ProviderPerson.Translator)).ToArray()
+                    : [];
+                editions.Add(new OpenLibraryEdition(id, ReadString(entry, "title"), language, ReadString(entry, "physical_format"), isbns, ReadArray(entry, "publishers").FirstOrDefault(), year)
+                {
+                    People = translators
+                });
+            }
+
+            return editions;
+        }
+
         private async Task<JsonDocument> GetAsync(string path, CancellationToken ct)
         {
             HttpResponseMessage response;
@@ -144,6 +188,9 @@ namespace Jularr.Integrations.Logic.OpenLibrary
 
         [GeneratedRegex("^OL[0-9]{1,12}W$")]
         private static partial Regex WorkId();
+
+        [GeneratedRegex("^OL[0-9]{1,12}M$")]
+        private static partial Regex EditionId();
 
         [GeneratedRegex("^/authors/OL[0-9]{1,12}A$")]
         private static partial Regex AuthorKey();

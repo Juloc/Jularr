@@ -12,8 +12,9 @@ namespace Jularr.Backend.Logic.Media
     {
         private const int PerRole = 50;
 
-        // Rows in the provider's order per role, for the Work or one of its units.
-        public static IEnumerable<object> Rows(IEnumerable<ProviderPerson> people, WorkUnitType? unitType = null, decimal? parentNumber = null, decimal? number = null) =>
+        // Rows in the provider's order per role, for the Work, one of its units or one of its catalog editions.
+        public static IEnumerable<object> Rows(IEnumerable<ProviderPerson> people, WorkUnitType? unitType = null, decimal? parentNumber = null, decimal? number = null,
+            string? editionLanguage = null, EditionFormat? editionFormat = null) =>
             people.Where(person => !string.IsNullOrWhiteSpace(person.Name) && Enum.IsDefined(typeof(PersonRole), person.Role))
                 .GroupBy(person => person.Role)
                 .SelectMany(role => role.Take(PerRole).Select((person, index) => (object)new
@@ -26,7 +27,9 @@ namespace Jularr.Backend.Logic.Media
                     Credit = string.IsNullOrWhiteSpace(person.Credit) ? null : TextLimit.Cut(person.Credit.Trim(), 300),
                     WorkUnitTypeId = (int?)unitType,
                     ParentNumber = parentNumber,
-                    Number = number
+                    Number = number,
+                    EditionLanguage = editionLanguage,
+                    EditionFormatId = (int?)editionFormat
                 }));
 
         public static WorkPeopleData Data(long workId, string @namespace, IEnumerable<object> rows) => new(workId, @namespace, JsonSerializer.Serialize(rows));
@@ -133,7 +136,7 @@ namespace Jularr.Backend.Logic.Media
                             AND other."WorkId" <> @Id
                     );
 
-                -- A unit's people need that unit; people without an id are new each time.
+                -- A unit's or an edition's people need it; people without an id are new each time.
                 WITH item AS (
                     SELECT
                         row_number() OVER () AS "Row",
@@ -143,10 +146,13 @@ namespace Jularr.Backend.Logic.Media
                         entry."PersonRoleId",
                         entry."Position",
                         entry."Credit",
-                        unit."Id" AS "WorkUnitId"
+                        unit."Id" AS "WorkUnitId",
+                        edition."Id" AS "WorkEditionId"
                     FROM
                         jsonb_to_recordset(@People::jsonb) AS entry ("ExternalId" text, "Name" text, "ImageUrl" text, "PersonRoleId" smallint, "Position" smallint, "Credit" text,
-                            "WorkUnitTypeId" smallint, "ParentNumber" numeric, "Number" numeric)
+                            "WorkUnitTypeId" smallint, "ParentNumber" numeric, "Number" numeric, "EditionLanguage" text, "EditionFormatId" smallint)
+                        LEFT JOIN "WorkEditions" AS edition ON edition."WorkId" = @Id AND edition."Name" IS NULL AND edition."LanguageCode" = entry."EditionLanguage"
+                            AND edition."EditionFormatId" = entry."EditionFormatId"
                         LEFT JOIN LATERAL (
                             SELECT
                                 unit."Id"
@@ -161,8 +167,8 @@ namespace Jularr.Backend.Logic.Media
                             LIMIT 1
                         ) AS unit ON TRUE
                     WHERE
-                        entry."Number" IS NULL
-                        OR unit."Id" IS NOT NULL
+                        (entry."Number" IS NULL OR unit."Id" IS NOT NULL)
+                        AND (entry."EditionFormatId" IS NULL OR edition."Id" IS NOT NULL)
                 ), loose AS (
                     SELECT
                         item."Row",
@@ -184,10 +190,11 @@ namespace Jularr.Backend.Logic.Media
                         loose
                 )
                 INSERT INTO
-                    "WorkPeople" ("WorkId", "WorkUnitId", "PersonId", "PersonRoleId", "Position", "Credit")
+                    "WorkPeople" ("WorkId", "WorkUnitId", "WorkEditionId", "PersonId", "PersonRoleId", "Position", "Credit")
                 SELECT
                     @Id,
                     item."WorkUnitId",
+                    item."WorkEditionId",
                     COALESCE(identity."PersonId", loose."PersonId"),
                     item."PersonRoleId",
                     item."Position",
