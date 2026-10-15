@@ -153,7 +153,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class SaveAcquisitionConnectionDataV1 : BaseData
     {
-        public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, string? apiKey, bool isEnabled, int priority, int[] categories,
+        public SaveAcquisitionConnectionDataV1(string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, string? apiKey, bool isEnabled, int priority, int[]? categories,
             string? downloadCategory, string? remotePath, string? localPath, string? username = null, int? maxConnections = null, string? password = null, int[]? mediaTypeIds = null,
             bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null)
         {
@@ -170,7 +170,7 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
             ApiKey = apiKey;
             IsEnabled = isEnabled;
             Priority = priority;
-            Categories = categories;
+            Categories = categories ?? [];
             DownloadCategory = downloadCategory;
             RemotePath = remotePath;
             LocalPath = localPath;

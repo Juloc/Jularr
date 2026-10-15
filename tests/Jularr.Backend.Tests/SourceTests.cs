@@ -69,6 +69,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(form, "value=\"https://api.nzbgeek.info\"");
             var categories = System.Text.RegularExpressions.Regex.Match(form, "<input[^>]*name=\"Categories\"[^>]*>").Value;
             Assert.IsFalse(string.IsNullOrEmpty(categories) || categories.Contains("required"), categories);
+
+            // An indexer without categories uses the media type ranges.
+            using var bare = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Bare", AcquisitionConnectionType.Newznab, "https://bare.example.test", null, true,
+                25, null, null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, bare.StatusCode, await bare.Content.ReadAsStringAsync());
             StringAssert.Contains(html, "/Admin/Acquisition?Type=AnnasArchive");
         }
 
