@@ -12,5 +12,13 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly EnumField MediaSubtypeId = new(typeof(MediaSubtype)) { Required = false };
         public static readonly StringField RelativePath = new(NpgsqlDbType.Varchar) { MaximumLength = 1024, Trim = true, Format = StringFormat.RelativePath };
         public static readonly LongField Version = new() { Minimum = 1 };
+
+        // What a library holds and how it is kept, for the overview.
+        public static readonly LongField WorkCount = new() { Minimum = 0 };
+        public static readonly LongField MissingCount = new() { Minimum = 0 };
+        public static readonly LongField UnmatchedCount = new() { Minimum = 0 };
+        public static readonly LongField TotalBytes = new() { Minimum = 0 };
+        public static readonly DateTimeField LastScanAt = new() { Required = false };
+        public static readonly BoolField IsScanning = new();
     }
 }

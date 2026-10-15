@@ -11,6 +11,11 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizeFolder("/");
             conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
             conventions.AddPageRoute("/Admin/Instance/Instance", "/Setup/Instance");
+            foreach (var view in new[] { "Unmatched", "Files", "Naming", "Rename", "Versions" })
+            {
+                conventions.AddPageRoute("/Admin/Library/Library", "/Admin/Library/" + view);
+            }
+
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Downloads");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Subtitles");
             conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Indexers");

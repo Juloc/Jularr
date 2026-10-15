@@ -50,6 +50,69 @@ namespace Jularr.Backend.Service.Admin.Library.V1
         }
     }
 
+    [ServiceEndpoint("GET", "/api/v1/admin/library/overview")]
+    public sealed class ReadLibraryOverviewV1 : AdminService<ReadLibraryOverviewParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<LibraryOverviewV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadLibraryOverviewParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadLibraryOverviewParametersV1 parameters, Type resultType) => new("media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Subtitle files belong to their video and are not counted apart.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    root."Id",
+                    root."Name",
+                    root."MediaTypeId",
+                    root."MediaSubtypeId",
+                    mount."Name" AS "StorageMountName",
+                    root."RelativePath",
+                    coalesce(files."WorkCount", 0) AS "WorkCount",
+                    coalesce(files."FileCount", 0) AS "FileCount",
+                    coalesce(files."TotalBytes", 0) AS "TotalBytes",
+                    coalesce(files."MissingCount", 0) AS "MissingCount",
+                    coalesce(files."UnmatchedCount", 0) AS "UnmatchedCount",
+                    scans."LastScanAt",
+                    coalesce(scans."IsScanning", FALSE) AS "IsScanning"
+                FROM
+                    "LibraryRoots" AS root
+                    JOIN "StorageMounts" AS mount ON mount."Id" = root."StorageMountId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            count(DISTINCT asset."WorkId") AS "WorkCount",
+                            count(*) AS "FileCount",
+                            sum(file."SizeBytes")::bigint AS "TotalBytes",
+                            count(*) FILTER (WHERE file."MissingSince" IS NOT NULL) AS "MissingCount",
+                            count(*) FILTER (WHERE file."MediaAssetId" IS NULL) AS "UnmatchedCount"
+                        FROM
+                            "StoredFiles" AS file
+                            LEFT JOIN "MediaAssets" AS asset ON asset."Id" = file."MediaAssetId"
+                        WHERE
+                            file."LibraryRootId" = root."Id"
+                            AND NOT file."IsSubtitle"
+                    ) AS files ON TRUE
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            max(operation."FinishedAt") FILTER (WHERE operation."OperationStatusTypeId" = 3) AS "LastScanAt",
+                            bool_or(operation."OperationStatusTypeId" IN (1, 2)) AS "IsScanning"
+                        FROM
+                            "Operations" AS operation
+                        WHERE
+                            operation."LibraryRootId" = root."Id"
+                            AND operation."OperationTypeId" = 1
+                    ) AS scans ON TRUE
+                ORDER BY
+                    root."MediaTypeId",
+                    root."Name",
+                    root."Id";
+                """;
+            return new BaseDataList<LibraryOverviewV1>(await Context.ReadSql.ReadListAsync<LibraryOverviewV1>(sql, CancellationToken));
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/admin/library/roots/{libraryRootId:long}")]
     public sealed class ReadLibraryRootV1 : AdminService<LibraryRootParametersV1>
     {

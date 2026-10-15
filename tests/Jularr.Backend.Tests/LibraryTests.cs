@@ -298,12 +298,24 @@ namespace Jularr.Backend.Tests
             await ScanAsync(host, rootId);
 
             // Identification creates the Work.
-            using var library = await host.SendAsync(HttpMethod.Get, "/Admin/Library");
+            using var overview = await host.SendAsync(HttpMethod.Get, "/Admin/Library");
+            html = await overview.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, overview.StatusCode, html);
+            StringAssert.Contains(html, "/Admin/Library/Unmatched?root=" + rootId);
+            using var rescan = await host.SendAsync(HttpMethod.Post, "/Admin/Library?PageNumber=1&handler=Scan&libraryRootId=" + rootId,
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = Token(html) });
+            Assert.AreEqual(HttpStatusCode.Redirect, rescan.StatusCode, await rescan.Content.ReadAsStringAsync());
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Operations\" WHERE \"OperationTypeId\" = 1 AND \"OperationStatusTypeId\" IN (1, 2)"));
+            await using (var scope = host.Services.CreateAsyncScope())
+            {
+                Assert.IsTrue(await OperationWorker.RunNextAsync(scope.ServiceProvider, NullLogger.Instance, CancellationToken.None));
+            }
+            using var library = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Unmatched");
             html = await library.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode, html);
             StringAssert.Contains(html, "value=\"Film\"");
             var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
-            using var assigned = await host.SendAsync(HttpMethod.Post, "/Admin/Library?Tab=Unmatched&PageNumber=1&handler=Assign&storedFileId=" + fileId, new Dictionary<string, string>
+            using var assigned = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Unmatched?PageNumber=1&handler=Assign&storedFileId=" + fileId, new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = Token(html), ["Title"] = "Film"
             });
@@ -314,11 +326,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Versions &amp; languages");
 
             // Renaming moves files through the confirmed preview only.
-            using var preview = await host.SendAsync(HttpMethod.Get, "/Admin/Library?Tab=Rename");
+            using var preview = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Rename");
             html = await preview.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, preview.StatusCode, html);
             StringAssert.Contains(html, "Film/Film.mkv");
-            using var renamed = await host.SendAsync(HttpMethod.Post, "/Admin/Library?Tab=Rename&PageNumber=1&handler=Rename", new Dictionary<string, string>
+            using var renamed = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Rename?PageNumber=1&handler=Rename", new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = Token(html), ["Fingerprint"] = Regex.Match(html, "value=\"([0-9a-f]{64})\"").Groups[1].Value
             });

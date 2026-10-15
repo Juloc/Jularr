@@ -102,18 +102,27 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class NamingPatternV1 : BaseResponse
     {
-        public NamingPatternV1(MediaType mediaTypeId, string pattern, long version)
+        public NamingPatternV1(MediaType mediaTypeId, string? folder, string file, string example, long version)
         {
             MediaTypeId = mediaTypeId;
-            Pattern = pattern;
+            Folder = folder;
+            File = file;
+            Example = example;
             Version = version;
         }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
 
-        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Pattern))]
-        public string Pattern { get; }
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Folder))]
+        public string? Folder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.File))]
+        public string File { get; }
+
+        // A sample title in this pattern.
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Example))]
+        public string Example { get; }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }
@@ -121,14 +130,18 @@ namespace Jularr.Backend.Data.Admin.Library.V1
 
     public sealed class UpdateNamingPatternDataV1 : BaseData
     {
-        public UpdateNamingPatternDataV1(string pattern, long version)
+        public UpdateNamingPatternDataV1(string? folder, string file, long version)
         {
-            Pattern = pattern;
+            Folder = folder;
+            File = file;
             Version = version;
         }
 
-        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Pattern))]
-        public string Pattern { get; }
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Folder))]
+        public string? Folder { get; }
+
+        [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.File))]
+        public string File { get; }
 
         [DataField(typeof(NamingPatternFields), nameof(NamingPatternFields.Version))]
         public long Version { get; }

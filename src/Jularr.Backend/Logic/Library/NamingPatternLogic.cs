@@ -23,6 +23,12 @@ namespace Jularr.Backend.Logic.Library
 
         public static async Task SaveNamingPatternAsync(this LogicContext ctx, NamingPatternSaveData data, CancellationToken ct)
         {
+            // Folders and file are stored as one pattern of at most 500 characters.
+            if (data.Pattern.Length > 500)
+            {
+                throw new DataValidationException(nameof(data.Pattern), "too_long");
+            }
+
             NamingPattern.Validate(data.MediaTypeId, data.Pattern, nameof(data.Pattern));
             if (!NamingPattern.Distinguishes(data.Pattern) && (await ctx.ReadReplacementSettingsAsync(ct)).KeepsReleases)
             {

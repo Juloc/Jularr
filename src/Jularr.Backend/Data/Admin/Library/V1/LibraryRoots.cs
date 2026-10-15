@@ -169,4 +169,69 @@ namespace Jularr.Backend.Data.Admin.Library.V1
         [DataField(typeof(OperationFields), nameof(OperationFields.Id))]
         public long Id { get; }
     }
+
+    public sealed class ReadLibraryOverviewParametersV1 : BaseParameters
+    {
+    }
+
+    // One library with its titles, files, size, problems and last scan.
+    public sealed class LibraryOverviewV1 : BaseResponse
+    {
+        public LibraryOverviewV1(long id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string storageMountName, string relativePath, long workCount, long fileCount,
+            long totalBytes, long missingCount, long unmatchedCount, DateTime? lastScanAt, bool isScanning)
+        {
+            Id = id;
+            Name = name;
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            StorageMountName = storageMountName;
+            RelativePath = relativePath;
+            WorkCount = workCount;
+            FileCount = fileCount;
+            TotalBytes = totalBytes;
+            MissingCount = missingCount;
+            UnmatchedCount = unmatchedCount;
+            LastScanAt = lastScanAt;
+            IsScanning = isScanning;
+        }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Name))]
+        public string StorageMountName { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.RelativePath))]
+        public string RelativePath { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.WorkCount))]
+        public long WorkCount { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.FileCount))]
+        public long FileCount { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.TotalBytes))]
+        public long TotalBytes { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.MissingCount))]
+        public long MissingCount { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.UnmatchedCount))]
+        public long UnmatchedCount { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.LastScanAt))]
+        public DateTime? LastScanAt { get; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.IsScanning))]
+        public bool IsScanning { get; }
+    }
 }

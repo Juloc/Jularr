@@ -1,0 +1,24 @@
+.library-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.library-example { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+
+.library-attention {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+
+.library-placeholders {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 8px 24px;
+    margin: 0 0 12px;
+
+    dt { color: var(--accent-text); font-weight: 650; }
+    dd { margin: 0; }
+}

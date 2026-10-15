@@ -61,20 +61,22 @@ namespace Jularr.Backend.Tests
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library?Tab=Naming");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Naming");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Episode files");
             using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/naming");
             Assert.AreEqual(HttpStatusCode.OK, read.StatusCode, await read.Content.ReadAsStringAsync());
             var series = (await read.Content.ReadFromJsonAsync<BaseDataList<NamingPatternV1>>())!.Single(pattern => pattern.MediaTypeId == MediaType.Series);
-            Assert.AreEqual(Defaults[MediaType.Series], series.Pattern);
+            Assert.AreEqual(Defaults[MediaType.Series], series.Folder + "/" + series.File);
+            Assert.AreEqual("Example Show/Season 01/Example Show - S01E02 [WEB-1080p].mkv", series.Example);
+            StringAssert.Contains(html, "Example Show/Season 01/Example Show - S01E02 [WEB-1080p].mkv");
 
-            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}/S{Season:00}/{Title} S{Season:00}E{Episode:00}", series.Version));
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}/S{Season:00}", "{Title} S{Season:00}E{Episode:00}", series.Version));
             Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
-            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title} {Season} {Episode}", series.Version));
+            using var stale = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1(null, "{Title} {Season} {Episode}", series.Version));
             Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
-            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}", series.Version + 1));
+            using var invalid = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1(null, "{Title}", series.Version + 1));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
             Assert.AreEqual("{Title}/S{Season:00}/{Title} S{Season:00}E{Episode:00}", await host.ScalarAsync("SELECT \"Pattern\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2"));
         }
@@ -89,7 +91,7 @@ namespace Jularr.Backend.Tests
             await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
             await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"IsReadOnly\" = FALSE");
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"RecycleModeId\" = 2");
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library?Tab=Versions");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Versions");
             StringAssert.Matches(await page.Content.ReadAsStringAsync(), new System.Text.RegularExpressions.Regex("<option value=\"2\"[^>]*selected"));
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceSettings\" SET \"RecycleModeId\" = 1");
             const string route = "/api/v1/admin/library/replacement";
@@ -105,7 +107,7 @@ namespace Jularr.Backend.Tests
             using var kept = await host.SendAsync(HttpMethod.Put, route, new UpdateReplacementSettingsDataV1(true, RecycleMode.Delete, null, null, 7, settings.Version));
             Assert.AreEqual(HttpStatusCode.OK, kept.StatusCode, await kept.Content.ReadAsStringAsync());
             var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"NamingPatterns\" WHERE \"MediaTypeId\" = 2"))!;
-            using var plain = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}/{Title} S{Season:00}E{Episode:00}", version));
+            using var plain = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/naming/Series", new UpdateNamingPatternDataV1("{Title}", "{Title} S{Season:00}E{Episode:00}", version));
             StringAssert.Contains(await plain.Content.ReadAsStringAsync(), "naming_needs_release_token");
 
             // An own recycle folder needs its place, outside every library.

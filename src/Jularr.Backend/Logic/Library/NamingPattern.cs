@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Media;
 
 namespace Jularr.Backend.Logic.Library
@@ -8,14 +9,13 @@ namespace Jularr.Backend.Logic.Library
     // Sonarr-like tokens in braces, numbers padded as in {Season:00}; an empty token takes its brackets with it.
     internal static partial class NamingPattern
     {
-        private static readonly IReadOnlyList<string> Tokens = ["Title", "Year", "Season", "Episode", "Episode Title", "Quality", "Release Group", "Edition", "Proper"];
 
         public static void Validate(MediaType mediaType, string pattern, string field)
         {
             // Only season and episode take a number format.
             var tokens = Token().Matches(pattern);
             var names = tokens.Select(match => match.Groups["name"].Value).ToArray();
-            if (names.Any(name => !Tokens.Contains(name, StringComparer.OrdinalIgnoreCase)) || Token().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0
+            if (names.Any(name => !NamingTokens.All.Contains(name, StringComparer.OrdinalIgnoreCase)) || Token().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0
                 || tokens.Any(match => match.Groups["format"].Success && match.Groups["name"].Value.ToLowerInvariant() is not ("season" or "episode")))
             {
                 throw new DataValidationException(field, "naming_unknown_token");
@@ -35,6 +35,17 @@ namespace Jularr.Backend.Logic.Library
                 throw new DataValidationException(field, "naming_invalid_path");
             }
         }
+
+        // Folders and the file name are edited apart and stored as one pattern.
+        public static string Join(string? folder, string file) => string.IsNullOrWhiteSpace(folder) ? file : folder.Trim().Trim('/') + "/" + file.Trim();
+
+        public static (string? Folder, string File) Split(string pattern) =>
+            pattern.LastIndexOf('/') is var slash and >= 0 ? (pattern[..slash], pattern[(slash + 1)..]) : (null, pattern);
+
+        // A sample film or episode named by the pattern.
+        public static string Example(MediaType mediaType, string pattern) => Apply(pattern, mediaType == MediaType.Series
+            ? new NamingValues("Example Show", 2020, 1, 2, "The Second", "WEB-1080p", "GRP", null, 1)
+            : new NamingValues("Example Movie", 1999, null, null, null, "BLURAY-1080p", "GRP", null, 1)) + ".mkv";
 
         // Several releases of one film or episode need a file name that tells them apart.
         public static bool Distinguishes(string pattern) =>

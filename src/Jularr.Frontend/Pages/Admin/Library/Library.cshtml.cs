@@ -20,13 +20,16 @@ namespace Jularr.Frontend.Pages.Admin.Library
         Files = 2,
         Rename = 3,
         Naming = 4,
-        Versions = 5
+        Versions = 5,
+        Overview = 6
     }
 
     public sealed class LibraryModel(ReadLibraryFilesV1 readFiles, AssignLibraryFileV1 assign, UnassignLibraryFileV1 unassign, ReadLibraryRenamesV1 readRenames,
         ApplyLibraryRenamesV1 applyRenames, ReadNamingPatternsV1 readPatterns, UpdateNamingPatternV1 updatePattern, ReadReplacementSettingsV1 readReplacement,
-        UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, IAntiforgery antiforgery, UiText texts) : JularrPage
+        UpdateReplacementSettingsV1 updateReplacement, KeepOnlyLibraryFileV1 keepOnly, ProtectLibraryFileV1 protect, ReadStorageMountsV1 readMounts, ReadLibraryOverviewV1 readOverview,
+        QueueLibraryScanV1 queueScan, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        private IReadOnlyList<LibraryOverviewV1>? _overview;
         private ReplacementSettingsV1? _replacement;
         private UpdateReplacementSettingsDataV1? _replacementInput;
         private PageResult<StorageMountDetailsV1>? _mounts;
@@ -41,16 +44,46 @@ namespace Jularr.Frontend.Pages.Admin.Library
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
-        [BindProperty(SupportsGet = true)]
-        public LibraryTab Tab { get; set; } = LibraryTab.Unmatched;
+        // The files of one library.
+        [BindProperty(SupportsGet = true, Name = "root")]
+        public long? RootId { get; set; }
+
+        // Each view has its address: the overview at /Admin/Library, the others below it.
+        private LibraryTab Tab => Request.Path.Value?.TrimEnd('/').Split('/')[^1] is { } last && Enum.TryParse<LibraryTab>(last, true, out var tab) && tab != LibraryTab.Overview
+            ? tab : LibraryTab.Overview;
 
         protected override void Define(Page page)
         {
-            page.Title("admin.library.title");
+            page.Title("library.tab." + Tab);
             page.Navigation("nav.admin");
-            page.Content.Add(new NavigationTabs(Enum.GetValues<LibraryTab>().Where(tab => tab is not (LibraryTab.Rename or LibraryTab.Naming or LibraryTab.Versions) || CanRename)
-                .Select(tab => new NavigationTab("library.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.library.title"));
+            page.Asset("Pages/Admin/Library/Library.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+
+            // Every library with what it holds; new ones are added with their storage.
+            if (_overview is { } libraries)
+            {
+                var table = new Table<LibraryOverviewV1>(libraries)
+                    .Text(item => item.Name, "library.root")
+                    .Content("table.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
+                    .Content("library.overview.place", item => new ValueText(item.StorageMountName + " / " + item.RelativePath))
+                    .Content("library.overview.titles", item => new ValueText(item.WorkCount.ToString("N0", CultureInfo.CurrentCulture)))
+                    .Content("library.overview.files", item => new A(new ValueText(item.FileCount.ToString("N0", CultureInfo.CurrentCulture)))
+                        .Attribute("href", "/Admin/Library/Files?root=" + item.Id.ToString(CultureInfo.InvariantCulture)))
+                    .Content("table.size", item => new ValueText(ByteSize.Format(item.TotalBytes)))
+                    .Content("library.overview.attention", Attention)
+                    .Content("library.overview.scanned", item => item.IsScanning ? new Text("library.overview.scanning")
+                        : item.LastScanAt is { } scanned ? new ValueText(scanned.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)) : new Text("library.overview.never"));
+
+                // Scanning reads the storage, which needs its administration.
+                if (CanRename)
+                {
+                    table.Content("common.actions", item => new Form<LibraryRootParametersV1>(form => form.Submit("library.overview.scan", item.Name, valueHidden: true),
+                        Address(handler: "Scan") + "&libraryRootId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new LibraryRootParametersV1(item.Id)));
+                }
+
+                page.Content.Add(libraries.Count == 0 ? new P(new Text("library.overview.empty")) : table);
+                if (CanRename) page.Content.Add(new Div(new A(new Text("library.overview.manage")).Class("button").Attribute("href", "/Admin/Storage")).Class("library-actions"));
+            }
 
             // Inventory and manual identity.
             if (_files is { } files)
@@ -98,21 +131,29 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 Paging(page, PageNumber, renames.Items.Count == RenamePageSize);
             }
 
-            // Names of movie and episode files for imports and renames.
+            // Folders and names of movie and episode files for imports and renames, each with a sample.
             if (_patterns is { } patterns)
             {
-                page.Content.Add(new P(new Text("library.naming.tokens")));
                 foreach (var pattern in patterns)
                 {
                     var failed = _failedPattern == pattern.MediaTypeId;
-                    page.Content.Add(new Form<UpdateNamingPatternDataV1>(form =>
-                    {
-                        form.Hidden(item => item.Version);
-                        form.Text(item => item.Pattern, "library.naming." + pattern.MediaTypeId);
-                        form.Submit("common.save");
-                    }, Address(handler: "Naming") + "&mediaTypeId=" + pattern.MediaTypeId, csrf, new UpdateNamingPatternDataV1(failed && _patternInput is { } input ? input.Pattern : pattern.Pattern, pattern.Version),
-                        failed ? FormError : null));
+                    page.Content.Add(new UiSection("library.naming." + pattern.MediaTypeId, [
+                        new Form<UpdateNamingPatternDataV1>(form =>
+                        {
+                            form.Hidden(item => item.Version);
+                            form.Text(item => item.Folder, "library.naming.folder");
+                            form.Text(item => item.File, "library.naming.file");
+                            form.Submit("common.save");
+                        }, Address(handler: "Naming") + "&mediaTypeId=" + pattern.MediaTypeId, csrf,
+                            failed && _patternInput is { } input ? input : new UpdateNamingPatternDataV1(pattern.Folder, pattern.File, pattern.Version), failed ? FormError : null),
+                        new P(new Text("library.naming.example"), new ValueText(" "), new Span(new ValueText(pattern.Example)).Class("library-example"))]));
                 }
+
+                page.Content.Add(new UiSection("library.naming.placeholders", [new Dl([.. NamingTokens.All.SelectMany(token => new IUiComponent[]
+                    {
+                        new Dt(new ValueText("{" + token + (token is "Season" or "Episode" ? ":00" : "") + "}")).Class("library-example"),
+                        new Dd(new Text("library.naming.token." + token.Replace(" ", "", StringComparison.Ordinal)))
+                    })]).Class("library-placeholders"), new P(new Text("library.naming.rules"))]));
             }
 
             // What an import does with the earlier file of the same film or episode.
@@ -220,10 +261,25 @@ namespace Jularr.Frontend.Pages.Admin.Library
             return LocalRedirect(Address());
         }
 
-        public async Task<IActionResult> OnPostNamingAsync([BindRequired] MediaType mediaTypeId, string? pattern, long version)
+        // A library is read again in the background.
+        private static IUiComponent Attention(LibraryOverviewV1 item) => item.MissingCount == 0 && item.UnmatchedCount == 0 ? new Text("library.overview.fine")
+            : new Span([.. new IUiComponent?[]
+            {
+                item.MissingCount > 0 ? new Span(new ValueText(item.MissingCount.ToString("N0", CultureInfo.CurrentCulture) + " "), new Text("library.missing")) : null,
+                item.UnmatchedCount > 0 ? new A(new ValueText(item.UnmatchedCount.ToString("N0", CultureInfo.CurrentCulture) + " "), new Text("library.unmatched"))
+                    .Attribute("href", "/Admin/Library/Unmatched?root=" + item.Id.ToString(CultureInfo.InvariantCulture)) : null
+            }.OfType<IUiComponent>()]).Class("library-attention");
+
+        public async Task<IActionResult> OnPostScanAsync([BindRequired] long libraryRootId)
+        {
+            await queueScan.ExecuteAsync<QueueLibraryScanResultV1>(new LibraryRootParametersV1(libraryRootId), default, HttpContext.RequestAborted);
+            return LocalRedirect(Address());
+        }
+
+        public async Task<IActionResult> OnPostNamingAsync([BindRequired] MediaType mediaTypeId, string? folder, string? file, long version)
         {
             _failedPattern = mediaTypeId;
-            _patternInput = new UpdateNamingPatternDataV1(pattern ?? "", version);
+            _patternInput = new UpdateNamingPatternDataV1(folder, file ?? "", version);
             await updatePattern.ExecuteAsync<UpdateResult>(new NamingPatternParametersV1(mediaTypeId), _patternInput, HttpContext.RequestAborted);
             return LocalRedirect(Address());
         }
@@ -246,9 +302,10 @@ namespace Jularr.Frontend.Pages.Admin.Library
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            if (Tab is LibraryTab.Rename or LibraryTab.Naming or LibraryTab.Versions && !CanRename)
+            if (Tab == LibraryTab.Overview)
             {
-                Tab = LibraryTab.Files;
+                _overview = await readOverview.ExecuteAsync<BaseDataList<LibraryOverviewV1>>(new ReadLibraryOverviewParametersV1(), ct);
+                return;
             }
 
             if (Tab == LibraryTab.Naming)
@@ -270,7 +327,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 return;
             }
 
-            _files = await readFiles.ExecuteAsync<PageResult<LibraryFileDetailsV1>>(new ReadLibraryFilesParametersV1(null, Tab == LibraryTab.Unmatched, PageNumber), ct);
+            _files = await readFiles.ExecuteAsync<PageResult<LibraryFileDetailsV1>>(new ReadLibraryFilesParametersV1(RootId, Tab == LibraryTab.Unmatched, PageNumber), ct);
         }
 
         private void Paging(Page page, int current, bool hasNext)
@@ -281,8 +338,8 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
         private bool CanRename => texts.CanManageStorage();
 
-        private string Address(int? pageNumber = null, LibraryTab? tab = null, string? handler = null) =>
-            "/Admin/Library?Tab=" + (tab ?? Tab) + "&PageNumber=" + (pageNumber ?? (tab is null ? PageNumber : 1)).ToString(CultureInfo.InvariantCulture)
-            + (handler is null ? "" : "&handler=" + handler);
+        private string Address(int? pageNumber = null, string? handler = null) =>
+            (Tab == LibraryTab.Overview ? "/Admin/Library" : "/Admin/Library/" + Tab) + "?PageNumber=" + (pageNumber ?? PageNumber).ToString(CultureInfo.InvariantCulture)
+            + (RootId is { } root ? "&root=" + root.ToString(CultureInfo.InvariantCulture) : "") + (handler is null ? "" : "&handler=" + handler);
     }
 }

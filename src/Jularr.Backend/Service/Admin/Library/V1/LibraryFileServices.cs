@@ -334,7 +334,11 @@ namespace Jularr.Backend.Service.Admin.Library.V1
                 ORDER BY
                     pattern."MediaTypeId";
                 """;
-            return new BaseDataList<NamingPatternV1>(await Context.ReadSql.ReadListAsync<NamingPatternV1>(sql, CancellationToken));
+            return new BaseDataList<NamingPatternV1>([.. (await Context.ReadSql.ReadListAsync<NamingPatternSaveData>(sql, CancellationToken)).Select(row =>
+            {
+                var (folder, file) = NamingPattern.Split(row.Pattern);
+                return new NamingPatternV1(row.MediaTypeId, folder, file, NamingPattern.Example(row.MediaTypeId, row.Pattern), row.Version);
+            })]);
         }
     }
 
@@ -348,7 +352,7 @@ namespace Jularr.Backend.Service.Admin.Library.V1
 
         protected override async Task<IServiceOutput> OnUpdate()
         {
-            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, Data.Pattern, Data.Version), CancellationToken);
+            await Context.SaveNamingPatternAsync(new NamingPatternSaveData(Parameters.MediaTypeId, NamingPattern.Join(Data.Folder, Data.File), Data.Version), CancellationToken);
             return new UpdateResult(true);
         }
     }

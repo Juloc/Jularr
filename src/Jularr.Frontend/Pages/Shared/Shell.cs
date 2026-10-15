@@ -46,9 +46,12 @@ namespace Jularr.Frontend.Pages.Shared
             // Administration areas open into their pages.
             if (texts.CanManageMedia())
             {
-                secondary.Add(Group("nav.group.media", "library",
-                    new("admin.works.title", "/Admin/Works", ""), new("admin.matches.title", "/Admin/Works/Matches", ""),
-                    new("admin.library.title", "/Admin/Library", ""), new("admin.activity.title", "/Admin/Activity", "")));
+                secondary.Add(Group("nav.group.media", "settings",
+                    new("admin.works.title", "/Admin/Works", ""), new("admin.matches.title", "/Admin/Works/Matches", ""), new("admin.activity.title", "/Admin/Activity", "")));
+                secondary.Add(Group("nav.group.library", "library", [new("library.tab.Overview", "/Admin/Library", ""), new("library.tab.Unmatched", "/Admin/Library/Unmatched", ""),
+                    new("library.tab.Files", "/Admin/Library/Files", ""),
+                    .. texts.CanManageStorage() ? new ShellLink[] { new("library.tab.Naming", "/Admin/Library/Naming", ""), new("library.tab.Rename", "/Admin/Library/Rename", ""),
+                        new("library.tab.Versions", "/Admin/Library/Versions", "") } : []]));
             }
 
             if (texts.CanRequest())

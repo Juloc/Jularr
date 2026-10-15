@@ -33,8 +33,7 @@ namespace Jularr.E2E.Tests
                 await Steps.AddUsenetAsync(page, fakes, "2000,2040");
 
                 // Replaced files go to the library's recycle bin.
-                await page.GotoAsync("/Admin/Library");
-                await page.GetByRole(AriaRole.Link, new() { Name = "Files & versions" }).ClickAsync();
+                await page.GotoAsync("/Admin/Library/Versions");
                 var replacement = page.Locator("main form", new() { Has = page.Locator("[name=RecycleModeId]") });
                 await replacement.Locator("[name=RecycleModeId]").SelectOptionAsync(new SelectOptionValue { Label = "Recycle bin in the library" });
                 await Steps.SubmitAsync(page, replacement);
