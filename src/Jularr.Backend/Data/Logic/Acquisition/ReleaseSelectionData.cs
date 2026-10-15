@@ -100,6 +100,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         // The languages the release carries (audio languages, the language of a book or chapter).
         public IReadOnlyList<string> Languages { get; init; } = [];
+
+        // The quality already present; only an upgrade of it can be taken.
+        public string? InstalledQuality { get; init; }
     }
 
     internal sealed class SelectionReason

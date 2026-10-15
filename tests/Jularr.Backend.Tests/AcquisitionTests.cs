@@ -209,6 +209,45 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AutomaticSearch_BelowTheCutoff_TakesOnlyAnUpgrade()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            var wantedId = await CreateWantedMovieAsync(host);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT 900, "Id" FROM "Works";
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT 900, "Id", 900 FROM "Works";
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT 900, "Id", 900, 1 FROM "Works";
+                INSERT INTO "StoredFiles" ("Id", "LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey")
+                    SELECT 900, "Id", 'Example Movie (2020)/Example Movie (2020).mkv', 7, now(), now(), 900, 'WEB-1080p' FROM "LibraryRoots" WHERE "RelativePath" = 'Movies';
+                """);
+
+            async Task<long> CutoffUnmetAsync()
+            {
+                using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted?pageSize=50&wantedViewTypeId=" + (int)WantedViewType.CutoffUnmet);
+                return (await listed.Content.ReadFromJsonAsync<PageResult<WantedDetailsV1>>())!.Items.Count;
+            }
+
+            // At its cutoff the film is not searched again.
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+            Assert.AreEqual(0L, await CutoffUnmetAsync());
+
+            // Below it, an equal release is no upgrade and left to a person; the automatic search takes the better one.
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"QualityKey\" = 'WEB-720p' WHERE \"Id\" = 900");
+            Assert.AreEqual(1L, await CutoffUnmetAsync());
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var candidates = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!;
+            var equal = candidates.Single(candidate => candidate.Title == Lower);
+            Assert.AreEqual((ReleaseDecisionType.ManualReview, "NotAnUpgrade"), (equal.ReleaseDecisionTypeId, equal.ReasonCode));
+            Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual("https://indexer.example.test/getnzb/feature", usenet.Grabbed.Single());
+        }
+
+        [TestMethod]
         public async Task Retry_AfterAClientFault_TakesTheSameReleaseAgain()
         {
             using var storage = new TemporaryDirectory();

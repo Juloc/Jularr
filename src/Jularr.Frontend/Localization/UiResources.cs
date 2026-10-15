@@ -847,6 +847,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.reason.WrongEpisode", "Wrong episode"),
             new("acquisition.reason.ContainsTarget", "Contains the target"),
             new("acquisition.reason.QualityNotAllowed", "Quality not allowed"),
+            new("acquisition.reason.NotAnUpgrade", "No upgrade of the present quality"),
             new("acquisition.reason.SizeUnknown", "Size unknown"),
             new("acquisition.reason.SizeBelowMinimum", "Smaller than allowed"),
             new("acquisition.reason.SizeAboveMaximum", "Larger than allowed"),

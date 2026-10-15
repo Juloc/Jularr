@@ -25,9 +25,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
-            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, DateTime wantedSince = default)
+            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, DateTime wantedSince = default, string? installedQuality = null)
         {
             WantedSince = wantedSince;
+            InstalledQuality = installedQuality;
             Author = author;
             PlatformAbbreviation = platformAbbreviation;
             PlatformIgdbId = platformIgdbId;
@@ -116,6 +117,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Fallback qualities count once the target has waited long enough.
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.WantedSince))]
         public DateTime WantedSince { get; }
+
+        // The best quality of the profile among the Work's own present files; an upgrade must beat it.
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.QualityKey))]
+        public string? InstalledQuality { get; }
     }
 
     internal sealed class UnitStateData : BaseData

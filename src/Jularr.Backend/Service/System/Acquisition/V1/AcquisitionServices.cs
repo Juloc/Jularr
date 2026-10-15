@@ -88,8 +88,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
                 var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken);
                 if (result.Selection.Winner is not { } winner)
                 {
-                    // Indexer problems retry soon; empty results back off.
-                    await RecordAsync(target.WantedItemId, result.OutcomeKey, result.IndexersUnavailable ? now.AddMinutes(30) : now + Backoff(target.SearchCount));
+                    // Indexer problems retry soon; empty results back off, an upgrade is looked for at its own interval.
+                    await RecordAsync(target.WantedItemId, result.OutcomeKey, result.IndexersUnavailable ? now.AddMinutes(30)
+                        : target.HasMedia ? now + UpgradePolicy.SearchInterval : now + Backoff(target.SearchCount));
                     continue;
                 }
 
