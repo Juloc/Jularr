@@ -19,6 +19,8 @@
     --radius-panel: 12px;
     --focus: var(--accent-text);
     --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    // Outlines of panels and table heads: the border with a touch of the accent.
+    --accent-line: color-mix(in srgb, var(--accent) 24%, var(--border));
     --jularr-ring: var(--accent);
     --jularr-ink: var(--text);
     --art-hue-rotate: 0deg;

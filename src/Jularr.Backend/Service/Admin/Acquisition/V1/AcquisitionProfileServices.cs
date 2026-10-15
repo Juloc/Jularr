@@ -167,7 +167,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     }
 
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules")]
-    public sealed class AddAcquisitionProfileRuleV1 : AdminService<AcquisitionProfileParametersV1, AddReleaseRuleDataV1>
+    public sealed class AddAcquisitionProfileRuleV1 : AdminService<AcquisitionProfileParametersV1, SaveReleaseRuleDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
@@ -177,6 +177,22 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         protected override async Task<IServiceOutput> OnCreate()
         {
             await Context.AddProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Data.Version),
+                new ReleaseScoreRule(Data.Name, Data.Field, Data.Match, Data.Value, Data.Score) { Effect = Data.Effect }, CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
+    [ServiceEndpoint("PUT", "/api/v1/admin/acquisition/profiles/{acquisitionProfileId:long}/rules/{position:int}")]
+    public sealed class UpdateAcquisitionProfileRuleV1 : AdminService<ReleaseRulePositionParametersV1, SaveReleaseRuleDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(ReleaseRulePositionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(ReleaseRulePositionParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.UpdateProfileRuleAsync(new AcquisitionProfileKeyData(Parameters.AcquisitionProfileId, Data.Version), Parameters.Position,
                 new ReleaseScoreRule(Data.Name, Data.Field, Data.Match, Data.Value, Data.Score) { Effect = Data.Effect }, CancellationToken);
             return new UpdateResult(true);
         }

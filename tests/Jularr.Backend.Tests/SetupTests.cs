@@ -71,7 +71,7 @@ namespace Jularr.Backend.Tests
             var profilesHtml = await profiles.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, profiles.StatusCode, profilesHtml);
             StringAssert.Contains(profilesHtml, "setup-wizard");
-            StringAssert.Contains(profilesHtml, "href=\"/Setup/Profiles?NewFor=Movie\"");
+            StringAssert.Contains(profilesHtml, "href=\"/Setup/Profiles/New?type=Movie\"");
 
             // Missing essentials block the end; once nothing blocks, the wizard closes.
             using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Finish");

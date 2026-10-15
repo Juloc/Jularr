@@ -222,9 +222,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public int Score { get; }
     }
 
-    public sealed class AddReleaseRuleDataV1 : BaseData
+    public sealed class SaveReleaseRuleDataV1 : BaseData
     {
-        public AddReleaseRuleDataV1(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score, long version)
+        public SaveReleaseRuleDataV1(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score, long version)
         {
             Name = name;
             Field = field;
@@ -255,6 +255,21 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version))]
         public long Version { get; }
+    }
+
+    public sealed class ReleaseRulePositionParametersV1 : BaseParameters
+    {
+        public ReleaseRulePositionParametersV1(long acquisitionProfileId, int position)
+        {
+            AcquisitionProfileId = acquisitionProfileId;
+            Position = position;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
+        public long AcquisitionProfileId { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.RulePosition))]
+        public int Position { get; }
     }
 
     public sealed class ReleaseRuleParametersV1 : BaseParameters

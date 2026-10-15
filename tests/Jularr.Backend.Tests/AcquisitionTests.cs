@@ -300,12 +300,12 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(DBNull.Value, await host.ScalarAsync("SELECT \"AcquisitionProfileId\" FROM \"WantedItems\""));
 
             // The editor renders the stored values and saves through the same service.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + uhdId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + uhdId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "value=\"BLURAY-2160p\" checked=\"checked\"");
             StringAssert.Contains(html, "value=\"CAM\"");
-            using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + uhdId, new FormUrlEncodedContent(
+            using var saved = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + uhdId, new FormUrlEncodedContent(
             [
                 new("__RequestVerificationToken", LibraryTests.Token(html)), new("MediaTypeId", "1"), new("Version", uhd.Version.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new("Name", "UHD"), new("IsDefault", "True"), new("AllowedQualities", "WEB-2160p"), new("AllowedQualities", "WEB-1080p"), new("UpgradeAllowed", "True"),
@@ -899,7 +899,7 @@ namespace Jularr.Backend.Tests
             async Task<HttpStatusCode> AddAsync(string name, ReleaseRuleField field, ReleaseRuleMatch match, string value, ReleaseRuleEffect effect, int score, long? version = null)
             {
                 var current = version ?? (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-                using var added = await host.SendAsync(HttpMethod.Post, rules, new AddReleaseRuleDataV1(name, field, match, value, effect, score, current));
+                using var added = await host.SendAsync(HttpMethod.Post, rules, new SaveReleaseRuleDataV1(name, field, match, value, effect, score, current));
                 return added.StatusCode;
             }
 
@@ -924,17 +924,31 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(ReleaseDecisionType.Eligible, candidates.Single(candidate => candidate.Title == Feature).ReleaseDecisionTypeId);
 
             // The page lists the rules; removing one keeps the others in order.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + profileId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId);
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Release rules");
             StringAssert.Contains(html, "Avoid -5");
             var version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
-            using var removed = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + profileId + "&handler=RemoveRule&position=2",
+            using var removed = await host.SendAsync(HttpMethod.Post, "/Admin/Acquisition/Profiles/" + profileId + "?handler=RemoveRule&position=2",
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["Version"] = version.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode, await removed.Content.ReadAsStringAsync());
             using var after = await host.SendAsync(HttpMethod.Get, rules);
-            CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "Group GRP", "Not other" }, (await after.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!.Select(rule => rule.Name).ToArray());
+            var kept = (await after.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
+            CollectionAssert.AreEqual(new[] { "Prefer Proper", "Prefer Repack", "Group GRP", "Not other" }, kept.Select(rule => rule.Name).ToArray());
+
+            // A rule changes in place and keeps its position.
+            var group = kept[2];
+            version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
+            using var changed = await host.SendAsync(HttpMethod.Put, rules + "/2", new SaveReleaseRuleDataV1("Group GRP first", group.Field, group.Match, group.Value, ReleaseRuleEffect.Prefer, 50, version));
+            Assert.AreEqual(HttpStatusCode.OK, changed.StatusCode, await changed.Content.ReadAsStringAsync());
+            using var edited = await host.SendAsync(HttpMethod.Get, rules);
+            var rule = (await edited.Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())![2];
+            Assert.AreEqual(("Group GRP first", 50), (rule.Name, rule.Score));
+            using var editor = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId + "?rule=2");
+            var editorHtml = await editor.Content.ReadAsStringAsync();
+            StringAssert.Contains(editorHtml, "Edit rule");
+            StringAssert.Contains(editorHtml, "<option value=\"" + (byte)group.Field + "\" selected=\"selected\">");
         }
 
         [TestMethod]
@@ -977,7 +991,7 @@ namespace Jularr.Backend.Tests
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/lower" }, usenet.Grabbed);
 
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + profileId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles/" + profileId);
             StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Accept the fallback after (hours)");
         }
 

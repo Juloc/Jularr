@@ -97,8 +97,13 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   in narrow panels; multiline, file, list and long text fields, errors and the buttons take
   the whole row, buttons at its end. A form with at most one short field sits in one row
   beside its buttons. A select of up to three short fixed choices (Boolean or enum) renders
-  as one segmented control under the same name; data lists stay a select. Pages do not
+  as one segmented control under the same name; data lists stay a select. `Form.Section`
+  groups fields in a titled panel under one save; `Form.ChoiceTable` shows options as rows
+  and several fields as checkbox or radio columns (a quality ladder). Pages do not
   restyle form grids.
+- Owner's decision 15 Oct: no grey surfaces. Panels and tables are white (dark surface in
+  dark mode) with an accent-tinted outline (`--accent-line`); section titles and table heads
+  are bold in the accent text colour on `--accent-soft`; labels use the text colour.
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.

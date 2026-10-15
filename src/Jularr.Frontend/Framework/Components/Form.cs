@@ -11,6 +11,7 @@ namespace Jularr.Frontend.Framework
         private static long _nextId;
         private readonly List<IUiComponent> _content = [];
         private readonly List<IUiComponent> _actions = [];
+        private List<IUiComponent> _target;
         private readonly HashSet<string> _fields = new(StringComparer.Ordinal);
         private readonly HashSet<string> _hiddenFields = new(StringComparer.Ordinal);
         private readonly string _id = "form-" + typeof(TData).FullName + "-" + Interlocked.Increment(ref _nextId).ToString(CultureInfo.InvariantCulture);
@@ -30,6 +31,7 @@ namespace Jularr.Frontend.Framework
                 throw new ArgumentException("Forms require a local action and an antiforgery token.", nameof(action));
             }
 
+            _target = _content;
             _action = action;
             _data = data;
             _error = error;
@@ -140,7 +142,73 @@ namespace Jularr.Frontend.Framework
                 content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
             }
 
-            _content.Add(new HtmlFieldset([.. content]).Class("ui-field ui-field--wide"));
+            _target.Add(new HtmlFieldset([.. content]).Class("ui-field ui-field--wide"));
+            _visibleFields++;
+            _hasWideField = true;
+            return this;
+        }
+
+        // A titled group of fields in its own panel; the form keeps one save.
+        public Form<TData> Section(string titleKey, Action<Form<TData>> define)
+        {
+            var outer = _target;
+            var inner = new List<IUiComponent> { new HtmlLegend(new Text(titleKey)) };
+            _target = inner;
+            define(this);
+            _target = outer;
+            _target.Add(new HtmlFieldset([.. inner]).Class("ui-form__section"));
+            return this;
+        }
+
+        // A column of a choice table: several values, or one with an optional none.
+        public ChoiceColumn Column<TValue>(Expression<Func<TData, TValue>> selector, string labelKey, bool single = false, string? noneKey = null)
+        {
+            var field = Declare(selector, single ? FieldControl.Select : FieldControl.MultiSelect, labelKey);
+            var selected = single
+                ? Value(field) is { Length: > 0 } value ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { value } : new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : (_data is null ? null : field.ReadValue(_data) as System.Collections.IEnumerable)?.Cast<object>()
+                    .Select(item => Convert.ToString(item, CultureInfo.InvariantCulture)!).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+            return new ChoiceColumn(field.Name, labelKey, single, noneKey, selected);
+        }
+
+        // One row per option and one choice per column, such as a quality being allowed, the cutoff or a fallback.
+        public Form<TData> ChoiceTable(string labelKey, IReadOnlyList<SelectOption> rows, params ChoiceColumn[] columns)
+        {
+            // Each choice is named by its row and its column.
+            string RowId(int index) => _id + "-row-" + index.ToString(CultureInfo.InvariantCulture);
+            string ColumnId(ChoiceColumn column) => _id + "-column-" + column.Name;
+            HtmlElement Choice(ChoiceColumn column, string value, int row, bool none = false)
+            {
+                var input = new Input().Attribute("type", column.Single ? "radio" : "checkbox").Attribute("name", column.Name).Attribute("value", value);
+                if (column.Selected.Contains(value) || none && column.Selected.Count == 0) input.Attribute("checked", "checked");
+                input.Attribute("aria-labelledby", RowId(row) + " " + ColumnId(column));
+                if (_action is null) input.Attribute("disabled", "disabled");
+                return new HtmlCell(input);
+            }
+
+            var head = new HtmlRow([new HtmlHeader(new Span()), .. columns.Select(column => new HtmlHeader(new Text(column.LabelKey)).Attribute("id", ColumnId(column)))]);
+            var body = rows.Select((row, index) => (IUiComponent)new HtmlRow([new HtmlHeader(new ValueText(row.Label)).Attribute("scope", "row").Attribute("id", RowId(index)),
+                .. columns.Select(column => Choice(column, row.Value, index))])).ToList();
+
+            // A single column without a value, such as no cutoff.
+            if (columns.FirstOrDefault(column => column.Single && column.NoneKey is not null) is { } optional)
+            {
+                body.Add(new HtmlRow([new HtmlHeader(new Text(optional.NoneKey!)).Attribute("scope", "row").Attribute("id", RowId(rows.Count)),
+                    .. columns.Select(column => column == optional ? Choice(column, "", rows.Count, none: true) : new HtmlCell())]));
+            }
+
+            var content = new List<IUiComponent>
+            {
+                // The columns and the surrounding section name what is chosen.
+                new HtmlLegend(new Text(labelKey)).Class("visually-hidden"),
+                new Div(new HtmlTable(new HtmlHead(head), new HtmlBody([.. body]))).Class("ui-choice-table")
+            };
+            if (_error?.Field is { } errorField && columns.Any(column => column.Name == errorField))
+            {
+                content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("role", "alert"));
+            }
+
+            _target.Add(new HtmlFieldset([.. content]).Class("ui-field ui-field--wide"));
             _visibleFields++;
             _hasWideField = true;
             return this;
@@ -148,7 +216,7 @@ namespace Jularr.Frontend.Framework
 
         public Form<TData> Checkbox(string labelKey)
         {
-            _content.Add(new HtmlLabel(new Input().Attribute("type", "checkbox").Attribute("disabled", "disabled"), new Span(new Text(labelKey))).Class("ui-checkbox"));
+            _target.Add(new HtmlLabel(new Input().Attribute("type", "checkbox").Attribute("disabled", "disabled"), new Span(new Text(labelKey))).Class("ui-checkbox"));
             return this;
         }
 
@@ -171,7 +239,7 @@ namespace Jularr.Frontend.Framework
         {
             var field = Declare(selector, FieldControl.Text, "");
             _hiddenFields.Add(field.Name);
-            _content.Add(new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", Value(field) ?? ""));
+            _target.Add(new Input().Attribute("type", "hidden").Attribute("name", field.Name).Attribute("value", Value(field) ?? ""));
             return this;
         }
 
@@ -237,7 +305,7 @@ namespace Jularr.Frontend.Framework
             var valueType = Nullable.GetUnderlyingType(field.ValueType) ?? field.ValueType;
             if (_action is not null && (field.Minimum.HasValue || valueType == typeof(DateTime) || valueType == typeof(DateTimeOffset)))
             {
-                _content.Add(new Input().Attribute("type", "hidden").Attribute("name", "__Invariant").Attribute("value", field.Name));
+                _target.Add(new Input().Attribute("type", "hidden").Attribute("name", "__Invariant").Attribute("value", field.Name));
             }
 
             return field;
@@ -295,7 +363,7 @@ namespace Jularr.Frontend.Framework
                 content.Add(new P(new Text(_error.FieldResourceKey ?? _error.ResourceKey)).Class("field-error").Attribute("id", _id + "-" + field.Name + "-error").Attribute("role", "alert"));
             }
 
-            _content.Add(new Div([.. content]).Class(wide ? "ui-field ui-field--wide" : "ui-field"));
+            _target.Add(new Div([.. content]).Class(wide ? "ui-field ui-field--wide" : "ui-field"));
             _visibleFields++;
             _hasWideField |= wide;
         }
@@ -307,6 +375,31 @@ namespace Jularr.Frontend.Framework
         private sealed class HtmlTextarea(params IUiComponent[] children) : HtmlElement("textarea", children);
         private sealed class HtmlFieldset(params IUiComponent[] children) : HtmlElement("fieldset", children);
         private sealed class HtmlLegend(params IUiComponent[] children) : HtmlElement("legend", children);
+        private sealed class HtmlTable(params IUiComponent[] children) : HtmlElement("table", children);
+        private sealed class HtmlHead(params IUiComponent[] children) : HtmlElement("thead", children);
+        private sealed class HtmlBody(params IUiComponent[] children) : HtmlElement("tbody", children);
+        private sealed class HtmlRow(params IUiComponent[] children) : HtmlElement("tr", children);
+        private sealed class HtmlHeader(params IUiComponent[] children) : HtmlElement("th", children);
+        private sealed class HtmlCell(params IUiComponent[] children) : HtmlElement("td", children);
+    }
+
+    // A field shown as one column of a choice table.
+    public sealed class ChoiceColumn
+    {
+        internal ChoiceColumn(string name, string labelKey, bool single, string? noneKey, IReadOnlySet<string> selected)
+        {
+            Name = name;
+            LabelKey = labelKey;
+            Single = single;
+            NoneKey = noneKey;
+            Selected = selected;
+        }
+
+        internal string Name { get; }
+        internal string LabelKey { get; }
+        internal bool Single { get; }
+        internal string? NoneKey { get; }
+        internal IReadOnlySet<string> Selected { get; }
     }
 
     public sealed record SelectOption(string Value, string Label);

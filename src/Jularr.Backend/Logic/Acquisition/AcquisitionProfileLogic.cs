@@ -227,8 +227,23 @@ namespace Jularr.Backend.Logic.Acquisition
             return Definition(await ctx.ReadRequiredAsync<AcquisitionProfileStateData>(sql, ct)).ScoreRules;
         }
 
-        // Prefer scores up and Avoid down; the other effects score nothing. A profile keeps up to 50 rules.
+        // A profile keeps up to 50 rules.
         public static Task AddProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, ReleaseScoreRule rule, CancellationToken ct)
+        {
+            var stored = Checked(rule);
+            return ctx.ReplaceProfileRulesAsync(key, rules => rules.Count < 50 ? [.. rules, stored] : throw new DataValidationException("Name", "out_of_range"), ct);
+        }
+
+        // A rule changes in place and keeps its position.
+        public static Task UpdateProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int position, ReleaseScoreRule rule, CancellationToken ct)
+        {
+            var stored = Checked(rule);
+            return ctx.ReplaceProfileRulesAsync(key, rules => position < rules.Count ? [.. rules.Select((existing, index) => index == position ? stored : existing)]
+                : throw new KeyNotFoundException("The rule was not found."), ct);
+        }
+
+        // Prefer scores up and Avoid down; the other effects score nothing.
+        private static ReleaseScoreRule Checked(ReleaseScoreRule rule)
         {
             if (rule.EffectiveEffect is ReleaseRuleEffect.Prefer or ReleaseRuleEffect.Avoid && rule.Score == 0)
             {
@@ -253,8 +268,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 ReleaseRuleEffect.Avoid => -Math.Abs(rule.Score),
                 _ => 0
             };
-            var stored = new ReleaseScoreRule(rule.Name, rule.Field, rule.Match, rule.Value, score) { Effect = rule.EffectiveEffect };
-            return ctx.ReplaceProfileRulesAsync(key, rules => rules.Count < 50 ? [.. rules, stored] : throw new DataValidationException("Name", "out_of_range"), ct);
+            return new ReleaseScoreRule(rule.Name, rule.Field, rule.Match, rule.Value, score) { Effect = rule.EffectiveEffect };
         }
 
         public static Task RemoveProfileRuleAsync(this LogicContext ctx, AcquisitionProfileKeyData key, int position, CancellationToken ct) =>
