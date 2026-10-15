@@ -11,8 +11,10 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Work
 {
     public sealed class WorkModel(ReadWorkV1 read, UpdateWorkV1 update, RefreshWorkMetadataV1 refresh, ReadWorkUnitGroupsV1 readGroups, CreateWorkUnitGroupV1 createGroup,
-        DeleteWorkUnitGroupV1 deleteGroup, IAntiforgery antiforgery, UiText texts) : JularrPage
+        DeleteWorkUnitGroupV1 deleteGroup, SearchMetadataV1 search, RematchWorkV1 rematch, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        private SearchMetadataDataV1? _matchQuery;
+        private IReadOnlyList<MetadataSearchResultV1>? _matches;
         private WorkDetailsV1? _work;
         private UpdateWorkDataV1? _input;
         private IReadOnlyList<WorkUnitGroupV1>? _groups;
@@ -52,7 +54,8 @@ namespace Jularr.Frontend.Pages.Admin.Work
                     if (TempData["VolumeUploaded"] is true) page.Content.Add(new P(new Text("work.upload.done")).Attribute("role", "status"));
                 }
 
-                if (_input is null && _groupInput is null && FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+                if (_input is null && _groupInput is null && _matchQuery is null && FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+                DefineMatch(page, work);
 
                 // Named sections over the units; units and files stay as they are.
                 var units = WorkUnitTypes.For(work.MediaTypeId);
@@ -85,6 +88,56 @@ namespace Jularr.Frontend.Pages.Admin.Work
                 }
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
+        }
+
+        // A wrong match is replaced by another provider entry; files, requests and manual edits stay with the Work.
+        private void DefineMatch(Page page, WorkDetailsV1 work)
+        {
+            var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+            var content = new List<IUiComponent>
+            {
+                new Form<SearchMetadataDataV1>(form =>
+                {
+                    form.Hidden(item => item.MediaTypeId);
+                    form.Hidden(item => item.MediaSubtypeId);
+                    form.Text(item => item.Query, "media.title");
+                    form.Submit("admin.works.searchMetadata");
+                }, Home + "?handler=MatchSearch", csrf, _matchQuery ?? new SearchMetadataDataV1(work.MediaTypeId, work.CanonicalTitle, null, work.MediaSubtypeId),
+                    _matchQuery is null ? null : FormError)
+            };
+            if (_matches is { } matches)
+            {
+                content.Add(matches.Count == 0 ? new P(new Text("discover.noResults")).Attribute("role", "status") : new Table<MetadataSearchResultV1>(matches)
+                    .Text(item => item.Title, "media.title")
+                    .Content("media.year", item => new ValueText(item.ReleaseYear?.ToString(CultureInfo.InvariantCulture) ?? ""))
+                    .Content("media.author", item => new ValueText(item.Author ?? ""))
+                    .Content("common.actions", item => item.WorkId == work.Id ? new Text("admin.work.currentMatch") : new Form<RematchWorkDataV1>(form =>
+                    {
+                        form.Hidden(data => data.Namespace);
+                        form.Hidden(data => data.ExternalId);
+                        form.Hidden(data => data.Title);
+                        form.Hidden(data => data.ReleaseYear);
+                        form.Hidden(data => data.Version);
+                        form.Submit("admin.work.useMatch", item.Title, valueHidden: true);
+                    }, Home + "?handler=Match", csrf, new RematchWorkDataV1(item.Namespace, item.ExternalId, item.Title, item.ReleaseYear, work.Version))));
+            }
+
+            page.Content.Add(new UiSection("admin.work.match", [.. content]));
+        }
+
+        public async Task<IActionResult> OnPostMatchSearchAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? query)
+        {
+            _matchQuery = new SearchMetadataDataV1(mediaTypeId, query ?? "", null, mediaSubtypeId);
+            await LoadDataAsync();
+            _matches = await search.ExecuteAsync<BaseDataList<MetadataSearchResultV1>>(new SearchMetadataParametersV1(), _matchQuery, HttpContext.RequestAborted);
+            PreparePage();
+            return Page();
+        }
+
+        public async Task<IActionResult> OnPostMatchAsync([BindRequired] string @namespace, [BindRequired] string externalId, [BindRequired] string title, int? releaseYear, [BindRequired] long version)
+        {
+            await rematch.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), new RematchWorkDataV1(@namespace, externalId, title, releaseYear, version), HttpContext.RequestAborted);
+            return RedirectToPage("/Admin/Work/Work", new { id = Id });
         }
 
         public async Task<IActionResult> OnGetAsync()

@@ -6,6 +6,37 @@ using Jularr.Backend.Data.Fields.Provider;
 
 namespace Jularr.Backend.Data.Logic.Media
 {
+    internal sealed class WorkRematchData : BaseData
+    {
+        public WorkRematchData(long id, string @namespace, string value, string canonicalTitle, int? releaseYear, long version)
+        {
+            Id = id;
+            Namespace = @namespace;
+            Value = value;
+            CanonicalTitle = canonicalTitle;
+            ReleaseYear = releaseYear;
+            Version = version;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string Value { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string CanonicalTitle { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Version))]
+        public long Version { get; }
+    }
+
     internal sealed class WorkMetadataData : BaseData
     {
         public WorkMetadataData(MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string @namespace, string value, string canonicalTitle, string? originalTitle, int? releaseYear, string externalIdentities,

@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
@@ -6,6 +7,111 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class WorkMetadataLogic
     {
+        // A Work matched to the wrong provider entry takes the chosen one: its provider identities, titles, facts and units without files go,
+        // its files, requests and manual edits stay; the following metadata import fills it again.
+        public static async Task RematchWorkAsync(this LogicContext ctx, WorkRematchData data, MediaType mediaType, CancellationToken ct)
+        {
+            var allowed = mediaType switch
+            {
+                MediaType.Movie => data.Namespace == "tmdb_movie",
+                MediaType.Series => data.Namespace == "tmdb_tv",
+                MediaType.Book => data.Namespace is "openlibrary" or "anilist",
+                MediaType.Music => data.Namespace == "musicbrainz",
+                MediaType.Game => data.Namespace == "igdb",
+                _ => false
+            };
+            if (!allowed)
+            {
+                throw new DataValidationException(nameof(data.Namespace), "unknown_catalog_value");
+            }
+
+            // Another Work with that entry is a different title, not a correction.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    identity."WorkId" AS "Id"
+                FROM
+                    "WorkExternalIdentities" AS identity
+                WHERE
+                    identity."Namespace" = @Namespace
+                    AND identity."Value" = @Value
+                    AND identity."WorkId" <> @Id;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<WorkIdData>(sql, ct) is not null)
+            {
+                throw new DataValidationException("ExternalId", "in_use");
+            }
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "Works" AS work
+                SET
+                    "CanonicalTitle" = @CanonicalTitle,
+                    "ReleaseYear" = @ReleaseYear,
+                    "ReleasedOn" = NULL,
+                    "Version" = work."Version" + 1,
+                    "UpdatedAt" = now()
+                WHERE
+                    work."Id" = @Id
+                    AND work."Version" = @Version;
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(data.Version), "outdated_version");
+            }
+
+            // Provider facts of the old match go; links to media servers and manual entries stay.
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                DELETE FROM
+                    "WorkExternalIdentities" AS identity
+                WHERE
+                    identity."WorkId" = @Id
+                    AND NOT identity."IsManual"
+                    AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv', 'tvdb', 'imdb', 'openlibrary', 'isbn', 'anilist', 'musicbrainz', 'igdb');
+
+                DELETE FROM
+                    "WorkTitles" AS title
+                WHERE
+                    title."WorkId" = @Id
+                    AND NOT title."IsManual";
+
+                DELETE FROM
+                    "WorkMetadataFacts" AS fact
+                WHERE
+                    fact."WorkId" = @Id
+                    AND NOT fact."IsManual";
+
+                DELETE FROM
+                    "WorkUnits" AS unit
+                WHERE
+                    unit."WorkId" = @Id
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            LEFT JOIN "WorkUnits" AS child ON child."Id" = asset."WorkUnitId"
+                        WHERE
+                            asset."WorkUnitId" = unit."Id"
+                            OR child."ParentWorkUnitId" = unit."Id"
+                    );
+
+                INSERT INTO
+                    "WorkExternalIdentities" ("WorkId", "Namespace", "Value")
+                VALUES
+                    (@Id, @Namespace, @Value);
+                """;
+            sql.Parameters.Add(data);
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task<long> SaveWorkMetadataAsync(this LogicContext ctx, WorkMetadataData data, CancellationToken ct)
         {
             // The provider identity finds the Work again; manual edits stay.

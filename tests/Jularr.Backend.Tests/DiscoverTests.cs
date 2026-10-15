@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Provider.V1;
+using AdminMedia = Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
@@ -201,6 +202,54 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("3", QueryHelpers.ParseQuery(handler.Requests.Last().Query)["page"].ToString());
         }
 
+        [TestMethod]
+        public async Task Rematch_AWronglyMatchedFilm_TakesTheOtherEntryAndKeepsItsFile()
+        {
+            await using var host = await CreateHostAsync(razor: true);
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            var work = (await imported.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!;
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (900, {work.Id});
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (900, {work.Id}, 900);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") VALUES (900, {work.Id}, 900, 1);
+                """);
+            var match = "/api/v1/admin/works/" + work.Id + "/match";
+
+            // Only an entry of the type's provider, on the current version.
+            using var wrongProvider = await host.SendAsync(HttpMethod.Post, match, new AdminMedia.RematchWorkDataV1("openlibrary", "OL1W", "The Matrix Reloaded", 2003, work.Version));
+            Assert.AreEqual(HttpStatusCode.BadRequest, wrongProvider.StatusCode);
+            using var stale = await host.SendAsync(HttpMethod.Post, match, new AdminMedia.RematchWorkDataV1("tmdb_movie", "604", "The Matrix Reloaded", 2003, work.Version + 5));
+            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode);
+
+            // The Work takes the other film; the old ids go, the file stays.
+            using var corrected = await host.SendAsync(HttpMethod.Post, match, new AdminMedia.RematchWorkDataV1("tmdb_movie", "604", "The Matrix Reloaded", 2003, work.Version));
+            Assert.AreEqual(HttpStatusCode.OK, corrected.StatusCode, await corrected.Content.ReadAsStringAsync());
+            var after = (await corrected.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!;
+            Assert.AreEqual((work.Id, "The Matrix Reloaded", (int?)2003), (after.Id, after.CanonicalTitle, after.ReleaseYear));
+            Assert.AreEqual("imdb:tt0234215,tmdb_movie:604", await host.ScalarAsync($"SELECT string_agg(\"Namespace\" || ':' || \"Value\", ',' ORDER BY \"Namespace\") FROM \"WorkExternalIdentities\" WHERE \"WorkId\" = {work.Id}"));
+            Assert.AreEqual(work.Id, await host.ScalarAsync("SELECT \"WorkId\" FROM \"MediaAssets\" WHERE \"Id\" = 900"));
+            StringAssert.Contains((string)(await host.ScalarAsync($"SELECT \"Value\" FROM \"WorkMetadataFacts\" WHERE \"WorkId\" = {work.Id} AND \"FactKey\" = 'Poster'"))!, "reloaded");
+
+            // An entry another Work holds is not a correction.
+            using var other = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new AdminMedia.ImportMetadataWorkDataV1(MediaType.Movie, "603"));
+            Assert.AreNotEqual(work.Id, (await other.Content.ReadFromJsonAsync<AdminMedia.WorkDetailsV1>())!.Id);
+            using var taken = await host.SendAsync(HttpMethod.Post, match, new AdminMedia.RematchWorkDataV1("tmdb_movie", "603", "The Matrix", 1999, after.Version));
+            StringAssert.Contains(await taken.Content.ReadAsStringAsync(), "in_use");
+
+            // The Work page searches the provider and offers the choice.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Works/" + work.Id);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Wrong match");
+            using var results = await host.SendAsync(HttpMethod.Post, "/Admin/Works/" + work.Id + "?handler=MatchSearch", new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = LibraryTests.Token(html), ["MediaTypeId"] = "1", ["Query"] = "Matrix"
+            });
+            var list = await results.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, results.StatusCode, list);
+            StringAssert.Contains(list, "Use this match");
+        }
+
         private static async Task<Host> CreateHostAsync(bool razor = false)
         {
             var tmdb = new FakeTmdb();
@@ -233,6 +282,7 @@ namespace Jularr.Backend.Tests
                     "/3/trending/movie/week" or "/3/movie/top_rated" or "/3/discover/movie" or "/3/movie/upcoming" or "/3/search/movie" => "{\"results\":[" + Movie + "]}",
                     "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
                     "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}}",
+                    "/3/movie/604" => """{"id":604,"title":"The Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","overview":"The fight goes on.","poster_path":"/reloaded.jpg","external_ids":{"imdb_id":"tt0234215"}}""",
                     _ => null
                 };
                 return Task.FromResult(body is null

@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Media;
 using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.Admin.Media.V1
@@ -108,6 +109,35 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 var connection = await _metadata.ConnectAsync(Context, CancellationToken);
                 await _metadata.ImportAsync(Context, connection, work.MediaTypeId, null, int.Parse(identity.Value, CultureInfo.InvariantCulture), CancellationToken);
             }
+            return await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct), CancellationToken);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/works/{workId:long}/match")]
+    public sealed class RematchWorkV1 : AdminService<WorkParametersV1, RematchWorkDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal RematchWorkV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<WorkDetailsV1>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("media.manual.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The new entry replaces the old match, then its metadata fills the same Work.
+            var work = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                var current = await WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct);
+                await ctx.RematchWorkAsync(new WorkRematchData(current.Id, Data.Namespace, Data.ExternalId, Data.Title, Data.ReleaseYear, Data.Version), current.MediaTypeId, ct);
+                return current;
+            }, CancellationToken);
+            await _catalog.ImportAsync(Context, work.MediaTypeId, work.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
             return await Context.ExecuteBatchAsync((ctx, ct) => WorkMetadataQueries.ReadWorkAsync(ctx, Parameters.WorkId, ct), CancellationToken);
         }
     }

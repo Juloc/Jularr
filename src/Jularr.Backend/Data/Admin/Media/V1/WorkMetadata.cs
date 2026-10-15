@@ -42,6 +42,34 @@ namespace Jularr.Backend.Data.Admin.Media.V1
         }
     }
 
+    // Another provider entry for a Work matched to the wrong one; title and year come from the chosen result.
+    public sealed class RematchWorkDataV1 : BaseData
+    {
+        public RematchWorkDataV1(string @namespace, string externalId, string title, int? releaseYear, long version)
+        {
+            Namespace = @namespace;
+            ExternalId = externalId;
+            Title = title;
+            ReleaseYear = releaseYear;
+            Version = version;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Version))]
+        public long Version { get; }
+    }
+
     public sealed class MetadataSearchResultV1 : BaseResponse
     {
         public MetadataSearchResultV1(string @namespace, string externalId, string title, string? originalTitle, int? releaseYear, string? overview, long? workId, string? author = null,
