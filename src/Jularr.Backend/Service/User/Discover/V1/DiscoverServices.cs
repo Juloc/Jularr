@@ -90,43 +90,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                         overview."Value" AS "Overview",
                         poster."Value" AS "PosterUrl",
                         backdrop."Value" AS "BackdropUrl",
-                        CASE
-                            WHEN EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "MediaAssets" AS asset
-                                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                                WHERE
-                                    asset."WorkId" = work."Id"
-                            ) OR EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WorkExternalIdentities" AS plex
-                                WHERE
-                                    plex."WorkId" = work."Id"
-                                    AND plex."Namespace" = 'plex'
-                            ) THEN 3
-                            WHEN EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WantedItems" AS wanted
-                                WHERE
-                                    wanted."WorkId" = work."Id"
-                            ) OR EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "AcquisitionRequests" AS request
-                                WHERE
-                                    request."WorkId" = work."Id"
-                                    AND request."RequestedByProfileId" = @ProfileId
-                                    AND request."AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5)
-                            ) THEN 2
-                            ELSE 1
-                        END AS "MediaStateTypeId",
+                        state."MediaStateTypeId",
                         (
                             SELECT
                                 'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
@@ -140,6 +104,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     FROM
                         "ProfileWorks" AS visible
                         JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                        JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = work."Id"
                         LEFT JOIN "WorkExternalIdentities" AS tmdb ON tmdb."WorkId" = work."Id" AND tmdb."Namespace" IN ('tmdb_movie', 'tmdb_tv')
                         LEFT JOIN LATERAL (
                             SELECT
@@ -411,43 +376,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     SELECT
                         identity."Value",
                         identity."WorkId",
-                        CASE
-                            WHEN EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "MediaAssets" AS asset
-                                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                                WHERE
-                                    asset."WorkId" = identity."WorkId"
-                            ) OR EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WorkExternalIdentities" AS plex
-                                WHERE
-                                    plex."WorkId" = identity."WorkId"
-                                    AND plex."Namespace" = 'plex'
-                            ) THEN 3
-                            WHEN EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "WantedItems" AS wanted
-                                WHERE
-                                    wanted."WorkId" = identity."WorkId"
-                            ) OR EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "AcquisitionRequests" AS request
-                                WHERE
-                                    request."WorkId" = identity."WorkId"
-                                    AND request."RequestedByProfileId" = @ProfileId
-                                    AND request."AcquisitionRequestStatusTypeId" IN (1, 2, 3, 4, 5)
-                            ) THEN 2
-                            ELSE 1
-                        END AS "MediaStateTypeId",
+                        state."MediaStateTypeId",
                         (
                             SELECT
                                 'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
@@ -461,6 +390,7 @@ namespace Jularr.Backend.Service.User.Discover.V1
                     FROM
                         "WorkExternalIdentities" AS identity
                         JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId" AND visible."ProfileId" = @ProfileId
+                        JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = identity."WorkId"
                         JOIN jsonb_to_recordset(@Values::jsonb) AS item ("Namespace" text, "Value" text) ON item."Namespace" = identity."Namespace" AND item."Value" = identity."Value";
                     """;
                 sql.Parameters.Add(new WorkIdentityLookupData(ids));

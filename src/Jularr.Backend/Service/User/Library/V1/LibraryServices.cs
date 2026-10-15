@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                             fact."IsManual" DESC
                         LIMIT 1
                     ) AS "PosterUrl",
-                    CASE WHEN available."AddedAt" IS NOT NULL OR plex."Value" IS NOT NULL THEN 3 ELSE 2 END AS "MediaStateTypeId",
+                    state."MediaStateTypeId",
                     EXISTS (
                         SELECT
                             1
@@ -54,6 +54,7 @@ namespace Jularr.Backend.Service.User.Library.V1
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
+                    JOIN "ProfileWorkStates" AS state ON state."ProfileId" = visible."ProfileId" AND state."WorkId" = work."Id"
                     LEFT JOIN LATERAL (
                         SELECT
                             max(file."CreatedAt") AS "AddedAt"

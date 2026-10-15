@@ -422,7 +422,7 @@ namespace Jularr.Backend.Service.User.Media.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // One profile-scoped page: available with media or in Plex, requested while acquired or asked for, otherwise not requested.
+            // One profile-scoped page.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -443,34 +443,13 @@ namespace Jularr.Backend.Service.User.Media.V1
                             fact."IsManual" DESC
                         LIMIT 1
                     ) AS "PosterUrl",
-                    CASE
-                        WHEN EXISTS (
-                            SELECT
-                                1
-                            FROM
-                                "MediaAssets" AS asset
-                                JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
-                            WHERE
-                                asset."WorkId" = work."Id"
-                        ) OR EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS plex WHERE plex."WorkId" = work."Id" AND plex."Namespace" = 'plex') THEN 3
-                        WHEN EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id")
-                            OR EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "AcquisitionRequests" AS request
-                                WHERE
-                                    request."WorkId" = work."Id"
-                                    AND request."RequestedByProfileId" = entry."ProfileId"
-                                    AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5
-                            ) THEN 2
-                        ELSE 1
-                    END::smallint AS "MediaStateTypeId",
+                    state."MediaStateTypeId",
                     TRUE AS "IsWatchlisted"
                 FROM
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
                     JOIN "Works" AS work ON work."Id" = entry."WorkId"
+                    JOIN "ProfileWorkStates" AS state ON state."ProfileId" = entry."ProfileId" AND state."WorkId" = work."Id"
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
