@@ -7,13 +7,17 @@ chrome. The page composition is owned by
 [the Player page](../../Pages/User/Player/Player.cshtml.cs). Icons beside this
 module use the `player-` prefix because sprite symbols are named by file name.
 
-The shared chrome centers Previous / -10 / Play-Pause / +30 / Next over the
-video. One timeline sits above the bottom toolbar, with volume on the left and
-track/speed/display options on the right. Neighbour targets come from the
-canonical playback-item service. Buttons reuse the shared Button styles.
+The shared chrome consumes canonical neighbour targets and reuses Button styles.
+The agreed Desktop toolbar places Previous / -10 / Play-Pause / +30 / Next below
+the timeline, volume left, subtitle toggle/settings/view/fullscreen right. The
+`Settings` composition slot enables that layout for the workshop. The live page
+has not supplied this slot yet and retains its existing track/speed menus.
 
 The Development-only `/Design?pane=player` workshop composes this same control
 with illustrative episodes and chapters. Its own entry demonstrates local UI
-states, including minimize/expand, without loading the playback client, making
-API calls or starting a stream/session. Quality, casting, dual subtitles and
-real chapter/episode integration in this layout remain outside this prototype.
+states without loading the playback client, making API calls or starting a
+stream/session. Its Audio/Subtitles/Playback/Info popover uses shared fields,
+toggles, buttons and navigation styles. Caption text, defaults and technical facts
+are explicit samples; none imply working persistence or processing.
+
+Binding decisions and remaining integration: [Player design](../../../../docs/PLAYER_DESIGN.md).

@@ -29,7 +29,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [MediaShelf client](Framework/Components/MediaShelf.ts): shared local chevrons, native touch/keyboard scrolling and fragment observer cleanup; [tests](Tools/media-shelf.test.mjs).
 - [MediaHero](Framework/Components/MediaHero.cs), [MediaShelf](Framework/Components/MediaShelf.cs), [MediaImage](Framework/Components/MediaImage.cs): shared media presentation; Backend owns image processing.
 
-- Player design workshop: [PlayerDesign.cs](Pages/Development/Design/PlayerDesign.cs), [client](Pages/Development/Design/PlayerDesign.entry.ts), [styles](Pages/Development/Design/PlayerDesign.entry.scss), `/Design?pane=player`; the shared Player chrome with explicitly local sample state, no stream or session.
+- Player design workshop: [PlayerDesign.cs](Pages/Development/Design/PlayerDesign.cs), [settings](Pages/Development/Design/PlayerSettings.cs), [client](Pages/Development/Design/PlayerDesign.entry.ts), [styles](Pages/Development/Design/PlayerDesign.entry.scss), `/Design?pane=player`; shared chrome, four settings tabs and explicitly local sample state, no stream/session or profile save. [Owner decisions](../../docs/PLAYER_DESIGN.md); `PlayerDesignTests.cs` and `Tools/player-design.test.mjs`.
 
 ## User and account pages
 

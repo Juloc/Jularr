@@ -21,10 +21,13 @@ namespace Jularr.Frontend.Pages.Development.Design
         protected override void Define(Page page)
         {
             page.Title("design.title");
-            page.Asset("Pages/Development/Design/Design.entry.scss");
-            page.Asset("Framework/Components/MediaShelf.entry.ts");
-            page.Asset("Framework/Components/MediaPreview.entry.ts");
-            page.Asset("Framework/Components/MediaCard.entry.ts");
+            if (_pane != "player")
+            {
+                page.Asset("Pages/Development/Design/Design.entry.scss");
+                page.Asset("Framework/Components/MediaShelf.entry.ts");
+                page.Asset("Framework/Components/MediaPreview.entry.ts");
+                page.Asset("Framework/Components/MediaCard.entry.ts");
+            }
             page.Asset("Modules/Appearance/appearance.entry.scss");
 
             // Shared appearance controls.

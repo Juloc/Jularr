@@ -23,7 +23,8 @@ function preview() {
             hasAttribute(name) { return name.startsWith('data-') && Object.hasOwn(dataset, name.slice(5)); }
         };
     };
-    const timeline = node(), volume = node();
+    const timeline = node(), volume = node(), timelineEvents = {};
+    timeline.addEventListener = (name, action) => timelineEvents[name] = action;
     const toggle = node({ action: 'toggle', labelPlay: 'Play', labelPause: 'Pause' });
     const nodes = {
         '[data-role=timeline]': timeline, '[data-role=volume]': volume, '[data-action=toggle]': toggle,
@@ -31,7 +32,7 @@ function preview() {
     };
     const player = { ...node(), querySelector: selector => nodes[selector] ?? null, querySelectorAll: () => [] };
     const root = {
-        ...node(), querySelector: selector => selector === '.player' ? player : node(), querySelectorAll: () => [],
+        ...node(), querySelector: selector => selector === '.player' ? player : null, querySelectorAll: () => [],
         addEventListener: (name, action) => events[name] = action
     };
     runInNewContext(code, {
@@ -42,7 +43,7 @@ function preview() {
         const button = action === 'toggle' ? toggle : node({ action });
         events.click({ target: { closest: () => button }, preventDefault() {} });
     };
-    return { root, player, timeline, toggle, click };
+    return { root, player, timeline, toggle, click, timelineEvents, time: nodes['[data-role=time]'] };
 }
 
 test('design transport changes only sample state with bounded -10/+30 seeking', () => {
@@ -55,6 +56,16 @@ test('design transport changes only sample state with bounded -10/+30 seeking', 
     for (let i = 0; i < 80; i++) ui.click('back');
     assert.equal(ui.timeline.value, '0');
     ui.click('toggle');
+    assert.equal(ui.toggle.attributes['aria-label'], 'Pause');
+});
+
+test('dragging previews without committing position or changing the play state', () => {
+    const ui = preview();
+    ui.click('toggle');
+    ui.timeline.value = '900';
+    assert.equal(ui.time.textContent, '12:34');
+    ui.timelineEvents.change();
+    assert.equal(ui.time.textContent, '15:00');
     assert.equal(ui.toggle.attributes['aria-label'], 'Pause');
 });
 

@@ -238,6 +238,15 @@
 }
 
 // The app stays hidden behind the full player; the mini player is a bar above it.
+.player--configured {
+    .player__transport { inset: auto auto 12px 50%; transform: translateX(-50%); }
+    .player__button--primary { width: 44px; min-width: 44px; min-height: 44px; .ui-icon { width: 26px; height: 26px; } }
+    .player__bottom { gap: 0; padding-bottom: 12px; }
+    .player__actions { min-height: 44px; }
+    .player__options { gap: 4px; }
+    .player__options .player__button { width: 36px; min-width: 36px; }
+}
+
 .player-active:not(.player-mini) .app-layout { display: none; }
 .player__mini-only { display: none; }
 
@@ -323,6 +332,7 @@
     .player__audio,
     .player__options,
     .player__panel,
+    [data-action=cast],
     [data-action=close],
     [data-action=minimize] { display: none; }
 
