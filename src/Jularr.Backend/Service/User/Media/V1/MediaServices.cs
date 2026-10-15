@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Data.Logic.Playback;
 using Jularr.Backend.Data.Logic.Profile;
+using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data;
 using Jularr.Backend.Infrastructure.Sql;
@@ -377,23 +378,21 @@ namespace Jularr.Backend.Service.User.Media.V1
     [ServiceEndpoint("GET", "/api/v1/watchlist")]
     public sealed class ReadWatchlistV1 : UserService<ReadWatchlistParametersV1>
     {
-        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<WorkCardV1>>()];
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<PageResult<LibraryItemV1>>()];
         protected override ModuleRequirement GetInstanceModules(ReadWatchlistParametersV1 parameters) => ModuleRequirement.All("Library");
         protected override ServicePermission GetPermission(ReadWatchlistParametersV1 parameters, Type resultType) => new("profile.media.read");
         protected override PageRequest GetPageRequest(ReadWatchlistParametersV1 parameters) => new(parameters.Page, parameters.PageSize);
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // One profile-scoped page.
+            // One profile-scoped page: available with media or in Plex, requested while acquired or asked for, otherwise not requested.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 SELECT
                     work."Id",
                     work."MediaTypeId",
-                    visible."MediaSubtypeId",
-                    work."CanonicalTitle",
-                    TRUE AS "IsWatchlisted",
+                    work."CanonicalTitle" AS "Title",
                     work."ReleaseYear"::integer AS "ReleaseYear",
                     (
                         SELECT
@@ -406,7 +405,31 @@ namespace Jularr.Backend.Service.User.Media.V1
                         ORDER BY
                             fact."IsManual" DESC
                         LIMIT 1
-                    ) AS "PosterUrl"
+                    ) AS "PosterUrl",
+                    CASE
+                        WHEN EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "MediaAssets" AS asset
+                                JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL
+                            WHERE
+                                asset."WorkId" = work."Id"
+                        ) OR EXISTS (SELECT 1 FROM "WorkExternalIdentities" AS plex WHERE plex."WorkId" = work."Id" AND plex."Namespace" = 'plex') THEN 3
+                        WHEN EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."WorkId" = work."Id")
+                            OR EXISTS (
+                                SELECT
+                                    1
+                                FROM
+                                    "AcquisitionRequests" AS request
+                                WHERE
+                                    request."WorkId" = work."Id"
+                                    AND request."RequestedByProfileId" = entry."ProfileId"
+                                    AND request."AcquisitionRequestStatusTypeId" BETWEEN 1 AND 5
+                            ) THEN 2
+                        ELSE 1
+                    END::smallint AS "MediaStateTypeId",
+                    TRUE AS "IsWatchlisted"
                 FROM
                     "WatchlistEntries" AS entry
                     JOIN "ProfileWorks" AS visible ON visible."ProfileId" = entry."ProfileId" AND visible."WorkId" = entry."WorkId"
@@ -414,15 +437,20 @@ namespace Jularr.Backend.Service.User.Media.V1
                 WHERE
                     entry."ProfileId" = @ProfileId
                     AND NOT visible."IsHidden"
+                    AND (@MediaTypeId::smallint IS NULL OR visible."MediaTypeId" = @MediaTypeId AND (@MediaSubtypeId::smallint IS NOT NULL OR visible."MediaSubtypeId" IS NULL))
+                    AND (@MediaSubtypeId::smallint IS NULL OR visible."MediaSubtypeId" = @MediaSubtypeId)
                 ORDER BY
+                    CASE WHEN @LibrarySortTypeId = 1 THEN entry."CreatedAt" END DESC NULLS LAST,
+                    CASE WHEN @LibrarySortTypeId = 3 THEN work."ReleaseYear" END DESC NULLS LAST,
                     work."CanonicalTitle",
                     work."Id"
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
+            sql.Parameters.Add(new LibraryFilterData(Parameters.MediaTypeId, Parameters.MediaSubtypeId, null, Parameters.LibrarySortTypeId));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             sql.Page = Page;
-            return await Context.ReadSql.ReadPageAsync<WorkCardV1>(sql, CancellationToken);
+            return await Context.ReadSql.ReadPageAsync<LibraryItemV1>(sql, CancellationToken);
         }
     }
 

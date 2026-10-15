@@ -11,14 +11,29 @@ namespace Jularr.Backend.Data.User.Media.V1
 {
     public sealed class ReadWatchlistParametersV1 : BaseParameters
     {
-        public ReadWatchlistParametersV1(int page = 1, int pageSize = 25)
+        public ReadWatchlistParametersV1(int page = 1, int pageSize = 25, MediaType? mediaTypeId = null, MediaSubtype? mediaSubtypeId = null,
+            LibrarySortType librarySortTypeId = LibrarySortType.RecentlyAdded)
         {
+            MediaTypeId = mediaTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+            LibrarySortTypeId = librarySortTypeId;
             Page = page;
             PageSize = pageSize;
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        // A type alone lists its Works without subtype; a subtype lists that subtype across types.
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId), false)]
+        public MediaType? MediaTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId), false)]
+        public MediaSubtype? MediaSubtypeId { get; }
+
+        // Recently added means added to the watchlist.
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.LibrarySortTypeId))]
+        public LibrarySortType LibrarySortTypeId { get; }
     }
 
     public sealed class ReadCreatorWorksParametersV1 : BaseParameters

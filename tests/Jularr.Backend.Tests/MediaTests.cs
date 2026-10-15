@@ -254,7 +254,17 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
             using var watchlist = await host.SendAsync(HttpMethod.Get, "/Watchlist");
             Assert.AreEqual(HttpStatusCode.OK, watchlist.StatusCode, await watchlist.Content.ReadAsStringAsync());
-            StringAssert.Contains(await watchlist.Content.ReadAsStringAsync(), "&lt;edited&gt;");
+            var watchlistHtml = await watchlist.Content.ReadAsStringAsync();
+            StringAssert.Contains(watchlistHtml, "&lt;edited&gt;");
+            StringAssert.Contains(watchlistHtml, "state-chip--notrequested");
+
+            // The list narrows to a media type and keeps its order.
+            var type = (MediaType)(short)(await host.ScalarAsync("SELECT \"MediaTypeId\" FROM \"Works\""))!;
+            var other = type == MediaType.Movie ? MediaType.Series : MediaType.Movie;
+            using var own = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?mediaTypeId=" + type + "&librarySortTypeId=Title");
+            Assert.AreEqual(1, (await own.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!.Items.Count);
+            using var none = await host.SendAsync(HttpMethod.Get, "/api/v1/watchlist?mediaTypeId=" + other);
+            Assert.AreEqual(0, (await none.Content.ReadFromJsonAsync<PageResult<Jularr.Backend.Data.User.Library.V1.LibraryItemV1>>())!.Items.Count);
             using var users = await host.SendAsync(HttpMethod.Get, "/Admin/Requests/Users");
             Assert.AreEqual(HttpStatusCode.OK, users.StatusCode, await users.Content.ReadAsStringAsync());
             StringAssert.Contains(await users.Content.ReadAsStringAsync(), "Standard");
