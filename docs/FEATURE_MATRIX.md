@@ -83,7 +83,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Player | tested | PlaybackTests, navigation.test.mjs | Real transcoding in CI, casting |
 | Reader | tested | ReadingTests, reader.test.mjs, comic.test.mjs | Bookmarks; PDF conversion; progress slider and hiding chrome; comic fit and zoom |
 | Login, setup, registration, profiles, sessions | e2e (setup, sign-in, registration with Owner approval, menus) | FirstRunTests, ProfilesTests, AuthenticationTests | Remaining setup steps in the browser |
-| Requests, settings, calendar, collections, notifications, statistics | tested | RequestTests, CalendarTests, CollectionTests, NotificationTests, StatisticsTests | Browser tests; month and week calendar; request timeline and cancel |
+| Requests, settings, calendar, collections, notifications, statistics | tested | RequestTests, CalendarTests, CollectionTests, NotificationTests, StatisticsTests | Browser tests; week calendar; request timeline and cancel |
 | Responsive layout | unclear | – | Viewport tests |
 
 ## Devices and apps

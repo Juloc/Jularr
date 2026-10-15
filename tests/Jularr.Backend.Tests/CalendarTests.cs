@@ -42,12 +42,22 @@ namespace Jularr.Backend.Tests
             Assert.IsNull(entries[1].WorkUnitTypeId);
             Assert.IsTrue(entries[2].IsWatchlisted);
 
-            using var page = await host.SendAsync(HttpMethod.Get, "/Calendar");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Calendar?view=agenda");
             var html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Next Week");
             StringAssert.Contains(html, "Coming Movie");
             Assert.IsFalse(html.Contains("Not Mine", StringComparison.Ordinal));
+
+            // The month of the movie shows it in its grid; the series filter leaves it out.
+            var month = "/Calendar?month=" + today.AddDays(3).ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            using var grid = await host.SendAsync(HttpMethod.Get, month);
+            var gridHtml = await grid.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, grid.StatusCode, gridHtml);
+            StringAssert.Contains(gridHtml, "calendar__grid");
+            StringAssert.Contains(gridHtml, "Coming Movie");
+            using var series = await host.SendAsync(HttpMethod.Get, month + "&type=Series");
+            Assert.IsFalse((await series.Content.ReadAsStringAsync()).Contains("Coming Movie", StringComparison.Ordinal));
 
             using var tooLong = await host.SendAsync(HttpMethod.Get, "/api/v1/calendar?from=" + today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "&days=100");
             Assert.AreEqual(HttpStatusCode.BadRequest, tooLong.StatusCode);

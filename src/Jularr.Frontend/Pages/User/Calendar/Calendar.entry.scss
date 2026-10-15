@@ -32,11 +32,96 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-panel);
         background: var(--surface);
+
+        img {
+            flex: none;
+            align-self: center;
+            width: 32px;
+            height: 48px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
     }
 
     &__unit,
     &__state {
         color: var(--muted);
         font-size: 13px;
+    }
+
+    &__period {
+        align-self: center;
+        min-width: 10ch;
+        font-weight: 650;
+        text-align: center;
+    }
+
+    // Seven columns of whole weeks; small screens list the days with releases.
+    &__grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 4px;
+    }
+
+    &__weekday {
+        padding: 4px 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+    }
+
+    &__cell {
+        display: grid;
+        align-content: start;
+        gap: 4px;
+        min-height: 96px;
+        padding: 6px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel);
+        background: var(--surface);
+
+        ul {
+            display: grid;
+            gap: 4px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .calendar__entry {
+            gap: 6px;
+            padding: 4px;
+            border: 0;
+            font-size: 13px;
+        }
+
+        &--outside {
+            opacity: 0.6;
+        }
+
+        &[aria-current="date"] {
+            border-color: var(--accent);
+        }
+    }
+
+    &__date {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+    }
+
+    &__more {
+        font-size: 12px;
+    }
+
+    @media (max-width: 780px) {
+        &__grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        &__weekday,
+        &__cell--empty {
+            display: none;
+        }
     }
 }
