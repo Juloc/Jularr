@@ -24,9 +24,10 @@ through the UI). A row is done only at e2e. Tests name classes in `tests/Jularr.
 | Play / read, progress | e2e (film, episode, album track with FFmpeg in CI; EPUB, comic) | Playback, Reading | PlaybackTests, ReadingTests, progress.test.mjs, path tests | Transcoding and track choice in the browser | Playback and reading start, seek and save progress |
 | Sign out, sign in, resume | e2e | Sessions, Progress | AuthenticationTests, path tests | Another device | Progress resumes on another session and device |
 | Failure cases: restart during a download, lost database connections, failed download and Retry, offline library, 5xx and script errors | e2e | as above | FailureTests, every path test watches 5xx and script errors | – | Each case ends in a visible, recoverable state without data loss |
-| Failure cases: missing metadata, ambiguous release, profiles and permissions, unavailable media, upgrades, subtitles and audio tracks, transcoding errors | tested (parts) | as above | LibraryTests, AcquisitionTests, PlaybackTests, StorageTests | Browser scenarios (B4b, B4c) | Each case ends in a visible, recoverable state without data loss | Each case ends in a visible, recoverable state without data loss |
+| Failure cases: ambiguous release, profiles and permissions, unavailable media, upgrades with the recycle bin | e2e | as above | LibraryChangesTests, ProfilesTests | – | Each case ends in a visible, recoverable state without data loss |
+| Failure cases: missing metadata, subtitles and audio tracks, transcoding errors | tested (parts) | as above | LibraryTests, AcquisitionTests, PlaybackTests | Browser scenarios (B4c) | Each case ends in a visible, recoverable state without data loss |
 
-The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader and the remaining failure cases (B4b, B4c).
+The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeServices.cs) (TMDB, MusicBrainz, Open Library, AniList, Newznab, SABnzbd) the started host reaches through the `Providers` addresses; files are generated (WebM and FLAC by FFmpeg, EPUB and CBZ in code). Still needed: a NNTP fake for the native downloader and the remaining failure cases (B4c).
 
 ## Arr+ core
 
@@ -76,11 +77,11 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Page | Status | Tests | Missing |
 | --- | --- | --- | --- |
 | Home/Discover | tested | DiscoverTests, discover.test.mjs, HomeLayoutTests | Other types, genre/year filters |
-| Details | tested | PlaybackTests | Complete episode details |
+| Details | tested | PlaybackTests | Complete episode details; the browser tab names "Media details" instead of the work |
 | Library, Watchlist | tested | MediaTests | Filters; numbered paging |
 | Player | tested | PlaybackTests, navigation.test.mjs | Real transcoding in CI, casting |
 | Reader | tested | ReadingTests, reader.test.mjs, comic.test.mjs | Bookmarks; PDF conversion |
-| Login, setup, profiles, sessions | e2e (setup, sign-in, menus) | FirstRunTests, AuthenticationTests | Remaining setup steps in the browser |
+| Login, setup, registration, profiles, sessions | e2e (setup, sign-in, registration with Owner approval, menus) | FirstRunTests, ProfilesTests, AuthenticationTests | Remaining setup steps in the browser; the sign-in page's appearance note "Instance defaults and profile policies are not connected yet" |
 | Requests, settings, calendar, collections, notifications, statistics | tested | RequestTests, CalendarTests, CollectionTests, NotificationTests, StatisticsTests | Browser tests |
 | Responsive layout | unclear | – | Viewport tests |
 
