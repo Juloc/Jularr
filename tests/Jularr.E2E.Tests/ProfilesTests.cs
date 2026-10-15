@@ -34,9 +34,12 @@ namespace Jularr.E2E.Tests
                 await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Movies", "Movie"));
                 await Steps.AddUsenetAsync(page, fakes, "2000,2040");
 
-                // Without the Registration module the sign-in page offers no account.
+                // Without the Registration module the sign-in page offers no account and the page does not exist.
                 await visitor.GotoAsync("/Account/Login");
                 Assert.AreEqual(0, await visitor.GetByRole(AriaRole.Link, new() { Name = "Create an account" }).CountAsync());
+                Assert.AreEqual(404, (await visitor.GotoAsync("/Account/Register"))!.Status);
+                CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.Where(problem => !problem.Contains("404", StringComparison.Ordinal)).ToArray());
+                viewer.Problems.Clear();
                 await Steps.SetModuleAsync(page, "Let visitors ask for an account", true);
 
                 // The visitor asks for an account; it cannot sign in before the Owner enables it.
@@ -45,7 +48,14 @@ namespace Jularr.E2E.Tests
                 var form = Steps.FormWith(visitor, "Ask for an account");
                 await form.Locator("[name=Email]").FillAsync(Email);
                 await form.Locator("[name=DisplayName]").FillAsync("Viewer");
+                await form.Locator("[name=Password]").FillAsync("short");
+                await form.Locator("[name=PasswordConfirmation]").FillAsync("short");
+                await form.Locator("button[type=submit]").ClickAsync();
+                await Assertions.Expect(visitor.Locator("main [role=alert]")).ToBeVisibleAsync();
+                Assert.AreEqual("", await form.Locator("[name=Password]").InputValueAsync());
+                Assert.AreEqual(Email, await form.Locator("[name=Email]").InputValueAsync());
                 await form.Locator("[name=Password]").FillAsync(Password);
+                await form.Locator("[name=PasswordConfirmation]").FillAsync(Password);
                 await Steps.SubmitAsync(visitor, form);
                 StringAssert.Contains(await visitor.Locator("main [role=status]").InnerTextAsync(), "waits until an administrator enables it");
                 await SignInAsync(visitor);
@@ -60,9 +70,10 @@ namespace Jularr.E2E.Tests
                 // Enabled, the same credentials work; administration stays closed.
                 await SignInAsync(visitor);
                 Assert.IsFalse(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "The enabled account could not sign in.");
+                CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.Where(problem => !problem.Contains("401", StringComparison.Ordinal)).ToArray());
                 var admin = await visitor.GotoAsync("/Admin/Accounts");
-                Assert.IsFalse(await visitor.Locator("main").InnerTextAsync() is var text && text.Contains(Email, StringComparison.Ordinal), "A user saw the account list.");
-                Assert.IsTrue(admin!.Status is 403 or 404 || new Uri(visitor.Url).AbsolutePath.Contains("AccessDenied", StringComparison.Ordinal), "A user reached administration: " + visitor.Url);
+                Assert.AreEqual(403, admin!.Status);
+                StringAssert.Contains(new Uri(visitor.Url).AbsolutePath, "/Account/AccessDenied");
                 viewer.Problems.Clear();
 
                 // The user's request waits for the Owner; once approved it is searched, downloaded and arrives.

@@ -9,14 +9,12 @@ using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Frontend.Framework;
 using Jularr.Frontend.Pages.Shared;
 using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace Jularr.Frontend.Pages.Account.Register
 {
     // A visitor asks for an account; it stays disabled until an administrator enables it.
-    [AllowAnonymous]
     [EnableRateLimiting("public")]
     public sealed class RegisterModel(ReadInstancePresentationV1 presentation, ReadUiLocalesV1 readLocales, RegisterV1 register, IAntiforgery antiforgery, FrontendAssets assets)
         : JularrPage
@@ -40,6 +38,7 @@ namespace Jularr.Frontend.Pages.Account.Register
                         form.Text(x => x.Email, "account.field.email", "email");
                         form.Text(x => x.DisplayName, "profile.field.displayName", "nickname");
                         form.Password(x => x.Password, "account.field.password", "new-password");
+                        form.Password(x => x.PasswordConfirmation, "setup.owner.passwordConfirmation", "new-password");
                         form.Select(x => x.UiLocaleId, "profile.field.uiLocale", options);
                         form.Submit("account.register.submit");
                     }, Url.Page("/Account/Register/Register")!, antiforgery.GetAndStoreTokens(HttpContext).RequestToken, _input, FormError),
@@ -48,7 +47,7 @@ namespace Jularr.Frontend.Pages.Account.Register
 
         public async Task<IActionResult> OnGetAsync()
         {
-            if (!(await presentation.ExecuteAsync<InstancePresentationDetailsV1>(new ReadInstancePresentationParametersV1(), HttpContext.RequestAborted)).AllowsRegistration)
+            if (!await IsOpenAsync())
             {
                 return NotFound();
             }
@@ -58,18 +57,29 @@ namespace Jularr.Frontend.Pages.Account.Register
             return Page();
         }
 
-        public async Task<IActionResult> OnPostAsync(string? email, string? displayName, string? password, long uiLocaleId)
+        public async Task<IActionResult> OnPostAsync(string? email, string? displayName, string? password, string? passwordConfirmation, long uiLocaleId)
         {
-            _input = new RegisterDataV1(email ?? "", displayName ?? "", "", uiLocaleId);
-            await register.ExecuteAsync<RegisterResultV1>(new AuthenticationParametersV1(), new RegisterDataV1(email ?? "", displayName ?? "", password ?? "", uiLocaleId), HttpContext.RequestAborted);
+            if (!await IsOpenAsync())
+            {
+                return NotFound();
+            }
+
+            // Passwords are never written back into the form.
+            _input = new RegisterDataV1(email ?? "", displayName ?? "", "", "", uiLocaleId);
+            await register.ExecuteAsync<RegisterResultV1>(new AuthenticationParametersV1(),
+                new RegisterDataV1(email ?? "", displayName ?? "", password ?? "", passwordConfirmation ?? "", uiLocaleId), HttpContext.RequestAborted);
             TempData["Registered"] = true;
             return RedirectToPage("/Account/Register/Register");
         }
 
+        // Without the Registration module the page does not exist.
+        private async Task<bool> IsOpenAsync() =>
+            (await presentation.ExecuteAsync<InstancePresentationDetailsV1>(new ReadInstancePresentationParametersV1(), HttpContext.RequestAborted)).AllowsRegistration;
+
         protected override async Task LoadDataAsync()
         {
             _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
-            _input ??= new RegisterDataV1("", "", "", _locales.FirstOrDefault()?.Id ?? 0);
+            _input ??= new RegisterDataV1("", "", "", "", _locales.FirstOrDefault()?.Id ?? 0);
         }
     }
 }

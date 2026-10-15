@@ -149,7 +149,7 @@ name, direction and enablement with a catalog revision check. English cannot be
 disabled. Required locale names are constrained in the fresh baseline.
 No translation generation, migration or active database installation happens implicitly.
 Public login verifies password hashes and issues hashed-secret sessions. Public
-registration creates disabled requests; Plex attempts use expiring, browser-bound,
+registration (module Registration, off by default) creates disabled requests; Plex attempts use expiring, browser-bound,
 single-use challenges with protected device keys. Cookie middleware validates the
 database session; mutations lock its current state through the shared gate.
 Rotation/revocation endpoints and Owner account approval/name/role/status editing

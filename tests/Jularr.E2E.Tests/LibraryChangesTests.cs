@@ -57,13 +57,17 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = better.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, better);
-                await WaitForAsync(() => !File.Exists(first), "The earlier file was not replaced.");
+                await WaitForAsync(() => Directory.Exists(Path.Combine(movies, ".jularr-recycle"))
+                    && Directory.EnumerateFiles(Path.Combine(movies, ".jularr-recycle"), "*.webm", SearchOption.AllDirectories).Any(), "The earlier file did not reach the recycle bin.");
+                Assert.IsFalse(File.Exists(first), "The earlier file is still in place.");
                 var files = Directory.EnumerateFiles(movies, "*.webm", SearchOption.AllDirectories).ToArray();
                 Assert.AreEqual(1, files.Count(file => !file.Contains(".jularr-recycle", StringComparison.Ordinal)), string.Join(", ", files));
                 Assert.AreEqual(1, files.Count(file => file.Contains(".jularr-recycle", StringComparison.Ordinal)), "The replaced file is not in the recycle bin: " + string.Join(", ", files));
                 CollectionAssert.AreEqual(new[] { lower, better }.Select(release => fakes.NzbAddress(release).ToString()).ToArray(), fakes.Grabbed.ToArray());
 
                 // A file deleted outside Jularr is found missing by the next scan and no longer offered.
+                await page.GotoAsync(details);
+                Assert.IsTrue(await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).CountAsync() > 0, "The upgraded film is not offered.");
                 File.Delete(files.Single(file => !file.Contains(".jularr-recycle", StringComparison.Ordinal)));
                 await page.GotoAsync("/Admin/Storage");
                 await page.Locator("tr", new() { HasText = "Library" }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
@@ -73,6 +77,7 @@ namespace Jularr.E2E.Tests
                     await page.GotoAsync(details);
                     return await page.GetByRole(AriaRole.Link, new() { Name = "Play", Exact = true }).CountAsync() == 0;
                 }, "The missing file is still offered.");
+                StringAssert.Contains(await page.Locator("main").InnerTextAsync(), FakeServices.MovieTitle);
 
                 CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
             }

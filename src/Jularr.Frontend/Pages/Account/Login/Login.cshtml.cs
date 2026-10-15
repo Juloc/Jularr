@@ -101,7 +101,7 @@ namespace Jularr.Frontend.Pages.Account.Login
         public async Task<IActionResult> OnPostAsync(string? email, string? password, string? returnUrl)
         {
             _email = email ?? "";
-            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            await LoadDataAsync();
 
             // Invoke the canonical service.
             var result = await login.ExecuteAsync<LoginResultV1>(new LoginDataV1(_email, password ?? ""), HttpContext.RequestAborted);
@@ -113,7 +113,7 @@ namespace Jularr.Frontend.Pages.Account.Login
 
         public async Task<IActionResult> OnPostPlexAsync()
         {
-            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            await LoadDataAsync();
             _plex = await startPlex.ExecuteAsync<StartPlexResultV1>(cancellationToken: HttpContext.RequestAborted);
             _plexChallengeId = _plex.AuthChallengePublicId;
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, _plex, antiforgery);
@@ -124,7 +124,7 @@ namespace Jularr.Frontend.Pages.Account.Login
         public async Task<IActionResult> OnPostPlexCompleteAsync(Guid authChallengePublicId, string? returnUrl)
         {
             _plexChallengeId = authChallengePublicId;
-            _authentication = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted);
+            await LoadDataAsync();
             var result = await completePlex.ExecuteAsync<LoginResultV1>(new CompletePlexParametersV1(authChallengePublicId), default, HttpContext.RequestAborted);
             await ServiceApi.ApplyAuthenticationAsync(HttpContext, result, antiforgery);
             if (result.IsAuthenticated)

@@ -28,11 +28,12 @@ namespace Jularr.Backend.Data.Public.Authentication.V1
 
     public sealed class RegisterDataV1 : BaseData
     {
-        public RegisterDataV1(string email, string displayName, string password, long uiLocaleId)
+        public RegisterDataV1(string email, string displayName, string password, string passwordConfirmation, long uiLocaleId)
         {
             Email = email;
             DisplayName = displayName;
             Password = password;
+            PasswordConfirmation = passwordConfirmation;
             UiLocaleId = uiLocaleId;
         }
 
@@ -45,8 +46,22 @@ namespace Jularr.Backend.Data.Public.Authentication.V1
         [DataField(typeof(AuthenticationFields), nameof(AuthenticationFields.NewPassword))]
         public string Password { get; }
 
+        [DataField(typeof(AuthenticationFields), nameof(AuthenticationFields.NewPassword))]
+        public string PasswordConfirmation { get; }
+
         [DataField(typeof(ProfileFields), nameof(ProfileFields.UiLocaleId))]
         public long UiLocaleId { get; }
+
+        public override void Validate()
+        {
+            base.Validate();
+
+            // Confirm before any mutation.
+            if (!string.Equals(Password, PasswordConfirmation, StringComparison.Ordinal))
+            {
+                throw new DataValidationException(nameof(PasswordConfirmation), "password_mismatch");
+            }
+        }
     }
 
     public sealed class LoginResultV1 : BaseResponse, ISessionResult
