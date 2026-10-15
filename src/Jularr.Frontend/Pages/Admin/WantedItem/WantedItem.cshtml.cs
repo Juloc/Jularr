@@ -53,11 +53,8 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         // State, then the searches of the whole title and pausing.
         private List<IUiComponent> Status(WantedDetailsV1 item, string? csrf)
         {
-            var content = new List<IUiComponent>
-            {
-                new P(new Text("table.status"), new ValueText(": "), WantedStatus.Of(item)),
-                new P(new Text("request.language"), new ValueText(": " + string.Join(", ", item.RequestedLanguages)))
-            };
+            var content = new List<IUiComponent> { new P(new Text("table.status"), new ValueText(": "), WantedStatus.Of(item)) };
+            if (item.RequestedLanguages.Length > 0) content.Add(new P(new Text("request.language"), new ValueText(": " + string.Join(", ", item.RequestedLanguages))));
             if (item.LastSearchedAt is { } searchedAt)
             {
                 content.Add(new P(new Text("wanted.lastSearch"), new ValueText(": " + searchedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture))));

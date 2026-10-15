@@ -28,6 +28,25 @@
     }
 
     tbody tr:hover { background: var(--surface-hover); }
+
+    // Row actions stay compact and light, side by side.
+    td .button {
+        min-height: 32px;
+        padding: 5px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    td .button--primary {
+        border-color: var(--accent-line);
+        background-color: var(--accent-soft);
+        color: var(--accent-text);
+
+        &:hover:not(:disabled) { background-color: var(--accent-soft); border-color: var(--accent); }
+    }
+
+    td .ui-form__actions,
+    td .ui-form--inline { gap: 8px; }
 }
 
 @media (max-width: 650px) {
