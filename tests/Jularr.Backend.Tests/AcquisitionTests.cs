@@ -682,6 +682,125 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task WantedViews_ListMissingAndCutoffUnmetAsTheUpgradePolicyDecides()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet(), razor: true);
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "Works" ("Id", "MediaTypeId", "CanonicalTitle") VALUES (701, 1, 'Missing Film'), (702, 1, 'Low Film'), (703, 1, 'Good Film'), (704, 1, 'Paused Film'), (705, 1, 'Unknown Film');
+                INSERT INTO "WantedItems" ("Id", "WorkId", "IsPaused") SELECT "Id", "Id", "Id" = 704 FROM "Works" WHERE "Id" BETWEEN 701 AND 705;
+                INSERT INTO "WorkEditions" ("Id", "WorkId") SELECT "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 702 AND 705;
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") SELECT "Id", "Id", "Id" FROM "Works" WHERE "Id" BETWEEN 702 AND 705;
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "MediaAssetTypeId") SELECT "Id", "Id", "Id", 1 FROM "Works" WHERE "Id" BETWEEN 702 AND 705;
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId", "QualityKey")
+                    SELECT root."Id", 'Film ' || item.id || '.mkv', 1, now(), now(), item.id, item.quality
+                    FROM (SELECT "Id" FROM "LibraryRoots" ORDER BY "Id" LIMIT 1) AS root, (VALUES (702, 'HDTV-720p'), (703, 'web-1080p'), (704, 'WEB-720p'), (705, NULL)) AS item (id, quality);
+                """);
+
+            async Task<string[]> ListAsync(WantedViewType view)
+            {
+                using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted?pageSize=50&wantedViewTypeId=" + (int)view);
+                Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+                return (await listed.Content.ReadFromJsonAsync<PageResult<WantedDetailsV1>>())!.Items.Select(item => item.CanonicalTitle).Order().ToArray();
+            }
+
+            // Missing and paused targets leave the lists; the cutoff list is what the policy calls upgradable.
+            CollectionAssert.AreEqual(new[] { "Missing Film" }, await ListAsync(WantedViewType.Missing));
+            var definition = System.Text.Json.JsonSerializer.Deserialize<AcquisitionProfileDefinition>(
+                (string)(await host.ScalarAsync("SELECT \"Definition\"::text FROM \"AcquisitionProfiles\" WHERE \"MediaTypeId\" = 1 AND \"IsDefault\""))!, AcquisitionSelectionLogic.DefinitionOptions)!;
+            var profile = new QualityProfile("1", "Movies", definition.AllowedQualities, definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, null, null, [], [], [], [], []);
+            var expected = new[] { ("Low Film", "HDTV-720p"), ("Good Film", "web-1080p"), ("Unknown Film", (string?)null) }
+                .Where(film => UpgradePolicy.Assess(profile, film.Item2).State == UpgradeState.Upgradable).Select(film => film.Item1).Order().ToArray();
+            CollectionAssert.AreEqual(new[] { "Low Film" }, expected);
+            CollectionAssert.AreEqual(expected, await ListAsync(WantedViewType.CutoffUnmet));
+            Assert.AreEqual(5, (await ListAsync(WantedViewType.All)).Length);
+
+            // The page offers the lists and keeps the chosen one.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&View=CutoffUnmet");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "Cutoff unmet");
+            StringAssert.Contains(html, "Below cutoff");
+            StringAssert.Contains(html, "WantedItemId=702&amp;Tab=");
+            StringAssert.Contains(html, "View=CutoffUnmet&amp;WantedItemId=702");
+            Assert.IsFalse(html.Contains("Good Film"));
+        }
+
+        [TestMethod]
+        public async Task NewRelease_TheDailyRefreshAddsTheEpisode_AndTheNextCycleGrabsIt()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Results = FakeUsenet.SeriesResults };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
+            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+
+            // Season 2 episode 1 is not known yet and season 1 is not wanted: nothing to search.
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
+                UPDATE "WorkUnits" AS episode SET "IsMonitored" = FALSE FROM "WorkUnits" AS season
+                    WHERE season."Id" = episode."ParentWorkUnitId" AND season."WorkId" = {work.Id} AND season."Number" = 1;
+                DELETE FROM "WorkUnits" AS episode USING "WorkUnits" AS season
+                    WHERE season."Id" = episode."ParentWorkUnitId" AND season."WorkId" = {work.Id} AND season."Number" = 2 AND episode."Number" = 1;
+                """);
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+
+            // A day later the refresh learns of it; it follows the target and is grabbed in the next cycle.
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "WorkExternalIdentities" SET "UpdatedAt" = now() - interval '2 days' WHERE "WorkId" = {work.Id};
+                UPDATE "WantedItems" SET "NextSearchAt" = NULL;
+                """);
+            await RunAsync<RefreshWantedMetadataV1>(host);
+            Assert.AreEqual(true, await host.ScalarAsync($"""
+                SELECT episode."IsMonitored" FROM "WorkUnits" AS episode JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                WHERE season."WorkId" = {work.Id} AND season."Number" = 2 AND episode."Number" = 1
+                """));
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/s2e1" }, usenet.Grabbed);
+        }
+
+        [TestMethod]
+        public async Task Unmonitoring_TheLastMissingEpisode_CompletesTheRequest()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeUsenet { Results = FakeUsenet.SeriesResults });
+            var tmdb = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Providers\" WHERE \"Key\" = 'tmdb'"))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/providers/" + tmdb + "/secret", new SaveProviderSecretDataV1(FakeUsenet.TmdbToken));
+            using var imported = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works/metadata", new ImportMetadataWorkDataV1(MediaType.Series, "1399"));
+            var work = (await imported.Content.ReadFromJsonAsync<WorkDetailsV1>())!;
+            var present = (long)(await host.ScalarAsync($"SELECT min(\"Id\") FROM \"WorkUnits\" WHERE \"WorkId\" = {work.Id} AND \"WorkUnitTypeId\" = 2 AND \"IsMonitored\""))!;
+            var last = (long)(await host.ScalarAsync($"SELECT max(\"Id\") FROM \"WorkUnits\" WHERE \"WorkId\" = {work.Id} AND \"WorkUnitTypeId\" = 2 AND \"IsMonitored\" AND \"ReleasedOn\" <= current_date"))!;
+            Assert.AreNotEqual(present, last);
+            await host.Fixture.RunSqlAsync($"""
+                INSERT INTO "AcquisitionRequests" ("Id", "WorkId", "RequestedByProfileId", "RequestedByAccountId", "UiLocaleId", "AcquisitionRequestStatusTypeId", "DecidedByAccountId", "DecidedAt")
+                VALUES (500, {work.Id}, 202, 42, 1, 2, 41, now());
+                INSERT INTO "WantedItems" ("Id", "WorkId") VALUES (600, {work.Id});
+                INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
+                UPDATE "WorkUnits" SET "IsMonitored" = FALSE WHERE "WorkId" = {work.Id} AND "WorkUnitTypeId" = 2 AND "Id" NOT IN ({present}, {last});
+                INSERT INTO "WorkEditions" ("Id", "WorkId") VALUES (900, {work.Id});
+                INSERT INTO "WorkVersions" ("Id", "WorkId", "WorkEditionId") VALUES (900, {work.Id}, 900);
+                INSERT INTO "MediaAssets" ("Id", "WorkId", "WorkVersionId", "WorkUnitId", "MediaAssetTypeId") VALUES (900, {work.Id}, 900, {present}, 1);
+                INSERT INTO "StoredFiles" ("LibraryRootId", "RelativePath", "SizeBytes", "ModifiedAt", "LastSeenAt", "MediaAssetId")
+                    SELECT "Id", 'Show/S01E01.mkv', 1, now(), now(), 900 FROM "LibraryRoots" ORDER BY "Id" LIMIT 1;
+                """);
+
+            // Switching another missing episode on keeps the request open; switching the last one off completes it.
+            using var on = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600/units/" + last, new UpdateWantedUnitDataV1(true));
+            Assert.AreEqual(HttpStatusCode.OK, on.StatusCode, await on.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)2, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 500"));
+            using var off = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600/units/" + last, new UpdateWantedUnitDataV1(false));
+            Assert.AreEqual(HttpStatusCode.OK, off.StatusCode, await off.Content.ReadAsStringAsync());
+            Assert.AreEqual((short)6, await host.ScalarAsync("SELECT \"AcquisitionRequestStatusTypeId\" FROM \"AcquisitionRequests\" WHERE \"Id\" = 500"));
+        }
+
+        [TestMethod]
         public async Task Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately()
         {
             using var storage = new TemporaryDirectory();

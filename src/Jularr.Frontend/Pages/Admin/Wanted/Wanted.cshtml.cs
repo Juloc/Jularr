@@ -43,6 +43,9 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         [BindProperty(SupportsGet = true)]
         public long? SeasonId { get; set; }
 
+        [BindProperty(SupportsGet = true)]
+        public WantedViewType View { get; set; }
+
         protected override void Define(Page page)
         {
             page.Title("admin.wanted.title");
@@ -50,6 +53,8 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // Shared Work targets, not requests; one target opens its acquisition tabs.
+            page.Content.Add(new NavigationTabs(Enum.GetValues<WantedViewType>()
+                .Select(view => new NavigationTab("wanted.view." + view, ViewAddress(view), view == View)).ToArray(), "admin.wanted.title"));
             page.Content.Add(new Split(split =>
             {
                 if (_wanted is { } wanted)
@@ -57,7 +62,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                     split.Primary.Add(new Table<WantedDetailsV1>(wanted.Items)
                         .Content("table.work", item => new ValueText(item.PlatformName is { } platform ? item.CanonicalTitle + " · " + platform : item.CanonicalTitle))
                         .Content("request.language", item => new ValueText(string.Join(", ", item.RequestedLanguages)))
-                        .Content("table.status", Status)
+                        .Content("table.status", item => View == WantedViewType.CutoffUnmet && item.HasMedia && !item.IsPaused ? new Text("wanted.belowCutoff") : Status(item))
                         .Content("wanted.lastSearch", item => new ValueText(item.LastSearchedAt?.ToString("u", CultureInfo.InvariantCulture) ?? ""))
                         .Link(item => item.Id, "common.actions", id => Address(PageNumber, id, SearchTab), "wanted.open")
                         .Content("wanted.monitoring", item => new Form<UpdateWantedDataV1>(form =>
@@ -152,7 +157,7 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
         protected override async Task LoadDataAsync()
         {
-            _wanted = await read.ExecuteAsync<PageResult<WantedDetailsV1>>(new ReadWantedParametersV1(PageNumber), HttpContext.RequestAborted);
+            _wanted = await read.ExecuteAsync<PageResult<WantedDetailsV1>>(new ReadWantedParametersV1(PageNumber, wantedViewTypeId: View), HttpContext.RequestAborted);
             if (WantedItemId is { } id)
             {
                 _selected = _wanted.Items.FirstOrDefault(item => item.Id == id)
@@ -353,9 +358,12 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
 
         private long SelectedId() => WantedItemId ?? throw new KeyNotFoundException("No wanted item was selected.");
 
-        private static string Address(int pageNumber, long? wantedItemId = null, string? tab = null, string? handler = null)
+        private static string ViewAddress(WantedViewType view) => "/Admin/Wanted?PageNumber=1" + (view == WantedViewType.All ? "" : "&View=" + view);
+
+        // Every address keeps the chosen list.
+        private string Address(int pageNumber, long? wantedItemId = null, string? tab = null, string? handler = null)
         {
-            var address = "/Admin/Wanted?PageNumber=" + pageNumber.ToString(CultureInfo.InvariantCulture);
+            var address = "/Admin/Wanted?PageNumber=" + pageNumber.ToString(CultureInfo.InvariantCulture) + (View == WantedViewType.All ? "" : "&View=" + View);
             if (wantedItemId is { } id) address += "&WantedItemId=" + id.ToString(CultureInfo.InvariantCulture) + "&Tab=" + tab;
             return handler is null ? address : address + "&handler=" + handler;
         }

@@ -147,21 +147,6 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public bool IsMissing => IsAvailable && !HasMedia && !IsCovered;
     }
 
-    internal sealed class WantedCompletionData : BaseData
-    {
-        public WantedCompletionData(long wantedItemId, bool isComplete)
-        {
-            WantedItemId = wantedItemId;
-            IsComplete = isComplete;
-        }
-
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
-        public long WantedItemId { get; }
-
-        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsComplete))]
-        public bool IsComplete { get; }
-    }
-
     internal sealed class WantedSearchOutcomeData : BaseData
     {
         public WantedSearchOutcomeData(long wantedItemId, string outcomeKey, DateTime? nextSearchAt)

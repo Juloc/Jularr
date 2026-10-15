@@ -19,11 +19,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Enrich only the bounded page.
+            // Enrich only the bounded page. Missing: nothing or a monitored aired unit without media; cutoff unmet as UpgradePolicy.Assess
+            // decides it, per unit for the best known quality of the target's profile.
             var sql = new SqlStatement();
             sql.Statement =
                 """
-                WITH wanted_page AS (
+                WITH wanted_state AS (
                     SELECT
                         wanted."Id",
                         wanted."WorkId",
@@ -37,13 +38,112 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         wanted."AcquisitionProfileId",
                         wanted."LibraryRootId",
                         wanted."GamePlatformId",
-                        wanted."Version"
+                        wanted."Version",
+                        EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "MediaAssets" AS asset
+                                JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                            WHERE
+                                asset."WorkId" = wanted."WorkId"
+                                AND (
+                                    wanted."GamePlatformId" IS NULL
+                                    OR EXISTS (
+                                        SELECT
+                                            1
+                                        FROM
+                                            "GameReleases" AS game
+                                        WHERE
+                                            game."WorkVersionId" = asset."WorkVersionId"
+                                            AND game."GamePlatformId" = wanted."GamePlatformId"
+                                    )
+                                )
+                        ) AND NOT EXISTS (
+                            SELECT
+                                1
+                            FROM
+                                "WorkUnits" AS episode
+                            WHERE
+                                episode."WorkId" = wanted."WorkId"
+                                AND episode."WorkUnitTypeId" = 2
+                                AND episode."IsMonitored"
+                                AND episode."ReleasedOn" <= current_date
+                                AND NOT EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "MediaAssets" AS asset
+                                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                                    WHERE
+                                        asset."WorkUnitId" = episode."Id"
+                                )
+                        ) AS "HasMedia",
+                        COALESCE((
+                            SELECT
+                                (profile."Definition" ->> 'UpgradeAllowed')::boolean
+                                AND EXISTS (
+                                    SELECT
+                                        1
+                                    FROM
+                                        "MediaAssets" AS asset
+                                        JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
+                                        JOIN jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS quality ("Key", "Position")
+                                            ON lower(quality."Key") = lower(available."QualityKey")
+                                        LEFT JOIN "WorkUnits" AS unit ON unit."Id" = asset."WorkUnitId"
+                                    WHERE
+                                        asset."WorkId" = wanted."WorkId"
+                                        AND (unit."Id" IS NULL OR unit."IsMonitored")
+                                        AND (
+                                            wanted."GamePlatformId" IS NULL
+                                            OR EXISTS (
+                                                SELECT
+                                                    1
+                                                FROM
+                                                    "GameReleases" AS game
+                                                WHERE
+                                                    game."WorkVersionId" = asset."WorkVersionId"
+                                                    AND game."GamePlatformId" = wanted."GamePlatformId"
+                                            )
+                                        )
+                                    GROUP BY
+                                        asset."WorkUnitId"
+                                    HAVING
+                                        min(quality."Position") > COALESCE((
+                                            SELECT
+                                                cutoff."Position"
+                                            FROM
+                                                jsonb_array_elements_text(profile."Definition" -> 'QualityOrder') WITH ORDINALITY AS cutoff ("Key", "Position")
+                                            WHERE
+                                                lower(cutoff."Key") = lower(profile."Definition" ->> 'UpgradeCutoffQuality')
+                                            LIMIT 1
+                                        ), 1)
+                                )
+                            FROM
+                                "AcquisitionProfiles" AS profile
+                            WHERE
+                                profile."MediaTypeId" = work."MediaTypeId"
+                                AND (profile."Id" = wanted."AcquisitionProfileId"
+                                    OR wanted."AcquisitionProfileId" IS NULL AND profile."IsDefault" AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId"))
+                            ORDER BY
+                                profile."MediaSubtypeId" IS NULL
+                            LIMIT 1
+                        ), FALSE) AS "IsCutoffUnmet"
                     FROM
                         "WantedItems" AS wanted
                     INNER JOIN
                         "Works" AS work ON work."Id" = wanted."WorkId"
+                ), wanted_page AS (
+                    SELECT
+                        *
+                    FROM
+                        wanted_state
+                    WHERE
+                        @WantedViewTypeId = 0
+                        OR @WantedViewTypeId = 1 AND NOT wanted_state."IsPaused" AND NOT wanted_state."HasMedia"
+                        OR @WantedViewTypeId = 2 AND NOT wanted_state."IsPaused" AND wanted_state."IsCutoffUnmet"
                     ORDER BY
-                        wanted."Id" DESC
+                        wanted_state."Id" DESC
                     LIMIT @PageSize
                     OFFSET @Offset
                 )
@@ -56,46 +156,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                     wanted_page."IsPaused",
                     wanted_page."MonitorsNewUnits",
                     wanted_page."Version",
-                    EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "MediaAssets" AS asset
-                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                        WHERE
-                            asset."WorkId" = wanted_page."WorkId"
-                            AND (
-                                wanted_page."GamePlatformId" IS NULL
-                                OR EXISTS (
-                                    SELECT
-                                        1
-                                    FROM
-                                        "GameReleases" AS game
-                                    WHERE
-                                        game."WorkVersionId" = asset."WorkVersionId"
-                                        AND game."GamePlatformId" = wanted_page."GamePlatformId"
-                                )
-                            )
-                    ) AND NOT EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            "WorkUnits" AS episode
-                        WHERE
-                            episode."WorkId" = wanted_page."WorkId"
-                            AND episode."WorkUnitTypeId" = 2
-                            AND episode."IsMonitored"
-                            AND episode."ReleasedOn" <= current_date
-                            AND NOT EXISTS (
-                                SELECT
-                                    1
-                                FROM
-                                    "MediaAssets" AS asset
-                                    JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
-                                WHERE
-                                    asset."WorkUnitId" = episode."Id"
-                            )
-                    ) AS "HasMedia",
+                    wanted_page."HasMedia",
                     download."Id" IS NOT NULL AS "IsDownloading",
                     download."ProgressPercent"::integer AS "ProgressPercent",
                     wanted_page."LastSearchedAt",
@@ -134,6 +195,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 ORDER BY
                     wanted_page."Id" DESC;
                 """;
+            sql.Parameters.Add(new WantedViewFilterData(Parameters.WantedViewTypeId));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<WantedDetailsV1>(sql, CancellationToken);
         }

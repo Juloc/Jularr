@@ -139,8 +139,12 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new KeyNotFoundException("The unit is not part of this wanted Work.");
             }
 
-            // Newly monitored units are searched in the next cycle, not after the old backoff.
-            if (data.IsMonitored)
+            // Newly monitored units are searched in the next cycle, not after the old backoff; unmonitoring may leave nothing missing.
+            if (!data.IsMonitored)
+            {
+                await ctx.CompleteRequestsAsync(new WantedItemParameters(data.WantedItemId), ct);
+            }
+            else
             {
                 sql = new SqlStatement();
                 sql.Statement =

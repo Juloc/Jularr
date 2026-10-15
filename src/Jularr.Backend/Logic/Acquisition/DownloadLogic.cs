@@ -812,15 +812,55 @@ namespace Jularr.Backend.Logic.Acquisition
                 WHERE
                     wanted."Id" = imported."WantedItemId"
                 RETURNING
-                    wanted."Id" AS "WantedItemId",
-                    NOT EXISTS (
+                    wanted."Id" AS "WantedItemId";
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ReadOptionalAsync<WantedItemParameters>(sql, ct) is not { } wanted)
+            {
+                return;
+            }
+
+            // Requesters hear about every arrival, not only the last one.
+            await ctx.NotifyRequestersAsync(new WantedNotificationData(wanted.WantedItemId, NotificationType.MediaAvailable), ct);
+            await ctx.CompleteRequestsAsync(wanted, ct);
+        }
+
+        // Requests complete once their Work has media and no monitored aired episode or volume is missing.
+        internal static async Task CompleteRequestsAsync(this LogicContext ctx, WantedItemParameters data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "AcquisitionRequests" AS request
+                SET
+                    "AcquisitionRequestStatusTypeId" = 6,
+                    "UpdatedAt" = now(),
+                    "Version" = request."Version" + 1
+                FROM
+                    "RequestTargets" AS target
+                    JOIN "WantedItems" AS wanted ON wanted."Id" = target."WantedItemId"
+                    JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                WHERE
+                    target."WantedItemId" = @WantedItemId
+                    AND request."Id" = target."AcquisitionRequestId"
+                    AND request."AcquisitionRequestStatusTypeId" BETWEEN 2 AND 5
+                    AND EXISTS (
                         SELECT
                             1
                         FROM
-                            "Works" AS work
-                            JOIN "WorkUnits" AS unit ON unit."WorkId" = work."Id"
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
-                            work."Id" = wanted."WorkId"
+                            asset."WorkId" = work."Id"
+                    )
+                    AND NOT EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WorkUnits" AS unit
+                        WHERE
+                            unit."WorkId" = work."Id"
                             AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                             AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                             AND NOT EXISTS (
@@ -832,20 +872,10 @@ namespace Jularr.Backend.Logic.Acquisition
                                 WHERE
                                     asset."WorkUnitId" = unit."Id"
                             )
-                    ) AS "IsComplete";
+                    );
                 """;
             sql.Parameters.Add(data);
-            if (await ctx.ReadOptionalAsync<WantedCompletionData>(sql, ct) is not { } wanted)
-            {
-                return;
-            }
-
-            // Requesters hear about every arrival, not only the last one.
-            await ctx.NotifyRequestersAsync(new WantedNotificationData(wanted.WantedItemId, NotificationType.MediaAvailable), ct);
-            if (wanted.IsComplete)
-            {
-                await ctx.AdvanceRequestsAsync(new RequestProgressData(wanted.WantedItemId, AcquisitionRequestStatusType.Completed), ct);
-            }
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
         }
 
         public static Task<LibraryRootLocationData?> ReadImportRootAsync(this LogicContext ctx, long wantedItemId, CancellationToken ct)
