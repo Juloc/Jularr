@@ -83,7 +83,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         WHERE
                             episode."WorkId" = wanted_page."WorkId"
                             AND episode."WorkUnitTypeId" = 2
-                            AND season."Number" > 0
+                            AND episode."IsMonitored"
                             AND episode."ReleasedOn" <= current_date
                             AND NOT EXISTS (
                                 SELECT
@@ -208,7 +208,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                         WHERE
                             episode."WorkId" = wanted_page."WorkId"
                             AND episode."WorkUnitTypeId" = 2
-                            AND season."Number" > 0
+                            AND episode."IsMonitored"
                             AND episode."ReleasedOn" <= current_date
                             AND NOT EXISTS (
                                 SELECT

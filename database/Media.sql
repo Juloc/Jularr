@@ -205,6 +205,8 @@ CREATE TABLE "WorkUnits" (
     "Number" numeric(9, 3) NOT NULL CHECK ("Number" >= 0),
     "Title" varchar(500) NULL CHECK (length(btrim("Title")) > 0),
     "ReleasedOn" date NULL,
+    -- Unmonitored episodes and volumes are never searched; specials start unmonitored.
+    "IsMonitored" boolean NOT NULL DEFAULT TRUE,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),
     UNIQUE ("WorkId", "Id"),
     FOREIGN KEY ("WorkId", "ParentWorkUnitId") REFERENCES "WorkUnits" ("WorkId", "Id") ON DELETE CASCADE

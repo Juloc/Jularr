@@ -242,18 +242,27 @@ namespace Jularr.Backend.Logic.Media
                         *
                     FROM
                         jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Track" integer, "Title" text, "ReleasedOn" date)
+                ), monitoring AS (
+                    SELECT
+                        COALESCE(bool_and(wanted."MonitorsNewUnits"), TRUE) AS "MonitorsNewUnits"
+                    FROM
+                        "WantedItems" AS wanted
+                    WHERE
+                        wanted."WorkId" = @Id
                 ), leaves AS (
                     INSERT INTO
-                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn")
+                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored")
                     SELECT
                         @Id,
                         NULL,
                         CASE WHEN item."Volume" IS NOT NULL THEN 3 ELSE 5 END,
                         COALESCE(item."Volume", item."Track"),
                         NULLIF(btrim(item."Title"), ''),
-                        item."ReleasedOn"
+                        item."ReleasedOn",
+                        monitoring."MonitorsNewUnits"
                     FROM
                         item
+                        CROSS JOIN monitoring
                     WHERE
                         item."Volume" IS NOT NULL
                         OR item."Track" IS NOT NULL
@@ -285,17 +294,19 @@ namespace Jularr.Backend.Logic.Media
                         "Number"
                 )
                 INSERT INTO
-                    "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn")
+                    "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored")
                 SELECT
                     @Id,
                     seasons."Id",
                     2,
                     item."Episode",
                     NULLIF(btrim(item."Title"), ''),
-                    item."ReleasedOn"
+                    item."ReleasedOn",
+                    item."Season" > 0 AND monitoring."MonitorsNewUnits"
                 FROM
                     item
                     JOIN seasons ON seasons."Number" = item."Season"
+                    CROSS JOIN monitoring
                 WHERE
                     item."Episode" IS NOT NULL
                 ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE

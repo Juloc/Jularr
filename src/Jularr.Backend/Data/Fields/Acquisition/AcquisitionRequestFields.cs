@@ -22,6 +22,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
     {
         public static readonly LongField Id = new() { Minimum = 1 };
         public static readonly BoolField IsPaused = new();
+        public static readonly BoolField MonitorsNewUnits = new();
         public static readonly LongField Version = new() { Minimum = 1 };
         public static readonly StringArrayField RequestedLanguages = new() { ItemMaximumLength = 32 };
         public static readonly IntField SearchCount = new() { Minimum = 0 };

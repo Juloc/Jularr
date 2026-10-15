@@ -83,7 +83,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                         WHERE
                             unit."WorkId" = work."Id"
-                            AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
+                            AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                             AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                             AND NOT EXISTS (
                                 SELECT
@@ -243,7 +243,7 @@ namespace Jularr.Backend.Logic.Acquisition
                                 LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                             WHERE
                                 unit."WorkId" = work."Id"
-                                AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
+                                AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                                 AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                                 AND NOT EXISTS (
                                     SELECT
@@ -485,7 +485,7 @@ namespace Jularr.Backend.Logic.Acquisition
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                 WHERE
                     wanted."Id" = @WantedItemId
-                    AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
+                    AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                     AND unit."Number" = trunc(unit."Number")
                 ORDER BY
                     parent."Number" NULLS FIRST,
@@ -823,7 +823,7 @@ namespace Jularr.Backend.Logic.Acquisition
                             LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                         WHERE
                             work."Id" = wanted."WorkId"
-                            AND (unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
+                            AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
                             AND (unit."ReleasedOn" <= current_date OR unit."WorkUnitTypeId" = 3 AND unit."ReleasedOn" IS NULL)
                             AND NOT EXISTS (
                                 SELECT

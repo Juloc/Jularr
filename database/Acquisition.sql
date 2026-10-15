@@ -160,6 +160,8 @@ CREATE TABLE "WantedItems" (
     -- Library the target imports into; without one the type's first writable library.
     "LibraryRootId" bigint NULL,
     "IsPaused" boolean NOT NULL DEFAULT FALSE,
+    -- Episodes and volumes that appear later are monitored.
+    "MonitorsNewUnits" boolean NOT NULL DEFAULT TRUE,
     "SearchCount" integer NOT NULL DEFAULT 0 CHECK ("SearchCount" >= 0),
     "LastSearchedAt" timestamptz NULL,
     "NextSearchAt" timestamptz NULL,
