@@ -64,7 +64,7 @@ namespace Jularr.E2E.Tests
                 await page.GotoAsync("/Admin/Accounts");
                 await page.Locator("tr", new() { HasText = Email }).GetByRole(AriaRole.Link, new() { Name = "Edit" }).ClickAsync();
                 var account = page.Locator("main form", new() { Has = page.Locator("[name=IsEnabled]") });
-                await account.Locator("[name=IsEnabled][value=True]").CheckAsync();
+                await account.Locator("[name=IsEnabled]").SelectOptionAsync("True");
                 await Steps.SubmitAsync(page, account);
 
                 // Enabled, the same credentials work; administration stays closed.

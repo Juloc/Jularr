@@ -48,7 +48,8 @@ namespace Jularr.Backend.Tests
             using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Providers");
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, await page.Content.ReadAsStringAsync());
             var html = await page.Content.ReadAsStringAsync();
-            var fields = Regex.Matches(html, "id=\"(form-[^\"]+-IsEnabled)\"").Select(match => match.Groups[1].Value).ToArray();
+            // A two-way choice is one segmented control; its first option names the field.
+            var fields = Regex.Matches(html, "id=\"(form-[^\"]+-IsEnabled)(?:-0)?\"").Select(match => match.Groups[1].Value).ToArray();
             // Media servers appear with their module, which is off.
             var registered = (long)(await host.ScalarAsync("SELECT count(*) FROM \"Providers\" WHERE \"Key\" NOT IN ('jellyfin', 'emby')"))!;
             Assert.AreEqual(registered, fields.Length);
