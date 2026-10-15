@@ -645,6 +645,7 @@ namespace Jularr.Frontend.Localization
             new("wanted.unit.monitoring", "Monitoring"),
             new("wanted.unit.monitored", "Monitored"),
             new("wanted.unit.unmonitored", "Not monitored"),
+            new("wanted.unit.partly", "Partly monitored"),
             new("wanted.unit.start", "Monitor"),
             new("wanted.unit.stop", "Stop monitoring"),
             new("wanted.search.season", "Season"),

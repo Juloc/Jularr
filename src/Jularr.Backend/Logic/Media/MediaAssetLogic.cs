@@ -235,9 +235,27 @@ namespace Jularr.Backend.Logic.Media
             sql.Statement =
                 """
                 INSERT INTO
-                    "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number")
-                VALUES
-                    (@WorkId, @ParentWorkUnitId, @WorkUnitTypeId, @Number)
+                    "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "IsMonitored")
+                VALUES (
+                    @WorkId,
+                    @ParentWorkUnitId,
+                    @WorkUnitTypeId,
+                    @Number,
+                    COALESCE((
+                        SELECT
+                            parent."Number" > 0
+                        FROM
+                            "WorkUnits" AS parent
+                        WHERE
+                            parent."Id" = @ParentWorkUnitId
+                    ), TRUE) AND (
+                        SELECT
+                            COALESCE(bool_and(wanted."MonitorsNewUnits"), TRUE)
+                        FROM
+                            "WantedItems" AS wanted
+                        WHERE
+                            wanted."WorkId" = @WorkId
+                    ))
                 ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
                 SET
                     "Number" = EXCLUDED."Number"

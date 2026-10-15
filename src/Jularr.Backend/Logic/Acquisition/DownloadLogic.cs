@@ -80,7 +80,6 @@ namespace Jularr.Backend.Logic.Acquisition
                             1
                         FROM
                             "WorkUnits" AS unit
-                            LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                         WHERE
                             unit."WorkId" = work."Id"
                             AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)
@@ -820,7 +819,6 @@ namespace Jularr.Backend.Logic.Acquisition
                         FROM
                             "Works" AS work
                             JOIN "WorkUnits" AS unit ON unit."WorkId" = work."Id"
-                            LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
                         WHERE
                             work."Id" = wanted."WorkId"
                             AND unit."IsMonitored" AND (unit."WorkUnitTypeId" = 2 OR unit."WorkUnitTypeId" = 3 AND work."MediaSubtypeId" = 2)

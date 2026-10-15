@@ -139,8 +139,11 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
     // A season, episode or volume of the wanted Work and whether it is searched.
     public sealed class WantedUnitV1 : BaseResponse
     {
-        public WantedUnitV1(long id, long? parentWorkUnitId, WorkUnitType workUnitTypeId, decimal number, string? title, DateOnly? releasedOn, bool isMonitored, bool hasMedia)
+        public WantedUnitV1(long id, long? parentWorkUnitId, WorkUnitType workUnitTypeId, decimal number, string? title, DateOnly? releasedOn, bool isMonitored, bool hasMedia,
+            int episodes, int monitoredEpisodes)
         {
+            Episodes = episodes;
+            MonitoredEpisodes = monitoredEpisodes;
             Id = id;
             ParentWorkUnitId = parentWorkUnitId;
             WorkUnitTypeId = workUnitTypeId;
@@ -174,6 +177,29 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.HasMedia))]
         public bool HasMedia { get; }
+
+        // A season's episodes and how many of them are monitored.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.SearchCount))]
+        public int Episodes { get; }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.SearchCount))]
+        public int MonitoredEpisodes { get; }
+    }
+
+    // Seasons and volumes, plus one season's episodes when it is named.
+    public sealed class ReadWantedUnitsParametersV1 : BaseParameters
+    {
+        public ReadWantedUnitsParametersV1(long wantedItemId, long? seasonId = null)
+        {
+            WantedItemId = wantedItemId;
+            SeasonId = seasonId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id))]
+        public long WantedItemId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.WorkUnitId), false)]
+        public long? SeasonId { get; }
     }
 
     public sealed class WantedUnitParametersV1 : BaseParameters

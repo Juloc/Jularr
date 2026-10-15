@@ -152,9 +152,11 @@ namespace Jularr.Frontend.Framework
             return this;
         }
 
-        public Form<TData> Submit(string key, string? value = null)
+        // A hidden value names the row for screen readers when many rows share one action.
+        public Form<TData> Submit(string key, string? value = null, bool valueHidden = false)
         {
-            var label = value is null ? (IUiComponent)new Text(key) : new Span(new Text(key), new Span(new ValueText(value)));
+            var label = value is null ? (IUiComponent)new Text(key)
+                : new Span(new Text(key), valueHidden ? new Span(new ValueText(" " + value)).Class("visually-hidden") : new Span(new ValueText(value)));
             var button = new Button(label).Primary();
             if (_action is null) button.Disabled();
             else button.Submit();

@@ -81,7 +81,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             1
                         FROM
                             "WorkUnits" AS episode
-                            JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
                         WHERE
                             episode."WorkId" = wanted_page."WorkId"
                             AND episode."WorkUnitTypeId" = 2
@@ -208,7 +207,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             1
                         FROM
                             "WorkUnits" AS episode
-                            JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
                         WHERE
                             episode."WorkId" = wanted_page."WorkId"
                             AND episode."WorkUnitTypeId" = 2
@@ -315,15 +313,15 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
     }
 
     [ServiceEndpoint("GET", "/api/v1/admin/wanted/{wantedItemId:long}/units")]
-    public sealed class ReadWantedUnitsV1 : AdminService<WantedItemParametersV1>
+    public sealed class ReadWantedUnitsV1 : AdminService<ReadWantedUnitsParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WantedUnitV1>>()];
-        protected override ModuleRequirement GetInstanceModules(WantedItemParametersV1 parameters) => ModuleRequirement.All("Requests");
-        protected override ServicePermission GetPermission(WantedItemParametersV1 parameters, Type resultType) => new("wanted.read");
+        protected override ModuleRequirement GetInstanceModules(ReadWantedUnitsParametersV1 parameters) => ModuleRequirement.All("Requests");
+        protected override ServicePermission GetPermission(ReadWantedUnitsParametersV1 parameters, Type resultType) => new("wanted.read");
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Seasons, episodes and volumes in their order; tracks follow their album.
+            // Seasons and volumes in their order, one season's episodes when asked; tracks follow their album.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -343,14 +341,27 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                             JOIN "StoredFiles" AS available ON available."MediaAssetId" = asset."Id" AND available."MissingSince" IS NULL
                         WHERE
                             asset."WorkUnitId" = unit."Id"
-                    ) AS "HasMedia"
+                    ) AS "HasMedia",
+                    episodes."Episodes",
+                    episodes."MonitoredEpisodes"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "WorkUnits" AS unit ON unit."WorkId" = wanted."WorkId"
                     LEFT JOIN "WorkUnits" AS parent ON parent."Id" = unit."ParentWorkUnitId"
+                    CROSS JOIN LATERAL (
+                        SELECT
+                            count(*)::integer AS "Episodes",
+                            (count(*) FILTER (WHERE episode."IsMonitored"))::integer AS "MonitoredEpisodes"
+                        FROM
+                            "WorkUnits" AS episode
+                        WHERE
+                            episode."ParentWorkUnitId" = unit."Id"
+                            AND episode."WorkUnitTypeId" = 2
+                    ) AS episodes
                 WHERE
                     wanted."Id" = @WantedItemId
                     AND unit."WorkUnitTypeId" IN (1, 2, 3)
+                    AND (unit."ParentWorkUnitId" IS NULL OR unit."ParentWorkUnitId" = @SeasonId)
                 ORDER BY
                     coalesce(parent."Number", unit."Number"),
                     unit."ParentWorkUnitId" NULLS FIRST,

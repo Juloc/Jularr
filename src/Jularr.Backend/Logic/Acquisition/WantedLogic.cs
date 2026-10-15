@@ -116,7 +116,7 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
     
-        // A season sets all its episodes; units of other Works are not touched.
+        // A season sets all its episodes; units of other Works and other unit types are not touched.
         public static async Task SetUnitMonitoringAsync(this LogicContext ctx, WantedUnitMonitoringData data, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -131,12 +131,29 @@ namespace Jularr.Backend.Logic.Acquisition
                 WHERE
                     wanted."Id" = @WantedItemId
                     AND unit."WorkId" = wanted."WorkId"
-                    AND (unit."Id" = @WorkUnitId OR unit."ParentWorkUnitId" = @WorkUnitId);
+                    AND (unit."Id" = @WorkUnitId AND unit."WorkUnitTypeId" IN (1, 2, 3) OR unit."ParentWorkUnitId" = @WorkUnitId AND unit."WorkUnitTypeId" = 2);
                 """;
             sql.Parameters.Add(data);
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0)
             {
                 throw new KeyNotFoundException("The unit is not part of this wanted Work.");
+            }
+
+            // Newly monitored units are searched in the next cycle, not after the old backoff.
+            if (data.IsMonitored)
+            {
+                sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    UPDATE
+                        "WantedItems" AS wanted
+                    SET
+                        "NextSearchAt" = NULL
+                    WHERE
+                        wanted."Id" = @WantedItemId;
+                    """;
+                sql.Parameters.Add(data);
+                await ctx.ExecuteAsyncForAffectedRows(sql, ct);
             }
         }
     }

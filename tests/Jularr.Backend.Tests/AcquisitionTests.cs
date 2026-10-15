@@ -613,14 +613,21 @@ namespace Jularr.Backend.Tests
                 INSERT INTO "RequestTargets" ("AcquisitionRequestId", "WantedItemId") VALUES (500, 600);
                 """);
 
-            // Specials start unmonitored, every other episode monitored.
-            using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/600/units");
-            Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
-            var units = (await listed.Content.ReadFromJsonAsync<BaseDataList<WantedUnitV1>>())!.ToArray();
-            var seasons = units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Season).ToDictionary(unit => (int)unit.Number);
-            var episodes = units.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).ToArray();
-            Assert.IsFalse(episodes.Single(unit => unit.ParentWorkUnitId == seasons[0].Id).IsMonitored);
-            Assert.IsTrue(episodes.Where(unit => unit.ParentWorkUnitId != seasons[0].Id).All(unit => unit.IsMonitored));
+            // The list holds seasons with their counts; specials start unmonitored, every other episode monitored.
+            async Task<WantedUnitV1[]> UnitsAsync(string query)
+            {
+                using var listed = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/600/units" + query);
+                Assert.AreEqual(HttpStatusCode.OK, listed.StatusCode, await listed.Content.ReadAsStringAsync());
+                return (await listed.Content.ReadFromJsonAsync<BaseDataList<WantedUnitV1>>())!.ToArray();
+            }
+            var units = await UnitsAsync("");
+            Assert.IsTrue(units.All(unit => unit.WorkUnitTypeId == WorkUnitType.Season));
+            var seasons = units.ToDictionary(unit => (int)unit.Number);
+            Assert.AreEqual(0, seasons[0].MonitoredEpisodes);
+            Assert.IsTrue(seasons[0].Episodes > 0);
+            Assert.IsTrue(units.Where(unit => unit.Number > 0).All(unit => unit.MonitoredEpisodes == unit.Episodes));
+            var episodes = await UnitsAsync("?seasonId=" + seasons[1].Id);
+            Assert.IsTrue(episodes.Where(unit => unit.WorkUnitTypeId == WorkUnitType.Episode).All(unit => unit.ParentWorkUnitId == seasons[1].Id && unit.IsMonitored));
 
             // Season 1 off: only season 2's aired episode is searched.
             using var off = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600/units/" + seasons[1].Id, new UpdateWantedUnitDataV1(false));
@@ -628,22 +635,37 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(0L, await host.ScalarAsync($"SELECT count(*) FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[1].Id} AND \"IsMonitored\""));
             await RunAsync<SearchDueWantedV1>(host);
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/s2e1" }, usenet.Grabbed);
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL FROM \"WantedItems\" WHERE \"Id\" = 600"));
 
             // The Monitoring tab shows the same and switches an episode back on.
             using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring");
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
-            StringAssert.Contains(html, "S01E02");
+            StringAssert.Contains(html, "Season 1");
             StringAssert.Contains(html, "Not monitored");
-            var episode = episodes.First(unit => unit.ParentWorkUnitId == seasons[1].Id);
-            using var on = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&handler=Unit&workUnitId=" + episode.Id,
+            Assert.IsFalse(html.Contains("S01E02"), "Episodes appear only for the opened season.");
+            using var opened = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&SeasonId=" + seasons[1].Id);
+            html = await opened.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "S01E02");
+            var episode = episodes.First(unit => unit.WorkUnitTypeId == WorkUnitType.Episode);
+            var other = episodes.Last(unit => unit.WorkUnitTypeId == WorkUnitType.Episode);
+            using var on = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&SeasonId=" + seasons[1].Id + "&handler=Unit&workUnitId=" + episode.Id,
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["IsMonitored"] = "True" });
             Assert.AreEqual(HttpStatusCode.Redirect, on.StatusCode, await on.Content.ReadAsStringAsync());
+            StringAssert.Contains(on.Headers.Location!.OriginalString, "SeasonId=" + seasons[1].Id);
             Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {episode.Id}"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL FROM \"WantedItems\" WHERE \"Id\" = 600"), "Switching on searches in the next cycle.");
+            using var partly = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring");
+            StringAssert.Contains(await partly.Content.ReadAsStringAsync(), "Partly monitored");
 
-            // A unit of another Work is not reachable through this target.
-            using var foreign = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600/units/999999", new UpdateWantedUnitDataV1(false));
+            // A unit of another Work is not reachable through this target and stays untouched.
+            var foreignId = (long)(await host.ScalarAsync($"""
+                WITH other AS (INSERT INTO "Works" ("MediaTypeId", "CanonicalTitle") VALUES (2, 'Other') RETURNING "Id")
+                INSERT INTO "WorkUnits" ("WorkId", "WorkUnitTypeId", "Number") SELECT "Id", 1, 1 FROM other RETURNING "Id";
+                """))!;
+            using var foreign = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/600/units/" + foreignId, new UpdateWantedUnitDataV1(false));
             Assert.AreEqual(HttpStatusCode.NotFound, foreign.StatusCode);
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {foreignId}"));
 
             // New units follow the target's choice: not monitored once it is switched off.
             var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"WantedItems\""))!;
@@ -656,6 +678,7 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, refreshed.StatusCode, await refreshed.Content.ReadAsStringAsync());
             Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 2"));
             Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"ParentWorkUnitId\" = {seasons[2].Id} AND \"Number\" = 1"));
+            Assert.AreEqual(false, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {other.Id}"), "A refresh keeps the owner's choice.");
         }
 
         [TestMethod]
