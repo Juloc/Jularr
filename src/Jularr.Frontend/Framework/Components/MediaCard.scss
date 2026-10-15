@@ -25,6 +25,7 @@
         overflow: hidden;
         border-radius: 10px;
         background: var(--surface);
+        transition: transform .15s ease, box-shadow .15s ease;
     }
 
     &__art .media-image {
@@ -41,15 +42,23 @@
         text-align: center;
     }
 
+    // Two lines of title and one of facts keep a shelf even.
     &__title {
+        display: -webkit-box;
+        overflow: hidden;
         font-weight: 600;
         line-height: 1.3;
         overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
     }
 
     &__meta {
+        overflow: hidden;
         color: var(--muted);
         font-size: 13px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     &__genres,
@@ -107,7 +116,18 @@
         .icon-info__trigger::after { left: auto; right: 0; }
     }
 
-    &__action-area { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
+    // The action rises over a shade at the foot of the artwork.
+    &__action-area {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: end center;
+        padding-bottom: 14px;
+        border-radius: 10px;
+        background: linear-gradient(transparent 45%, rgb(0 0 0 / 55%));
+        opacity: 0;
+        transition: opacity .15s ease;
+    }
 
     &__progress {
         appearance: none;
@@ -123,14 +143,45 @@
         &::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-control); }
     }
 
-    &__status {
-        padding: 4px 8px;
-        border: 1px solid var(--border);
+    // State as a chip: available in green, requested or in progress in the accent, not requested light.
+    &__status { display: flex; }
+
+    &__state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 100%;
+        padding: 3px 10px;
+        border: 1px solid var(--accent-line);
         border-radius: var(--radius-control);
-        font-size: 13px;
-        color: var(--muted);
-        text-align: center;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 650;
         overflow-wrap: anywhere;
+
+        &::before {
+            content: "";
+            flex: none;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        &--available,
+        &--known {
+            border-color: color-mix(in srgb, var(--success) 30%, var(--surface));
+            background: color-mix(in srgb, var(--success) 12%, var(--surface));
+            color: var(--success);
+        }
+
+        &--requested,
+        &--inprogress {
+            border-color: var(--accent-line);
+            background: var(--accent-soft);
+            color: var(--accent-text);
+        }
     }
 
     // Hover, keyboard and touch.
@@ -144,6 +195,22 @@
 
     &:hover &__action-area,
     &:focus-within &__action-area { opacity: 1; }
+
+    &:hover &__art,
+    &:focus-within &__art {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 26px rgb(20 10 40 / 22%);
+    }
+
+    &:hover &__overlay,
+    &:focus-within &__overlay { transform: translateY(-4px); }
+
+    &__overlay { transition: transform .15s ease; }
+
+    @media (prefers-reduced-motion: reduce) {
+        &__art, &__overlay, &__action-area { transition: none; }
+        &:hover &__art, &:focus-within &__art, &:hover &__overlay, &:focus-within &__overlay { transform: none; }
+    }
 
     &:hover &__action,
     &:focus-within &__action { pointer-events: auto; }

@@ -116,7 +116,11 @@ namespace Jularr.Frontend.Framework
             }
 
             // Unknown detail keeps coarse status.
-            if (_availability is null) content.Add(new Div(new Span(new Text(statusKey)).Class("media-card__state")).Class("media-card__status"));
+            if (_availability is null)
+            {
+                content.Add(new Div(new Span(new Text(statusKey)).Class("media-card__state media-card__state--" + statusKey[(statusKey.LastIndexOf('.') + 1)..].ToLowerInvariant()))
+                    .Class("media-card__status"));
+            }
 
             var variant = _positionMs is not null ? " media-card--continue" : _availability is not null ? " media-card--library" : "";
             new Div([.. content]).Class("media-card" + variant).WriteTo(writer, encoder, texts);

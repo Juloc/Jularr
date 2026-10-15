@@ -3,8 +3,18 @@
 @use "../../../Framework/Components/MediaHero";
 
 .discover-media-heading {
-    font-size: 19px;
-    margin: 16px 0 0;
+    margin: 20px 0 0;
+    color: var(--accent-text);
+    font-size: 22px;
+    font-weight: 750;
+}
+
+.discover-view-heading {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    h2 { margin: 0; font-size: 22px; font-weight: 750; }
 }
 
 .discover-paging {

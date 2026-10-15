@@ -7,8 +7,9 @@
         gap: 16px;
 
         margin-bottom: 12px;
-        h2 { font-size: 18px; margin: 0; flex: 1; min-width: 0; }
-        a { color: var(--accent-text); white-space: nowrap; }
+        h2 { flex: 1; min-width: 0; margin: 0; font-size: 20px; font-weight: 700; }
+        a { color: var(--accent-text); font-weight: 650; text-decoration: none; white-space: nowrap; }
+        a::after { content: " ›"; }
     }
 
     &__controls { display: flex; justify-content: end; gap: 6px; }

@@ -117,7 +117,13 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "/Discover/movies/603");
 
             using var browse = await host.SendAsync(HttpMethod.Get, "/?type=series&view=Top");
-            StringAssert.Contains(await browse.Content.ReadAsStringAsync(), "The Matrix Show");
+            var browseHtml = await browse.Content.ReadAsStringAsync();
+            StringAssert.Contains(browseHtml, "The Matrix Show");
+
+            // A ranking names itself and leads back to its type; the page keeps one row of tabs.
+            StringAssert.Contains(browseHtml, "<h2>Top rated</h2>");
+            StringAssert.Contains(browseHtml, "href=\"/?type=series\"");
+            Assert.AreEqual(1, System.Text.RegularExpressions.Regex.Matches(browseHtml, "class=\"navigation-tabs[ \"]").Count);
 
             using var title = await host.SendAsync(HttpMethod.Get, "/Discover/movies/603");
             html = await title.Content.ReadAsStringAsync();

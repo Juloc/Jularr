@@ -73,13 +73,13 @@ namespace Jularr.Frontend.Pages.User.Discover
         {
             var selected = Selected;
 
-            // Media type, then browse view; filters stay separate.
+            // One row of media types; a ranking opened from its shelf names itself and leads back.
             page.Content.Add(new NavigationTabs([new NavigationTab("discover.all", Address(null, null, 1), selected is null), .. Listed.Select(type =>
                 new NavigationTab("discover.type." + type.Slug, Address(type.Slug, null, 1), type.Slug == selected?.Slug))], "discover.mediaTypes", "media"));
-            if (selected is { Feeds.Length: > 0 } && string.IsNullOrWhiteSpace(Query))
+            if (selected is not null && View is { } view && string.IsNullOrWhiteSpace(Query))
             {
-                page.Content.Add(new NavigationTabs([new NavigationTab("discover.overview", "/?type=" + selected.Slug, View is null), .. selected.Feeds.Select(feed =>
-                    new NavigationTab("discover.feed." + feed, Address(selected.Slug, feed, 1), View == feed))], "discover.browseViews", "browse"));
+                page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", Address(selected.Slug, null, 1)),
+                    new H2(new Text("discover.feed." + view))).Class("discover-view-heading"));
             }
 
             if (_providerUnavailable && (_results is not null || _catalog is not null))

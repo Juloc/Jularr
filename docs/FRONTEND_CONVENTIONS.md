@@ -155,7 +155,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   provider results. Books, Light Novels and Manga remain distinct.
 - Discover separates media-type scope, browse view and filters. Its All
   landing has a shared Hero/Continue followed by per-enabled-type shelves
-  in the approved order; only provider-supported rankings may appear. The
+  in the approved order; only provider-supported rankings may appear. A ranking
+  opens from its shelf's See all and names itself with a way back (one tab row).
+  Cards show their state as a chip: available in the success colour, requested
+  or in progress in the accent, not requested light. The
   header owns the **one** global Search and Filter entry; do not add another
   search/filter field inside Discover. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
