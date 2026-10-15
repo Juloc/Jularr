@@ -752,6 +752,13 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Failing, paused until");
             StringAssert.Contains(html, "1 / 1 ");
+
+            // Editing the indexer ends its backoff.
+            var brokenId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"))!;
+            using var edited = await host.SendAsync(HttpMethod.Put, Connections + "/" + brokenId,
+                new SaveAcquisitionConnectionDataV1("Broken", AcquisitionConnectionType.Newznab, "https://broken.example.test/", null, true, 20, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, edited.StatusCode, await edited.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"RetryAt\" IS NULL AND \"FailureCount\" = 0 FROM \"AcquisitionConnections\" WHERE \"Name\" = 'Broken'"));
         }
 
         [TestMethod]

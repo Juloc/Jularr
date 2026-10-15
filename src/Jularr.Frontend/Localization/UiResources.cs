@@ -401,7 +401,7 @@ namespace Jularr.Frontend.Localization
             new("acquisition.connection.test", "Test connection"),
             new("acquisition.connection.delete", "Delete"),
             new("acquisition.connection.unchecked", "Not tested"),
-            new("acquisition.connection.today", "Today"),
+            new("acquisition.connection.today", "Used today"),
             new("acquisition.connection.queries", "queries"),
             new("acquisition.connection.grabs", "grabs"),
             new("acquisition.connection.backoff", "Failing, paused until"),

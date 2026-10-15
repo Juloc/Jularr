@@ -222,9 +222,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             var connection = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
             var apiKey = DirectSources.IsDirect(connection.AcquisitionConnectionTypeId)
                 || connection.AcquisitionConnectionTypeId is AcquisitionConnectionType.Usenet or AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl
-                || connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab && connection.ProtectedApiKey is null
                 ? ""
-                : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
+                : connection.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab
+                    ? AcquisitionConnectionInput.IndexerKey(_protector, connection.ProtectedApiKey)
+                    : AcquisitionConnectionInput.Unprotect(_protector, connection.ProtectedApiKey);
 
             // Keep remote I/O outside transactions.
             AcquisitionConnectionTestV1 result;
@@ -304,6 +305,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 data.AcquisitionConnectionTypeId == AcquisitionConnectionType.Usenet ? data.MaxConnections ?? 8 : null, password, data.MediaTypeIds.Distinct().Order().ToArray(),
                 data.SearchesAutomatically, data.QueryLimit, data.GrabLimit);
         }
+
+        // Keyless indexers send no key.
+        public static string IndexerKey(IDataProtector protector, byte[]? protectedApiKey) => protectedApiKey is null ? "" : Unprotect(protector, protectedApiKey);
 
         public static string Unprotect(IDataProtector protector, byte[]? protectedApiKey)
         {

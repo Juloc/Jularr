@@ -206,12 +206,12 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         }
 
         // A failing indexer waits before automatic searches use it again.
-        private IUiComponent Health(AcquisitionConnectionDetailsV1 item) => item.RetryAt is { } retry && retry > DateTime.UtcNow
+        private static IUiComponent Health(AcquisitionConnectionDetailsV1 item) => item.RetryAt is { } retry && retry > DateTime.UtcNow
             ? new Span(new Text("acquisition.connection.backoff"), new ValueText(" " + retry.ToString("u", CultureInfo.InvariantCulture)))
             : new Text(item.CheckedAt is null ? "acquisition.connection.unchecked" : item.ErrorKey is { } error ? "errors." + error : "acquisition.connection.healthy");
 
         // Today's queries and grabs of an indexer against its limits.
-        private IUiComponent Usage(AcquisitionConnectionDetailsV1 item) => item.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab ? new Span()
+        private static IUiComponent Usage(AcquisitionConnectionDetailsV1 item) => item.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab ? new Span()
             : new Span(new ValueText(Count(item.QueryCount, item.QueryLimit) + " "), new Text("acquisition.connection.queries"),
                 new ValueText(" · " + Count(item.GrabCount, item.GrabLimit) + " "), new Text("acquisition.connection.grabs"));
 
