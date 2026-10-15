@@ -408,4 +408,20 @@ namespace Jularr.Backend.Data.Admin.Wanted.V1
         [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.AcquisitionReleaseStatusTypeId))]
         public AcquisitionReleaseStatusType AcquisitionReleaseStatusTypeId { get; }
     }
+
+    // How a search now ended: the release taken, or why none was.
+    public sealed class AutomaticSearchResultV1 : BaseResponse
+    {
+        public AutomaticSearchResultV1(string outcomeKey, string? title)
+        {
+            OutcomeKey = outcomeKey;
+            Title = title;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.ReasonKey))]
+        public string OutcomeKey { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title), false)]
+        public string? Title { get; }
+    }
 }

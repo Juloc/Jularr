@@ -282,7 +282,7 @@ namespace Jularr.Backend.Tests
             using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/wanted/" + wantedId, new UpdateWantedDataV1(false, wanted.Version, movies.Id));
             Assert.AreEqual(HttpStatusCode.OK, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
             Assert.AreEqual(1, (await ReadProfilesAsync(host)).Single(profile => profile.Id == movies.Id).WantedCount);
-            using var currentTab = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?WantedItemId=" + wantedId + "&Tab=current");
+            using var currentTab = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/" + wantedId);
             var currentHtml = await currentTab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, currentTab.StatusCode, currentHtml);
             StringAssert.Contains(currentHtml, "value=\"" + movies.Id + "\" selected=\"selected\"");
@@ -504,11 +504,15 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains(FakeUsenet.ClientKey, StringComparison.Ordinal));
 
             // The search form renders every candidate with its decision.
-            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?WantedItemId=" + wantedId + "&Tab=search");
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/" + wantedId);
             html = await page.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
-            using var searched = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted?PageNumber=1&WantedItemId=" + wantedId + "&Tab=search&handler=Search",
-                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["WantedItemId"] = wantedId.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+            StringAssert.Contains(html, "href=\"/Admin/Wanted/" + wantedId + "/Search\"");
+            using var searchPage = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/" + wantedId + "/Search");
+            html = await searchPage.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "action=\"/Admin/Wanted/" + wantedId + "/Search?handler=Search\"");
+            using var searched = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted/" + wantedId + "/Search?handler=Search",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
             html = await searched.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, html);
             StringAssert.Contains(html, Feature);
@@ -643,25 +647,27 @@ namespace Jularr.Backend.Tests
             CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/s2e1" }, usenet.Grabbed);
             Assert.AreEqual(false, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL FROM \"WantedItems\" WHERE \"Id\" = 600"));
 
-            // The Monitoring tab shows the same and switches an episode back on.
-            using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring");
+            // The target's page shows the same and switches an episode back on; each row searches on its own.
+            using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/600");
             var html = await tab.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
             StringAssert.Contains(html, "Season 1");
             StringAssert.Contains(html, "Not monitored");
             Assert.IsFalse(html.Contains("Episode 2"), "Episodes appear only for the opened season.");
-            using var opened = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&SeasonId=" + seasons[1].Id);
+            using var opened = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/600?SeasonId=" + seasons[1].Id);
             html = await opened.Content.ReadAsStringAsync();
             StringAssert.Contains(html, "Episode 2");
+            StringAssert.Contains(html, "Search automatically");
+            StringAssert.Contains(html, "Search manually");
             var episode = episodes.First(unit => unit.WorkUnitTypeId == WorkUnitType.Episode);
             var other = episodes.Last(unit => unit.WorkUnitTypeId == WorkUnitType.Episode);
-            using var on = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring&SeasonId=" + seasons[1].Id + "&handler=Unit&workUnitId=" + episode.Id,
+            using var on = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted/600?SeasonId=" + seasons[1].Id + "&handler=Unit&workUnitId=" + episode.Id,
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["IsMonitored"] = "True" });
             Assert.AreEqual(HttpStatusCode.Redirect, on.StatusCode, await on.Content.ReadAsStringAsync());
             StringAssert.Contains(on.Headers.Location!.OriginalString, "SeasonId=" + seasons[1].Id);
             Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"IsMonitored\" FROM \"WorkUnits\" WHERE \"Id\" = {episode.Id}"));
             Assert.AreEqual(true, await host.ScalarAsync("SELECT \"NextSearchAt\" IS NULL FROM \"WantedItems\" WHERE \"Id\" = 600"), "Switching on searches in the next cycle.");
-            using var partly = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted?PageNumber=1&WantedItemId=600&Tab=monitoring");
+            using var partly = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/600");
             StringAssert.Contains(await partly.Content.ReadAsStringAsync(), "Partly monitored");
 
             // A unit of another Work is not reachable through this target and stays untouched.
@@ -808,8 +814,8 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
             StringAssert.Contains(html, "Cutoff unmet");
             StringAssert.Contains(html, "Below cutoff");
-            StringAssert.Contains(html, "WantedItemId=702&amp;Tab=");
-            StringAssert.Contains(html, "View=CutoffUnmet&amp;WantedItemId=702");
+            StringAssert.Contains(html, "href=\"/Admin/Wanted/702\"");
+            StringAssert.Contains(html, "View=CutoffUnmet&amp;handler=Pause&amp;wantedItemId=702");
             Assert.IsFalse(html.Contains("Good Film"));
         }
 
@@ -1197,6 +1203,32 @@ namespace Jularr.Backend.Tests
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
             return (await response.Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!;
+        }
+
+        [TestMethod]
+        public async Task AutomaticSearch_OnDemand_TakesTheBestReleaseAtOnce()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            var wantedId = await CreateWantedMovieAsync(host);
+
+            // The button on the target's page searches like the schedule and grabs the winner without waiting for the next cycle.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Wanted/" + wantedId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            using var searched = await host.SendAsync(HttpMethod.Post, "/Admin/Wanted/" + wantedId + "?handler=Automatic",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
+            Assert.AreEqual(HttpStatusCode.Redirect, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, usenet.Grabbed.Count);
+            using var after = await host.SendAsync(HttpMethod.Get, searched.Headers.Location!.OriginalString);
+            StringAssert.Contains(await after.Content.ReadAsStringAsync(), "Downloading: " + Feature);
+
+            // While it downloads, the film is not searched again.
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search/automatic", new SearchWantedDataV1());
+            Assert.AreEqual(HttpStatusCode.BadRequest, again.StatusCode);
+            StringAssert.Contains(await again.Content.ReadAsStringAsync(), "in_use");
         }
 
         [TestMethod]

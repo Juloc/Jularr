@@ -145,6 +145,13 @@ namespace Jularr.E2E.Tests
             await page.Locator("tr", new() { HasText = title }).GetByRole(AriaRole.Link, new() { Name = "Open" }).ClickAsync();
         }
 
+        // The manual search page of a target.
+        public static async Task OpenSearchAsync(IPage page, string title)
+        {
+            await OpenWantedAsync(page, title);
+            await page.GetByRole(AriaRole.Link, new() { Name = "Search manually", Exact = true }).ClickAsync();
+        }
+
         public static async Task GrabAsync(IPage page, FakeRelease release)
         {
             await SubmitAsync(page, page.Locator("tr", new() { HasText = release.Title }).Locator("form")

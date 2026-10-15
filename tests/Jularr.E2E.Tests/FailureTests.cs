@@ -27,7 +27,7 @@ namespace Jularr.E2E.Tests
                 // The download is still running when Jularr stops.
                 fakes.HoldDownloads = true;
                 fakes.Offer(Film with { File = video });
-                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, Film);
                 await jularr.RestartAsync();
@@ -76,13 +76,13 @@ namespace Jularr.E2E.Tests
                 // A broken download lands in To-Do; after Retry the broken release is blocked and the next good one is taken.
                 fakes.FailDownloads = true;
                 fakes.Offer(Film with { File = video }, LowerFilm with { File = video });
-                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, Film);
                 var failed = await WaitForFailedDownloadAsync(page);
                 fakes.FailDownloads = false;
                 await Steps.SubmitAsync(page, failed.Locator("form").Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Retry" }) }));
-                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = Film.Title }).InnerTextAsync(), "Failed or blocked before");
 

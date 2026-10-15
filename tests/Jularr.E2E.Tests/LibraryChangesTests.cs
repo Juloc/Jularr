@@ -41,7 +41,7 @@ namespace Jularr.E2E.Tests
 
                 // A title with extra words is left to a person; the plain one is taken.
                 fakes.Offer(lower, fanCut);
-                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 var doubtful = await page.Locator("tr", new() { HasText = fanCut.Title }).InnerTextAsync();
                 StringAssert.Contains(doubtful, "Review");
@@ -52,7 +52,7 @@ namespace Jularr.E2E.Tests
 
                 // The better release replaces it; the earlier file waits in the recycle bin.
                 fakes.Offer(better);
-                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = better.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, better);

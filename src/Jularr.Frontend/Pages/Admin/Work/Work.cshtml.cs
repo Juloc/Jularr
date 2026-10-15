@@ -25,10 +25,15 @@ namespace Jularr.Frontend.Pages.Admin.Work
 
         protected override void Define(Page page)
         {
-            page.Title("admin.work.title");
+            page.Title("admin.work.title", _work?.CanonicalTitle);
             page.Navigation("nav.admin");
+            page.Asset("Pages/Admin/Work/Work.entry.scss");
 
-            page.Content.Add(new A(new Text("admin.works.title")).Attribute("href", "/Admin/Works"));
+            // Its searches, episodes and releases live with its Arr+ target.
+            page.Content.Add(new Div([new A(new Text("admin.works.title")).Class("button").Attribute("href", "/Admin/Works"),
+                .. _work?.WantedItemId is { } wanted && texts.CanManageWanted()
+                    ? new IUiComponent[] { new A(new Text("admin.work.wanted")).Class("button").Attribute("href", "/Admin/Wanted/" + wanted.ToString(CultureInfo.InvariantCulture)) }
+                    : []]).Class("work-actions"));
 
             // Edit real identity metadata.
             if (_work is { } work)

@@ -41,7 +41,7 @@ namespace Jularr.E2E.Tests
 
                 // Wanted shows every candidate with its decision; the chosen one is downloaded.
                 fakes.Offer(film, otherFilm);
-                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = otherFilm.Title }).InnerTextAsync(), "Different title");
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = film.Title }).InnerTextAsync(), "Eligible");
@@ -49,7 +49,7 @@ namespace Jularr.E2E.Tests
 
                 // A single episode is searched by its season and number.
                 fakes.Offer(episode);
-                await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.SeriesTitle);
                 var search = Steps.FormWith(page, "Start search");
                 await search.Locator("[name=ParentUnitNumber]").FillAsync("1");
                 await search.Locator("[name=UnitNumber]").FillAsync("1");
@@ -66,10 +66,10 @@ namespace Jularr.E2E.Tests
 
                 // The second episode is switched off on the Monitoring tab: nothing monitored is missing, the request completes and the Missing list drops the series.
                 await Steps.OpenWantedAsync(page, FakeServices.SeriesTitle);
-                await page.GetByRole(AriaRole.Link, new() { Name = "Monitoring", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }).ClickAsync();
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = "Episode 1" }).InnerTextAsync(), "Present");
-                await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = "Episode 2" }).Locator("form"));
+                await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = "Episode 2" }).Locator("form")
+                    .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Stop monitoring" }) }));
                 var season = page.Locator("tr").Filter(new() { Has = page.GetByRole(AriaRole.Link, new() { Name = "Season 1", Exact = true }) });
                 StringAssert.Contains(await season.InnerTextAsync(), "Partly monitored");
                 await page.GotoAsync("/Admin/Wanted?PageNumber=1&View=Missing");

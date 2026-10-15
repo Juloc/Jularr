@@ -33,8 +33,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class WorkDetailsV1 : BaseResponse
     {
-        public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isMediaSubtypeManual, string canonicalTitle, int? releaseYear, long version)
+        public WorkDetailsV1(long id, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isMediaSubtypeManual, string canonicalTitle, int? releaseYear, long version,
+            long? wantedItemId = null)
         {
+            WantedItemId = wantedItemId;
             Id = id;
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
@@ -65,6 +67,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Version))]
         public long Version { get; }
+
+        // Its acquisition target, once it is wanted.
+        [DataField(typeof(Fields.Acquisition.WantedItemFields), nameof(Fields.Acquisition.WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
     }
 
     public sealed class CreateWorkDataV1 : BaseData

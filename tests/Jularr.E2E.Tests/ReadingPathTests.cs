@@ -41,17 +41,17 @@ namespace Jularr.E2E.Tests
 
                 // Each search finds its release, offered just before; the chosen one is downloaded.
                 fakes.Offer(book);
-                await Steps.OpenWantedAsync(page, FakeServices.BookTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.BookTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = book.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, book);
                 fakes.Offer(volume);
-                await Steps.OpenWantedAsync(page, FakeServices.MangaTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MangaTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = volume.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, volume);
                 fakes.Offer(novel);
-                await Steps.OpenWantedAsync(page, FakeServices.NovelTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.NovelTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = novel.Title }).InnerTextAsync(), "Eligible");
                 await Steps.GrabAsync(page, novel);

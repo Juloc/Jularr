@@ -235,7 +235,7 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "&lt;Work&gt;");
             token = WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
             var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\""))!;
-            using var pause = await browser.PostAsync("/Admin/Wanted?WantedItemId=" + wantedId, new FormUrlEncodedContent(new Dictionary<string, string>
+            using var pause = await browser.PostAsync("/Admin/Wanted?PageNumber=1&handler=Pause&wantedItemId=" + wantedId, new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["__RequestVerificationToken"] = token, ["IsPaused"] = "True", ["Version"] = "1"
             }));

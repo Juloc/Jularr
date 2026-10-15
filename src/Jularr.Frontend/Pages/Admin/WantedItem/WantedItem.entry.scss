@@ -1,0 +1,9 @@
+.wanted-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+.ui-section + .ui-section,
+.wanted-actions + .ui-section { margin-top: 16px; }

@@ -88,7 +88,7 @@ namespace Jularr.E2E.Tests
                 await Steps.SubmitAsync(page, page.Locator("tr", new() { HasText = FakeServices.MovieTitle }).Locator("form")
                     .Filter(new() { Has = page.GetByRole(AriaRole.Button, new() { Name = "Approve" }) }));
                 fakes.Offer(film);
-                await Steps.OpenWantedAsync(page, FakeServices.MovieTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.MovieTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 await Steps.GrabAsync(page, film);
                 await Steps.WaitForAvailableAsync(page, FakeServices.MovieTitle);

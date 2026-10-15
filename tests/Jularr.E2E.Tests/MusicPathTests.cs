@@ -38,7 +38,7 @@ namespace Jularr.E2E.Tests
 
                 // Only the requested artist's release is eligible.
                 fakes.Offer(album, otherArtist);
-                await Steps.OpenWantedAsync(page, FakeServices.AlbumTitle);
+                await Steps.OpenSearchAsync(page, FakeServices.AlbumTitle);
                 await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = otherArtist.Title }).InnerTextAsync(), "Not the wanted artist");
                 StringAssert.Contains(await page.Locator("tr", new() { HasText = album.Title }).InnerTextAsync(), "Eligible");
