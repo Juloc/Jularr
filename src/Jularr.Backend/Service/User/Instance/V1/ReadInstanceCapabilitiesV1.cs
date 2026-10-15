@@ -36,8 +36,9 @@ namespace Jularr.Backend.Service.User.Instance.V1
                 """;
             var modules = await Context.ReadSql.ReadListAsync<InstanceModuleData>(sql, CancellationToken);
 
-            // Seek thumbnails also need their folder.
-            var usable = modules.Where(module => module.IsEnabled && (module.Key != "Trickplay" || _media.TrickplayPath is not null)).Select(module => module.Key);
+            // Seek thumbnails and translation also need their folder.
+            var usable = modules.Where(module => module.IsEnabled && (module.Key != "Trickplay" || _media.TrickplayPath is not null)
+                && (module.Key != "Translation" || _media.TranslationPath is not null)).Select(module => module.Key);
             var permissions = ServiceGate.GetPermissions(Auth.AccountId, Auth.ProfileId, Auth.ProfileOwnerAccountId, Auth.AccountRoleTypeId, Auth.IsDevice);
             return new InstanceCapabilitiesDetailsV1([.. permissions], [.. usable]);
         }

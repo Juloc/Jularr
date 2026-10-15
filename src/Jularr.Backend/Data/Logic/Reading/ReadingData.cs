@@ -216,6 +216,33 @@ namespace Jularr.Backend.Data.Logic.Reading
         public long DocumentId { get; }
     }
 
+    internal sealed class ReadingTranslationPathData : BaseData
+    {
+        public ReadingTranslationPathData(long documentId, string path)
+        {
+            DocumentId = documentId;
+            Path = path;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Path))]
+        public string Path { get; }
+    }
+
+    // How many blocks a prepared section has.
+    internal sealed class ReadingSectionBlocksData : BaseData
+    {
+        public ReadingSectionBlocksData(int blocks)
+        {
+            Blocks = blocks;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionCount))]
+        public int Blocks { get; }
+    }
+
     internal sealed class ReadingResourceData : BaseData
     {
         public ReadingResourceData(long documentId, string path, string mediaType, byte[] bytes)

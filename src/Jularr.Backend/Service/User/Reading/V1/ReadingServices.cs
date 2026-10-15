@@ -112,7 +112,8 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         document."CacheCompletedAt" IS NOT NULL AS "IsCached",
                         progress."Locator",
                         progress."Progression",
-                        coalesce(visible."MediaSubtypeId" = 2, FALSE) AS "IsRightToLeft"
+                        coalesce(visible."MediaSubtypeId" = 2, FALSE) AS "IsRightToLeft",
+                        document."Language"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "MediaAssets" AS asset ON asset."Id" = @MediaAssetId

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
+using Jularr.Backend.Data.Enums.Translation;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Service.User.Reading.V1;
 using Jularr.Frontend.Framework;
@@ -93,7 +94,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             var settings = new Div(
                 Setting("reader.fontSize", [("smaller", "reader.smaller"), ("larger", "reader.larger")], "size"),
                 Setting("reader.theme", [("light", "reader.theme.light"), ("sepia", "reader.theme.sepia"), ("dark", "reader.theme.dark")], "theme"),
-                Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode")
+                Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode"),
+                texts.CanTranslate()
+                    ? Setting("reader.translate", [("", "reader.translate.original"), .. Enum.GetValues<TranslationLanguageType>().Select(language => (language.ToString(), "reader.language." + language))], "translate")
+                    : new Span()
             ).Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden");
 
             var navigation = new List<IUiComponent>();
@@ -105,7 +109,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 ? new A(new Text("reader.next")).Class("button button--primary").Attribute("href", "?s=" + (index + 1).ToString(CultureInfo.InvariantCulture)).Attribute("data-role", "next")
                 : new Span(new Text("reader.end")));
 
-            page.Content.Add(new Div(
+            var view = new Div(
                 top,
                 contents,
                 notes,
@@ -115,6 +119,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 Toolbar(),
                 Popover(),
                 new P(new Text("progress.saveFailed")).Attribute("data-role", "save-error").Attribute("role", "status").Attribute("hidden", "hidden"),
+                new P().Class("reader__note").Attribute("data-role", "translation-status").Attribute("role", "status").Attribute("hidden", "hidden"),
                 new Div([.. navigation]).Class("reader__bottom")
             ).Class("reader")
                 .Attribute("data-progress-url", "/api/v1/reading/assets/" + asset + "/progress")
@@ -129,7 +134,19 @@ namespace Jularr.Frontend.Pages.User.Reader
                 .Attribute("data-annotations-url", "/api/v1/reading/assets/" + asset + "/annotations")
                 .Attribute("data-annotations", JsonSerializer.Serialize(_marks, Json))
                 .Attribute("data-note-label", texts["reader.note"])
-                .Attribute("data-query", Query ?? ""));
+                .Attribute("data-query", Query ?? "");
+            if (texts.CanTranslate())
+            {
+                // The section's translations are shared; the files to translate it come with its route.
+                view.Attribute("data-language", document.Language ?? "")
+                    .Attribute("data-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/"
+                        + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
+                    .Attribute("data-route-url", "/api/v1/translation/routes/")
+                    .Attribute("data-translating-label", texts["reader.translating"])
+                    .Attribute("data-translation-failed-label", texts["reader.translationFailed"]);
+            }
+
+            page.Content.Add(view);
             if (!document.IsCached)
             {
                 page.Content.Add(new P(new Text("reader.notCached")).Class("reader__note").Attribute("role", "status"));

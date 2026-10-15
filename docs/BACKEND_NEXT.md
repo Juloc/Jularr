@@ -76,7 +76,9 @@ and commit together. No migration, active-database installation or extra server.
   confirms; a signed-in user who connects their own server account is linked at once. Offline PWA copies
   follow a device check (server rendition or original), original download optional,
   behind a profile permission. The mini-player uses a small own navigation script with a
-  full-page fallback. Translation uses Bergamot models (optional owner). Retro games play
+  full-page fallback. Translation uses Bergamot models (optional owner); since 2026-10-15 in the
+  browser (Mozilla's WASM engine 3.0 and first-collection models, fetched on demand into
+  `Media:TranslationPath`), with translated sections shared on the server. Retro games play
   through EmulatorJS (all cores, see the 13 October decision below), other platforms are downloads.
   E2E uses Playwright against a Compose test stack. Setup step 2 offers a new instance or
   a Jularr backup restore; migration stays with the stopped Phase B; the AI step waits

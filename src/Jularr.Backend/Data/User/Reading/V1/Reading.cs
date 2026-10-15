@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Translation;
+using Jularr.Backend.Data.Fields.Translation;
 using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Fields.Media;
 using Jularr.Backend.Data.Fields.Playback;
@@ -44,6 +46,48 @@ namespace Jularr.Backend.Data.User.Reading.V1
         public int SectionIndex { get; }
     }
 
+    public sealed class ReadingTranslationParametersV1 : BaseParameters
+    {
+        public ReadingTranslationParametersV1(long documentId, int sectionIndex, TranslationLanguageType languageTypeId)
+        {
+            DocumentId = documentId;
+            SectionIndex = sectionIndex;
+            LanguageTypeId = languageTypeId;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
+        public long DocumentId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
+        public int SectionIndex { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.LanguageTypeId))]
+        public TranslationLanguageType LanguageTypeId { get; }
+    }
+
+    // A section's blocks in another language: a JSON array of plain texts in block order.
+    public sealed class ReadingTranslationV1 : BaseResponse
+    {
+        public ReadingTranslationV1(string blocks)
+        {
+            Blocks = blocks;
+        }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Blocks))]
+        public string Blocks { get; }
+    }
+
+    public sealed class SaveReadingTranslationDataV1 : BaseData
+    {
+        public SaveReadingTranslationDataV1(string blocks)
+        {
+            Blocks = blocks;
+        }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Blocks))]
+        public string Blocks { get; }
+    }
+
     public sealed class ReadingResourceParametersV1 : BaseParameters
     {
         public ReadingResourceParametersV1(long documentId, string path)
@@ -62,8 +106,9 @@ namespace Jularr.Backend.Data.User.Reading.V1
     public sealed class ReadingDocumentV1 : BaseResponse
     {
         public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
-            bool isRightToLeft)
+            bool isRightToLeft, string? language)
         {
+            Language = language;
             DocumentId = documentId;
             WorkId = workId;
             Title = title;
@@ -103,6 +148,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
         // Manga read right to left; comic pages are the sections.
         [DataField(typeof(ReadingFields), nameof(ReadingFields.IsRightToLeft))]
         public bool IsRightToLeft { get; }
+
+        // The book's own language tag, where it names one.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.Language))]
+        public string? Language { get; }
     }
 
     public sealed class ReadingTocEntryV1 : BaseResponse

@@ -50,6 +50,7 @@ using Jularr.Integrations.Data.Database;
 using Jularr.Integrations.Logic.Database;
 using Jularr.Integrations.Logic.Subtitles;
 using Jularr.Integrations.Logic.Synology;
+using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Jularr.Backend.Data.Public.Authentication.V1;
@@ -186,6 +187,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<UsenetJob>();
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddTransient<ReadingContent>();
+            services.TryAddSingleton<TranslationFiles>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
@@ -263,6 +265,7 @@ namespace Jularr.Backend.Service.Core
             // Bound external communication; pasted source links reach public addresses only.
             AddClient<PlexClient>(services, 10, 1);
             AddClient<GutenbergClient>(services, 60, null, agent: true);
+            AddClient<MozillaTranslationsClient>(services, 600, null, agent: true);
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary);
@@ -464,7 +467,7 @@ namespace Jularr.Backend.Service.Core
                 // Authorized files stream after the service committed.
                 if (result is IFileOutput file)
                 {
-                    http.Response.Headers.CacheControl = "private,no-store";
+                    http.Response.Headers.CacheControl = file is IImmutableFileOutput ? "private,max-age=31536000,immutable" : "private,no-store";
                     return (IResult)Results.File(file.FilePath, file.ContentType, enableRangeProcessing: true);
                 }
 

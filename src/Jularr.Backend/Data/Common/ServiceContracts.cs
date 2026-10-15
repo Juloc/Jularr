@@ -12,6 +12,9 @@ namespace Jularr.Backend.Data.Common
     }
 
     // Authorized bytes from the database, such as cached book resources.
+    // A file named by its content; browsers keep it for good.
+    public interface IImmutableFileOutput : IFileOutput;
+
     public interface IBinaryOutput
     {
         byte[] Bytes { get; }

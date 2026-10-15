@@ -71,8 +71,9 @@ export function highlights(reader: HTMLElement, content: HTMLElement, section: n
     });
 
     function offer() {
+        // Marks belong to the original text, not to a translation of it.
         const selection = window.getSelection();
-        if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !popover.hidden) {
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !popover.hidden || reader.dataset.translated) {
             toolbar.hidden = true;
             return;
         }

@@ -420,7 +420,7 @@ namespace Jularr.Backend.Tests
         }
 
         // Two identified books in a book library.
-        private static async Task<(long First, long Second)> CreateBooksAsync(Host host, string storage, string firstTitle, string secondTitle)
+        internal static async Task<(long First, long Second)> CreateBooksAsync(Host host, string storage, string firstTitle, string secondTitle)
         {
             var mountId = await LibraryTests.CreateMountAsync(host);
             foreach (var title in new[] { firstTitle, secondTitle })

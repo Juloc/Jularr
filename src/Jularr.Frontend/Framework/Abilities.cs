@@ -13,6 +13,7 @@ namespace Jularr.Frontend.Framework
         public static bool CanReadRequestRules(this UiText texts) => texts.Can("rules.read", "Requests");
         public static bool CanPlay(this UiText texts) => texts.Can("profile.playback", "Library", "Playback");
         public static bool CanRead(this UiText texts) => texts.Can("profile.media.read", "Library", "Reading");
+        public static bool CanTranslate(this UiText texts) => texts.Can("profile.media.read", "Library", "Reading", "Translation");
         public static bool CanManageProfiles(this UiText texts) => texts.Can(null, "Profiles");
         public static bool CanCreateProfiles(this UiText texts) => texts.Can("session.profile.create", "Profiles");
         public static bool CanDeleteProfile(this UiText texts) => texts.Can("profile.self.delete", "Profiles");
