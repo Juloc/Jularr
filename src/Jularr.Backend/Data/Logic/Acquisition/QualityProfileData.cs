@@ -1,5 +1,8 @@
 using System.Text.Json.Serialization;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
+using Jularr.Backend.Data.Fields.Acquisition;
 
 namespace Jularr.Backend.Data.Logic.Acquisition
 {
@@ -195,5 +198,40 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Qualities accepted once the target has been wanted for the given hours.
         public string[] FallbackQualities { get; }
         public int? FallbackAfterHours { get; }
+    }
+
+    // A Sonarr or Radarr profile as Jularr takes it over, with the custom formats it could not express.
+    internal sealed class TakenOverProfile
+    {
+        public TakenOverProfile(AcquisitionProfileInputData input, IReadOnlyList<ReleaseScoreRule> rules, IReadOnlyList<string> skippedFormats)
+        {
+            Input = input;
+            Rules = rules;
+            SkippedFormats = skippedFormats;
+        }
+
+        public AcquisitionProfileInputData Input { get; }
+        public IReadOnlyList<ReleaseScoreRule> Rules { get; }
+        public IReadOnlyList<string> SkippedFormats { get; }
+    }
+
+    // A profile's name and media type; a takeover does not create the same twice.
+    internal sealed class AcquisitionProfileNameData : BaseData
+    {
+        public AcquisitionProfileNameData(long id, string name, MediaType mediaTypeId)
+        {
+            Id = id;
+            Name = name;
+            MediaTypeId = mediaTypeId;
+        }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(Fields.Media.WorkFields), nameof(Fields.Media.WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
     }
 }

@@ -17,6 +17,8 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Movie = 3,
         Series = 4,
         Album = 5,
-        Book = 6
+        Book = 6,
+        Profile = 7,
+        Format = 8
     }
 }

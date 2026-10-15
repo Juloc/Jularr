@@ -242,6 +242,14 @@ namespace Jularr.Backend.Logic.Acquisition
                 : throw new KeyNotFoundException("The rule was not found."), ct);
         }
 
+        // Rules taken over with a new profile follow its own, as far as the 50 allow.
+        public static async Task AppendProfileRulesAsync(this LogicContext ctx, long id, IReadOnlyList<ReleaseScoreRule> rules, CancellationToken ct)
+        {
+            var added = rules.Select(Checked).ToArray();
+            var state = await ctx.ReadAcquisitionProfileStateAsync(id, ct);
+            await ctx.ReplaceProfileRulesAsync(new AcquisitionProfileKeyData(id, state.Version), existing => [.. existing.Concat(added).Take(50)], ct);
+        }
+
         // Prefer scores up and Avoid down; the other effects score nothing.
         private static ReleaseScoreRule Checked(ReleaseScoreRule rule)
         {

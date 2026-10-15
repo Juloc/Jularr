@@ -41,7 +41,7 @@ namespace Jularr.Integrations.Logic.Servarr
         {
             using var document = await GetAsync(connection, "movie", ct);
             return [.. Items(document).Select(item => new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false,
-                Bool(item, "hasFile") == false)).Where(title => title.Title.Length > 0)];
+                Bool(item, "hasFile") == false, qualityProfileId: Int(item, "qualityProfileId"))).Where(title => title.Title.Length > 0)];
         }
 
         public async Task<IReadOnlyList<ServarrTitle>> ReadSeriesAsync(ServarrConnection connection, CancellationToken ct)
@@ -52,7 +52,8 @@ namespace Jularr.Integrations.Logic.Servarr
             {
                 var statistics = item.TryGetProperty("statistics", out var value) && value.ValueKind == JsonValueKind.Object ? value : default;
                 var missing = statistics.ValueKind == JsonValueKind.Object && (Int(statistics, "episodeFileCount") ?? 0) < (Int(statistics, "episodeCount") ?? 0);
-                return new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false, missing);
+                return new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false, missing,
+                    qualityProfileId: Int(item, "qualityProfileId"));
             }).Where(title => title.Title.Length > 0)];
         }
 
@@ -76,6 +77,56 @@ namespace Jularr.Integrations.Logic.Servarr
             return [.. Items(document).Select(item => new ServarrTitle(Text(item, "title") ?? "", Year(Text(item, "releaseDate")), null, Bool(item, "monitored") ?? false,
                 (Int(Child(item, "statistics"), "bookFileCount") ?? 0) == 0, null, Text(Child(item, "author"), "authorName"))).Where(title => title.Title.Length > 0)];
         }
+
+        // Sonarr and Radarr quality profiles; groups pass their allowance to their qualities.
+        public async Task<IReadOnlyList<ServarrQualityProfile>> ReadQualityProfilesAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            using var document = await GetAsync(connection, "qualityprofile", ct);
+            return [.. Items(document).Where(item => Int(item, "id") is not null && Text(item, "name") is not null).Select(item =>
+            {
+                var cutoff = Int(item, "cutoff");
+                var qualities = new List<ServarrQuality>();
+                foreach (var entry in Array(item, "items"))
+                {
+                    var allowed = Bool(entry, "allowed") ?? false;
+                    var members = Array(entry, "items").ToArray();
+                    var groupIsCutoff = members.Length > 0 && Int(entry, "id") == cutoff;
+                    foreach (var member in members.Length > 0 ? members : [entry])
+                    {
+                        var quality = Child(member, "quality");
+                        if (Text(quality, "name") is not { } name) continue;
+                        qualities.Add(new ServarrQuality(name, Text(quality, "source"), Int(quality, "resolution") ?? 0, Text(quality, "modifier"), allowed || Bool(member, "allowed") == true && members.Length == 0,
+                            groupIsCutoff || members.Length == 0 && Int(quality, "id") == cutoff));
+                    }
+                }
+
+                var scores = new Dictionary<int, int>();
+                foreach (var format in Array(item, "formatItems"))
+                {
+                    if (Int(format, "format") is { } id && Int(format, "score") is { } score) scores[id] = score;
+                }
+
+                return new ServarrQualityProfile(Int(item, "id")!.Value, Text(item, "name")!, Bool(item, "upgradeAllowed") ?? false, qualities, scores, Int(item, "minFormatScore") ?? 0);
+            })];
+        }
+
+        public async Task<IReadOnlyList<ServarrCustomFormat>> ReadCustomFormatsAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            using var document = await GetAsync(connection, "customformat", ct);
+            return [.. Items(document).Where(item => Int(item, "id") is not null && Text(item, "name") is not null).Select(item => new ServarrCustomFormat(Int(item, "id")!.Value, Text(item, "name")!,
+                [.. Array(item, "specifications").Select(condition => new ServarrFormatCondition(Text(condition, "implementation") ?? "", Bool(condition, "negate") ?? false,
+                    Bool(condition, "required") ?? false, Fields(condition).TryGetValue("value", out var value) ? value.ValueKind switch
+                    {
+                        JsonValueKind.String => value.GetString(),
+                        JsonValueKind.Number => value.GetRawText(),
+                        _ => null
+                    } : null))]))];
+        }
+
+        private static IEnumerable<JsonElement> Array(JsonElement element, string property) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Array
+                ? value.EnumerateArray().Where(entry => entry.ValueKind == JsonValueKind.Object).Take(1000)
+                : [];
 
         private static JsonElement Child(JsonElement element, string property) =>
             element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object ? value : default;

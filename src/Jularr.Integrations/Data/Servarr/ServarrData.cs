@@ -76,8 +76,9 @@ namespace Jularr.Integrations.Data.Servarr
     // A movie, series, album or book the old tool watched; missing ones become wanted.
     internal sealed class ServarrTitle
     {
-        public ServarrTitle(string title, int? year, int? tmdbId, bool isMonitored, bool isMissing, string? externalId = null, string? creator = null)
+        public ServarrTitle(string title, int? year, int? tmdbId, bool isMonitored, bool isMissing, string? externalId = null, string? creator = null, int? qualityProfileId = null)
         {
+            QualityProfileId = qualityProfileId;
             ExternalId = externalId;
             Creator = creator;
             Title = title;
@@ -93,8 +94,84 @@ namespace Jularr.Integrations.Data.Servarr
         public bool IsMonitored { get; }
         public bool IsMissing { get; }
 
+        // The quality profile the title used there.
+        public int? QualityProfileId { get; }
+
         // The MusicBrainz release group of an album; artist or author.
         public string? ExternalId { get; }
         public string? Creator { get; }
+    }
+
+    // One quality of a profile with its source and resolution, allowed alone or through its group.
+    internal sealed class ServarrQuality
+    {
+        public ServarrQuality(string name, string? source, int resolution, string? modifier, bool isAllowed, bool isCutoff)
+        {
+            Name = name;
+            Source = source;
+            Resolution = resolution;
+            Modifier = modifier;
+            IsAllowed = isAllowed;
+            IsCutoff = isCutoff;
+        }
+
+        public string Name { get; }
+        public string? Source { get; }
+        public int Resolution { get; }
+        public string? Modifier { get; }
+        public bool IsAllowed { get; }
+        public bool IsCutoff { get; }
+    }
+
+    internal sealed class ServarrQualityProfile
+    {
+        public ServarrQualityProfile(int id, string name, bool upgradeAllowed, IReadOnlyList<ServarrQuality> qualities, IReadOnlyDictionary<int, int> formatScores, int minimumFormatScore)
+        {
+            Id = id;
+            Name = name;
+            UpgradeAllowed = upgradeAllowed;
+            Qualities = qualities;
+            FormatScores = formatScores;
+            MinimumFormatScore = minimumFormatScore;
+        }
+
+        public int Id { get; }
+        public string Name { get; }
+        public bool UpgradeAllowed { get; }
+        public IReadOnlyList<ServarrQuality> Qualities { get; }
+
+        // Score per custom format id.
+        public IReadOnlyDictionary<int, int> FormatScores { get; }
+        public int MinimumFormatScore { get; }
+    }
+
+    internal sealed class ServarrFormatCondition
+    {
+        public ServarrFormatCondition(string implementation, bool negate, bool required, string? value)
+        {
+            Implementation = implementation;
+            Negate = negate;
+            Required = required;
+            Value = value;
+        }
+
+        public string Implementation { get; }
+        public bool Negate { get; }
+        public bool Required { get; }
+        public string? Value { get; }
+    }
+
+    internal sealed class ServarrCustomFormat
+    {
+        public ServarrCustomFormat(int id, string name, IReadOnlyList<ServarrFormatCondition> conditions)
+        {
+            Id = id;
+            Name = name;
+            Conditions = conditions;
+        }
+
+        public int Id { get; }
+        public string Name { get; }
+        public IReadOnlyList<ServarrFormatCondition> Conditions { get; }
     }
 }

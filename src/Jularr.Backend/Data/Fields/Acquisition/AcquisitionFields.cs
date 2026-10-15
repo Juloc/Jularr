@@ -94,7 +94,8 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField RuleName = new(NpgsqlDbType.Varchar) { MaximumLength = 64, AllowBlank = false, Trim = true };
         public static readonly EnumField RuleField = new(typeof(ReleaseRuleField));
         public static readonly EnumField RuleMatch = new(typeof(ReleaseRuleMatch));
-        public static readonly StringField RuleValue = new(NpgsqlDbType.Varchar) { MaximumLength = 200, AllowBlank = false, Trim = true };
+        // Long enough for the expressions of custom formats taken over.
+        public static readonly StringField RuleValue = new(NpgsqlDbType.Varchar) { MaximumLength = 1000, AllowBlank = false, Trim = true };
         public static readonly EnumField RuleEffect = new(typeof(ReleaseRuleEffect));
         public static readonly IntField RuleScore = new() { Minimum = -1000, Maximum = 1000 };
     }

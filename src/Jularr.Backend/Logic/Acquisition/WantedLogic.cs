@@ -50,17 +50,26 @@ namespace Jularr.Backend.Logic.Acquisition
             }
         }
 
-        public static async Task EnsureWantedItemAsync(this LogicContext ctx, WorkIdData data, CancellationToken ct)
+        public static async Task EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
         {
-            // A taken-over title becomes a target once.
+            // A taken-over title becomes a target once, with the profile it had, if one of its type.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO "WantedItems" (
-                    "WorkId"
-                ) VALUES (
-                    @Id
+                    "WorkId",
+                    "AcquisitionProfileId"
                 )
+                SELECT
+                    work."Id",
+                    profile."Id"
+                FROM
+                    "Works" AS work
+                    LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = @AcquisitionProfileId
+                        AND profile."MediaTypeId" = work."MediaTypeId"
+                        AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                WHERE
+                    work."Id" = @WorkId
                 ON CONFLICT ("WorkId", "GamePlatformId") DO NOTHING;
                 """;
             sql.Parameters.Add(data);

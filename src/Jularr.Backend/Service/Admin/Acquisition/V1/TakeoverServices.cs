@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
 {
-    // A one-time takeover from Prowlarr, Sonarr or Radarr: indexers, clients and missing titles; nothing keeps running alongside.
+    // A one-time takeover from Prowlarr, Sonarr or Radarr: indexers, clients, quality profiles with their custom formats and missing titles; nothing keeps running alongside.
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/takeover")]
     public sealed class RunTakeoverV1 : AdminService<TakeoverParametersV1, RunTakeoverDataV1>
     {
@@ -50,8 +50,16 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             IReadOnlyList<ServarrIndexer> indexers;
             IReadOnlyList<ServarrClient> clients;
             IReadOnlyList<ServarrTitle> titles;
+            IReadOnlyList<ServarrQualityProfile> profiles = [];
+            IReadOnlyList<ServarrCustomFormat> formats = [];
             try
             {
+                if (Data.TakeoverSourceTypeId is TakeoverSourceType.Sonarr or TakeoverSourceType.Radarr)
+                {
+                    profiles = await _servarr.ReadQualityProfilesAsync(source, CancellationToken);
+                    formats = await _servarr.ReadCustomFormatsAsync(source, CancellationToken);
+                }
+
                 indexers = await _servarr.ReadIndexersAsync(source, CancellationToken);
                 clients = Data.TakeoverSourceTypeId == TakeoverSourceType.Prowlarr ? [] : await _servarr.ReadClientsAsync(source, CancellationToken);
                 titles = Data.TakeoverSourceTypeId switch
@@ -68,7 +76,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new ServiceUnavailableException(exception.Failure == ServarrFailure.Unauthorized ? "acquisition_authentication_failed" : "acquisition_unavailable");
             }
 
-            var known = await Context.ExecuteBatchAsync((ctx, ct) =>
+            var (known, jularrProfiles) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -78,7 +86,17 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     FROM
                         "AcquisitionConnections" AS connection;
                     """;
-                return ctx.ReadSql.ReadListAsync<AcquisitionConnectionUrlData>(sql, ct);
+                var profileSql = new SqlStatement();
+                profileSql.Statement =
+                    """
+                    SELECT
+                        profile."Id",
+                        profile."Name",
+                        profile."MediaTypeId"
+                    FROM
+                        "AcquisitionProfiles" AS profile;
+                    """;
+                return (await ctx.ReadSql.ReadListAsync<AcquisitionConnectionUrlData>(sql, ct), await ctx.ReadSql.ReadListAsync<AcquisitionProfileNameData>(profileSql, ct));
             }, CancellationToken);
             var existing = known.Select(connection => connection.BaseUrl.TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -96,6 +114,42 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 items.Add(await TakeConnectionAsync(TakeoverItemType.Client, client.Name, client.BaseUrl, client.ApiKey, existing,
                     new SaveAcquisitionConnectionDataV1(Limit(client.Name, 128), AcquisitionConnectionType.Sabnzbd, client.BaseUrl, client.ApiKey, client.IsEnabled, client.Priority, [],
                         client.Category is { Length: <= 64 } category ? category : null, null, null)));
+            }
+
+            // Profiles keep their name; one of that name and type is not taken twice.
+            var profileIds = new Dictionary<int, long>();
+            var profileType = Data.TakeoverSourceTypeId == TakeoverSourceType.Radarr ? MediaType.Movie : MediaType.Series;
+            var formatsById = formats.ToDictionary(format => format.Id);
+            foreach (var profile in profiles)
+            {
+                var mapped = ServarrProfileLogic.Map(profile, formatsById, profileType);
+                var name = Limit(profile.Name, 500);
+                if (jularrProfiles.FirstOrDefault(existing => existing.MediaTypeId == profileType && string.Equals(existing.Name, mapped.Input.Name, StringComparison.OrdinalIgnoreCase)) is { } same)
+                {
+                    profileIds[profile.Id] = same.Id;
+                    items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_exists", null));
+                    continue;
+                }
+
+                if (mapped.Input.AllowedQualities.Length == 0)
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_no_qualities", null));
+                    continue;
+                }
+
+                if (Data.Apply)
+                {
+                    profileIds[profile.Id] = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+                    {
+                        var id = await ctx.CreateAcquisitionProfileAsync(mapped.Input, ct);
+                        if (mapped.Rules.Count > 0) await ctx.AppendProfileRulesAsync(id, mapped.Rules, ct);
+                        return id;
+                    }, CancellationToken);
+                }
+
+                items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, Data.Apply ? "takeover_added" : "takeover_will_add", null));
+                if (profile.MinimumFormatScore > 0) items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_minimum_score", null));
+                items.AddRange(mapped.SkippedFormats.Select(format => new TakeoverItemV1(TakeoverItemType.Format, Limit(format, 500), "takeover_format_skipped", null)));
             }
 
             // Watched titles without files become wanted through their provider id; large libraries continue in later runs.
@@ -137,7 +191,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     var workId = await _catalog.ImportAsync(Context, mediaType, null, identity.Item1, externalId, CancellationToken);
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
-                        await ctx.EnsureWantedItemAsync(new WorkIdData(workId), ct);
+                        await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, title.QualityProfileId is { } profileId && profileIds.TryGetValue(profileId, out var id) ? id : null), ct);
                         return true;
                     }, CancellationToken);
                     items.Add(new TakeoverItemV1(type, name, "takeover_wanted", null));

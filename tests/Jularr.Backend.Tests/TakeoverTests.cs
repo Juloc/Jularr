@@ -6,6 +6,7 @@ using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
+using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Integrations.Logic.Servarr;
 using Jularr.Integrations.Logic.Tmdb;
@@ -98,6 +99,26 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("tv", await host.ScalarAsync("SELECT \"DownloadCategory\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 2"));
             Assert.AreEqual("takeover_wanted", sonarr.Single(item => item.Name == "Example Show (2020)").OutcomeKey);
 
+            // Its profile keeps the qualities Jularr knows, best first, stops at the best of the cutoff group and gets its custom formats as rules; the title uses it.
+            Assert.AreEqual("takeover_added", sonarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Profile).OutcomeKey);
+            Assert.AreEqual("takeover_format_skipped", sonarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Format).OutcomeKey);
+            Assert.AreEqual("Mixed", sonarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Format).Name);
+            var profile = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
+                .Single(item => item.Name == "HD-1080p");
+            CollectionAssert.AreEqual(new[] { "BLURAY-1080p", "WEB-1080p", "HDTV-1080p" }, profile.AllowedQualities);
+            Assert.AreEqual(("WEB-1080p", MediaType.Series), (profile.UpgradeCutoffQuality, profile.MediaTypeId));
+            var rules = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles/" + profile.Id + "/rules")).Content.ReadFromJsonAsync<BaseDataList<ReleaseRuleV1>>())!;
+            var x265 = rules.Single(rule => rule.Name == "x265");
+            Assert.AreEqual((ReleaseRuleField.RawTitle, ReleaseRuleMatch.Regex, "[xh]\\.?265", ReleaseRuleEffect.Reject), (x265.Field, x265.Match, x265.Value, x265.Effect));
+            var groups = rules.Single(rule => rule.Name == "Good groups");
+            Assert.AreEqual((ReleaseRuleField.ReleaseGroup, ReleaseRuleEffect.Prefer, 1000), (groups.Field, groups.Effect, groups.Score));
+            Assert.IsFalse(rules.Any(rule => rule.Name is "Mixed" or "Unused"));
+            Assert.AreEqual(profile.Id, await host.ScalarAsync("SELECT wanted.\"AcquisitionProfileId\" FROM \"WantedItems\" AS wanted JOIN \"Works\" AS work ON work.\"Id\" = wanted.\"WorkId\" WHERE work.\"MediaTypeId\" = 2"));
+
+            // A second run finds the profile by its name.
+            var again = await RunAsync(host, false, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989");
+            Assert.AreEqual("takeover_exists", again.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Profile).OutcomeKey);
+
             // Lidarr: an album with its MusicBrainz release group is wanted, one without has no id.
             var lidarr = await RunAsync(host, true, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686");
             Assert.AreEqual("takeover_wanted", lidarr.Single(item => item.Name == "Example Album (2019)").OutcomeKey);
@@ -155,6 +176,7 @@ namespace Jularr.Backend.Tests
                         [{"name":"SAB","implementation":"Sabnzbd","enable":true,"priority":1,
                           "fields":[{"name":"host","value":"sab.example.test"},{"name":"port","value":8080},{"name":"useSsl","value":false},{"name":"apiKey","value":"********"},{"name":"movieCategory","value":"movies"}]}]
                         """),
+                    "/api/v3/qualityprofile" or "/api/v3/customformat" => Json("[]"),
                     "/api/v3/movie" => Json("""
                         [
                           {"title":"The Matrix","year":1999,"tmdbId":603,"monitored":true,"hasFile":false},
@@ -196,7 +218,28 @@ namespace Jularr.Backend.Tests
                     ("prowlarr.example.test", "/api/v1/indexer") => Json(Indexer.Replace("NAME", "Prowled", StringComparison.Ordinal).Replace("HOST", "prowled", StringComparison.Ordinal)),
                     ("sonarr.example.test", "/api/v3/indexer") => Json(Indexer.Replace("NAME", "Prowled", StringComparison.Ordinal).Replace("HOST", "prowled", StringComparison.Ordinal)),
                     ("sonarr.example.test", "/api/v3/downloadclient") => Json(Client("tvCategory")),
-                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tmdbId":1399,"monitored":true,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
+                    ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tmdbId":1399,"monitored":true,"qualityProfileId":4,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
+                    ("sonarr.example.test", "/api/v3/qualityprofile") => Json("""
+                        [{"id":4,"name":"HD-1080p","upgradeAllowed":true,"cutoff":1002,"minFormatScore":0,"items":[
+                          {"quality":{"id":4,"name":"HDTV-720p","source":"television","resolution":720},"items":[],"allowed":false},
+                          {"quality":{"id":9,"name":"HDTV-1080p","source":"television","resolution":1080},"items":[],"allowed":true},
+                          {"name":"WEB 1080p","id":1002,"allowed":true,"items":[
+                            {"quality":{"id":3,"name":"WEBDL-1080p","source":"web","resolution":1080},"items":[],"allowed":true},
+                            {"quality":{"id":15,"name":"WEBRip-1080p","source":"webRip","resolution":1080},"items":[],"allowed":true}]},
+                          {"quality":{"id":7,"name":"Bluray-1080p","source":"bluray","resolution":1080},"items":[],"allowed":true},
+                          {"quality":{"id":2,"name":"DVD","source":"dvd","resolution":480},"items":[],"allowed":true}],
+                         "formatItems":[{"format":1,"name":"x265","score":-10000},{"format":2,"name":"Good groups","score":1750},{"format":3,"name":"Mixed","score":50},{"format":4,"name":"Unused","score":0}]}]
+                        """),
+                    ("sonarr.example.test", "/api/v3/customformat") => Json("""
+                        [{"id":1,"name":"x265","specifications":[{"implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"[xh]\\.?265"}]}]},
+                         {"id":2,"name":"Good groups","specifications":[
+                           {"implementation":"ReleaseGroupSpecification","negate":false,"required":false,"fields":[{"name":"value","value":"^(GRP)$"}]},
+                           {"implementation":"ReleaseGroupSpecification","negate":false,"required":false,"fields":[{"name":"value","value":"^(TEAM)$"}]}]},
+                         {"id":3,"name":"Mixed","specifications":[
+                           {"implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"HDR"}]},
+                           {"implementation":"SourceSpecification","negate":false,"required":true,"fields":[{"name":"value","value":7}]}]},
+                         {"id":4,"name":"Unused","specifications":[{"implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"x"}]}]}]
+                        """),
                     ("lidarr.example.test", "/api/v1/indexer" or "/api/v1/downloadclient") => Json("[]"),
                     ("lidarr.example.test", "/api/v1/album") => Json($$$"""
                         [
