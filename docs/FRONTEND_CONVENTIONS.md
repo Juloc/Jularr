@@ -157,8 +157,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   landing has a shared Hero/Continue followed by per-enabled-type shelves
   in the approved order; only provider-supported rankings may appear. A ranking
   opens from its shelf's See all and names itself with a way back (one tab row).
-  Cards show their state as a chip: available in the success colour, requested
-  or in progress in the accent, not requested light. The
+  Cards use the shared cover presentation and Backend-supplied state below. The
   header owns the **one** global Search and Filter entry; do not add another
   search/filter field inside Discover. User/profile ordering is respected.
   Backend supplies effective capability/order/provider data; do not copy
@@ -304,17 +303,41 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
   keep controls functional when browser storage is unavailable. Focused playback
   controls stay visible; honor reduced motion and prefer wrapping over truncation.
 - Use the shared Button and its variants rather than rebuilding buttons in pages.
+  Disabled buttons remain opaque, with muted surface/text rather than reduced opacity.
   Custom interaction requires an owner decision. Keep SCSS BEM selectors together
   with `&__element` and `&--modifier`; reuse the same style for equivalent controls.
-- Media cards place request/resume actions centrally over artwork on hover/focus,
-  with reachable touch controls. Show at most three important, Backend-ordered
-  genres. Series lifecycle belongs top-left; monitored-unit availability belongs
-  top-right (green complete, proportional yellow partial, red missing, purple
-  downloading, blue searching/queued). Never infer completeness from coarse
-  availability. Audio/subtitle icons show an available preferred language flag,
-  otherwise distinct language counts; do not infer a country from a language code.
-  Shelves hide native scrollbars and use shared local chevrons while retaining
-  native touch/keyboard scrolling, without navigation-only server reads.
+- Keep CSS minimal: reuse inherited rules, avoid equivalent duplicated declarations
+  and fix the owning style instead of stacking compensating overrides.
+- All catalog/Continue cards use the same canonical `MediaCard`: portrait cover,
+  availability top-left, bookmark top-right. Hover/focus shows title, supplied
+  year/rating and matching icon/text actions in equal-width columns immediately
+  above progress: Play/Continue/Read/Request left, Details right. Touch keeps these
+  actions reachable. A missing real primary action leaves only Details; do not
+  fabricate playback or requests. Series lifecycle, genres, descriptions and
+  language capsules belong in Details, not the cover. Unknown coarse state stays
+  readable in the hover content, never becomes a fabricated completeness dot.
+- Progress is flush at the bottom, full-width and 12px high, with a translucent
+  white track and rounded fill; the rounded card clips it. No time text, border,
+  shadow or surrounding capsule. It must not affect other content's layout.
+- Availability is green only when all monitored units have local profile-language
+  audio; yellow means complete in other audio languages; orange means partial
+  with profile audio; yellow–orange means partial in other audio languages.
+  Subtitles do not change this classification. Purple downloading, blue searching/
+  queued, gray requested and no dot for missing stay distinct. Hover expands the
+  dot into a compact icon/text capsule; partial rings retain supplied unit counts.
+  Backend must supply these facts. Existing list services do not yet expose audio
+  completeness: production does not infer it from `MediaStateType` or episode counts.
+- Supplied trailers start muted after sustained mouse hover, widen the card without
+  increasing its height, replace its cover and stop on leave, Escape, scrolling,
+  hidden document or page navigation. Use one official embed, no eager player.
+  The cached component module owns delegated handlers once across app-shell visits.
+  No trailer identifier means no preview request. Production list contracts still
+  lack trailer IDs; workshop samples are explicitly labeled, not library records.
+- Bookmark mutations use the existing Details POST, typed Form, antiforgery and
+  Backend watchlist service. Return only to validated local URLs. If a list does not
+  supply current membership, the icon links to management in Details, not a false toggle.
+  Shelves retain native touch/keyboard scrolling and local chevrons, no visible
+  scrollbar or navigation-only server reads.
 - Truncated visible text (`text-overflow: ellipsis`, line clamping or text clipped by
   `overflow: hidden`) must expose its complete value through the owning shared
   component, at minimum a localized tooltip usable by pointer, keyboard and touch.
@@ -337,7 +360,7 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Development-only design workshops may show explicitly labeled sample data and
   disabled component states. They must not start library playback or pretend to
   perform business actions. An explicitly requested promotional trailer may load
-  its official provider embed after Play, without a playback session or progress.
+  its official provider embed after Play or sustained hover, without a playback session or progress.
   Reuse real components and approved references, not copies.
 - Before completing a change, check the
   [CODEMAP](../src/Jularr.Frontend/CODEMAP.md),

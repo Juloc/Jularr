@@ -15,13 +15,20 @@
     transition: background-color .12s, border-color .12s;
 
     &:hover:not(:disabled) { background-color: var(--surface-hover); }
-    &:disabled { opacity: .65; cursor: not-allowed; }
     &[aria-pressed="true"] {
         border-color: var(--accent);
         background-color: var(--accent);
         color: var(--accent-contrast);
 
         &:hover:not(:disabled) { background-color: var(--accent-hover); }
+    }
+
+    &--compact { min-height: 32px; padding: 5px 10px; font-size: 12px; }
+    &--icon { width: 36px; min-height: 36px; padding: 0; border-radius: 50%; .ui-icon { width: 18px; height: 18px; } }
+
+    @media (pointer: coarse) {
+        &--compact { min-height: 44px; }
+        &--icon { width: 44px; min-height: 44px; }
     }
 
     &--primary {
@@ -31,4 +38,7 @@
 
         &:hover:not(:disabled) { background-color: var(--accent-hover); }
     }
+
+    // Opaque, quietly muted state.
+    &:disabled { opacity: 1; background: var(--surface-hover); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
 }

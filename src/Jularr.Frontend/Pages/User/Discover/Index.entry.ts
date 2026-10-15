@@ -1,4 +1,5 @@
 import { initializeShelves } from '../../../Framework/Components/MediaShelf';
+import '../../../Framework/Components/MediaCard';
 
 initializeShelves();
 

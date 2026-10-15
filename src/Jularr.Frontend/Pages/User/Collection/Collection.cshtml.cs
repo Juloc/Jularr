@@ -17,7 +17,7 @@ namespace Jularr.Frontend.Pages.User.Collection
     // One collection: its Works, its name and, for a smart one, its filter.
     public sealed class CollectionModel(ReadCollectionV1 read, ReadCollectionWorksV1 readWorks, UpdateCollectionV1 update, DeleteCollectionV1 delete, RemoveCollectionWorkV1 removeWork,
         AddCollectionWorkV1 addWork, ReadLibraryV1 library, IAntiforgery antiforgery,
-        UiText texts) : JularrPage
+        UiText texts, FrontendAssets assets) : JularrPage
     {
         private CollectionV1? _collection;
         private PageResult<WorkCardV1>? _works;
@@ -58,8 +58,9 @@ namespace Jularr.Frontend.Pages.User.Collection
                 var removeToken = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(new Div([.. works.Items.Select(item =>
                 {
-                    var card = new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId));
+                    var card = new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))
+                        .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, removeToken));
                     return collection.IsSmart ? (IUiComponent)card : new Div(card, new Form<CollectionWorkParametersV1>(form => form.Submit("media.remove", item.CanonicalTitle, valueHidden: true),
                         Home + "?handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), removeToken, new CollectionWorkParametersV1(collection.Id, item.Id))).Class("media-grid__entry");
                 })]).Class("media-grid"));

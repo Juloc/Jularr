@@ -129,18 +129,30 @@ test("media shelf snap alignment includes its focus padding without visible scro
     assert.match(css, /\.media-shelf__items::-webkit-scrollbar\{display:none\}/);
 });
 
-test("icon hints remain painted on closed summaries and language hints open above the shelf edge", () => {
+test("card status capsules reveal on keyboard focus and retain their hint", () => {
     const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
-    assert.match(css, /content:attr\(aria-label\)/);
-    assert.match(css, /\.icon-info\[open\]>.icon-info__trigger:{1,2}after\{display:none\}/);
-    assert.match(css, /\.media-card__languages \.icon-info \.icon-info__trigger:{1,2}after\{top:auto;bottom:100%\}/);
+    assert.match(css, /\.media-card__surface:focus-within \.media-availability-badge__body/);
+    assert.match(css, /\.media-availability-badge:focus-visible \.media-availability-badge__hint\{display:block\}/);
 });
 
-test("availability symbols and their card targets have no painted background", () => {
+test("availability dots share one palette with their compact expanded symbols", () => {
     const css = readFileSync(join(build, manifest["Pages/Development/Design/Design.entry.scss"].file), "utf8");
-    assert.match(css, /\.media-card__availability \.icon-info__trigger\{background:none\}/);
-    assert.match(css, /\.media-availability\{position:relative;display:block;width:28px;height:28px\}/);
-    assert.match(css, /\.icon-info__trigger\{[^}]*min-width:44px;min-height:44px/);
+    assert.match(css, /\.media-availability-badge\{[^}]*min-width:44px;height:44px/);
+    assert.match(css, /\.media-availability-badge__body\{[^}]*max-width:12px;height:12px/);
+    assert.match(css, /\.media-availability--compact\{[^}]*width:16px;height:16px[^}]*background:none/);
+    assert.match(css, /--status-dot:\s*linear-gradient\(135deg, var\(--status-alternate\) 50%, var\(--status-color\) 50%\)/);
+    assert.ok(css.includes(".media-availability--partialotheraudio .media-availability__track{color:var(--status-alternate)}"));
+});
+
+test("shared covers clip rounded progress, equal actions and a same-height trailer", () => {
+    const css = readFileSync(join(build, manifest["Pages/User/Library/Library.entry.scss"].file), "utf8");
+    assert.match(css, /\.media-card__surface\{[^}]*overflow:hidden;border-radius:24px/);
+    assert.match(css, /\.media-card__progress\{[^}]*height:12px;border:0;background:#ffffffa6/);
+    assert.match(css, /\.media-card__progress::-webkit-progress-value\{[^}]*border-radius:999px/);
+    assert.match(css, /\.media-card__progress::-moz-progress-bar\{[^}]*border-radius:999px/);
+    assert.ok(css.includes(".media-card__actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}"));
+    assert.match(css, /\.media-card__surface\[data-expanded\]\{[^}]*height:var\(--preview-height\)/);
+    assert.doesNotMatch(css, /media-card__genres|media-card__series|media-card__languages|media-card--minimal/);
 });
 
 test("manifest URLs are relative and cannot escape the asset root", () => {

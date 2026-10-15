@@ -18,7 +18,7 @@ namespace Jularr.Frontend.Pages.User.Watchlist
 {
     // The profile's watchlist by media type, in the chosen order, each title with its state and a way off the list.
     public sealed class WatchlistModel(ReadAuthenticationV1 authentication, ReadWatchlistV1 read, ReadProfileMediaV1 readMedia, UpdateWatchlistV1 update, IAntiforgery antiforgery,
-        UiText texts) : JularrPage
+        UiText texts, FrontendAssets assets) : JularrPage
     {
         private PageResult<LibraryItemV1>? _works;
         private IReadOnlyList<ProfileMediaV1> _media = [];
@@ -47,12 +47,9 @@ namespace Jularr.Frontend.Pages.User.Watchlist
 
             // Removing changes only this list.
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(new Div([.. works.Items.Select(item => new Div(new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId), new Form<UpdateWatchlistDataV1>(form =>
-                {
-                    form.Hidden(data => data.IsWatchlisted);
-                    form.Submit("media.remove", item.Title, valueHidden: true);
-                }, Address(scope, Sort, works.Page) + "&handler=Remove&workId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new UpdateWatchlistDataV1(false))).Class("media-grid__entry"))])
+            page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(assets, item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId)
+                .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))])
                 .Class("media-grid"));
 
             if (works.Items.Count == 0) page.Content.Add(new P(new Text("media.watchlist.empty")));
