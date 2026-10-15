@@ -112,6 +112,27 @@ namespace Jularr.Backend.Service.Admin.Media.V1
             }
         }
 
+        // Similar titles change slowly; a shared cache of half a day spares the provider.
+        public async Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
+        {
+            var key = $"metadata.recommendations.{mediaType}.{tmdbId.ToString(CultureInfo.InvariantCulture)}.{connection.Language}";
+            if (_cache.TryGetValue(key, out IReadOnlyList<TmdbSearchResult>? cached))
+            {
+                return cached!;
+            }
+
+            try
+            {
+                var results = await _tmdb.ReadRecommendationsAsync(connection, Kind(mediaType), tmdbId, ct);
+                _cache.Set(key, results, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12), Size = Math.Max(1, results.Count) });
+                return results;
+            }
+            catch (TmdbException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<TmdbWork> ReadWorkAsync(TmdbConnection connection, MediaType mediaType, int tmdbId, CancellationToken ct)
         {
             try

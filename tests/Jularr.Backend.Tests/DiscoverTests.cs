@@ -91,6 +91,13 @@ namespace Jularr.Backend.Tests
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), "/Franchise/" + franchiseId);
 
+            // With another title in the series, the details show the series as related works.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"MediaTypeId\", \"CanonicalTitle\", \"ReleaseYear\", \"FranchiseId\") VALUES (1, 'The Matrix Revolutions', 2003, " + franchiseId + ")");
+            using var related = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
+            var relatedHtml = await related.Content.ReadAsStringAsync();
+            StringAssert.Contains(relatedHtml, "The Matrix Revolutions");
+            StringAssert.Contains(relatedHtml, "href=\"/Franchise/" + franchiseId + "\"");
+
             // Switched off, neither the series nor the link remain.
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Franchises'");
             using var off = await host.SendAsync(HttpMethod.Get, "/api/v1/franchises/" + franchiseId);
@@ -123,6 +130,10 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "https://www.youtube.com/watch?v=vKQi3bBA1y8");
             StringAssert.Contains(html, "Neo");
             StringAssert.Contains(html, "Director");
+
+            // Similar titles from TMDB lead to their request.
+            StringAssert.Contains(html, "The Matrix Reloaded");
+            StringAssert.Contains(html, "/Discover/movies/604");
         }
 
         [TestMethod]
@@ -371,6 +382,7 @@ namespace Jularr.Backend.Tests
                     "/3/trending/tv/week" or "/3/tv/top_rated" or "/3/discover/tv" or "/3/search/tv" => "{\"results\":[" + Show + "]}",
                     "/3/movie/603" => Movie[..^1] + ",\"external_ids\":{\"imdb_id\":\"tt0133093\"},\"belongs_to_collection\":{\"id\":2344,\"name\":\"The Matrix Collection\"}," + MovieDetails + "}",
                     "/3/tv/1399" => Show[..^1] + ",\"backdrop_path\":\"/show-backdrop.jpg\",\"external_ids\":{\"tvdb_id\":81189},\"seasons\":[]}",
+                    "/3/movie/603/recommendations" => """{"results":[{"id":604,"title":"The Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","poster_path":"/reloaded.jpg"}]}""",
                     "/3/movie/604" => """{"id":604,"title":"The Matrix Reloaded","original_title":"The Matrix Reloaded","release_date":"2003-05-15","overview":"The fight goes on.","poster_path":"/reloaded.jpg","external_ids":{"imdb_id":"tt0234215"}}""",
                     _ => null
                 };

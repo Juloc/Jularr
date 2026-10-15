@@ -63,6 +63,14 @@ namespace Jularr.Integrations.Logic.Tmdb
                 : [];
         }
 
+        public async Task<IReadOnlyList<TmdbSearchResult>> ReadRecommendationsAsync(TmdbConnection connection, TmdbMediaKind kind, int id, CancellationToken ct)
+        {
+            using var document = await ReadAsync(connection, (kind == TmdbMediaKind.Movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture) + "/recommendations", [], ct);
+            return document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array
+                ? results.EnumerateArray().Select(item => ParseResult(kind, item)).OfType<TmdbSearchResult>().Take(20).ToArray()
+                : [];
+        }
+
         public async Task<TmdbWork> ReadWorkAsync(TmdbConnection connection, TmdbMediaKind kind, int id, CancellationToken ct)
         {
             var path = (kind == TmdbMediaKind.Movie ? "movie/" : "tv/") + id.ToString(CultureInfo.InvariantCulture);

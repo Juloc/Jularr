@@ -6,8 +6,10 @@ using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.User.Request.V1;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Data.User.Collection.V1;
+using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Backend.Service.User.Collection.V1;
+using Jularr.Backend.Service.User.Discover.V1;
 using Jularr.Backend.Service.User.Request.V1;
 using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Frontend.Framework;
@@ -19,9 +21,11 @@ namespace Jularr.Frontend.Pages.User.Details
 {
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
         ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
-        RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits, IAntiforgery antiforgery,
-        UiText texts) : JularrPage
+        RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, ReadWorkCreditsV1 readCredits,
+        ReadWorkRecommendationsV1 readRecommendations, ReadFranchiseWorksV1 readFranchise, IAntiforgery antiforgery, FrontendAssets assets, UiText texts) : JularrPage
     {
+        private IReadOnlyList<WorkCardV1> _related = [];
+        private IReadOnlyList<DiscoverItemV1> _recommendations = [];
         private IReadOnlyList<WorkCreditV1> _credits = [];
         private IReadOnlyList<WorkSeasonV1> _seasons = [];
         private IReadOnlyList<WorkEpisodeV1> _episodes = [];
@@ -48,6 +52,11 @@ namespace Jularr.Frontend.Pages.User.Details
             page.Title("details.title", _work?.CanonicalTitle);
             page.Navigation("nav.home");
             page.Asset("Pages/User/Details/Details.entry.scss");
+            if (_recommendations.Count > 0 || _related.Count > 0)
+            {
+                page.Asset("Framework/Components/MediaShelf.entry.ts");
+                page.Asset("Framework/Components/MediaCard.entry.ts");
+            }
 
             // Persisted media identity.
             if (_work is { } work)
@@ -78,7 +87,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 }
 
                 if (creators.Count > 0) page.Content.Add(new P([.. creators]).Class("details-creators"));
-                if (work.FranchiseId is { } franchiseId && work.FranchiseName is { } franchiseName)
+                if (work.FranchiseId is { } franchiseId && work.FranchiseName is { } franchiseName && _related.Count == 0)
                 {
                     page.Content.Add(new P([new Text("details.franchise"), new ValueText(" "),
                         new A(new ValueText(franchiseName)).Attribute("href", "/Franchise/" + franchiseId.ToString(CultureInfo.InvariantCulture))]).Class("details-franchise"));
@@ -178,6 +187,16 @@ namespace Jularr.Frontend.Pages.User.Details
                     page.Content.Add(new UiSection("details.cast", [new Div([.. _credits.Select(Person)]).Class("details-people")]));
                 }
 
+                // The other titles of its film series, then similar titles leading to their Work or their request.
+                if (work.FranchiseId is { } series)
+                {
+                    page.Content.Add(new MediaShelf(assets, "details.related", "/Franchise/" + series.ToString(CultureInfo.InvariantCulture), [.. _related.Select(item => (IUiComponent)new MediaCard(assets,
+                        item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture),
+                        MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)).Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]));
+                }
+
+                page.Content.Add(new MediaShelf(assets, "details.recommendations", null, [.. _recommendations.Select(Recommendation)]));
+
                 // Hand-picked collections take or give back this Work.
                 if (_collections.Count > 0)
                 {
@@ -211,6 +230,16 @@ namespace Jularr.Frontend.Pages.User.Details
                 rows.Count > 0 ? new Dl([.. rows]).Class("details-languages") : new Span(),
                 new Framework.Details(new Summary(new Text("common.seeAll")), Versions(items)).Class("details-versions"))
                 .Class("details-languages-card");
+        }
+
+        // A known title also goes on the watchlist from its card.
+        private IUiComponent Recommendation(DiscoverItemV1 item)
+        {
+            var card = new MediaCard(assets, item.Title, item.WorkId is { } known ? "/Details/" + known.ToString(CultureInfo.InvariantCulture)
+                    : "/Discover/" + DiscoverTypes.For(item.MediaTypeId).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture),
+                item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId);
+            if (item.WorkId is { } workId) card.Bookmark(new MediaBookmark(assets, workId));
+            return card;
         }
 
         private static IUiComponent Person(WorkCreditV1 credit) => new Div(
@@ -337,6 +366,20 @@ namespace Jularr.Frontend.Pages.User.Details
 
             _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
             _credits = await readCredits.ExecuteAsync<BaseDataList<WorkCreditV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+            if (_work.FranchiseId is { } franchiseId)
+            {
+                _related = [.. (await readFranchise.ExecuteAsync<PageResult<WorkCardV1>>(new FranchiseWorksParametersV1(franchiseId, pageSize: 20), HttpContext.RequestAborted)).Items
+                    .Where(item => item.Id != Id)];
+            }
+
+            try
+            {
+                _recommendations = await readRecommendations.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new WorkParametersV1(Id), default(NoData), HttpContext.RequestAborted);
+            }
+            catch (ServiceUnavailableException)
+            {
+                // The Work stays complete without its provider's suggestions.
+            }
             if (texts.CanCollect())
             {
                 _collections = await readCollections.ExecuteAsync<BaseDataList<WorkCollectionV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);

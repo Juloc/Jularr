@@ -65,42 +65,9 @@ namespace Jularr.Backend.Service.User.Media.V1
                     work."CanonicalTitle",
                     (entry."WorkId" IS NOT NULL) AS "IsWatchlisted",
                     work."ReleaseYear"::integer AS "ReleaseYear",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Overview'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "Overview",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Poster'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "PosterUrl",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Backdrop'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "BackdropUrl",
+                    facts."Overview",
+                    facts."PosterUrl",
+                    facts."BackdropUrl",
                     (
                         SELECT
                             'https://app.plex.tv/desktop/#!/server/' || provider."ExternalId" || '/details?key=%2Flibrary%2Fmetadata%2F' || plex."Value"
@@ -179,46 +146,26 @@ namespace Jularr.Backend.Service.User.Media.V1
                         LIMIT 1
                     ) AS "RequestStatusTypeId",
                     work."RuntimeMinutes"::integer AS "RuntimeMinutes",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Genres'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "Genres",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Trailer'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "TrailerKey",
-                    (
-                        SELECT
-                            fact."Value"
-                        FROM
-                            "WorkMetadataFacts" AS fact
-                        WHERE
-                            fact."WorkId" = work."Id"
-                            AND fact."FactKey" = 'Studio'
-                        ORDER BY
-                            fact."IsManual" DESC
-                        LIMIT 1
-                    ) AS "Studio"
+                    facts."Genres",
+                    facts."TrailerKey",
+                    facts."Studio"
                 FROM
                     "ProfileWorks" AS visible
                     JOIN "Works" AS work ON work."Id" = visible."WorkId"
                     LEFT JOIN "WatchlistEntries" AS entry ON entry."WorkId" = work."Id" AND entry."ProfileId" = @ProfileId
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Overview'))[1] AS "Overview",
+                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Poster'))[1] AS "PosterUrl",
+                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Backdrop'))[1] AS "BackdropUrl",
+                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Genres'))[1] AS "Genres",
+                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Trailer'))[1] AS "TrailerKey",
+                            (array_agg(fact."Value" ORDER BY fact."IsManual" DESC) FILTER (WHERE fact."FactKey" = 'Studio'))[1] AS "Studio"
+                        FROM
+                            "WorkMetadataFacts" AS fact
+                        WHERE
+                            fact."WorkId" = work."Id"
+                    ) AS facts ON TRUE
                     LEFT JOIN "InstanceModules" AS module ON module."Key" = 'Franchises' AND module."IsEnabled"
                     LEFT JOIN "Franchises" AS franchise ON franchise."Id" = work."FranchiseId" AND module."Key" IS NOT NULL
                 WHERE
