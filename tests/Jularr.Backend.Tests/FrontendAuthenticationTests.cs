@@ -265,13 +265,14 @@ namespace Jularr.Backend.Tests
             await texts.InitializeAsync(http);
 
             // Validate through the backend field.
-            var data = new RegisterDataV1("new@example.test", "New", "short", 1);
+            var data = new RegisterDataV1("new@example.test", "New", "short", "short", 1);
             var validation = Assert.ThrowsExactly<DataValidationException>(data.Validate);
             Assert.AreEqual("Password", validation.Field);
             Assert.AreEqual("too_short", validation.Code);
             new LoginDataV1("a@example.test", "short").Validate();
-            new RegisterDataV1("new@example.test", "New", "  valid passphrase  ", 1).Validate();
-            Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new@example.test", "New", new string('x', 129), 1).Validate());
+            new RegisterDataV1("new@example.test", "New", "  valid passphrase  ", "  valid passphrase  ", 1).Validate();
+            Assert.AreEqual("password_mismatch", Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new@example.test", "New", "valid passphrase one", "valid passphrase two", 1).Validate()).Code);
+            Assert.ThrowsExactly<DataValidationException>(() => new RegisterDataV1("new@example.test", "New", new string('x', 129), new string('x', 129), 1).Validate());
 
             // The component consumes shared metadata/errors.
             var form = new Form<RegisterDataV1>(fields => fields.Password(item => item.Password, "account.field.password", "new-password"),

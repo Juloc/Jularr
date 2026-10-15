@@ -100,7 +100,7 @@ namespace Jularr.Backend.Service.Public.Authentication.V1
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Create;
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<RegisterResultV1>()];
-        protected override ModuleRequirement GetInstanceModules(AuthenticationParametersV1 parameters) => ModuleRequirement.None;
+        protected override ModuleRequirement GetInstanceModules(AuthenticationParametersV1 parameters) => ModuleRequirement.All("Registration");
 
         protected override async Task<IServiceOutput> OnCreate()
         {

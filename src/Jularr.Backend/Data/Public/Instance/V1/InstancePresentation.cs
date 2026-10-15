@@ -9,8 +9,9 @@ namespace Jularr.Backend.Data.Public.Instance.V1
 
     public sealed class InstancePresentationDetailsV1 : BaseResponse
     {
-        public InstancePresentationDetailsV1(string name, long uiLocaleId, string? publicUrl, bool pairsDevices)
+        public InstancePresentationDetailsV1(string name, long uiLocaleId, string? publicUrl, bool pairsDevices, bool allowsRegistration)
         {
+            AllowsRegistration = allowsRegistration;
             Name = name;
             UiLocaleId = uiLocaleId;
             PublicUrl = publicUrl;
@@ -29,5 +30,9 @@ namespace Jularr.Backend.Data.Public.Instance.V1
         // A TV without an account may ask for a pairing code.
         [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.IsEnabled))]
         public bool PairsDevices { get; }
+
+        // A visitor may ask for an account.
+        [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.IsEnabled))]
+        public bool AllowsRegistration { get; }
     }
 }

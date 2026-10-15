@@ -29,7 +29,16 @@ namespace Jularr.Backend.Service.Public.Instance.V1
                         WHERE
                             module."Key" = 'Devices'
                             AND module."IsEnabled"
-                    ) AS "PairsDevices"
+                    ) AS "PairsDevices",
+                    EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "InstanceModules" AS module
+                        WHERE
+                            module."Key" = 'Registration'
+                            AND module."IsEnabled"
+                    ) AS "AllowsRegistration"
                 FROM
                     "InstanceSettings" AS settings
                 WHERE

@@ -180,7 +180,12 @@ namespace Jularr.Backend.Tests
         {
             await using var host = await Host.CreateAsync();
             await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
-            var request = new RegisterDataV1("new@example.test", "New", Password, 1);
+            var request = new RegisterDataV1("new@example.test", "New", Password, Password, 1);
+
+            // Only with the Registration module.
+            using var closed = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", request);
+            Assert.AreEqual(HttpStatusCode.Forbidden, closed.StatusCode);
+            await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = TRUE WHERE \"Key\" = 'Registration'");
 
             using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", request);
             Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
@@ -192,12 +197,12 @@ namespace Jularr.Backend.Tests
 
             using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1(request.Email, Password));
             Assert.AreEqual(HttpStatusCode.Unauthorized, login.StatusCode);
-            using var duplicate = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("NEW@example.test", "Replacement", "different-password", 1));
+            using var duplicate = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("NEW@example.test", "Replacement", "different-password", "different-password", 1));
             Assert.AreEqual(HttpStatusCode.OK, duplicate.StatusCode);
             Assert.AreEqual(hash, await host.ScalarAsync("SELECT \"PasswordHash\" FROM \"AccountPasswords\" AS password JOIN \"Accounts\" AS account ON account.\"Id\" = password.\"AccountId\" WHERE account.\"Email\" = 'new@example.test'"));
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountSessions\""));
 
-            using var invalidLocale = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("rollback@example.test", "Rollback", Password, 999));
+            using var invalidLocale = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("rollback@example.test", "Rollback", Password, Password, 999));
             Assert.AreEqual(HttpStatusCode.BadRequest, invalidLocale.StatusCode);
             Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\" WHERE \"Email\" = 'rollback@example.test'"));
         }
