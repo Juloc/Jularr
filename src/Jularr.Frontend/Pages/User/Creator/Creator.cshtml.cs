@@ -3,12 +3,13 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Creator
 {
     // An author's or artist's titles the profile may see.
-    public sealed class CreatorModel(ReadCreatorWorksV1 read) : JularrPage
+    public sealed class CreatorModel(ReadCreatorWorksV1 read, FrontendAssets assets, IAntiforgery antiforgery) : JularrPage
     {
         private PageResult<WorkCardV1>? _works;
 
@@ -26,9 +27,11 @@ namespace Jularr.Frontend.Pages.User.Creator
             if (_works is { } works && Name is { } name)
             {
                 page.Content.Add(new H2(new ValueText(name)));
+                var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
                 page.Content.Add(works.Items.Count > 0
-                    ? new Div([.. works.Items.Select(item => new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))]).Class("media-grid")
+                    ? new Div([.. works.Items.Select(item => new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                        item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))
+                        .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid")
                     : new P(new Text("creator.empty")));
                 if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(name, works.Page - 1)));
                 if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(name, works.Page + 1)));

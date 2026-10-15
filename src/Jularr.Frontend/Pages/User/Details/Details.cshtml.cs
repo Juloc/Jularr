@@ -316,9 +316,10 @@ namespace Jularr.Frontend.Pages.User.Details
             return RedirectToPage("/User/Details/Details", new { id = Id });
         }
 
-        public async Task<IActionResult> OnPostAsync([BindRequired] bool isWatchlisted)
+        public async Task<IActionResult> OnPostAsync([BindRequired] bool isWatchlisted, string? returnUrl = null)
         {
             await update.ExecuteAsync<UpdateResult>(new WorkParametersV1(Id), new UpdateWatchlistDataV1(isWatchlisted), HttpContext.RequestAborted);
+            if (Url.IsLocalUrl(returnUrl)) return LocalRedirect(returnUrl);
             return RedirectToPage("/User/Details/Details", new { id = Id });
         }
 

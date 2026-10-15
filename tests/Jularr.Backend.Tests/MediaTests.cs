@@ -256,7 +256,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, watchlist.StatusCode, await watchlist.Content.ReadAsStringAsync());
             var watchlistHtml = await watchlist.Content.ReadAsStringAsync();
             StringAssert.Contains(watchlistHtml, "&lt;edited&gt;");
-            StringAssert.Contains(watchlistHtml, "state-chip--notrequested");
+            StringAssert.Contains(watchlistHtml, "media-card__bookmark");
+            StringAssert.Contains(watchlistHtml, "aria-label=\"Remove from watchlist\"");
+            Assert.IsFalse(watchlistHtml.Contains("state-chip--notrequested", StringComparison.Ordinal));
+            Assert.IsFalse(watchlistHtml.Contains("media-availability-badge--profileaudio", StringComparison.Ordinal));
 
             // The list narrows to a media type and keeps its order.
             var type = (MediaType)(short)(await host.ScalarAsync("SELECT \"MediaTypeId\" FROM \"Works\""))!;

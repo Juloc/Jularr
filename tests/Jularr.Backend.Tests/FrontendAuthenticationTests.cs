@@ -41,7 +41,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task MediaCard_ResumeAndLanguages_RenderEncodedAccessibleContext()
+        public async Task MediaCard_ProgressAndStates_RenderAccessibleActions()
         {
             await using var host = await Host.CreateAsync(razor: true);
             using var scope = host.Services.CreateScope();
@@ -51,72 +51,99 @@ namespace Jularr.Backend.Tests
             await texts.InitializeAsync(http);
             var assets = scope.ServiceProvider.GetRequiredService<FrontendAssets>();
 
-            // Standalone status stays noninteractive.
-            var availability = new MediaAvailability(assets, MediaAvailabilityState.Partial, 18, 24);
-            using var symbolWriter = new StringWriter();
-            availability.WriteTo(symbolWriter, HtmlEncoder.Default, texts);
-            var symbolHtml = symbolWriter.ToString();
-            StringAssert.Contains(symbolHtml, "role=\"img\" aria-label=\"");
-            StringAssert.Contains(symbolHtml, "stroke-dasharray=\"75 100\"");
-            Assert.IsFalse(symbolHtml.Contains("icon-info", StringComparison.Ordinal));
-            Assert.IsFalse(symbolHtml.Contains("<a", StringComparison.Ordinal));
-            Assert.IsFalse(symbolHtml.Contains("<details", StringComparison.Ordinal));
-
-            // Preference and fallback independently.
-            var card = new MediaCard("<Title>", "/Details/1", null, null, "media.state.InProgress", "media.continue", "/Player/2")
-                .SeriesStatus("media.series.Continuing").Availability(availability)
-                .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 3, null, 6)
-                .Genres(new ValueText("<Genre>"), new ValueText("Second"), new ValueText("Third"), new ValueText("Fourth")).Continue(30000, 90000);
+            // Standalone symbol stays reusable.
+            var availability = new MediaAvailability(assets, MediaAvailabilityState.PartialOtherAudio, 12, 24);
             using var writer = new StringWriter();
+            availability.WriteTo(writer, HtmlEncoder.Default, texts);
+            var symbol = writer.ToString();
+            StringAssert.Contains(symbol, "stroke-dasharray=\"50 100\"");
+            Assert.IsFalse(symbol.Contains("<a", StringComparison.Ordinal));
+
+            // Native actions, encoded text.
+            writer.GetStringBuilder().Clear();
+            var card = new MediaCard(assets, "<Title>", "/Details/1", null, "2026", "media.state.InProgress", "media.continue", "/Player/2")
+                .Availability(availability).Continue(30000, 90000).Trailer("k4xGqY5IDBE");
             card.WriteTo(writer, HtmlEncoder.Default, texts);
             var html = writer.ToString();
             StringAssert.Contains(html, "&lt;Title&gt;");
-            StringAssert.Contains(html, "class=\"media-card__series\"><span class=\"tag\">" + texts["media.series.Continuing"]);
-            StringAssert.Contains(html, "stroke-dasharray=\"75 100\"");
-            StringAssert.Contains(html, "#icon-flag-de");
-            StringAssert.Contains(html, "aria-label=\"" + string.Format(CultureInfo.CurrentCulture, texts["media.languagePreferred"], texts["media.dubs"], texts["design.languageGerman"]) + "\"");
-            StringAssert.Contains(html, "aria-label=\"" + string.Format(CultureInfo.CurrentCulture, texts["media.languageCount"], texts["media.subs"], 6) + "\"");
-            StringAssert.Contains(html, "&lt;Genre&gt;");
-            Assert.IsFalse(html.Contains("Fourth", StringComparison.Ordinal));
-            StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\" aria-label=\"" + texts["media.progress"] + "\"");
-            StringAssert.Contains(html, string.Format(CultureInfo.CurrentCulture, texts["media.minutesLeft"], 1));
-            StringAssert.Contains(html, "class=\"media-card__action-area\"><a class=\"button button--primary media-card__action\" href=\"/Player/2\"");
-            Assert.IsFalse(html.Contains("class=\"media-card__status\"", StringComparison.Ordinal));
+            StringAssert.Contains(html, "media-availability-badge--partialotheraudio");
+            StringAssert.Contains(html, "href=\"/Player/2\"");
+            StringAssert.Contains(html, texts["media.details"]);
+            StringAssert.Contains(html, "<progress max=\"90000\" value=\"30000\"");
+            StringAssert.Contains(html, "data-trailer-label=\"" + texts["media.preview.playTrailer"] + "\"");
+            foreach (var omitted in new[] { "media-card__series", "media-card__genres", "media-card__languages", "media-card__remaining", "<iframe", "disabled=\"disabled\"" })
+                Assert.IsFalse(html.Contains(omitted, StringComparison.Ordinal), omitted);
+            Assert.ThrowsExactly<ArgumentException>(() => card.Trailer("../../bad"));
 
-            // Unknown duration has no percentage.
+            // Progression has no invented duration.
             writer.GetStringBuilder().Clear();
-            new MediaCard("Book", "/Details/1", null, null, "media.state.InProgress").Continue(30000, null).WriteTo(writer, HtmlEncoder.Default, texts);
+            new MediaCard(assets, "Book", "/Details/1", null, null, "media.state.InProgress").Continue(30000, null).WriteTo(writer, HtmlEncoder.Default, texts);
             Assert.IsFalse(writer.ToString().Contains("<progress", StringComparison.Ordinal));
-
-            // Reading shows the read share.
             writer.GetStringBuilder().Clear();
-            new MediaCard("Book", "/Details/1", null, null, "media.state.InProgress").ContinueReading(0.455m).WriteTo(writer, HtmlEncoder.Default, texts);
-            StringAssert.Contains(writer.ToString(), "<progress max=\"100\" value=\"46\" aria-label=\"" + texts["media.readProgress"] + "\"");
-            StringAssert.Contains(writer.ToString(), string.Format(CultureInfo.CurrentCulture, texts["media.percentRead"], 46));
+            new MediaCard(assets, "Book", "/Details/1", null, null, "media.state.InProgress").ContinueReading(0.455m).WriteTo(writer, HtmlEncoder.Default, texts);
+            StringAssert.Contains(writer.ToString(), "<progress max=\"100\" value=\"46\"");
+            Assert.IsFalse(writer.ToString().Contains("media-card__remaining", StringComparison.Ordinal));
 
-            // Both tags, ordinary fallback links.
+            // Preview keeps real fallback links.
             writer.GetStringBuilder().Clear();
             card.Preview("preview-test").WriteTo(writer, HtmlEncoder.Default, texts);
-            html = writer.ToString();
-            Assert.AreEqual(2, Regex.Matches(html, "data-preview-open=\"preview-test\"").Count);
-            Assert.AreEqual(2, Regex.Matches(html, "aria-haspopup=\"dialog\"").Count);
-            Assert.IsFalse(Regex.IsMatch(html, "<a[^>]*>[^<]*<a"));
-
-            // Cards never mutate shared symbols.
-            symbolWriter.GetStringBuilder().Clear();
-            availability.WriteTo(symbolWriter, HtmlEncoder.Default, texts);
-            Assert.AreEqual(symbolHtml, symbolWriter.ToString());
-
-            // Inert artwork, no embedded player.
+            Assert.AreEqual(2, Regex.Matches(writer.ToString(), "data-preview-open=\"preview-test\"").Count);
             writer.GetStringBuilder().Clear();
-            new MediaPreview("preview-test", assets, "<Title>", null, null, null, "<Overview>")
-                .Trailer("ayi6VfCKBcA").WriteTo(writer, HtmlEncoder.Default, texts);
+            availability.WriteTo(writer, HtmlEncoder.Default, texts);
+            Assert.AreEqual(symbol, writer.ToString());
+            writer.GetStringBuilder().Clear();
+            new MediaAvailability(assets, MediaAvailabilityState.Missing).Badge("/Details/1").WriteTo(writer, HtmlEncoder.Default, texts);
+            Assert.AreEqual("", writer.ToString());
+
+            // Counts and language remain distinct.
+            foreach (var state in new[] { MediaAvailabilityState.ProfileAudio, MediaAvailabilityState.OtherAudio, MediaAvailabilityState.Partial, MediaAvailabilityState.PartialOtherAudio })
+            {
+                writer.GetStringBuilder().Clear();
+                new MediaAvailability(assets, state, 12, 24).Badge("/Details/1").WriteTo(writer, HtmlEncoder.Default, texts);
+                var label = string.Format(CultureInfo.CurrentCulture, texts["media.availability." + state], 12, 24);
+                StringAssert.Contains(writer.ToString(), HtmlEncoder.Default.Encode(label));
+            }
+
+            // Inert dialog until user action.
+            writer.GetStringBuilder().Clear();
+            new MediaPreview("preview-test", assets, "<Title>", null, null, null, "<Overview>").Trailer("ayi6VfCKBcA").WriteTo(writer, HtmlEncoder.Default, texts);
+            StringAssert.Contains(writer.ToString(), "&lt;Overview&gt;");
+            Assert.IsFalse(writer.ToString().Contains("<iframe", StringComparison.Ordinal));
+
+            // Bookmark uses the canonical POST.
+            writer.GetStringBuilder().Clear();
+            new MediaBookmark(assets, 1, false, "/Library?type=movies", "test-token").WriteTo(writer, HtmlEncoder.Default, texts);
             html = writer.ToString();
-            StringAssert.Contains(html, "<template id=\"preview-test\">");
-            StringAssert.Contains(html, "&lt;Overview&gt;");
-            StringAssert.Contains(html, "data-trailer-id=\"ayi6VfCKBcA\"");
+            StringAssert.Contains(html, "method=\"post\"");
+            StringAssert.Contains(html, "name=\"__RequestVerificationToken\" value=\"test-token\"");
+            StringAssert.Contains(html, "name=\"IsWatchlisted\" value=\"True\"");
+            StringAssert.Contains(html, "type=\"submit\"");
+            StringAssert.Contains(html, "returnUrl=%2FLibrary%3Ftype%3Dmovies");
+            writer.GetStringBuilder().Clear();
+            new MediaBookmark(assets, 1).WriteTo(writer, HtmlEncoder.Default, texts);
+            StringAssert.Contains(writer.ToString(), "href=\"/Details/1\"");
+            Assert.IsFalse(writer.ToString().Contains("<form", StringComparison.Ordinal));
+        }
+
+        [TestMethod]
+        [DataRow("Development", HttpStatusCode.OK)]
+        [DataRow("Production", HttpStatusCode.NotFound)]
+        public async Task ApprovedCards_EnvironmentGate_ShowsEightExplicitSamples(string environment, HttpStatusCode expected)
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            host.Services.GetRequiredService<IHostEnvironment>().EnvironmentName = environment;
+            using var response = await host.SendAsync(HttpMethod.Get, "/Design?pane=cards");
+            Assert.AreEqual(expected, response.StatusCode);
+            if (expected != HttpStatusCode.OK) return;
+
+            var html = await response.Content.ReadAsStringAsync();
+            Assert.AreEqual(8, Regex.Matches(html, "data-media-card=\"true\"").Count);
+            Assert.AreEqual(8, Regex.Matches(html, "<template id=\"card-preview-").Count);
+            Assert.AreEqual(7, Regex.Matches(html, "class=\"media-availability-badge media-availability-badge--").Count);
+            foreach (var state in new[] { "profileaudio", "otheraudio", "partial", "partialotheraudio", "downloading", "searching", "requested" })
+                StringAssert.Contains(html, "media-availability-badge--" + state);
             Assert.IsFalse(html.Contains("<iframe", StringComparison.Ordinal));
-            Assert.ThrowsExactly<ArgumentException>(() => new MediaPreview("test", assets, "Title", null, null, null, null).Trailer("../../bad"));
+            Assert.IsFalse(html.Contains("media-card__languages", StringComparison.Ordinal));
         }
 
         [TestMethod]
@@ -134,6 +161,34 @@ namespace Jularr.Backend.Tests
             using var fetched = await host.Client.SendAsync(fetch);
             Assert.AreEqual(HttpStatusCode.Unauthorized, fetched.StatusCode);
             Assert.IsFalse(fetched.Headers.Contains("Set-Cookie"));
+        }
+
+        [TestMethod]
+        public async Task CardBookmark_Post_RequiresAntiforgeryAndReturnsOnlyLocally()
+        {
+            await using var host = await Host.CreateAsync(razor: true, media: true);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Works\" (\"Id\", \"MediaTypeId\", \"CanonicalTitle\") VALUES (101, 1, 'Bookmark test')");
+            using var loginPage = await host.SendAsync(HttpMethod.Get, "/Account/Login");
+            using var login = await host.SendAsync(HttpMethod.Post, "/Account/Login", Form(await loginPage.Content.ReadAsStringAsync(), ("Email", "a@example.test"), ("Password", "test-password-123")));
+            Assert.AreEqual(HttpStatusCode.Redirect, login.StatusCode);
+
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/101");
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode);
+            var html = await details.Content.ReadAsStringAsync();
+            using var withoutToken = new HttpRequestMessage(HttpMethod.Post, "/Details/101")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["IsWatchlisted"] = "true" })
+            };
+            withoutToken.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            using var missingToken = await host.Client.SendAsync(withoutToken);
+            Assert.AreEqual(HttpStatusCode.BadRequest, missingToken.StatusCode);
+
+            using var added = await host.SendAsync(HttpMethod.Post, "/Details/101?returnUrl=%2FLibrary%3Ftype%3Dmovies", Form(html, ("IsWatchlisted", "true")));
+            Assert.AreEqual(HttpStatusCode.Redirect, added.StatusCode);
+            Assert.AreEqual("/Library?type=movies", added.Headers.Location!.OriginalString);
+            using var removed = await host.SendAsync(HttpMethod.Post, "/Details/101?returnUrl=https%3A%2F%2Fforeign.example.test", Form(html, ("IsWatchlisted", "false")));
+            Assert.AreEqual(HttpStatusCode.Redirect, removed.StatusCode);
+            Assert.AreEqual("/Details/101", removed.Headers.Location!.OriginalString);
         }
 
         [TestMethod]
@@ -171,12 +226,11 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(html, "class=\"navigation-tabs\"");
             StringAssert.Contains(html, "your-name-poster-");
             StringAssert.Contains(html, "suzume-poster-");
-            StringAssert.Contains(html, "media-card--continue");
-            StringAssert.Contains(html, "media-card--library");
-            StringAssert.Contains(html, "class=\"button button--primary media-card__action\" type=\"button\" disabled=\"disabled\"");
+            StringAssert.Contains(html, "data-media-card=\"true\"");
+            StringAssert.Contains(html, "media-card__actions");
             StringAssert.Contains(html, "data-shelf-direction=\"next\"");
             StringAssert.Contains(html, "class=\"media-shelf__items\" tabindex=\"0\" role=\"region\"");
-            foreach (var state in Enum.GetValues<MediaAvailabilityState>())
+            foreach (var state in new[] { MediaAvailabilityState.Available, MediaAvailabilityState.Partial, MediaAvailabilityState.Missing, MediaAvailabilityState.Downloading, MediaAvailabilityState.Searching })
                 StringAssert.Contains(html, "media-availability--" + state.ToString().ToLowerInvariant());
             Assert.AreEqual(1, Regex.Matches(html, "<dialog\\b").Count);
             Assert.AreEqual(9, Regex.Matches(html, "<template\\b").Count);

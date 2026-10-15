@@ -9,11 +9,12 @@ using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Backend.Service.User.Library.V1;
 using Jularr.Backend.Service.User.Profile.V1;
 using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Library
 {
-    public sealed class LibraryModel(ReadAuthenticationV1 authentication, ReadLibraryV1 read, ReadProfileMediaV1 readMedia, UiText texts) : JularrPage
+    public sealed class LibraryModel(ReadAuthenticationV1 authentication, ReadLibraryV1 read, ReadProfileMediaV1 readMedia, UiText texts, FrontendAssets assets, IAntiforgery antiforgery) : JularrPage
     {
         private PageResult<LibraryItemV1>? _items;
         private IReadOnlyList<ProfileMediaV1> _media = [];
@@ -56,8 +57,10 @@ namespace Jularr.Frontend.Pages.User.Library
             }
             else
             {
-                page.Content.Add(new Div([.. items.Items.Select(item => new MediaCard(item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]).Class("media-grid"));
+                var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+                page.Content.Add(new Div([.. items.Items.Select(item => new MediaCard(assets, item.Title, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId)
+                    .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid"));
             }
 
             // A full page offers the next one.

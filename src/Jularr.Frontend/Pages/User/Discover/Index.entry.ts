@@ -1,6 +1,8 @@
 import { initializeShelves } from '../../../Framework/Components/MediaShelf';
+import { initializeCards } from '../../../Framework/Components/MediaCard';
 
 initializeShelves();
+initializeCards();
 
 const searchForm = document.querySelector<HTMLFormElement>('.app-header .search-box');
 const searchInput = searchForm?.querySelector<HTMLInputElement>('input[type="search"]');

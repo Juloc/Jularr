@@ -54,6 +54,7 @@ function discover(landing = false) {
     runInNewContext(script, {
         exports: {},
         require: name => {
+            if (name === '../../../Framework/Components/MediaCard') return { initializeCards() {} };
             assert.equal(name, '../../../Framework/Components/MediaShelf');
             return { initializeShelves() {} };
         },

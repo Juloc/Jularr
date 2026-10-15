@@ -249,6 +249,11 @@ namespace Jularr.Frontend.Framework
             var label = value is null ? (IUiComponent)new Text(key)
                 : new Span(new Text(key), valueHidden ? new Span(new ValueText(" " + value)).Class("visually-hidden") : new Span(new ValueText(value)));
             var button = new Button(label).Primary();
+            return Submit(button);
+        }
+
+        public Form<TData> Submit(Button button)
+        {
             if (_action is null) button.Disabled();
             else button.Submit();
 

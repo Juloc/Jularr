@@ -3,12 +3,13 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.User.Media.V1;
 using Jularr.Backend.Service.User.Media.V1;
 using Jularr.Frontend.Framework;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Franchise
 {
     // A film series' titles the profile may see.
-    public sealed class FranchiseModel(ReadFranchiseV1 read, ReadFranchiseWorksV1 readWorks) : JularrPage
+    public sealed class FranchiseModel(ReadFranchiseV1 read, ReadFranchiseWorksV1 readWorks, FrontendAssets assets, IAntiforgery antiforgery) : JularrPage
     {
         private FranchiseV1? _franchise;
         private PageResult<WorkCardV1>? _works;
@@ -27,8 +28,10 @@ namespace Jularr.Frontend.Pages.User.Franchise
             if (_franchise is { } franchise && _works is { } works)
             {
                 page.Content.Add(new H2(new ValueText(franchise.Name)));
-                page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
-                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))]).Class("media-grid"));
+                var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+                page.Content.Add(new Div([.. works.Items.Select(item => new MediaCard(assets, item.CanonicalTitle, "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl,
+                    item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId))
+                    .Bookmark(new MediaBookmark(assets, item.Id, item.IsWatchlisted, Request.Path + Request.QueryString, csrf)))]).Class("media-grid"));
                 if (works.Page > 1) page.Content.Add(new A(new Text("common.previous")).Attribute("href", Address(works.Page - 1)));
                 if (works.Items.Count == works.PageSize) page.Content.Add(new A(new Text("common.next")).Attribute("href", Address(works.Page + 1)));
             }

@@ -24,6 +24,7 @@ namespace Jularr.Frontend.Pages.Development.Design
             page.Asset("Pages/Development/Design/Design.entry.scss");
             page.Asset("Framework/Components/MediaShelf.entry.ts");
             page.Asset("Framework/Components/MediaPreview.entry.ts");
+            page.Asset("Framework/Components/MediaCard.entry.ts");
             page.Asset("Modules/Appearance/appearance.entry.scss");
 
             // Shared appearance controls.
@@ -34,8 +35,14 @@ namespace Jularr.Frontend.Pages.Development.Design
             }));
             page.Content.Add(new NavigationTabs([
                 new("design.controls", "/Design#controls", false), new("design.forms", "/Design#forms", false),
-                new("design.media", "/Design#media", false), new("design.player", "/Design#player", false)
+                new("design.media", "/Design#media", false), new("design.player", "/Design#player", false), new("design.cards.title", "/Design?pane=cards", _pane == "cards")
             ], "nav.tabs"));
+
+            if (_pane == "cards")
+            {
+                DefineCards(page);
+                return;
+            }
 
             // Live brand and artwork.
             var originalArtwork = new (string File, string Key, int Width, int Height)[]
@@ -125,21 +132,18 @@ namespace Jularr.Frontend.Pages.Development.Design
                 new MediaHero(texts["design.exampleTitle"], null, texts["design.exampleContext"], texts["design.exampleOverview"], "media.details", "/Design#media"),
                 new P(new Text("design.mediaNotice")),
                 new MediaShelf(assets, "discover.continueWatching", null, [
-                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.InProgress", "media.continue")
+                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.InProgress", "media.continue")
                         .Continue(3000000, 6360000),
-                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.InProgress", "media.continue")
+                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.InProgress", "media.continue")
                         .Continue(900000, 7320000)
                 ]),
                 new MediaShelf(assets, "design.mediaLibrary", null, [
-                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.Available")
+                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.Available")
                         .Preview("preview-your-name-library")
-                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available))
-                        .Genres(new Text("design.genreDrama"), new Text("design.genreRomance"))
-                        .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 3, new MediaLanguage("flag-de", "design.languageGerman"), 8),
-                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Available")
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available)),
+                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Available")
                         .Preview("preview-suzume-library")
-                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available))
-                        .Genres(new Text("design.tagGenre"), new Text("design.genreAdventure")).Languages(assets, null, 2, null, 6),
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Available)),
                     SeriesExample("Continuing", MediaAvailabilityState.Partial, 18, 24),
                     SeriesExample("Releasing", MediaAvailabilityState.Searching),
                     SeriesExample("Ended", MediaAvailabilityState.Available),
@@ -147,12 +151,12 @@ namespace Jularr.Frontend.Pages.Development.Design
                     SeriesExample("Announced", MediaAvailabilityState.Downloading)
                 ]),
                 new MediaShelf(assets, "design.mediaDiscover", null, [
-                    new MediaCard("Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested", "request.create")
+                    new MediaCard(assets, "Your Name.", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested", "request.create")
                         .Preview("preview-your-name-discover")
-                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Missing)).Genres(new Text("design.genreDrama")),
-                    new MediaCard("Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Requested")
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Missing)),
+                    new MediaCard(assets, "Suzume", "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), "2022", "media.state.Requested")
                         .Preview("preview-suzume-discover")
-                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Downloading)).Genres(new Text("design.tagGenre"))
+                        .Availability(new MediaAvailability(assets, MediaAvailabilityState.Downloading))
                 ]),
                 new P(new Text("design.imageCredit"), new ValueText(" "),
                     new A(new ValueText("TMDB")).Attribute("href", "https://www.themoviedb.org/movie/372058/images")),
@@ -176,11 +180,8 @@ namespace Jularr.Frontend.Pages.Development.Design
                 var id = "preview-series-" + status;
                 var requestStatus = availability == MediaAvailabilityState.Missing ? "media.state.NotRequested" : "request.status.Approved";
                 AddPreview(id, texts["design.exampleTitle"], "suzume-poster.jpg", texts["design.exampleContext"], requestStatus, availability, "media.series." + status);
-                return new MediaCard(texts["design.exampleTitle"], "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), null, "design.exampleStatus")
-                    .Preview(id)
-                    .SeriesStatus("media.series." + status).Availability(new MediaAvailability(assets, availability, available, monitored))
-                    .Genres(new Text("design.tagGenre"), new Text("design.genreAdventure"))
-                    .Languages(assets, new MediaLanguage("flag-de", "design.languageGerman"), 2, null, 6);
+                return new MediaCard(assets, texts["design.exampleTitle"], "/Design#media", assets.ImageUrl("Pages/Development/Design/Images/suzume-poster.jpg"), null, "design.exampleStatus")
+                    .Preview(id).Availability(new MediaAvailability(assets, availability, available, monitored));
             }
 
             void AddPreview(string id, string title, string poster, string meta, string requestStatus, MediaAvailabilityState availability, string? seriesStatus = null)
@@ -211,10 +212,51 @@ namespace Jularr.Frontend.Pages.Development.Design
                     .Number(item => item.ReleaseYear, "media.year").Checkbox("design.selected").Submit("common.save"), data: example, error: failure);
         }
 
+        private void DefineCards(Page page)
+        {
+            page.Asset("Pages/Development/Design/Design.entry.ts");
+            page.Content.Add(new P(new Text("design.cards.notice")));
+
+            // Explicit states, no fabricated records.
+            var examples = new (MediaAvailabilityState State, int Available, long Watched)[]
+            {
+                (MediaAvailabilityState.ProfileAudio, 24, 1800000),
+                (MediaAvailabilityState.OtherAudio, 24, 900000),
+                (MediaAvailabilityState.Partial, 12, 0),
+                (MediaAvailabilityState.PartialOtherAudio, 12, 0),
+                (MediaAvailabilityState.Downloading, 6, 0),
+                (MediaAvailabilityState.Searching, 0, 0),
+                (MediaAvailabilityState.Requested, 0, 0),
+                (MediaAvailabilityState.Missing, 0, 0)
+            };
+            page.Content.Add(new MediaShelf(assets, "design.cards.title", null, [.. examples.Select(example =>
+            {
+                var previewId = "card-preview-" + example.State;
+                var card = new MediaCard(assets, "Your Name.", "/Design?pane=cards", assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), "2016", "media.state.NotRequested")
+                    .Availability(new MediaAvailability(assets, example.State, example.Available, 24)).Rating("8.4").Trailer("k4xGqY5IDBE").Preview(previewId)
+                    .Actions(new Button(new Icon(example.Available > 0 ? "player-play" : "requests", assets),
+                            new Text(example.Watched > 0 ? "media.continue" : example.Available > 0 ? "player.play" : "media.request")).Primary().Compact()
+                            .Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog"),
+                        new Button(new Icon("library", assets), new Text("media.details")).Compact().Attribute("data-preview-open", previewId).Attribute("aria-haspopup", "dialog"))
+                    .Bookmark(new Button(new Icon("bookmark", assets)).IconOnly(texts["nav.watchlist"]).Attribute("data-design-bookmark", "").Attribute("aria-pressed", "false"));
+                if (example.Watched > 0) card.Continue(example.Watched, 5400000);
+                return (IUiComponent)card;
+            })]));
+
+            // Shared dialog, local-only actions.
+            page.Content.Add(MediaPreview.Host(assets, texts));
+            foreach (var example in examples)
+            {
+                page.Content.Add(new MediaPreview("card-preview-" + example.State, assets, "Your Name.",
+                    assets.ImageUrl("Pages/Development/Design/Images/your-name-poster.jpg"), assets.ImageUrl("Pages/Development/Design/Images/your-name-backdrop.jpg"), "2016 · 8.4", null)
+                    .Trailer("k4xGqY5IDBE").Content(new P(new Text("design.cards.notice")), new MediaAvailability(assets, example.State, example.Available, 24)));
+            }
+        }
+
         public IActionResult OnGet(string? pane)
         {
             if (!environment.IsDevelopment()) return NotFound();
-            if (pane is not null and not ("components" or "layouts")) return NotFound();
+            if (pane is not null and not ("components" or "layouts" or "cards")) return NotFound();
 
             _pane = pane ?? "components";
             PreparePage();

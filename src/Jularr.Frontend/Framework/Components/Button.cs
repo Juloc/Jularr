@@ -2,6 +2,9 @@ namespace Jularr.Frontend.Framework
 {
     public sealed class Button : HtmlElement
     {
+        private string _tone = "";
+        private string _shape = "";
+
         public Button(params IUiComponent[] children) : base("button", children)
         {
             Class("button");
@@ -10,9 +13,28 @@ namespace Jularr.Frontend.Framework
 
         public Button Primary()
         {
-            Class("button button--primary");
+            _tone = " button--primary";
+            ApplyStyle();
             return this;
         }
+
+        public Button Compact()
+        {
+            _shape = " button--compact";
+            ApplyStyle();
+            return this;
+        }
+
+        public Button IconOnly(string label)
+        {
+            _shape = " button--icon";
+            ApplyStyle();
+            Attribute("aria-label", label);
+            return this;
+        }
+
+        // Compose tone and shape.
+        private void ApplyStyle() => Class("button" + _tone + _shape);
 
         public Button Submit()
         {
