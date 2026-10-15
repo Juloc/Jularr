@@ -146,6 +146,7 @@ test("availability dots share one palette with their compact expanded symbols", 
 
 test("shared covers clip rounded progress, equal actions and a same-height trailer", () => {
     const css = readFileSync(join(build, manifest["Pages/User/Library/Library.entry.scss"].file), "utf8");
+    assert.ok(css.includes(".media-image{display:block;width:100%;max-width:100%;height:auto;object-fit:cover}"));
     assert.match(css, /\.media-card__surface\{[^}]*overflow:hidden;border-radius:24px/);
     assert.match(css, /\.media-card__progress\{[^}]*height:12px;border:0;background:#ffffffa6/);
     assert.match(css, /\.media-card__progress::-webkit-progress-value\{[^}]*border-radius:999px/);
