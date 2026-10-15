@@ -255,6 +255,41 @@ namespace Jularr.E2E.Tests
         }
 
         // A two-chapter EPUB 3.
+        // A text PDF: one Helvetica line per entry, top to bottom, each page in its own content stream.
+        public static string WritePdf(string file, params string[][] pages)
+        {
+            static string Escape(string text) => text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("(", "\\(", StringComparison.Ordinal).Replace(")", "\\)", StringComparison.Ordinal);
+            var objects = new List<string> { "<< /Type /Catalog /Pages 2 0 R >>", "", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>" };
+            var kids = new List<string>();
+            foreach (var lines in pages)
+            {
+                var stream = string.Concat(lines.Select((line, index) => "BT /F1 11 Tf 54 " + (780 - index * 15) + " Td (" + Escape(line) + ") Tj ET\n"));
+                objects.Add("<< /Length " + stream.Length + " >>\nstream\n" + stream + "endstream");
+                objects.Add("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents " + objects.Count + " 0 R >>");
+                kids.Add(objects.Count + " 0 R");
+            }
+
+            objects[1] = "<< /Type /Pages /Kids [" + string.Join(' ', kids) + "] /Count " + kids.Count + " >>";
+            var body = new System.Text.StringBuilder("%PDF-1.4\n");
+            var offsets = new List<int>();
+            for (var index = 0; index < objects.Count; index++)
+            {
+                offsets.Add(body.Length);
+                body.Append(index + 1).Append(" 0 obj\n").Append(objects[index]).Append("\nendobj\n");
+            }
+
+            var xref = body.Length;
+            body.Append("xref\n0 ").Append(objects.Count + 1).Append("\n0000000000 65535 f \n");
+            foreach (var offset in offsets)
+            {
+                body.Append(offset.ToString("D10", System.Globalization.CultureInfo.InvariantCulture)).Append(" 00000 n \n");
+            }
+
+            body.Append("trailer\n<< /Size ").Append(objects.Count + 1).Append(" /Root 1 0 R >>\nstartxref\n").Append(xref).Append("\n%%EOF\n");
+            File.WriteAllText(file, body.ToString(), System.Text.Encoding.Latin1);
+            return file;
+        }
+
         public static string WriteEpub(string file, string title, string author)
         {
             using var archive = ZipFile.Open(file, ZipArchiveMode.Create);

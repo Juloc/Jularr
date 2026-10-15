@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Net;
 using System.Text.Json;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
@@ -71,6 +72,11 @@ namespace Jularr.Backend.Service.User.Reading.V1
                     return await OpenComicAsync(context, source, file, ct);
                 }
 
+                if (source.RelativePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    return await OpenPdfAsync(context, source, file, ct);
+                }
+
                 var hash = await SHA256.HashDataAsync(file, ct);
                 file.Position = 0;
                 EpubPackage package;
@@ -133,6 +139,74 @@ namespace Jularr.Backend.Service.User.Reading.V1
             var toc = package.Toc.Where(entry => indexes.ContainsKey(entry.Path)).Select(entry => new ReadingStructureEntry(entry.Title, indexes[entry.Path], entry.Level, entry.Anchor)).ToArray();
             var structure = JsonSerializer.Serialize(new ReadingStructure([.. sections], toc));
             await CompleteAsync(context, new ReadingDocumentCompleteData(documentId, package.Title, package.Language, structure, sections.Sum(section => section.Characters)), ct);
+        }
+
+        // A PDF reads like an EPUB once its text is reflowed; one without text stays for the browser's own viewer.
+        private async Task<long> OpenPdfAsync(LogicContext context, ReadingSourceData source, FileStream file, CancellationToken ct)
+        {
+            var hash = await SHA256.HashDataAsync(file, ct);
+            file.Position = 0;
+
+            // Only a PDF with text becomes a document.
+            IReadOnlyList<PdfChapter> chapters;
+            try
+            {
+                chapters = PdfBook.Read(file);
+            }
+            catch (PdfWithoutTextException)
+            {
+                throw new ServiceUnavailableException("reading_pdf_without_text");
+            }
+            catch (InvalidDataException)
+            {
+                throw new ServiceUnavailableException("reading_invalid_file");
+            }
+
+            var save = new ReadingDocumentSaveData(source.StoredFileId, source.SizeBytes, source.ModifiedAt, hash, PdfBook.AnalyzerVersion, ReadingFormatType.Pdf, null, null,
+                "{\"Sections\":[],\"Toc\":[]}", 0);
+            var state = await context.ExecuteBatchAsync((ctx, token) => ctx.CreateReadingDocumentAsync(save, token), ct);
+            if (state.IsCached)
+            {
+                return state.DocumentId;
+            }
+
+            await context.ExecuteBatchAsync(async (ctx, token) =>
+            {
+                await ctx.ClearReadingResourcesAsync(new ReadingDocumentIdData(state.DocumentId), token);
+                return true;
+            }, ct);
+
+            // Each chapter becomes one section of plain paragraphs, prepared like any book text.
+            var sections = new List<ReadingStructureSection>();
+            var toc = new List<ReadingStructureEntry>();
+            var writer = new ResourceWriter(context, ct);
+            var noSections = new Dictionary<string, int>(StringComparer.Ordinal);
+            var noManifest = new Dictionary<string, string>(StringComparer.Ordinal);
+            for (var index = 0; index < chapters.Count; index++)
+            {
+                var chapter = chapters[index];
+                var html = new StringBuilder("<html><body>");
+                if (chapter.Title is { } heading)
+                {
+                    html.Append("<h2>").Append(WebUtility.HtmlEncode(heading)).Append("</h2>");
+                    toc.Add(new ReadingStructureEntry(heading, index, 1, null));
+                }
+
+                foreach (var paragraph in chapter.Paragraphs)
+                {
+                    html.Append("<p>").Append(WebUtility.HtmlEncode(paragraph)).Append("</p>");
+                }
+
+                var path = "pdf/" + index.ToString("D5", CultureInfo.InvariantCulture) + ".xhtml";
+                var prepared = ReadingHtml.Prepare(html.Append("</body></html>").ToString(), path, state.DocumentId, noSections, noManifest);
+                sections.Add(new ReadingStructureSection(path, chapter.Title, prepared.Characters, prepared.Blocks));
+                await writer.AddAsync(new ReadingResourceData(state.DocumentId, SectionPath(index), "text/html; charset=utf-8", Encoding.UTF8.GetBytes(prepared.Html)));
+            }
+
+            await writer.FlushAsync();
+            await CompleteAsync(context, new ReadingDocumentCompleteData(state.DocumentId, null, null, JsonSerializer.Serialize(new ReadingStructure([.. sections], [.. toc])),
+                sections.Sum(section => section.Characters)), ct);
+            return state.DocumentId;
         }
 
         private async Task<long> OpenComicAsync(LogicContext context, ReadingSourceData source, FileStream file, CancellationToken ct)

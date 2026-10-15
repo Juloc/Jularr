@@ -92,5 +92,61 @@ namespace Jularr.E2E.Tests
                 throw;
             }
         }
+
+        [TestMethod]
+        [Timeout(600_000)]
+        public async Task PdfBook_FromRequestDownloadAndImportReadsReflowedAndContinues()
+        {
+            using var folders = new Folders("Books");
+            // Chapters long enough to scroll through, each paragraph a few lines with a blank line after.
+            string[] Text(int paragraphs) => [.. Enumerable.Range(1, paragraphs).SelectMany(number => new[] { "Paragraph " + number + " runs across the page like the text of any printed book",
+                "does, line after line, until it ends here.", "" })];
+            var pdf = new FakeRelease("Jane Austen - Pride and Prejudice (pdf)", "pride-pdf", 7020, Steps.WritePdf(Path.Combine(folders.Fixtures, "book.pdf"),
+                ["Chapter One", "", "", "It is a truth universally acknowledged, that a single man in possession", "of a good fortune, must be in want of a wife.", "", .. Text(13)],
+                [.. Text(16)],
+                ["Chapter Two", "", "", "Mr. Bennet was among the earliest of those who waited on Mr. Bingley.", "", .. Text(13)],
+                [.. Text(16)]));
+            await using var fakes = await FakeServices.StartAsync(folders.Downloads);
+            await using var jularr = await JularrInstance.StartAsync(new Dictionary<string, string>
+            {
+                ["Providers:Tmdb"] = fakes.Tmdb3.ToString(),
+                ["Providers:OpenLibrary"] = fakes.OpenLibrary.ToString(),
+                ["Storage:LocalPaths:0"] = folders.Library
+            });
+            await using var session = await BrowserSession.StartAsync(jularr);
+            var page = session.Page;
+
+            try
+            {
+                await Owner.SetUpAndSignInAsync(page);
+                await Steps.AddLibraryAsync(page, folders.Library, new LibraryPath("Books", "Book"));
+                await Steps.AddUsenetAsync(page, fakes, "7000,7020");
+                await Steps.ImportAndRequestAsync(page, "Book", null, FakeServices.BookTitle);
+
+                // The PDF release is found, grabbed and imported like an EPUB.
+                fakes.Offer(pdf);
+                await Steps.OpenSearchAsync(page, FakeServices.BookTitle);
+                await Steps.SubmitAsync(page, Steps.FormWith(page, "Start search"));
+                await Steps.GrabAsync(page, pdf);
+                var details = await Steps.WaitForAvailableAsync(page, FakeServices.BookTitle, "Read");
+                Assert.AreEqual(1, Directory.EnumerateFiles(Path.Combine(folders.Library, "Books"), "*.pdf", SearchOption.AllDirectories).Count(), "The PDF was not imported once.");
+
+                // The reader reflows it by chapter, keeps the original at hand and continues where reading stopped.
+                await Steps.OpenReaderAsync(page, details);
+                StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "must be in want of a wife.");
+                Assert.AreEqual(1, await page.GetByRole(AriaRole.Link, new() { Name = "Original PDF" }).CountAsync());
+                await Steps.ReadNextSectionAsync(page);
+                await Steps.SignOutAndInAsync(page);
+                await Steps.OpenReaderAsync(page, details);
+                StringAssert.Contains(await page.Locator("[data-role=content]").InnerTextAsync(), "Chapter Two");
+
+                CollectionAssert.AreEqual(Array.Empty<string>(), session.Problems.ToArray());
+            }
+            catch (Exception exception) when (exception is not AssertInconclusiveException)
+            {
+                await Evidence.SaveAsync(page, "reading-pdf");
+                throw;
+            }
+        }
     }
 }

@@ -96,7 +96,7 @@ and commit together. No migration, active-database installation or extra server.
   apps as well as the browser; books download as the processed ebook when the reader
   converts, the original PDF besides. PDFs convert to a readable format where possible
   and otherwise stay a download or the browser's viewer without Jularr progress; pdf.js
-  is declined. Dependencies: Playwright now; Bergamot and Chromaprint/AcoustID later as
+  is declined, PdfPig reads the text layer (approved 2026-10-15). Dependencies: Playwright now; Bergamot and Chromaprint/AcoustID later as
   optional modules; MailKit, TOTP and passkeys not now. Instant play while downloading
   (K25) is a later optional module, only with direct unpack and enough buffer.
   Audiobooks are a Book subtype with their own library and requests. AniList sign-in

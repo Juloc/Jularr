@@ -43,7 +43,8 @@ namespace Jularr.Frontend.Pages.User.Reader
         {
             page.Title("reader.title");
             page.Shell = false;
-            if (_source is { ReadingFormatTypeId: ReadingFormatType.Pdf } pdf)
+            // A PDF without text stays in the browser's own viewer.
+            if (_source is { ReadingFormatTypeId: ReadingFormatType.Pdf } pdf && _document is null)
             {
                 page.Asset("Modules/Reader/reader.entry.ts");
                 page.Content.Add(PdfView(pdf));
@@ -76,7 +77,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 new Button(new Text("reader.contents")).Class("button").Attribute("data-action", "contents").Attribute("aria-expanded", "false"),
                 new Button(new Text("reader.notes")).Class("button").Attribute("data-action", "notes").Attribute("aria-expanded", NotesPage > 1 ? "true" : "false"),
                 new Button(new Text("reader.search")).Class("button").Attribute("data-action", "search").Attribute("aria-expanded", _hits is null ? "false" : "true"),
-                new Button(new Text("reader.settings")).Class("button").Attribute("data-action", "settings").Attribute("aria-expanded", "false")
+                new Button(new Text("reader.settings")).Class("button").Attribute("data-action", "settings").Attribute("aria-expanded", "false"),
+                _source?.ReadingFormatTypeId == ReadingFormatType.Pdf
+                    ? new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener")
+                    : new Span()
             ).Class("reader__top");
 
             // Contents and settings share one panel area.
@@ -270,12 +274,16 @@ namespace Jularr.Frontend.Pages.User.Reader
         {
             var ct = HttpContext.RequestAborted;
             _source = await readSource.ExecuteAsync<ReadingSourceV1>(new ReadingAssetParametersV1(Id), ct);
-            if (_source.ReadingFormatTypeId == ReadingFormatType.Pdf)
+            try
             {
+                _document = await open.ExecuteAsync<ReadingDocumentV1>(new ReadingAssetParametersV1(Id), default, ct);
+            }
+            catch (ServiceUnavailableException exception) when (_source.ReadingFormatTypeId == ReadingFormatType.Pdf && exception.Code is "reading_pdf_without_text" or "reading_invalid_file")
+            {
+                // The browser may still show what Jularr cannot reflow.
                 return;
             }
 
-            _document = await open.ExecuteAsync<ReadingDocumentV1>(new ReadingAssetParametersV1(Id), default, ct);
             if (_document.ReadingFormatTypeId == ReadingFormatType.Comic)
             {
                 return;

@@ -203,6 +203,7 @@ namespace Jularr.Frontend.Localization
             new("reader.contents", "Contents"),
             new("reader.notes", "Notes"),
             new("reader.openPdf", "Open in a new tab"),
+            new("reader.originalPdf", "Original PDF"),
             new("reader.search", "Search in this book"),
             new("reader.searchEmpty", "The words do not appear in this book."),
             new("reader.searchMore", "Only the first 50 sections with the words are listed."),

@@ -45,6 +45,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.metadata_rate_limited", "TMDB limits requests right now. Please try again shortly."),
             new("errors.reading_unavailable", "This book is not saved for reading while its storage is offline."),
             new("errors.reading_invalid_file", "This book file cannot be opened."),
+            new("errors.reading_pdf_without_text", "This PDF holds scanned pages without text; it opens as a PDF."),
             new("errors.reading_unsupported", "This comic needs 7-Zip, which is not configured on the server."),
             new("errors.plex_unavailable", "The Plex server could not be reached."),
             new("errors.plex_authentication_failed", "The Plex server rejected the token."),

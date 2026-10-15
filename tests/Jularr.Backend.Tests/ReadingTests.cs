@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Instance.V1;
 using Jularr.Backend.Data.Admin.Library.V1;
@@ -178,7 +179,63 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Pdf_OnlyPresentFile_OpensInTheBrowsersViewer()
+        public async Task Pdf_WithText_ReadsAsChaptersAcrossPagesAndKeepsTheOriginal()
+        {
+            using var storage = new TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
+            var (_, second) = await CreateBooksAsync(host, storage.Path, "First Book", "Second Book");
+            const string Long = "and the long line runs on across the whole width of the page like book text does";
+            var pdf = BuildPdf(
+                [(760, "1"), (732, "The first paragraph starts here " + Long), (718, "with a word that breaks at the line end into hyph-"), (704, "enated halves and ends here."),
+                    (676, "The second paragraph " + Long), (662, "and does not end on this page " + Long)],
+                [(780, "but continues on the next one and ends."), (752, "2"), (724, "The second chapter " + Long), (710, "ends with this sentence.")],
+                [(780, "A last paragraph " + Long), (766, "closes the book.")]);
+            File.WriteAllBytes(Path.Combine(storage.Path, "1", "Books", "Second Book", "Second Book.pdf"), pdf);
+            await host.Fixture.RunSqlAsync("UPDATE \"StoredFiles\" SET \"MissingSince\" = now() WHERE \"MediaAssetId\" = " + second);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
+                + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', " + pdf.Length + ", now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
+
+            // Headers drop, chapters come from their numbers, paragraphs join across lines and pages.
+            var document = await OpenAsync(host, second);
+            Assert.AreEqual(ReadingFormatType.Pdf, document.ReadingFormatTypeId);
+            Assert.AreEqual(2, document.SectionCount);
+            using var toc = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/toc");
+            CollectionAssert.AreEqual(new[] { "1", "2" }, (await toc.Content.ReadFromJsonAsync<BaseDataList<ReadingTocEntryV1>>())!.Select(entry => entry.Title).ToArray());
+            using var first = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/0");
+            var html = (await first.Content.ReadFromJsonAsync<ReadingSectionV1>())!.Html;
+            StringAssert.Contains(html, "into hyphenated halves");
+            StringAssert.Contains(html, "this page " + Long + " but continues on the next one");
+            Assert.IsFalse(html.Contains("Page ", StringComparison.Ordinal));
+            Assert.AreEqual(2, Regex.Matches(html, "<p ").Count);
+
+            // The reader reflows it and still offers the original.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + second);
+            var reader = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, reader);
+            StringAssert.Contains(reader, "href=\"/api/v1/reading/assets/" + second + "/file\"");
+            Assert.IsFalse(reader.Contains("<iframe", StringComparison.Ordinal));
+        }
+
+        // Text lines per page at given heights; every page carries a running header.
+        private static byte[] BuildPdf(params (double Y, string Text)[][] pages)
+        {
+            var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+            var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+            for (var index = 0; index < pages.Length; index++)
+            {
+                var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+                page.AddText("Page " + (index + 1) + " of " + pages.Length, 9, new UglyToad.PdfPig.Core.PdfPoint(460, 815), font);
+                foreach (var (y, text) in pages[index])
+                {
+                    page.AddText(text, 9, new UglyToad.PdfPig.Core.PdfPoint(54, y), font);
+                }
+            }
+
+            return builder.Build();
+        }
+
+        [TestMethod]
+        public async Task Pdf_WithoutReadableText_OpensInTheBrowsersViewer()
         {
             using var storage = new TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
@@ -188,7 +245,7 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("INSERT INTO \"StoredFiles\" (\"LibraryRootId\", \"RelativePath\", \"SizeBytes\", \"ModifiedAt\", \"LastSeenAt\", \"MediaAssetId\") "
                 + "SELECT \"LibraryRootId\", 'Second Book/Second Book.pdf', 13, now(), now(), \"MediaAssetId\" FROM \"StoredFiles\" WHERE \"MediaAssetId\" = " + second);
 
-            // The format decides the reader; the PDF comes from its storage.
+            // The format decides the reader; a PDF Jularr cannot reflow comes from its storage.
             using var epub = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + first + "/source");
             Assert.AreEqual(ReadingFormatType.Epub, (await epub.Content.ReadFromJsonAsync<ReadingSourceV1>())!.ReadingFormatTypeId);
             using var pdf = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/assets/" + second + "/source");

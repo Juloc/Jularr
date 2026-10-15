@@ -163,6 +163,43 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task AnnasArchive_RequestedBookIsDownloadedImportedAndRead()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var sources = new FakeSources();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, sources);
+            using var created = await host.SendAsync(HttpMethod.Post, Connections, new SaveAcquisitionConnectionDataV1("Anna", AcquisitionConnectionType.AnnasArchive,
+                "https://annas.example.test", null, true, 60, [], null, null, null));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+
+            // The book is requested like any title; the request's target is what Anna's Archive is searched for.
+            using var work = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/works", new CreateWorkDataV1(MediaType.Book, "Pride and Prejudice", 1813));
+            var workId = (await work.Content.ReadFromJsonAsync<WorkDetailsV1>())!.Id;
+            await host.Fixture.RunSqlAsync($"INSERT INTO \"WorkMetadataFacts\" (\"WorkId\", \"FactKey\", \"Value\", \"IsManual\") VALUES ({workId}, 'Author', 'Jane Austen', TRUE)");
+            using var requested = await host.SendAsync(HttpMethod.Post, "/api/v1/works/" + workId + "/requests", new CreateRequestDataV1(1));
+            Assert.AreEqual(HttpStatusCode.OK, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var wantedId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"WantedItems\" WHERE \"WorkId\" = " + workId))!;
+            await GrabAnnaAsync(host, wantedId);
+            await RunAsync<MonitorDownloadsV1>(host);
+
+            // The imported book opens in the reader, reads and continues where it was left.
+            var assetId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"MediaAssets\" WHERE \"WorkId\" = " + workId))!;
+            using var opened = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + assetId + "/open");
+            Assert.AreEqual(HttpStatusCode.OK, opened.StatusCode, await opened.Content.ReadAsStringAsync());
+            var document = (await opened.Content.ReadFromJsonAsync<Data.User.Reading.V1.ReadingDocumentV1>())!;
+            Assert.AreEqual("Pride and Prejudice", document.Title);
+            using var section = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/0");
+            Assert.AreEqual(HttpStatusCode.OK, section.StatusCode, await section.Content.ReadAsStringAsync());
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/reading/assets/" + assetId + "/progress", new Data.User.Reading.V1.SaveReadingProgressDataV1("s1/b0", 0.5m, false));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/reading/assets/" + assetId + "/open");
+            Assert.AreEqual("s1/b0", (await again.Content.ReadFromJsonAsync<Data.User.Reading.V1.ReadingDocumentV1>())!.Locator);
+            using var reader = await host.SendAsync(HttpMethod.Get, "/Read/" + assetId);
+            Assert.AreEqual(HttpStatusCode.OK, reader.StatusCode, await reader.Content.ReadAsStringAsync());
+        }
+
+        [TestMethod]
         public async Task AnnasArchive_ChecksWaitForAPermittedPersonAndThenContinue()
         {
             using var storage = new TemporaryDirectory();

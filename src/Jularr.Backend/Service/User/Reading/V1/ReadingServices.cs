@@ -31,7 +31,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
 
         protected override async Task<IServiceOutput> OnExecute()
         {
-            // The newest readable EPUB or comic of the asset; a matching prepared document is reused.
+            // The newest readable EPUB or comic of the asset, else its newest PDF; a matching prepared document is reused.
             var source = await Context.ExecuteBatchAsync((ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -62,9 +62,10 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 "StoredFiles" AS candidate
                             WHERE
                                 candidate."MediaAssetId" = asset."Id"
-                                AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7)$'
+                                AND candidate."RelativePath" ~* '\.(epub|cbz|cbr|cb7|pdf)$'
                             ORDER BY
                                 candidate."MissingSince" IS NULL DESC,
+                                candidate."RelativePath" ~* '\.pdf$',
                                 candidate."ModifiedAt" DESC,
                                 candidate."Id"
                             LIMIT 1
@@ -81,7 +82,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                                 prepared."StoredFileId" = file."Id"
                                 AND prepared."SourceSizeBytes" = file."SizeBytes"
                                 AND prepared."SourceModifiedAt" = file."ModifiedAt"
-                                AND prepared."AnalyzerVersion" = CASE WHEN prepared."ReadingFormatTypeId" = 4 THEN @ComicAnalyzerVersion ELSE @AnalyzerVersion END
+                                AND prepared."AnalyzerVersion" = CASE prepared."ReadingFormatTypeId" WHEN 4 THEN @ComicAnalyzerVersion WHEN 2 THEN @PdfAnalyzerVersion ELSE @AnalyzerVersion END
                             ORDER BY
                                 prepared."CacheCompletedAt" IS NOT NULL DESC,
                                 prepared."Id" DESC
@@ -91,7 +92,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         asset."Id" = @MediaAssetId
                         AND asset."MediaAssetTypeId" IN (3, 4);
                     """;
-                sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion, ComicPages.AnalyzerVersion));
+                sql.Parameters.Add(new ReadingSourceLookupData(Parameters.MediaAssetId, ReadingHtml.AnalyzerVersion, ComicPages.AnalyzerVersion, PdfBook.AnalyzerVersion));
                 sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
                 return ctx.ReadSql.ReadOptionalAsync<ReadingSourceData>(sql, ct);
             }, CancellationToken) ?? throw new KeyNotFoundException("The book was not found.");

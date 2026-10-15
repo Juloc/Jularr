@@ -74,8 +74,9 @@ namespace Jularr.Backend.Data.Logic.Reading
 
     internal sealed class ReadingSourceLookupData : BaseData
     {
-        public ReadingSourceLookupData(long mediaAssetId, int analyzerVersion, int comicAnalyzerVersion)
+        public ReadingSourceLookupData(long mediaAssetId, int analyzerVersion, int comicAnalyzerVersion, int pdfAnalyzerVersion)
         {
+            PdfAnalyzerVersion = pdfAnalyzerVersion;
             MediaAssetId = mediaAssetId;
             AnalyzerVersion = analyzerVersion;
             ComicAnalyzerVersion = comicAnalyzerVersion;
@@ -89,6 +90,9 @@ namespace Jularr.Backend.Data.Logic.Reading
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.AnalyzerVersion))]
         public int ComicAnalyzerVersion { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.AnalyzerVersion))]
+        public int PdfAnalyzerVersion { get; }
     }
 
     internal sealed class ReadingOpenedData : BaseData
