@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Framework
         {
             var art = new List<IUiComponent>
             {
-                imageUrl is null ? new Div().Class("episode-card__placeholder") : new MediaImage(imageUrl, title ?? label, 400, 225)
+                imageUrl is null ? new Div().Class("episode-card__placeholder") : new MediaImage(imageUrl, label, 400, 225)
             };
             if (runtimeMinutes is { } minutes)
             {
@@ -45,7 +45,7 @@ namespace Jularr.Frontend.Framework
                 still,
                 new Div(
                     new Span(new ValueText(label)).Class("episode-card__label"),
-                    new H3(new ValueText(title ?? label)).Class("episode-card__title"),
+                    title is null ? new Span() : new H3(new ValueText(title)).Class("episode-card__title"),
                     overview is null ? new Span() : new P(new ValueText(overview)).Class("episode-card__overview"),
                     new Span(new Text(stateKey)).Class("state-chip state-chip--" + stateKey[(stateKey.LastIndexOf('.') + 1)..].ToLowerInvariant())
                 ).Class("episode-card__body")

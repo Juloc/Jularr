@@ -46,7 +46,7 @@ namespace Jularr.Integrations.Data.Tmdb
 
     internal sealed class TmdbSeason
     {
-        public TmdbSeason(int seasonNumber, string? name, DateOnly? airDate, int episodeCount, string? posterPath = null)
+        public TmdbSeason(int seasonNumber, string? name, DateOnly? airDate, int episodeCount, string? posterPath)
         {
             SeasonNumber = seasonNumber;
             Name = name;
@@ -64,7 +64,7 @@ namespace Jularr.Integrations.Data.Tmdb
 
     internal sealed class TmdbEpisode
     {
-        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate, string? overview = null, string? stillPath = null, int? runtime = null)
+        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate, string? overview, string? stillPath, int? runtime)
         {
             SeasonNumber = seasonNumber;
             EpisodeNumber = episodeNumber;
@@ -90,9 +90,9 @@ namespace Jularr.Integrations.Data.Tmdb
     {
         public TmdbWork(TmdbMediaKind kind, int id, string title, string? originalTitle, int? year, string? overview, string? posterPath, string? backdropPath, string? imdbId, int? tvdbId,
             IReadOnlyList<TmdbSeason> seasons, IReadOnlyList<int> genreIds, string? originalLanguage, IReadOnlyList<string> originCountries, int? collectionId,
-            string? collectionName, DateOnly? releasedOn, TmdbDetails? details = null)
+            string? collectionName, DateOnly? releasedOn, TmdbDetails details)
         {
-            Details = details ?? new TmdbDetails([], null, [], null, [], []);
+            Details = details;
             ReleasedOn = releasedOn;
             CollectionId = collectionId;
             CollectionName = collectionName;

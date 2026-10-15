@@ -159,18 +159,18 @@ namespace Jularr.Frontend.Pages.User.Details
                     }
 
                     page.Content.Add(new UiSection("details.versions", [.. sections]));
-                }
 
-                // One bounded inventory page.
-                var paging = new List<IUiComponent>();
-                var address = "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?p=";
-                if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", address + (PageNumber - 1).ToString(CultureInfo.InvariantCulture)));
-                if (_availability is { } rows && rows.Items.Count == rows.PageSize)
-                {
-                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", address + (PageNumber + 1).ToString(CultureInfo.InvariantCulture)));
-                }
+                    // One bounded inventory page.
+                    var paging = new List<IUiComponent>();
+                    var address = "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture) + "?p=";
+                    if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", address + (PageNumber - 1).ToString(CultureInfo.InvariantCulture)));
+                    if (availability.Items.Count == availability.PageSize)
+                    {
+                        paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", address + (PageNumber + 1).ToString(CultureInfo.InvariantCulture)));
+                    }
 
-                if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("details-paging").Attribute("aria-label", texts["details.pages"]));
+                    if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("details-paging").Attribute("aria-label", texts["details.pages"]));
+                }
 
                 // Cast before crew, each with their character or job.
                 if (_credits.Count > 0)
@@ -192,11 +192,9 @@ namespace Jularr.Frontend.Pages.User.Details
         }
 
         // Opens the trailer on YouTube; the page itself frames nothing from there.
-        private static IUiComponent Trailer(string key) => new Section(
-            new H2(new Text("details.trailer")),
+        private static IUiComponent Trailer(string key) =>
             new A(new MediaImage("https://i.ytimg.com/vi/" + key + "/hqdefault.jpg", "", 480, 360), new Span(new Text("details.watchTrailer")).Class("details-trailer__play"))
-                .Class("details-trailer").Attribute("href", "https://www.youtube.com/watch?v=" + key).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer"))
-            .Class("details-overview__trailer");
+                .Class("details-trailer").Attribute("href", "https://www.youtube.com/watch?v=" + key).Attribute("target", "_blank").Attribute("rel", "noopener noreferrer");
 
         // Audio and subtitle languages and qualities of the present versions; the full table on demand.
         private IUiComponent Languages(IReadOnlyList<WorkAvailabilityV1> items)
@@ -209,15 +207,15 @@ namespace Jularr.Frontend.Pages.User.Details
                 if (chips.Length > 0) rows.Add(new Div(new Dt(new Text(labelKey)), new Dd(chips)));
             }
 
-            Row("details.audio", present.SelectMany(item => item.AudioLanguages));
-            Row("details.subtitles", present.SelectMany(item => item.SubtitleLanguages));
+            Row("details.audio", present.SelectMany(item => item.AudioLanguages).Select(code => LanguageLabel.Name(code) ?? code));
+            Row("details.subtitles", present.SelectMany(item => item.SubtitleLanguages).Select(code => LanguageLabel.Name(code) ?? code));
             Row("details.quality", present.Select(item => item.Height).OfType<int>().OrderDescending()
                 .Select(height => height >= 2000 ? "4K" : height.ToString(CultureInfo.InvariantCulture) + "p"));
             return new Section(
                 new H2(new Text("details.versions")),
                 rows.Count > 0 ? new Dl([.. rows]).Class("details-languages") : new Span(),
                 new Framework.Details(new Summary(new Text("common.seeAll")), Versions(items)).Class("details-versions"))
-                .Class("details-overview__versions");
+                .Class("details-languages-card");
         }
 
         private static IUiComponent Person(WorkCreditV1 credit) => new Div(
@@ -247,8 +245,7 @@ namespace Jularr.Frontend.Pages.User.Details
                 // Staff-named sections head their episodes.
                 if (episode.GroupName is { } name && name != group) episodes.Add(new H3(new ValueText(name)));
                 group = episode.GroupName;
-                var resume = episode.ResumePositionMs is > 0 and { } position && !episode.IsCompleted
-                    ? TimeSpan.FromMilliseconds(position).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : null;
+                var resume = episode.ResumePositionMs is > 0 and { } position && !episode.IsCompleted ? Clock(position) : null;
                 episodes.Add(new EpisodeCard(
                         "S" + episode.SeasonNumber.ToString("00", CultureInfo.InvariantCulture) + " E" + episode.Number.ToString("00.###", CultureInfo.InvariantCulture),
                         episode.Title, episode.Overview, episode.ImageUrl, episode.RuntimeMinutes,
@@ -258,9 +255,9 @@ namespace Jularr.Frontend.Pages.User.Details
             }
 
             return new Div(
-                new Section(new H2(new Text("details.seasons")), new Nav([.. seasons]).Class("details-seasons").Attribute("aria-label", texts["details.seasons"])).Class("details-series__seasons"),
-                new Section(new H2(new Text("details.episodes")), _episodes.Count == 0 ? new P(new Text("details.noEpisodes")) : new Div([.. episodes]).Class("details-episodes"))
-                    .Class("details-series__episodes")).Class("details-series");
+                new Section(new H2(new Text("details.seasons")), new Nav([.. seasons]).Class("details-seasons").Attribute("aria-label", texts["details.seasons"])),
+                new Section(new H2(new Text("details.episodes")), _episodes.Count == 0 ? new P(new Text("details.noEpisodes")) : new Div([.. episodes]).Class("details-episodes")))
+                .Class("details-series");
         }
 
         private string SeasonName(WorkSeasonV1 season) => season.SeasonNumber == 0 ? texts["details.specials"]
@@ -275,7 +272,7 @@ namespace Jularr.Frontend.Pages.User.Details
             .Content("details.quality", item => new ValueText(item.Height is { } height ? height.ToString(CultureInfo.InvariantCulture) + "p" : ""))
             .Content("details.audio", item => new ValueText(string.Join(", ", item.AudioLanguages)))
             .Content("details.subtitles", item => new ValueText(string.Join(", ", item.SubtitleLanguages)))
-            .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? TimeSpan.FromMilliseconds(duration).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : ""))
+            .Content("details.duration", item => new ValueText(item.DurationMs is { } duration ? Clock(duration) : ""))
             .Content("table.status", item => new Text(item.IsAvailable ? "library.present" : "library.missing"))
             .Content("common.actions", Play);
 
@@ -287,11 +284,12 @@ namespace Jularr.Frontend.Pages.User.Details
                 return new Span();
             }
 
-            var resume = !IsReadable(item) && item.ResumePositionMs is > 0 && !item.IsCompleted
-                ? TimeSpan.FromMilliseconds(item.ResumePositionMs.Value).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture) : null;
+            var resume = !IsReadable(item) && item.ResumePositionMs is > 0 && !item.IsCompleted ? Clock(item.ResumePositionMs.Value) : null;
             var label = resume is null ? new Text(PlayKey(item)) : (IUiComponent)new Span(new Text("details.resume"), new ValueText(" " + resume));
             return new A(label).Class("button").Attribute("href", PlayHref(item));
         }
+
+        private static string Clock(long milliseconds) => TimeSpan.FromMilliseconds(milliseconds).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
 
         private bool CanOpen(WorkAvailabilityV1 item) => item.IsAvailable && (item.MediaAssetTypeId == MediaAssetType.Game ? item.IsEmulated && texts.CanPlayGames()
             : IsReadable(item) ? texts.CanRead() : texts.CanPlay());

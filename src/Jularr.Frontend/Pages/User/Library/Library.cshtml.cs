@@ -64,7 +64,7 @@ namespace Jularr.Frontend.Pages.User.Library
             var paging = new List<IUiComponent>();
             if (items.Page > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(scope, Query, Sort, items.Page - 1)));
             if (items.Items.Count == items.PageSize) paging.Add(new A(new Text("common.next")).Class("button").Attribute("href", Address(scope, Query, Sort, items.Page + 1)));
-            if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("library-paging").Attribute("aria-label", texts["library.paging"]));
+            if (paging.Count > 0) page.Content.Add(new Nav([.. paging]).Class("page-actions").Attribute("aria-label", texts["library.paging"]));
         }
 
         public async Task<IActionResult> OnGetAsync()

@@ -97,8 +97,7 @@ namespace Jularr.Integrations.Logic.Tmdb
         private static TmdbDetails ParseDetails(TmdbMediaKind kind, JsonElement root)
         {
             var genres = Items(root, "genres").Select(genre => Text(genre, "name")).OfType<string>().ToArray();
-            var runtime = kind == TmdbMediaKind.Movie ? Int(root, "runtime")
-                : Items(root, "episode_run_time").Where(item => item.ValueKind == JsonValueKind.Number).Select(item => (int?)item.GetInt32()).FirstOrDefault();
+            var runtime = kind == TmdbMediaKind.Movie ? Int(root, "runtime") : null;
             var studios = Items(root, kind == TmdbMediaKind.Movie ? "production_companies" : "networks").Select(company => Text(company, "name")).OfType<string>().Take(3).ToArray();
 
             // An official YouTube trailer first; only an id of YouTube's shape is kept.

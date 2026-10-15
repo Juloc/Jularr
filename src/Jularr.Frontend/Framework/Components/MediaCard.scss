@@ -183,6 +183,8 @@
 }
 
 // Grids reuse the card at a fluid width.
+.media-grid + .page-actions { margin-top: 24px; }
+
 .media-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

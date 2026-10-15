@@ -552,7 +552,6 @@ namespace Jularr.Frontend.Localization
             new("details.upcoming", "Upcoming"),
             new("details.noEpisodes", "No episodes known for this season yet."),
             new("details.minutes", "{0} min"),
-            new("details.trailer", "Trailer"),
             new("details.watchTrailer", "Watch the trailer on YouTube"),
             new("details.cast", "Cast & crew"),
             new("discover.mediaTypes", "Media types"),

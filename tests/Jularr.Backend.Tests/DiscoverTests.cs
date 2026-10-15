@@ -164,7 +164,7 @@ namespace Jularr.Backend.Tests
             using var library = await host.SendAsync(HttpMethod.Get, "/Library?type=movies");
             Assert.AreEqual(HttpStatusCode.OK, library.StatusCode);
             using var empty = await host.SendAsync(HttpMethod.Get, "/Library?type=movies&p=2");
-            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "class=\"library-paging\"");
+            StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "class=\"page-actions\" aria-label=\"Pages\"");
             StringAssert.Contains(await empty.Content.ReadAsStringAsync(), "/Library?type=movies&amp;sort=RecentlyAdded");
             using var invalid = await host.SendAsync(HttpMethod.Get, "/Library?p=2147483647");
             Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
