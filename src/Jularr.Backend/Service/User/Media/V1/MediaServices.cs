@@ -440,4 +440,122 @@ namespace Jularr.Backend.Service.User.Media.V1
             return new UpdateResult(true);
         }
     }
+
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/seasons")]
+    public sealed class ReadWorkSeasonsV1 : UserService<WorkParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WorkSeasonV1>>()];
+        protected override ModuleRequirement GetInstanceModules(WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Specials after the numbered seasons; an episode counts as here when a video of it has a present file.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    season."Number"::integer AS "SeasonNumber",
+                    season."Title",
+                    season."ImageUrl",
+                    extract(year FROM season."ReleasedOn")::integer AS "ReleaseYear",
+                    count(episode."Id")::integer AS "EpisodeCount",
+                    (count(episode."Id") FILTER (WHERE EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id"
+                        WHERE
+                            asset."WorkUnitId" = episode."Id"
+                            AND asset."MediaAssetTypeId" = 1
+                            AND file."MissingSince" IS NULL
+                            AND NOT file."IsSubtitle"
+                    )))::integer AS "AvailableCount"
+                FROM
+                    "WorkUnits" AS season
+                    LEFT JOIN "WorkUnits" AS episode ON episode."ParentWorkUnitId" = season."Id" AND episode."WorkUnitTypeId" = 2
+                WHERE
+                    season."WorkId" = @WorkId
+                    AND season."WorkUnitTypeId" = 1
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = season."WorkId")
+                GROUP BY
+                    season."Id"
+                ORDER BY
+                    season."Number" = 0,
+                    season."Number";
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<WorkSeasonV1>(await Context.ReadSql.ReadListAsync<WorkSeasonV1>(sql, CancellationToken));
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/works/{workId:long}/seasons/{seasonNumber:int}/episodes")]
+    public sealed class ReadWorkEpisodesV1 : UserService<ReadWorkEpisodesParametersV1>
+    {
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<WorkEpisodeV1>>()];
+        protected override ModuleRequirement GetInstanceModules(ReadWorkEpisodesParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(ReadWorkEpisodesParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            // Here when a video has a present file; requested while its target searches it; not yet aired episodes are upcoming.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    episode."Id",
+                    season."Number"::integer AS "SeasonNumber",
+                    episode."Number",
+                    episode."Title",
+                    episode."Overview",
+                    episode."ImageUrl",
+                    episode."RuntimeMinutes"::integer AS "RuntimeMinutes",
+                    episode."ReleasedOn",
+                    playable."Id" AS "MediaAssetId",
+                    CASE WHEN progress."ProgressPositionTypeId" = 1 THEN progress."PositionMs" END AS "ResumePositionMs",
+                    playable."DurationMs",
+                    coalesce(progress."IsCompleted", FALSE) AS "IsCompleted",
+                    CASE
+                        WHEN playable."Id" IS NOT NULL THEN 3
+                        WHEN episode."IsMonitored" AND EXISTS (SELECT 1 FROM "WantedItems" AS wanted WHERE wanted."WorkId" = episode."WorkId" AND NOT wanted."IsPaused") THEN 2
+                        ELSE 1
+                    END::smallint AS "MediaStateTypeId",
+                    coalesce(episode."ReleasedOn" > current_date, FALSE) AS "IsUpcoming"
+                FROM
+                    "WorkUnits" AS episode
+                    JOIN "WorkUnits" AS season ON season."Id" = episode."ParentWorkUnitId"
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            asset."Id",
+                            max(file."DurationMs") AS "DurationMs"
+                        FROM
+                            "MediaAssets" AS asset
+                            JOIN "StoredFiles" AS file ON file."MediaAssetId" = asset."Id" AND file."MissingSince" IS NULL AND NOT file."IsSubtitle"
+                        WHERE
+                            asset."WorkUnitId" = episode."Id"
+                            AND asset."MediaAssetTypeId" = 1
+                        GROUP BY
+                            asset."Id"
+                        ORDER BY
+                            asset."Id"
+                        LIMIT 1
+                    ) AS playable ON TRUE
+                    LEFT JOIN "MediaProgress" AS progress ON progress."ProfileId" = @ProfileId
+                        AND progress."WorkId" = episode."WorkId"
+                        AND progress."WorkUnitId" = episode."Id"
+                WHERE
+                    episode."WorkId" = @WorkId
+                    AND episode."WorkUnitTypeId" = 2
+                    AND season."Number" = @SeasonNumber
+                    AND EXISTS (SELECT 1 FROM "ProfileWorks" AS visible WHERE visible."ProfileId" = @ProfileId AND visible."WorkId" = episode."WorkId")
+                ORDER BY
+                    episode."Number";
+                """;
+            sql.Parameters.Add(Parameters);
+            sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+            return new BaseDataList<WorkEpisodeV1>(await Context.ReadSql.ReadListAsync<WorkEpisodeV1>(sql, CancellationToken));
+        }
+    }
 }

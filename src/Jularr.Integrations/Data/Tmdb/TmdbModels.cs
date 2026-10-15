@@ -46,34 +46,44 @@ namespace Jularr.Integrations.Data.Tmdb
 
     internal sealed class TmdbSeason
     {
-        public TmdbSeason(int seasonNumber, string? name, DateOnly? airDate, int episodeCount)
+        public TmdbSeason(int seasonNumber, string? name, DateOnly? airDate, int episodeCount, string? posterPath = null)
         {
             SeasonNumber = seasonNumber;
             Name = name;
             AirDate = airDate;
             EpisodeCount = episodeCount;
+            PosterPath = posterPath;
         }
 
         public int SeasonNumber { get; }
         public string? Name { get; }
         public DateOnly? AirDate { get; }
         public int EpisodeCount { get; }
+        public string? PosterPath { get; }
     }
 
     internal sealed class TmdbEpisode
     {
-        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate)
+        public TmdbEpisode(int seasonNumber, int episodeNumber, string? name, DateOnly? airDate, string? overview = null, string? stillPath = null, int? runtime = null)
         {
             SeasonNumber = seasonNumber;
             EpisodeNumber = episodeNumber;
             Name = name;
             AirDate = airDate;
+            Overview = overview;
+            StillPath = stillPath;
+            Runtime = runtime;
         }
 
         public int SeasonNumber { get; }
         public int EpisodeNumber { get; }
         public string? Name { get; }
         public DateOnly? AirDate { get; }
+        public string? Overview { get; }
+        public string? StillPath { get; }
+
+        // Minutes.
+        public int? Runtime { get; }
     }
 
     internal sealed class TmdbWork

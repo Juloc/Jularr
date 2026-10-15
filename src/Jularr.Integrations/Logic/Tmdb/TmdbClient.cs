@@ -75,7 +75,7 @@ namespace Jularr.Integrations.Logic.Tmdb
             var seasons = root.TryGetProperty("seasons", out var seasonList) && seasonList.ValueKind == JsonValueKind.Array
                 ? seasonList.EnumerateArray()
                     .Where(season => Int(season, "season_number") is not null)
-                    .Select(season => new TmdbSeason(Int(season, "season_number")!.Value, Text(season, "name"), Date(season, "air_date"), Int(season, "episode_count") ?? 0))
+                    .Select(season => new TmdbSeason(Int(season, "season_number")!.Value, Text(season, "name"), Date(season, "air_date"), Int(season, "episode_count") ?? 0, Text(season, "poster_path")))
                     .ToArray()
                 : [];
             var genres = root.TryGetProperty("genres", out var genreList) && genreList.ValueKind == JsonValueKind.Array
@@ -96,7 +96,8 @@ namespace Jularr.Integrations.Logic.Tmdb
             return document.RootElement.TryGetProperty("episodes", out var episodes) && episodes.ValueKind == JsonValueKind.Array
                 ? episodes.EnumerateArray()
                     .Where(episode => Int(episode, "episode_number") is > 0)
-                    .Select(episode => new TmdbEpisode(Int(episode, "season_number") ?? seasonNumber, Int(episode, "episode_number")!.Value, Text(episode, "name"), Date(episode, "air_date")))
+                    .Select(episode => new TmdbEpisode(Int(episode, "season_number") ?? seasonNumber, Int(episode, "episode_number")!.Value, Text(episode, "name"), Date(episode, "air_date"),
+                        Text(episode, "overview"), Text(episode, "still_path"), Int(episode, "runtime")))
                     .ToArray()
                 : [];
         }
@@ -178,6 +179,9 @@ namespace Jularr.Integrations.Logic.Tmdb
         public static string? PosterUrl(string? path) => path is null ? null : "https://image.tmdb.org/t/p/w500" + path;
 
         public static string? BackdropUrl(string? path) => path is null ? null : "https://image.tmdb.org/t/p/w1280" + path;
+
+        // Episode stills in card size.
+        public static string? StillUrl(string? path) => path is null ? null : "https://image.tmdb.org/t/p/w400" + path;
 
         // Image paths are file names below TMDB's image host.
         private static string? ImagePath(string? path) =>

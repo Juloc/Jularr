@@ -10,6 +10,8 @@ using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.User.Library.V1;
 using Jularr.Backend.Data.Common;
+using WorkEpisodeV1 = Jularr.Backend.Data.User.Media.V1.WorkEpisodeV1;
+using WorkSeasonV1 = Jularr.Backend.Data.User.Media.V1.WorkSeasonV1;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
@@ -526,7 +528,7 @@ namespace Jularr.Backend.Tests
             using var storage = new TemporaryDirectory();
             using var downloads = new TemporaryDirectory();
             var usenet = new FakeUsenet { Results = FakeUsenet.SeriesResults };
-            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet);
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
             await host.Fixture.RunSqlAsync("UPDATE \"LibraryRoots\" SET \"MediaTypeId\" = 2");
 
             // Without a key TMDB is unavailable; the key is stored write-only.
@@ -555,6 +557,29 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(3L, await host.ScalarAsync("SELECT count(*) FROM \"WorkExternalIdentities\""));
             Assert.AreEqual(6L, await host.ScalarAsync("SELECT count(*) FROM \"WorkUnits\" WHERE \"WorkUnitTypeId\" = 2"));
             Assert.AreEqual("Beispiel Serie", await host.ScalarAsync("SELECT \"Title\" FROM \"WorkTitles\" WHERE \"Title\" <> 'Example Show'"));
+
+            // Viewers see the seasons, specials last, and each episode with its still, summary, length and state.
+            using var seasonsRead = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id + "/seasons");
+            Assert.AreEqual(HttpStatusCode.OK, seasonsRead.StatusCode, await seasonsRead.Content.ReadAsStringAsync());
+            var seasonList = (await seasonsRead.Content.ReadFromJsonAsync<BaseDataList<WorkSeasonV1>>())!;
+            CollectionAssert.AreEqual(new[] { 1, 2, 0 }, seasonList.Select(season => season.SeasonNumber).ToArray());
+            Assert.AreEqual((3, 0, "https://image.tmdb.org/t/p/w500/s1.jpg"), (seasonList[0].EpisodeCount, seasonList[0].AvailableCount, seasonList[0].ImageUrl));
+            using var episodesRead = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id + "/seasons/1/episodes");
+            var first = (await episodesRead.Content.ReadFromJsonAsync<BaseDataList<WorkEpisodeV1>>())![0];
+            Assert.AreEqual(("One", "The first.", "https://image.tmdb.org/t/p/w400/one.jpg", (int?)42, MediaStateType.NotRequested),
+                (first.Title, first.Overview, first.ImageUrl, first.RuntimeMinutes, first.MediaStateTypeId));
+            using var laterRead = await host.SendAsync(HttpMethod.Get, "/api/v1/works/" + work.Id + "/seasons/2/episodes");
+            Assert.IsTrue((await laterRead.Content.ReadFromJsonAsync<BaseDataList<WorkEpisodeV1>>())![1].IsUpcoming);
+
+            // The details page lists the seasons beside the episodes of the chosen one.
+            using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + work.Id);
+            var detailsHtml = await details.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, detailsHtml);
+            StringAssert.Contains(detailsHtml, "href=\"/Details/" + work.Id + "?season=2\"");
+            StringAssert.Contains(detailsHtml, "S01 E01");
+            StringAssert.Contains(detailsHtml, "The first.");
+            using var later = await host.SendAsync(HttpMethod.Get, "/Details/" + work.Id + "?season=2");
+            StringAssert.Contains(await later.Content.ReadAsStringAsync(), "Upcoming");
 
             // A fully aired season comes as a pack, the aired episode of the running season alone.
             await host.Fixture.RunSqlAsync($"""
@@ -1395,9 +1420,9 @@ namespace Jularr.Backend.Tests
                 return path switch
                 {
                     "/3/search/tv" => Json("""{"results":[{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","overview":"A show."}]}"""),
-                    "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189,"imdb_id":"tt0903747"},"seasons":[{"season_number":0,"name":"Specials","episode_count":1},{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":3},{"season_number":2,"name":"Season 2","air_date":"2021-04-01","episode_count":2}]}"""),
+                    "/3/tv/1399" => Json("""{"id":1399,"name":"Example Show","original_name":"Beispiel Serie","first_air_date":"2020-04-01","external_ids":{"tvdb_id":81189,"imdb_id":"tt0903747"},"seasons":[{"season_number":0,"name":"Specials","episode_count":1},{"season_number":1,"name":"Season 1","air_date":"2020-04-01","episode_count":3,"poster_path":"/s1.jpg"},{"season_number":2,"name":"Season 2","air_date":"2021-04-01","episode_count":2}]}"""),
                     "/3/tv/1399/season/0" => Json("""{"episodes":[{"season_number":0,"episode_number":1,"name":"Pilot extra","air_date":"2020-01-01"}]}"""),
-                    "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01"},{"season_number":1,"episode_number":2,"name":"Two","air_date":"2020-04-08"},{"season_number":1,"episode_number":3,"name":"Three","air_date":"2020-04-15"}]}"""),
+                    "/3/tv/1399/season/1" => Json("""{"episodes":[{"season_number":1,"episode_number":1,"name":"One","air_date":"2020-04-01","overview":"The first.","still_path":"/one.jpg","runtime":42},{"season_number":1,"episode_number":2,"name":"Two","air_date":"2020-04-08"},{"season_number":1,"episode_number":3,"name":"Three","air_date":"2020-04-15"}]}"""),
                     "/3/tv/1399/season/2" => Json($$$"""{"episodes":[{"season_number":2,"episode_number":1,"name":"Four","air_date":"2021-04-01"},{"season_number":2,"episode_number":2,"name":"Five","air_date":"{{{future}}}"}]}"""),
                     _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                 };

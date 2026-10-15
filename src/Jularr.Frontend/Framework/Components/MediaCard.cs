@@ -118,7 +118,7 @@ namespace Jularr.Frontend.Framework
             // Unknown detail keeps coarse status.
             if (_availability is null)
             {
-                content.Add(new Div(new Span(new Text(statusKey)).Class("media-card__state media-card__state--" + statusKey[(statusKey.LastIndexOf('.') + 1)..].ToLowerInvariant()))
+                content.Add(new Div(new Span(new Text(statusKey)).Class("media-card__state state-chip state-chip--" + statusKey[(statusKey.LastIndexOf('.') + 1)..].ToLowerInvariant()))
                     .Class("media-card__status"));
             }
 

@@ -292,4 +292,116 @@ namespace Jularr.Backend.Data.User.Media.V1
         [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitTitle))]
         public string? UnitTitle { get; }
     }
+
+    public sealed class ReadWorkEpisodesParametersV1 : BaseParameters
+    {
+        public ReadWorkEpisodesParametersV1(long workId, int seasonNumber)
+        {
+            WorkId = workId;
+            SeasonNumber = seasonNumber;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber))]
+        public int SeasonNumber { get; }
+    }
+
+    // A season with its poster, year and how much of it is here.
+    public sealed class WorkSeasonV1 : BaseResponse
+    {
+        public WorkSeasonV1(int seasonNumber, string? title, string? imageUrl, int? releaseYear, int episodeCount, int availableCount)
+        {
+            SeasonNumber = seasonNumber;
+            Title = title;
+            ImageUrl = imageUrl;
+            ReleaseYear = releaseYear;
+            EpisodeCount = episodeCount;
+            AvailableCount = availableCount;
+        }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber))]
+        public int SeasonNumber { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl))]
+        public string? ImageUrl { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.EpisodeCount))]
+        public int EpisodeCount { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.AvailableCount))]
+        public int AvailableCount { get; }
+    }
+
+    // An episode as a card: still, summary and length, what plays and where this profile stopped, and its state.
+    public sealed class WorkEpisodeV1 : BaseResponse
+    {
+        public WorkEpisodeV1(long id, int seasonNumber, decimal number, string? title, string? overview, string? imageUrl, int? runtimeMinutes, DateOnly? releasedOn,
+            long? mediaAssetId, long? resumePositionMs, long? durationMs, bool isCompleted, MediaStateType mediaStateTypeId, bool isUpcoming)
+        {
+            Id = id;
+            SeasonNumber = seasonNumber;
+            Number = number;
+            Title = title;
+            Overview = overview;
+            ImageUrl = imageUrl;
+            RuntimeMinutes = runtimeMinutes;
+            ReleasedOn = releasedOn;
+            MediaAssetId = mediaAssetId;
+            ResumePositionMs = resumePositionMs;
+            DurationMs = durationMs;
+            IsCompleted = isCompleted;
+            MediaStateTypeId = mediaStateTypeId;
+            IsUpcoming = isUpcoming;
+        }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.SeasonNumber))]
+        public int SeasonNumber { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.UnitNumber))]
+        public decimal Number { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Title))]
+        public string? Title { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.Overview))]
+        public string? Overview { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ImageUrl))]
+        public string? ImageUrl { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.RuntimeMinutes))]
+        public int? RuntimeMinutes { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.ReleasedOn))]
+        public DateOnly? ReleasedOn { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id), false)]
+        public long? MediaAssetId { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.PositionMs), false)]
+        public long? ResumePositionMs { get; }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.DurationMs), false)]
+        public long? DurationMs { get; }
+
+        [DataField(typeof(PlaybackFields), nameof(PlaybackFields.IsCompleted))]
+        public bool IsCompleted { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.MediaStateTypeId))]
+        public MediaStateType MediaStateTypeId { get; }
+
+        [DataField(typeof(WorkUnitFields), nameof(WorkUnitFields.IsUpcoming))]
+        public bool IsUpcoming { get; }
+    }
 }

@@ -205,6 +205,10 @@ CREATE TABLE "WorkUnits" (
     "Number" numeric(9, 3) NOT NULL CHECK ("Number" >= 0),
     "Title" varchar(500) NULL CHECK (length(btrim("Title")) > 0),
     "ReleasedOn" date NULL,
+    -- A season's poster or an episode's still, its summary in the instance language and its length.
+    "Overview" varchar(4000) NULL CHECK (length(btrim("Overview")) > 0),
+    "ImageUrl" varchar(500) NULL CHECK ("ImageUrl" ~ '^https://'),
+    "RuntimeMinutes" smallint NULL CHECK ("RuntimeMinutes" BETWEEN 1 AND 1440),
     -- Unmonitored episodes and volumes are never searched; specials start unmonitored.
     "IsMonitored" boolean NOT NULL DEFAULT TRUE,
     "CreatedAt" timestamptz NOT NULL DEFAULT now(),

@@ -19,8 +19,10 @@ namespace Jularr.Frontend.Pages.User.Details
 {
     public sealed class DetailsModel(ReadWorkV1 read, ReadWorkAvailabilityV1 readAvailability, UpdateWatchlistV1 update, CreateRequestV1 request, ReadUiLocalesV1 locales,
         ReadWorkPlatformsV1 readPlatforms, ReadRequestProfilesV1 readRequestProfiles, ReadWorkCollectionsV1 readCollections, AddCollectionWorkV1 addToCollection,
-        RemoveCollectionWorkV1 removeFromCollection, IAntiforgery antiforgery, UiText texts) : JularrPage
+        RemoveCollectionWorkV1 removeFromCollection, ReadWorkSeasonsV1 readSeasons, ReadWorkEpisodesV1 readEpisodes, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
+        private IReadOnlyList<WorkSeasonV1> _seasons = [];
+        private IReadOnlyList<WorkEpisodeV1> _episodes = [];
         private WorkDetailsV1? _work;
         private IReadOnlyList<WorkCollectionV1> _collections = [];
         private PageResult<WorkAvailabilityV1>? _availability;
@@ -34,6 +36,10 @@ namespace Jularr.Frontend.Pages.User.Details
 
         [BindProperty(SupportsGet = true, Name = "p")]
         public int PageNumber { get; set; } = 1;
+
+        // The season whose episodes are shown; the first numbered one by default.
+        [BindProperty(SupportsGet = true, Name = "season")]
+        public int? SeasonNumber { get; set; }
 
         protected override void Define(Page page)
         {
@@ -120,8 +126,13 @@ namespace Jularr.Frontend.Pages.User.Details
 
                 page.Content.Add(new Div([.. actions]).Class("details-actions"));
 
+                // A series shows its seasons and their episodes instead of its files.
+                if (_seasons.Count > 0)
+                {
+                    page.Content.Add(Series(work));
+                }
                 // Stored inventory, no storage access; named sections split it where staff defined them.
-                if (_availability is { Items.Count: > 0 } availability)
+                else if (_availability is { Items.Count: > 0 } availability)
                 {
                     var sections = new List<IUiComponent>();
                     var start = 0;
@@ -163,6 +174,38 @@ namespace Jularr.Frontend.Pages.User.Details
             }
             else if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
         }
+
+        private IUiComponent Series(WorkDetailsV1 work)
+        {
+            var home = "/Details/" + work.Id.ToString(CultureInfo.InvariantCulture);
+            var seasons = _seasons.Select(season =>
+            {
+                var current = season.SeasonNumber == SelectedSeason;
+                var facts = string.Join(" · ", new[] { string.Format(CultureInfo.CurrentCulture, texts["details.episodeCount"], season.EpisodeCount),
+                    season.ReleaseYear?.ToString(CultureInfo.InvariantCulture) }.OfType<string>());
+                var link = new A(season.ImageUrl is null ? new Span().Class("details-season__poster") : new MediaImage(season.ImageUrl, "", 92, 138),
+                    new Span(new Strong(new ValueText(SeasonName(season))), new Span(new ValueText(facts)).Class("details-season__facts")).Class("details-season__text"))
+                    .Class(current ? "details-season details-season--current" : "details-season").Attribute("href", home + "?season=" + season.SeasonNumber.ToString(CultureInfo.InvariantCulture));
+                return current ? (IUiComponent)link.Attribute("aria-current", "page") : link;
+            });
+            var canPlay = texts.CanPlay();
+            var episodes = _episodes.Select(episode => (IUiComponent)new EpisodeCard(
+                    "S" + episode.SeasonNumber.ToString("00", CultureInfo.InvariantCulture) + " E" + episode.Number.ToString("00.###", CultureInfo.InvariantCulture),
+                    episode.Title, episode.Overview, episode.ImageUrl, episode.RuntimeMinutes,
+                    episode.IsUpcoming && episode.MediaStateTypeId != MediaStateType.Available ? "details.upcoming" : "media.state." + episode.MediaStateTypeId,
+                    canPlay && episode.MediaAssetId is { } asset ? "/Player/" + asset.ToString(CultureInfo.InvariantCulture) : null)
+                .Progress(episode.IsCompleted ? null : episode.ResumePositionMs, episode.DurationMs));
+            return new Div(
+                new Section(new H2(new Text("details.seasons")), new Nav([.. seasons]).Class("details-seasons").Attribute("aria-label", texts["details.seasons"])).Class("details-series__seasons"),
+                new Section(new H2(new Text("details.episodes")), _episodes.Count == 0 ? new P(new Text("details.noEpisodes")) : new Div([.. episodes]).Class("details-episodes"))
+                    .Class("details-series__episodes")).Class("details-series");
+        }
+
+        private string SeasonName(WorkSeasonV1 season) => season.SeasonNumber == 0 ? texts["details.specials"]
+            : MediaUnitLabel.Format(texts, WorkUnitType.Season, season.SeasonNumber, null)!;
+
+        private int? SelectedSeason => SeasonNumber is { } chosen && _seasons.Any(season => season.SeasonNumber == chosen) ? chosen
+            : _seasons.FirstOrDefault(season => season.SeasonNumber > 0)?.SeasonNumber ?? _seasons.FirstOrDefault()?.SeasonNumber;
 
         private Table<WorkAvailabilityV1> Versions(IReadOnlyList<WorkAvailabilityV1> items) => new Table<WorkAvailabilityV1>(items)
             .Content("details.unit", item => new ValueText(MediaUnitLabel.Format(texts, item.WorkUnitTypeId, item.UnitNumber, item.ParentUnitNumber, item.UnitTitle) ?? texts["details.wholeWork"]))
@@ -227,6 +270,15 @@ namespace Jularr.Frontend.Pages.User.Details
         protected override async Task LoadDataAsync()
         {
             _work = await read.ExecuteAsync<WorkDetailsV1>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+            if (_work.MediaTypeId == MediaType.Series)
+            {
+                _seasons = await readSeasons.ExecuteAsync<BaseDataList<WorkSeasonV1>>(new WorkParametersV1(Id), HttpContext.RequestAborted);
+                if (SelectedSeason is { } season)
+                {
+                    _episodes = await readEpisodes.ExecuteAsync<BaseDataList<WorkEpisodeV1>>(new ReadWorkEpisodesParametersV1(Id, season), HttpContext.RequestAborted);
+                }
+            }
+
             _availability = await readAvailability.ExecuteAsync<PageResult<WorkAvailabilityV1>>(new ReadWorkAvailabilityParametersV1(Id, page: PageNumber, pageSize: 48), HttpContext.RequestAborted);
             if (texts.CanCollect())
             {

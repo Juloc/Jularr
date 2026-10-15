@@ -1,0 +1,39 @@
+// State as a chip: available in the success colour, requested or in progress in the accent, anything else light.
+.state-chip {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 6px;
+    max-width: 100%;
+    padding: 3px 10px;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+
+    &::before {
+        content: "";
+        flex: none;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+    }
+
+    &--available,
+    &--known {
+        border-color: color-mix(in srgb, var(--success) 30%, var(--surface));
+        background: color-mix(in srgb, var(--success) 12%, var(--surface));
+        color: var(--success);
+    }
+
+    &--requested,
+    &--inprogress {
+        border-color: var(--accent-line);
+        background: var(--accent-soft);
+        color: var(--accent-text);
+    }
+}

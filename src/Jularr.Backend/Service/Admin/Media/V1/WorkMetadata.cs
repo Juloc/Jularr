@@ -134,10 +134,12 @@ namespace Jularr.Backend.Service.Admin.Media.V1
                 work = await _tmdb.ReadWorkAsync(connection, Kind(mediaType), tmdbId, ct);
                 foreach (var season in work.Seasons)
                 {
-                    units.Add(new { Season = season.SeasonNumber, Episode = (int?)null, Title = TextLimit.Cut(season.Name, 500), ReleasedOn = season.AirDate });
+                    units.Add(new { Season = season.SeasonNumber, Episode = (int?)null, Title = TextLimit.Cut(season.Name, 500), ReleasedOn = season.AirDate, Overview = (string?)null,
+                        ImageUrl = TmdbClient.PosterUrl(season.PosterPath), RuntimeMinutes = (int?)null });
                     foreach (var episode in await _tmdb.ReadSeasonAsync(connection, tmdbId, season.SeasonNumber, ct))
                     {
-                        units.Add(new { Season = season.SeasonNumber, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.AirDate });
+                        units.Add(new { Season = season.SeasonNumber, Episode = (int?)episode.EpisodeNumber, Title = TextLimit.Cut(episode.Name, 500), ReleasedOn = episode.AirDate,
+                            Overview = TextLimit.Cut(episode.Overview, 4000), ImageUrl = TmdbClient.StillUrl(episode.StillPath), RuntimeMinutes = episode.Runtime is > 0 and <= 1440 ? episode.Runtime : null });
                     }
                 }
             }

@@ -28,7 +28,7 @@ sections over a Work's unit numbers (UnitGroups module), and Franchises, TMDB fi
 Work may name (Franchises module). It is embedded as
 `Jularr.Database.Media.sql` and adds MediaTypes, Works, WorkTitles,
 WorkExternalIdentities (tmdb/tvdb/imdb mappings, never an alternative Work ID) and
-WatchlistEntries. Episode units carry their air date for acquisition. It is not a migration for an existing database. Media integration
+WatchlistEntries. Episode units carry their air date for acquisition; seasons their poster, episodes their still, summary and length from TMDB. It is not a migration for an existing database. Media integration
 tests explicitly install it in their disposable Account fixture.
 
 `Acquisition.sql` also holds Notifications with their types and the per-profile

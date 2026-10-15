@@ -347,7 +347,8 @@ namespace Jularr.Backend.Logic.Media
                     SELECT
                         *
                     FROM
-                        jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Track" integer, "Title" text, "ReleasedOn" date)
+                        jsonb_to_recordset(@Units::jsonb) AS item ("Season" integer, "Episode" integer, "Volume" integer, "Track" integer, "Title" text, "ReleasedOn" date,
+                            "Overview" text, "ImageUrl" text, "RuntimeMinutes" integer)
                 ), monitoring AS (
                     SELECT
                         COALESCE(bool_and(wanted."MonitorsNewUnits"), TRUE) AS "MonitorsNewUnits"
@@ -378,14 +379,15 @@ namespace Jularr.Backend.Logic.Media
                         "ReleasedOn" = COALESCE(EXCLUDED."ReleasedOn", "WorkUnits"."ReleasedOn")
                 ), seasons AS (
                     INSERT INTO
-                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn")
+                        "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "ImageUrl")
                     SELECT
                         @Id,
                         NULL,
                         1,
                         item."Season",
                         NULLIF(btrim(item."Title"), ''),
-                        item."ReleasedOn"
+                        item."ReleasedOn",
+                        item."ImageUrl"
                     FROM
                         item
                     WHERE
@@ -394,13 +396,14 @@ namespace Jularr.Backend.Logic.Media
                     ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
                     SET
                         "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
-                        "ReleasedOn" = EXCLUDED."ReleasedOn"
+                        "ReleasedOn" = EXCLUDED."ReleasedOn",
+                        "ImageUrl" = COALESCE(EXCLUDED."ImageUrl", "WorkUnits"."ImageUrl")
                     RETURNING
                         "Id",
                         "Number"
                 )
                 INSERT INTO
-                    "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored")
+                    "WorkUnits" ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number", "Title", "ReleasedOn", "IsMonitored", "Overview", "ImageUrl", "RuntimeMinutes")
                 SELECT
                     @Id,
                     seasons."Id",
@@ -408,7 +411,10 @@ namespace Jularr.Backend.Logic.Media
                     item."Episode",
                     NULLIF(btrim(item."Title"), ''),
                     item."ReleasedOn",
-                    item."Season" > 0 AND monitoring."MonitorsNewUnits"
+                    item."Season" > 0 AND monitoring."MonitorsNewUnits",
+                    NULLIF(btrim(item."Overview"), ''),
+                    item."ImageUrl",
+                    item."RuntimeMinutes"
                 FROM
                     item
                     JOIN seasons ON seasons."Number" = item."Season"
@@ -418,7 +424,10 @@ namespace Jularr.Backend.Logic.Media
                 ON CONFLICT ("WorkId", "ParentWorkUnitId", "WorkUnitTypeId", "Number") DO UPDATE
                 SET
                     "Title" = COALESCE(EXCLUDED."Title", "WorkUnits"."Title"),
-                    "ReleasedOn" = EXCLUDED."ReleasedOn";
+                    "ReleasedOn" = EXCLUDED."ReleasedOn",
+                    "Overview" = COALESCE(EXCLUDED."Overview", "WorkUnits"."Overview"),
+                    "ImageUrl" = COALESCE(EXCLUDED."ImageUrl", "WorkUnits"."ImageUrl"),
+                    "RuntimeMinutes" = COALESCE(EXCLUDED."RuntimeMinutes", "WorkUnits"."RuntimeMinutes");
                 """;
             sql.Parameters.Add(data);
             sql.Parameters.Add(new WorkIdData(workId.Value));

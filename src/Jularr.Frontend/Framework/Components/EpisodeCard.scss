@@ -1,0 +1,97 @@
+.episode-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+
+    &__art {
+        position: relative;
+        display: block;
+        aspect-ratio: 16 / 9;
+        overflow: hidden;
+        background: var(--accent-soft);
+        color: #fff;
+
+        .media-image { width: 100%; height: 100%; object-fit: cover; }
+    }
+
+    &__placeholder { width: 100%; height: 100%; }
+
+    &__runtime {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        padding: 2px 8px;
+        border-radius: var(--radius-control);
+        background: rgb(0 0 0 / 60%);
+        font-size: 12px;
+        font-weight: 650;
+    }
+
+    // Playing rises over a shade on hover or focus; touch shows it always.
+    &__play {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgb(0 0 0 / 40%);
+        font-weight: 700;
+        opacity: 0;
+        transition: opacity .15s ease;
+    }
+
+    &__art:hover &__play,
+    &__art:focus-visible &__play { opacity: 1; }
+
+    @media (hover: none), (pointer: coarse) {
+        &__play { opacity: 1; background: linear-gradient(transparent 55%, rgb(0 0 0 / 50%)); place-items: end start; padding: 10px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        &__play { transition: none; }
+    }
+
+    &__progress {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        appearance: none;
+        width: 100%;
+        height: 4px;
+        border: 0;
+        background: rgb(255 255 255 / 35%);
+        color: var(--accent);
+
+        &::-webkit-progress-bar { background: rgb(255 255 255 / 35%); }
+        &::-webkit-progress-value { background: var(--accent); }
+        &::-moz-progress-bar { background: var(--accent); }
+    }
+
+    &__body {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px 14px 14px;
+    }
+
+    &__label { color: var(--accent-text); font-size: 12px; font-weight: 700; }
+
+    &__title { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
+
+    &__overview {
+        display: -webkit-box;
+        overflow: hidden;
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+    }
+
+    .state-chip { margin-top: auto; }
+}
