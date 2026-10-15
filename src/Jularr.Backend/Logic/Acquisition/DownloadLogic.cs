@@ -137,7 +137,8 @@ namespace Jularr.Backend.Logic.Acquisition
                         LIMIT 1
                     ) AS "Author",
                     platform."Abbreviation" AS "PlatformAbbreviation",
-                    platform."IgdbId" AS "PlatformIgdbId"
+                    platform."IgdbId" AS "PlatformIgdbId",
+                    wanted."CreatedAt" AS "WantedSince"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"

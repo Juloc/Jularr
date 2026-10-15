@@ -26,14 +26,22 @@ namespace Jularr.Backend.Logic.Acquisition
             _ => throw new ArgumentOutOfRangeException(nameof(mediaType))
         };
 
-        public static QualityProfile ReadProfile(WantedTargetData target)
+        public static QualityProfile ReadProfile(WantedTargetData target, DateTime? now = null)
         {
-            // Validated once per search; requested languages order releases of equal quality.
+            // Validated once per search; requested languages order releases of equal quality; fallback qualities join once the target has waited long enough.
             var definition = JsonSerializer.Deserialize<AcquisitionProfileDefinition>(target.Definition!, DefinitionOptions)
                 ?? throw new InvalidOperationException("The acquisition profile is invalid.");
-            var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, definition.AllowedQualities,
+            var fallback = definition.FallbackAfterHours is { } hours && now is { } current && target.WantedSince.AddHours(hours) <= current ? definition.FallbackQualities : [];
+            var allowed = definition.QualityOrder.Where(quality => definition.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)
+                || fallback.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
+            var profile = new QualityProfile(target.AcquisitionProfileId!.Value.ToString(CultureInfo.InvariantCulture), target.ProfileName!, allowed,
                 definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality, definition.MinimumSizeBytes, definition.MaximumSizeBytes, definition.MustContain,
-                definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules) { LanguageOrder = target.RequestedLocales };
+                definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules)
+            {
+                LanguageOrder = target.RequestedLocales,
+                DelayMinutes = definition.DelayMinutes,
+                FallbackQualities = fallback
+            };
             if (ReleaseScorer.ValidateProfile(profile) is { Count: > 0 } errors)
             {
                 throw new InvalidOperationException("The acquisition profile is invalid: " + string.Join("; ", errors));
@@ -114,6 +122,20 @@ namespace Jularr.Backend.Logic.Acquisition
                     ContextScore = judgement.ContextScore,
                     Languages = judgement.Languages ?? judgement.Parsed?.AudioLanguages ?? []
                 };
+        }
+
+        // An automatic grab waits until the winner is as old as the profile's delay, unless it has the best allowed quality.
+        public static DateTime? DelayUntil(QualityProfile profile, CandidateEvaluation winner, DateTime now)
+        {
+            if (profile.DelayMinutes == 0 || winner.Candidate.PublishedAt is not { } published
+                || string.Equals(winner.Score?.QualityKey, profile.QualityOrder.FirstOrDefault(quality => profile.AllowedQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var until = published.UtcDateTime.AddMinutes(profile.DelayMinutes);
+            return until > now ? until : null;
         }
 
         // The outcome a target remembers for the next automatic search.

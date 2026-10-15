@@ -932,6 +932,50 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Profiles_DelayWaitsForABetterRelease_FallbackQualitiesJoinAfterTheirHours()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet { Published = DateTimeOffset.UtcNow.AddMinutes(-10) };
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+            var wantedId = await CreateWantedMovieAsync(host);
+            var profileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"MediaTypeId\" = 1 AND \"IsDefault\""))!;
+
+            async Task<HttpResponseMessage> SaveAsync(string[] allowed, int delay, string[]? fallback = null, int? hours = null)
+            {
+                var version = (long)(await host.ScalarAsync($"SELECT \"Version\" FROM \"AcquisitionProfiles\" WHERE \"Id\" = {profileId}"))!;
+                return await host.SendAsync(HttpMethod.Put, "/api/v1/admin/acquisition/profiles/" + profileId, new SaveAcquisitionProfileDataV1("Movies", MediaType.Movie, true, allowed,
+                    false, null, null, null, [], [], version, null, delay, fallback, hours));
+            }
+
+            // A fresh release below the best allowed quality waits for the delay; the target looks again when it ends.
+            using (var saved = await SaveAsync(["BLURAY-1080p", "WEB-1080p"], 120)) Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+            Assert.AreEqual("release_delayed", await host.ScalarAsync($"SELECT \"LastOutcomeKey\" FROM \"WantedItems\" WHERE \"Id\" = {wantedId}"));
+            Assert.AreEqual(true, await host.ScalarAsync($"SELECT \"NextSearchAt\" BETWEEN now() + interval '100 minutes' AND now() + interval '111 minutes' FROM \"WantedItems\" WHERE \"Id\" = {wantedId}"));
+
+            // Fallback qualities are other known qualities with the hours after which they count.
+            using (var noHours = await SaveAsync(["BLURAY-1080p"], 0, ["WEB-720p"])) Assert.AreEqual(HttpStatusCode.BadRequest, noHours.StatusCode);
+            using (var overlap = await SaveAsync(["BLURAY-1080p"], 0, ["BLURAY-1080p"], 1)) Assert.AreEqual(HttpStatusCode.BadRequest, overlap.StatusCode);
+
+            // Before its hours the fallback quality is refused; afterwards it is grabbed and says why.
+            using (var saved = await SaveAsync(["BLURAY-1080p"], 0, ["WEB-720p"], 1)) Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL");
+            await RunAsync<SearchDueWantedV1>(host);
+            Assert.AreEqual(0, usenet.Grabbed.Count);
+            await host.Fixture.RunSqlAsync("UPDATE \"WantedItems\" SET \"NextSearchAt\" = NULL, \"CreatedAt\" = now() - interval '2 hours'");
+            using var searched = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/wanted/" + wantedId + "/search", new SearchWantedDataV1());
+            var lower = (await searched.Content.ReadFromJsonAsync<BaseDataList<WantedReleaseCandidateV1>>())!.Single(candidate => candidate.Title == Lower);
+            Assert.AreEqual(ReleaseDecisionType.Eligible, lower.ReleaseDecisionTypeId);
+            await RunAsync<SearchDueWantedV1>(host);
+            CollectionAssert.AreEqual(new[] { "https://indexer.example.test/getnzb/lower" }, usenet.Grabbed);
+
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Profiles?AcquisitionProfileId=" + profileId);
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "Accept the fallback after (hours)");
+        }
+
+        [TestMethod]
         public async Task Grab_ConcurrentCallsStartOneDownload_AndArrPlusSwitchesOffSeparately()
         {
             using var storage = new TemporaryDirectory();
@@ -1164,6 +1208,7 @@ namespace Jularr.Backend.Tests
 
             public List<string> Grabbed { get; } = [];
             public List<string> IndexerHosts { get; } = [];
+            public DateTimeOffset? Published { get; set; }
             public string Queue { get; set; } = EmptyQueue;
             public string History { get; set; } = """{"history":{"slots":[]}}""";
 
@@ -1199,7 +1244,8 @@ namespace Jularr.Backend.Tests
                     if (request.RequestUri.Host == "broken.example.test") return new HttpResponseMessage(HttpStatusCode.InternalServerError);
                     var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri.Query);
                     if (query["apikey"] != (request.RequestUri.Host == "open.example.test" ? null : IndexerKey)) return new HttpResponseMessage(HttpStatusCode.Unauthorized);
-                    return Xml(query["t"] == "caps" ? Capabilities : Results ?? MovieResults);
+                    var found = query["t"] == "caps" ? Capabilities : Results ?? MovieResults;
+                    return Xml(Published is { } published ? found.Replace("Mon, 05 Oct 2026 10:00:00 +0000", published.ToString("r")) : found);
                 }
 
                 // SABnzbd receives form posts.

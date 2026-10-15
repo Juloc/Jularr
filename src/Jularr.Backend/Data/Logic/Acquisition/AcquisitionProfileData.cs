@@ -10,8 +10,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class AcquisitionProfileInputData
     {
         public AcquisitionProfileInputData(long? id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
-            int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version)
+            int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version, int delayMinutes, string[] fallbackQualities, int? fallbackAfterHours)
         {
+            DelayMinutes = delayMinutes;
+            FallbackQualities = fallbackQualities;
+            FallbackAfterHours = fallbackAfterHours;
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
@@ -40,6 +43,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string[] MustContain { get; }
         public string[] MustNotContain { get; }
         public long? Version { get; }
+        public int DelayMinutes { get; }
+        public string[] FallbackQualities { get; }
+        public int? FallbackAfterHours { get; }
     }
 
     internal sealed class AcquisitionProfileRowData : BaseData

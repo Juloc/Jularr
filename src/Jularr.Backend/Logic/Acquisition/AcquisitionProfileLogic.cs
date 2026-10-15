@@ -40,9 +40,22 @@ namespace Jularr.Backend.Logic.Acquisition
                 throw new DataValidationException(nameof(input.MaximumSizeMb), "out_of_range");
             }
 
+            // Fallback qualities are other known qualities and need the hours after which they count.
+            var fallback = order.Where(quality => input.FallbackQualities.Contains(quality, StringComparer.OrdinalIgnoreCase)).ToArray();
+            if (fallback.Length != input.FallbackQualities.Distinct(StringComparer.OrdinalIgnoreCase).Count() || fallback.Intersect(allowed, StringComparer.OrdinalIgnoreCase).Any())
+            {
+                throw new DataValidationException(nameof(input.FallbackQualities), "unknown_catalog_value");
+            }
+
+            if ((fallback.Length > 0) != (input.FallbackAfterHours is not null))
+            {
+                throw new DataValidationException(nameof(input.FallbackAfterHours), "required");
+            }
+
             var stored = existing is null ? null : JsonSerializer.Deserialize<AcquisitionProfileDefinition>(existing, AcquisitionSelectionLogic.DefinitionOptions);
             var definition = new AcquisitionProfileDefinition(allowed, [.. order], input.UpgradeAllowed, cutoff, input.MinimumSizeMb * Megabyte, input.MaximumSizeMb * Megabyte,
-                Terms(input.MustContain), Terms(input.MustNotContain), stored?.RequiredRegex ?? [], stored?.RejectedRegex ?? [], stored?.ScoreRules ?? []);
+                Terms(input.MustContain), Terms(input.MustNotContain), stored?.RequiredRegex ?? [], stored?.RejectedRegex ?? [], stored?.ScoreRules ?? [], input.DelayMinutes, fallback,
+                fallback.Length > 0 ? input.FallbackAfterHours : null);
             var profile = new QualityProfile("0", input.Name, definition.AllowedQualities, definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality,
                 definition.MinimumSizeBytes, definition.MaximumSizeBytes, definition.MustContain, definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules);
             if (ReleaseScorer.ValidateProfile(profile).Count > 0)
@@ -240,7 +253,8 @@ namespace Jularr.Backend.Logic.Acquisition
 
             var stored = Definition(state);
             var definition = new AcquisitionProfileDefinition(stored.AllowedQualities, stored.QualityOrder, stored.UpgradeAllowed, stored.UpgradeCutoffQuality, stored.MinimumSizeBytes,
-                stored.MaximumSizeBytes, stored.MustContain, stored.MustNotContain, stored.RequiredRegex, stored.RejectedRegex, change(stored.ScoreRules));
+                stored.MaximumSizeBytes, stored.MustContain, stored.MustNotContain, stored.RequiredRegex, stored.RejectedRegex, change(stored.ScoreRules), stored.DelayMinutes,
+                stored.FallbackQualities, stored.FallbackAfterHours);
             var sql = new SqlStatement();
             sql.Statement =
                 """

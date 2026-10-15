@@ -35,6 +35,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     ((profile."Definition" ->> 'MaximumSizeBytes')::bigint / 1048576)::integer AS "MaximumSizeMb",
                     ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustContain')) AS "MustContain",
                     ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustNotContain')) AS "MustNotContain",
+                    coalesce((profile."Definition" ->> 'DelayMinutes')::integer, 0) AS "DelayMinutes",
+                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'FallbackQualities', '[]'::jsonb))) AS "FallbackQualities",
+                    (profile."Definition" ->> 'FallbackAfterHours')::integer AS "FallbackAfterHours",
                     (
                         SELECT
                             count(*)::integer
@@ -82,6 +85,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     ((profile."Definition" ->> 'MaximumSizeBytes')::bigint / 1048576)::integer AS "MaximumSizeMb",
                     ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustContain')) AS "MustContain",
                     ARRAY(SELECT jsonb_array_elements_text(profile."Definition" -> 'MustNotContain')) AS "MustNotContain",
+                    coalesce((profile."Definition" ->> 'DelayMinutes')::integer, 0) AS "DelayMinutes",
+                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'FallbackQualities', '[]'::jsonb))) AS "FallbackQualities",
+                    (profile."Definition" ->> 'FallbackAfterHours')::integer AS "FallbackAfterHours",
                     (
                         SELECT
                             count(*)::integer
@@ -195,6 +201,6 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         public static AcquisitionProfileInputData Create(long? id, SaveAcquisitionProfileDataV1 data) =>
             new(id, data.Name, data.MediaTypeId, data.MediaSubtypeId, data.IsDefault, data.AllowedQualities, data.UpgradeAllowed, data.UpgradeCutoffQuality, data.MinimumSizeMb, data.MaximumSizeMb,
-                data.MustContain, data.MustNotContain, data.Version);
+                data.MustContain, data.MustNotContain, data.Version, data.DelayMinutes, data.FallbackQualities, data.FallbackAfterHours);
     }
 }

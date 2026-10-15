@@ -25,6 +25,10 @@ namespace Jularr.Backend.Logic.Acquisition
             {
                 rejections.Add(new ReleaseReason("QualityNotAllowed", qualityKey));
             }
+            else if (profile.FallbackQualities.Contains(qualityKey, StringComparer.OrdinalIgnoreCase))
+            {
+                scoreReasons.Add(new ReleaseReason("FallbackQuality", qualityKey));
+            }
 
             if ((profile.MinimumSizeBytes is not null || profile.MaximumSizeBytes is not null) &&
                 candidate.SizeBytes is null)

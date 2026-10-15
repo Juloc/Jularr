@@ -80,7 +80,8 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             var input = _input ?? (_selected is { } selected
                 ? new SaveAcquisitionProfileDataV1(selected.Name, selected.MediaTypeId, selected.IsDefault, selected.AllowedQualities, selected.UpgradeAllowed, selected.UpgradeCutoffQuality,
-                    selected.MinimumSizeMb, selected.MaximumSizeMb, selected.MustContain, selected.MustNotContain, selected.Version, selected.MediaSubtypeId)
+                    selected.MinimumSizeMb, selected.MaximumSizeMb, selected.MustContain, selected.MustNotContain, selected.Version, selected.MediaSubtypeId, selected.DelayMinutes,
+                    selected.FallbackQualities, selected.FallbackAfterHours)
                 : NewProfile(NewFor!.Value, NewForSubtype));
             var qualities = ProfileQualities.For(input.MediaTypeId, input.MediaSubtypeId).Select(quality => new SelectOption(quality, quality)).ToArray();
 
@@ -98,6 +99,9 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 form.Number(item => item.MaximumSizeMb, "profile.maximumSize");
                 form.Text(item => item.MustContain, "profile.mustContain");
                 form.Text(item => item.MustNotContain, "profile.mustNotContain");
+                form.Number(item => item.DelayMinutes, "profile.delay");
+                form.Choices(item => item.FallbackQualities, "profile.fallbackQualities", qualities);
+                form.Number(item => item.FallbackAfterHours, "profile.fallbackAfter");
                 form.Submit("common.save");
             }, Address(AcquisitionProfileId, NewFor, NewForSubtype), csrf, input, _input is null ? null : FormError);
         }
@@ -166,10 +170,11 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string? name, [BindRequired] bool isDefault, string[]? allowedQualities, [BindRequired] bool upgradeAllowed,
-            string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, string? mustContain, string? mustNotContain, long? version)
+            string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, string? mustContain, string? mustNotContain, long? version, int? delayMinutes,
+            string[]? fallbackQualities, int? fallbackAfterHours)
         {
             _input = new SaveAcquisitionProfileDataV1(name ?? "", mediaTypeId, isDefault, allowedQualities ?? [], upgradeAllowed, Blank(upgradeCutoffQuality), minimumSizeMb, maximumSizeMb,
-                Terms(mustContain), Terms(mustNotContain), version, mediaSubtypeId);
+                Terms(mustContain), Terms(mustNotContain), version, mediaSubtypeId, delayMinutes ?? 0, fallbackQualities, fallbackAfterHours);
             if (AcquisitionProfileId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionProfileParametersV1(existing), _input, HttpContext.RequestAborted);

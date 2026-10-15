@@ -43,8 +43,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     public sealed class SaveAcquisitionProfileDataV1 : BaseData
     {
         public SaveAcquisitionProfileDataV1(string name, MediaType mediaTypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality, int? minimumSizeMb,
-            int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version = null, MediaSubtype? mediaSubtypeId = null)
+            int? maximumSizeMb, string[] mustContain, string[] mustNotContain, long? version = null, MediaSubtype? mediaSubtypeId = null, int delayMinutes = 0,
+            string[]? fallbackQualities = null, int? fallbackAfterHours = null)
         {
+            DelayMinutes = delayMinutes;
+            FallbackQualities = fallbackQualities ?? [];
+            FallbackAfterHours = fallbackAfterHours;
             Name = name;
             MediaTypeId = mediaTypeId;
             MediaSubtypeId = mediaSubtypeId;
@@ -92,6 +96,15 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MustNotContain))]
         public string[] MustNotContain { get; }
 
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DelayMinutes))]
+        public int DelayMinutes { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackQualities))]
+        public string[] FallbackQualities { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackAfterHours))]
+        public int? FallbackAfterHours { get; }
+
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Version), false)]
         public long? Version { get; }
     }
@@ -99,8 +112,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     public sealed class AcquisitionProfileDetailsV1 : BaseResponse
     {
         public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
-            int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, int wantedCount, long version)
+            int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, int wantedCount, long version, int delayMinutes = 0, string[]? fallbackQualities = null,
+            int? fallbackAfterHours = null)
         {
+            DelayMinutes = delayMinutes;
+            FallbackQualities = fallbackQualities ?? [];
+            FallbackAfterHours = fallbackAfterHours;
             Id = id;
             Name = name;
             MediaTypeId = mediaTypeId;
@@ -152,6 +169,15 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MustNotContain))]
         public string[] MustNotContain { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.DelayMinutes))]
+        public int DelayMinutes { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackQualities))]
+        public string[] FallbackQualities { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackAfterHours))]
+        public int? FallbackAfterHours { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
         public int WantedCount { get; }

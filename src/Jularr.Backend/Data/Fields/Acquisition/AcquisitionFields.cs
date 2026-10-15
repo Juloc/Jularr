@@ -83,6 +83,9 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringArrayField MustNotContain = new() { ItemMaximumLength = 200, MaximumLength = 50 };
         public static readonly IntField WantedCount = new() { Minimum = 0 };
         public static readonly LongField Version = new() { Minimum = 1 };
+        public static readonly IntField DelayMinutes = new() { Minimum = 0, Maximum = 10080 };
+        public static readonly StringArrayField FallbackQualities = new() { ItemMaximumLength = 64, MaximumLength = 32, Required = false };
+        public static readonly IntField FallbackAfterHours = new() { Minimum = 1, Maximum = 720, Required = false };
 
         // Release rules of a profile, kept in their order.
         public static readonly IntField RulePosition = new() { Minimum = 0, Maximum = 49 };

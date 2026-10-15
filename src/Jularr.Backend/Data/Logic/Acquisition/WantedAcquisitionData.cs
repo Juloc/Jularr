@@ -25,8 +25,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     {
         public WantedTargetData(long wantedItemId, long workId, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, string canonicalTitle, int? releaseYear, string[] titles, long? acquisitionProfileId,
             string? profileName, string? definition, string[] releaseIdentities, bool isPaused, bool hasMedia, bool isDownloading, int searchCount, string[] externalIdentities,
-            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId)
+            string[] requestedLocales, string? author, string? platformAbbreviation, int? platformIgdbId, DateTime wantedSince = default)
         {
+            WantedSince = wantedSince;
             Author = author;
             PlatformAbbreviation = platformAbbreviation;
             PlatformIgdbId = platformIgdbId;
@@ -111,6 +112,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(GamePlatformFields), nameof(GamePlatformFields.IgdbId), false)]
         public int? PlatformIgdbId { get; }
+
+        // Fallback qualities count once the target has waited long enough.
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.WantedSince))]
+        public DateTime WantedSince { get; }
     }
 
     internal sealed class UnitStateData : BaseData

@@ -90,6 +90,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // The languages the profile wants, best first.
         public string[] LanguageOrder { get; init; } = [];
 
+        public int DelayMinutes { get; init; }
+
+        // Allowed only through the fallback; a release in one of them names it.
+        public string[] FallbackQualities { get; init; } = [];
+
         // The indexers this profile may search and prefers.
         public AcquisitionSourcePolicy SourcePolicy { get; init; } = AcquisitionSourcePolicy.Unrestricted;
     }
@@ -153,8 +158,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     internal sealed class AcquisitionProfileDefinition
     {
         public AcquisitionProfileDefinition(string[] allowedQualities, string[] qualityOrder, bool upgradeAllowed, string? upgradeCutoffQuality, long? minimumSizeBytes, long? maximumSizeBytes,
-            string[] mustContain, string[] mustNotContain, string[] requiredRegex, string[] rejectedRegex, ReleaseScoreRule[] scoreRules)
+            string[] mustContain, string[] mustNotContain, string[] requiredRegex, string[] rejectedRegex, ReleaseScoreRule[] scoreRules, int delayMinutes = 0,
+            string[]? fallbackQualities = null, int? fallbackAfterHours = null)
         {
+            DelayMinutes = delayMinutes;
+            FallbackQualities = fallbackQualities ?? [];
+            FallbackAfterHours = fallbackAfterHours;
             AllowedQualities = allowedQualities;
             QualityOrder = qualityOrder;
             UpgradeAllowed = upgradeAllowed;
@@ -179,5 +188,12 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string[] RequiredRegex { get; }
         public string[] RejectedRegex { get; }
         public ReleaseScoreRule[] ScoreRules { get; }
+
+        // Automatic grabs wait this long for a better release unless the best allowed quality turns up.
+        public int DelayMinutes { get; }
+
+        // Qualities accepted once the target has been wanted for the given hours.
+        public string[] FallbackQualities { get; }
+        public int? FallbackAfterHours { get; }
     }
 }

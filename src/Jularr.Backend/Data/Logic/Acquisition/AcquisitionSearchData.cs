@@ -207,5 +207,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public IReadOnlyDictionary<string, ReleaseOffer> Offers { get; }
         public bool IndexersUnavailable { get; }
         public string OutcomeKey { get; }
+
+        // An automatic search keeps the winner until then.
+        public DateTime? DelayedUntil { get; init; }
     }
 }

@@ -59,12 +59,12 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
 
-            var profile = AcquisitionSelectionLogic.ReadProfile(target);
+            var now = _time.GetUtcNow().UtcDateTime;
+            var profile = AcquisitionSelectionLogic.ReadProfile(target, now);
             var intent = AcquisitionSelectionLogic.ReadIntent(target, kind, scope);
             var budget = SearchBudget.For(depth);
             var offers = new ConcurrentDictionary<string, ReleaseOffer>(StringComparer.Ordinal);
             var failures = 0;
-            var now = _time.GetUtcNow().UtcDateTime;
             var allNewznab = indexers.Where(indexer => indexer.AcquisitionConnectionTypeId == AcquisitionConnectionType.Newznab).ToArray();
             var newznab = allNewznab.Where(indexer => AcquisitionConnectionLogic.CanSearch(indexer, target.MediaTypeId, automatic, now)).ToArray();
             var skipped = allNewznab.Count(indexer => (indexer.MediaTypeIds.Length == 0 || indexer.MediaTypeIds.Contains((int)target.MediaTypeId))
@@ -133,7 +133,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             // Indexers left out for backoff or limits count as unavailable, not as empty.
             var sources = catalogs.Length + newznab.Length + skipped;
             var unavailable = sources > 0 && failures + skipped >= sources && offers.IsEmpty;
-            return new WantedSearchResult(selection, offers, unavailable, AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable));
+            var delayed = automatic && selection.Winner is { } winner ? AcquisitionSelectionLogic.DelayUntil(profile, winner, now) : null;
+            return new WantedSearchResult(selection, offers, unavailable, delayed is null ? AcquisitionSelectionLogic.OutcomeKey(selection.Outcome, unavailable) : "release_delayed")
+            {
+                DelayedUntil = delayed
+            };
         }
 
         public ReleaseOffer? FindOffer(long wantedItemId, string candidateId) =>

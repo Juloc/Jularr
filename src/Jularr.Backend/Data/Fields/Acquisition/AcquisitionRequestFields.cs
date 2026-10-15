@@ -28,6 +28,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly IntField SearchCount = new() { Minimum = 0 };
         public static readonly DateTimeField LastSearchedAt = new() { Required = false };
         public static readonly DateTimeField NextSearchAt = new() { Required = false };
+        public static readonly DateTimeField WantedSince = new();
         public static readonly StringField OutcomeKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly BoolField HasMedia = new();
         public static readonly BoolField IsDownloading = new();
