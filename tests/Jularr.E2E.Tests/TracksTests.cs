@@ -60,8 +60,7 @@ namespace Jularr.E2E.Tests
                 await WaitForPlayableAsync(page, details, brokenEpisode);
 
                 // Both audio tracks are offered in their languages; choosing the second asks for a new plan with that stream, and the new source plays.
-                await pilot.ClickAsync();
-                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
+                await OpenWithTracksAsync(page, details, pilot);
                 await page.Locator("[data-action=audio]").ClickAsync();
                 var audio = page.Locator("[data-panel=audio] [data-audio]");
                 Assert.AreEqual(2, await audio.CountAsync());
@@ -107,6 +106,29 @@ namespace Jularr.E2E.Tests
         }
 
         // The download monitor imports one episode after the other.
+        // The library scan after the import reads the tracks; until then the player offers no choice of them.
+        private static async Task OpenWithTracksAsync(IPage page, string details, ILocator play)
+        {
+            var deadline = DateTime.UtcNow.AddMinutes(2);
+            while (true)
+            {
+                await page.GotoAsync(details);
+                await play.ClickAsync();
+                await page.WaitForFunctionAsync("() => document.querySelector('video')?.readyState >= 1", null, new() { Timeout = Steps.MediaTimeout });
+                if (await page.Locator("[data-action=audio]").CountAsync() > 0)
+                {
+                    return;
+                }
+
+                if (DateTime.UtcNow > deadline)
+                {
+                    throw new TimeoutException("The episode's tracks were not read within two minutes.");
+                }
+
+                await Task.Delay(2000);
+            }
+        }
+
         private static async Task WaitForPlayableAsync(IPage page, string details, ILocator play)
         {
             var deadline = DateTime.UtcNow.AddMinutes(2);
