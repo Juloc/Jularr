@@ -201,13 +201,38 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         // Qualities accepted once the target has been wanted for the given hours.
         public string[] FallbackQualities { get; }
         public int? FallbackAfterHours { get; }
+
+        // Which releases of an artist or books of an author count.
+        public ReleaseMonitoring? Monitoring { get; init; }
     }
 
-    // A Sonarr or Radarr profile as Jularr takes it over, with the custom formats it could not express.
+    // An artist's release types and statuses, an author's languages and least pages; empty lists allow everything.
+    internal sealed class ReleaseMonitoring
+    {
+        public ReleaseMonitoring(string[] primaryTypes, string[] secondaryTypes, string[] releaseStatuses, string[] languages, int? minimumPages)
+        {
+            PrimaryTypes = primaryTypes;
+            SecondaryTypes = secondaryTypes;
+            ReleaseStatuses = releaseStatuses;
+            Languages = languages;
+            MinimumPages = minimumPages;
+        }
+
+        public string[] PrimaryTypes { get; }
+        public string[] SecondaryTypes { get; }
+        public string[] ReleaseStatuses { get; }
+        public string[] Languages { get; }
+        public int? MinimumPages { get; }
+
+        public bool AllowsType(string? type) => type is null || PrimaryTypes.Length == 0 || PrimaryTypes.Contains(type, StringComparer.OrdinalIgnoreCase);
+    }
+
+    // A Servarr profile as Jularr takes it over, with the custom formats it could not express and the monitoring its metadata profile names.
     internal sealed class TakenOverProfile
     {
-        public TakenOverProfile(AcquisitionProfileInputData input, IReadOnlyList<ReleaseScoreRule> rules, IReadOnlyList<string> skippedFormats)
+        public TakenOverProfile(AcquisitionProfileInputData input, IReadOnlyList<ReleaseScoreRule> rules, IReadOnlyList<string> skippedFormats, ReleaseMonitoring? monitoring = null)
         {
+            Monitoring = monitoring;
             Input = input;
             Rules = rules;
             SkippedFormats = skippedFormats;
@@ -216,6 +241,7 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public AcquisitionProfileInputData Input { get; }
         public IReadOnlyList<ReleaseScoreRule> Rules { get; }
         public IReadOnlyList<string> SkippedFormats { get; }
+        public ReleaseMonitoring? Monitoring { get; }
     }
 
     // What became of a taken-over profile, and the Jularr profile its titles use.
@@ -239,5 +265,28 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(Fields.Media.WorkFields), nameof(Fields.Media.WorkFields.MediaTypeId))]
         public MediaType MediaTypeId { get; }
+    }
+
+    internal sealed class TakeoverLibraryData : BaseData
+    {
+        public TakeoverLibraryData(long id, string name, MediaType mediaTypeId, string relativePath)
+        {
+            Id = id;
+            Name = name;
+            MediaTypeId = mediaTypeId;
+            RelativePath = relativePath;
+        }
+
+        [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.Id))]
+        public long Id { get; }
+
+        [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.Name))]
+        public string Name { get; }
+
+        [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.RelativePath))]
+        public string RelativePath { get; }
     }
 }

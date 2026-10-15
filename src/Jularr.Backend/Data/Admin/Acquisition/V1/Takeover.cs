@@ -1,6 +1,7 @@
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Fields.Acquisition;
+using Jularr.Backend.Data.Fields.Library;
 
 namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
@@ -10,12 +11,13 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
     public sealed class RunTakeoverDataV1 : BaseData
     {
-        public RunTakeoverDataV1(TakeoverSourceType takeoverSourceTypeId, string baseUrl, string apiKey, bool apply)
+        public RunTakeoverDataV1(TakeoverSourceType takeoverSourceTypeId, string baseUrl, string apiKey, bool apply, string[]? rootFolders = null)
         {
             TakeoverSourceTypeId = takeoverSourceTypeId;
             BaseUrl = baseUrl;
             ApiKey = apiKey;
             Apply = apply;
+            RootFolders = rootFolders;
         }
 
         [DataField(typeof(TakeoverFields), nameof(TakeoverFields.TakeoverSourceTypeId))]
@@ -31,6 +33,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         // False shows what would happen.
         [DataField(typeof(TakeoverFields), nameof(TakeoverFields.Apply))]
         public bool Apply { get; }
+
+        // The libraries chosen for its root folders; titles in others take the default library.
+        [DataField(typeof(TakeoverFields), nameof(TakeoverFields.RootFolders), false)]
+        public string[]? RootFolders { get; }
     }
 
     public sealed class TakeoverItemV1 : BaseResponse
@@ -55,5 +61,12 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         // A connection that still needs its key is completed in the connection form.
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.BaseUrl), false)]
         public string? SuggestedUrl { get; }
+
+        // A library a root folder can go to.
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Id), false)]
+        public long? LibraryRootId { get; init; }
+
+        [DataField(typeof(LibraryRootFields), nameof(LibraryRootFields.Name), false)]
+        public string? LibraryName { get; init; }
     }
 }

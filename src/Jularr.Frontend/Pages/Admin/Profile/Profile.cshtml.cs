@@ -55,6 +55,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             if (FormError is not null && _input is null && _ruleInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
             if (_profile is not { } profile) return;
 
+            if (Monitoring(profile) is { Count: > 0 } monitoring) page.Content.Add(new UiSection("profile.monitoring", [new Dl([.. monitoring])]));
             page.Content.Add(new UiSection("profile.rules", [RulesTable(profile, csrf), RuleForm(profile, csrf)]));
 
             // The default of a media type stays; deleting asks once more.
@@ -111,6 +112,16 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                 });
                 form.Submit("common.save");
             }, Address(), csrf, input, _input is null ? null : FormError);
+        }
+
+        // What a takeover brought from Lidarr's or Readarr's metadata profile.
+        private static List<IUiComponent> Monitoring(AcquisitionProfileDetailsV1 profile)
+        {
+            var rows = new List<IUiComponent>();
+            if (profile.MonitoredTypes.Length > 0) rows.AddRange([new Dt(new Text("profile.monitoring.types")), new Dd(new ValueText(string.Join(", ", profile.MonitoredTypes)))]);
+            if (profile.MonitoredLanguages.Length > 0) rows.AddRange([new Dt(new Text("profile.monitoring.languages")), new Dd(new ValueText(string.Join(", ", profile.MonitoredLanguages)))]);
+            if (profile.MinimumPages is { } pages) rows.AddRange([new Dt(new Text("profile.monitoring.pages")), new Dd(new ValueText(pages.ToString(CultureInfo.CurrentCulture)))]);
+            return rows;
         }
 
         // Require and Reject decide, Prefer and Avoid score, Info only names a match.

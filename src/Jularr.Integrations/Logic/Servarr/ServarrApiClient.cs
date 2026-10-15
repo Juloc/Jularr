@@ -42,7 +42,7 @@ namespace Jularr.Integrations.Logic.Servarr
         {
             using var document = await GetAsync(connection, "movie", ct);
             return [.. Items(document).Select(item => new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false,
-                Bool(item, "hasFile") == false, qualityProfileId: Int(item, "qualityProfileId"))).Where(title => title.Title.Length > 0)];
+                Bool(item, "hasFile") == false, qualityProfileId: Int(item, "qualityProfileId")) { Path = Text(item, "path") }).Where(title => title.Title.Length > 0)];
         }
 
         public async Task<IReadOnlyList<ServarrTitle>> ReadSeriesAsync(ServarrConnection connection, CancellationToken ct)
@@ -54,7 +54,7 @@ namespace Jularr.Integrations.Logic.Servarr
                 var statistics = item.TryGetProperty("statistics", out var value) && value.ValueKind == JsonValueKind.Object ? value : default;
                 var missing = statistics.ValueKind == JsonValueKind.Object && (Int(statistics, "episodeFileCount") ?? 0) < (Int(statistics, "episodeCount") ?? 0);
                 return new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false, missing,
-                    qualityProfileId: Int(item, "qualityProfileId"));
+                    qualityProfileId: Int(item, "qualityProfileId")) { Path = Text(item, "path") };
             }).Where(title => title.Title.Length > 0)];
         }
 
@@ -67,7 +67,12 @@ namespace Jularr.Integrations.Logic.Servarr
                 var statistics = Child(item, "statistics");
                 var missing = (Int(statistics, "trackFileCount") ?? 0) < (Int(statistics, "trackCount") ?? Int(statistics, "totalTrackCount") ?? 1);
                 return new ServarrTitle(Text(item, "title") ?? "", Year(Text(item, "releaseDate")), null, Bool(item, "monitored") ?? false, missing, Text(item, "foreignAlbumId"),
-                    Text(Child(item, "artist"), "artistName"));
+                    Text(Child(item, "artist"), "artistName"), Int(Child(item, "artist"), "qualityProfileId"))
+                {
+                    Path = Text(Child(item, "artist"), "path"),
+                    AlbumType = Text(item, "albumType"),
+                    MetadataProfileId = Int(Child(item, "artist"), "metadataProfileId")
+                };
             }).Where(title => title.Title.Length > 0)];
         }
 
@@ -76,10 +81,14 @@ namespace Jularr.Integrations.Logic.Servarr
             // Readarr's ids are its own catalog's; the title and author find the book again.
             using var document = await GetAsync(connection, "book", ct);
             return [.. Items(document).Select(item => new ServarrTitle(Text(item, "title") ?? "", Year(Text(item, "releaseDate")), null, Bool(item, "monitored") ?? false,
-                (Int(Child(item, "statistics"), "bookFileCount") ?? 0) == 0, null, Text(Child(item, "author"), "authorName"))).Where(title => title.Title.Length > 0)];
+                (Int(Child(item, "statistics"), "bookFileCount") ?? 0) == 0, null, Text(Child(item, "author"), "authorName"), Int(Child(item, "author"), "qualityProfileId"))
+            {
+                Path = Text(Child(item, "author"), "path"),
+                MetadataProfileId = Int(Child(item, "author"), "metadataProfileId")
+            }).Where(title => title.Title.Length > 0)];
         }
 
-        // Sonarr and Radarr quality profiles; groups pass their allowance to their qualities.
+        // Quality profiles; groups pass their allowance to their qualities. Sonarr and Radarr describe a quality by source and resolution, Lidarr and Readarr by its name.
         public async Task<IReadOnlyList<ServarrQualityProfile>> ReadQualityProfilesAsync(ServarrConnection connection, CancellationToken ct)
         {
             using var document = await GetAsync(connection, "qualityprofile", ct);
@@ -97,7 +106,7 @@ namespace Jularr.Integrations.Logic.Servarr
                         var quality = Child(member, "quality");
                         if (quality.ValueKind != JsonValueKind.Object) continue;
                         qualities.Add(new ServarrQuality(Text(quality, "source"), Int(quality, "resolution") ?? 0, allowed || Bool(member, "allowed") == true && members.Length == 0,
-                            groupIsCutoff || members.Length == 0 && Int(quality, "id") == cutoff));
+                            groupIsCutoff || members.Length == 0 && Int(quality, "id") == cutoff, Text(quality, "name")));
                     }
                 }
 
@@ -110,6 +119,28 @@ namespace Jularr.Integrations.Logic.Servarr
                 return new ServarrQualityProfile(Int(item, "id")!.Value, Text(item, "name")!, Bool(item, "upgradeAllowed") ?? false, qualities, scores, Int(item, "minFormatScore") ?? 0);
             })];
         }
+
+        // Lidarr's allowed release types and statuses, Readarr's languages and least pages.
+        public async Task<IReadOnlyList<ServarrMetadataProfile>> ReadMetadataProfilesAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            using var document = await GetAsync(connection, "metadataprofile", ct);
+            return [.. Items(document).Where(item => Int(item, "id") is not null && Text(item, "name") is not null).Select(item => new ServarrMetadataProfile(Int(item, "id")!.Value,
+                Text(item, "name")!, Allowed(item, "primaryAlbumTypes", "albumType"), Allowed(item, "secondaryAlbumTypes", "albumType"), Allowed(item, "releaseStatuses", "releaseStatus"),
+                [.. (Text(item, "allowedLanguages") ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Where(code => code.Length == 3 && code.All(char.IsAsciiLetterLower)).Take(20)],
+                Int(item, "minPages") is > 0 and var pages ? pages : null))];
+        }
+
+        public async Task<IReadOnlyList<ServarrRootFolder>> ReadRootFoldersAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            using var document = await GetAsync(connection, "rootfolder", ct);
+            return [.. Items(document).Select(item => Text(item, "path") is { } path
+                ? new ServarrRootFolder(path, Int(item, "defaultQualityProfileId"), Int(item, "defaultMetadataProfileId"))
+                : null).OfType<ServarrRootFolder>().Take(50)];
+        }
+
+        private static string[] Allowed(JsonElement item, string list, string entry) =>
+            [.. Array(item, list).Where(value => Bool(value, "allowed") == true).Select(value => Text(Child(value, entry), "name")).OfType<string>().Take(30)];
 
         public async Task<IReadOnlyList<ServarrCustomFormat>> ReadCustomFormatsAsync(ServarrConnection connection, CancellationToken ct)
         {

@@ -121,8 +121,11 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
     {
         public AcquisitionProfileDetailsV1(long id, string name, MediaType mediaTypeId, MediaSubtype? mediaSubtypeId, bool isDefault, string[] allowedQualities, bool upgradeAllowed, string? upgradeCutoffQuality,
             int? minimumSizeMb, int? maximumSizeMb, string[] mustContain, string[] mustNotContain, int wantedCount, long version, int delayMinutes = 0, string[]? fallbackQualities = null,
-            int? fallbackAfterHours = null)
+            int? fallbackAfterHours = null, string[]? monitoredTypes = null, string[]? monitoredLanguages = null, int? minimumPages = null)
         {
+            MonitoredTypes = monitoredTypes ?? [];
+            MonitoredLanguages = monitoredLanguages ?? [];
+            MinimumPages = minimumPages;
             DelayMinutes = delayMinutes;
             FallbackQualities = fallbackQualities ?? [];
             FallbackAfterHours = fallbackAfterHours;
@@ -186,6 +189,16 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.FallbackAfterHours))]
         public int? FallbackAfterHours { get; }
+
+        // An artist's release types and statuses, an author's languages and least pages, as taken over; empty allows everything.
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MonitoredValues))]
+        public string[] MonitoredTypes { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MonitoredValues))]
+        public string[] MonitoredLanguages { get; }
+
+        [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.MinimumPages))]
+        public int? MinimumPages { get; }
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.WantedCount))]
         public int WantedCount { get; }

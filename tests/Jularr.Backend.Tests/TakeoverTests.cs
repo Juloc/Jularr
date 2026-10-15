@@ -122,15 +122,43 @@ namespace Jularr.Backend.Tests
             var again = await RunAsync(host, false, TakeoverSourceType.Sonarr, "http://sonarr.example.test:8989");
             Assert.AreEqual("takeover_exists", again.Single(item => item.TakeoverItemTypeId == TakeoverItemType.Profile).OutcomeKey);
 
-            // Lidarr: an album with its MusicBrainz release group is wanted, one without has no id.
-            var lidarr = await RunAsync(host, true, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686");
+            // Lidarr's root folders are offered every music library; the one named like the folder is suggested.
+            var mountId = await host.ScalarAsync("""INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('NAS', 3, '/srv/media', FALSE) RETURNING "Id" """);
+            await host.Fixture.RunSqlAsync("INSERT INTO \"LibraryRoots\" (\"Name\", \"MediaTypeId\", \"StorageMountId\", \"RelativePath\") VALUES ('Music', 6, " + mountId + ", 'music'), ('Classical', 6, "
+                + mountId + ", 'classical')");
+            var musicLibrary = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"LibraryRoots\" WHERE \"Name\" = 'Music'"))!;
+            var folders = (await RunAsync(host, false, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686")).Where(item => item.TakeoverItemTypeId == TakeoverItemType.RootFolder).ToArray();
+            Assert.AreEqual(4, folders.Length);
+            CollectionAssert.AreEquivalent(new[] { "/data/music/ Music", "/data/classical Classical" },
+                folders.Where(item => item.OutcomeKey == "takeover_suggested").Select(item => item.Name + " " + item.LibraryName).ToArray());
+
+            // Lidarr: an album with its MusicBrainz release group is wanted in the chosen library, one without has no id, a single its metadata profile leaves out is skipped.
+            var lidarr = await RunAsync(host, true, TakeoverSourceType.Lidarr, "http://lidarr.example.test:8686", [musicLibrary + ":/data/music/"]);
             Assert.AreEqual("takeover_wanted", lidarr.Single(item => item.Name == "Example Album (2019)").OutcomeKey);
             Assert.AreEqual("takeover_no_id", lidarr.Single(item => item.Name == "Bootleg (2020)").OutcomeKey);
+            Assert.AreEqual("takeover_not_monitored", lidarr.Single(item => item.Name == "Some Single (2021)").OutcomeKey);
+            Assert.AreEqual("takeover_assigned", lidarr.Single(item => item.Name == "/data/music/" && item.LibraryRootId == musicLibrary).OutcomeKey);
+            Assert.AreEqual(musicLibrary, await host.ScalarAsync("SELECT wanted.\"LibraryRootId\" FROM \"WantedItems\" AS wanted JOIN \"Works\" AS work ON work.\"Id\" = wanted.\"WorkId\" WHERE work.\"MediaTypeId\" = 6"));
+
+            // Its profile keeps the lossless qualities by name and the metadata profile its artists follow as monitoring; the album uses it.
+            var lossless = (await (await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles")).Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!
+                .Single(item => item.Name == "Lossless");
+            CollectionAssert.AreEqual(new[] { "FLAC-24", "FLAC" }, lossless.AllowedQualities);
+            Assert.AreEqual(("FLAC", MediaType.Music), (lossless.UpgradeCutoffQuality, lossless.MediaTypeId));
+            using var losslessDetails = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles/" + lossless.Id);
+            var monitoring = (await losslessDetails.Content.ReadFromJsonAsync<AcquisitionProfileDetailsV1>())!;
+            CollectionAssert.AreEqual(new[] { "Album", "Studio", "Official" }, monitoring.MonitoredTypes);
+            Assert.AreEqual(lossless.Id, await host.ScalarAsync("SELECT wanted.\"AcquisitionProfileId\" FROM \"WantedItems\" AS wanted JOIN \"Works\" AS work ON work.\"Id\" = wanted.\"WorkId\" WHERE work.\"MediaTypeId\" = 6"));
 
             // Readarr: the book found once in Open Library by title, author and year is wanted; an unclear one waits for a person.
             var readarr = await RunAsync(host, true, TakeoverSourceType.Readarr, "http://readarr.example.test:8787");
             Assert.AreEqual("takeover_wanted", readarr.Single(item => item.Name == "Pride and Prejudice (1813)").OutcomeKey);
             Assert.AreEqual("takeover_no_match", readarr.Single(item => item.Name == "Unknown Book (2001)").OutcomeKey);
+            Assert.AreEqual("takeover_no_library", readarr.Single(item => item.TakeoverItemTypeId == TakeoverItemType.RootFolder).OutcomeKey);
+            using var ebookDetails = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/acquisition/profiles/" + await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionProfiles\" WHERE \"Name\" = 'eBook'"));
+            var ebook = (await ebookDetails.Content.ReadFromJsonAsync<AcquisitionProfileDetailsV1>())!;
+            CollectionAssert.AreEqual(new[] { "EPUB", "MOBI" }, ebook.AllowedQualities);
+            Assert.AreEqual(("en de", 100), (string.Join(" ", ebook.MonitoredLanguages), ebook.MinimumPages));
             Assert.AreEqual("movie:0 series:1 music:1 book:1", await host.ScalarAsync("""
                 SELECT 'movie:' || count(*) FILTER (WHERE work."MediaTypeId" = 1) || ' series:' || count(*) FILTER (WHERE work."MediaTypeId" = 2)
                     || ' music:' || count(*) FILTER (WHERE work."MediaTypeId" = 6) || ' book:' || count(*) FILTER (WHERE work."MediaTypeId" = 3)
@@ -138,9 +166,10 @@ namespace Jularr.Backend.Tests
                 """));
         }
 
-        private static async Task<IReadOnlyList<TakeoverItemV1>> RunAsync(Host host, bool apply, TakeoverSourceType source = TakeoverSourceType.Radarr, string address = "http://radarr.example.test:7878")
+        private static async Task<IReadOnlyList<TakeoverItemV1>> RunAsync(Host host, bool apply, TakeoverSourceType source = TakeoverSourceType.Radarr, string address = "http://radarr.example.test:7878",
+            string[]? rootFolders = null)
         {
-            using var response = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(source, address, RadarrKey, apply));
+            using var response = await host.SendAsync(HttpMethod.Post, Takeover, new RunTakeoverDataV1(source, address, RadarrKey, apply, rootFolders));
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, await response.Content.ReadAsStringAsync());
             return (await response.Content.ReadFromJsonAsync<BaseDataList<TakeoverItemV1>>())!;
         }
@@ -181,7 +210,7 @@ namespace Jularr.Backend.Tests
                         [{"name":"SAB","implementation":"Sabnzbd","enable":true,"priority":1,
                           "fields":[{"name":"host","value":"sab.example.test"},{"name":"port","value":8080},{"name":"useSsl","value":false},{"name":"apiKey","value":"********"},{"name":"movieCategory","value":"movies"}]}]
                         """),
-                    "/api/v3/qualityprofile" or "/api/v3/customformat" => Json("[]"),
+                    "/api/v3/qualityprofile" or "/api/v3/customformat" or "/api/v3/rootfolder" => Json("[]"),
                     "/api/v3/movie" => Json("""
                         [
                           {"title":"The Matrix","year":1999,"tmdbId":603,"monitored":true,"hasFile":false},
@@ -223,6 +252,7 @@ namespace Jularr.Backend.Tests
                     ("prowlarr.example.test", "/api/v1/indexer") => Json(Indexer.Replace("NAME", "Prowled", StringComparison.Ordinal).Replace("HOST", "prowled", StringComparison.Ordinal)),
                     ("sonarr.example.test", "/api/v3/indexer") => Json(Indexer.Replace("NAME", "Prowled", StringComparison.Ordinal).Replace("HOST", "prowled", StringComparison.Ordinal)),
                     ("sonarr.example.test", "/api/v3/downloadclient") => Json(Client("tvCategory")),
+                    ("sonarr.example.test", "/api/v3/rootfolder") => Json("[]"),
                     ("sonarr.example.test", "/api/v3/series") => Json("""[{"title":"Example Show","year":2020,"tmdbId":1399,"monitored":true,"qualityProfileId":4,"statistics":{"episodeFileCount":0,"episodeCount":1}}]"""),
                     ("sonarr.example.test", "/api/v3/qualityprofile") => Json("""
                         [{"id":4,"name":"HD-1080p","upgradeAllowed":true,"cutoff":1002,"minFormatScore":0,"items":[
@@ -245,18 +275,42 @@ namespace Jularr.Backend.Tests
                            {"implementation":"SourceSpecification","negate":false,"required":true,"fields":[{"name":"value","value":7}]}]},
                          {"id":4,"name":"Unused","specifications":[{"implementation":"ReleaseTitleSpecification","negate":false,"required":true,"fields":[{"name":"value","value":"x"}]}]}]
                         """),
-                    ("lidarr.example.test", "/api/v1/indexer" or "/api/v1/downloadclient") => Json("[]"),
+                    ("lidarr.example.test" or "readarr.example.test", "/api/v1/indexer" or "/api/v1/downloadclient" or "/api/v1/customformat") => Json("[]"),
+                    ("lidarr.example.test", "/api/v1/qualityprofile") => Json("""
+                        [{"id":1,"name":"Lossless","upgradeAllowed":true,"cutoff":6,"items":[
+                          {"quality":{"id":2,"name":"MP3-320"},"items":[],"allowed":false},
+                          {"quality":{"id":6,"name":"FLAC"},"items":[],"allowed":true},
+                          {"quality":{"id":21,"name":"FLAC 24bit"},"items":[],"allowed":true}],"formatItems":[]}]
+                        """),
+                    ("lidarr.example.test", "/api/v1/metadataprofile") => Json("""
+                        [{"id":2,"name":"Albums",
+                          "primaryAlbumTypes":[{"albumType":{"id":0,"name":"Album"},"allowed":true},{"albumType":{"id":2,"name":"Single"},"allowed":false}],
+                          "secondaryAlbumTypes":[{"albumType":{"id":0,"name":"Studio"},"allowed":true},{"albumType":{"id":3,"name":"Live"},"allowed":false}],
+                          "releaseStatuses":[{"releaseStatus":{"id":0,"name":"Official"},"allowed":true},{"releaseStatus":{"id":1,"name":"Promotion"},"allowed":false}]}]
+                        """),
+                    ("lidarr.example.test", "/api/v1/rootfolder") => Json("""[{"path":"/data/music/","defaultQualityProfileId":1,"defaultMetadataProfileId":2},{"path":"/data/classical"}]"""),
                     ("lidarr.example.test", "/api/v1/album") => Json($$$"""
                         [
-                          {"title":"Example Album","releaseDate":"2019-05-03T00:00:00Z","foreignAlbumId":"{{{MusicTests.Album}}}","monitored":true,"artist":{"artistName":"Example Artist"},"statistics":{"trackFileCount":0,"trackCount":3}},
+                          {"title":"Example Album","releaseDate":"2019-05-03T00:00:00Z","foreignAlbumId":"{{{MusicTests.Album}}}","albumType":"Album","monitored":true,
+                           "artist":{"artistName":"Example Artist","path":"/data/music/Example Artist","qualityProfileId":1,"metadataProfileId":2},"statistics":{"trackFileCount":0,"trackCount":3}},
+                          {"title":"Some Single","releaseDate":"2021-01-01T00:00:00Z","foreignAlbumId":"single","albumType":"Single","monitored":true,
+                           "artist":{"artistName":"Example Artist","path":"/data/music/Example Artist","qualityProfileId":1,"metadataProfileId":2},"statistics":{"trackFileCount":0,"trackCount":1}},
                           {"title":"Bootleg","releaseDate":"2020-01-01T00:00:00Z","monitored":true,"statistics":{"trackFileCount":0,"trackCount":2}},
                           {"title":"Complete","releaseDate":"2018-01-01T00:00:00Z","foreignAlbumId":"x","monitored":true,"statistics":{"trackFileCount":2,"trackCount":2}}
                         ]
                         """),
-                    ("readarr.example.test", "/api/v1/indexer" or "/api/v1/downloadclient") => Json("[]"),
+                    ("readarr.example.test", "/api/v1/qualityprofile") => Json("""
+                        [{"id":1,"name":"eBook","upgradeAllowed":false,"cutoff":3,"items":[
+                          {"quality":{"id":3,"name":"EPUB"},"items":[],"allowed":true},
+                          {"quality":{"id":2,"name":"MOBI"},"items":[],"allowed":true},
+                          {"quality":{"id":10,"name":"MP3"},"items":[],"allowed":true}],"formatItems":[]}]
+                        """),
+                    ("readarr.example.test", "/api/v1/metadataprofile") => Json("""[{"id":1,"name":"Standard","allowedLanguages":"eng, ger","minPages":100}]"""),
+                    ("readarr.example.test", "/api/v1/rootfolder") => Json("""[{"path":"/books","defaultQualityProfileId":1,"defaultMetadataProfileId":1}]"""),
                     ("readarr.example.test", "/api/v1/book") => Json("""
                         [
-                          {"title":"Pride and Prejudice","releaseDate":"1813-01-28T00:00:00Z","monitored":true,"author":{"authorName":"Jane Austen"},"statistics":{"bookFileCount":0}},
+                          {"title":"Pride and Prejudice","releaseDate":"1813-01-28T00:00:00Z","monitored":true,
+                           "author":{"authorName":"Jane Austen","path":"/books/Jane Austen","qualityProfileId":1,"metadataProfileId":1},"statistics":{"bookFileCount":0}},
                           {"title":"Unknown Book","releaseDate":"2001-01-01T00:00:00Z","monitored":true,"author":{"authorName":"Nobody"},"statistics":{"bookFileCount":0}}
                         ]
                         """),
