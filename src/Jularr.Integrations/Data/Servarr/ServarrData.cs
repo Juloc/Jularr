@@ -103,13 +103,21 @@ namespace Jularr.Integrations.Data.Servarr
         // The MusicBrainz release group of an album; artist or author.
         public string? ExternalId { get; }
         public string? Creator { get; }
+
+        // Its folder there (an album's and a book's: its artist's or author's), which places it in a root folder.
+        public string? Path { get; init; }
+
+        // An album's primary type, such as "Album", "EP" or "Single"; the metadata profile its artist or author follows.
+        public string? AlbumType { get; init; }
+        public int? MetadataProfileId { get; init; }
     }
 
     // One quality of a profile with its source and resolution, allowed alone or through its group.
     internal sealed class ServarrQuality
     {
-        public ServarrQuality(string? source, int resolution, bool isAllowed, bool isCutoff)
+        public ServarrQuality(string? source, int resolution, bool isAllowed, bool isCutoff, string? name = null)
         {
+            Name = name;
             Source = source;
             Resolution = resolution;
             IsAllowed = isAllowed;
@@ -118,6 +126,9 @@ namespace Jularr.Integrations.Data.Servarr
 
         public string? Source { get; }
         public int Resolution { get; }
+
+        // Lidarr's and Readarr's name of the quality, such as "FLAC 24bit" or "EPUB".
+        public string? Name { get; }
         public bool IsAllowed { get; }
         public bool IsCutoff { get; }
     }
@@ -172,5 +183,48 @@ namespace Jularr.Integrations.Data.Servarr
         public int Id { get; }
         public string Name { get; }
         public IReadOnlyList<ServarrFormatCondition> Conditions { get; }
+    }
+
+    // Which releases of an artist or which books of an author count (Lidarr's and Readarr's metadata profiles).
+    internal sealed class ServarrMetadataProfile
+    {
+        public ServarrMetadataProfile(int id, string name, IReadOnlyList<string> primaryTypes, IReadOnlyList<string> secondaryTypes, IReadOnlyList<string> releaseStatuses,
+            IReadOnlyList<string> languages, int? minimumPages)
+        {
+            Id = id;
+            Name = name;
+            PrimaryTypes = primaryTypes;
+            SecondaryTypes = secondaryTypes;
+            ReleaseStatuses = releaseStatuses;
+            Languages = languages;
+            MinimumPages = minimumPages;
+        }
+
+        public int Id { get; }
+        public string Name { get; }
+
+        // The allowed ones; Readarr's profiles have none of these.
+        public IReadOnlyList<string> PrimaryTypes { get; }
+        public IReadOnlyList<string> SecondaryTypes { get; }
+        public IReadOnlyList<string> ReleaseStatuses { get; }
+
+        // Readarr's allowed languages as ISO 639-2 codes, and its least pages.
+        public IReadOnlyList<string> Languages { get; }
+        public int? MinimumPages { get; }
+    }
+
+    // A library folder there with the profiles new titles take.
+    internal sealed class ServarrRootFolder
+    {
+        public ServarrRootFolder(string path, int? defaultQualityProfileId, int? defaultMetadataProfileId)
+        {
+            Path = path;
+            DefaultQualityProfileId = defaultQualityProfileId;
+            DefaultMetadataProfileId = defaultMetadataProfileId;
+        }
+
+        public string Path { get; }
+        public int? DefaultQualityProfileId { get; }
+        public int? DefaultMetadataProfileId { get; }
     }
 }

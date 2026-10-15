@@ -101,10 +101,11 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class WantedTakeoverData : BaseData
     {
-        public WantedTakeoverData(long workId, long? acquisitionProfileId)
+        public WantedTakeoverData(long workId, long? acquisitionProfileId, long? libraryRootId = null)
         {
             WorkId = workId;
             AcquisitionProfileId = acquisitionProfileId;
+            LibraryRootId = libraryRootId;
         }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
@@ -112,6 +113,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(AcquisitionProfileFields), nameof(AcquisitionProfileFields.Id), false)]
         public long? AcquisitionProfileId { get; }
+
+        // The library its root folder was matched to.
+        [DataField(typeof(Fields.Library.LibraryRootFields), nameof(Fields.Library.LibraryRootFields.Id), false)]
+        public long? LibraryRootId { get; }
     }
 
     internal sealed class WantedItemUpdateData : BaseData

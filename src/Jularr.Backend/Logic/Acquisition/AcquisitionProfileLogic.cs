@@ -55,7 +55,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var stored = existing is null ? null : JsonSerializer.Deserialize<AcquisitionProfileDefinition>(existing, AcquisitionSelectionLogic.DefinitionOptions);
             var definition = new AcquisitionProfileDefinition(allowed, [.. order], input.UpgradeAllowed, cutoff, input.MinimumSizeMb * Megabyte, input.MaximumSizeMb * Megabyte,
                 Terms(input.MustContain), Terms(input.MustNotContain), stored?.RequiredRegex ?? [], stored?.RejectedRegex ?? [], stored?.ScoreRules ?? [], input.DelayMinutes, fallback,
-                fallback.Length > 0 ? input.FallbackAfterHours : null);
+                fallback.Length > 0 ? input.FallbackAfterHours : null) { Monitoring = stored?.Monitoring };
             var profile = new QualityProfile("0", input.Name, definition.AllowedQualities, definition.QualityOrder, definition.UpgradeAllowed, definition.UpgradeCutoffQuality,
                 definition.MinimumSizeBytes, definition.MaximumSizeBytes, definition.MustContain, definition.MustNotContain, definition.RequiredRegex, definition.RejectedRegex, definition.ScoreRules);
             if (ReleaseScorer.ValidateProfile(profile).Count > 0)
@@ -243,12 +243,12 @@ namespace Jularr.Backend.Logic.Acquisition
                 : throw new KeyNotFoundException("The rule was not found."), ct);
         }
 
-        // Rules taken over with a new profile follow its own, as far as the 50 allow.
-        public static async Task AppendProfileRulesAsync(this LogicContext ctx, long id, IReadOnlyList<ReleaseScoreRule> rules, CancellationToken ct)
+        // Rules taken over with a new profile follow its own, as far as the 50 allow; taken-over monitoring joins its other settings.
+        public static async Task AppendProfileRulesAsync(this LogicContext ctx, long id, IReadOnlyList<ReleaseScoreRule> rules, ReleaseMonitoring? monitoring, CancellationToken ct)
         {
             var added = rules.Select(Checked).ToArray();
             var state = await ctx.ReadAcquisitionProfileStateAsync(id, ct);
-            await ctx.ReplaceProfileRulesAsync(new AcquisitionProfileKeyData(id, state.Version), existing => [.. existing.Concat(added).Take(50)], ct);
+            await ctx.ReplaceProfileRulesAsync(new AcquisitionProfileKeyData(id, state.Version), existing => [.. existing.Concat(added).Take(50)], ct, monitoring);
         }
 
         // Prefer scores up and Avoid down; the other effects score nothing.
@@ -292,7 +292,7 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         private static async Task ReplaceProfileRulesAsync(this LogicContext ctx, AcquisitionProfileKeyData key, Func<IReadOnlyList<ReleaseScoreRule>, ReleaseScoreRule[]> change,
-            CancellationToken ct)
+            CancellationToken ct, ReleaseMonitoring? monitoring = null)
         {
             var state = await ctx.ReadAcquisitionProfileStateAsync(key.Id, ct);
             if (state.Version != key.Version)
@@ -303,7 +303,7 @@ namespace Jularr.Backend.Logic.Acquisition
             var stored = Definition(state);
             var definition = new AcquisitionProfileDefinition(stored.AllowedQualities, stored.QualityOrder, stored.UpgradeAllowed, stored.UpgradeCutoffQuality, stored.MinimumSizeBytes,
                 stored.MaximumSizeBytes, stored.MustContain, stored.MustNotContain, stored.RequiredRegex, stored.RejectedRegex, Numbered(change(stored.ScoreRules)), stored.DelayMinutes,
-                stored.FallbackQualities, stored.FallbackAfterHours);
+                stored.FallbackQualities, stored.FallbackAfterHours) { Monitoring = monitoring ?? stored.Monitoring };
             var sql = new SqlStatement();
             sql.Statement =
                 """

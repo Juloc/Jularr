@@ -89,6 +89,10 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringArrayField FallbackQualities = new() { ItemMaximumLength = 64, MaximumLength = 32, Required = false };
         public static readonly IntField FallbackAfterHours = new() { Minimum = 1, Maximum = 720, Required = false };
 
+        // Taken-over monitoring: release types and statuses, book languages and least pages.
+        public static readonly StringArrayField MonitoredValues = new() { ItemMaximumLength = 64, MaximumLength = 60 };
+        public static readonly IntField MinimumPages = new() { Minimum = 1, Required = false };
+
         // Release rules of a profile, kept in their order.
         public static readonly IntField RuleId = new() { Minimum = 1 };
         public static readonly StringField RuleName = new(NpgsqlDbType.Varchar) { MaximumLength = 64, AllowBlank = false, Trim = true };

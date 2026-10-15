@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Jularr.Backend.Service.Admin.Acquisition.V1
 {
-    // A one-time takeover from Prowlarr, Sonarr or Radarr: indexers, clients, quality profiles with their custom formats and missing titles; nothing keeps running alongside.
+    // A one-time takeover from Prowlarr or a Servarr: indexers, clients, quality profiles with their custom formats and monitoring, root folders and missing titles; nothing keeps running alongside.
     [ServiceEndpoint("POST", "/api/v1/admin/acquisition/takeover")]
     public sealed class RunTakeoverV1 : AdminService<TakeoverParametersV1, RunTakeoverDataV1>
     {
@@ -52,12 +52,20 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             IReadOnlyList<ServarrTitle> titles;
             IReadOnlyList<ServarrQualityProfile> profiles = [];
             IReadOnlyList<ServarrCustomFormat> formats = [];
+            IReadOnlyList<ServarrMetadataProfile> metadataProfiles = [];
+            IReadOnlyList<ServarrRootFolder> rootFolders = [];
             try
             {
-                if (Data.TakeoverSourceTypeId is TakeoverSourceType.Sonarr or TakeoverSourceType.Radarr)
+                if (Data.TakeoverSourceTypeId != TakeoverSourceType.Prowlarr)
                 {
                     profiles = await _servarr.ReadQualityProfilesAsync(source, CancellationToken);
                     formats = await _servarr.ReadCustomFormatsAsync(source, CancellationToken);
+                    rootFolders = await _servarr.ReadRootFoldersAsync(source, CancellationToken);
+                }
+
+                if (Data.TakeoverSourceTypeId is TakeoverSourceType.Lidarr or TakeoverSourceType.Readarr)
+                {
+                    metadataProfiles = await _servarr.ReadMetadataProfilesAsync(source, CancellationToken);
                 }
 
                 indexers = await _servarr.ReadIndexersAsync(source, CancellationToken);
@@ -76,7 +84,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new ServiceUnavailableException(exception.Failure == ServarrFailure.Unauthorized ? "acquisition_authentication_failed" : "acquisition_unavailable");
             }
 
-            var (known, jularrProfiles) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            var (known, jularrProfiles, libraries) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var sql = new SqlStatement();
                 sql.Statement =
@@ -96,7 +104,21 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     FROM
                         "AcquisitionProfiles" AS profile;
                     """;
-                return (await ctx.ReadSql.ReadListAsync<AcquisitionConnectionUrlData>(sql, ct), await ctx.ReadSql.ReadListAsync<AcquisitionProfileNameData>(profileSql, ct));
+                var librarySql = new SqlStatement();
+                librarySql.Statement =
+                    """
+                    SELECT
+                        root."Id",
+                        root."Name",
+                        root."MediaTypeId",
+                        root."RelativePath"
+                    FROM
+                        "LibraryRoots" AS root
+                    ORDER BY
+                        root."Id";
+                    """;
+                return (await ctx.ReadSql.ReadListAsync<AcquisitionConnectionUrlData>(sql, ct), await ctx.ReadSql.ReadListAsync<AcquisitionProfileNameData>(profileSql, ct),
+                    await ctx.ReadSql.ReadListAsync<TakeoverLibraryData>(librarySql, ct));
             }, CancellationToken);
             var existing = known.Select(connection => connection.BaseUrl.TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -116,23 +138,6 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                         client.Category is { Length: <= 64 } category ? category : null, null, null)));
             }
 
-            // Profiles keep their name; one of that name and type is not taken twice.
-            var profileIds = new Dictionary<int, long>();
-            var profileType = Data.TakeoverSourceTypeId == TakeoverSourceType.Radarr ? MediaType.Movie : MediaType.Series;
-            var formatsById = formats.ToDictionary(format => format.Id);
-            foreach (var profile in profiles)
-            {
-                var mapped = ServarrProfileLogic.Map(profile, formatsById, profileType);
-                var name = Limit(profile.Name, 500);
-                var outcome = await Context.ExecuteBatchAsync((ctx, ct) => ctx.TakeOverProfileAsync(mapped, jularrProfiles, Data.Apply, ct), CancellationToken);
-                if (outcome.ProfileId is { } id) profileIds[profile.Id] = id;
-                items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, outcome.OutcomeKey, null));
-                if (outcome.OutcomeKey is not ("takeover_added" or "takeover_will_add")) continue;
-                if (profile.MinimumFormatScore > 0) items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_minimum_score", null));
-                items.AddRange(mapped.SkippedFormats.Select(format => new TakeoverItemV1(TakeoverItemType.Format, Limit(format, 500), "takeover_format_skipped", null)));
-            }
-
-            // Watched titles without files become wanted through their provider id; large libraries continue in later runs.
             var (type, mediaType) = Data.TakeoverSourceTypeId switch
             {
                 TakeoverSourceType.Radarr => (TakeoverItemType.Movie, MediaType.Movie),
@@ -140,10 +145,65 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 TakeoverSourceType.Lidarr => (TakeoverItemType.Album, MediaType.Music),
                 _ => (TakeoverItemType.Book, MediaType.Book)
             };
+
+            // Profiles keep their name; one of that name and type is not taken twice. A quality profile takes the metadata profile most of its titles follow.
+            var profileIds = new Dictionary<int, long>();
+            var formatsById = formats.ToDictionary(format => format.Id);
+            var metadataById = metadataProfiles.ToDictionary(metadata => metadata.Id);
+            foreach (var profile in profiles)
+            {
+                var metadataId = titles.Where(title => title.QualityProfileId == profile.Id).Select(title => title.MetadataProfileId)
+                    .Concat(rootFolders.Where(folder => folder.DefaultQualityProfileId == profile.Id).Select(folder => folder.DefaultMetadataProfileId))
+                    .OfType<int>().Where(metadataById.ContainsKey).GroupBy(id => id).OrderByDescending(group => group.Count()).Select(group => (int?)group.Key).FirstOrDefault();
+                var mapped = ServarrProfileLogic.Map(profile, formatsById, mediaType, metadataId is { } id ? metadataById[id] : null);
+                var name = Limit(profile.Name, 500);
+                var outcome = await Context.ExecuteBatchAsync((ctx, ct) => ctx.TakeOverProfileAsync(mapped, jularrProfiles, Data.Apply, ct), CancellationToken);
+                if (outcome.ProfileId is { } profileId) profileIds[profile.Id] = profileId;
+                items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, outcome.OutcomeKey, null));
+                if (outcome.OutcomeKey is not ("takeover_added" or "takeover_will_add")) continue;
+                if (profile.MinimumFormatScore > 0) items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_minimum_score", null));
+                items.AddRange(mapped.SkippedFormats.Select(format => new TakeoverItemV1(TakeoverItemType.Format, Limit(format, 500), "takeover_format_skipped", null)));
+            }
+
+            // Each root folder goes to a chosen library of its type. A library named like the folder, or the only one, is suggested.
+            var chosen = (Data.RootFolders ?? []).Select(Choice).OfType<(long LibraryRootId, string Path)>().GroupBy(choice => Folder(choice.Path), StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First().LibraryRootId, StringComparer.Ordinal);
+            var candidates = libraries.Where(library => library.MediaTypeId == mediaType).ToArray();
+            foreach (var folder in rootFolders)
+            {
+                var path = Limit(folder.Path, 500);
+                if (candidates.Length == 0)
+                {
+                    items.Add(new TakeoverItemV1(TakeoverItemType.RootFolder, path, "takeover_no_library", null));
+                    continue;
+                }
+
+                var suggested = candidates.Length == 1 ? candidates[0]
+                    : candidates.FirstOrDefault(library => LastName(library.RelativePath) == LastName(folder.Path) || library.Name.Equals(LastName(folder.Path), StringComparison.OrdinalIgnoreCase));
+                var isChosen = chosen.TryGetValue(Folder(folder.Path), out var chosenId);
+                var choice = isChosen ? chosenId : suggested?.Id;
+                items.AddRange(candidates.Select(library => new TakeoverItemV1(TakeoverItemType.RootFolder, path,
+                    library.Id != choice ? "takeover_possible" : isChosen ? "takeover_assigned" : "takeover_suggested", null)
+                {
+                    LibraryRootId = library.Id,
+                    LibraryName = library.Name
+                }));
+            }
+
+            // Watched titles without files become wanted through their provider id; large libraries continue in later runs.
             var taken = 0;
             foreach (var title in titles.Where(title => title.IsMonitored && title.IsMissing))
             {
                 var name = Limit(title.Year is { } year ? title.Title + " (" + year + ")" : title.Title, 500);
+
+                // Lidarr's metadata profile may leave out an album's type.
+                if (title.MetadataProfileId is { } metadataId && metadataById.TryGetValue(metadataId, out var metadata)
+                    && !ServarrProfileLogic.Monitoring(metadata).AllowsType(title.AlbumType))
+                {
+                    items.Add(new TakeoverItemV1(type, name, "takeover_not_monitored", null));
+                    continue;
+                }
+
                 var identity = mediaType switch
                 {
                     MediaType.Movie or MediaType.Series => title.TmdbId?.ToString(CultureInfo.InvariantCulture) is { } tmdbId ? (mediaType == MediaType.Movie ? "tmdb_movie" : "tmdb_tv", tmdbId) : default,
@@ -171,7 +231,9 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     var workId = await _catalog.ImportAsync(Context, mediaType, null, identity.Item1, externalId, CancellationToken);
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
-                        await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, title.QualityProfileId is { } profileId && profileIds.TryGetValue(profileId, out var id) ? id : null), ct);
+                        await ctx.EnsureWantedItemAsync(new WantedTakeoverData(workId, title.QualityProfileId is { } profileId && profileIds.TryGetValue(profileId, out var id) ? id : null,
+                            rootFolders.FirstOrDefault(folder => title.Path is { } titlePath && Contains(folder.Path, titlePath)) is { } root
+                                && chosen.TryGetValue(Folder(root.Path), out var libraryRootId) ? libraryRootId : null), ct);
                         return true;
                     }, CancellationToken);
                     items.Add(new TakeoverItemV1(type, name, "takeover_wanted", null));
@@ -215,5 +277,19 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
         }
 
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];
+
+        // "12:/data/music" chooses library 12 for that root folder.
+        private static (long LibraryRootId, string Path)? Choice(string value) =>
+            value.IndexOf(':') is > 0 and var colon && colon < value.Length - 1 && long.TryParse(value.AsSpan(0, colon), NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+                ? (id, value[(colon + 1)..])
+                : null;
+
+        private static string Folder(string path) => path.TrimEnd('/', '\\');
+
+        private static string LastName(string path) => Folder(path).Split('/', '\\')[^1].ToLowerInvariant();
+
+        // A title's folder lies in the root folder or is it.
+        private static bool Contains(string folder, string path) => path.StartsWith(Folder(folder), StringComparison.Ordinal)
+            && (path.Length == Folder(folder).Length || path[Folder(folder).Length] is '/' or '\\');
     }
 }

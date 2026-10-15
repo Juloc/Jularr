@@ -19,6 +19,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Album = 5,
         Book = 6,
         Profile = 7,
-        Format = 8
+        Format = 8,
+        RootFolder = 9
     }
 }

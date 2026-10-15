@@ -38,6 +38,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     coalesce((profile."Definition" ->> 'DelayMinutes')::integer, 0) AS "DelayMinutes",
                     ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'FallbackQualities', '[]'::jsonb))) AS "FallbackQualities",
                     (profile."Definition" ->> 'FallbackAfterHours')::integer AS "FallbackAfterHours",
+                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'PrimaryTypes', '[]'::jsonb)))
+                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'SecondaryTypes', '[]'::jsonb)))
+                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'ReleaseStatuses', '[]'::jsonb))) AS "MonitoredTypes",
+                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'Languages', '[]'::jsonb))) AS "MonitoredLanguages",
+                    (profile."Definition" -> 'Monitoring' ->> 'MinimumPages')::integer AS "MinimumPages",
                     (
                         SELECT
                             count(*)::integer
@@ -102,6 +107,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     coalesce((profile."Definition" ->> 'DelayMinutes')::integer, 0) AS "DelayMinutes",
                     ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'FallbackQualities', '[]'::jsonb))) AS "FallbackQualities",
                     (profile."Definition" ->> 'FallbackAfterHours')::integer AS "FallbackAfterHours",
+                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'PrimaryTypes', '[]'::jsonb)))
+                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'SecondaryTypes', '[]'::jsonb)))
+                        || ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'ReleaseStatuses', '[]'::jsonb))) AS "MonitoredTypes",
+                    ARRAY(SELECT jsonb_array_elements_text(coalesce(profile."Definition" -> 'Monitoring' -> 'Languages', '[]'::jsonb))) AS "MonitoredLanguages",
+                    (profile."Definition" -> 'Monitoring' ->> 'MinimumPages')::integer AS "MinimumPages",
                     (
                         SELECT
                             count(*)::integer

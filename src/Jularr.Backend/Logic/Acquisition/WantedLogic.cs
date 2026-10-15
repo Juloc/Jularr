@@ -52,22 +52,26 @@ namespace Jularr.Backend.Logic.Acquisition
 
         public static async Task EnsureWantedItemAsync(this LogicContext ctx, WantedTakeoverData data, CancellationToken ct)
         {
-            // A taken-over title becomes a target once, with the profile it had, if one of its type.
+            // A taken-over title becomes a target once, with the profile it had and the library of its root folder, each if one of its type.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO "WantedItems" (
                     "WorkId",
-                    "AcquisitionProfileId"
+                    "AcquisitionProfileId",
+                    "LibraryRootId"
                 )
                 SELECT
                     work."Id",
-                    profile."Id"
+                    profile."Id",
+                    root."Id"
                 FROM
                     "Works" AS work
                     LEFT JOIN "AcquisitionProfiles" AS profile ON profile."Id" = @AcquisitionProfileId
                         AND profile."MediaTypeId" = work."MediaTypeId"
                         AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                    LEFT JOIN "LibraryRoots" AS root ON root."Id" = @LibraryRootId
+                        AND root."MediaTypeId" = work."MediaTypeId"
                 WHERE
                     work."Id" = @WorkId
                 ON CONFLICT ("WorkId", "GamePlatformId") DO NOTHING;
