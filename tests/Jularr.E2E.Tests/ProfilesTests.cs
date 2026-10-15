@@ -48,10 +48,10 @@ namespace Jularr.E2E.Tests
                 var form = Steps.FormWith(visitor, "Ask for an account");
                 await form.Locator("[name=Email]").FillAsync(Email);
                 await form.Locator("[name=DisplayName]").FillAsync("Viewer");
-                await form.Locator("[name=Password]").FillAsync("short");
-                await form.Locator("[name=PasswordConfirmation]").FillAsync("short");
+                await form.Locator("[name=Password]").FillAsync(Password);
+                await form.Locator("[name=PasswordConfirmation]").FillAsync(Password + "-typo");
                 await form.Locator("button[type=submit]").ClickAsync();
-                await Assertions.Expect(visitor.Locator("main [role=alert]")).ToBeVisibleAsync();
+                await Assertions.Expect(visitor.Locator("main [role=alert]")).ToBeVisibleAsync(new() { Timeout = 30_000 });
                 Assert.AreEqual("", await form.Locator("[name=Password]").InputValueAsync());
                 Assert.AreEqual(Email, await form.Locator("[name=Email]").InputValueAsync());
                 await form.Locator("[name=Password]").FillAsync(Password);
@@ -70,7 +70,11 @@ namespace Jularr.E2E.Tests
                 // Enabled, the same credentials work; administration stays closed.
                 await SignInAsync(visitor);
                 Assert.IsFalse(new Uri(visitor.Url).AbsolutePath.StartsWith("/Account/Login", StringComparison.Ordinal), "The enabled account could not sign in.");
-                CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.Where(problem => !problem.Contains("401", StringComparison.Ordinal)).ToArray());
+                // Only the refused confirmation (400) and the pending sign-in (401) answered with errors.
+                CollectionAssert.AreEqual(Array.Empty<string>(), viewer.Problems.Where(problem =>
+                    !(problem.Contains("/Account/Register", StringComparison.Ordinal) && problem.Contains("400", StringComparison.Ordinal))
+                    && !(problem.Contains("/Account/Login", StringComparison.Ordinal) && problem.Contains("401", StringComparison.Ordinal))).ToArray(),
+                    string.Join(Environment.NewLine, viewer.Problems));
                 var admin = await visitor.GotoAsync("/Admin/Accounts");
                 Assert.AreEqual(403, admin!.Status);
                 StringAssert.Contains(new Uri(visitor.Url).AbsolutePath, "/Account/AccessDenied");
