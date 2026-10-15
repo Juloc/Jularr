@@ -1,13 +1,10 @@
 using System.Globalization;
 using System.Text.Json;
-using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Media;
-using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Media;
 using Jularr.Backend.Infrastructure.Sql;
-using Jularr.Backend.Service.Core;
 using Jularr.Backend.Service.Admin.Media.V1;
 
 namespace Jularr.Backend.Service.Core
