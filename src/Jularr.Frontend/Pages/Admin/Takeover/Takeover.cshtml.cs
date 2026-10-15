@@ -21,7 +21,6 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
             page.Title("admin.takeover.title");
             page.Navigation("nav.admin");
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Media, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
-            else page.Content.Add(AdminNavigation.Acquisition);
 
             // The key is used for this read only; a preview changes nothing.
             var sources = Enum.GetValues<TakeoverSourceType>().Select(source => new SelectOption(((byte)source).ToString(CultureInfo.InvariantCulture), texts["takeover.source." + source]));
@@ -42,7 +41,8 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
                     .Text(item => item.Name, "sources.name")
                     .Resource(item => item.OutcomeKey, "table.status", outcome => "takeover.outcome." + outcome)
                     .Content("common.actions", item => item.SuggestedUrl is { } url
-                        ? new A(new Text("sources.add")).Class("button").Attribute("href", SetupWizard.Address(Request, SetupStepType.Downloads, "/Admin/Acquisition") + "?Type=" + (item.TakeoverItemTypeId == TakeoverItemType.Client ? "Sabnzbd" : "Newznab")
+                        ? new A(new Text("sources.add")).Class("button").Attribute("href", (item.TakeoverItemTypeId == TakeoverItemType.Client ? SetupWizard.Address(Request, SetupStepType.Downloads, "/Admin/Acquisition/Downloads") + "?Type=Sabnzbd"
+                            : SetupWizard.Address(Request, SetupStepType.Indexers, "/Admin/Acquisition") + "?Type=Newznab")
                             + "&name=" + Uri.EscapeDataString(item.Name) + "&url=" + Uri.EscapeDataString(url))
                         : new Span()));
                 if (items.Count == 0)

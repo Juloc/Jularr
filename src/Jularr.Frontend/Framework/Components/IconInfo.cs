@@ -31,7 +31,5 @@ namespace Jularr.Frontend.Framework
             ).Class("icon-info").WriteTo(writer, encoder, texts);
         }
 
-        private sealed class Details(params IUiComponent[] content) : HtmlElement("details", content);
-        private sealed class Summary(params IUiComponent[] content) : HtmlElement("summary", content);
     }
 }

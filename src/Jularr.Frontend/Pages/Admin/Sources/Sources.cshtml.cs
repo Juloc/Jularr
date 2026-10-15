@@ -17,7 +17,6 @@ namespace Jularr.Frontend.Pages.Admin.Sources
         {
             page.Title("admin.sources.title");
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.Acquisition);
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             // Every enabled source is searched together; setup adds what needs nothing from the Owner.

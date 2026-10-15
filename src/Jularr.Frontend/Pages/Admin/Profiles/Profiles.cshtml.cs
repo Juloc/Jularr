@@ -39,7 +39,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
             page.Title("admin.profiles.title");
             page.Navigation("nav.admin");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            page.Content.Add(SetupWizard.IsActive(Request) ? SetupWizard.Frame(SetupStepType.Profiles, csrf) : AdminNavigation.Acquisition);
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles, csrf));
             var editing = _selected is not null || NewFor is not null;
 
             page.Content.Add(new Split(split =>

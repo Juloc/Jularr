@@ -1,7 +1,7 @@
 # Instance setup: agreed flow
 
 Consolidated flow requested by the owner. The first Owner, resumable steps over the
-real Admin editors (Instance, Storage, Downloads, Providers, Profiles, Existing media), the
+real Admin editors (Instance, Storage, Indexers, Download clients, Providers, Profiles, Existing media), the
 checks and the final completion are implemented. Restore is offered on the first editor
 (`/Setup/Backup`) while setup is unfinished: a backup of the same schema replaces the new
 instance through `pg_restore`, then Jularr restarts and its own accounts sign in. AI (page 7)

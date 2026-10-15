@@ -13,6 +13,15 @@
     &__back { display: none; }
 }
 
+// With a detail open the list keeps each row's name and action and gives the detail the room.
+@media (min-width: 781px) {
+    .split--detail-open {
+        grid-template-columns: minmax(220px, 1fr) minmax(0, 2.4fr);
+
+        .split__primary table :is(th, td):not(:first-child, :last-child) { display: none; }
+    }
+}
+
 @media (max-width: 780px) {
     .split { grid-template-columns: minmax(0, 1fr); }
 

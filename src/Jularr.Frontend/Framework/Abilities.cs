@@ -9,6 +9,8 @@ namespace Jularr.Frontend.Framework
         public static bool CanManageRequests(this UiText texts) => texts.Can("requests.update", "Requests");
         public static bool CanManageWanted(this UiText texts) => texts.Can("wanted.update", "Requests");
         public static bool CanAcquire(this UiText texts) => texts.Can("wanted.update", "Requests", "Acquisition");
+        public static bool CanConfigureAcquisition(this UiText texts) => texts.Can("acquisition.manage", "Acquisition");
+        public static bool CanReadRequestRules(this UiText texts) => texts.Can("rules.read", "Requests");
         public static bool CanPlay(this UiText texts) => texts.Can("profile.playback", "Library", "Playback");
         public static bool CanRead(this UiText texts) => texts.Can("profile.media.read", "Library", "Reading");
         public static bool CanManageProfiles(this UiText texts) => texts.Can(null, "Profiles");

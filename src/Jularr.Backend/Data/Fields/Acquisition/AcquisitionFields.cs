@@ -40,6 +40,7 @@ namespace Jularr.Backend.Data.Fields.Acquisition
         public static readonly StringField ErrorKey = new(NpgsqlDbType.Varchar) { MaximumLength = 64, Required = false };
         public static readonly BoolField IsAvailable = new();
         public static readonly LongField Version = new() { Minimum = 1 };
+        public static readonly StringField SearchQuery = new() { MaximumLength = 200, AllowBlank = false, Trim = true, Format = StringFormat.SingleLine };
     }
 
     public static class AcquisitionReleaseFields

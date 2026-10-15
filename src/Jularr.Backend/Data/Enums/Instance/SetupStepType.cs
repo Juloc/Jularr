@@ -5,10 +5,11 @@ namespace Jularr.Backend.Data.Enums.Instance
     {
         Instance = 1,
         Storage = 2,
-        Downloads = 3,
-        Providers = 4,
-        Profiles = 5,
-        Media = 6,
-        Finish = 7
+        Indexers = 3,
+        Downloads = 4,
+        Providers = 5,
+        Profiles = 6,
+        Media = 7,
+        Finish = 8
     }
 }

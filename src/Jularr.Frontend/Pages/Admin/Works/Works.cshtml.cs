@@ -25,7 +25,6 @@ namespace Jularr.Frontend.Pages.Admin.Works
         {
             page.Title("admin.works.title");
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.Works);
 
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var mediaTypes = Enum.GetValues<MediaType>().Select(type => new SelectOption(((byte)type).ToString(CultureInfo.InvariantCulture), texts["media.type." + type]));

@@ -2,10 +2,7 @@ using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Request.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Acquisition;
-using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Service.Admin.Request.V1;
-using Jularr.Backend.Service.Core;
-using Jularr.Backend.Service.Public.Authentication.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
@@ -13,10 +10,9 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Requests
 {
-    public sealed class RequestsModel(ReadRequestsV1 read, UpdateRequestV1 update, ReadAuthenticationV1 authentication, IAntiforgery antiforgery) : JularrPage
+    public sealed class RequestsModel(ReadRequestsV1 read, UpdateRequestV1 update, IAntiforgery antiforgery) : JularrPage
     {
         private PageResult<RequestDetailsV1>? _requests;
-        private bool _canReadRules;
 
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
@@ -28,8 +24,6 @@ namespace Jularr.Frontend.Pages.Admin.Requests
         {
             page.Title("admin.requests.title");
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.RequestsFor(_canReadRules));
-
             page.Content.Add(new NavigationTabs(Enum.GetValues<RequestTabType>()
                 .Select(tab => new NavigationTab("request.tab." + tab, Address(tab: tab), tab == Tab)).ToArray(), "admin.requests.title"));
 
@@ -83,8 +77,6 @@ namespace Jularr.Frontend.Pages.Admin.Requests
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
-            var auth = await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: ct);
-            _canReadRules = auth.Permissions.Contains(ServiceApi.RulesReadPolicyName, StringComparer.Ordinal);
             _requests = await read.ExecuteAsync<PageResult<RequestDetailsV1>>(new ReadRequestsParametersV1(PageNumber, requestTabTypeId: Tab), ct);
         }
 

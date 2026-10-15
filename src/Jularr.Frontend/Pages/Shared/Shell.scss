@@ -79,6 +79,10 @@
     gap: 28px;
     padding: 22px 12px;
     border-right: 1px solid var(--border);
+    // Open areas may outgrow a short window.
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
 }
 .sidebar-brand {
     display: flex;
@@ -145,6 +149,35 @@ html[data-skin="original"] .sidebar-secondary {
 }
 .nav-link:hover { background-color: var(--surface-hover); color: var(--text); }
 .nav-link.is-active { background-color: var(--accent); color: var(--accent-contrast); }
+
+// An area opens into its pages; its heading stays quiet, the current page is marked.
+.nav-group {
+    & > summary {
+        cursor: pointer;
+        list-style: none;
+
+        &::-webkit-details-marker { display: none; }
+
+        &::after {
+            content: "";
+            width: 7px;
+            height: 7px;
+            margin-left: auto;
+            border-right: 2px solid currentColor;
+            border-bottom: 2px solid currentColor;
+            transform: rotate(-45deg);
+            transition: transform .12s;
+        }
+
+        &.is-active { background-color: transparent; color: var(--text); }
+    }
+
+    &[open] > summary::after { transform: rotate(45deg); }
+
+    &__pages { display: grid; gap: 2px; padding: 2px 0 4px 34px; }
+}
+.nav-link--sub { min-height: 36px; padding: 7px 12px; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .nav-group > summary::after { transition: none; } }
 @media (max-width: 780px) { .app-sidebar { display: none; } }
 
 .mobile-navigation { display: none; }

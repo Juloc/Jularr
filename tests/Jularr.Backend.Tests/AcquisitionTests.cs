@@ -1185,6 +1185,39 @@ namespace Jularr.Backend.Tests
             return (await response.Content.ReadFromJsonAsync<BaseDataList<AcquisitionProfileDetailsV1>>())!;
         }
 
+        [TestMethod]
+        public async Task Connections_ListByRole_AndATestSearchCountsAsAQuery()
+        {
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            var usenet = new FakeUsenet();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, usenet, razor: true);
+
+            // A role keeps one kind of connection, in the list and on its tab.
+            using var clients = await host.SendAsync(HttpMethod.Get, Connections + "?acquisitionConnectionRoleId=2");
+            var listed = (await clients.Content.ReadFromJsonAsync<PageResult<AcquisitionConnectionDetailsV1>>())!.Items;
+            Assert.IsTrue(listed.Count > 0 && listed.All(item => item.AcquisitionConnectionTypeId == AcquisitionConnectionType.Sabnzbd));
+            using var tab = await host.SendAsync(HttpMethod.Get, "/Admin/Acquisition/Downloads");
+            var html = await tab.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, tab.StatusCode, html);
+            StringAssert.Contains(html, "Add download client");
+            Assert.IsFalse(html.Contains("Add indexer", StringComparison.Ordinal));
+
+            // A test search lists what the indexer returns and uses one of its daily queries.
+            var indexerId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"AcquisitionConnections\" WHERE \"AcquisitionConnectionTypeId\" = 1 ORDER BY \"Id\" LIMIT 1"))!;
+            using var searched = await host.SendAsync(HttpMethod.Post, Connections + "/" + indexerId + "/search", new SearchAcquisitionConnectionDataV1("Example"));
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            var releases = (await searched.Content.ReadFromJsonAsync<BaseDataList<IndexerReleaseV1>>())!;
+            Assert.IsTrue(releases.Any(release => release.Title == "Example.Movie.1999.1080p.WEB-DL.H264-GRP"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"QueryCount\" = 1 FROM \"AcquisitionConnections\" WHERE \"Id\" = " + indexerId));
+
+            // At the daily limit the indexer is not asked.
+            await host.Fixture.RunSqlAsync("UPDATE \"AcquisitionConnections\" SET \"QueryLimit\" = 1 WHERE \"Id\" = " + indexerId);
+            using var limited = await host.SendAsync(HttpMethod.Post, Connections + "/" + indexerId + "/search", new SearchAcquisitionConnectionDataV1("Example"));
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, limited.StatusCode);
+            StringAssert.Contains(await limited.Content.ReadAsStringAsync(), "acquisition_query_limit_reached");
+        }
+
         private static async Task<IReadOnlyList<WantedReleaseV1>> ReadReleasesAsync(Host host, long wantedId)
         {
             using var response = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/wanted/" + wantedId + "/releases");

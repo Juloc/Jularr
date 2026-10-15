@@ -212,8 +212,8 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
                 .Text(item => item.Score, "wanted.search.score")
                 .Text(item => item.Title, "wanted.search.release")
                 .Text(item => item.ConnectionName, "wanted.search.indexer")
-                .Content("wanted.search.age", item => new ValueText(Age(item.PublishedAt)))
-                .Content("wanted.search.size", item => new ValueText(Size(item.SizeBytes)))
+                .Content("wanted.search.age", item => new ValueText(ReleaseFacts.AgeDays(item.PublishedAt)))
+                .Content("wanted.search.size", item => new ValueText(ReleaseFacts.Size(item.SizeBytes)))
                 .Text(item => item.QualityKey, "wanted.search.quality")
                 .Content("wanted.search.reason", item => Reason("acquisition.reason." + item.ReasonCode, item.ReasonValue))
                 .Content("common.actions", item => item.ReleaseDecisionTypeId == ReleaseDecisionType.Rejected
@@ -336,11 +336,6 @@ namespace Jularr.Frontend.Pages.Admin.Wanted
         }
 
         private static IUiComponent Reason(string key, string? value) => value is null ? new Text(key) : new Span(new Text(key), new ValueText(" · " + value));
-
-        private static string Age(DateTime? publishedAt) =>
-            publishedAt is { } date ? Math.Max(0, (int)(DateTime.UtcNow - date).TotalDays).ToString(CultureInfo.InvariantCulture) : "";
-
-        private static string Size(long? bytes) => bytes is { } size ? ByteSize.Format(size) : "";
 
         private bool CanAcquire => texts.CanAcquire();
 

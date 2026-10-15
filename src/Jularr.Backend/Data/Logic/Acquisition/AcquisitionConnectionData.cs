@@ -316,6 +316,17 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public string BaseUrl { get; }
     }
 
+    internal sealed class AcquisitionConnectionRoleFilterData : BaseData
+    {
+        public AcquisitionConnectionRoleFilterData(AcquisitionConnectionRole? acquisitionConnectionRoleId)
+        {
+            AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionRoleId), false)]
+        public AcquisitionConnectionRole? AcquisitionConnectionRoleId { get; }
+    }
+
     internal sealed class AcquisitionConnectionRoleParameters : BaseData
     {
         public AcquisitionConnectionRoleParameters(AcquisitionConnectionRole acquisitionConnectionRoleId)

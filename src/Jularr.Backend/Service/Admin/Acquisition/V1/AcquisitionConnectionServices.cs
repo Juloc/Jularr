@@ -31,7 +31,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
 
         protected override async Task<IServiceOutput> OnRead()
         {
-            // Indexers first, then download clients.
+            // Indexers first, then download clients; a role keeps one kind.
             var sql = new SqlStatement();
             sql.Statement =
                 """
@@ -62,6 +62,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     COALESCE(connection."RetryAt" > now(), FALSE) AS "IsBackedOff"
                 FROM
                     "AcquisitionConnections" AS connection
+                    JOIN "AcquisitionConnectionTypes" AS type ON type."Id" = connection."AcquisitionConnectionTypeId"
+                WHERE
+                    @AcquisitionConnectionRoleId::smallint IS NULL
+                    OR type."AcquisitionConnectionRoleId" = @AcquisitionConnectionRoleId
                 ORDER BY
                     connection."AcquisitionConnectionTypeId",
                     connection."Priority",
@@ -69,6 +73,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 LIMIT @PageSize
                 OFFSET @Offset;
                 """;
+            sql.Parameters.Add(new AcquisitionConnectionRoleFilterData(Parameters.AcquisitionConnectionRoleId));
             sql.Page = Page;
             return await Context.ReadSql.ReadPageAsync<AcquisitionConnectionDetailsV1>(sql, CancellationToken);
         }
@@ -282,6 +287,59 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 return true;
             }, CancellationToken);
             return result;
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/admin/acquisition/connections/{acquisitionConnectionId:long}/search")]
+    public sealed class SearchAcquisitionConnectionV1 : AdminService<AcquisitionConnectionParametersV1, SearchAcquisitionConnectionDataV1>
+    {
+        private const int Limit = 25;
+        private readonly NewznabClient _newznab;
+        private readonly IDataProtector _protector;
+
+        internal SearchAcquisitionConnectionV1(NewznabClient newznab, IDataProtectionProvider protection)
+        {
+            _newznab = newznab;
+            _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<IndexerReleaseV1>>()];
+        protected override ModuleRequirement GetInstanceModules(AcquisitionConnectionParametersV1 parameters) => ModuleRequirement.All("Acquisition");
+        protected override ServicePermission GetPermission(AcquisitionConnectionParametersV1 parameters, Type resultType) => new("acquisition.manage");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // One free-text query of an indexer, counted like any other.
+            var indexer = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadAcquisitionConnectionAsync(Parameters.AcquisitionConnectionId, ct), CancellationToken);
+            if (indexer.AcquisitionConnectionTypeId != AcquisitionConnectionType.Newznab)
+            {
+                throw new DataValidationException(nameof(SearchAcquisitionConnectionDataV1.Query), "invalid_transition");
+            }
+
+            if (!AcquisitionConnectionLogic.HasQueries(indexer, 0))
+            {
+                throw new ServiceUnavailableException("acquisition_query_limit_reached");
+            }
+
+            IReadOnlyList<NewznabItem>? items = null;
+            try
+            {
+                items = await _newznab.SearchAsync(new NewznabConnection(indexer.BaseUrl, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey)),
+                    new NewznabQuery(NewznabSearchMode.Search, Data.Query, [], indexer.Categories, Limit), CancellationToken);
+            }
+            catch (NewznabException)
+            {
+            }
+
+            await Context.ExecuteBatchAsync(async (ctx, ct) =>
+            {
+                await ctx.RecordIndexerUseAsync(new IndexerUseData(indexer.Id, 1, items is not null), ct);
+                return true;
+            }, CancellationToken);
+            return items is null
+                ? throw new ServiceUnavailableException("acquisition_unavailable")
+                : new BaseDataList<IndexerReleaseV1>([.. items.Select(item => new IndexerReleaseV1(TextLimit.Cut(item.Title, 1000)!, item.SizeBytes, item.PublishedAt?.UtcDateTime))]);
         }
     }
 

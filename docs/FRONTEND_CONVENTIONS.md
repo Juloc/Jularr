@@ -102,6 +102,10 @@ Scope: `src/Jularr.Frontend/`. Shared C# and backend rules:
 - Controls and navigation are flat and opaque: no glass blur, transparency
   settings, bevels or 3D button gradients. Keep keyboard focus visible but
   restrained; outlined fields indicate focus with their thin border.
+- Owner's decision 15 Oct: a page has at most one row of tabs. Administration areas
+  (Media, Requests, Arr+) are collapsible groups in the sidebar whose pages are their own
+  addresses; the area of the current page is open. Spread content over pages rather than
+  stacking tab rows or crowding one page.
 - Tabs and subsection navigation reuse `NavigationTabs`: button-like segments
   inside one shared capsule. `Tabs` adds only the server-selected content pane.
   Keep the capsule single-row and horizontally scrollable when necessary, with

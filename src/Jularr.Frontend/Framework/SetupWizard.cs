@@ -11,7 +11,8 @@ namespace Jularr.Frontend.Framework
         {
             [SetupStepType.Instance] = "/Setup/Instance",
             [SetupStepType.Storage] = "/Setup/Storage",
-            [SetupStepType.Downloads] = "/Setup/Acquisition",
+            [SetupStepType.Indexers] = "/Setup/Indexers",
+            [SetupStepType.Downloads] = "/Setup/Downloads",
             [SetupStepType.Providers] = "/Setup/Providers",
             [SetupStepType.Profiles] = "/Setup/Profiles",
             [SetupStepType.Media] = "/Setup/Takeover",

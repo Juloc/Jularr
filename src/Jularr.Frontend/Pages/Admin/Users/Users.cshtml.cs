@@ -35,7 +35,6 @@ namespace Jularr.Frontend.Pages.Admin.Users
         {
             page.Title("admin.users.title");
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.Requests);
             if (_users is not { } users)
             {
                 return;

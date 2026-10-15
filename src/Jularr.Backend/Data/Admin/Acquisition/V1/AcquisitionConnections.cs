@@ -7,14 +7,19 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
     public sealed class ReadAcquisitionConnectionsParametersV1 : BaseParameters
     {
-        public ReadAcquisitionConnectionsParametersV1(int page = 1, int pageSize = 25)
+        public ReadAcquisitionConnectionsParametersV1(int page = 1, int pageSize = 25, AcquisitionConnectionRole? acquisitionConnectionRoleId = null)
         {
             Page = page;
             PageSize = pageSize;
+            AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
         }
 
         public int Page { get; }
         public int PageSize { get; }
+
+        // Without a role, every connection.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionRoleId), false)]
+        public AcquisitionConnectionRole? AcquisitionConnectionRoleId { get; }
     }
 
     public sealed class AcquisitionConnectionParametersV1 : BaseParameters
@@ -299,5 +304,35 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchModes))]
         public string[] SearchModes { get; }
+    }
+
+    public sealed class SearchAcquisitionConnectionDataV1 : BaseData
+    {
+        public SearchAcquisitionConnectionDataV1(string query)
+        {
+            Query = query;
+        }
+
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.SearchQuery))]
+        public string Query { get; }
+    }
+
+    public sealed class IndexerReleaseV1 : BaseResponse
+    {
+        public IndexerReleaseV1(string title, long? sizeBytes, DateTime? publishedAt)
+        {
+            Title = title;
+            SizeBytes = sizeBytes;
+            PublishedAt = publishedAt;
+        }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.Title))]
+        public string Title { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.SizeBytes))]
+        public long? SizeBytes { get; }
+
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.PublishedAt))]
+        public DateTime? PublishedAt { get; }
     }
 }

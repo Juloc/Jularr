@@ -13,7 +13,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Table.cs](Framework/Components/Table.cs): typed rows and composed cells.
 - [Button.cs](Framework/Components/Button.cs), [Tag.cs](Framework/Components/Tag.cs), [Toggle.cs](Framework/Components/Toggle.cs): shared controls.
 - [Split.cs](Framework/Components/Split.cs), [Tabs.cs](Framework/Components/Tabs.cs), [NavigationTabs.cs](Framework/Components/NavigationTabs.cs): layout and route-backed navigation.
-- [Shell.cs](Pages/Shared/Shell.cs), [Brand.cs](Pages/Shared/Brand.cs): capability-driven application chrome and branding.
+- [Shell.cs](Pages/Shared/Shell.cs), [Brand.cs](Pages/Shared/Brand.cs): capability-driven application chrome and branding; administration areas are collapsible sidebar groups.
 - [Shared layout](Pages/Shared/_Layout.cshtml), [page body](Pages/Shared/_PageBody.cshtml): thin Razor bridges.
 - [FrontendAssets.cs](Framework/FrontendAssets.cs), [Vite](vite.config.ts), [build tools](Tools): fingerprinted, entry-scoped assets and SVG sprite.
 - [Shared SCSS](Assets/Shared/shell.entry.scss): colocated base component styles loaded once.
@@ -62,7 +62,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Works](Pages/Admin/Works/Works.cshtml.cs), [Work](Pages/Admin/Work/Work.cshtml.cs) (metadata, a wrong match replaced by another provider entry, and named unit sections; [manga volume upload](Pages/Admin/WorkUpload/WorkUpload.cshtml.cs)), [Creator](Pages/User/Creator/Creator.cshtml.cs) (an author's or artist's titles), [Franchise](Pages/User/Franchise/Franchise.cshtml.cs) (a film series' titles), [AniList matches](Pages/Admin/Matches/Matches.cshtml.cs), [Library inventory](Pages/Admin/Library/Library.cshtml.cs): metadata, editing, matching, file identification, naming patterns and rename preview.
 - [Admin library](Pages/Admin/Library/Library.cshtml.cs): unmatched and assigned files (keep only one version, protect from automatic upgrades), confirmed renames, naming patterns, and Files & versions (upgrade behaviour, several releases, recycle mode, folder and days); [subtitles of a video](Pages/Admin/Subtitles/Subtitles.cshtml.cs) searched and chosen by hand.
 - [Requests](Pages/Admin/Requests/Requests.cshtml.cs), [Wanted](Pages/Admin/Wanted/Wanted.cshtml.cs), [Activity](Pages/Admin/Activity/Activity.cshtml.cs): moderation, acquisition and recovery.
-- [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs), [Sources](Pages/Admin/Sources/Sources.cshtml.cs), [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs) (with release rules): connection/catalog/profile configuration.
+- [Acquisition](Pages/Admin/Acquisition/Acquisition.cshtml.cs), [Sources](Pages/Admin/Sources/Sources.cshtml.cs), [Quality profiles](Pages/Admin/Profiles/Profiles.cshtml.cs) (with release rules): connection/catalog/profile configuration; connections have one address per role (`/Admin/Acquisition`, `/Downloads`, `/Subtitles`) and an indexer test search.
 - [Takeover](Pages/Admin/Takeover/Takeover.cshtml.cs): one-time Prowlarr/Sonarr/Radarr preview and import.
 - [Localization](Pages/Admin/Localization/Localization.cshtml.cs), [Languages](Pages/Admin/Languages/Languages.cshtml.cs): DB descriptions, translations and locale administration.
 - [Request users](Pages/Admin/Users/Users.cshtml.cs), [Rules](Pages/Admin/Rules/Rules.cshtml.cs): rule list and editor; accounts with their resolved rule, assignment and overrides. Details offers the rule's qualities when requesting.

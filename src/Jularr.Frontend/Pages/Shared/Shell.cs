@@ -43,11 +43,12 @@ namespace Jularr.Frontend.Pages.Shared
                 secondary.Add(new ShellLink("system.title", "/Admin/System", "server"));
             }
 
+            // Administration areas open into their pages.
             if (texts.CanManageMedia())
             {
-                secondary.Add(new ShellLink("admin.works.title", "/Admin/Works", "settings"));
-                secondary.Add(new ShellLink("admin.library.title", "/Admin/Library", "library"));
-                secondary.Add(new ShellLink("admin.activity.title", "/Admin/Activity", "settings"));
+                secondary.Add(Group("nav.group.media", "library",
+                    new("admin.works.title", "/Admin/Works", ""), new("admin.matches.title", "/Admin/Works/Matches", ""),
+                    new("admin.library.title", "/Admin/Library", ""), new("admin.activity.title", "/Admin/Activity", "")));
             }
 
             if (texts.CanRequest())
@@ -57,13 +58,20 @@ namespace Jularr.Frontend.Pages.Shared
 
             if (texts.CanManageRequests())
             {
-                secondary.Add(new ShellLink("admin.requests.title", "/Admin/Requests", "settings"));
+                secondary.Add(Group("nav.group.requests", "settings", [new("admin.requests.title", "/Admin/Requests", ""),
+                    .. texts.CanReadRequestRules() ? new ShellLink[] { new("admin.rules.title", "/Admin/Rules", ""), new("admin.users.title", "/Admin/Requests/Users", "") } : []]));
             }
 
-            if (texts.CanManageWanted())
+            var acquisition = new List<ShellLink>();
+            if (texts.CanManageWanted()) acquisition.Add(new("admin.wanted.title", "/Admin/Wanted", ""));
+            if (texts.CanConfigureAcquisition())
             {
-                secondary.Add(new ShellLink("admin.wanted.title", "/Admin/Wanted", "settings"));
+                acquisition.AddRange([new("acquisition.role.Search", "/Admin/Acquisition", ""), new("acquisition.role.Download", "/Admin/Acquisition/Downloads", ""),
+                    new("acquisition.role.Subtitles", "/Admin/Acquisition/Subtitles", ""), new("admin.profiles.title", "/Admin/Acquisition/Profiles", ""),
+                    new("admin.sources.title", "/Admin/Acquisition/Sources", ""), new("admin.takeover.title", "/Admin/Acquisition/Takeover", "")]);
             }
+
+            if (acquisition.Count > 0) secondary.Add(Group("nav.group.acquisition", "settings", [.. acquisition]));
 
             // Render shared navigation.
             // The one global search sits in the header.
@@ -103,12 +111,21 @@ namespace Jularr.Frontend.Pages.Shared
         {
             var children = links.Select(link =>
             {
-                var active = link.Href == "/"
-                    ? currentPath == "/"
-                    : string.Equals(currentPath, link.Href, StringComparison.OrdinalIgnoreCase)
-                        || currentPath.StartsWith(link.Href + "/", StringComparison.OrdinalIgnoreCase);
-
                 var className = mobile ? "mobile-link" : "nav-link";
+                if (link.Children is { } pages)
+                {
+                    // The area of the current page stays open and marks it.
+                    var current = Current(pages);
+                    var group = new Details(new Summary(new Icon(link.Icon, assets), new Span(new Text(link.Key))).Class(current is null ? className : className + " is-active"),
+                        new Div([.. pages.Select(page =>
+                        {
+                            var anchor = new A(new Span(new Text(page.Key))).Class(page == current ? "nav-link nav-link--sub is-active" : "nav-link nav-link--sub").Attribute("href", page.Href);
+                            return page == current ? anchor.Attribute("aria-current", "page") : anchor;
+                        })]).Class("nav-group__pages")).Class("nav-group");
+                    return current is null ? group : group.Attribute("open", "open");
+                }
+
+                var active = Matches(link);
                 var anchor = new A(new Icon(link.Icon, assets), new Span(new Text(link.Key)))
                     .Class(active ? className + " is-active" : className)
                     .Attribute("href", link.Href);
@@ -120,10 +137,22 @@ namespace Jularr.Frontend.Pages.Shared
                 .Attribute("aria-label", texts[titleKey]);
         }
 
+        private bool Matches(ShellLink link) => link.Href == "/"
+            ? currentPath == "/"
+            : string.Equals(currentPath, link.Href, StringComparison.OrdinalIgnoreCase)
+                || currentPath.StartsWith(link.Href + "/", StringComparison.OrdinalIgnoreCase);
+
+        // The most specific page of an area, so /Admin/Acquisition/Profiles is not also the indexers.
+        private ShellLink? Current(IReadOnlyList<ShellLink> pages) => pages.Where(Matches).MaxBy(page => page.Href.Length);
+
+        // An area with one page is a plain link.
+        private static ShellLink Group(string key, string icon, params ShellLink[] pages) =>
+            pages.Length == 1 ? pages[0] with { Icon = icon } : new ShellLink(key, pages[0].Href, icon, pages);
+
         private sealed class Aside(params IUiComponent[] children) : HtmlElement("aside", children);
     }
 
-    public sealed record ShellLink(string Key, string Href, string Icon);
+    public sealed record ShellLink(string Key, string Href, string Icon, IReadOnlyList<ShellLink>? Children = null);
 
     // Required destinations; Services determine optional links.
     public sealed class ShellNavigation

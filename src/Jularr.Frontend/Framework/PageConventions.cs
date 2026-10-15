@@ -11,7 +11,10 @@ namespace Jularr.Frontend.Framework
             conventions.AuthorizeFolder("/");
             conventions.AuthorizeFolder("/Admin", ServiceApi.AdminPolicyName);
             conventions.AddPageRoute("/Admin/Instance/Instance", "/Setup/Instance");
-            conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Acquisition");
+            conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Downloads");
+            conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Admin/Acquisition/Subtitles");
+            conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Indexers");
+            conventions.AddPageRoute("/Admin/Acquisition/Acquisition", "/Setup/Downloads");
             conventions.AddPageRoute("/Admin/Providers/Providers", "/Setup/Providers");
             conventions.AddPageRoute("/Admin/Profiles/Profiles", "/Setup/Profiles");
             conventions.AddPageRoute("/Admin/Takeover/Takeover", "/Setup/Takeover");

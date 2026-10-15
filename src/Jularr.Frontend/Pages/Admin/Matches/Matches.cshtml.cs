@@ -24,7 +24,6 @@ namespace Jularr.Frontend.Pages.Admin.Matches
         {
             page.Title("admin.matches.title");
             page.Navigation("nav.admin");
-            page.Content.Add(AdminNavigation.Works);
             if (_reviews is not { } reviews)
             {
                 if (FormError is not null) page.Content.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));

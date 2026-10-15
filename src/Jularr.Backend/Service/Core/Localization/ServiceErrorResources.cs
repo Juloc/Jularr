@@ -62,6 +62,7 @@ namespace Jularr.Backend.Service.Core.Localization
             new("errors.acquisition_authentication_failed", "The indexer or download client rejected the API key."),
             new("errors.acquisition_rate_limited", "The indexer limits requests right now. Please try again later."),
             new("errors.acquisition_limit_reached", "The indexer's daily grab limit is reached."),
+            new("errors.acquisition_query_limit_reached", "The indexer's daily query limit is reached."),
             new("errors.acquisition_invalid_response", "The indexer or download client returned an invalid response."),
             new("errors.acquisition_no_download_client", "No enabled download client is configured."),
             new("errors.acquisition_grab_failed", "The download client did not accept the release."),

@@ -33,7 +33,6 @@ namespace Jularr.Frontend.Pages.Admin.Rules
             page.Title("admin.rules.title");
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Rules/Rules.entry.scss");
-            page.Content.Add(AdminNavigation.Requests);
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             var editing = _selected is not null || New;
 

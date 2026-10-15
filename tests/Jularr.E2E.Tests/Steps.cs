@@ -109,7 +109,7 @@ namespace Jularr.E2E.Tests
             await page.FillAsync("form [name=ApiKey]", FakeServices.IndexerKey);
             await page.FillAsync("form [name=Categories]", categories);
             await SubmitAsync(page, page.Locator("form", new() { Has = page.Locator("[name=BaseUrl]") }));
-            await page.GotoAsync("/Admin/Acquisition");
+            await page.GotoAsync("/Admin/Acquisition/Downloads");
             await page.GetByRole(AriaRole.Link, new() { Name = "Add download client" }).ClickAsync();
             await page.FillAsync("form [name=Name]", "SABnzbd");
             await page.FillAsync("form [name=BaseUrl]", new Uri(fakes.Address, "sabnzbd/").ToString());

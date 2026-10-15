@@ -40,8 +40,6 @@ namespace Jularr.Frontend.Modules.Appearance
                     .Class("appearance__choices"))
                 .Class("appearance__group").Attribute("role", "group").Attribute("aria-label", texts[labelKey]);
 
-        private sealed class Details(params IUiComponent[] content) : HtmlElement("details", content);
-        private sealed class Summary(params IUiComponent[] content) : HtmlElement("summary", content);
         private sealed class Label(params IUiComponent[] content) : HtmlElement("label", content);
     }
 }
