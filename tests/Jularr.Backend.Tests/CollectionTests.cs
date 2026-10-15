@@ -83,6 +83,21 @@ namespace Jularr.Backend.Tests
             using var confirm = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?delete=true");
             StringAssert.Contains(await confirm.Content.ReadAsStringAsync(), "The titles themselves stay.");
 
+            // A title of the library is found by name and added from the collection page.
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "WantedItems" ("WorkId") VALUES (20);
+                INSERT INTO "WorkTitles" ("WorkId", "Title", "IsManual") VALUES (20, 'New Film', TRUE);
+                """);
+            using var found = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
+            var foundHtml = await found.Content.ReadAsStringAsync();
+            StringAssert.Contains(foundHtml, "New Film");
+            using var addedByPage = await host.SendAsync(HttpMethod.Post, "/Collections/" + favorites + "?handler=Add&workId=20",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(foundHtml) });
+            Assert.AreEqual(HttpStatusCode.Redirect, addedByPage.StatusCode, await addedByPage.Content.ReadAsStringAsync());
+            CollectionAssert.Contains(await WorksAsync(host, favorites), 20L);
+            using var again = await host.SendAsync(HttpMethod.Get, "/Collections/" + favorites + "?q=New");
+            StringAssert.Contains(await again.Content.ReadAsStringAsync(), "In this collection");
+
             // A profile keeps at most 100 collections, so lists are always complete.
             await host.Fixture.RunSqlAsync("INSERT INTO \"Collections\" (\"ProfileId\", \"Name\", \"IsSmart\") SELECT 101, 'List ' || n, FALSE FROM generate_series(1, 100) AS n");
             using var tooMany = await host.SendAsync(HttpMethod.Post, Route, new CreateCollectionDataV1("One more", false));
