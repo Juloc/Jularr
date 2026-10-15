@@ -309,7 +309,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
         protected override async Task<IServiceOutput> OnExecute()
         {
             // Stored source, streams and resume point.
-            var lookup = new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value);
+            var lookup = new PlaybackSourceParameters(Parameters.MediaAssetId, Auth.ProfileId!.Value, Auth.SessionPublicId);
             var (source, tracks) = await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
                 var sql = new SqlStatement();
@@ -326,7 +326,16 @@ namespace Jularr.Backend.Service.User.Playback.V1
                         mount."WakeBroadcastAddress",
                         mount."WakeOnDemand",
                         file."DurationMs",
-                        progress."PositionMs" AS "ResumePositionMs"
+                        progress."PositionMs" AS "ResumePositionMs",
+                        file."BitRate",
+                        COALESCE((
+                            SELECT
+                                session."AudioQuality"
+                            FROM
+                                "AccountSessions" AS session
+                            WHERE
+                                session."PublicId" = @SessionPublicId
+                        ), 1) AS "AudioQuality"
                     FROM
                         "MediaAssets" AS asset
                         JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
@@ -376,7 +385,12 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var videoCodecs = Data.VideoCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var audioCodecs = Data.AudioCodecs.ToHashSet(StringComparer.OrdinalIgnoreCase);
             var direct = PlaybackLogic.CanPlayDirectly(LibraryFileTypes.GetStream(source.RelativePath).Container, tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex);
-            var conversion = direct ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex);
+
+            // A device asking for smaller music converts it when it can; otherwise the original plays.
+            var kilobits = _transcodes.IsAvailable && source.DurationMs is not null ? PlaybackLogic.AudioKilobits(source.AudioQuality, tracks, source.BitRate) : null;
+            var smaller = kilobits is null ? null : PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex, kilobits);
+            direct &= smaller is null;
+            var conversion = direct ? null : smaller ?? PlaybackLogic.PlanConversion(tracks, containers, videoCodecs, audioCodecs, Data.AudioStreamIndex);
             if (!direct && (conversion is null || source.DurationMs is null || !_transcodes.IsAvailable))
             {
                 throw new ServiceUnavailableException("playback_conversion_unavailable");
@@ -405,7 +419,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             if (conversion is { } plan)
             {
                 _transcodes.Register(new PlaybackTranscodeSource(sessionId, lookup.ProfileId, path, plan.VideoStreamIndex, plan.AudioStreamIndex, plan.CopyVideo, plan.CopyAudio,
-                    source.DurationMs!.Value));
+                    source.DurationMs!.Value, plan.AudioKilobits));
                 return new PlaybackPlanV1(sessionId, mode, url + "/playlist.m3u8", resume, source.DurationMs);
             }
 

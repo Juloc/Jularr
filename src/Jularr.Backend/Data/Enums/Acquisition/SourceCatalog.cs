@@ -93,6 +93,7 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             new("novelping", "NovelPing", SourceGroup.Novels, SourceCapability.Link, SourceAvailability.ReferenceOnly),
             new("anilist", "AniList", SourceGroup.Manga, MetadataSearch, SourceAvailability.Ready, providerKey: "anilist"),
             new("musicbrainz", "MusicBrainz", SourceGroup.Music, MetadataSearch, SourceAvailability.Ready, providerKey: "musicbrainz"),
+            new("acoustid", "AcoustID (untagged music by fingerprint)", SourceGroup.Music, SourceCapability.Metadata, SourceAvailability.Account, providerKey: "acoustid"),
             new("igdb", "IGDB (Twitch application)", SourceGroup.Games, MetadataSearch, SourceAvailability.Account, providerKey: "igdb"),
             new("screenscraper", "ScreenScraper", SourceGroup.Games, MetadataSearch, SourceAvailability.Planned),
             new("libretro", "Libretro database", SourceGroup.Games, MetadataSearch, SourceAvailability.Planned),

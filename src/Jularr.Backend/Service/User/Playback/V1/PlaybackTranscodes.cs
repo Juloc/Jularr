@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 namespace Jularr.Backend.Service.User.Playback.V1
 {
     internal sealed record PlaybackTranscodeSource(Guid SessionId, long ProfileId, string InputPath, int? VideoStreamIndex, int? AudioStreamIndex, bool CopyVideo, bool CopyAudio,
-        long DurationMs)
+        long DurationMs, int? AudioKilobits = null)
     {
         public int SegmentCount => (int)Math.Ceiling(DurationMs / (PlaybackTranscodes.SegmentSeconds * 1000d));
     }
@@ -140,7 +140,7 @@ namespace Jularr.Backend.Service.User.Playback.V1
             var software = job.SoftwareFallback || _options.VideoEncoderArguments.Length == 0;
             var request = new TranscodeRequest(job.Source.InputPath, job.Directory, index, SegmentSeconds, job.Source.VideoStreamIndex, job.Source.AudioStreamIndex,
                 job.Source.CopyVideo, job.Source.CopyAudio, software ? MediaOptions.SoftwareEncoderArguments : _options.VideoEncoderArguments,
-                software ? [] : _options.HardwareAccelerationArguments);
+                software ? [] : _options.HardwareAccelerationArguments) { AudioKilobits = job.Source.AudioKilobits ?? 192 };
 
             // Counting and starting share one reservation, so parallel starts respect the budget.
             lock (_capacity)

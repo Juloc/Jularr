@@ -553,4 +553,35 @@ namespace Jularr.Backend.Data.Logic.Library
         [DataField(typeof(InstanceSettingsFields), nameof(InstanceSettingsFields.SubtitleLanguages))]
         public string[] SubtitleLanguages { get; }
     }
+
+    // Albums by their MusicBrainz release groups.
+    internal sealed class MusicAlbumLookupData : BaseData
+    {
+        public MusicAlbumLookupData(string[] externalIds)
+        {
+            ExternalIds = externalIds;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalIds))]
+        public string[] ExternalIds { get; }
+    }
+
+    internal sealed class MusicAlbumMatchData : BaseData
+    {
+        public MusicAlbumMatchData(string externalId, long workId, int trackCount)
+        {
+            ExternalId = externalId;
+            WorkId = workId;
+            TrackCount = trackCount;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id))]
+        public long WorkId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.TrackCount))]
+        public int TrackCount { get; }
+    }
 }

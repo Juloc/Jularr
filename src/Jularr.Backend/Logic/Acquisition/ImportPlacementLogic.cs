@@ -3,6 +3,7 @@ using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
 using Jularr.Backend.Logic.Library;
+using Jularr.Integrations.Data.Media;
 using Jularr.Integrations.Data.Storage;
 
 namespace Jularr.Backend.Logic.Acquisition
@@ -27,7 +28,8 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files,
-            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null, IReadOnlyList<TargetUnit>? episodes = null)
+            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null, IReadOnlyList<TargetUnit>? episodes = null,
+            IReadOnlyDictionary<string, AudioTags>? tags = null)
         {
             if (mediaType == MediaType.Book)
             {
@@ -36,7 +38,7 @@ namespace Jularr.Backend.Logic.Acquisition
 
             if (mediaType == MediaType.Music)
             {
-                return PlanMusic(title, year, author, files, trackCount);
+                return PlanMusic(title, year, author, files, trackCount, tags ?? new Dictionary<string, AudioTags>());
             }
 
             if (mediaType == MediaType.Game)
@@ -114,23 +116,34 @@ namespace Jularr.Backend.Logic.Acquisition
             return placements;
         }
 
-        // Tracks keep the release's natural order and land on their units only when the album's track count matches; the artist names the folder.
-        private static IReadOnlyList<ImportPlacementData> PlanMusic(string title, int? year, string? artist, IReadOnlyList<StorageFile> files, int trackCount)
+        // Tracks keep their tagged disc and track order, else the release's natural order, and land on their units only when the album's track count matches.
+        // A tagged title names the file; the artist names the folder.
+        private static IReadOnlyList<ImportPlacementData> PlanMusic(string title, int? year, string? artist, IReadOnlyList<StorageFile> files, int trackCount,
+            IReadOnlyDictionary<string, AudioTags> tags)
         {
             var tracks = files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Audio)
-                .OrderBy(file => Digits().Replace(file.RelativePath, match => match.Value.PadLeft(10, '0')), StringComparer.OrdinalIgnoreCase).ToArray();
+                .OrderBy(file => NaturalKey(file.RelativePath), StringComparer.OrdinalIgnoreCase).ToArray();
+            if (tracks.All(file => tags.GetValueOrDefault(file.RelativePath)?.Track is not null))
+            {
+                tracks = [.. tracks.OrderBy(file => tags[file.RelativePath].Disc ?? 1).ThenBy(file => tags[file.RelativePath].Track)];
+            }
+
             var numbered = tracks.All(file => Path.GetFileName(file.RelativePath) is { Length: > 0 } name && char.IsAsciiDigit(name[0]));
             var units = tracks.Length == trackCount;
             var placements = new List<ImportPlacementData>();
             for (var index = 0; index < tracks.Length; index++)
             {
                 var stem = Path.GetFileNameWithoutExtension(tracks[index].RelativePath);
-                var name = (numbered ? TrackNumber().Replace(stem, "") : stem).Trim(' ', '-', '.', '_');
+                var name = tags.GetValueOrDefault(tracks[index].RelativePath)?.Title is { } tagged ? LibraryNaming.SafeName(tagged)
+                    : (numbered ? TrackNumber().Replace(stem, "") : stem).Trim(' ', '-', '.', '_');
                 AddGroup(placements, files, tracks[index], LibraryNaming.Track(artist, title, year, index + 1, name), units ? WorkUnitType.Track : null, units ? index + 1 : null, null);
             }
 
             return placements;
         }
+
+        // "2 - Two" sorts before "10 - Ten".
+        public static string NaturalKey(string path) => Digits().Replace(path, match => match.Value.PadLeft(10, '0'));
 
         // A game keeps its release's files below its platform; the largest game file is the media.
         private static IReadOnlyList<ImportPlacementData> PlanGame(string title, int? year, string? platform, IReadOnlyList<StorageFile> files)

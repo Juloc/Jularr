@@ -71,7 +71,11 @@ unreachable path fails the operation with `storage_unavailable` and keeps all
 inventory. With `Media:FfprobePath` configured, new or changed video/audio files are
 probed with a bounded `ffprobe` run (no shell). Files in a top folder already
 identified as exactly one Work are assigned automatically when the path parser finds
-their unit; everything else waits for manual identification under `/Admin/Library`.
+their unit. In a music library, files tagged with a MusicBrainz release group go to that
+album; with `Media:FpcalcPath` (Chromaprint's `fpcalc`) configured and an AcoustID key
+stored and switched on under `/Admin/Providers`, an untagged folder whose files'
+fingerprints all match one album goes to that album. Everything else waits for manual
+identification under `/Admin/Library`.
 Profiles read the stored availability only.
 
 The Rename tab there previews moving identified files into the import layout

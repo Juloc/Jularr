@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Library;
 using Jularr.Backend.Data.Enums.Playback;
 using Jularr.Backend.Data.Logic.Library;
@@ -23,8 +24,20 @@ namespace Jularr.Backend.Logic.Playback
                 && (audio is null || audio.Codec is { } audioCodec && audioCodecs.Contains(audioCodec));
         }
 
+        // Music is converted for a device that asks for a smaller size when the file is clearly larger; video and unknown sizes play as they are.
+        public static int? AudioKilobits(AudioQuality quality, IReadOnlyList<PlaybackTrackData> tracks, long? bitRate)
+        {
+            var kilobits = quality switch
+            {
+                AudioQuality.High => 256,
+                AudioQuality.Small => 128,
+                _ => (int?)null
+            };
+            return kilobits is { } target && Select(tracks, MediaTrackType.Video) is null && bitRate > target * 1200L ? target : null;
+        }
+
         public static PlaybackConversion? PlanConversion(IReadOnlyList<PlaybackTrackData> tracks, IReadOnlySet<string> containers, IReadOnlySet<string> videoCodecs,
-            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null)
+            IReadOnlySet<string> audioCodecs, int? audioStreamIndex = null, int? audioKilobits = null)
         {
             // HLS delivers H.264 and AAC; matching streams are copied, a chosen audio track replaces the default.
             var video = Select(tracks, MediaTrackType.Video);
@@ -35,9 +48,9 @@ namespace Jularr.Backend.Logic.Playback
             }
 
             var copyVideo = video is null || video.Codec == "h264";
-            var copyAudio = audio is null || audio.Codec is "aac" or "mp3" && audioCodecs.Contains(audio.Codec);
+            var copyAudio = audio is null || audioKilobits is null && audio.Codec is "aac" or "mp3" && audioCodecs.Contains(audio.Codec);
             var mode = copyVideo && copyAudio ? PlaybackModeType.Remux : PlaybackModeType.Transcode;
-            return new PlaybackConversion(mode, video?.StreamIndex, audio?.StreamIndex, copyVideo, copyAudio);
+            return new PlaybackConversion(mode, video?.StreamIndex, audio?.StreamIndex, copyVideo, copyAudio) { AudioKilobits = copyAudio ? null : audioKilobits ?? 192 };
         }
 
         public static async Task<Guid> CreatePlaybackSessionAsync(this LogicContext ctx, PlaybackSessionCreationData data, CancellationToken ct)

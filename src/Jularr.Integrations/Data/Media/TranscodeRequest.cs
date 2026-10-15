@@ -27,5 +27,8 @@ namespace Jularr.Integrations.Data.Media
         public bool CopyAudio { get; }
         public IReadOnlyList<string> VideoEncoderArguments { get; }
         public IReadOnlyList<string> HardwareAccelerationArguments { get; }
+
+        // Converted audio's rate in kilobits a second.
+        public int AudioKilobits { get; init; } = 192;
     }
 }

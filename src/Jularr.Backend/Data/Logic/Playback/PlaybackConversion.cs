@@ -18,5 +18,8 @@ namespace Jularr.Backend.Data.Logic.Playback
         public int? AudioStreamIndex { get; }
         public bool CopyVideo { get; }
         public bool CopyAudio { get; }
+
+        // Converted audio's rate in kilobits a second.
+        public int? AudioKilobits { get; init; }
     }
 }

@@ -14,6 +14,7 @@ using Jularr.Backend.Logic.Operation;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Nas;
 using Jularr.Integrations.Data.Storage;
+using Jularr.Integrations.Logic.Media;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
 using OperationKind = Jularr.Backend.Data.Enums.Operation.OperationType;
@@ -36,9 +37,14 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             var facts = ReleaseFacts.Of(download.Title);
 
-            // Ebooks and comics must be what their names say.
+            // Music follows its tags; ebooks and comics must be what their names say.
+            var tags = download.MediaTypeId == MediaType.Music
+                ? await Task.Run(() => files.Where(file => LibraryFileTypes.GetAssetType(file.RelativePath) == MediaAssetType.Audio)
+                    .Select(file => (file.RelativePath, Tags: AudioTagReader.Read(StorageFileSystem.ResolveFile(source, file.RelativePath))))
+                    .Where(file => file.Tags is not null).ToDictionary(file => file.RelativePath, file => file.Tags!, StringComparer.Ordinal), ct)
+                : null;
             var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, patterns, facts,
-                    download.Author, download.TrackCount, download.PlatformName, EpisodeNumbering.Episodes(units))
+                    download.Author, download.TrackCount, download.PlatformName, EpisodeNumbering.Episodes(units), tags)
                 .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
                 .ToArray();
             if (placements.Length == 0)

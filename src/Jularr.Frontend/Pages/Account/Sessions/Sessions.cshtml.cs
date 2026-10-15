@@ -1,6 +1,7 @@
 using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.User.Session.V1;
 using Jularr.Backend.Service.User.Session.V1;
 using Jularr.Frontend.Framework;
@@ -10,7 +11,8 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Frontend.Pages.Account.Sessions
 {
-    public sealed class SessionsModel(ReadSessionsV1 readSessions, RevokeSessionV1 revokeSession, RenameSessionDeviceV1 renameDevice, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class SessionsModel(ReadSessionsV1 readSessions, RevokeSessionV1 revokeSession, RenameSessionDeviceV1 renameDevice, UpdateSessionAudioQualityV1 updateAudioQuality,
+        IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<SessionDetailsV1>? _sessions;
         private int _pageNumber = 1;
@@ -37,6 +39,13 @@ namespace Jularr.Frontend.Pages.Account.Sessions
                                     new RenameSessionDeviceDataV1(session.DeviceName))
                             }
                             : []),
+                        new Form<SessionAudioQualityDataV1>(form =>
+                        {
+                            form.Select(item => item.AudioQuality, "session.audioQuality", Enum.GetValues<AudioQuality>()
+                                .Select(quality => new SelectOption(((byte)quality).ToString(CultureInfo.InvariantCulture), texts["session.audioQuality." + quality])));
+                            form.Submit("common.save");
+                        }, Url.Page("/Account/Sessions/Sessions", "AudioQuality", new { sessionPublicId = session.Id }), antiforgery.GetAndStoreTokens(HttpContext).RequestToken,
+                            new SessionAudioQualityDataV1(session.AudioQuality)),
                         new P(new Text("session.created"), new ValueText(session.CreatedAt.ToString("u", CultureInfo.InvariantCulture))),
                         new P(new Text("session.expires"), new ValueText(session.ExpiresAt.ToString("u", CultureInfo.InvariantCulture))),
                         new Form<RevokeSessionParametersV1>(form =>
@@ -65,6 +74,12 @@ namespace Jularr.Frontend.Pages.Account.Sessions
         public async Task<IActionResult> OnPostRenameAsync(Guid sessionPublicId, string? deviceName)
         {
             await renameDevice.ExecuteAsync<UpdateResult>(new SessionDeviceParametersV1(sessionPublicId), new RenameSessionDeviceDataV1(deviceName), HttpContext.RequestAborted);
+            return RedirectToPage("/Account/Sessions/Sessions");
+        }
+
+        public async Task<IActionResult> OnPostAudioQualityAsync(Guid sessionPublicId, AudioQuality audioQuality)
+        {
+            await updateAudioQuality.ExecuteAsync<UpdateResult>(new SessionDeviceParametersV1(sessionPublicId), new SessionAudioQualityDataV1(audioQuality), HttpContext.RequestAborted);
             return RedirectToPage("/Account/Sessions/Sessions");
         }
 

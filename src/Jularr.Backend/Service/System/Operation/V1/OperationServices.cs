@@ -101,12 +101,14 @@ namespace Jularr.Backend.Service.System.Operation.V1
         private readonly StorageOptions _options;
         private readonly MediaProbeClient _probe;
         private readonly GameRomIdentification _roms;
+        private readonly MusicTagIdentification _music;
 
-        internal ExecuteLibraryScanV1(IOptions<StorageOptions> options, MediaProbeClient probe, GameRomIdentification roms)
+        internal ExecuteLibraryScanV1(IOptions<StorageOptions> options, MediaProbeClient probe, GameRomIdentification roms, MusicTagIdentification music)
         {
             _options = options.Value;
             _probe = probe;
             _roms = roms;
+            _music = music;
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -194,6 +196,12 @@ namespace Jularr.Backend.Service.System.Operation.V1
             if (root.MediaTypeId == MediaType.Game)
             {
                 await _roms.IdentifyAsync(Context, root.Id, directory, CancellationToken);
+            }
+
+            // Albums tagged with their MusicBrainz release group name their album.
+            if (root.MediaTypeId == MediaType.Music)
+            {
+                await _music.IdentifyAsync(Context, root.Id, directory, CancellationToken);
             }
 
             // Folders already identified keep growing.
