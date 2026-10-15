@@ -151,6 +151,19 @@ namespace Jularr.Backend.Tests
             var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"))!;
             Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = {workId}"));
             Assert.AreEqual(workId, (await FindAsync()).WorkId);
+
+            // Books trend globally on Open Library; other rankings are not offered.
+            using var trending = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Trending));
+            Assert.AreEqual(HttpStatusCode.OK, trending.StatusCode, await trending.Content.ReadAsStringAsync());
+            var trend = (await trending.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.Single();
+            Assert.AreEqual((workId, "https://covers.openlibrary.org/b/id/14348537-L.jpg"), (trend.WorkId, trend.PosterUrl));
+            using var top = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/feed", new ReadDiscoverCatalogFeedDataV1(MediaType.Book, DiscoverFeedType.Top));
+            Assert.AreEqual(HttpStatusCode.BadRequest, top.StatusCode);
+            using var shelves = await host.SendAsync(HttpMethod.Get, "/?type=books&handler=Recommendations");
+            var landing = await shelves.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, shelves.StatusCode, landing);
+            StringAssert.Contains(landing, "/?type=books&amp;view=Trending");
+            StringAssert.Contains(landing, "/Details/" + workId);
         }
 
         private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeBookSources sources, bool razor = false)
@@ -217,6 +230,7 @@ namespace Jularr.Backend.Tests
                             "/search.json" => Json("""{"docs":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537,"isbn":["9780141439518"]}]}"""),
                             "/works/OL66554W.json" => Json("""{"title":"Pride and Prejudice","first_publish_date":"1813","description":{"value":"A novel of manners."},"covers":[14348537],"authors":[{"author":{"key":"/authors/OL21594A"}}]}"""),
                             "/authors/OL21594A.json" => Json("""{"name":"Jane Austen"}"""),
+                            "/trending/weekly.json" => Json("""{"works":[{"key":"/works/OL66554W","title":"Pride and Prejudice","author_name":["Jane Austen"],"first_publish_year":1813,"cover_i":14348537}]}"""),
                             _ => new HttpResponseMessage(HttpStatusCode.NotFound)
                         };
                     case "gutendex.example.test":

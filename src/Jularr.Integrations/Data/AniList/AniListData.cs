@@ -18,6 +18,14 @@ namespace Jularr.Integrations.Data.AniList
         public AniListFailure Failure { get; }
     }
 
+    // How AniList ranks a list; the newest only counts titles already out.
+    internal enum AniListRanking : byte
+    {
+        Trending,
+        Score,
+        Newest
+    }
+
     internal enum AniListMediaType : byte
     {
         Anime,

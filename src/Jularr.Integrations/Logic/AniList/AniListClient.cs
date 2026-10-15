@@ -27,6 +27,22 @@ namespace Jularr.Integrations.Logic.AniList
                 : [];
         }
 
+        public async Task<IReadOnlyList<AniListMedia>> ReadRankedAsync(AniListMediaType type, IReadOnlyCollection<string> formats, AniListRanking ranking, CancellationToken ct)
+        {
+            var (sort, statuses) = ranking switch
+            {
+                AniListRanking.Trending => ("TRENDING_DESC", new[] { "RELEASING", "FINISHED", "NOT_YET_RELEASED", "HIATUS" }),
+                AniListRanking.Score => ("SCORE_DESC", ["RELEASING", "FINISHED", "HIATUS"]),
+                _ => ("START_DATE_DESC", ["RELEASING", "FINISHED"])
+            };
+            using var document = await PostAsync("query ($type: MediaType, $formats: [MediaFormat], $sort: [MediaSort], $statuses: [MediaStatus]) { Page(perPage: 20) { "
+                + "media(type: $type, format_in: $formats, sort: $sort, status_in: $statuses, isAdult: false) { " + Fields + " } } }",
+                new Dictionary<string, object> { ["type"] = Name(type), ["formats"] = formats, ["sort"] = new[] { sort }, ["statuses"] = statuses }, ct);
+            return Child(Child(document.RootElement, "data"), "Page") is { } page && page.TryGetProperty("media", out var media) && media.ValueKind == JsonValueKind.Array
+                ? [.. media.EnumerateArray().Select(Read).OfType<AniListMedia>()]
+                : [];
+        }
+
         public async Task<AniListMedia> ReadAsync(AniListMediaType type, int id, CancellationToken ct)
         {
             using var document = await PostAsync("query ($id: Int, $type: MediaType) { Media(id: $id, type: $type) { " + Fields + " } }",

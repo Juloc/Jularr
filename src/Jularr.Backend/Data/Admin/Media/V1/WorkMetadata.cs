@@ -44,8 +44,10 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
     public sealed class MetadataSearchResultV1 : BaseResponse
     {
-        public MetadataSearchResultV1(string @namespace, string externalId, string title, string? originalTitle, int? releaseYear, string? overview, long? workId, string? author = null)
+        public MetadataSearchResultV1(string @namespace, string externalId, string title, string? originalTitle, int? releaseYear, string? overview, long? workId, string? author = null,
+            string? posterUrl = null)
         {
+            PosterUrl = posterUrl;
             Namespace = @namespace;
             ExternalId = externalId;
             Author = author;
@@ -77,6 +79,9 @@ namespace Jularr.Backend.Data.Admin.Media.V1
 
         [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Overview))]
         public string? Overview { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
 
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
         public long? WorkId { get; }

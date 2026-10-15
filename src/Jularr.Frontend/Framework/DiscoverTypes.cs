@@ -2,10 +2,10 @@ using Jularr.Backend.Data.Enums.Media;
 
 namespace Jularr.Frontend.Framework
 {
-    // One Discover scope; films and series browse TMDB feeds, the other types search their own catalogs.
+    // One Discover scope; films and series come from TMDB, the other types from their own catalogs.
     public sealed record DiscoverType(string Slug, MediaType Type, MediaSubtype? Subtype, DiscoverFeedType[] Feeds)
     {
-        public bool IsCatalog => Feeds.Length == 0;
+        public bool IsCatalog => Type is not (MediaType.Movie or MediaType.Series);
     }
 
     // The Discover scopes in the order of the media-type bar.
@@ -15,9 +15,9 @@ namespace Jularr.Frontend.Framework
         [
             new("movies", MediaType.Movie, null, [DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New, DiscoverFeedType.Upcoming]),
             new("series", MediaType.Series, null, [DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New]),
-            new("lightnovels", MediaType.Book, MediaSubtype.LightNovel, []),
-            new("books", MediaType.Book, null, []),
-            new("manga", MediaType.Book, MediaSubtype.Manga, []),
+            new("lightnovels", MediaType.Book, MediaSubtype.LightNovel, [DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New]),
+            new("books", MediaType.Book, null, [DiscoverFeedType.Trending]),
+            new("manga", MediaType.Book, MediaSubtype.Manga, [DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New]),
             new("music", MediaType.Music, null, []),
             new("games", MediaType.Game, null, [])
         ];

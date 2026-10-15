@@ -17,6 +17,19 @@ namespace Jularr.Backend.Service.Admin.Media.V1
 
         public static bool Handles(MediaType mediaType) => mediaType == MediaType.Book;
 
+        // Open Library's trending list is global, not regional.
+        public async Task<IReadOnlyList<OpenLibraryResult>> ReadTrendingAsync(CancellationToken ct)
+        {
+            try
+            {
+                return await openLibrary.ReadTrendingAsync(ct);
+            }
+            catch (OpenLibraryException exception)
+            {
+                throw Translate(exception);
+            }
+        }
+
         public async Task<IReadOnlyList<OpenLibraryResult>> SearchAsync(string query, int? year, CancellationToken ct)
         {
             try

@@ -70,8 +70,9 @@ namespace Jularr.Backend.Data.User.Discover.V1
 
     public sealed class DiscoverCatalogItemV1 : BaseResponse
     {
-        public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long? workId)
+        public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long? workId, string? posterUrl)
         {
+            PosterUrl = posterUrl;
             Namespace = @namespace;
             ExternalId = externalId;
             Title = title;
@@ -98,6 +99,28 @@ namespace Jularr.Backend.Data.User.Discover.V1
         // Set when the title already is a Work.
         [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
         public long? WorkId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ImageUrl))]
+        public string? PosterUrl { get; }
+    }
+
+    public sealed class ReadDiscoverCatalogFeedDataV1 : BaseData
+    {
+        public ReadDiscoverCatalogFeedDataV1(MediaType mediaTypeId, DiscoverFeedType discoverFeedTypeId, MediaSubtype? mediaSubtypeId = null)
+        {
+            MediaTypeId = mediaTypeId;
+            DiscoverFeedTypeId = discoverFeedTypeId;
+            MediaSubtypeId = mediaSubtypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(DiscoverFields), nameof(DiscoverFields.DiscoverFeedTypeId))]
+        public DiscoverFeedType DiscoverFeedTypeId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
     }
 
     public sealed class RequestDiscoverCatalogDataV1 : BaseData

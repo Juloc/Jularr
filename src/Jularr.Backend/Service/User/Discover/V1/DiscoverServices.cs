@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Jularr.Backend.Data;
+using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Account;
 using Jularr.Backend.Data.Enums.Media;
@@ -301,8 +302,30 @@ namespace Jularr.Backend.Service.User.Discover.V1
         {
             await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
             var results = await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
-            return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(result => new DiscoverCatalogItemV1(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear,
-                result.Author, result.WorkId))]);
+            return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(DiscoverQueries.CatalogItem)]);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/discover/catalog/feed")]
+    public sealed class ReadDiscoverCatalogFeedV1 : UserService<DiscoverParametersV1, ReadDiscoverCatalogFeedDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal ReadDiscoverCatalogFeedV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DiscoverCatalogItemV1>>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            await DiscoverQueries.RequireCatalogTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            var results = await _catalog.ReadFeedAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.DiscoverFeedTypeId, CancellationToken);
+            return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(DiscoverQueries.CatalogItem)]);
         }
     }
 
@@ -334,6 +357,9 @@ namespace Jularr.Backend.Service.User.Discover.V1
 
     internal static class DiscoverQueries
     {
+        public static DiscoverCatalogItemV1 CatalogItem(MetadataSearchResultV1 result) =>
+            new(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear, result.Author, result.WorkId, result.PosterUrl);
+
         // Films and series are discovered through TMDB; the other types through their catalogs.
         public static Task RequireCatalogTypeAsync(LogicContext context, MediaType mediaType, long profileId, CancellationToken ct) =>
             mediaType is MediaType.Book or MediaType.Music or MediaType.Game
