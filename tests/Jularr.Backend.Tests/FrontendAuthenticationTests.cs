@@ -171,7 +171,12 @@ namespace Jularr.Backend.Tests
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/101");
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode);
             var html = await details.Content.ReadAsStringAsync();
-            using var missingToken = await host.SendAsync(HttpMethod.Post, "/Details/101", new Dictionary<string, string> { ["IsWatchlisted"] = "true" });
+            using var withoutToken = new HttpRequestMessage(HttpMethod.Post, "/Details/101")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["IsWatchlisted"] = "true" })
+            };
+            withoutToken.Headers.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
+            using var missingToken = await host.Client.SendAsync(withoutToken);
             Assert.AreEqual(HttpStatusCode.BadRequest, missingToken.StatusCode);
 
             using var added = await host.SendAsync(HttpMethod.Post, "/Details/101?returnUrl=%2FLibrary%3Ftype%3Dmovies", Form(html, ("IsWatchlisted", "true")));
