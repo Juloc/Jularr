@@ -1,1 +1,3 @@
-import './MediaCard';
+import { initializeCards } from './MediaCard';
+
+initializeCards();

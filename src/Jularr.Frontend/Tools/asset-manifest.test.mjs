@@ -156,6 +156,13 @@ test("shared covers clip rounded progress, equal actions and a same-height trail
     assert.doesNotMatch(css, /media-card__genres|media-card__series|media-card__languages|media-card--minimal/);
 });
 
+test("card entry delegates initialization to one cached shared chunk", () => {
+    const entry = manifest["Framework/Components/MediaCard.entry.ts"];
+    const script = readFileSync(join(build, entry.file), "utf8");
+    assert.ok(!script.includes("pointerover"), "Reimporting the entry must not recreate global listeners.");
+    assert.ok(entry.imports?.some(key => readFileSync(join(build, manifest[key].file), "utf8").includes("pointerover")));
+});
+
 test("manifest URLs are relative and cannot escape the asset root", () => {
     for (const file of [...files, icons.file]) {
         assert.ok(!file.startsWith("/") && !file.includes("..") && !file.includes("?"), file);

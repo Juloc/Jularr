@@ -11,18 +11,22 @@ function preview(viewportWidth = 1280, slotLeft = 100) {
     const pending = new Map();
     const events = {};
     const frames = [];
+    const registrations = [];
+    const exports = {};
+    const listen = (name, action) => { registrations.push(name); events[name] = action; };
     let sequence = 0;
     class Element {}
     const document = { hidden: false, activeElement: null,
         createElement: () => { const frame = {}; frames.push(frame); return frame; },
-        addEventListener: (name, action) => { events[name] = action; } };
+        addEventListener: listen };
     runInNewContext(script, {
-        document, exports: {}, Element, Node: Element, matchMedia: () => ({ matches: true }),
-        window: { innerWidth: viewportWidth, addEventListener: (name, action) => { events[name] = action; } },
+        document, exports, Element, Node: Element, matchMedia: () => ({ matches: true }),
+        window: { innerWidth: viewportWidth, addEventListener: listen },
         setTimeout: (action, delay) => { assert.equal(delay, 2000); pending.set(++sequence, action); return sequence; },
         clearTimeout: id => pending.delete(id)
     });
-    return { document, events, frames, pending,
+    exports.initializeCards();
+    return { document, events, frames, pending, registrations, initialize: exports.initializeCards,
         card(height = 345) {
             const target = { children: [], replaceChildren(...children) { this.children = children; } };
             const card = Object.assign(new Element(), {
@@ -38,6 +42,13 @@ function preview(viewportWidth = 1280, slotLeft = 100) {
         advance() { for (const [id, action] of [...pending]) { if (pending.has(id)) { pending.delete(id); action(); } } }
     };
 }
+
+test('repeated entry initialization registers delegated handlers only once', () => {
+    const view = preview();
+    view.initialize();
+    view.initialize();
+    assert.equal(view.registrations.length, 8);
+});
 
 test('fragment cards require sustained mouse hover, keep one trailer and release on leaving', () => {
     const view = preview();
