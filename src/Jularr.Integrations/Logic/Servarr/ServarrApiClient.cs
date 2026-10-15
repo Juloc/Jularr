@@ -94,8 +94,8 @@ namespace Jularr.Integrations.Logic.Servarr
                     foreach (var member in members.Length > 0 ? members : [entry])
                     {
                         var quality = Child(member, "quality");
-                        if (Text(quality, "name") is not { } name) continue;
-                        qualities.Add(new ServarrQuality(name, Text(quality, "source"), Int(quality, "resolution") ?? 0, Text(quality, "modifier"), allowed || Bool(member, "allowed") == true && members.Length == 0,
+                        if (quality.ValueKind != JsonValueKind.Object) continue;
+                        qualities.Add(new ServarrQuality(Text(quality, "source"), Int(quality, "resolution") ?? 0, allowed || Bool(member, "allowed") == true && members.Length == 0,
                             groupIsCutoff || members.Length == 0 && Int(quality, "id") == cutoff));
                     }
                 }

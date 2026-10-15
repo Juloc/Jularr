@@ -8,6 +8,16 @@
     h2 { margin: 0 0 10px; color: var(--accent-text); font-size: 16px; font-weight: 700; }
 }
 
+// Buttons and small forms that belong together, in one wrapping row.
+.page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+td .page-actions { gap: 6px 8px; }
+
 @media (max-width: 650px) {
     .ui-section { padding: 14px 16px; }
 }

@@ -26,10 +26,9 @@ namespace Jularr.Frontend.Pages.Admin.WantedSearch
             if (_item is not { } item) return;
             page.Title("wanted.tab.search", item.CanonicalTitle);
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/WantedItem/WantedItem.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
-            page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", WantedStatus.Home(Id))).Class("wanted-actions"));
+            page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", WantedStatus.Home(Id))).Class("page-actions"));
             page.Content.Add(new Form<SearchWantedDataV1>(form =>
             {
                 if (item.MediaTypeId == MediaType.Series)

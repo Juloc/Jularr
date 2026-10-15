@@ -4,7 +4,7 @@
     color-scheme: light;
     --background: light-dark(#f6f5f9, #141319);
     --surface: light-dark(#fff, #1d1b24);
-    --surface-hover: light-dark(#eeebf5, #2b2736);
+    --surface-hover: color-mix(in srgb, var(--accent) 7%, var(--surface));
     --field: light-dark(#faf9fc, #19171f);
     --border: light-dark(#dedbe7, #393441);
     --text: light-dark(#25202f, #f4f0f8);
@@ -37,7 +37,7 @@ html[data-mode="dark"] { color-scheme: dark; }
 html[data-skin="original"] {
     --background: light-dark(#f6f1e9, #191619);
     --surface: light-dark(#fffdf9, #242024);
-    --surface-hover: light-dark(#f7e8e7, #36272f);
+    --surface-hover: color-mix(in srgb, var(--accent) 7%, var(--surface));
     --field: light-dark(#fcf8f2, #201b20);
     --border: light-dark(#e1d6cc, #45373d);
     --text: light-dark(#302426, #f5ece6);

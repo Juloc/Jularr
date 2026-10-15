@@ -215,6 +215,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public IReadOnlyList<string> SkippedFormats { get; }
     }
 
+    // What became of a taken-over profile, and the Jularr profile its titles use.
+    internal sealed record TakenOverProfileOutcome(string OutcomeKey, long? ProfileId);
+
     // A profile's name and media type; a takeover does not create the same twice.
     internal sealed class AcquisitionProfileNameData : BaseData
     {

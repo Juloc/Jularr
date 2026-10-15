@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Logic.Acquisition;
+using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Integrations.Data.Servarr;
 
 namespace Jularr.Backend.Logic.Acquisition
@@ -37,13 +38,29 @@ namespace Jularr.Backend.Logic.Acquisition
             return new TakenOverProfile(input, rules, skipped);
         }
 
+        // A profile of that name and type is used as it is; one without a known quality is left out; otherwise it is created with its rules.
+        public static async Task<TakenOverProfileOutcome> TakeOverProfileAsync(this LogicContext ctx, TakenOverProfile mapped, IReadOnlyList<AcquisitionProfileNameData> existing, bool apply,
+            CancellationToken ct)
+        {
+            if (existing.FirstOrDefault(profile => profile.MediaTypeId == mapped.Input.MediaTypeId && string.Equals(profile.Name, mapped.Input.Name, StringComparison.OrdinalIgnoreCase)) is { } same)
+            {
+                return new TakenOverProfileOutcome("takeover_exists", same.Id);
+            }
+
+            if (mapped.Input.AllowedQualities.Length == 0) return new TakenOverProfileOutcome("takeover_no_qualities", null);
+            if (!apply) return new TakenOverProfileOutcome("takeover_will_add", null);
+            var id = await ctx.CreateAcquisitionProfileAsync(mapped.Input, ct);
+            if (mapped.Rules.Count > 0) await ctx.AppendProfileRulesAsync(id, mapped.Rules, ct);
+            return new TakenOverProfileOutcome("takeover_added", id);
+        }
+
         private static string[] Ordered(IEnumerable<ServarrQuality> qualities)
         {
             var keys = qualities.Select(Quality).OfType<string>().ToHashSet(StringComparer.Ordinal);
             return [.. VideoQualities.Order.Where(keys.Contains)];
         }
 
-        // Television, web and Blu-ray (also remux) in Jularr's five sizes; DVD, cam and raw sources have no Jularr quality.
+        // Television, web and Blu-ray in Jularr's five sizes; DVD, cam and raw sources have no Jularr quality.
         private static string? Quality(ServarrQuality quality)
         {
             var source = quality.Source?.ToLowerInvariant() switch

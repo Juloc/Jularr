@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Jularr.Frontend.Pages.Admin.Acquisition
 {
-    // Indexers, download clients and subtitle providers, one kind per tab.
+    // Indexers, download clients and subtitle providers, each kind on its own page.
     public sealed class AcquisitionModel(ReadAcquisitionConnectionsV1 connections, ReadAcquisitionConnectionV1 connection, CreateAcquisitionConnectionV1 create,
         UpdateAcquisitionConnectionV1 update, DeleteAcquisitionConnectionV1 delete, TestAcquisitionConnectionV1 test, SearchAcquisitionConnectionV1 search, IAntiforgery antiforgery,
         UiText texts) : JularrPage
@@ -59,7 +59,6 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         protected override void Define(Page page)
         {
             page.Title("acquisition.role." + Role);
-            page.Asset("Pages/Admin/Acquisition/Acquisition.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers, csrf));
             page.Navigation("nav.admin");
@@ -86,13 +85,13 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                     additions.Add(new A(new Text("acquisition.connection.addSubtitles")).Class("button").Attribute("href", "/Admin/Acquisition/Sources"));
                 }
 
-                split.Primary.Add(new Div([.. additions]).Class("acquisition-actions"));
+                split.Primary.Add(new Div([.. additions]).Class("page-actions"));
 
                 if (type is { } selectedType)
                 {
                     // A test just run replaces the stored state.
-                    if (TempData["AcquisitionTested"] is string tested) split.Secondary.Add(new P(new ValueText(tested)).Class("acquisition-health").Attribute("role", "status"));
-                    else if (_selected is { } selected) split.Secondary.Add(new P(Health(selected)).Class("acquisition-health").Attribute("role", "status"));
+                    if (TempData["AcquisitionTested"] is string tested) split.Secondary.Add(new Strong(new ValueText(tested)).Attribute("role", "status"));
+                    else if (_selected is { } selected) split.Secondary.Add(new Strong(Health(selected)).Attribute("role", "status"));
                     split.Secondary.Add(ConnectionForm(selectedType, csrf));
                     if (_selected is { } current)
                     {
@@ -134,12 +133,12 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
                         form.Hidden(item => item.Version);
                         form.Submit("acquisition.connection.delete");
                     }, Address(selected.Id, handler: "Delete"), csrf, new DeleteAcquisitionConnectionParametersV1(selected.Id, selected.Version)),
-                    new A(new Text("common.back")).Class("button").Attribute("href", Address(selected.Id))).Class("acquisition-actions");
+                    new A(new Text("common.back")).Class("button").Attribute("href", Address(selected.Id))).Class("page-actions");
             }
 
             return new Div(new Form<AcquisitionConnectionParametersV1>(form => form.Submit("acquisition.connection.test"), Address(selected.Id, handler: "Test"), csrf,
                     new AcquisitionConnectionParametersV1(selected.Id)),
-                new A(new Text("acquisition.connection.delete")).Class("button").Attribute("href", Address(selected.Id) + "&delete=true")).Class("acquisition-actions");
+                new A(new Text("acquisition.connection.delete")).Class("button").Attribute("href", Address(selected.Id) + "&delete=true")).Class("page-actions");
         }
 
         // A free-text query shows what the indexer returns; it counts towards the daily queries.
@@ -175,9 +174,8 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             [BindRequired] bool isEnabled, [BindRequired] int priority, string? categories, string? downloadCategory, string? remotePath, string? localPath, string? username,
             int? maxConnections, string? password, int[]? mediaTypeIds, bool? searchesAutomatically, int? queryLimit, int? grabLimit)
         {
-            _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", Blank(apiKey), isEnabled, priority, Categories(categories),
-                Blank(downloadCategory), Blank(remotePath), Blank(localPath), Blank(username), maxConnections, Blank(password), mediaTypeIds, searchesAutomatically ?? true, queryLimit,
-                grabLimit);
+            _input = new SaveAcquisitionConnectionDataV1(name ?? "", acquisitionConnectionTypeId, baseUrl ?? "", apiKey, isEnabled, priority, Categories(categories),
+                downloadCategory, remotePath, localPath, username, maxConnections, password, mediaTypeIds, searchesAutomatically ?? true, queryLimit, grabLimit);
             if (AcquisitionConnectionId is { } existing)
             {
                 await update.ExecuteAsync<UpdateResult>(new AcquisitionConnectionParametersV1(existing), _input, HttpContext.RequestAborted);
@@ -195,7 +193,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
             // A successful test also ends a pause after failures.
             var result = await test.ExecuteAsync<AcquisitionConnectionTestV1>(new AcquisitionConnectionParametersV1(SelectedId()), default, HttpContext.RequestAborted);
             TempData["AcquisitionTested"] = result.IsAvailable
-                ? string.Join(" · ", new[] { texts["acquisition.connection.healthy"], result.ServerVersion is { } version ? texts["acquisition.connection.version"] + " " + version : null,
+                ? string.Join(" · ", new[] { texts["acquisition.connection.healthy"], result.ServerVersion is { } version ? texts["table.version"] + " " + version : null,
                     result.SearchModes.Length > 0 ? texts["acquisition.connection.searchModes"] + " " + string.Join(", ", result.SearchModes) : null }.OfType<string>())
                 : texts["errors." + (result.ErrorKey ?? "acquisition_unavailable")];
             return LocalRedirect(Address(AcquisitionConnectionId));
@@ -219,17 +217,14 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
 
         protected override async Task LoadDataAsync()
         {
+            // The address names the kind; an opened connection keeps its own.
             Role = Request.Path.Value?.EndsWith("/Downloads", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Download
                 : Request.Path.Value?.EndsWith("/Subtitles", StringComparison.OrdinalIgnoreCase) is true ? AcquisitionConnectionRole.Subtitles
                 : AcquisitionConnectionRole.Search;
             if (AcquisitionConnectionId is { } id)
             {
                 _selected = await connection.ExecuteAsync<AcquisitionConnectionDetailsV1>(new AcquisitionConnectionParametersV1(id), HttpContext.RequestAborted);
-                Role = RoleOf(_selected.AcquisitionConnectionTypeId);
-            }
-            else if (Type is { } type)
-            {
-                Role = RoleOf(type);
+                Role = _selected.AcquisitionConnectionRoleId;
             }
 
             _connections = await connections.ExecuteAsync<PageResult<AcquisitionConnectionDetailsV1>>(new ReadAcquisitionConnectionsParametersV1(PageNumber, acquisitionConnectionRoleId: Role),
@@ -317,16 +312,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         private static string Count(int count, int? limit) =>
             count.ToString(CultureInfo.InvariantCulture) + (limit is { } value ? " / " + value.ToString(CultureInfo.InvariantCulture) : "");
 
-        private static AcquisitionConnectionRole RoleOf(AcquisitionConnectionType type) => type switch
-        {
-            AcquisitionConnectionType.Sabnzbd or AcquisitionConnectionType.Usenet => AcquisitionConnectionRole.Download,
-            AcquisitionConnectionType.OpenSubtitles or AcquisitionConnectionType.SubDl => AcquisitionConnectionRole.Subtitles,
-            _ => AcquisitionConnectionRole.Search
-        };
-
         private long SelectedId() => AcquisitionConnectionId ?? throw new KeyNotFoundException("No connection was selected.");
-
-        private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
         // Numbers only; anything else is rejected with the field.
         private static int[] Categories(string? value) => value is null ? [] : [.. value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)

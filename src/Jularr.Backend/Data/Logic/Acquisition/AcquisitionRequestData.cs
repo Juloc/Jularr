@@ -88,6 +88,17 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long ActorAccountId { get; }
     }
 
+    internal sealed class WantedItemFilterData : BaseData
+    {
+        public WantedItemFilterData(long? wantedItemId)
+        {
+            WantedItemId = wantedItemId;
+        }
+
+        [DataField(typeof(WantedItemFields), nameof(WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
+    }
+
     internal sealed class WantedTakeoverData : BaseData
     {
         public WantedTakeoverData(long workId, long? acquisitionProfileId)

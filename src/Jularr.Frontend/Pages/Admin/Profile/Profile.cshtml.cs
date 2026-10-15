@@ -48,10 +48,9 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         {
             page.Title("admin.profiles.title", _profile?.Name);
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles, csrf));
-            page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", ProfilesModel.Home(Request))).Class("profile-actions"));
+            page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", ProfilesModel.Home(Request))).Class("page-actions"));
             page.Content.Add(ProfileForm(csrf));
             if (FormError is not null && _input is null && _ruleInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
             if (_profile is not { } profile) return;
@@ -67,7 +66,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                         form.Hidden(item => item.Version);
                         form.Submit("profile.delete");
                     }, Address(handler: "Delete"), csrf, new DeleteAcquisitionProfileParametersV1(profile.Id, profile.Version)),
-                        new A(new Text("common.back")).Class("button").Attribute("href", Address())).Class("profile-actions")
+                        new A(new Text("common.back")).Class("button").Attribute("href", Address())).Class("page-actions")
                     : new A(new Text("profile.delete")).Class("button").Attribute("href", Address() + "?delete=true"));
             }
         }
@@ -129,7 +128,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                         form.Hidden(item => item.Version);
                         form.Submit("profile.rule.remove", rule.Name, valueHidden: true);
                     }, Address(handler: "RemoveRule") + "&position=" + rule.Position.ToString(CultureInfo.InvariantCulture), csrf,
-                        new ReleaseRuleParametersV1(profile.Id, rule.Position, profile.Version))).Class("profile-actions"));
+                        new ReleaseRuleParametersV1(profile.Id, rule.Position, profile.Version))).Class("page-actions"));
 
         // A new rule, or the chosen one in place.
         private IUiComponent RuleForm(AcquisitionProfileDetailsV1 profile, string? csrf)
@@ -150,7 +149,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
                     section.Select(item => item.Effect, "profile.rule.effect", Options<ReleaseRuleEffect>("profile.rule.effect."));
                     section.Number(item => item.Score, "wanted.search.score");
                 });
-                form.Submit(edited is null ? "request.rule.add" : "common.save");
+                form.Submit(edited is null ? "collections.add" : "common.save");
             }, Address(handler: "Rule") + (edited is null ? "" : "&rule=" + edited.Position.ToString(CultureInfo.InvariantCulture)), csrf, input, _ruleInput is null ? null : FormError);
         }
 
@@ -158,10 +157,8 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         private SelectOption[] Options<TEnum>(string prefix) where TEnum : struct, Enum =>
             [.. Enum.GetValues<TEnum>().Select(value => new SelectOption(Convert.ToByte(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture), texts[prefix + value]))];
 
-        // Sensible starting points per kind.
-        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType mediaType, MediaSubtype? subtype) => mediaType is MediaType.Movie or MediaType.Series
-            ? new SaveAcquisitionProfileDataV1("", mediaType, false, ["WEB-1080p", "BLURAY-1080p"], true, "WEB-1080p", null, null, [], [], null, subtype)
-            : new SaveAcquisitionProfileDataV1("", mediaType, false, ["EPUB"], false, null, null, null, [], [], null, subtype);
+        private static SaveAcquisitionProfileDataV1 NewProfile(MediaType mediaType, MediaSubtype? subtype) => new("", mediaType, false,
+            ProfileQualities.StartingQualities(mediaType, subtype), ProfileQualities.StartingCutoff(mediaType) is not null, ProfileQualities.StartingCutoff(mediaType), null, null, [], [], null, subtype);
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -174,7 +171,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             [BindRequired] bool upgradeAllowed, string? upgradeCutoffQuality, int? minimumSizeMb, int? maximumSizeMb, string? mustContain, string? mustNotContain, long? version, int? delayMinutes,
             string[]? fallbackQualities, int? fallbackAfterHours)
         {
-            _input = new SaveAcquisitionProfileDataV1(name ?? "", mediaTypeId, isDefault, allowedQualities ?? [], upgradeAllowed, Blank(upgradeCutoffQuality), minimumSizeMb, maximumSizeMb,
+            _input = new SaveAcquisitionProfileDataV1(name ?? "", mediaTypeId, isDefault, allowedQualities ?? [], upgradeAllowed, upgradeCutoffQuality, minimumSizeMb, maximumSizeMb,
                 Terms(mustContain), Terms(mustNotContain), version, mediaSubtypeId, delayMinutes ?? 0, fallbackQualities, fallbackAfterHours);
             if (ProfileId is { } existing)
             {
@@ -231,8 +228,6 @@ namespace Jularr.Frontend.Pages.Admin.Profile
         }
 
         private long SelectedId() => ProfileId ?? throw new KeyNotFoundException("No profile was selected.");
-
-        private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
         private static string[] Terms(string? value) => value is null ? [] : [.. value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
 

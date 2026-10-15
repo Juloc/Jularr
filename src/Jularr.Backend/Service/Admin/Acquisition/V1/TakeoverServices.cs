@@ -124,30 +124,10 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             {
                 var mapped = ServarrProfileLogic.Map(profile, formatsById, profileType);
                 var name = Limit(profile.Name, 500);
-                if (jularrProfiles.FirstOrDefault(existing => existing.MediaTypeId == profileType && string.Equals(existing.Name, mapped.Input.Name, StringComparison.OrdinalIgnoreCase)) is { } same)
-                {
-                    profileIds[profile.Id] = same.Id;
-                    items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_exists", null));
-                    continue;
-                }
-
-                if (mapped.Input.AllowedQualities.Length == 0)
-                {
-                    items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_no_qualities", null));
-                    continue;
-                }
-
-                if (Data.Apply)
-                {
-                    profileIds[profile.Id] = await Context.ExecuteBatchAsync(async (ctx, ct) =>
-                    {
-                        var id = await ctx.CreateAcquisitionProfileAsync(mapped.Input, ct);
-                        if (mapped.Rules.Count > 0) await ctx.AppendProfileRulesAsync(id, mapped.Rules, ct);
-                        return id;
-                    }, CancellationToken);
-                }
-
-                items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, Data.Apply ? "takeover_added" : "takeover_will_add", null));
+                var outcome = await Context.ExecuteBatchAsync((ctx, ct) => ctx.TakeOverProfileAsync(mapped, jularrProfiles, Data.Apply, ct), CancellationToken);
+                if (outcome.ProfileId is { } id) profileIds[profile.Id] = id;
+                items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, outcome.OutcomeKey, null));
+                if (outcome.OutcomeKey is not ("takeover_added" or "takeover_will_add")) continue;
                 if (profile.MinimumFormatScore > 0) items.Add(new TakeoverItemV1(TakeoverItemType.Profile, name, "takeover_minimum_score", null));
                 items.AddRange(mapped.SkippedFormats.Select(format => new TakeoverItemV1(TakeoverItemType.Format, Limit(format, 500), "takeover_format_skipped", null)));
             }

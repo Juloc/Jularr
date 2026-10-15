@@ -8,6 +8,14 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 {
     public sealed class ReadAcquisitionProfilesParametersV1 : BaseParameters
     {
+        public ReadAcquisitionProfilesParametersV1(long? wantedItemId = null)
+        {
+            WantedItemId = wantedItemId;
+        }
+
+        // Only the profiles that fit this target's type and subtype.
+        [DataField(typeof(Fields.Acquisition.WantedItemFields), nameof(Fields.Acquisition.WantedItemFields.Id), false)]
+        public long? WantedItemId { get; }
     }
 
     public sealed class CreateAcquisitionProfileParametersV1 : BaseParameters

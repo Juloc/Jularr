@@ -16,7 +16,7 @@ namespace Jularr.Backend.Logic.Library
             var tokens = Token().Matches(pattern);
             var names = tokens.Select(match => match.Groups["name"].Value).ToArray();
             if (names.Any(name => !NamingTokens.All.Contains(name, StringComparer.OrdinalIgnoreCase)) || Token().Replace(pattern, "").IndexOfAny(['{', '}']) >= 0
-                || tokens.Any(match => match.Groups["format"].Success && match.Groups["name"].Value.ToLowerInvariant() is not ("season" or "episode")))
+                || tokens.Any(match => match.Groups["format"].Success && !NamingTokens.Numbered.Contains(match.Groups["name"].Value, StringComparer.OrdinalIgnoreCase)))
             {
                 throw new DataValidationException(field, "naming_unknown_token");
             }

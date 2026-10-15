@@ -57,8 +57,9 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
         public AcquisitionConnectionDetailsV1(long id, string name, AcquisitionConnectionType acquisitionConnectionTypeId, string baseUrl, bool hasApiKey, bool isEnabled, int priority,
             int[] categories, string? downloadCategory, string? remotePath, string? localPath, DateTime? checkedAt, string? errorKey, long version, string? username = null,
             int? maxConnections = null, int[]? mediaTypeIds = null, bool searchesAutomatically = true, int? queryLimit = null, int? grabLimit = null, int queryCount = 0, int grabCount = 0,
-            DateTime? retryAt = null, bool isBackedOff = false)
+            DateTime? retryAt = null, bool isBackedOff = false, AcquisitionConnectionRole acquisitionConnectionRoleId = AcquisitionConnectionRole.Search)
         {
+            AcquisitionConnectionRoleId = acquisitionConnectionRoleId;
             IsBackedOff = isBackedOff;
             MediaTypeIds = mediaTypeIds ?? [];
             SearchesAutomatically = searchesAutomatically;
@@ -90,6 +91,10 @@ namespace Jularr.Backend.Data.Admin.Acquisition.V1
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.Name))]
         public string Name { get; }
+
+        // Where the connection is used: search, download or subtitles.
+        [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionRoleId))]
+        public AcquisitionConnectionRole AcquisitionConnectionRoleId { get; }
 
         [DataField(typeof(AcquisitionConnectionFields), nameof(AcquisitionConnectionFields.AcquisitionConnectionTypeId))]
         public AcquisitionConnectionType AcquisitionConnectionTypeId { get; }

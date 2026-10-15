@@ -59,7 +59,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
                     connection."RetryAt",
-                    COALESCE(connection."RetryAt" > now(), FALSE) AS "IsBackedOff"
+                    COALESCE(connection."RetryAt" > now(), FALSE) AS "IsBackedOff",
+                    type."AcquisitionConnectionRoleId"
                 FROM
                     "AcquisitionConnections" AS connection
                     JOIN "AcquisitionConnectionTypes" AS type ON type."Id" = connection."AcquisitionConnectionTypeId"
@@ -115,9 +116,11 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     CASE WHEN connection."CountedOn" = current_date THEN connection."QueryCount" ELSE 0 END AS "QueryCount",
                     CASE WHEN connection."CountedOn" = current_date THEN connection."GrabCount" ELSE 0 END AS "GrabCount",
                     connection."RetryAt",
-                    COALESCE(connection."RetryAt" > now(), FALSE) AS "IsBackedOff"
+                    COALESCE(connection."RetryAt" > now(), FALSE) AS "IsBackedOff",
+                    type."AcquisitionConnectionRoleId"
                 FROM
                     "AcquisitionConnections" AS connection
+                    JOIN "AcquisitionConnectionTypes" AS type ON type."Id" = connection."AcquisitionConnectionTypeId"
                 WHERE
                     connection."Id" = @AcquisitionConnectionId;
                 """;
@@ -322,23 +325,25 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 throw new ServiceUnavailableException("acquisition_query_limit_reached");
             }
 
-            IReadOnlyList<NewznabItem>? items = null;
+            IReadOnlyList<NewznabItem> items = [];
+            string? failure = null;
             try
             {
                 items = await _newznab.SearchAsync(new NewznabConnection(indexer.BaseUrl, AcquisitionConnectionInput.IndexerKey(_protector, indexer.ProtectedApiKey)),
                     new NewznabQuery(NewznabSearchMode.Search, Data.Query, [], indexer.Categories, Limit), CancellationToken);
             }
-            catch (NewznabException)
+            catch (NewznabException exception)
             {
+                failure = AcquisitionConnectionInput.ErrorKey(exception.Failure);
             }
 
             await Context.ExecuteBatchAsync(async (ctx, ct) =>
             {
-                await ctx.RecordIndexerUseAsync(new IndexerUseData(indexer.Id, 1, items is not null), ct);
+                await ctx.RecordIndexerUseAsync(new IndexerUseData(indexer.Id, 1, failure is null), ct);
                 return true;
             }, CancellationToken);
-            return items is null
-                ? throw new ServiceUnavailableException("acquisition_unavailable")
+            return failure is not null
+                ? throw new ServiceUnavailableException(failure)
                 : new BaseDataList<IndexerReleaseV1>([.. items.Select(item => new IndexerReleaseV1(TextLimit.Cut(item.Title, 1000)!, item.SizeBytes, item.PublishedAt?.UtcDateTime))]);
         }
     }

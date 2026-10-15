@@ -38,14 +38,13 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             if (_item is not { } item) return;
             page.Title("admin.wanted.title", item.CanonicalTitle);
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/WantedItem/WantedItem.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
 
             page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", "/Admin/Wanted"),
-                new A(new Text("wanted.openWork")).Class("button").Attribute("href", "/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture))).Class("wanted-actions"));
+                new A(new Text("wanted.openWork")).Class("button").Attribute("href", "/Admin/Works/" + item.WorkId.ToString(CultureInfo.InvariantCulture))).Class("page-actions"));
             page.Content.Add(new UiSection("wanted.section.status", [.. Status(item, csrf)]));
-            if (CanAcquire && Options(item) is { Length: > 0 } options) page.Content.Add(new UiSection("wanted.section.choice", [ChoiceForm(item, options, csrf)]));
-            if (item.HasUnits) page.Content.Add(new UiSection("wanted.monitoring", [.. Units(item, csrf)]));
+            if (CanAcquire && _profiles.Count > 0) page.Content.Add(new UiSection("wanted.section.choice", [ChoiceForm(item, csrf)]));
+            if (item.HasUnits) page.Content.Add(new UiSection(item.MediaTypeId == MediaType.Series ? "wanted.section.episodes" : "wanted.section.volumes", [.. Units(item, csrf)]));
             page.Content.Add(new UiSection("wanted.tab.history", [.. History(csrf)]));
             if (FormError is not null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));
         }
@@ -53,7 +52,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
         // State, then the searches of the whole title and pausing.
         private List<IUiComponent> Status(WantedDetailsV1 item, string? csrf)
         {
-            var content = new List<IUiComponent> { new P(new Text("table.status"), new ValueText(": "), WantedStatus.Of(item)) };
+            var content = new List<IUiComponent> { new P(WantedStatus.Of(item)).Class("wanted-state") };
             if (item.RequestedLanguages.Length > 0) content.Add(new P(new Text("request.language"), new ValueText(": " + string.Join(", ", item.RequestedLanguages))));
             if (item.LastSearchedAt is { } searchedAt)
             {
@@ -82,20 +81,17 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
                 form.Hidden(data => data.LibraryRootId);
                 form.Submit(item.IsPaused ? "wanted.resume" : "wanted.pause");
             }, Address("Choice"), csrf, new UpdateWantedDataV1(!item.IsPaused, item.Version, item.AcquisitionProfileId, item.LibraryRootId)));
-            content.Add(new Div([.. actions]).Class("wanted-actions"));
+            content.Add(new Div([.. actions]).Class("page-actions"));
             return content;
         }
 
         // Without a choice the defaults of the subtype, then of the type apply.
-        private AcquisitionProfileDetailsV1[] Options(WantedDetailsV1 item) =>
-            [.. _profiles.Where(profile => profile.MediaTypeId == item.MediaTypeId && (profile.MediaSubtypeId is null || profile.MediaSubtypeId == item.MediaSubtypeId))];
-
-        private Form<UpdateWantedDataV1> ChoiceForm(WantedDetailsV1 item, AcquisitionProfileDetailsV1[] options, string? csrf) => new(form =>
+        private Form<UpdateWantedDataV1> ChoiceForm(WantedDetailsV1 item, string? csrf) => new(form =>
         {
             form.Hidden(data => data.IsPaused);
             form.Hidden(data => data.Version);
             form.Select(data => data.AcquisitionProfileId, "wanted.profile", [new SelectOption("", texts["wanted.profile.default"]),
-                .. options.Select(profile => new SelectOption(profile.Id.ToString(CultureInfo.InvariantCulture), profile.Name))]);
+                .. _profiles.Select(profile => new SelectOption(profile.Id.ToString(CultureInfo.InvariantCulture), profile.Name))]);
             form.Select(data => data.LibraryRootId, "wanted.library", [new SelectOption("", texts["wanted.library.default"]),
                 .. _libraries.Select(library => new SelectOption(library.Id.ToString(CultureInfo.InvariantCulture), library.Name))]);
             form.Submit("common.save");
@@ -121,7 +117,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
                     .Content("wanted.unit.releasedOn", unit => new ValueText(unit.ReleasedOn?.ToString("d", CultureInfo.CurrentCulture) ?? ""))
                     .Content("table.status", unit => unit.WorkUnitTypeId == WorkUnitType.Season ? new Span() : new Text(unit.HasMedia ? "wanted.unit.present" : "library.missing"))
                     .Content("wanted.monitoring", unit => new Text(MonitoringKey(unit)))
-                    .Content("common.actions", unit => new Div([.. UnitActions(unit, seasons, csrf)]).Class("wanted-actions"))
+                    .Content("common.actions", unit => new Div([.. UnitActions(unit, seasons, csrf)]).Class("page-actions"))
             };
             return content;
         }
@@ -243,7 +239,7 @@ namespace Jularr.Frontend.Pages.Admin.WantedItem
             if (_item.HasUnits) _units = await readUnits.ExecuteAsync<BaseDataList<WantedUnitV1>>(new ReadWantedUnitsParametersV1(Id, SeasonId), ct);
             if (CanAcquire)
             {
-                _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(), ct);
+                _profiles = await profiles.ExecuteAsync<BaseDataList<AcquisitionProfileDetailsV1>>(new ReadAcquisitionProfilesParametersV1(Id), ct);
                 _libraries = await libraries.ExecuteAsync<BaseDataList<WantedLibraryV1>>(new WantedItemParametersV1(Id), ct);
             }
         }

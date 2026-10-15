@@ -321,6 +321,12 @@ namespace Jularr.Backend.Tests
             });
             Assert.AreEqual(HttpStatusCode.Redirect, assigned.StatusCode, await assigned.Content.ReadAsStringAsync());
             var workId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"Works\" WHERE \"CanonicalTitle\" = 'Film'"))!;
+
+            // The overview counts the identified file, its title and the finished scans.
+            using var counted = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/library/overview");
+            var shown = (await counted.Content.ReadFromJsonAsync<BaseDataList<LibraryOverviewV1>>())!.Single();
+            Assert.AreEqual((1L, 1L, 0L, 0L, false), (shown.WorkCount, shown.FileCount, shown.UnmatchedCount, shown.MissingCount, shown.IsScanning));
+            Assert.IsNotNull(shown.LastScanAt);
             using var details = await host.SendAsync(HttpMethod.Get, "/Details/" + workId);
             Assert.AreEqual(HttpStatusCode.OK, details.StatusCode, await details.Content.ReadAsStringAsync());
             StringAssert.Contains(await details.Content.ReadAsStringAsync(), "Versions &amp; languages");

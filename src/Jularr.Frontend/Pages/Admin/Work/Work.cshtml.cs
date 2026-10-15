@@ -27,13 +27,12 @@ namespace Jularr.Frontend.Pages.Admin.Work
         {
             page.Title("admin.work.title", _work?.CanonicalTitle);
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Work/Work.entry.scss");
 
             // Its searches, episodes and releases live with its Arr+ target.
             page.Content.Add(new Div([new A(new Text("admin.works.title")).Class("button").Attribute("href", "/Admin/Works"),
                 .. _work?.WantedItemId is { } wanted && texts.CanManageWanted()
                     ? new IUiComponent[] { new A(new Text("admin.work.wanted")).Class("button").Attribute("href", "/Admin/Wanted/" + wanted.ToString(CultureInfo.InvariantCulture)) }
-                    : []]).Class("work-actions"));
+                    : []]).Class("page-actions"));
 
             // Edit real identity metadata.
             if (_work is { } work)

@@ -47,7 +47,7 @@ namespace Jularr.Frontend.Pages.Admin.Sources
             // Only sources Jularr supports can be added; the form asks for accounts.
             if (item is { SourceAvailabilityId: SourceAvailability.Ready or SourceAvailability.Account, AcquisitionConnectionTypeId: { } type })
             {
-                var href = "/Admin/Acquisition?Type=" + type + "&name=" + Uri.EscapeDataString(item.Name) + (item.DefaultBaseUrl is { } url ? "&url=" + Uri.EscapeDataString(url) : "");
+                var href = (item.SourceGroupId == SourceGroup.Subtitles ? "/Admin/Acquisition/Subtitles" : "/Admin/Acquisition") + "?Type=" + type + "&name=" + Uri.EscapeDataString(item.Name) + (item.DefaultBaseUrl is { } url ? "&url=" + Uri.EscapeDataString(url) : "");
                 return new A(new Text("sources.add")).Class("button").Attribute("href", href);
             }
 

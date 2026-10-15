@@ -105,20 +105,16 @@ namespace Jularr.Integrations.Data.Servarr
     // One quality of a profile with its source and resolution, allowed alone or through its group.
     internal sealed class ServarrQuality
     {
-        public ServarrQuality(string name, string? source, int resolution, string? modifier, bool isAllowed, bool isCutoff)
+        public ServarrQuality(string? source, int resolution, bool isAllowed, bool isCutoff)
         {
-            Name = name;
             Source = source;
             Resolution = resolution;
-            Modifier = modifier;
             IsAllowed = isAllowed;
             IsCutoff = isCutoff;
         }
 
-        public string Name { get; }
         public string? Source { get; }
         public int Resolution { get; }
-        public string? Modifier { get; }
         public bool IsAllowed { get; }
         public bool IsCutoff { get; }
     }

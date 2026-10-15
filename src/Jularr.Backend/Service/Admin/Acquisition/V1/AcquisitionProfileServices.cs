@@ -49,6 +49,19 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."Version"
                 FROM
                     "AcquisitionProfiles" AS profile
+                WHERE
+                    @WantedItemId::bigint IS NULL
+                    OR EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "WantedItems" AS wanted
+                            JOIN "Works" AS work ON work."Id" = wanted."WorkId"
+                        WHERE
+                            wanted."Id" = @WantedItemId
+                            AND profile."MediaTypeId" = work."MediaTypeId"
+                            AND (profile."MediaSubtypeId" IS NULL OR profile."MediaSubtypeId" = work."MediaSubtypeId")
+                    )
                 ORDER BY
                     profile."MediaTypeId",
                     profile."MediaSubtypeId" NULLS FIRST,
@@ -56,6 +69,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                     profile."Name",
                     profile."Id";
                 """;
+            sql.Parameters.Add(new WantedItemFilterData(Parameters.WantedItemId));
             return new BaseDataList<AcquisitionProfileDetailsV1>(await Context.ReadSql.ReadListAsync<AcquisitionProfileDetailsV1>(sql, CancellationToken));
         }
     }

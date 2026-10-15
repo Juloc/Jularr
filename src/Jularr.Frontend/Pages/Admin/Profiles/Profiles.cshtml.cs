@@ -22,7 +22,6 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             page.Title("admin.profiles.title");
             page.Navigation("nav.admin");
-            page.Asset("Pages/Admin/Profiles/Profiles.entry.scss");
             if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
             var home = Home(Request);
 
@@ -33,7 +32,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
                 .Content("profile.usage", item => item.IsDefault ? new Text("profile.default") : new ValueText(item.WantedCount.ToString(CultureInfo.InvariantCulture)))
                 .Link(item => item.Id, "common.actions", id => home + "/" + id.ToString(CultureInfo.InvariantCulture), "common.edit"));
             page.Content.Add(new Div([.. Kinds.Select(kind => new A(new Text("profile.add." + (kind.Subtype?.ToString() ?? kind.Type.ToString()))).Class("button")
-                .Attribute("href", home + "/New?type=" + kind.Type + (kind.Subtype is { } subtype ? "&subtype=" + subtype : "")))]).Class("profile-actions"));
+                .Attribute("href", home + "/New?type=" + kind.Type + (kind.Subtype is { } subtype ? "&subtype=" + subtype : "")))]).Class("page-actions"));
         }
 
         public async Task<IActionResult> OnGetAsync()

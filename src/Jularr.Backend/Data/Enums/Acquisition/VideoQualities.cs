@@ -50,5 +50,12 @@ namespace Jularr.Backend.Data.Enums.Acquisition
             MediaType.Game => GameQualities.Order,
             _ => []
         };
+
+        // A new profile starts with Blu-ray and web in 1080p and upgrades up to web; other kinds with their best format and no upgrades.
+        public static string[] StartingQualities(MediaType mediaType, MediaSubtype? subtype) => mediaType is MediaType.Movie or MediaType.Series
+            ? ["WEB-1080p", "BLURAY-1080p"]
+            : For(mediaType, subtype).Take(1).ToArray();
+
+        public static string? StartingCutoff(MediaType mediaType) => mediaType is MediaType.Movie or MediaType.Series ? "WEB-1080p" : null;
     }
 }

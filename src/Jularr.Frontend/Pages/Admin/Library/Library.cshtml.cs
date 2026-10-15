@@ -66,8 +66,8 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     .Text(item => item.Name, "library.root")
                     .Content("table.type", item => new Text(MediaTypeLabel.Key(item.MediaTypeId, item.MediaSubtypeId)))
                     .Content("library.overview.place", item => new ValueText(item.StorageMountName + " / " + item.RelativePath))
-                    .Content("library.overview.titles", item => new ValueText(item.WorkCount.ToString("N0", CultureInfo.CurrentCulture)))
-                    .Content("library.overview.files", item => new A(new ValueText(item.FileCount.ToString("N0", CultureInfo.CurrentCulture)))
+                    .Content("table.titles", item => new ValueText(item.WorkCount.ToString("N0", CultureInfo.CurrentCulture)))
+                    .Content("storage.paths.files", item => new A(new ValueText(item.FileCount.ToString("N0", CultureInfo.CurrentCulture)))
                         .Attribute("href", "/Admin/Library/Files?root=" + item.Id.ToString(CultureInfo.InvariantCulture)))
                     .Content("table.size", item => new ValueText(ByteSize.Format(item.TotalBytes)))
                     .Content("library.overview.attention", Attention)
@@ -77,12 +77,12 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 // Scanning reads the storage, which needs its administration.
                 if (CanRename)
                 {
-                    table.Content("common.actions", item => new Form<LibraryRootParametersV1>(form => form.Submit("library.overview.scan", item.Name, valueHidden: true),
+                    table.Content("common.actions", item => new Form<LibraryRootParametersV1>(form => form.Submit("storage.paths.scan", item.Name, valueHidden: true),
                         Address(handler: "Scan") + "&libraryRootId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new LibraryRootParametersV1(item.Id)));
                 }
 
                 page.Content.Add(libraries.Count == 0 ? new P(new Text("library.overview.empty")) : table);
-                if (CanRename) page.Content.Add(new Div(new A(new Text("library.overview.manage")).Class("button").Attribute("href", "/Admin/Storage")).Class("library-actions"));
+                if (CanRename) page.Content.Add(new Div(new A(new Text("library.overview.manage")).Class("button").Attribute("href", "/Admin/Storage")).Class("page-actions"));
             }
 
             // Inventory and manual identity.
@@ -151,7 +151,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
                 page.Content.Add(new UiSection("library.naming.placeholders", [new Dl([.. NamingTokens.All.SelectMany(token => new IUiComponent[]
                     {
-                        new Dt(new ValueText("{" + token + (token is "Season" or "Episode" ? ":00" : "") + "}")).Class("library-example"),
+                        new Dt(new ValueText(NamingTokens.Display(token))).Class("library-example"),
                         new Dd(new Text("library.naming.token." + token.Replace(" ", "", StringComparison.Ordinal)))
                     })]).Class("library-placeholders"), new P(new Text("library.naming.rules"))]));
             }
@@ -242,6 +242,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
 
         public async Task<IActionResult> OnGetAsync()
         {
+            if (Tab is LibraryTab.Naming or LibraryTab.Rename or LibraryTab.Versions && !CanRename) return LocalRedirect("/Admin/Library");
             await LoadDataAsync();
             PreparePage();
             return Page();
@@ -261,7 +262,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
             return LocalRedirect(Address());
         }
 
-        // A library is read again in the background.
+        // Missing files, and unidentified ones to assign.
         private static IUiComponent Attention(LibraryOverviewV1 item) => item.MissingCount == 0 && item.UnmatchedCount == 0 ? new Text("library.overview.fine")
             : new Span([.. new IUiComponent?[]
             {
@@ -270,6 +271,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                     .Attribute("href", "/Admin/Library/Unmatched?root=" + item.Id.ToString(CultureInfo.InvariantCulture)) : null
             }.OfType<IUiComponent>()]).Class("library-attention");
 
+        // A library is read again in the background.
         public async Task<IActionResult> OnPostScanAsync([BindRequired] long libraryRootId)
         {
             await queueScan.ExecuteAsync<QueueLibraryScanResultV1>(new LibraryRootParametersV1(libraryRootId), default, HttpContext.RequestAborted);

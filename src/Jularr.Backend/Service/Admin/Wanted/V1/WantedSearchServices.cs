@@ -32,7 +32,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 (await ctx.ReadWantedTargetAsync(Parameters.WantedItemId, ct), await ctx.ReadEnabledConnectionsAsync(AcquisitionConnectionRole.Search, ct)), CancellationToken);
 
             // A manual search shows every candidate and keeps the automatic schedule.
-            var scope = await WantedSearchScope.ReadAsync(Context, target, Data, CancellationToken);
+            var scope = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSearchScopeAsync(target, Data.ParentUnitNumber, Data.UnitNumber, ct), CancellationToken);
             var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: false, CancellationToken, scope);
             if (result.IndexersUnavailable)
             {
@@ -83,7 +83,7 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
                 throw new DataValidationException(nameof(WantedItemParametersV1.WantedItemId), "in_use");
             }
 
-            var scope = await WantedSearchScope.ReadAsync(Context, target, Data, CancellationToken);
+            var scope = await Context.ExecuteBatchAsync((ctx, ct) => ctx.ReadSearchScopeAsync(target, Data.ParentUnitNumber, Data.UnitNumber, ct), CancellationToken);
             var result = await _acquisition.SearchAsync(Context, target, indexers, SearchDepth.Normal, automatic: true, CancellationToken, scope);
             if (result.IndexersUnavailable)
             {
@@ -98,30 +98,6 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
             var offer = result.Offers[winner.Candidate.Id];
             await _acquisition.GrabAsync(Context, target, offer, winner.Score?.QualityKey, clients, CancellationToken);
             return new AutomaticSearchResultV1("grabbed", TextLimit.Cut(offer.Title, 1000));
-        }
-    }
-
-    // What a search covers: Manga the asked volume, else like the automatic search the whole series as a pack or the next missing volume; Series one season or episode.
-    internal static class WantedSearchScope
-    {
-        public static async Task<UnitScope?> ReadAsync(LogicContext context, WantedTargetData target, SearchWantedDataV1 data, CancellationToken ct)
-        {
-            if (target.MediaSubtypeId == MediaSubtype.Manga)
-            {
-                var units = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct);
-                return data.UnitNumber is { } volume ? AcquisitionSelectionLogic.ReadUnitScope(units, null, volume) : AcquisitionSelectionLogic.ReadNextUnitScope(units, null, firstAttempt: true);
-            }
-
-            if (target.MediaTypeId == MediaType.Series && data.ParentUnitNumber is not null)
-            {
-                var units = await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct);
-                return AcquisitionSelectionLogic.ReadUnitScope(units, data.ParentUnitNumber, data.UnitNumber);
-            }
-
-            // An episode needs its season; other Works have no units.
-            return data.UnitNumber is null ? null : throw (target.MediaTypeId == MediaType.Series
-                ? new DataValidationException(nameof(SearchWantedDataV1.ParentUnitNumber), "required")
-                : new DataValidationException(nameof(SearchWantedDataV1.UnitNumber), "invalid_transition"));
         }
     }
 
