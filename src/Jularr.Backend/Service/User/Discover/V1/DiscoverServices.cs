@@ -282,8 +282,71 @@ namespace Jularr.Backend.Service.User.Discover.V1
         }
     }
 
+    [ServiceEndpoint("POST", "/api/v1/discover/catalog/search")]
+    public sealed class SearchDiscoverCatalogV1 : UserService<DiscoverParametersV1, SearchDiscoverCatalogDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal SearchDiscoverCatalogV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DiscoverCatalogItemV1>>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            if (!DiscoverQueries.IsCatalogType(Data.MediaTypeId))
+            {
+                throw new DataValidationException(nameof(SearchDiscoverCatalogDataV1.MediaTypeId), "unknown_catalog_value");
+            }
+
+            await DiscoverQueries.RequireTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            var results = await _catalog.SearchAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Query, null, CancellationToken);
+            return new BaseDataList<DiscoverCatalogItemV1>([.. results.Select(result => new DiscoverCatalogItemV1(result.Namespace, result.ExternalId, result.Title, result.ReleaseYear,
+                result.Author, result.WorkId))]);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/discover/catalog/requests")]
+    public sealed class RequestDiscoverCatalogItemV1 : UserService<DiscoverParametersV1, RequestDiscoverCatalogDataV1>
+    {
+        private readonly MetadataCatalog _catalog;
+
+        internal RequestDiscoverCatalogItemV1(MetadataCatalog catalog)
+        {
+            _catalog = catalog;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<CreateRequestResultV1>()];
+        protected override ModuleRequirement GetInstanceModules(DiscoverParametersV1 parameters) => ModuleRequirement.All("Library", "Requests");
+        protected override ServicePermission GetPermission(DiscoverParametersV1 parameters, Type resultType) => new("profile.requests.update");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // The catalog identity resolves to one canonical Work before the request exists.
+            if (!DiscoverQueries.IsCatalogType(Data.MediaTypeId))
+            {
+                throw new DataValidationException(nameof(RequestDiscoverCatalogDataV1.MediaTypeId), "unknown_catalog_value");
+            }
+
+            await DiscoverQueries.RequireTypeAsync(Context, Data.MediaTypeId, Auth.ProfileId!.Value, CancellationToken);
+            var workId = await _catalog.ImportAsync(Context, Data.MediaTypeId, Data.MediaSubtypeId, Data.Namespace, Data.ExternalId, CancellationToken);
+            var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value,
+                Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct), CancellationToken);
+            return new CreateRequestResultV1(request.Id);
+        }
+    }
+
     internal static class DiscoverQueries
     {
+        // Films and series are discovered through TMDB; the other types through their catalogs.
+        public static bool IsCatalogType(MediaType mediaType) => mediaType is MediaType.Book or MediaType.Music or MediaType.Game;
+
         public static async Task<(IReadOnlySet<MediaType> Usable, IReadOnlySet<MediaType> Listed)> ReadTypesAsync(LogicContext context, long profileId, CancellationToken ct)
         {
             var categories = await context.ExecuteBatchAsync((ctx, token) =>

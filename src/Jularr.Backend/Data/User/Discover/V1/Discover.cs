@@ -48,6 +48,85 @@ namespace Jularr.Backend.Data.User.Discover.V1
         public int Page { get; }
     }
 
+    // Books, Manga, Light Novels, music and games come from their own catalogs.
+    public sealed class SearchDiscoverCatalogDataV1 : BaseData
+    {
+        public SearchDiscoverCatalogDataV1(MediaType mediaTypeId, string query, MediaSubtype? mediaSubtypeId = null)
+        {
+            MediaTypeId = mediaTypeId;
+            Query = query;
+            MediaSubtypeId = mediaSubtypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Query))]
+        public string Query { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+    }
+
+    public sealed class DiscoverCatalogItemV1 : BaseResponse
+    {
+        public DiscoverCatalogItemV1(string @namespace, string externalId, string title, int? releaseYear, string? author, long? workId)
+        {
+            Namespace = @namespace;
+            ExternalId = externalId;
+            Title = title;
+            ReleaseYear = releaseYear;
+            Author = author;
+            WorkId = workId;
+        }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.CanonicalTitle))]
+        public string Title { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleaseYear))]
+        public int? ReleaseYear { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Author))]
+        public string? Author { get; }
+
+        // Set when the title already is a Work.
+        [DataField(typeof(WorkFields), nameof(WorkFields.Id), false)]
+        public long? WorkId { get; }
+    }
+
+    public sealed class RequestDiscoverCatalogDataV1 : BaseData
+    {
+        public RequestDiscoverCatalogDataV1(MediaType mediaTypeId, string @namespace, string externalId, long uiLocaleId, MediaSubtype? mediaSubtypeId = null)
+        {
+            MediaTypeId = mediaTypeId;
+            Namespace = @namespace;
+            ExternalId = externalId;
+            UiLocaleId = uiLocaleId;
+            MediaSubtypeId = mediaSubtypeId;
+        }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaTypeId))]
+        public MediaType MediaTypeId { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.Namespace))]
+        public string Namespace { get; }
+
+        [DataField(typeof(WorkMetadataFields), nameof(WorkMetadataFields.ExternalId))]
+        public string ExternalId { get; }
+
+        [DataField(typeof(Fields.Localization.UiLocaleFields), nameof(Fields.Localization.UiLocaleFields.Id))]
+        public long UiLocaleId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.MediaSubtypeId))]
+        public MediaSubtype? MediaSubtypeId { get; }
+    }
+
     public sealed class DiscoverItemParametersV1 : BaseParameters
     {
         public DiscoverItemParametersV1(MediaType mediaTypeId, int tmdbId)

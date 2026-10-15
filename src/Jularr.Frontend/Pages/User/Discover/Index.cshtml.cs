@@ -17,31 +17,26 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.User.Discover
 {
-    public sealed class IndexModel(ReadAuthenticationV1 authentication, ReadProfileMediaV1 readMedia, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search, ReadContinueV1 continuation,
-        ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets) : JularrPage
+    public sealed class IndexModel(ReadAuthenticationV1 authentication, ReadProfileMediaV1 readMedia, ReadDiscoverFeedV1 feeds, SearchDiscoverV1 search,
+        SearchDiscoverCatalogV1 catalogSearch, ReadContinueV1 continuation, ReadLibraryV1 library, ReadHomeLayoutV1 readLayout, UiText texts, FrontendAssets assets) : JularrPage
     {
-        // Only types with a real discovery provider; Books, Manga and Light Novels follow with their providers.
-        private static readonly (string Slug, MediaType Type, DiscoverFeedType[] Feeds)[] Types =
-        [
-            ("movies", MediaType.Movie, [DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New, DiscoverFeedType.Upcoming]),
-            ("series", MediaType.Series, [DiscoverFeedType.Trending, DiscoverFeedType.Top, DiscoverFeedType.New])
-        ];
-
         private readonly List<(MediaType Type, DiscoverFeedType Feed, IReadOnlyList<DiscoverItemV1> Items)> _shelves = [];
         private IReadOnlyList<DiscoverItemV1>? _results;
+        private IReadOnlyList<DiscoverCatalogItemV1>? _catalog;
         private IReadOnlyList<ContinueItemV1> _continue = [];
         private IReadOnlyList<LibraryItemV1> _recent = [];
         private IReadOnlyList<HomeShelfV1> _layout = [.. Enum.GetValues<HomeShelfType>().Select(type => new HomeShelfV1(type, false))];
         private bool _providerUnavailable;
-        private HashSet<MediaType>? _listed;
+        private HashSet<string>? _listed;
 
         [BindProperty(SupportsGet = true, Name = "type")]
         public string? TypeSlug { get; set; }
 
-        // The profile's listed types only.
-        private IEnumerable<(string Slug, MediaType Type, DiscoverFeedType[] Feeds)> Listed => Types.Where(type => _listed?.Contains(type.Type) is true);
+        // The profile's listed types and subtypes only.
+        private IEnumerable<DiscoverType> Listed => DiscoverTypes.All.Where(type => _listed?.Contains(type.Type.ToString()) is true
+            && (type.Subtype is null || _listed.Contains(type.Subtype.Value.ToString())));
 
-        private (string Slug, MediaType Type, DiscoverFeedType[] Feeds) Selected => Listed.FirstOrDefault(type => type.Slug == TypeSlug);
+        private DiscoverType? Selected => Listed.FirstOrDefault(type => type.Slug == TypeSlug);
 
         [BindProperty(SupportsGet = true, Name = "view")]
         public DiscoverFeedType? View { get; set; }
@@ -77,17 +72,26 @@ namespace Jularr.Frontend.Pages.User.Discover
             var selected = Selected;
 
             // Media type, then browse view; filters stay separate.
-            page.Content.Add(new NavigationTabs([new NavigationTab("discover.all", Address(null, null, 1), selected.Slug is null), .. Listed.Select(type =>
-                new NavigationTab("discover.type." + type.Slug, Address(type.Slug, null, 1), type.Slug == selected.Slug))], "discover.mediaTypes", "media"));
-            if (selected.Slug is not null && string.IsNullOrWhiteSpace(Query))
+            page.Content.Add(new NavigationTabs([new NavigationTab("discover.all", Address(null, null, 1), selected is null), .. Listed.Select(type =>
+                new NavigationTab("discover.type." + type.Slug, Address(type.Slug, null, 1), type.Slug == selected?.Slug))], "discover.mediaTypes", "media"));
+            if (selected is { IsCatalog: false } && string.IsNullOrWhiteSpace(Query))
             {
                 page.Content.Add(new NavigationTabs([new NavigationTab("discover.overview", "/?type=" + selected.Slug, View is null), .. selected.Feeds.Select(feed =>
                     new NavigationTab("discover.feed." + feed, Address(selected.Slug, feed, 1), View == feed))], "discover.browseViews", "browse"));
             }
 
-            if (_providerUnavailable && _results is not null)
+            if (_providerUnavailable && (_results is not null || _catalog is not null))
             {
                 page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
+            }
+
+            // Catalog titles become Works only through a request.
+            if (_catalog is { } catalog)
+            {
+                page.Content.Add(catalog.Count == 0
+                    ? new P(new Text("discover.noResults")).Attribute("role", "status")
+                    : new Div([.. catalog.Select(item => CatalogCard(selected!, item))]).Class("media-grid"));
+                return;
             }
 
             // Search results and full browse views are grids.
@@ -96,16 +100,16 @@ namespace Jularr.Frontend.Pages.User.Discover
                 if (results.Count == 0)
                 {
                     page.Content.Add(new P(new Text(string.IsNullOrWhiteSpace(Query) ? "discover.empty" : "discover.noResults")).Attribute("role", "status"));
-                    if (PageNumber > 1) page.Content.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected.Slug, View, PageNumber - 1)));
+                    if (PageNumber > 1) page.Content.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected?.Slug, View, PageNumber - 1)));
                     return;
                 }
 
                 page.Content.Add(new Div([.. results.Select(Card)]).Class("media-grid"));
                 var paging = new List<IUiComponent>();
-                if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected.Slug, View, PageNumber - 1)));
+                if (PageNumber > 1) paging.Add(new A(new Text("common.previous")).Class("button").Attribute("href", Address(selected?.Slug, View, PageNumber - 1)));
                 if (!_providerUnavailable && PageNumber < 500 && results.Count >= 20)
                 {
-                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("href", Address(selected.Slug, View, PageNumber + 1)));
+                    paging.Add(new A(new Text("common.next")).Class("button").Attribute("data-discover-next", "true").Attribute("href", Address(selected?.Slug, View, PageNumber + 1)));
                 }
 
                 page.Content.Add(new Nav([.. paging]).Class("discover-paging").Attribute("aria-label", texts["discover.pages"]));
@@ -119,7 +123,7 @@ namespace Jularr.Frontend.Pages.User.Discover
             page.Content.Add(new Div([.. featured.Content]).Attribute("id", "discover-featured"));
 
             // Watching, listening and reading continue on their own shelves, in the profile's order.
-            var continuing = _continue.Where(item => selected.Slug is null || item.MediaTypeId == selected.Type).ToList();
+            var continuing = _continue.Where(item => selected is null || item.MediaTypeId == selected.Type).ToList();
             var canPlay = texts.CanPlay();
             foreach (var shelf in _layout.Where(shelf => !shelf.IsHidden))
             {
@@ -131,7 +135,7 @@ namespace Jularr.Frontend.Pages.User.Discover
                         texts.CanRead() ? continuing.Where(item => ReadableMedia.IsReadable(item.MediaAssetTypeId)) : []),
                     HomeShelfType.RecentlyAdded => new MediaShelf(assets, "discover.recentlyAdded", "/Library", [.. _recent.Select(item => new MediaCard(item.Title,
                         "/Details/" + item.Id.ToString(CultureInfo.InvariantCulture), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId))]),
-                    _ => Recommendations(selected.Slug)
+                    _ => Recommendations(selected?.Slug)
                 });
             }
         }
@@ -175,8 +179,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             if (_providerUnavailable) page.Content.Add(new P(new Text("discover.providerUnavailable")).Attribute("role", "status"));
             foreach (var group in _shelves.GroupBy(shelf => shelf.Type))
             {
-                var slug = Types.First(type => type.Type == group.Key).Slug;
-                if (selected.Slug is null && group.Any(shelf => shelf.Items.Count > 0))
+                var slug = DiscoverTypes.For(group.Key).Slug;
+                if (selected is null && group.Any(shelf => shelf.Items.Count > 0))
                 {
                     page.Content.Add(new H2(new Text("discover.type." + slug)).Class("discover-media-heading"));
                 }
@@ -238,13 +242,20 @@ namespace Jularr.Frontend.Pages.User.Discover
             var selected = Selected;
             try
             {
-                if (!string.IsNullOrWhiteSpace(Query))
+                if (!string.IsNullOrWhiteSpace(Query) && selected is { IsCatalog: true } scope)
                 {
-                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query.Trim(), selected.Slug is null ? null : selected.Type, PageNumber), HttpContext.RequestAborted);
+                    _catalog = await catalogSearch.ExecuteAsync<BaseDataList<DiscoverCatalogItemV1>>(new SearchDiscoverCatalogDataV1(scope.Type, Query.Trim(), scope.Subtype),
+                        HttpContext.RequestAborted);
                     return;
                 }
 
-                if (selected.Slug is not null && View is { } view && selected.Feeds.Contains(view))
+                if (!string.IsNullOrWhiteSpace(Query))
+                {
+                    _results = await search.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new SearchDiscoverDataV1(Query.Trim(), selected?.Type, PageNumber), HttpContext.RequestAborted);
+                    return;
+                }
+
+                if (selected is not null && View is { } view && selected.Feeds.Contains(view))
                 {
                     _results = await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(selected.Type, view, PageNumber), HttpContext.RequestAborted);
                     return;
@@ -253,7 +264,8 @@ namespace Jularr.Frontend.Pages.User.Discover
             catch (ServiceUnavailableException)
             {
                 _providerUnavailable = true;
-                _results = [];
+                _results = selected is { IsCatalog: true } ? null : [];
+                _catalog = selected is { IsCatalog: true } ? [] : null;
                 return;
             }
 
@@ -272,7 +284,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
             if (shown.Contains(HomeShelfType.RecentlyAdded))
             {
-                _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected.Slug is null ? null : selected.Type, pageSize: 20), HttpContext.RequestAborted)).Items;
+                _recent = (await library.ExecuteAsync<PageResult<LibraryItemV1>>(new ReadLibraryParametersV1(selected?.Type, pageSize: 20), HttpContext.RequestAborted)).Items;
             }
         }
 
@@ -286,20 +298,20 @@ namespace Jularr.Frontend.Pages.User.Discover
             var profileId = (await authentication.ExecuteAsync<AuthenticationResultV1>(cancellationToken: HttpContext.RequestAborted)).ProfileId
                 ?? throw new UnauthorizedAccessException("An active profile is required.");
             var media = await readMedia.ExecuteAsync<BaseDataList<ProfileMediaV1>>(new ReadProfileParametersV1(profileId), HttpContext.RequestAborted);
-            _listed = [.. media.Where(item => !item.IsSubtype && !item.IsHidden).Select(item => Enum.Parse<MediaType>(item.Key))];
+            _listed = [.. media.Where(item => !item.IsHidden).Select(item => item.Key)];
         }
 
         private async Task LoadRecommendationsAsync()
         {
             await LoadListedAsync();
             var selected = Selected;
-            foreach (var (_, type, typeFeeds) in Listed.Where(type => selected.Slug is null || type.Slug == selected.Slug))
+            foreach (var scope in Listed.Where(type => selected is null || type.Slug == selected.Slug))
             {
-                foreach (var feed in typeFeeds)
+                foreach (var feed in scope.Feeds)
                 {
                     try
                     {
-                        _shelves.Add((type, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(type, feed), HttpContext.RequestAborted)));
+                        _shelves.Add((scope.Type, feed, await feeds.ExecuteAsync<BaseDataList<DiscoverItemV1>>(new ReadDiscoverFeedDataV1(scope.Type, feed), HttpContext.RequestAborted)));
                     }
                     catch (ServiceUnavailableException)
                     {
@@ -316,6 +328,20 @@ namespace Jularr.Frontend.Pages.User.Discover
             return new MediaCard(item.Title, DetailsHref(item), item.PosterUrl, item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), "media.state." + item.MediaStateTypeId, actionKey, actionHref);
         }
 
+        // A known title opens its Work; any other opens its request.
+        private IUiComponent CatalogCard(DiscoverType scope, DiscoverCatalogItemV1 item)
+        {
+            var meta = string.Join(" · ", new[] { item.ReleaseYear?.ToString(CultureInfo.InvariantCulture), item.Author }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            if (item.WorkId is { } workId)
+            {
+                return new MediaCard(item.Title, "/Details/" + workId.ToString(CultureInfo.InvariantCulture), null, meta, "discover.known");
+            }
+
+            var href = "/Discover/" + scope.Slug + "/" + Uri.EscapeDataString(item.Namespace) + "/" + Uri.EscapeDataString(item.ExternalId) + "?title=" + Uri.EscapeDataString(item.Title)
+                + (meta.Length == 0 ? "" : "&meta=" + Uri.EscapeDataString(meta));
+            return new MediaCard(item.Title, href, null, meta, "media.state." + MediaStateType.NotRequested, texts.CanRequest() ? "request.create" : null, texts.CanRequest() ? href : null);
+        }
+
         // The canonical next step: use what exists, request what is missing.
         private (string? Key, string? Href) Action(DiscoverItemV1 item) => item.MediaStateTypeId switch
         {
@@ -327,7 +353,7 @@ namespace Jularr.Frontend.Pages.User.Discover
 
         private static string DetailsHref(DiscoverItemV1 item) => item.WorkId is { } workId
             ? "/Details/" + workId.ToString(CultureInfo.InvariantCulture)
-            : "/Discover/" + Types.First(type => type.Type == item.MediaTypeId).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture);
+            : "/Discover/" + DiscoverTypes.For(item.MediaTypeId).Slug + "/" + item.TmdbId!.Value.ToString(CultureInfo.InvariantCulture);
 
         private string Address(string? slug, DiscoverFeedType? feed, int page)
         {

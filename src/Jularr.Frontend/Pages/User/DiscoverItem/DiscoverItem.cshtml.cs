@@ -77,12 +77,8 @@ namespace Jularr.Frontend.Pages.User.DiscoverItem
             }
         }
 
-        private DiscoverItemParametersV1 Parameters() => new(Type switch
-        {
-            "movies" => MediaType.Movie,
-            "series" => MediaType.Series,
-            _ => throw new KeyNotFoundException("Unknown media type.")
-        }, TmdbId);
+        private DiscoverItemParametersV1 Parameters() =>
+            new(DiscoverTypes.Find(Type) is { IsCatalog: false } scope ? scope.Type : throw new KeyNotFoundException("Unknown media type."), TmdbId);
 
         private string Address() => "/Discover/" + Type + "/" + TmdbId.ToString(CultureInfo.InvariantCulture);
     }

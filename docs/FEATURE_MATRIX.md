@@ -17,7 +17,7 @@ through the UI). A row is done only at e2e. Tests name classes in `tests/Jularr.
 | Setup: Owner, sign-in, menu pages | e2e | `Pages/Setup`, Account services | FirstRunTests, FilmPathTests | Setup wizard steps after the Owner; modules switched in the browser | A fresh instance is set up through the UI alone, modules switched on the Instance page |
 | Storage/NAS connection, library root | e2e (local path) | Storage, Library services | StorageTests, LibraryTests, FilmPathTests, MusicPathTests, ReadingPathTests | SMB/NFS in the browser (Samba stack) | A connected share is browsable; an outage keeps browsing |
 | Scan and metadata match | tested | Library scan, `WorkMetadata` | LibraryTests, MediaTests | Automatic TMDB identification of unknown folders; E2E | Scanned files appear under the right Work without manual steps where the name is clear |
-| Discover, details, request | e2e (films, series; other types requested on details after an administrator added them) | Discover, Request services | DiscoverTests, RequestTests, FilmPathTests, MusicPathTests, ReadingPathTests | Discover for music, books, manga, light novels, games, anime (C4) | Each enabled type can be found and requested by a user |
+| Discover, details, request | e2e (films, series); tested (books, light novels, manga, music and games found in their catalogs and requested) | Discover, Request services, `MetadataCatalog` | DiscoverTests, RequestTests, BookTests, FilmPathTests, MusicPathTests, ReadingPathTests | Feeds for the catalog types, the AniList anime tab, these types in the All search (C4b) | Each enabled type can be found and requested by a user |
 | Wanted, search, release choice | e2e (films, episodes, albums, books, manga, light novels) | Acquisition (Wanted, SearchPlanner, judges) | AcquisitionTests, MangaTests, path tests | Games and anime in the browser | A request becomes Wanted, finds and grabs the best allowed release |
 | Download (SABnzbd, native usenet) | e2e (SABnzbd) | `SabnzbdClient`, Usenet | AcquisitionTests, UsenetTests, path tests | Native downloader in the browser (NNTP fake) | Failure retries, then blocklists and searches again |
 | Import, library | e2e | DownloadImport, ImportPlacement | AcquisitionTests, path tests | – | The file lands in the right library and folder, the request reads available |
@@ -69,7 +69,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Function | Status | Missing |
 | --- | --- | --- |
 | Central indexer management | tested | – |
-| Requests for every type | tested for Movies and Series | User discovery and requests for music, books, manga, games, anime |
+| Requests for every type | tested | Anime through AniList (C4b) |
 | Request rules, approval, limits, quality | tested | – |
 | Request → Wanted → acquisition → available, notifications | tested | Push and e-mail wait for SMTP (P2) |
 
@@ -77,7 +77,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 
 | Page | Status | Tests | Missing |
 | --- | --- | --- | --- |
-| Home/Discover | tested | DiscoverTests, discover.test.mjs, HomeLayoutTests | Other types, genre/year filters |
+| Home/Discover | tested | DiscoverTests, BookTests, discover.test.mjs, HomeLayoutTests | Feeds for the catalog types, genre/year filters |
 | Details | tested | PlaybackTests | Complete episode details; the browser tab names "Media details" instead of the work |
 | Library, Watchlist | tested | MediaTests | Filters; numbered paging |
 | Player | tested | PlaybackTests, navigation.test.mjs | Real transcoding in CI, casting |

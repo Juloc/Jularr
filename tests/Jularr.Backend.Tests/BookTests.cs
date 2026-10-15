@@ -7,6 +7,7 @@ using Jularr.Backend.Data.Admin.Activity.V1;
 using Jularr.Backend.Data.Admin.Media.V1;
 using Jularr.Backend.Data.Admin.Wanted.V1;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.User.Discover.V1;
 using Jularr.Backend.Data.Enums.Acquisition;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Data.Enums.Operation;
@@ -113,9 +114,48 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(LibraryFileTypes.IsDocumentContent(".pdf", "<html>"u8));
         }
 
-        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeBookSources sources)
+        [TestMethod]
+        public async Task Discover_ABookIsFoundInItsCatalog_AndRequestedByAUser()
         {
-            var host = await LibraryTests.CreateHostAsync(storage, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = downloads }, services: services =>
+            using var storage = new TemporaryDirectory();
+            using var downloads = new TemporaryDirectory();
+            await using var host = await CreateHostAsync(storage.Path, downloads.Path, new FakeBookSources(), razor: true);
+
+            // The catalog finds the book; films stay with TMDB.
+            async Task<DiscoverCatalogItemV1> FindAsync()
+            {
+                using var found = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Book, "Pride and Prejudice"));
+                Assert.AreEqual(HttpStatusCode.OK, found.StatusCode, await found.Content.ReadAsStringAsync());
+                return (await found.Content.ReadFromJsonAsync<BaseDataList<DiscoverCatalogItemV1>>())!.First(item => item.ExternalId == "OL66554W");
+            }
+
+            var book = await FindAsync();
+            Assert.IsNull(book.WorkId);
+            using var films = await host.SendAsync(HttpMethod.Post, "/api/v1/discover/catalog/search", new SearchDiscoverCatalogDataV1(MediaType.Movie, "Pride and Prejudice"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, films.StatusCode);
+
+            // The page lists it with its request page, which asks for the language.
+            using var page = await host.SendAsync(HttpMethod.Get, "/?type=books&q=Pride%20and%20Prejudice");
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            StringAssert.Contains(html, "/Discover/books/openlibrary/OL66554W?title=Pride%20and%20Prejudice");
+            using var item = await host.SendAsync(HttpMethod.Get, "/Discover/books/openlibrary/OL66554W?title=Pride%20and%20Prejudice");
+            var form = await item.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, item.StatusCode, form);
+            StringAssert.Contains(form, "Pride and Prejudice");
+
+            // Requesting imports the Work once; the catalog then knows it.
+            using var requested = await host.SendAsync(HttpMethod.Post, "/Discover/books/openlibrary/OL66554W?title=Pride%20and%20Prejudice",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(form), ["UiLocaleId"] = "1" });
+            Assert.AreEqual(HttpStatusCode.Redirect, requested.StatusCode, await requested.Content.ReadAsStringAsync());
+            var workId = (long)(await host.ScalarAsync("SELECT \"WorkId\" FROM \"WorkExternalIdentities\" WHERE \"Namespace\" = 'openlibrary' AND \"Value\" = 'OL66554W'"))!;
+            Assert.AreEqual(1L, await host.ScalarAsync($"SELECT count(*) FROM \"AcquisitionRequests\" WHERE \"WorkId\" = {workId}"));
+            Assert.AreEqual(workId, (await FindAsync()).WorkId);
+        }
+
+        private static async Task<Host> CreateHostAsync(string storage, string downloads, FakeBookSources sources, bool razor = false)
+        {
+            var host = await LibraryTests.CreateHostAsync(storage, razor, settings: new Dictionary<string, string> { ["Storage:DirectDownloadPath"] = downloads }, services: services =>
             {
                 services.AddHttpClient<NewznabClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
                 services.AddHttpClient<SabnzbdClient>().ConfigurePrimaryHttpMessageHandler(() => sources);
