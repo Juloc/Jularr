@@ -58,7 +58,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Function | Status | Owner | Tests | Missing |
 | --- | --- | --- | --- | --- |
 | Movies: TMDB metadata, search, rename, history, editions, franchises | tested | `TmdbClient`, `WorkMetadata` | AcquisitionTests, DiscoverTests, ReleaseFactsTests | Edition choice in the UI |
-| Series: seasons, episodes, specials, season packs | tested | `WorkMetadata`, `VideoReleaseJudge` | AcquisitionTests | Specials search; multi-episode and daily tests; absolute numbering for anime |
+| Series: seasons, episodes, specials, season packs, absolute (Anime) and dated (daily) releases | tested | `WorkMetadata`, `VideoReleaseJudge`, `EpisodeNumbering` | AcquisitionTests | Specials search; an AniList mapping where TMDB seasons differ from the Anime count |
 | Music: MusicBrainz, Cover Art Archive, albums, tracks, FLAC/ALAC/MP3/AAC, album playback | tested | `MusicBrainzClient`, `MusicReleaseJudge` | MusicTests | Artists, discographies and their monitoring, editions/media, secondary types, multi-format, tag read/write, retag preview, duplicates (#1022) |
 | Books, manga, light novels: sources, Newznab, import, reader | tested | Book/Manga judges, sources | BookTests, MangaTests, SourceTests, ReadingTests | Author and series entities and monitoring, editions, format upgrades, chapter releases |
 | Audiobooks as Book subtype | planned | Media subtypes | – | Subtype, library/discover view, audio playback with chapters |

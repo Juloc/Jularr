@@ -34,6 +34,9 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public int? Season { get; init; }
         public int? Episode { get; init; }
         public int? AbsoluteEpisode { get; init; }
+
+        // Daily shows are released by date.
+        public DateOnly? AirDate { get; init; }
         public int? Volume { get; init; }
         public decimal? Chapter { get; init; }
     }
@@ -148,8 +151,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
     // One canonical unit a search targets: an episode in its season or a volume; movies and books have none.
     internal sealed class TargetUnit
     {
-        public TargetUnit(long id, int? parentNumber, int number, bool hasFile)
+        public TargetUnit(long id, int? parentNumber, int number, bool hasFile, int? absolute = null, DateOnly? releasedOn = null)
         {
+            Absolute = absolute;
+            ReleasedOn = releasedOn;
             Id = id;
             ParentNumber = parentNumber;
             Number = number;
@@ -159,6 +164,8 @@ namespace Jularr.Backend.Data.Logic.Acquisition
         public long Id { get; }
         public int? ParentNumber { get; }
         public int Number { get; }
+        public int? Absolute { get; }
+        public DateOnly? ReleasedOn { get; }
         public bool HasFile { get; }
     }
 

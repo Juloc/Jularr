@@ -477,7 +477,20 @@ namespace Jularr.Backend.Logic.Acquisition
                             AND download."OperationStatusTypeId" IN (1, 2)
                             AND covering."ParentUnitNumber" IS NOT DISTINCT FROM parent."Number"
                             AND (covering."UnitStart" IS NULL OR unit."Number" BETWEEN covering."UnitStart" AND covering."UnitEnd")
-                    ) AS "IsCovered"
+                    ) AS "IsCovered",
+                    CASE WHEN unit."WorkUnitTypeId" = 2 AND parent."Number" > 0 THEN (
+                        SELECT
+                            count(*)::integer
+                        FROM
+                            "WorkUnits" AS earlier
+                            JOIN "WorkUnits" AS season ON season."Id" = earlier."ParentWorkUnitId"
+                        WHERE
+                            earlier."WorkId" = work."Id"
+                            AND earlier."WorkUnitTypeId" = 2
+                            AND season."Number" > 0
+                            AND (season."Number", earlier."Number") <= (parent."Number", unit."Number")
+                    ) END AS "AbsoluteNumber",
+                    unit."ReleasedOn"
                 FROM
                     "WantedItems" AS wanted
                     JOIN "Works" AS work ON work."Id" = wanted."WorkId"

@@ -24,8 +24,9 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
     {
         public async Task PlaceAsync(LogicContext context, DownloadData download, string source, IReadOnlyList<StorageFile> files, bool isComplete, CancellationToken ct)
         {
-            var (root, patterns, target) = await context.ExecuteBatchAsync(async (ctx, token) =>
-                (await ctx.ReadImportRootAsync(download.WantedItemId, token), await ctx.ReadNamingPatternsAsync(token), await ctx.ReadWantedTargetAsync(download.WantedItemId, token)), ct);
+            var (root, patterns, target, units) = await context.ExecuteBatchAsync(async (ctx, token) =>
+                (await ctx.ReadImportRootAsync(download.WantedItemId, token), await ctx.ReadNamingPatternsAsync(token), await ctx.ReadWantedTargetAsync(download.WantedItemId, token),
+                    download.MediaTypeId == MediaType.Series ? await ctx.ReadUnitStatesAsync(download.WantedItemId, token) : []), ct);
             if (root is null)
             {
                 await AttentionAsync(context, download.OperationId, "import_no_library", null, ct);
@@ -36,7 +37,7 @@ namespace Jularr.Backend.Service.System.Acquisition.V1
 
             // Ebooks and comics must be what their names say.
             var placements = ImportPlacementLogic.Plan(download.MediaTypeId, download.MediaSubtypeId, download.CanonicalTitle, download.ReleaseYear, download.QualityKey, files, patterns, facts,
-                    download.Author, download.TrackCount, download.PlatformName)
+                    download.Author, download.TrackCount, download.PlatformName, EpisodeNumbering.Episodes(units))
                 .Where(placement => !placement.IsMedia || LibraryFileTypes.GetAssetType(placement.SourcePath) is not (MediaAssetType.Ebook or MediaAssetType.Comic) || IsDocument(source, placement))
                 .ToArray();
             if (placements.Length == 0)

@@ -27,7 +27,7 @@ namespace Jularr.Backend.Logic.Acquisition
         }
 
         public static IReadOnlyList<ImportPlacementData> Plan(MediaType mediaType, MediaSubtype? subtype, string title, int? year, string? qualityKey, IReadOnlyList<StorageFile> files,
-            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null)
+            IReadOnlyDictionary<MediaType, string> patterns, ReleaseFact? facts, string? author = null, int trackCount = 0, string? platform = null, IReadOnlyList<TargetUnit>? episodes = null)
         {
             if (mediaType == MediaType.Book)
             {
@@ -58,10 +58,10 @@ namespace Jularr.Backend.Logic.Acquisition
                 return placements;
             }
 
-            // Episodes keep their numbering.
+            // Episodes keep their numbering; absolute and dated names take the episode they map to.
             foreach (var video in videos)
             {
-                if (!ReleaseParser.TryParse(Path.GetFileNameWithoutExtension(video.RelativePath), out var parsed) || parsed.SeasonNumber is not { } season || parsed.EpisodeStart is not { } episode)
+                if (!ReleaseParser.TryParse(Path.GetFileNameWithoutExtension(video.RelativePath), out var parsed) || EpisodeNumbering.Resolve(parsed, episodes ?? []) is not var (season, episode, _))
                 {
                     continue;
                 }

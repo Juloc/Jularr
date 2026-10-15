@@ -120,8 +120,10 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
     internal sealed class UnitStateData : BaseData
     {
-        public UnitStateData(long workUnitId, int? parentNumber, int number, bool isAvailable, bool hasMedia, bool isCovered)
+        public UnitStateData(long workUnitId, int? parentNumber, int number, bool isAvailable, bool hasMedia, bool isCovered, int? absoluteNumber = null, DateOnly? releasedOn = null)
         {
+            AbsoluteNumber = absoluteNumber;
+            ReleasedOn = releasedOn;
             WorkUnitId = workUnitId;
             ParentNumber = parentNumber;
             Number = number;
@@ -148,6 +150,13 @@ namespace Jularr.Backend.Data.Logic.Acquisition
 
         [DataField(typeof(WantedItemFields), nameof(WantedItemFields.IsCovered))]
         public bool IsCovered { get; }
+
+        // The place of a regular episode across all seasons, as absolute releases count.
+        [DataField(typeof(AcquisitionReleaseFields), nameof(AcquisitionReleaseFields.UnitStart), false)]
+        public int? AbsoluteNumber { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.ReleasedOn))]
+        public DateOnly? ReleasedOn { get; }
 
         public bool IsMissing => IsAvailable && !HasMedia && !IsCovered;
     }

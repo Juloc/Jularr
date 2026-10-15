@@ -190,6 +190,11 @@ namespace Jularr.Backend.Logic.Acquisition
                 Add(rungs, stage, tier, NewznabSearchMode.Search, $"{title} Season {season.Value}", NoParameters, $"{label} + Season {season.Value}");
             }
 
+            if (intent.AirDate is { } date)
+            {
+                Add(rungs, stage, tier, NewznabSearchMode.Search, $"{title} {date:yyyy MM dd}", NoParameters, $"{label} + {date:yyyy-MM-dd}");
+            }
+
             if (intent.AbsoluteEpisode is > 0 and var absolute)
             {
                 Add(rungs, stage, tier, NewznabSearchMode.Search, $"{title} - {absolute:00}", NoParameters, $"{label} + absolute {absolute}");

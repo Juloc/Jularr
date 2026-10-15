@@ -72,7 +72,9 @@ namespace Jularr.Backend.Logic.Acquisition
             return new SearchIntent(kind, target.CanonicalTitle)
             {
                 Aliases = target.Titles, Year = target.ReleaseYear, Creator = target.Author, ExternalIds = ids, Season = kind == AcquisitionKind.Manga ? null : scope?.ParentNumber,
-                Episode = kind == AcquisitionKind.Manga ? null : scope?.UnitNumber, Volume = kind == AcquisitionKind.Manga ? scope?.UnitNumber : null
+                Episode = kind == AcquisitionKind.Manga ? null : scope?.UnitNumber, Volume = kind == AcquisitionKind.Manga ? scope?.UnitNumber : null,
+                AbsoluteEpisode = kind == AcquisitionKind.Anime && scope?.UnitNumber is not null ? scope.Unit.Absolute : null,
+                AirDate = kind == AcquisitionKind.Tv && scope is { UnitNumber: not null, ParentNumber: >= 1900 } ? scope.Unit.ReleasedOn : null
             };
         }
 
@@ -152,7 +154,7 @@ namespace Jularr.Backend.Logic.Acquisition
         {
             // Missing units of the group are wanted; the target is the asked or first missing one.
             var group = states.Where(state => state.ParentNumber == parentNumber).ToArray();
-            var units = group.Select(state => new TargetUnit(state.WorkUnitId, state.ParentNumber, state.Number, state.HasMedia)).ToArray();
+            var units = group.Select(state => new TargetUnit(state.WorkUnitId, state.ParentNumber, state.Number, state.HasMedia, state.AbsoluteNumber, state.ReleasedOn)).ToArray();
             var wanted = units.Where(unit => group.Any(state => state.WorkUnitId == unit.Id && state.IsMissing)).ToArray();
             var target = unitNumber is { } number
                 ? units.FirstOrDefault(unit => unit.Number == number) ?? new TargetUnit(0, parentNumber, number, false)
@@ -179,11 +181,11 @@ namespace Jularr.Backend.Logic.Acquisition
             var first = start ?? scope.Unit.Number;
             var last = end ?? first;
             return states.Select(state => state.IsMissing && state.ParentNumber == scope.ParentNumber && (parsed is null || pack || state.Number >= first && state.Number <= last)
-                ? new UnitStateData(state.WorkUnitId, state.ParentNumber, state.Number, state.IsAvailable, state.HasMedia, true)
+                ? new UnitStateData(state.WorkUnitId, state.ParentNumber, state.Number, state.IsAvailable, state.HasMedia, true, state.AbsoluteNumber, state.ReleasedOn)
                 : state).ToArray();
         }
 
-        public static (int? Parent, int? Start, int? End) ReadCoverage(AcquisitionKind kind, string title)
+        public static (int? Parent, int? Start, int? End) ReadCoverage(AcquisitionKind kind, string title, IReadOnlyList<TargetUnit> episodes)
         {
             // Series releases claim a season or an episode range, Manga releases a volume range or the whole Work.
             if (kind == AcquisitionKind.Manga)
@@ -192,13 +194,18 @@ namespace Jularr.Backend.Logic.Acquisition
                 return (null, start, end);
             }
 
-            if (kind is not (AcquisitionKind.Tv or AcquisitionKind.Anime) || !ReleaseParser.TryParse(title, out var parsed) || parsed.SeasonNumber is not { } season)
+            if (kind is not (AcquisitionKind.Tv or AcquisitionKind.Anime) || !ReleaseParser.TryParse(title, out var parsed))
             {
                 return (null, null, null);
             }
 
-            var (first, last, pack) = ReadRange(kind, parsed);
-            return pack || first is null ? (season, null, null) : (season, first, last);
+            // A season pack claims its season; absolute and dated releases claim the episodes they map to.
+            if (parsed.IsSeasonPack && parsed.SeasonNumber is { } packed)
+            {
+                return (packed, null, null);
+            }
+
+            return EpisodeNumbering.Resolve(parsed, episodes) is var (season, first, last) ? (season, first, last) : (parsed.SeasonNumber, null, null);
         }
 
         private static (int? Start, int? End, bool Pack) ReadRange(AcquisitionKind kind, ReleaseInfo? parsed) => kind == AcquisitionKind.Manga

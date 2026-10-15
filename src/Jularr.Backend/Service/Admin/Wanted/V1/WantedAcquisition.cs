@@ -176,7 +176,11 @@ namespace Jularr.Backend.Service.Admin.Wanted.V1
 
             // Reserve first so concurrent grabs cannot start a second download.
             var client = clients[0];
-            var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId), offer.Title);
+            var kind = AcquisitionSelectionLogic.GetKind(target.MediaTypeId, target.MediaSubtypeId);
+            var episodes = kind is AcquisitionKind.Tv or AcquisitionKind.Anime
+                ? EpisodeNumbering.Episodes(await context.ExecuteBatchAsync((ctx, token) => ctx.ReadUnitStatesAsync(target.WantedItemId, token), ct))
+                : [];
+            var (parent, start, end) = AcquisitionSelectionLogic.ReadCoverage(kind, offer.Title, episodes);
             var grab = new AcquisitionGrabData(target.WantedItemId, offer.ConnectionId, Limit(offer.Identity, 600), Limit(offer.Title, 1000), qualityKey, client.Id, parent, start, end);
             var operationId = await context.ExecuteBatchAsync((ctx, token) => ctx.ReserveDownloadAsync(grab, token), ct);
 

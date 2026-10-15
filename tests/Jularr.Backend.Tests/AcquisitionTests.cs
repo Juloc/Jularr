@@ -19,6 +19,7 @@ using Jularr.Backend.Logic.Acquisition;
 using Jularr.Backend.Service.System.Acquisition.V1;
 using Jularr.Integrations.Data.Newznab;
 using Jularr.Integrations.Data.Sabnzbd;
+using Jularr.Integrations.Data.Storage;
 using Jularr.Integrations.Logic.Newznab;
 using Jularr.Integrations.Logic.Sabnzbd;
 using Jularr.Integrations.Logic.Storage;
@@ -1058,6 +1059,31 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var denied = await host.SendAsync(HttpMethod.Get, Connections);
             Assert.AreEqual(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+
+        [TestMethod]
+        public void Numbering_AbsoluteAndDatedReleases_TakeTheEpisodeTheyMapTo()
+        {
+            TargetUnit Episode(int season, int number, int absolute, string date) => new(season * 10 + number, season, number, false, absolute, DateOnly.Parse(date, System.Globalization.CultureInfo.InvariantCulture));
+            var episodes = new[] { Episode(1, 1, 1, "2020-04-01"), Episode(1, 2, 2, "2020-04-08"), Episode(1, 3, 3, "2020-04-15"), Episode(2, 1, 4, "2021-04-01") };
+            (int, int, int)? Resolve(string title) => ReleaseParser.TryParse(title, out var parsed) ? EpisodeNumbering.Resolve(parsed, episodes) : null;
+
+            // The absolute count continues across seasons, a date names its episode, a range across seasons maps to none.
+            Assert.AreEqual((2, 1, 1), Resolve("[Grp] Example Show - 04 [1080p]"));
+            Assert.AreEqual((1, 2, 2), Resolve("Example.Show.2020.04.08.1080p.WEB-DL-GRP"));
+            Assert.IsNull(Resolve("[Grp] Example Show - 03-04 [1080p]"));
+            Assert.AreEqual((1, 2, 3), Resolve("Example.Show.S01E02-E03.1080p.WEB-DL-GRP"));
+
+            // The search for the season-two episode takes the absolute release, not another number.
+            var season = episodes.Where(episode => episode.ParentNumber == 2).ToArray();
+            VideoIdentityMatch Judge(string title) => VideoReleaseJudge.Judge(AcquisitionKind.Anime, "Example Show", null, season[0], new UnitSet(season, season), Offer(title, "x")).Match;
+            Assert.AreEqual(VideoIdentityMatch.Matches, Judge("[Grp] Example Show - 04 [1080p]"));
+            Assert.AreNotEqual(VideoIdentityMatch.Matches, Judge("[Grp] Example Show - 02 [1080p]"));
+
+            // The import places an absolute file as its episode.
+            var placed = ImportPlacementLogic.Plan(MediaType.Series, MediaSubtype.Anime, "Example Show", 2020, "WEB-1080p", [new StorageFile("[Grp] Example Show - 04 [1080p].mkv", 1000, DateTime.UtcNow)],
+                NamingPatternTests.Defaults, null, episodes: episodes).Single();
+            Assert.AreEqual(((decimal?)2, (decimal?)1), (placed.ParentUnitNumber, placed.UnitNumber));
         }
 
         [TestMethod]

@@ -112,7 +112,9 @@ namespace Jularr.Backend.Logic.Acquisition
 
         private static ReleaseJudgement<VideoIdentityMatch> JudgeUnit(VideoIdentityMatch titleMatch, ReleaseIdentityEvidence title, ReleaseInfo parsed, TargetUnit unit, UnitSet scope, bool viaId)
         {
-            if (parsed.SeasonNumber != unit.ParentNumber)
+            // Absolute and dated releases count by the episodes of the season they map to.
+            var mapped = parsed.IsSeasonPack ? null : EpisodeNumbering.Resolve(parsed, scope.All);
+            if ((mapped?.Season ?? parsed.SeasonNumber) != unit.ParentNumber)
             {
                 return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.WrongSeason, parsed, ReleaseIdentityEvidence.Conflict("WrongSeason", parsed.SeasonNumber?.ToString(System.Globalization.CultureInfo.InvariantCulture)), SelectionCoverage.Single, null);
             }
@@ -128,7 +130,7 @@ namespace Jularr.Backend.Logic.Acquisition
                 return new ReleaseJudgement<VideoIdentityMatch>(VideoIdentityMatch.ContainsTarget, parsed, Fit("ContainsTarget"), new SelectionCoverage(covered, scope.Wanted.Count, Math.Max(0, seasonUnits.Length - covered)), null);
             }
 
-            if (parsed.EpisodeStart is int start && parsed.EpisodeEnd is int end && unit.Number >= start && unit.Number <= end)
+            if (mapped is var (_, start, end) && unit.Number >= start && unit.Number <= end)
             {
                 var covered = scope.Wanted.Count(candidate => candidate.ParentNumber == unit.ParentNumber && candidate.Number >= start && candidate.Number <= end);
                 return new ReleaseJudgement<VideoIdentityMatch>(titleMatch == VideoIdentityMatch.AmbiguousTitle ? VideoIdentityMatch.AmbiguousTitle : VideoIdentityMatch.Matches, parsed, Fit("Matches"), new SelectionCoverage(Math.Max(1, covered), scope.Wanted.Count, Math.Max(0, end - start + 1 - covered)), null);
