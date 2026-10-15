@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Acquisition.V1;
 using Jularr.Backend.Data.Common;
@@ -22,13 +23,13 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
     {
         private const int TitlesPerRun = 50;
         private readonly ServarrApiClient _servarr;
-        private readonly WorkMetadata _metadata;
+        private readonly MetadataCatalog _catalog;
         private readonly IDataProtector _protector;
 
-        internal RunTakeoverV1(ServarrApiClient servarr, WorkMetadata metadata, IDataProtectionProvider protection)
+        internal RunTakeoverV1(ServarrApiClient servarr, MetadataCatalog catalog, IDataProtectionProvider protection)
         {
             _servarr = servarr;
-            _metadata = metadata;
+            _catalog = catalog;
             _protector = protection.CreateProtector(AcquisitionConnectionInput.ProtectorPurpose);
         }
 
@@ -45,7 +46,7 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             }
 
             // Everything is read before anything is written.
-            var source = new ServarrConnection(address, Data.ApiKey, Data.TakeoverSourceTypeId == TakeoverSourceType.Prowlarr ? 1 : 3);
+            var source = new ServarrConnection(address, Data.ApiKey, Data.TakeoverSourceTypeId is TakeoverSourceType.Sonarr or TakeoverSourceType.Radarr ? 3 : 1);
             IReadOnlyList<ServarrIndexer> indexers;
             IReadOnlyList<ServarrClient> clients;
             IReadOnlyList<ServarrTitle> titles;
@@ -57,6 +58,8 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                 {
                     TakeoverSourceType.Radarr => await _servarr.ReadMoviesAsync(source, CancellationToken),
                     TakeoverSourceType.Sonarr => await _servarr.ReadSeriesAsync(source, CancellationToken),
+                    TakeoverSourceType.Lidarr => await _servarr.ReadAlbumsAsync(source, CancellationToken),
+                    TakeoverSourceType.Readarr => await _servarr.ReadBooksAsync(source, CancellationToken),
                     _ => []
                 };
             }
@@ -95,36 +98,49 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
                         client.Category is { Length: <= 64 } category ? category : null, null, null)));
             }
 
-            // Watched titles without files become wanted; large libraries continue in later runs.
-            var type = Data.TakeoverSourceTypeId == TakeoverSourceType.Radarr ? TakeoverItemType.Movie : TakeoverItemType.Series;
-            var mediaType = type == TakeoverItemType.Movie ? MediaType.Movie : MediaType.Series;
-            var wanted = titles.Where(title => title.IsMonitored && title.IsMissing).ToArray();
-            var connection = Data.Apply && wanted.Any(title => title.TmdbId is not null) ? await _metadata.ConnectAsync(Context, CancellationToken) : null;
-            var taken = 0;
-            foreach (var title in wanted)
+            // Watched titles without files become wanted through their provider id; large libraries continue in later runs.
+            var (type, mediaType) = Data.TakeoverSourceTypeId switch
             {
-                var name = title.Year is { } year ? title.Title + " (" + year + ")" : title.Title;
-                if (title.TmdbId is not { } tmdbId)
+                TakeoverSourceType.Radarr => (TakeoverItemType.Movie, MediaType.Movie),
+                TakeoverSourceType.Sonarr => (TakeoverItemType.Series, MediaType.Series),
+                TakeoverSourceType.Lidarr => (TakeoverItemType.Album, MediaType.Music),
+                _ => (TakeoverItemType.Book, MediaType.Book)
+            };
+            var taken = 0;
+            foreach (var title in titles.Where(title => title.IsMonitored && title.IsMissing))
+            {
+                var name = Limit(title.Year is { } year ? title.Title + " (" + year + ")" : title.Title, 500);
+                var identity = mediaType switch
                 {
-                    items.Add(new TakeoverItemV1(type, Limit(name, 500), "takeover_no_tmdb", null));
+                    MediaType.Movie or MediaType.Series => title.TmdbId?.ToString(CultureInfo.InvariantCulture) is { } tmdbId ? (mediaType == MediaType.Movie ? "tmdb_movie" : "tmdb_tv", tmdbId) : default,
+                    MediaType.Music => title.ExternalId is { } album ? ("musicbrainz", album) : default,
+                    _ => ("openlibrary", "")
+                };
+                if (identity.Item1 is null)
+                {
+                    items.Add(new TakeoverItemV1(type, name, "takeover_no_id", null));
                 }
-                else if (connection is null)
+                else if (!Data.Apply)
                 {
-                    items.Add(new TakeoverItemV1(type, Limit(name, 500), "takeover_will_want", null));
+                    items.Add(new TakeoverItemV1(type, name, "takeover_will_want", null));
                 }
                 else if (taken++ >= TitlesPerRun)
                 {
-                    items.Add(new TakeoverItemV1(type, Limit(name, 500), "takeover_next_run", null));
+                    items.Add(new TakeoverItemV1(type, name, "takeover_next_run", null));
+                }
+                else if ((mediaType == MediaType.Book ? await FindBookAsync(title) : identity.Item2) is not { } externalId)
+                {
+                    items.Add(new TakeoverItemV1(type, name, "takeover_no_match", null));
                 }
                 else
                 {
-                    var workId = await _metadata.ImportAsync(Context, connection, mediaType, null, tmdbId, CancellationToken);
+                    var workId = await _catalog.ImportAsync(Context, mediaType, null, identity.Item1, externalId, CancellationToken);
                     await Context.ExecuteBatchAsync(async (ctx, ct) =>
                     {
                         await ctx.EnsureWantedItemAsync(new WorkIdData(workId), ct);
                         return true;
                     }, CancellationToken);
-                    items.Add(new TakeoverItemV1(type, Limit(name, 500), "takeover_wanted", null));
+                    items.Add(new TakeoverItemV1(type, name, "takeover_wanted", null));
                 }
             }
 
@@ -151,6 +167,17 @@ namespace Jularr.Backend.Service.Admin.Acquisition.V1
             await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionConnectionAsync(AcquisitionConnectionInput.Create(null, data, _protector), ct), CancellationToken);
             existing.Add(baseUrl.TrimEnd('/'));
             return new TakeoverItemV1(type, Limit(name, 500), "takeover_added", null);
+        }
+
+        // The one Open Library work of that title, author and year; anything less clear is left for a person.
+        private async Task<string?> FindBookAsync(ServarrTitle title)
+        {
+            var found = (await _catalog.SearchAsync(Context, MediaType.Book, null, title.Title, title.Year, CancellationToken))
+                .Where(result => result.Namespace == BookMetadata.Namespace && TitleMatcher.Matches(title.Title, result.Title)
+                    && (title.Year is null || result.ReleaseYear is null || Math.Abs(title.Year.Value - result.ReleaseYear.Value) <= 1)
+                    && (title.Creator is null || result.Author?.Contains(title.Creator, StringComparison.OrdinalIgnoreCase) == true))
+                .ToArray();
+            return found.Length == 1 ? found[0].ExternalId : null;
         }
 
         private static string Limit(string value, int length) => value.Length <= length ? value : value[..length];

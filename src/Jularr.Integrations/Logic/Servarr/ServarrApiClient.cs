@@ -5,7 +5,7 @@ using Jularr.Integrations.Data.Servarr;
 
 namespace Jularr.Integrations.Logic.Servarr
 {
-    // Reads Prowlarr, Sonarr and Radarr once for a takeover; Jularr never runs alongside them.
+    // Reads Prowlarr, Sonarr, Radarr, Lidarr and Readarr once for a takeover; Jularr never runs alongside them.
     internal sealed class ServarrApiClient(HttpClient http)
     {
         private const long MaximumBytes = 32L * 1024 * 1024;
@@ -33,7 +33,7 @@ namespace Jularr.Integrations.Logic.Servarr
                 var port = FieldInt(fields, "port") is { } value ? ":" + value.ToString(CultureInfo.InvariantCulture) : "";
                 var baseUrl = scheme + "://" + FieldText(fields, "host") + port + (FieldText(fields, "urlBase") is { Length: > 0 } urlBase ? "/" + urlBase.Trim('/') : "");
                 return new ServarrClient(Text(item, "name") ?? "SABnzbd", baseUrl, Secret(FieldText(fields, "apiKey")), Bool(item, "enable") ?? true, Math.Clamp(Int(item, "priority") ?? 25, 1, 100),
-                    FieldText(fields, "movieCategory") ?? FieldText(fields, "tvCategory"));
+                    FieldText(fields, "movieCategory") ?? FieldText(fields, "tvCategory") ?? FieldText(fields, "musicCategory") ?? FieldText(fields, "bookCategory"));
             }).Where(client => Uri.TryCreate(client.BaseUrl, UriKind.Absolute, out var uri) && uri.Host.Length > 0)];
         }
 
@@ -55,6 +55,32 @@ namespace Jularr.Integrations.Logic.Servarr
                 return new ServarrTitle(Text(item, "title") ?? "", Int(item, "year"), Int(item, "tmdbId") is > 0 and var id ? id : null, Bool(item, "monitored") ?? false, missing);
             }).Where(title => title.Title.Length > 0)];
         }
+
+        public async Task<IReadOnlyList<ServarrTitle>> ReadAlbumsAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            // An album misses something while it has fewer track files than tracks.
+            using var document = await GetAsync(connection, "album", ct);
+            return [.. Items(document).Select(item =>
+            {
+                var statistics = Child(item, "statistics");
+                var missing = (Int(statistics, "trackFileCount") ?? 0) < (Int(statistics, "trackCount") ?? Int(statistics, "totalTrackCount") ?? 1);
+                return new ServarrTitle(Text(item, "title") ?? "", Year(Text(item, "releaseDate")), null, Bool(item, "monitored") ?? false, missing, Text(item, "foreignAlbumId"),
+                    Text(Child(item, "artist"), "artistName"));
+            }).Where(title => title.Title.Length > 0)];
+        }
+
+        public async Task<IReadOnlyList<ServarrTitle>> ReadBooksAsync(ServarrConnection connection, CancellationToken ct)
+        {
+            // Readarr's ids are its own catalog's; the title and author find the book again.
+            using var document = await GetAsync(connection, "book", ct);
+            return [.. Items(document).Select(item => new ServarrTitle(Text(item, "title") ?? "", Year(Text(item, "releaseDate")), null, Bool(item, "monitored") ?? false,
+                (Int(Child(item, "statistics"), "bookFileCount") ?? 0) == 0, null, Text(Child(item, "author"), "authorName"))).Where(title => title.Title.Length > 0)];
+        }
+
+        private static JsonElement Child(JsonElement element, string property) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object ? value : default;
+
+        private static int? Year(string? date) => date is { Length: >= 4 } && int.TryParse(date[..4], NumberStyles.None, CultureInfo.InvariantCulture, out var year) && year is >= 1800 and <= 2200 ? year : null;
 
         private async Task<JsonDocument> GetAsync(ServarrConnection connection, string resource, CancellationToken ct)
         {

@@ -25,7 +25,7 @@ namespace Jularr.Backend.Tests
     public sealed class MusicTests
     {
         private const string Connections = "/api/v1/admin/acquisition/connections";
-        private const string Album = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
+        internal const string Album = "0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b";
 
         [TestMethod]
         public async Task Album_PlaysItsPresentTracksInOrderAndLeadsToTheArtist()
@@ -194,7 +194,7 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
         }
 
-        private sealed class FakeMusicSources : HttpMessageHandler
+        internal sealed class FakeMusicSources : HttpMessageHandler
         {
             private const string Group = $$"""{"id":"{{Album}}","title":"Example Album","primary-type":"Album","first-release-date":"2019-05-03","artist-credit":[{"name":"Example Artist","joinphrase":""}]}""";
 

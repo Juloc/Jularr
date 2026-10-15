@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.Admin.Subtitles
 {
     // Subtitles of one video searched at the providers and chosen by hand.
-    public sealed class SubtitlesModel(ReadSubtitleFileV1 read, SearchSubtitlesV1 search, DownloadSubtitleV1 download, IAntiforgery antiforgery, UiText texts) : JularrPage
+    public sealed class SubtitlesModel(ReadSubtitleFileV1 read, SearchSubtitlesV1 search, DownloadSubtitleV1 download, IAntiforgery antiforgery) : JularrPage
     {
         private SubtitleFileV1? _file;
         private SearchSubtitlesDataV1? _input;

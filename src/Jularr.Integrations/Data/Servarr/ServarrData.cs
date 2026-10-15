@@ -73,11 +73,13 @@ namespace Jularr.Integrations.Data.Servarr
         public string? Category { get; }
     }
 
-    // A movie or series the old tool watched; missing ones become wanted.
+    // A movie, series, album or book the old tool watched; missing ones become wanted.
     internal sealed class ServarrTitle
     {
-        public ServarrTitle(string title, int? year, int? tmdbId, bool isMonitored, bool isMissing)
+        public ServarrTitle(string title, int? year, int? tmdbId, bool isMonitored, bool isMissing, string? externalId = null, string? creator = null)
         {
+            ExternalId = externalId;
+            Creator = creator;
             Title = title;
             Year = year;
             TmdbId = tmdbId;
@@ -90,5 +92,9 @@ namespace Jularr.Integrations.Data.Servarr
         public int? TmdbId { get; }
         public bool IsMonitored { get; }
         public bool IsMissing { get; }
+
+        // The MusicBrainz release group of an album; artist or author.
+        public string? ExternalId { get; }
+        public string? Creator { get; }
     }
 }

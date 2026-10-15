@@ -5,7 +5,9 @@ namespace Jularr.Backend.Data.Enums.Acquisition
     {
         Prowlarr = 1,
         Sonarr = 2,
-        Radarr = 3
+        Radarr = 3,
+        Lidarr = 4,
+        Readarr = 5
     }
 
     public enum TakeoverItemType : byte
@@ -13,6 +15,8 @@ namespace Jularr.Backend.Data.Enums.Acquisition
         Indexer = 1,
         Client = 2,
         Movie = 3,
-        Series = 4
+        Series = 4,
+        Album = 5,
+        Book = 6
     }
 }

@@ -214,7 +214,7 @@ namespace Jularr.Backend.Tests
             await scope.ServiceProvider.GetRequiredService<TService>().ExecuteAsync<UpdateResult>(new AcquisitionCycleParametersV1(), default);
         }
 
-        private sealed class FakeBookSources : HttpMessageHandler
+        internal sealed class FakeBookSources : HttpMessageHandler
         {
             public int SabGrabs { get; private set; }
             public byte[] EpubBytes { get; set; } = ReadingTests.BuildEpub("Pride and Prejudice");
