@@ -31,5 +31,12 @@ namespace Jularr.Backend.Data.Fields.Library
         public static readonly StringField QualityKey = new() { MaximumLength = 64, Required = false };
         public static readonly StringField Edition = new() { MaximumLength = 64, Required = false };
         public static readonly IntField Revision = new() { Minimum = 1, Maximum = 9 };
+
+        // Subtitles searched by hand.
+        public static readonly StringField SubtitleLanguage = new(NpgsqlDbType.Varchar) { MaximumLength = 8, AllowBlank = false, Trim = true, Format = StringFormat.Locale };
+        public static readonly StringArrayField SubtitleLanguages = new() { ItemMaximumLength = 8, MaximumLength = 32 };
+        public static readonly StringField SubtitleOfferId = new(NpgsqlDbType.Varchar) { MaximumLength = 32, AllowBlank = false, Trim = true, Format = StringFormat.SingleLine };
+        public static readonly BoolField IsHearingImpaired = new();
+        public static readonly LongField Downloads = new() { Minimum = 0 };
     }
 }

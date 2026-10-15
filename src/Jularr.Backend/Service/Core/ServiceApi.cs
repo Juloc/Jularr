@@ -178,6 +178,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddTransient<GameMetadata>();
             services.TryAddTransient<DirectSources>();
             services.TryAddTransient<SubtitleProviders>();
+            services.TryAddTransient<SubtitleFiles>();
             services.TryAddTransient<DownloadImport>();
             services.TryAddSingleton<UsenetDownloader>();
             services.TryAddSingleton<ArchiveTools>();

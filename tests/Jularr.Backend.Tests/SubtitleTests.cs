@@ -80,6 +80,61 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
+        public async Task Subtitles_SearchedByHand_AreChosenAndSavedBesideTheVideo()
+        {
+            var provider = new FakeOpenSubtitles();
+            using var storage = new LibraryTests.TemporaryDirectory();
+            await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true, services: services => services.AddHttpClient<OpenSubtitlesClient>().ConfigurePrimaryHttpMessageHandler(() => provider));
+            var mountId = await LibraryTests.CreateMountAsync(host);
+            var folder = Path.Combine(storage.Path, mountId.ToString(), "Movies", "Film (2001)");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "Film.2001.1080p.WEB-DL-GRP.mkv"), "video");
+            var rootId = await LibraryTests.CreateRootAsync(host, mountId, "Movies", MediaType.Movie);
+            await LibraryTests.ScanAsync(host, rootId);
+            var fileId = (long)(await host.ScalarAsync("SELECT \"Id\" FROM \"StoredFiles\""))!;
+            using var assigned = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/library/files/" + fileId + "/assignment", new AssignLibraryFileDataV1(null, "Film", null, null, null));
+            await host.Fixture.RunSqlAsync($"""
+                UPDATE "StoredFiles" SET "ProbedAt" = now() WHERE "Id" = {fileId};
+                INSERT INTO "WorkExternalIdentities" ("WorkId", "Namespace", "Value") SELECT "Id", 'imdb', 'tt0133093' FROM "Works";
+                UPDATE "InstanceModules" SET "IsEnabled" = TRUE WHERE "Key" = 'Subtitles';
+                UPDATE "InstanceSettings" SET "SubtitleLanguages" = ARRAY['de'];
+                """);
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/acquisition/connections", new SaveAcquisitionConnectionDataV1("OpenSubtitles",
+                AcquisitionConnectionType.OpenSubtitles, "https://api.opensubtitles.com/api/v1", "consumer-key", true, 25, [], null, null, null, "viewer", null, "account-secret"));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            var files = "/api/v1/admin/library/files/" + fileId + "/subtitles";
+
+            // The search lists the provider's German offers, the matching release first.
+            using var searched = await host.SendAsync(HttpMethod.Post, files + "/search", new SearchSubtitlesDataV1("de"));
+            Assert.AreEqual(HttpStatusCode.OK, searched.StatusCode, await searched.Content.ReadAsStringAsync());
+            var offers = (await searched.Content.ReadFromJsonAsync<BaseDataList<SubtitleOfferV1>>())!;
+            Assert.IsTrue(offers.Count > 0 && offers.All(offer => offer.Language == "de" && offer.ProviderName == "OpenSubtitles"));
+            StringAssert.Contains(provider.Search!, "languages=de");
+
+            // Only an offer of that search is taken; the chosen one lands beside the video once.
+            using var unknown = await host.SendAsync(HttpMethod.Post, files, new DownloadSubtitleDataV1("99"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, unknown.StatusCode);
+            using var chosen = await host.SendAsync(HttpMethod.Post, files, new DownloadSubtitleDataV1(offers[0].OfferId));
+            Assert.AreEqual(HttpStatusCode.OK, chosen.StatusCode, await chosen.Content.ReadAsStringAsync());
+            Assert.IsTrue((await chosen.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
+            Assert.AreEqual(FakeOpenSubtitles.Subtitle, File.ReadAllText(Path.Combine(folder, "Film.2001.1080p.WEB-DL-GRP.de.srt")));
+            using var again = await host.SendAsync(HttpMethod.Post, files, new DownloadSubtitleDataV1(offers[0].OfferId));
+            Assert.IsFalse((await again.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
+            using var state = await host.SendAsync(HttpMethod.Get, files);
+            CollectionAssert.AreEqual(new[] { "de" }, (await state.Content.ReadFromJsonAsync<SubtitleFileV1>())!.PresentLanguages);
+
+            // The page searches and offers the choice.
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Library/Subtitles/" + fileId);
+            var html = await page.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, html);
+            using var results = await host.SendAsync(HttpMethod.Post, "/Admin/Library/Subtitles/" + fileId + "?handler=Search",
+                new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html), ["Language"] = "de" });
+            var list = await results.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, results.StatusCode, list);
+            StringAssert.Contains(list, "Use this subtitle");
+        }
+
+        [TestMethod]
         public async Task SubDl_SeasonPack_GivesTheAskedEpisodeInItsLanguage()
         {
             var client = new SubDlClient(new HttpClient(new FakeSubDl()));

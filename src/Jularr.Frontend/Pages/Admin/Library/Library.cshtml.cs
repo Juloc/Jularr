@@ -63,7 +63,7 @@ namespace Jularr.Frontend.Pages.Admin.Library
                 table = Tab == LibraryTab.Unmatched
                     ? table.Content("library.assign", item => Assignment(item, csrf))
                     : table.Content("table.work", item => item.WorkId is { } workId
-                        ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), Release(item, csrf))
+                        ? new Div(new A(new ValueText(item.WorkTitle ?? "")).Attribute("href", "/Admin/Works/" + workId.ToString(CultureInfo.InvariantCulture)), Release(item, csrf), Subtitles(item))
                         : new Text("library.unmatched"));
                 page.Content.Add(files.Items.Count > 0 ? table : new P(new Text(Tab == LibraryTab.Unmatched ? "library.emptyUnmatched" : "library.empty")));
                 Paging(page, files.Page, files.Items.Count == files.PageSize);
@@ -166,6 +166,11 @@ namespace Jularr.Frontend.Pages.Admin.Library
         }
 
         // Keeping one version is the administrator's confirmation, also against a better one.
+        // Films and episodes have their subtitles searched by hand while the Subtitles module is on.
+        private IUiComponent Subtitles(LibraryFileDetailsV1 item) => item.MediaTypeId is MediaType.Movie or MediaType.Series && texts.Can(null, "Subtitles")
+            ? new A(new Text("details.subtitles")).Attribute("href", "/Admin/Library/Subtitles/" + item.Id.ToString(CultureInfo.InvariantCulture))
+            : new Span();
+
         private Div Release(LibraryFileDetailsV1 file, string? csrf)
         {
             var id = file.Id.ToString(CultureInfo.InvariantCulture);

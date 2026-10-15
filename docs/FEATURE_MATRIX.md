@@ -62,7 +62,7 @@ The path tests run against [fake services](../tests/Jularr.E2E.Tests/FakeService
 | Music: MusicBrainz, Cover Art Archive, albums, tracks, FLAC/ALAC/MP3/AAC, album playback | tested | `MusicBrainzClient`, `MusicReleaseJudge` | MusicTests | Artists, discographies and their monitoring, editions/media, secondary types, multi-format, tag read/write, retag preview, duplicates (#1022) |
 | Books, manga, light novels: sources, Newznab, import, reader | tested | Book/Manga judges, sources | BookTests, MangaTests, SourceTests, ReadingTests | Author and series entities and monitoring, editions, format upgrades, chapter releases |
 | Audiobooks as Book subtype | planned | Media subtypes | – | Subtype, library/discover view, audio playback with chapters |
-| Subtitles: detection, wanted languages, automatic fetch, OpenSubtitles, SubDL | tested | `SubtitleServices` | SubtitleTests, PlaybackTests | Manual search, status and history page, forced flags, quotas, further providers |
+| Subtitles: detection, wanted languages, automatic fetch, OpenSubtitles, SubDL | tested | `SubtitleServices` | SubtitleTests, PlaybackTests | Status and history page, forced flags, quotas, further providers; a browser test needs an HTTPS subtitle fake |
 
 ## Prowlarr and Seerr
 

@@ -485,6 +485,18 @@ namespace Jularr.Backend.Data.Logic.Library
         public string[] SiblingPaths { get; }
     }
 
+    // The video due for a subtitle check, or the chosen one.
+    internal sealed class SubtitleSourceParameters : BaseData
+    {
+        public SubtitleSourceParameters(long? storedFileId)
+        {
+            StoredFileId = storedFileId;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id), false)]
+        public long? StoredFileId { get; }
+    }
+
     internal sealed class SubtitleCheckData : BaseData
     {
         public SubtitleCheckData(long id, long sizeBytes, DateTime modifiedAt)
