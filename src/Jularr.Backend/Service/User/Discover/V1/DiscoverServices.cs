@@ -18,6 +18,7 @@ using Jularr.Backend.Service.Admin.Media.V1;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Data.Tmdb;
 using Jularr.Integrations.Logic.Tmdb;
+using UserMedia = Jularr.Backend.Data.User.Media.V1;
 
 namespace Jularr.Backend.Service.User.Discover.V1
 {
@@ -245,6 +246,69 @@ namespace Jularr.Backend.Service.User.Discover.V1
             var request = await Context.ExecuteBatchAsync((ctx, ct) => ctx.CreateAcquisitionRequestAsync(new AcquisitionRequestCreationData(workId, Auth.ProfileId!.Value, Auth.AccountId!.Value, Data.UiLocaleId, null, null, Auth.AccountRoleTypeId == AccountRoleType.Owner), ct),
                 CancellationToken);
             return new CreateRequestResultV1(request.Id);
+        }
+    }
+
+    [ServiceEndpoint("POST", "/api/v1/works/{workId:long}/recommendations")]
+    public sealed class ReadWorkRecommendationsV1 : UserService<UserMedia.WorkParametersV1, NoData>
+    {
+        private readonly WorkMetadata _metadata;
+
+        internal ReadWorkRecommendationsV1(WorkMetadata metadata)
+        {
+            _metadata = metadata;
+        }
+
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<BaseDataList<DiscoverItemV1>>()];
+        protected override ModuleRequirement GetInstanceModules(UserMedia.WorkParametersV1 parameters) => ModuleRequirement.All("Library");
+        protected override ServicePermission GetPermission(UserMedia.WorkParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnExecute()
+        {
+            // TMDB's recommendations for a film or series the profile sees, in the profile's types; other Works have none.
+            var identity = await Context.ExecuteBatchAsync((ctx, ct) =>
+            {
+                var sql = new SqlStatement();
+                sql.Statement =
+                    """
+                    SELECT
+                        identity."Namespace",
+                        identity."Value",
+                        identity."WorkId"
+                    FROM
+                        "WorkExternalIdentities" AS identity
+                        JOIN "ProfileWorks" AS visible ON visible."WorkId" = identity."WorkId" AND visible."ProfileId" = @ProfileId
+                    WHERE
+                        identity."WorkId" = @WorkId
+                        AND identity."Namespace" IN ('tmdb_movie', 'tmdb_tv')
+                    LIMIT 1;
+                    """;
+                sql.Parameters.Add(Parameters);
+                sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
+                return ctx.ReadSql.ReadOptionalAsync<WorkIdentityData>(sql, ct);
+            }, CancellationToken);
+            var mediaType = identity?.Namespace == WorkMetadata.Namespace(MediaType.Movie) ? MediaType.Movie : MediaType.Series;
+            if (identity is null || !int.TryParse(identity.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var tmdbId)
+                || !(await DiscoverQueries.ReadTypesAsync(Context, Auth.ProfileId!.Value, CancellationToken)).Listed.Contains(mediaType))
+            {
+                return new BaseDataList<DiscoverItemV1>([]);
+            }
+
+            var connection = await _metadata.ConnectAsync(Context, CancellationToken);
+            IReadOnlyList<TmdbSearchResult> results;
+            try
+            {
+                results = await _metadata.ReadRecommendationsAsync(connection, mediaType, tmdbId, CancellationToken);
+            }
+            catch (KeyNotFoundException)
+            {
+                // A title TMDB no longer knows has no suggestions.
+                results = [];
+            }
+
+            var overlay = await DiscoverQueries.ReadOverlayAsync(Context, mediaType, results.Select(result => result.Id), Auth.ProfileId!.Value, CancellationToken);
+            return new BaseDataList<DiscoverItemV1>([.. results.Select(result => DiscoverQueries.ToItem(mediaType, result, overlay))]);
         }
     }
 
