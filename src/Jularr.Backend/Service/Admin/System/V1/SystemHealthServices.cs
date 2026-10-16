@@ -7,7 +7,6 @@ using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Database;
 using Jularr.Integrations.Logic.Media;
-using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Logic.Usenet;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -20,16 +19,14 @@ namespace Jularr.Backend.Service.Admin.System.V1
         private readonly MediaProbeClient _probe;
         private readonly MediaTranscoder _transcoder;
         private readonly ArchiveTools _archives;
-        private readonly NasMountClient _mounts;
         private readonly PostgresBackupTools _backups;
         private readonly BackupOptions _backupOptions;
 
-        internal ReadSystemHealthV1(MediaProbeClient probe, MediaTranscoder transcoder, ArchiveTools archives, NasMountClient mounts, PostgresBackupTools backups, IOptions<BackupOptions> backupOptions)
+        internal ReadSystemHealthV1(MediaProbeClient probe, MediaTranscoder transcoder, ArchiveTools archives, PostgresBackupTools backups, IOptions<BackupOptions> backupOptions)
         {
             _probe = probe;
             _transcoder = transcoder;
             _archives = archives;
-            _mounts = mounts;
             _backups = backups;
             _backupOptions = backupOptions.Value;
         }
@@ -78,7 +75,6 @@ namespace Jularr.Backend.Service.Admin.System.V1
                 new("ffmpeg", _transcoder.IsAvailable),
                 new("par2", _archives.CanRepair),
                 new("sevenZip", _archives.CanExtract),
-                new("mountHelper", _mounts.IsConfigured),
                 new("pgDump", _backups.CanBackUp)
             ];
             var lastBackup = _backupOptions.Path is { } path ? BackupFiles.Newest(path) : null;

@@ -116,7 +116,6 @@ namespace Jularr.Backend.Service.Core
 
             services.Configure<AuthenticationOptions>(configuration.GetSection("Authentication"));
             services.Configure<StorageOptions>(configuration.GetSection("Storage"));
-            services.AddSingleton(new NasMountClient { SocketPath = configuration["Storage:MountHelperSocket"] });
             services.Configure<MediaOptions>(options =>
             {
                 configuration.GetSection("Media").Bind(options);
@@ -176,7 +175,6 @@ namespace Jularr.Backend.Service.Core
 
             // Register shared infrastructure.
             services.TryAddSingleton(TimeProvider.System);
-            services.TryAddSingleton<NasMountClient>();
             services.TryAddSingleton<MediaProbeClient>();
             services.TryAddSingleton<WakeOnLanClient>();
             services.TryAddSingleton<MediaTranscoder>();

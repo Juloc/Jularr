@@ -1,8 +1,11 @@
 using Jularr.Backend.Data.Admin.Storage.V1;
+using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Storage;
 using Microsoft.Extensions.Options;
@@ -35,7 +38,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     mount."WakeMacAddress",
                     mount."WakeBroadcastAddress",
                     mount."WakeOnDemand",
-                    mount."StorageProtocolTypeId" <> 3 AS "CanMount",
+                    mount."StorageProtocolTypeId" <> 3 AS "IsNetwork",
                     mount."Version",
                     health."StorageHealthTypeId",
                     health."DiagnosticCode",
@@ -52,6 +55,33 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                 """;
             sql.Parameters.Add(Parameters);
             return await Context.ReadSql.ReadRequiredAsync<StorageMountDetailsV1>(sql, CancellationToken);
+        }
+    }
+
+    // The compose lines that mount a NAS share as a Docker volume; the password stays a variable for the .env file.
+    [ServiceEndpoint("GET", "/api/v1/admin/storage/mounts/{storageMountId:long}/volume")]
+    public sealed class ReadStorageMountVolumeV1 : AdminService<StorageMountParametersV1>
+    {
+        private readonly StorageOptions _options;
+
+        internal ReadStorageMountVolumeV1(IOptions<StorageOptions> options)
+        {
+            _options = options.Value;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<StorageMountVolumeV1>()];
+        protected override ModuleRequirement GetInstanceModules(StorageMountParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(StorageMountParametersV1 parameters, Type resultType) => new("storage.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            var mount = await Context.ReadStorageMountAsync(Parameters.StorageMountId, CancellationToken);
+            if (mount.StorageProtocolTypeId == StorageProtocolType.Local)
+            {
+                throw new DataValidationException(nameof(StorageMountDetailsV1.StorageProtocolTypeId), "invalid_type");
+            }
+
+            return new StorageMountVolumeV1(StorageVolumeLogic.ComposeBlock(mount, _options.MountRoot));
         }
     }
 

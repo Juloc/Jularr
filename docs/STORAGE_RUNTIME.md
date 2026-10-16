@@ -1,4 +1,4 @@
-# Storage connections and mount runtime
+# Storage connections and NAS volumes
 
 Owner settings at `/Admin/Storage` and the authenticated Setup page at
 `/Setup/Storage` use the same connection editor and Backend services. First-Owner
@@ -11,20 +11,19 @@ their connection.
 `ReadStorageMountsV1` returns a bounded configuration page; `ReadStorageMountV1`
 returns one connection and `ReadStorageProtocolsV1` provides supported versions.
 `CreateStorageMountV1` and `UpdateStorageMountV1` persist validated configuration
-through Storage Logic. `ExecuteStorageMountV1` performs an explicit Connect,
-Disconnect or ReadStatus operation outside database transactions, using short
-authorized batches before and after external work.
+through Storage Logic. `CheckStorageMountV1` probes the connection now, outside
+database transactions, and records the result. `ReadStorageMountVolumeV1` returns
+the compose lines that mount an SMB or NFS connection as a Docker volume.
 
 `ReadStorageLocalPathsV1` lists the `Storage:LocalPaths` deployment configuration;
-Local connections may only use one of those paths and need no helper. They are host or
-container paths of the running platform (for example `D:	estlibrary` on a Windows host);
+Local connections may only use one of those paths. They are host or
+container paths of the running platform (for example `D:\testlibrary` on a Windows host);
 SMB/NFS exports remain absolute POSIX paths.
 `WakeStorageMountV1` sends an Owner Wake-on-LAN packet to the configured MAC and
 optional IPv4 broadcast address. `WakeOnDemand` records the Owner's policy: false
 means only the Owner wakes the device, true allows automatic wake when a profile
 opens media; the playback/reader package consumes that policy. `RemoveStorageMountV1`
-asks a configured helper to disconnect, then deletes the version-checked connection
-unless library paths still use it. `ReadStorageDirectoriesV1` lists at most 500
+deletes the version-checked connection unless library paths still use it. `ReadStorageDirectoriesV1` lists at most 500
 subfolders below the connection, rejecting traversal, links and missing folders.
 
 The fresh `Storage.sql` baseline adds physical StorageMounts and protocol/version
@@ -44,11 +43,9 @@ state. Read results expose HasPassword only. An omitted password preserves the
 stored value; switching to NFS clears SMB credentials. Input-only service data
 accepts the password, while neutral persistence data hides protected bytes from JSON.
 
-Saving never remounts automatically. A mounted connection keeps its applied
-revision; explicit Disconnect/Connect applies new settings. Busy unmounts fail
-instead of detaching active consumers. Status reports kernel mount state and
-whether the applied revision matches current settings, not NAS health or capacity.
-Normal catalog/settings rendering performs no NAS I/O or mount-status polling.
+Saving changes only the stored connection. A changed SMB or NFS connection takes
+effect once its new compose lines are in place and the container restarted.
+Normal catalog/settings rendering performs no NAS I/O.
 
 ## Library paths and scanning
 
@@ -86,78 +83,52 @@ recorded under its new path, keeping its identity, analysis and progress, or mov
 back. Offline libraries and names taken meanwhile are skipped, a video together with
 its subtitles, and folders a rename emptied are removed.
 
-## Linux deployment
+## Docker volumes
 
-The console `Jularr.MountHelper` uses a private Unix-domain socket and the Linux
-`mount.cifs`/`mount.nfs` utilities. Its API accepts only the three bounded actions
-and fixed SMB/NFS options. Destinations are generated as `/mnt/jularr/<StorageMountId>`.
-It has neither database credentials nor HTTP listeners. Credential files have
-mode 0600, are deleted after the mount attempt and never appear as password arguments.
-Persistent helper state records applied revision and non-secret configuration identity.
+Jularr mounts nothing itself and needs no helper container or extra capabilities.
+Docker mounts an SMB or NFS share as a volume of the Jularr container at
+`Storage:MountRoot/<StorageMountId>` (default `/mnt/jularr`), where Jularr looks for
+the connection. The Storage page shows the lines to add to `compose.yaml`
+(`ReadStorageMountVolumeV1`, built in [StorageVolumeLogic.cs](../src/Jularr.Backend/Logic/Storage/StorageVolumeLogic.cs)):
 
-The [Compose overlay](../deploy/mount-helper/compose.yaml) extends an existing
-`jularr` web service. Build context and helper [Dockerfile](../deploy/mount-helper/Dockerfile)
-are included. The web service runs as UID/GID 1000 and receives the mount tree
-with `rslave` propagation. Only the helper receives SYS_ADMIN, DAC_OVERRIDE and
-DAC_READ_SEARCH (exactly the set `mount.cifs` keeps through libcap-ng; with SYS_ADMIN
-alone it fails with "Unable to apply new capability set") and AppArmor mount
-permission; it has a read-only image, explicit writable directories, no Docker
-socket, no host PID namespace and no published ports. These capabilities are
-substantial: install this component only on a trusted Linux host.
-AppArmor is unconfined for this container, not disabled for the host or web service.
-
-Create a dedicated, root-owned shared bind mount on the Linux Docker host before
-starting the overlay, once per host boot unless persisted by its mount configuration:
-
-```sh
-sudo install -d -o root -g root -m 0755 /mnt/jularr
-sudo mount --bind /mnt/jularr /mnt/jularr
-sudo mount --make-rshared /mnt/jularr
+```yaml
+services:
+  jularr:
+    volumes:
+      - nas-1:/mnt/jularr/1
+volumes:
+  nas-1:
+    driver_opts:
+      type: cifs
+      device: "//nas.local/media"
+      o: "username=jularr,password=${JULARR_NAS_1_PASSWORD},vers=3.1.1,uid=1654,gid=1654,ro"
 ```
 
-Inspect existing mounts before applying these commands; do not stack the bind
-mount repeatedly. Compose is layered with the deployment's actual web service
-definition. Additional libraries do not need separate Compose bind mounts when
-their NAS connection is managed beneath this shared tree.
+The SMB password stays out of `compose.yaml`: it goes into `.env` as
+`JULARR_NAS_<StorageMountId>_PASSWORD`, each comma written twice as the kernel's
+option parser expects. Files of an SMB share belong to the image's app user (1654).
+NFS uses `addr`, `nfsvers` and `soft`, so an unreachable server returns errors instead
+of hanging readers; its export must grant UID 1654 the intended permissions.
+Docker resolves the SMB server name and the NFS `addr` itself.
 
-Keep the socket and helper-state volumes dedicated to one Jularr instance. Share
-the socket volume only with the web service, read-only; socket access is restricted
-to root and group 1000. SMB uses that same UID/GID with cache=strict and explicit
-read-only/read-write mode. NFS exports must grant the application identity the
-intended permissions. Both protocols use nosuid/nodev/noexec. Mount commands are
-bounded and run without a shell. Failure responses and logs contain no credentials.
+Docker mounts volumes when the container starts: a NAS that is off at that moment
+keeps the container from starting, and a share that disappears later shows as
+offline until it is back. A NAS that sleeps needs a direct connection without a volume.
 
-Mount propagation requires a Linux Docker host and suitable kernel CIFS/NFS support;
-Docker Desktop bind propagation is not supported by Docker's contract. Windows
-development can edit configuration and test the service boundary, but cannot use
-the Linux sidecar through a host-native Windows web process. Helpers are activated
-explicitly; application startup does not install schemas or mount the NAS.
-
-## Verification and remaining integration
-
-Focused tests cover isolated PostgreSQL configuration/credentials/Owner access,
-real Razor settings and Setup forms, antiforgery, bounded paging, private socket
-communication, concurrent edits and native command arguments. Runtime smoke tests
-must distinguish control-socket checks from successful SMB/NFS mounts.
-
-## Health and reconnection
+## Health checks
 
 `StorageMountStates` keeps what Jularr last saw of a connection: available, offline
-or no access, the reason, free and total space and when it was checked. Explicit
-Connect/Status actions and every library scan probe the connection (one directory
-entry and the volume's space, at most five seconds, so a hanging network mount
-never blocks); reads use the stored state and the `StorageMountHealth` view, which
-shows an offline connection with Wake-on-LAN as asleep. Connect also records that
-the Owner wants the connection kept; Disconnect forgets the wish and the state.
-A failed Connect keeps the wish, so the connection is retried.
-`ReconnectStorageMountsV1`, run every minute by the storage worker, asks the helper
-whether such connections are mounted (kernel state only, so a sleeping NAS stays
-asleep) and remounts a lost one, for example after a host restart, retrying after
-1, 2, 5, 10 and then every 15 minutes. A share that stays mounted while its NAS
-sleeps is left to the kernel's own reconnection and shows its state at the next
-scan or check. The worker never sends Wake-on-LAN; a helper that is down pauses it.
-A probe that hangs in the kernel keeps its thread until the kernel gives up; callers
-continue after five seconds.
+or no access, the reason, free and total space and when it was checked. The Check
+action and every library scan probe the connection (one directory entry and the
+volume's space, at most five seconds, so a hanging network mount never blocks);
+reads use the stored state and the `StorageMountHealth` view, which shows an offline
+connection with Wake-on-LAN as asleep. A failed probe counts in `FailedChecks`;
+`CheckStorageMountsV1`, run every minute by the storage worker, probes such a
+connection again after 1, 2, 5, 10 and then every 15 minutes, until it is available.
+The Owner is notified once, at the third failure in a row. Connections that are
+available are not polled, so a sleeping NAS is not woken; the worker never sends
+Wake-on-LAN. A probe that hangs in the kernel keeps its thread until the kernel gives
+up; callers continue after five seconds.
 
 Playback wakes sleeping storage on demand (per the connection's policy) and Arr+
 imports completed downloads into the first writable library of the media type.
@@ -173,5 +144,5 @@ password is used only for the address and account it was saved with. Use HTTPS w
 certificate, or HTTP only inside the home network. One media type per library path is
 the owner decision.
 
-References: [Docker bind propagation](https://docs.docker.com/engine/storage/bind-mounts/#configure-bind-propagation),
+References: [Docker volume options](https://docs.docker.com/reference/compose-file/volumes/#driver_opts),
 [kernel CIFS usage](https://www.kernel.org/doc/html/latest/admin-guide/cifs/usage.html).

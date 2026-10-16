@@ -1,20 +1,18 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Admin.Storage.V1;
 using Jularr.Backend.Data.Enums.Storage;
 using Jularr.Backend.Data.Common;
+using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Logic.Storage;
 using Jularr.Backend.Data.System.Storage.V1;
 using Jularr.Backend.Service.System.Storage.V1;
-using Jularr.Integrations.Data.Nas;
-using Jularr.Integrations.Logic.Nas;
 using Jularr.Integrations.Data.Synology;
 using Jularr.Integrations.Logic.Synology;
-using Jularr.MountHelper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
@@ -69,10 +67,10 @@ namespace Jularr.Backend.Tests
             await host.Fixture.RunSqlAsync("UPDATE \"Accounts\" SET \"AccountRoleTypeId\" = 3 WHERE \"Id\" = 41");
             using var deniedRead = await host.SendAsync(HttpMethod.Get, Route);
             using var deniedCreate = await host.SendAsync(HttpMethod.Post, Route, Smb());
-            using var deniedConnect = await host.SendAsync(HttpMethod.Post, Route + "/" + id + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Connect));
+            using var deniedCheck = await host.SendAsync(HttpMethod.Post, Route + "/" + id + "/check");
             Assert.AreEqual(HttpStatusCode.Forbidden, deniedRead.StatusCode);
             Assert.AreEqual(HttpStatusCode.Forbidden, deniedCreate.StatusCode);
-            Assert.AreEqual(HttpStatusCode.Forbidden, deniedConnect.StatusCode);
+            Assert.AreEqual(HttpStatusCode.Forbidden, deniedCheck.StatusCode);
         }
 
         [TestMethod]
@@ -99,94 +97,33 @@ namespace Jularr.Backend.Tests
             Assert.IsFalse(html.Contains(Password, StringComparison.Ordinal));
             StringAssert.Contains(html, "name=\"Password\"");
 
-            // Missing helper does not break browsing.
-            using var unavailable = await host.SendAsync(HttpMethod.Post, Route + "/1/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Connect));
-            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
-            StringAssert.Contains(await unavailable.Content.ReadAsStringAsync(), "storage_helper_unavailable");
+            // The share as a Docker volume, its password a variable for .env.
+            StringAssert.Contains(html, "type: cifs");
+            StringAssert.Contains(html, "password=${JULARR_NAS_1_PASSWORD}");
             using var nfs = await host.SendAsync(HttpMethod.Get, "/Setup/Storage?protocol=Nfs");
             Assert.AreEqual(HttpStatusCode.OK, nfs.StatusCode, await nfs.Content.ReadAsStringAsync());
             Assert.IsFalse((await nfs.Content.ReadAsStringAsync()).Contains("name=\"Password\"", StringComparison.Ordinal));
 
             using var browser = ((TestServer)host.Services.GetRequiredService<IServer>()).CreateClient();
             browser.DefaultRequestHeaders.Add("Cookie", string.Join("; ", host.Cookies.Select(cookie => cookie.Key + "=" + cookie.Value)));
-            using var denied = await browser.PostAsync("/Admin/Storage?handler=Connection&storageMountId=1",
-                new FormUrlEncodedContent(new Dictionary<string, string> { ["OperationTypeId"] = "Connect" }));
+            using var denied = await browser.PostAsync("/Admin/Storage?handler=Check&storageMountId=1", new FormUrlEncodedContent(new Dictionary<string, string>()));
             Assert.AreEqual(HttpStatusCode.BadRequest, denied.StatusCode);
         }
 
         [TestMethod]
-        public async Task MountOperation_PrivateSocket_DecryptsOnlyForConnectAndDetectsConcurrentConfigurationChanges()
+        public void Volume_ComposeBlock_MountsTheShareWhereJularrLooksAndKeepsThePasswordAVariable()
         {
-            await using var host = await CreateHostAsync();
-            using var created = await host.SendAsync(HttpMethod.Post, Route, Smb());
-            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode);
-            var socketPath = Path.Combine(Path.GetTempPath(), "jularr-mount-" + Guid.NewGuid().ToString("N")[..12] + ".sock");
-            using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
-            listener.Listen(1);
-            host.Services.GetRequiredService<NasMountClient>().SocketPath = socketPath;
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            try
-            {
-                // Controlled external boundary, no NAS.
-                var helper = Task.Run(async () =>
-                {
-                    using var socket = await listener.AcceptAsync(timeout.Token);
-                    using var stream = new NetworkStream(socket);
-                    var request = await NasMountProtocol.ReadAsync<NasMountRequest>(stream, timeout.Token);
-                    Assert.AreEqual(Password, request.Password);
-                    Assert.AreEqual(NasMountAction.Connect, request.Action);
-                    await host.Fixture.RunSqlAsync("UPDATE \"StorageMounts\" SET \"Version\" = \"Version\" + 1 WHERE \"Id\" = 1");
-                    await NasMountProtocol.WriteAsync(stream, new NasMountResponse(true, request.Version), timeout.Token);
-                });
-                using var connected = await host.SendAsync(HttpMethod.Post, Route + "/1/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Connect));
-                Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
-                var status = (await connected.Content.ReadFromJsonAsync<StorageMountStatusV1>())!;
-                Assert.IsTrue(status.IsMounted);
-                Assert.IsFalse(status.IsCurrentConfiguration);
-                await helper;
+            var smb = new StorageMountData(7, "NAS", StorageProtocolType.Smb, "nas.test", "/Media $hare", "3.1.1", "ju\"loc", "HOME", false, null, null, null, false, 1);
+            var block = StorageVolumeLogic.ComposeBlock(smb, "/mnt/jularr/");
+            StringAssert.Contains(block, "      - nas-7:/mnt/jularr/7");
+            StringAssert.Contains(block, "type: cifs");
+            StringAssert.Contains(block, "device: \"//nas.test/Media $$hare\"");
+            StringAssert.Contains(block, "o: \"username=ju\\\"loc,password=${JULARR_NAS_7_PASSWORD},domain=HOME,vers=3.1.1,uid=1654,gid=1654\"");
 
-                // Status never needs the password.
-                var statusHelper = Task.Run(async () =>
-                {
-                    using var socket = await listener.AcceptAsync(timeout.Token);
-                    using var stream = new NetworkStream(socket);
-                    var request = await NasMountProtocol.ReadAsync<NasMountRequest>(stream, timeout.Token);
-                    Assert.IsNull(request.Password);
-                    Assert.AreEqual(NasMountAction.Status, request.Action);
-                    await NasMountProtocol.WriteAsync(stream, new NasMountResponse(true, request.Version), timeout.Token);
-                });
-                using var current = await host.SendAsync(HttpMethod.Post, Route + "/1/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.ReadStatus));
-                Assert.AreEqual(HttpStatusCode.OK, current.StatusCode, await current.Content.ReadAsStringAsync());
-                Assert.IsTrue((await current.Content.ReadFromJsonAsync<StorageMountStatusV1>())!.IsCurrentConfiguration);
-                await statusHelper;
-            }
-            finally
-            {
-                if (File.Exists(socketPath)) File.Delete(socketPath);
-            }
-        }
-
-        [TestMethod]
-        public async Task Helper_ProtocolBoundary_RejectsUnsafeRequestsAndKeepsSecretsOffCommandArguments()
-        {
-            var request = new NasMountRequest(NasMountAction.Connect, 17, 1, "Smb", "nas.test", "/share/Media Library", "3.1.1", "jularr", null, Password, true);
-            MountManager.Validate(request);
-            var command = MountManager.BuildMountCommand(request, "/mnt/jularr/17", "/run/jularr-mount-helper/credential-test");
-            Assert.AreEqual("/usr/bin/mount", command.FileName);
-            CollectionAssert.Contains(command.ArgumentList.ToArray(), "//nas.test/share/Media Library");
-            Assert.IsFalse(string.Join(' ', command.ArgumentList).Contains(Password, StringComparison.Ordinal));
-            StringAssert.Contains(command.ArgumentList[3], "cache=strict");
-            StringAssert.Contains(command.ArgumentList[3], "nosuid,nodev,noexec,ro");
-
-            var traversal = new NasMountRequest(NasMountAction.Connect, 17, 1, "Nfs", "nas.test", "/share/../etc", "4.1", null, null, null, false);
-            Assert.ThrowsExactly<ArgumentException>(() => MountManager.Validate(traversal));
-            var injectedCredentials = new NasMountRequest(NasMountAction.Connect, 17, 1, "Smb", "nas.test", "/share", "3.1.1", "user\npassword=other", null, Password, true);
-            Assert.ThrowsExactly<ArgumentException>(() => MountManager.Validate(injectedCredentials));
-
-            // Reject oversized IPC before allocation.
-            using var frame = new MemoryStream(new byte[] { 0, 2, 0, 0 });
-            await Assert.ThrowsExactlyAsync<InvalidDataException>(() => NasMountProtocol.ReadAsync<NasMountRequest>(frame, CancellationToken.None));
+            var nfs = new StorageMountData(8, "NFS", StorageProtocolType.Nfs, "nas.test", "/exports/media", "4.1", null, null, true, null, null, null, false, 1);
+            block = StorageVolumeLogic.ComposeBlock(nfs, "/mnt/jularr");
+            StringAssert.Contains(block, "device: \":/exports/media\"");
+            StringAssert.Contains(block, "o: \"addr=nas.test,nfsvers=4.1,soft,ro\"");
         }
 
         private static SaveStorageMountDataV1 Smb(string? password = Password, string name = "NAS", string server = "nas.test", string path = "/media", string version = "3.1.1")
@@ -195,7 +132,7 @@ namespace Jularr.Backend.Tests
         }
 
         [TestMethod]
-        public async Task Connections_LostAfterConnect_ReconnectWithBackoffAndShowTheirState()
+        public async Task Connections_FailedChecks_CheckAgainWithBackoffNotifyOnceAndShowTheirState()
         {
             using var storage = new LibraryTests.TemporaryDirectory();
             await using var host = await LibraryTests.CreateHostAsync(storage.Path, razor: true);
@@ -203,38 +140,12 @@ namespace Jularr.Backend.Tests
             var share = Path.Combine(storage.Path, mountId.ToString(System.Globalization.CultureInfo.InvariantCulture));
             Directory.CreateDirectory(share);
             File.WriteAllText(Path.Combine(share, "movie.mkv"), "movie");
-            var socketPath = Path.Combine(Path.GetTempPath(), "jularr-mount-" + Guid.NewGuid().ToString("N")[..12] + ".sock");
-            using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
-            listener.Listen(4);
-            host.Services.GetRequiredService<NasMountClient>().SocketPath = socketPath;
-            var answers = new Queue<string>();
-            var actions = new List<NasMountAction>();
-            using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-            // The helper answers "mounted", "unmounted" or "failed" in turn, no NAS.
-            var helper = Task.Run(async () =>
+            async Task CheckDueAsync()
             {
-                while (!stop.IsCancellationRequested)
-                {
-                    using var socket = await listener.AcceptAsync(stop.Token);
-                    using var stream = new NetworkStream(socket);
-                    var request = await NasMountProtocol.ReadAsync<NasMountRequest>(stream, stop.Token);
-                    actions.Add(request.Action);
-                    var answer = answers.Dequeue();
-                    await NasMountProtocol.WriteAsync(stream, answer switch
-                    {
-                        "mounted" => new NasMountResponse(true, request.Version),
-                        "unmounted" => new NasMountResponse(false, 0),
-                        _ => new NasMountResponse(false, 0, "storage_unavailable")
-                    }, stop.Token);
-                }
-            });
-
-            async Task ReconnectAsync()
-            {
+                await host.Fixture.RunSqlAsync("UPDATE \"StorageMountStates\" SET \"NextCheckAt\" = now() - interval '1 second' WHERE \"FailedChecks\" > 0");
                 await using var scope = host.Services.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<ReconnectStorageMountsV1>().ExecuteAsync<UpdateResult>(new StorageConnectionsParametersV1(), default, CancellationToken.None);
+                await scope.ServiceProvider.GetRequiredService<CheckStorageMountsV1>().ExecuteAsync<UpdateResult>(new StorageChecksParametersV1(), default, CancellationToken.None);
             }
 
             async Task<StorageMountDetailsV1> ReadAsync()
@@ -243,69 +154,37 @@ namespace Jularr.Backend.Tests
                 return (await read.Content.ReadFromJsonAsync<StorageMountDetailsV1>())!;
             }
 
-            try
+            // A check records what the share shows.
+            using var available = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/check");
+            Assert.AreEqual(HttpStatusCode.OK, available.StatusCode, await available.Content.ReadAsStringAsync());
+            Assert.AreEqual(StorageAvailabilityType.Available, (await available.Content.ReadFromJsonAsync<StorageMountStatusV1>())!.StorageAvailabilityTypeId);
+            Assert.AreEqual(StorageHealthType.Online, (await ReadAsync()).StorageHealthTypeId);
+            using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId);
+            StringAssert.Contains(await page.Content.ReadAsStringAsync(), "class=\"storage__health\" role=\"status\">Online");
+
+            // Gone: asleep (it has Wake-on-LAN), checked again after a pause that grows.
+            Directory.Move(share, share + "-away");
+            using var away = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/check");
+            Assert.AreEqual(HttpStatusCode.OK, away.StatusCode);
+            Assert.AreEqual(StorageHealthType.Sleeping, (await ReadAsync()).StorageHealthTypeId);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"FailedChecks\" = 1 AND \"NextCheckAt\" > now() FROM \"StorageMountStates\""));
+            await using (var scope = host.Services.CreateAsyncScope())
             {
-                // Connect remembers the wish and what the share shows.
-                answers.Enqueue("mounted");
-                using var connected = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Connect));
-                Assert.AreEqual(HttpStatusCode.OK, connected.StatusCode, await connected.Content.ReadAsStringAsync());
-                var mount = await ReadAsync();
-                Assert.AreEqual(StorageHealthType.Online, mount.StorageHealthTypeId);
-                Assert.IsNotNull(mount.CheckedAt);
-                using var page = await host.SendAsync(HttpMethod.Get, "/Admin/Storage?storageMountId=" + mountId);
-                StringAssert.Contains(await page.Content.ReadAsStringAsync(), "class=\"storage__health\" role=\"status\">Online");
-
-                // A mounted share is left alone.
-                answers.Enqueue("mounted");
-                await ReconnectAsync();
-                CollectionAssert.AreEqual(new[] { NasMountAction.Connect, NasMountAction.Status }, actions);
-
-                // Lost and not back yet: asleep (it has Wake-on-LAN), retried later.
-                actions.Clear();
-                answers.Enqueue("unmounted");
-                answers.Enqueue("failed");
-                await ReconnectAsync();
-                CollectionAssert.AreEqual(new[] { NasMountAction.Status, NasMountAction.Connect }, actions);
-                Assert.AreEqual(StorageHealthType.Sleeping, (await ReadAsync()).StorageHealthTypeId);
-                Assert.AreEqual(1, await host.ScalarAsync("SELECT \"ReconnectAttempts\" FROM \"StorageMountStates\""));
-                actions.Clear();
-                await ReconnectAsync();
-                Assert.AreEqual(0, actions.Count);
-
-                // Due again, it reconnects by itself.
-                await host.Fixture.RunSqlAsync("UPDATE \"StorageMountStates\" SET \"ReconnectAt\" = now() - interval '1 minute'");
-                answers.Enqueue("unmounted");
-                answers.Enqueue("mounted");
-                await ReconnectAsync();
-                Assert.AreEqual(StorageHealthType.Online, (await ReadAsync()).StorageHealthTypeId);
-                Assert.AreEqual(0, await host.ScalarAsync("SELECT \"ReconnectAttempts\" FROM \"StorageMountStates\""));
-
-                // Disconnect ends both the wish and the state.
-                actions.Clear();
-                answers.Enqueue("unmounted");
-                using var disconnected = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Disconnect));
-                Assert.AreEqual(HttpStatusCode.OK, disconnected.StatusCode, await disconnected.Content.ReadAsStringAsync());
-                Assert.IsNull((await ReadAsync()).StorageHealthTypeId);
-                answers.Enqueue("unmounted");
-                using var checkedStatus = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.ReadStatus));
-                Assert.AreEqual(HttpStatusCode.OK, checkedStatus.StatusCode);
-                Assert.IsNull((await ReadAsync()).StorageHealthTypeId);
-                await ReconnectAsync();
-                CollectionAssert.AreEqual(new[] { NasMountAction.Disconnect, NasMountAction.Status }, actions);
-
-                // A Connect while the NAS is away keeps the wish for the worker.
-                answers.Enqueue("failed");
-                using var failed = await host.SendAsync(HttpMethod.Post, Route + "/" + mountId + "/connection", new ExecuteStorageMountDataV1(StorageMountOperationType.Connect));
-                Assert.AreNotEqual(HttpStatusCode.OK, failed.StatusCode);
-                Assert.AreEqual(StorageHealthType.Sleeping, (await ReadAsync()).StorageHealthTypeId);
-                Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsConnectRequested\" AND \"ReconnectAt\" > now() FROM \"StorageMountStates\""));
+                await scope.ServiceProvider.GetRequiredService<CheckStorageMountsV1>().ExecuteAsync<UpdateResult>(new StorageChecksParametersV1(), default, CancellationToken.None);
             }
-            finally
-            {
-                await stop.CancelAsync();
-                await helper.ContinueWith(_ => { });
-                if (File.Exists(socketPath)) File.Delete(socketPath);
-            }
+
+            Assert.AreEqual(1, await host.ScalarAsync("SELECT \"FailedChecks\" FROM \"StorageMountStates\""));
+            await CheckDueAsync();
+            await CheckDueAsync();
+            await CheckDueAsync();
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"FailedChecks\" = 4 AND \"NextCheckAt\" > now() + interval '9 minutes' FROM \"StorageMountStates\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT count(*) > 0 AND max(\"Occurrences\") = 1 FROM \"Notifications\" WHERE \"Subject\" = 'NAS'"));
+
+            // Back: the next check finds it and the pauses end.
+            Directory.Move(share + "-away", share);
+            await CheckDueAsync();
+            Assert.AreEqual(StorageHealthType.Online, (await ReadAsync()).StorageHealthTypeId);
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"FailedChecks\" = 0 AND \"NextCheckAt\" IS NULL FROM \"StorageMountStates\""));
         }
 
         [TestMethod]

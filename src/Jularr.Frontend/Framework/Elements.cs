@@ -118,6 +118,7 @@ namespace Jularr.Frontend.Framework
     public sealed class H2(params IUiComponent[] children) : HtmlElement("h2", children);
     public sealed class H3(params IUiComponent[] children) : HtmlElement("h3", children);
     public sealed class P(params IUiComponent[] children) : HtmlElement("p", children);
+    public sealed class Pre(params IUiComponent[] children) : HtmlElement("pre", children);
     public sealed class Span(params IUiComponent[] children) : HtmlElement("span", children);
     public sealed class Section(params IUiComponent[] children) : HtmlElement("section", children);
     public sealed class Header(params IUiComponent[] children) : HtmlElement("header", children);

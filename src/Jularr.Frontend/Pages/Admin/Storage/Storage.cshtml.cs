@@ -20,13 +20,14 @@ namespace Jularr.Frontend.Pages.Admin.Storage
 {
     [Authorize(Policy = ServiceApi.StorageReadPolicyName)]
     public class StorageModel(ReadStorageMountsV1 read, ReadStorageMountV1 readMount, ReadStorageProtocolsV1 readProtocols, ReadStorageLocalPathsV1 readLocalPaths,
-        CreateStorageMountV1 create, UpdateStorageMountV1 update, ExecuteStorageMountV1 execute, WakeStorageMountV1 wake, RemoveStorageMountV1 remove,
+        CreateStorageMountV1 create, UpdateStorageMountV1 update, CheckStorageMountV1 check, ReadStorageMountVolumeV1 readVolume, WakeStorageMountV1 wake, RemoveStorageMountV1 remove,
         UpdateStorageSynologyV1 synology, ReadStorageSynologyStatusV1 synologyStatus, PowerStorageSynologyV1 synologyPower,
         ReadStorageSynologyCertificateV1 synologyCertificate, TrustStorageSynologyCertificateV1 trustCertificate, ReadStorageDirectoriesV1 readDirectories, ReadLibraryRootsV1 readRoots, CreateLibraryRootV1 createRoot, RenameLibraryRootV1 renameRoot, DeleteLibraryRootV1 deleteRoot,
         QueueLibraryScanV1 queueScan, IAntiforgery antiforgery, UiText texts) : JularrPage
     {
         private PageResult<StorageMountDetailsV1>? _mounts;
         private StorageMountDetailsV1? _mount;
+        private StorageMountVolumeV1? _volume;
         private IReadOnlyList<StorageProtocolVersionDetailsV1> _protocols = [];
         private IReadOnlyList<StorageLocalPathV1> _localPaths = [];
         private PageResult<LibraryRootDetailsV1>? _roots;
@@ -86,23 +87,19 @@ namespace Jularr.Frontend.Pages.Admin.Storage
                 // Shared settings/setup editor.
                 var protocol = _input?.StorageProtocolTypeId ?? _mount?.StorageProtocolTypeId ?? Protocol;
                 content.Secondary.Add(ConnectionForm(protocol, csrf));
-                if (protocol != StorageProtocolType.Local)
-                {
-                    content.Secondary.Add(new P(new Text("storage.credentialsHint")));
-                    content.Secondary.Add(new P(new Text("storage.applyHint")));
-                }
+                if (protocol != StorageProtocolType.Local) content.Secondary.Add(new P(new Text("storage.credentialsHint")));
 
                 if (_mount is { } mount)
                 {
                     content.Secondary.Add(new Div([.. ConnectionActions(mount, csrf)]).Class("storage__actions"));
                     content.Secondary.Add(Health(mount));
-                    if (TempData["StorageCurrent"] is false) content.Secondary.Add(new P(new Text("storage.stale")).Attribute("role", "status"));
+                    if (_volume is { } volume) content.Secondary.Add(Volume(volume));
 
                     if (TempData["StorageWoken"] is true) content.Secondary.Add(new P(new Text("storage.wake.sent")).Attribute("role", "status"));
                     if (TempData["StorageScanQueued"] is true) content.Secondary.Add(new P(new Text("storage.paths.scanQueued")).Attribute("role", "status"));
                     if (FormError is not null && _failedSection is not ("Save" or "Root" or "Synology")) content.Secondary.Add(new P(new Text(FormError.ResourceKey)).Attribute("role", "alert"));
                     content.Secondary.Add(new UiSection("storage.paths", Paths(mount, csrf)));
-                    if (mount.CanMount) content.Secondary.Add(new UiSection("storage.synology.title", [.. Synology(mount, csrf)]));
+                    if (mount.IsNetwork) content.Secondary.Add(new UiSection("storage.synology.title", [.. Synology(mount, csrf)]));
                 }
             });
             var detailOpen = StorageMountId is not null || _input is not null || Request.Query.ContainsKey("protocol");
@@ -246,18 +243,14 @@ namespace Jularr.Frontend.Pages.Admin.Storage
 
         private string? Temperature(int? celsius) => celsius is { } value ? string.Format(CultureInfo.CurrentCulture, texts["storage.synology.temperature"], value) : null;
 
+        // The compose lines that mount the share.
+        private static IUiComponent Volume(StorageMountVolumeV1 volume) =>
+            new Section(new H2(new Text("storage.volume.title"), new FieldInfo("storage.volume.info", "storage-volume-info")), new Pre(new ValueText(volume.Compose)).Class("storage__volume"))
+                .Class("ui-section");
+
         private IEnumerable<IUiComponent> ConnectionActions(StorageMountDetailsV1 mount, string? csrf)
         {
-            // Explicit mount actions only.
-            var operations = mount.CanMount ? Enum.GetValues<StorageMountOperationType>() : [StorageMountOperationType.ReadStatus];
-            foreach (var operation in operations)
-            {
-                yield return new Form<ExecuteStorageMountDataV1>(form =>
-                {
-                    form.Hidden(item => item.OperationTypeId);
-                    form.Submit("storage.operation." + operation);
-                }, Address(mount.Id, handler: "Connection"), csrf, new ExecuteStorageMountDataV1(operation));
-            }
+            yield return new Form<StorageMountParametersV1>(form => form.Submit("storage.check"), Address(mount.Id, handler: "Check"), csrf, new StorageMountParametersV1(mount.Id));
 
             if (mount.WakeMacAddress is not null)
             {
@@ -379,11 +372,9 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             return LocalRedirect(Address(StorageMountId));
         }
 
-        public async Task<IActionResult> OnPostConnectionAsync([BindRequired] long storageMountId, StorageMountOperationType operationTypeId)
+        public async Task<IActionResult> OnPostCheckAsync([BindRequired] long storageMountId)
         {
-            var result = await execute.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(storageMountId),
-                new ExecuteStorageMountDataV1(operationTypeId), HttpContext.RequestAborted);
-            TempData["StorageCurrent"] = !result.IsMounted || result.IsCurrentConfiguration;
+            await check.ExecuteAsync<StorageMountStatusV1>(new StorageMountParametersV1(storageMountId), default, HttpContext.RequestAborted);
             return LocalRedirect(Address(storageMountId));
         }
 
@@ -475,6 +466,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             }
 
             _mount = await readMount.ExecuteAsync<StorageMountDetailsV1>(new StorageMountParametersV1(id), ct);
+            if (_mount.IsNetwork) _volume = await readVolume.ExecuteAsync<StorageMountVolumeV1>(new StorageMountParametersV1(id), ct);
             _roots = await readRoots.ExecuteAsync<PageResult<LibraryRootDetailsV1>>(new ReadLibraryRootsParametersV1(id, RootPageNumber), ct);
 
             // Storage I/O only on explicit browsing.

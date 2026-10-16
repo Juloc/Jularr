@@ -54,7 +54,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
     public sealed class StorageMountDetailsV1 : BaseResponse
     {
         public StorageMountDetailsV1(long id, string name, StorageProtocolType storageProtocolTypeId, string? host, string sharePath, string? protocolVersion, string? username, string? domain, bool isReadOnly,
-            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool canMount, long version, StorageHealthType? storageHealthTypeId,
+            bool hasPassword, string? wakeMacAddress, string? wakeBroadcastAddress, bool wakeOnDemand, bool isNetwork, long version, StorageHealthType? storageHealthTypeId,
             string? diagnosticCode, DateTime? checkedAt, long? freeBytes, long? totalBytes, string? synologyUrl, string? synologyUsername)
         {
             SynologyUrl = synologyUrl;
@@ -77,7 +77,7 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
             WakeMacAddress = wakeMacAddress;
             WakeBroadcastAddress = wakeBroadcastAddress;
             WakeOnDemand = wakeOnDemand;
-            CanMount = canMount;
+            IsNetwork = isNetwork;
             Version = version;
         }
 
@@ -120,8 +120,8 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.WakeOnDemand))]
         public bool WakeOnDemand { get; }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.CanMount))]
-        public bool CanMount { get; }
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsNetwork))]
+        public bool IsNetwork { get; }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Version))]
         public long Version { get; }
@@ -265,17 +265,28 @@ namespace Jularr.Backend.Data.Admin.Storage.V1
 
     public sealed class StorageMountStatusV1 : BaseResponse
     {
-        public StorageMountStatusV1(bool isMounted, bool isCurrentConfiguration)
+        public StorageMountStatusV1(StorageAvailabilityType storageAvailabilityTypeId, string? diagnosticCode)
         {
-            IsMounted = isMounted;
-            IsCurrentConfiguration = isCurrentConfiguration;
+            StorageAvailabilityTypeId = storageAvailabilityTypeId;
+            DiagnosticCode = diagnosticCode;
         }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsMounted))]
-        public bool IsMounted { get; }
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.StorageAvailabilityTypeId))]
+        public StorageAvailabilityType StorageAvailabilityTypeId { get; }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.IsCurrentConfiguration))]
-        public bool IsCurrentConfiguration { get; }
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.DiagnosticCode))]
+        public string? DiagnosticCode { get; }
+    }
+
+    public sealed class StorageMountVolumeV1 : BaseResponse
+    {
+        public StorageMountVolumeV1(string compose)
+        {
+            Compose = compose;
+        }
+
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Compose))]
+        public string Compose { get; }
     }
 
     public sealed class ReadStorageLocalPathsParametersV1 : BaseParameters

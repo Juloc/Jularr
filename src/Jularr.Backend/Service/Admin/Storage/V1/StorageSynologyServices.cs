@@ -22,7 +22,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         internal UpdateStorageSynologyV1(IDataProtectionProvider protection)
         {
-            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
+            _protector = protection.CreateProtector(StoragePasswords.ProtectorPurpose);
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
@@ -56,7 +56,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
         internal ReadStorageSynologyStatusV1(SynologyClient synology, IDataProtectionProvider protection)
         {
             _synology = synology;
-            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
+            _protector = protection.CreateProtector(StoragePasswords.ProtectorPurpose);
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;
@@ -83,7 +83,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
         internal PowerStorageSynologyV1(SynologyClient synology, IDataProtectionProvider protection)
         {
             _synology = synology;
-            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
+            _protector = protection.CreateProtector(StoragePasswords.ProtectorPurpose);
         }
 
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Execute;

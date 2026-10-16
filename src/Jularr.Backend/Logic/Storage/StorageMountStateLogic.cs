@@ -1,90 +1,44 @@
-using Jularr.Backend.Data.Enums.Storage;
+using Jularr.Backend.Data.Enums.Notification;
+using Jularr.Backend.Data.Logic.Notification;
 using Jularr.Backend.Data.Logic.Storage;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Notification;
 
 namespace Jularr.Backend.Logic.Storage
 {
     internal static class StorageMountStateLogic
     {
-        // Retry delays after failed reconnects.
-        private static readonly int[] ReconnectMinutes = [1, 2, 5, 10, 15];
-
+        // A failed mount is checked again after 1, 2, 5, 10 and then every 15 minutes; available resets the count, the Owner hears of the third failure.
         public static async Task SaveStorageMountProbeAsync(this LogicContext ctx, StorageMountProbeData data, CancellationToken ct)
         {
-            // Available resets the backoff.
             var sql = new SqlStatement();
             sql.Statement =
                 """
                 INSERT INTO
-                    "StorageMountStates" ("StorageMountId", "StorageAvailabilityTypeId", "DiagnosticCode", "CheckedAt", "AvailableAt", "FreeBytes", "TotalBytes")
+                    "StorageMountStates" AS state ("StorageMountId", "StorageAvailabilityTypeId", "DiagnosticCode", "CheckedAt", "AvailableAt", "FreeBytes", "TotalBytes", "FailedChecks", "NextCheckAt")
                 VALUES
-                    (@StorageMountId, @StorageAvailabilityTypeId, @DiagnosticCode, now(), CASE WHEN @StorageAvailabilityTypeId = 1 THEN now() END, @FreeBytes, @TotalBytes)
+                    (@StorageMountId, @StorageAvailabilityTypeId, @DiagnosticCode, now(), CASE WHEN @StorageAvailabilityTypeId = 1 THEN now() END, @FreeBytes, @TotalBytes,
+                        CASE WHEN @StorageAvailabilityTypeId = 1 THEN 0 ELSE 1 END, CASE WHEN @StorageAvailabilityTypeId <> 1 THEN now() + interval '1 minute' END)
                 ON CONFLICT ("StorageMountId") DO UPDATE
                 SET
                     "StorageAvailabilityTypeId" = EXCLUDED."StorageAvailabilityTypeId",
                     "DiagnosticCode" = EXCLUDED."DiagnosticCode",
                     "CheckedAt" = EXCLUDED."CheckedAt",
-                    "AvailableAt" = coalesce(EXCLUDED."AvailableAt", "StorageMountStates"."AvailableAt"),
+                    "AvailableAt" = coalesce(EXCLUDED."AvailableAt", state."AvailableAt"),
                     "FreeBytes" = EXCLUDED."FreeBytes",
                     "TotalBytes" = EXCLUDED."TotalBytes",
-                    "ReconnectAttempts" = CASE WHEN EXCLUDED."StorageAvailabilityTypeId" = 1 THEN 0 ELSE "StorageMountStates"."ReconnectAttempts" END,
-                    "ReconnectAt" = CASE WHEN EXCLUDED."StorageAvailabilityTypeId" = 1 THEN NULL ELSE "StorageMountStates"."ReconnectAt" END;
+                    "FailedChecks" = CASE WHEN EXCLUDED."FailedChecks" = 0 THEN 0 ELSE state."FailedChecks" + 1 END,
+                    "NextCheckAt" = CASE WHEN EXCLUDED."FailedChecks" > 0 THEN now() + make_interval(mins => (ARRAY[1, 2, 5, 10, 15])[least(state."FailedChecks" + 1, 5)]) END
+                RETURNING
+                    state."FailedChecks",
+                    (SELECT mount."Name" FROM "StorageMounts" AS mount WHERE mount."Id" = state."StorageMountId") AS "Name";
                 """;
             sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-        }
-
-        // Disconnect forgets the observed state.
-        public static async Task RequestStorageConnectionAsync(this LogicContext ctx, StorageConnectRequestData data, CancellationToken ct)
-        {
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                INSERT INTO
-                    "StorageMountStates" ("StorageMountId", "IsConnectRequested")
-                VALUES
-                    (@StorageMountId, @IsConnectRequested)
-                ON CONFLICT ("StorageMountId") DO UPDATE
-                SET
-                    "IsConnectRequested" = EXCLUDED."IsConnectRequested",
-                    "StorageAvailabilityTypeId" = CASE WHEN EXCLUDED."IsConnectRequested" THEN "StorageMountStates"."StorageAvailabilityTypeId" END,
-                    "AvailableAt" = CASE WHEN EXCLUDED."IsConnectRequested" THEN "StorageMountStates"."AvailableAt" END,
-                    "DiagnosticCode" = CASE WHEN EXCLUDED."IsConnectRequested" THEN "StorageMountStates"."DiagnosticCode" END,
-                    "CheckedAt" = CASE WHEN EXCLUDED."IsConnectRequested" THEN "StorageMountStates"."CheckedAt" END,
-                    "FreeBytes" = CASE WHEN EXCLUDED."IsConnectRequested" THEN "StorageMountStates"."FreeBytes" END,
-                    "TotalBytes" = CASE WHEN EXCLUDED."IsConnectRequested" THEN "StorageMountStates"."TotalBytes" END,
-                    "ReconnectAttempts" = 0,
-                    "ReconnectAt" = NULL;
-                """;
-            sql.Parameters.Add(data);
-            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
-        }
-
-        // Only while the Owner still wants the connection.
-        public static async Task<bool> SaveStorageReconnectAsync(this LogicContext ctx, StorageMountProbeData probe, int failedAttempts, CancellationToken ct)
-        {
-            var available = probe.StorageAvailabilityTypeId == StorageAvailabilityType.Available;
-            var sql = new SqlStatement();
-            sql.Statement =
-                """
-                UPDATE
-                    "StorageMountStates"
-                SET
-                    "StorageAvailabilityTypeId" = @StorageAvailabilityTypeId,
-                    "DiagnosticCode" = @DiagnosticCode,
-                    "CheckedAt" = now(),
-                    "AvailableAt" = CASE WHEN @StorageAvailabilityTypeId = 1 THEN now() ELSE "AvailableAt" END,
-                    "FreeBytes" = @FreeBytes,
-                    "TotalBytes" = @TotalBytes,
-                    "ReconnectAttempts" = @ReconnectAttempts,
-                    "ReconnectAt" = CASE WHEN @ReconnectAttempts > 0 THEN now() + make_interval(mins => @DelayMinutes) END
-                WHERE
-                    "StorageMountId" = @StorageMountId
-                    AND "IsConnectRequested";
-                """;
-            sql.Parameters.Add(probe);
-            sql.Parameters.Add(new StorageReconnectAttemptData(available ? 0 : failedAttempts, ReconnectMinutes[Math.Clamp(failedAttempts, 1, ReconnectMinutes.Length) - 1]));
-            return await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 1;
+            var failure = await ctx.ReadRequiredAsync<StorageCheckFailureData>(sql, ct);
+            if (failure.FailedChecks == 3)
+            {
+                await ctx.NotifyStaffAsync(new StaffNotificationData(NotificationType.StorageOffline, null, failure.Name, "/Admin/Storage?storageMountId=" + data.StorageMountId), ct);
+            }
         }
     }
 }

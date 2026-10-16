@@ -209,9 +209,9 @@ manual identification and stored availability are implemented; see
 
 1. Additional versions per Work (owner decision 13 Oct): by default one version and one quality profile per Work, as in Sonarr; an advanced switch, off by default, will let a request that an existing version does not satisfy (other language or quality) add as many versions as needed.
 2. Exact instance/profile preference catalogs; complete the agreed media/storage columns.
-3. NAS health/capacity probes and real-host SMB/NFS deployment verification. The
-   owner approved a separate Linux mount helper; `ffprobe` is used within the
-   requested FFmpeg scope. Further third-party/native dependencies require approval.
+3. Real-host SMB/NFS verification of the Docker volumes, and direct SMB through
+   SMBLibrary (owner-approved) for a NAS that sleeps. Further third-party/native
+   dependencies require approval.
 4. Whether one library path may hold several media types, as the older storage spec
    allows; the current contract fixes one media type per path.
 

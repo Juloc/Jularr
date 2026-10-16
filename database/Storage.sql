@@ -49,7 +49,7 @@ CREATE TABLE "StorageMounts" (
 );
 CREATE UNIQUE INDEX "UX_StorageMounts_LocalPath" ON "StorageMounts" ("SharePath") WHERE "StorageProtocolTypeId" = 3;
 
--- Last observed state and the Owner's connect wish.
+-- Last observed state; a mount that failed is checked again after a growing pause.
 CREATE TABLE "StorageAvailabilityTypes" (
     "Id" smallint PRIMARY KEY,
     "Key" varchar(32) NOT NULL UNIQUE
@@ -58,18 +58,17 @@ INSERT INTO "StorageAvailabilityTypes" ("Id", "Key") VALUES (1, 'Available'), (2
 
 CREATE TABLE "StorageMountStates" (
     "StorageMountId" bigint PRIMARY KEY REFERENCES "StorageMounts" ("Id") ON DELETE CASCADE,
-    "IsConnectRequested" boolean NOT NULL DEFAULT FALSE,
     "StorageAvailabilityTypeId" smallint NULL REFERENCES "StorageAvailabilityTypes" ("Id"),
     "DiagnosticCode" varchar(64) NULL,
     "CheckedAt" timestamptz NULL,
     "AvailableAt" timestamptz NULL,
     "FreeBytes" bigint NULL CHECK ("FreeBytes" >= 0),
     "TotalBytes" bigint NULL CHECK ("TotalBytes" >= 0),
-    "ReconnectAttempts" integer NOT NULL DEFAULT 0 CHECK ("ReconnectAttempts" >= 0),
-    "ReconnectAt" timestamptz NULL,
+    "FailedChecks" integer NOT NULL DEFAULT 0 CHECK ("FailedChecks" >= 0),
+    "NextCheckAt" timestamptz NULL,
     CHECK (("StorageAvailabilityTypeId" IS NULL) = ("CheckedAt" IS NULL))
 );
-CREATE INDEX "IX_StorageMountStates_Reconnect" ON "StorageMountStates" ("ReconnectAt") WHERE "IsConnectRequested";
+CREATE INDEX "IX_StorageMountStates_NextCheck" ON "StorageMountStates" ("NextCheckAt") WHERE "FailedChecks" > 0;
 
 -- Offline with Wake-on-LAN reads as asleep.
 CREATE VIEW "StorageMountHealth" AS

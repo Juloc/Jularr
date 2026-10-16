@@ -11,8 +11,6 @@ namespace Jularr.Backend.Data.Fields.Storage
         public static readonly DateTimeField CheckedAt = new() { Required = false };
         public static readonly LongField FreeBytes = new() { Minimum = 0, Required = false };
         public static readonly LongField TotalBytes = new() { Minimum = 0, Required = false };
-        public static readonly BoolField IsConnectRequested = new();
-        public static readonly IntField ReconnectAttempts = new() { Minimum = 0 };
-        public static readonly IntField DelayMinutes = new() { Minimum = 1, Maximum = 60 };
+        public static readonly IntField FailedChecks = new() { Minimum = 0 };
     }
 }

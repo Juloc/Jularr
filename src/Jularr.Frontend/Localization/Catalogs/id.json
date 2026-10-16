@@ -4384,22 +4384,6 @@
    "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
    "Kata sandi dilindungi di penyimpanan dan tidak pernah ditampilkan. Izin NFS memakai ekspor server dan identitas sistem file."
   ],
-  "storage.applyHint": [
-   "Saving changes does not interrupt a mount. Disconnect and reconnect explicitly to apply changed settings.",
-   "Menyimpan perubahan tidak mengganggu mount yang berjalan. Putuskan dan sambungkan kembali secara eksplisit untuk menerapkan pengaturan yang diubah."
-  ],
-  "storage.operation.ReadStatus": [
-   "Check mount status",
-   "Periksa status mount"
-  ],
-  "storage.operation.Connect": [
-   "Connect",
-   "Sambungkan"
-  ],
-  "storage.operation.Disconnect": [
-   "Disconnect",
-   "Putuskan"
-  ],
   "admin.backup.title": [
    "Backups",
    "Cadangan"
@@ -4659,10 +4643,6 @@
   "system.tool.sevenZip": [
    "7-Zip (unpacking, CBR/CB7)",
    "7-Zip (ekstraksi, CBR/CB7)"
-  ],
-  "system.tool.mountHelper": [
-   "Mount helper (SMB/NFS)",
-   "Pembantu mount (SMB/NFS)"
   ],
   "system.tool.pgDump": [
    "pg_dump (backups)",
@@ -5235,10 +5215,6 @@
   "storage.problem.storage_unavailable": [
    "Not reachable or not mounted",
    "Tidak dapat dijangkau atau belum di-mount"
-  ],
-  "storage.stale": [
-   "The mount uses older settings. Disconnect and reconnect to apply the saved configuration.",
-   "Mount memakai pengaturan lama. Putuskan dan sambungkan kembali untuk menerapkan konfigurasi tersimpan."
   ],
   "storage.saved": [
    "Connection saved.",
@@ -6320,21 +6296,9 @@
    "The external provider is currently unavailable.",
    "Penyedia eksternal sedang tidak tersedia."
   ],
-  "errors.storage_helper_unavailable": [
-   "The mount helper is unavailable. Check its configuration and runtime permissions.",
-   "Pembantu mount tidak tersedia. Periksa konfigurasi dan izin runtime-nya."
-  ],
   "errors.storage_unavailable": [
-   "The NAS connection could not be mounted. Check the server, export and credentials.",
-   "Koneksi NAS tidak dapat di-mount. Periksa server, ekspor, dan kredensialnya."
-  ],
-  "errors.storage_busy": [
-   "This mount is in use. Stop dependent operations before disconnecting it.",
-   "Mount ini sedang dipakai. Hentikan operasi yang bergantung padanya sebelum memutuskannya."
-  ],
-  "errors.storage_configuration_changed": [
-   "The mounted connection uses different settings. Disconnect it before applying the saved configuration.",
-   "Koneksi yang di-mount memakai pengaturan berbeda. Putuskan sebelum menerapkan konfigurasi tersimpan."
+   "The storage is not reachable. Check that the NAS is on and the share is mounted.",
+   "Penyimpanan tidak dapat dijangkau. Pastikan NAS menyala dan share terpasang."
   ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
@@ -6755,6 +6719,18 @@
   "errors.validation.unknown_or_duplicate_id": [
    "The item is unavailable or was supplied more than once.",
    "Item tidak tersedia atau dikirim lebih dari sekali."
+  ],
+  "storage.check": [
+   "Check now",
+   "Periksa sekarang"
+  ],
+  "storage.volume.title": [
+   "Docker volume",
+   "Volume Docker"
+  ],
+  "storage.volume.info": [
+   "Add these lines to compose.yaml and restart the container. An SMB password goes into .env under the variable named in them, each comma written twice. Docker mounts the share when the container starts, so the NAS must be on then.",
+   "Tambahkan baris ini ke compose.yaml lalu mulai ulang kontainer. Kata sandi SMB dimasukkan ke .env dengan nama variabel yang tertulis di dalamnya, setiap koma ditulis dua kali. Docker memasang share saat kontainer dimulai, jadi NAS harus menyala saat itu."
   ]
  }
 }

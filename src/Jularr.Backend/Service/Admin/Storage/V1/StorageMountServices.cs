@@ -41,7 +41,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
                     mount."WakeMacAddress",
                     mount."WakeBroadcastAddress",
                     mount."WakeOnDemand",
-                    mount."StorageProtocolTypeId" <> 3 AS "CanMount",
+                    mount."StorageProtocolTypeId" <> 3 AS "IsNetwork",
                     mount."Version",
                     health."StorageHealthTypeId",
                     health."DiagnosticCode",
@@ -71,7 +71,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         internal CreateStorageMountV1(IDataProtectionProvider protection, IOptions<StorageOptions> options)
         {
-            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
+            _protector = protection.CreateProtector(StoragePasswords.ProtectorPurpose);
             _options = options.Value;
         }
 
@@ -95,7 +95,7 @@ namespace Jularr.Backend.Service.Admin.Storage.V1
 
         internal UpdateStorageMountV1(IDataProtectionProvider protection, IOptions<StorageOptions> options)
         {
-            _protector = protection.CreateProtector(StorageMountRequests.ProtectorPurpose);
+            _protector = protection.CreateProtector(StoragePasswords.ProtectorPurpose);
             _options = options.Value;
         }
 

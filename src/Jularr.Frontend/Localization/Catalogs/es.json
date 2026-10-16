@@ -4384,22 +4384,6 @@
    "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
    "Las contraseñas se protegen al guardarse y nunca se muestran. Los permisos de NFS usan la exportación del servidor y las identidades del sistema de archivos."
   ],
-  "storage.applyHint": [
-   "Saving changes does not interrupt a mount. Disconnect and reconnect explicitly to apply changed settings.",
-   "Guardar los cambios no interrumpe un montaje. Desconecta y vuelve a conectar de forma explícita para aplicar los ajustes modificados."
-  ],
-  "storage.operation.ReadStatus": [
-   "Check mount status",
-   "Comprobar estado del montaje"
-  ],
-  "storage.operation.Connect": [
-   "Connect",
-   "Conectar"
-  ],
-  "storage.operation.Disconnect": [
-   "Disconnect",
-   "Desconectar"
-  ],
   "admin.backup.title": [
    "Backups",
    "Copias de seguridad"
@@ -4659,10 +4643,6 @@
   "system.tool.sevenZip": [
    "7-Zip (unpacking, CBR/CB7)",
    "7-Zip (descompresión, CBR/CB7)"
-  ],
-  "system.tool.mountHelper": [
-   "Mount helper (SMB/NFS)",
-   "Ayudante de montaje (SMB/NFS)"
   ],
   "system.tool.pgDump": [
    "pg_dump (backups)",
@@ -5235,10 +5215,6 @@
   "storage.problem.storage_unavailable": [
    "Not reachable or not mounted",
    "Inaccesible o sin montar"
-  ],
-  "storage.stale": [
-   "The mount uses older settings. Disconnect and reconnect to apply the saved configuration.",
-   "El montaje usa ajustes anteriores. Desconecta y vuelve a conectar para aplicar la configuración guardada."
   ],
   "storage.saved": [
    "Connection saved.",
@@ -6320,21 +6296,9 @@
    "The external provider is currently unavailable.",
    "El proveedor externo no está disponible en este momento."
   ],
-  "errors.storage_helper_unavailable": [
-   "The mount helper is unavailable. Check its configuration and runtime permissions.",
-   "El ayudante de montaje no está disponible. Revisa su configuración y sus permisos de ejecución."
-  ],
   "errors.storage_unavailable": [
-   "The NAS connection could not be mounted. Check the server, export and credentials.",
-   "No se pudo montar la conexión del NAS. Revisa el servidor, la exportación y las credenciales."
-  ],
-  "errors.storage_busy": [
-   "This mount is in use. Stop dependent operations before disconnecting it.",
-   "Este montaje está en uso. Detén las operaciones que dependen de él antes de desconectarlo."
-  ],
-  "errors.storage_configuration_changed": [
-   "The mounted connection uses different settings. Disconnect it before applying the saved configuration.",
-   "La conexión montada usa ajustes distintos. Desconéctala antes de aplicar la configuración guardada."
+   "The storage is not reachable. Check that the NAS is on and the share is mounted.",
+   "No se puede acceder al almacenamiento. Comprueba que el NAS esté encendido y el recurso compartido montado."
   ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
@@ -6755,6 +6719,18 @@
   "errors.validation.unknown_or_duplicate_id": [
    "The item is unavailable or was supplied more than once.",
    "El elemento no está disponible o se indicó más de una vez."
+  ],
+  "storage.check": [
+   "Check now",
+   "Comprobar ahora"
+  ],
+  "storage.volume.title": [
+   "Docker volume",
+   "Volumen de Docker"
+  ],
+  "storage.volume.info": [
+   "Add these lines to compose.yaml and restart the container. An SMB password goes into .env under the variable named in them, each comma written twice. Docker mounts the share when the container starts, so the NAS must be on then.",
+   "Añade estas líneas a compose.yaml y reinicia el contenedor. Una contraseña SMB va en .env bajo la variable indicada en ellas, con cada coma escrita dos veces. Docker monta el recurso compartido al iniciar el contenedor, así que el NAS debe estar encendido en ese momento."
   ]
  }
 }

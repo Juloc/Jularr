@@ -4384,22 +4384,6 @@
    "Passwords are protected in storage and never shown. NFS permissions use the server export and filesystem identities.",
    "パスワードはストレージ内で保護され、表示されることはありません。NFS の権限にはサーバーのエクスポートとファイルシステムの ID が使われます。"
   ],
-  "storage.applyHint": [
-   "Saving changes does not interrupt a mount. Disconnect and reconnect explicitly to apply changed settings.",
-   "変更を保存してもマウントは中断されません。変更した設定を反映するには、明示的に切断してから再接続してください。"
-  ],
-  "storage.operation.ReadStatus": [
-   "Check mount status",
-   "マウント状態を確認"
-  ],
-  "storage.operation.Connect": [
-   "Connect",
-   "接続"
-  ],
-  "storage.operation.Disconnect": [
-   "Disconnect",
-   "切断"
-  ],
   "admin.backup.title": [
    "Backups",
    "バックアップ"
@@ -4659,10 +4643,6 @@
   "system.tool.sevenZip": [
    "7-Zip (unpacking, CBR/CB7)",
    "7-Zip（解凍、CBR/CB7）"
-  ],
-  "system.tool.mountHelper": [
-   "Mount helper (SMB/NFS)",
-   "マウントヘルパー（SMB/NFS）"
   ],
   "system.tool.pgDump": [
    "pg_dump (backups)",
@@ -5235,10 +5215,6 @@
   "storage.problem.storage_unavailable": [
    "Not reachable or not mounted",
    "到達できないか、マウントされていません"
-  ],
-  "storage.stale": [
-   "The mount uses older settings. Disconnect and reconnect to apply the saved configuration.",
-   "マウントは古い設定を使用しています。保存した設定を反映するには、切断してから再接続してください。"
   ],
   "storage.saved": [
    "Connection saved.",
@@ -6320,21 +6296,9 @@
    "The external provider is currently unavailable.",
    "外部プロバイダーは現在利用できません。"
   ],
-  "errors.storage_helper_unavailable": [
-   "The mount helper is unavailable. Check its configuration and runtime permissions.",
-   "マウントヘルパーを利用できません。設定と実行時の権限を確認してください。"
-  ],
   "errors.storage_unavailable": [
-   "The NAS connection could not be mounted. Check the server, export and credentials.",
-   "NAS の接続をマウントできませんでした。サーバー、エクスポート、認証情報を確認してください。"
-  ],
-  "errors.storage_busy": [
-   "This mount is in use. Stop dependent operations before disconnecting it.",
-   "このマウントは使用中です。切断する前に、依存する操作を停止してください。"
-  ],
-  "errors.storage_configuration_changed": [
-   "The mounted connection uses different settings. Disconnect it before applying the saved configuration.",
-   "マウント済みの接続は異なる設定を使用しています。保存した設定を適用する前に切断してください。"
+   "The storage is not reachable. Check that the NAS is on and the share is mounted.",
+   "ストレージに接続できません。NAS の電源が入っていて、共有がマウントされているか確認してください。"
   ],
   "errors.storage_waking": [
    "The storage device is waking up. Please try again shortly.",
@@ -6755,6 +6719,18 @@
   "errors.validation.unknown_or_duplicate_id": [
    "The item is unavailable or was supplied more than once.",
    "この項目を利用できないか、複数回指定されました。"
+  ],
+  "storage.check": [
+   "Check now",
+   "今すぐ確認"
+  ],
+  "storage.volume.title": [
+   "Docker volume",
+   "Docker ボリューム"
+  ],
+  "storage.volume.info": [
+   "Add these lines to compose.yaml and restart the container. An SMB password goes into .env under the variable named in them, each comma written twice. Docker mounts the share when the container starts, so the NAS must be on then.",
+   "これらの行を compose.yaml に追加し、コンテナーを再起動してください。SMB のパスワードは、行内に記載された変数名で .env に記入し、カンマはすべて 2 回続けて書きます。Docker はコンテナーの起動時に共有をマウントするため、その時点で NAS が起動している必要があります。"
   ]
  }
 }

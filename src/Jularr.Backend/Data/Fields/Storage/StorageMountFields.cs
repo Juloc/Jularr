@@ -18,13 +18,12 @@ namespace Jularr.Backend.Data.Fields.Storage
         public static readonly StringField Password = new() { MaximumLength = 1024, Required = false, Format = StringFormat.SingleLine };
         public static readonly ByteArrayField ProtectedPassword = new() { Required = false };
         public static readonly BoolField HasPassword = new();
-        public static readonly BoolField IsMounted = new();
-        public static readonly BoolField IsCurrentConfiguration = new();
         public static readonly BoolField IsReadOnly = new();
         public static readonly StringField WakeMacAddress = new(NpgsqlDbType.Varchar) { MaximumLength = 17, Required = false, Trim = true, Format = StringFormat.MacAddress };
         public static readonly StringField WakeBroadcastAddress = new(NpgsqlDbType.Varchar) { MaximumLength = 15, Required = false, Trim = true, Format = StringFormat.IPv4Address };
         public static readonly BoolField WakeOnDemand = new();
-        public static readonly BoolField CanMount = new();
+        public static readonly BoolField IsNetwork = new();
+        public static readonly StringField Compose = new() { MaximumLength = 4096 };
         public static readonly StringField LocalPath = new() { MaximumLength = 1024, AllowBlank = false, Format = StringFormat.SingleLine };
         public static readonly StringField DirectoryName = new() { MaximumLength = 255, AllowBlank = false };
         public static readonly LongField Version = new() { Minimum = 1 };

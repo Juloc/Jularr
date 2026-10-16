@@ -32,49 +32,31 @@ namespace Jularr.Backend.Data.Logic.Storage
         public long? TotalBytes { get; }
     }
 
-    internal sealed class StorageConnectRequestData : BaseData
+    // A mount the background check looks at again.
+    internal sealed class StorageCheckCandidateData : BaseData
     {
-        public StorageConnectRequestData(long storageMountId, bool isConnectRequested)
+        public StorageCheckCandidateData(long storageMountId)
         {
             StorageMountId = storageMountId;
-            IsConnectRequested = isConnectRequested;
         }
 
         [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
         public long StorageMountId { get; }
-
-        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.IsConnectRequested))]
-        public bool IsConnectRequested { get; }
     }
 
-    internal sealed class StorageReconnectCandidateData : BaseData
+    internal sealed class StorageCheckFailureData : BaseData
     {
-        public StorageReconnectCandidateData(long storageMountId, int reconnectAttempts)
+        public StorageCheckFailureData(int failedChecks, string name)
         {
-            StorageMountId = storageMountId;
-            ReconnectAttempts = reconnectAttempts;
+            FailedChecks = failedChecks;
+            Name = name;
         }
 
-        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Id))]
-        public long StorageMountId { get; }
+        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.FailedChecks))]
+        public int FailedChecks { get; }
 
-        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.ReconnectAttempts))]
-        public int ReconnectAttempts { get; }
-    }
-
-    internal sealed class StorageReconnectAttemptData : BaseData
-    {
-        public StorageReconnectAttemptData(int reconnectAttempts, int delayMinutes)
-        {
-            ReconnectAttempts = reconnectAttempts;
-            DelayMinutes = delayMinutes;
-        }
-
-        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.ReconnectAttempts))]
-        public int ReconnectAttempts { get; }
-
-        [DataField(typeof(StorageMountStateFields), nameof(StorageMountStateFields.DelayMinutes))]
-        public int DelayMinutes { get; }
+        [DataField(typeof(StorageMountFields), nameof(StorageMountFields.Name))]
+        public string Name { get; }
     }
 
     internal sealed class StorageSynologyData : BaseData
