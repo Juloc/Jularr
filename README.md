@@ -15,7 +15,7 @@ dazu Synology API und per Docker Compose freigegebene Pfade. Konfiguration erfol
 Regeln: [AGENTS.md](AGENTS.md), [CONVENTIONS.md](docs/CONVENTIONS.md).
 Navigation: [CODEMAP.md](docs/CODEMAP.md).
 Nächste fachliche Schritte: [Backend-Slices](docs/BACKEND_NEXT.md) (Plan, keine Implementierung).
-Instanz-Einrichtung: [Wizard-Ablauf und Owner](docs/INSTANCE_SETUP.md) (Vorschlag).
+Instanz-Einrichtung: [vier Schritte, Presets und Owner](docs/INSTANCE_SETUP.md).
 Lokale Vorschau auf D: [Testserver und Aktualisierung](docs/LOCAL_PREVIEW.md).
 
 ## Docker Compose
@@ -146,7 +146,7 @@ User `ReadInstanceCapabilitiesV1` liefert die verfügbaren Funktionen; Public
 Shell/Login verwenden den Namen, bei eigener Benennung mit „by Jularr“.
 Die aktive Profilsprache hat Vorrang vor dem Instanzdefault; exakte Sprache,
 Elternsprache und Englisch werden vom gemeinsamen Backend-Katalog aufgelöst.
-Weitere Module, Profilsichtbarkeit und der weitere Setup Wizard bleiben offen.
+Der [Setup Wizard](docs/INSTANCE_SETUP.md) bündelt Owner und Sprache, Module, Bibliotheken sowie Quellen und Abschluss in vier Schritten.
 
 `/Admin/Works` legt kanonische Works manuell an; `/Admin/Works/{id}` bearbeitet
 den Titel mit Versionsprüfung und erhält weitere Titelquellen. `/Details/{id}`

@@ -14,7 +14,7 @@ through the UI). A row is done only at e2e. Tests name classes in `tests/Jularr.
 
 | Step | Status | Owner | Tests | Missing | Acceptance |
 | --- | --- | --- | --- | --- | --- |
-| Setup: Owner, sign-in, menu pages | e2e | `Pages/Setup`, Account services | FirstRunTests, FilmPathTests | Setup wizard steps after the Owner; modules switched in the browser | A fresh instance is set up through the UI alone, modules switched on the Instance page |
+| Setup: Owner, sign-in, menu pages | e2e | `Pages/Setup`, Account services | FirstRunTests, FilmPathTests, SetupWizardTests, SetupTests | Storage/NAS and source-editor browser coverage beyond the local fixtures | A fresh instance is set up through the UI alone, modules switched on the Instance page |
 | Storage/NAS connection, library root | e2e (local path) | Storage, Library services | StorageTests, LibraryTests, FilmPathTests, MusicPathTests, ReadingPathTests | SMB/NFS in the browser (Samba stack) | A connected share is browsable; an outage keeps browsing |
 | Scan and metadata match | tested | Library scan, `WorkMetadata` | LibraryTests, MediaTests | Automatic TMDB identification of unknown folders; E2E | Scanned files appear under the right Work without manual steps where the name is clear |
 | Discover, details, request | e2e (films, series); tested (books, light novels, manga, music and games found in their catalogs and requested) | Discover, Request services, `MetadataCatalog` | DiscoverTests, RequestTests, BookTests, FilmPathTests, MusicPathTests, ReadingPathTests | Anime tab (needs an AniList to TMDB mapping), catalog types in the All search, rankings for music and games | Each enabled type can be found and requested by a user |

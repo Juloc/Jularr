@@ -6747,6 +6747,82 @@
   "hint.StorageMountFields.IsVolume.info": [
    "Jularr opens the share only when needed, so a NAS may sleep. A Docker volume is mounted when the container starts and needs lines in compose.yaml.",
    "Jularr membuka share hanya saat diperlukan, sehingga NAS bisa tidur. Volume Docker dipasang saat kontainer dimulai dan memerlukan baris di compose.yaml."
+  ],
+  "setup.step.Owner": [
+   "Owner & language",
+   "Pemilik dan bahasa"
+  ],
+  "setup.step.Sources": [
+   "Sources",
+   "Sumber"
+  ],
+  "setup.sources.back": [
+   "Back to sources",
+   "Kembali ke sumber"
+  ],
+  "admin.plex.pin.start": [
+   "Connect through plex.tv",
+   "Hubungkan melalui plex.tv"
+  ],
+  "setup.presets": [
+   "Module presets",
+   "Preset modul"
+  ],
+  "setup.locale.machine": [
+   "{0} (machine translated)",
+   "{0} (terjemahan mesin)"
+  ],
+  "setup.preset.complete": [
+   "Complete",
+   "Lengkap"
+  ],
+  "setup.preset.mediaServer": [
+   "Media server",
+   "Server media"
+  ],
+  "setup.preset.requests": [
+   "Requests",
+   "Permintaan"
+  ],
+  "setup.modules.media": [
+   "Media",
+   "Media"
+  ],
+  "setup.modules.requests": [
+   "Requests & downloads",
+   "Permintaan dan unduhan"
+  ],
+  "setup.modules.personal": [
+   "Profiles & personal features",
+   "Profil dan fitur pribadi"
+  ],
+  "setup.modules.operations": [
+   "Administration",
+   "Administrasi"
+  ],
+  "setup.sources.metadata": [
+   "Metadata",
+   "Metadata"
+  ],
+  "setup.sources.tmdbKey": [
+   "TMDB API key",
+   "Kunci API TMDB"
+  ],
+  "setup.sources.tmdbAccount": [
+   "Get a TMDB API key",
+   "Dapatkan kunci API TMDB"
+  ],
+  "setup.sources.acquisition": [
+   "Search & downloads",
+   "Pencarian dan unduhan"
+  ],
+  "setup.sources.providers": [
+   "Provider connections",
+   "Koneksi penyedia"
+  ],
+  "setup.sources.plex": [
+   "Plex and other providers",
+   "Plex dan penyedia lainnya"
   ]
  }
 }

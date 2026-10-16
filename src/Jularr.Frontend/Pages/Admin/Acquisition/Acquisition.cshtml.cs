@@ -60,7 +60,7 @@ namespace Jularr.Frontend.Pages.Admin.Acquisition
         {
             page.Title("acquisition.role." + Role);
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers, csrf));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(Role == AcquisitionConnectionRole.Download ? SetupStepType.Downloads : SetupStepType.Indexers));
             page.Navigation("nav.admin");
             var type = _selected?.AcquisitionConnectionTypeId ?? Type;
 

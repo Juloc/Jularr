@@ -66,7 +66,7 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             page.Navigation("nav.admin");
             page.Asset("Pages/Admin/Storage/Storage.entry.scss");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage, csrf));
+            if (IsSetup) page.Content.Add(SetupWizard.Frame(SetupStepType.Storage));
 
             var split = new Split(content =>
             {
@@ -104,7 +104,10 @@ namespace Jularr.Frontend.Pages.Admin.Storage
             });
             var detailOpen = StorageMountId is not null || _input is not null || Request.Query.ContainsKey("protocol");
             page.Content.Add(split.MasterDetail(detailOpen, Address()));
+            DefineFooter(page, csrf);
         }
+
+        protected virtual void DefineFooter(Page page, string? csrf) { }
 
         private Form<SaveStorageMountDataV1> ConnectionForm(StorageProtocolType protocol, string? csrf)
         {

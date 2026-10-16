@@ -23,9 +23,21 @@ namespace Jularr.Backend.Logic.Authentication
             sql.Statement =
                 """
                 INSERT INTO
-                    "AccountAuthChallenges" ("PublicId", "AuthChallengePurposeTypeId", "TokenHash", "ProtectedState", "ExpiresAt")
-                VALUES
-                    (@PublicId, @AuthChallengePurposeTypeId, @TokenHash, @ProtectedState, @ExpiresAt)
+                    "AccountAuthChallenges" ("PublicId", "AuthChallengePurposeTypeId", "TokenHash", "ProtectedState", "ExpiresAt", "AccountId", "CredentialRevision")
+                SELECT
+                    @PublicId,
+                    @AuthChallengePurposeTypeId,
+                    @TokenHash,
+                    @ProtectedState,
+                    @ExpiresAt,
+                    @AccountId,
+                    account."CredentialRevision"
+                FROM
+                    (SELECT 1) AS input
+                    LEFT JOIN "Accounts" AS account ON account."Id" = @AccountId
+                WHERE
+                    @AccountId::bigint IS NULL
+                    OR account."IsEnabled"
                 RETURNING
                     "Id";
                 """;
@@ -41,7 +53,7 @@ namespace Jularr.Backend.Logic.Authentication
                 VALUES
                     (@AccountAuthChallengeId, @AuthChallengePurposeTypeId, @ProviderId, @ExternalPinId, @ClientIdentifier);
                 """;
-            sql.Parameters.Add(new PlexFlowCreationData(created.Id, provider.Id, externalPinId, clientIdentifier));
+            sql.Parameters.Add(new PlexFlowCreationData(created.Id, provider.Id, externalPinId, clientIdentifier, challenge.AuthChallengePurposeTypeId));
             if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
             {
                 throw new InvalidOperationException("The external authentication attempt could not be created.");
@@ -69,7 +81,18 @@ namespace Jularr.Backend.Logic.Authentication
                     "Providers" AS provider ON provider."Id" = flow."ProviderId"
                 WHERE
                     challenge."PublicId" = @AuthChallengePublicId
-                    AND challenge."AuthChallengePurposeTypeId" = 7
+                    AND challenge."AuthChallengePurposeTypeId" = @AuthChallengePurposeTypeId
+                    AND challenge."AccountId" IS NOT DISTINCT FROM @AccountId
+                    AND (challenge."AccountId" IS NULL OR EXISTS (
+                        SELECT
+                            1
+                        FROM
+                            "Accounts" AS account
+                        WHERE
+                            account."Id" = challenge."AccountId"
+                            AND account."IsEnabled"
+                            AND account."CredentialRevision" = challenge."CredentialRevision"
+                    ))
                     AND challenge."ConsumedAt" IS NULL
                     AND challenge."ExpiresAt" > statement_timestamp()
                     AND challenge."ProtectedState" IS NOT NULL
@@ -166,7 +189,22 @@ namespace Jularr.Backend.Logic.Authentication
                 throw new UnauthorizedAccessException("A second factor is required.");
             }
 
-            sql = new SqlStatement();
+            await ctx.ConsumePlexFlowAsync(parameters, ct);
+
+            // Pending accounts receive no session.
+            if (!account.IsEnabled)
+            {
+                return new PlexCompletionData(null, requiresApproval: true);
+            }
+
+            var session = await ctx.CreateSessionAsync(account, sessionLifetime, ct);
+            return new PlexCompletionData(session, requiresApproval: false);
+        }
+
+        public static async Task ConsumePlexFlowAsync(this LogicContext ctx, PlexChallengeParameters parameters, CancellationToken ct)
+        {
+            _ = await ctx.ReadPlexFlowAsync(parameters, ct);
+            var sql = new SqlStatement();
             sql.Statement =
                 """
                 UPDATE
@@ -179,19 +217,7 @@ namespace Jularr.Backend.Logic.Authentication
                     AND "ConsumedAt" IS NULL;
                 """;
             sql.Parameters.Add(parameters);
-            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
-            {
-                throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
-            }
-
-            // Pending accounts receive no session.
-            if (!account.IsEnabled)
-            {
-                return new PlexCompletionData(null, requiresApproval: true);
-            }
-
-            var session = await ctx.CreateSessionAsync(account, sessionLifetime, ct);
-            return new PlexCompletionData(session, requiresApproval: false);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1) throw new UnauthorizedAccessException("The authentication attempt is unavailable.");
         }
     }
 }

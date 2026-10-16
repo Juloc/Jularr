@@ -31,7 +31,7 @@ namespace Jularr.Frontend.Pages.Admin.Instance
         {
             page.Title("admin.instance.title");
             page.Navigation("nav.admin");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Instance, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Instance));
 
             // Edit supported settings only.
             if (_settings is { } settings)

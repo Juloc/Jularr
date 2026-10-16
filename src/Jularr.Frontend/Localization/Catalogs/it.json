@@ -6747,6 +6747,82 @@
   "hint.StorageMountFields.IsVolume.info": [
    "Jularr opens the share only when needed, so a NAS may sleep. A Docker volume is mounted when the container starts and needs lines in compose.yaml.",
    "Jularr apre la condivisione solo quando serve, così il NAS può andare in standby. Un volume Docker viene montato all'avvio del container e richiede righe in compose.yaml."
+  ],
+  "setup.step.Owner": [
+   "Owner & language",
+   "Proprietario e lingua"
+  ],
+  "setup.step.Sources": [
+   "Sources",
+   "Fonti"
+  ],
+  "setup.sources.back": [
+   "Back to sources",
+   "Torna alle fonti"
+  ],
+  "admin.plex.pin.start": [
+   "Connect through plex.tv",
+   "Connetti tramite plex.tv"
+  ],
+  "setup.presets": [
+   "Module presets",
+   "Preimpostazioni dei moduli"
+  ],
+  "setup.locale.machine": [
+   "{0} (machine translated)",
+   "{0} (traduzione automatica)"
+  ],
+  "setup.preset.complete": [
+   "Complete",
+   "Completo"
+  ],
+  "setup.preset.mediaServer": [
+   "Media server",
+   "Server multimediale"
+  ],
+  "setup.preset.requests": [
+   "Requests",
+   "Richieste"
+  ],
+  "setup.modules.media": [
+   "Media",
+   "Media"
+  ],
+  "setup.modules.requests": [
+   "Requests & downloads",
+   "Richieste e download"
+  ],
+  "setup.modules.personal": [
+   "Profiles & personal features",
+   "Profili e funzioni personali"
+  ],
+  "setup.modules.operations": [
+   "Administration",
+   "Amministrazione"
+  ],
+  "setup.sources.metadata": [
+   "Metadata",
+   "Metadati"
+  ],
+  "setup.sources.tmdbKey": [
+   "TMDB API key",
+   "Chiave API TMDB"
+  ],
+  "setup.sources.tmdbAccount": [
+   "Get a TMDB API key",
+   "Ottieni una chiave API TMDB"
+  ],
+  "setup.sources.acquisition": [
+   "Search & downloads",
+   "Ricerca e download"
+  ],
+  "setup.sources.providers": [
+   "Provider connections",
+   "Connessioni ai fornitori"
+  ],
+  "setup.sources.plex": [
+   "Plex and other providers",
+   "Plex e altri fornitori"
   ]
  }
 }

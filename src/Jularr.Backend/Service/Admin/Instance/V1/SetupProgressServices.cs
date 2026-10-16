@@ -4,11 +4,30 @@ using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Service;
 using Jularr.Backend.Data.Logic.Instance;
 using Jularr.Backend.Logic.Instance;
+using Jularr.Backend.Logic.Media;
+using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Service.Core;
 using Jularr.Integrations.Logic.Media;
 
 namespace Jularr.Backend.Service.Admin.Instance.V1
 {
+    [ServiceEndpoint("PUT", "/api/v1/admin/setup/libraries")]
+    public sealed class SaveSetupLibrariesV1 : AdminService<SetupProgressParametersV1, CompleteSetupDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(SetupProgressParametersV1 parameters) => ModuleRequirement.None;
+        protected override ServicePermission GetPermission(SetupProgressParametersV1 parameters, Type resultType) => new("instance.settings.update");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.RequireSetupVersionAsync(new SetupVersionData(Data.Version), CancellationToken);
+            await Context.DisableUnconfiguredMediaAsync(CancellationToken);
+            await Context.UpdateSetupStepAsync(new SetupStepData(SetupStepType.Providers), CancellationToken);
+            return new UpdateResult(true);
+        }
+    }
+
     [ServiceEndpoint("GET", "/api/v1/admin/setup")]
     public sealed class ReadSetupProgressV1 : AdminService<SetupProgressParametersV1>
     {

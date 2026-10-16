@@ -7,6 +7,38 @@ namespace Jularr.Backend.Logic.Media
 {
     internal static class MediaCategoryLogic
     {
+        public static async Task DisableUnconfiguredMediaAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            // A subtype needs its own root. A parent remains available for its subtype's roots.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "MediaSubtypes" AS subtype
+                SET
+                    "IsEnabled" = FALSE,
+                    "Version" = subtype."Version" + 1
+                WHERE
+                    subtype."IsEnabled"
+                    AND NOT EXISTS (SELECT 1 FROM "LibraryRoots" AS root WHERE root."MediaSubtypeId" = subtype."Id");
+                """;
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+
+            sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "MediaTypes" AS type
+                SET
+                    "IsEnabled" = FALSE,
+                    "Version" = type."Version" + 1
+                WHERE
+                    type."IsEnabled"
+                    AND NOT EXISTS (SELECT 1 FROM "LibraryRoots" AS root WHERE root."MediaTypeId" = type."Id");
+                """;
+            await ctx.ExecuteAsyncForAffectedRows(sql, ct);
+        }
+
         public static async Task UpdateMediaCategoryAsync(this LogicContext ctx, MediaCategoryUpdateData data, CancellationToken ct)
         {
             // A type switches alone; a subtype only turns on below an enabled parent.

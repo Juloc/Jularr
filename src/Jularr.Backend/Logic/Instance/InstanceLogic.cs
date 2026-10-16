@@ -1,6 +1,7 @@
 using System.Net;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Instance;
+using Jularr.Backend.Data.Logic.Localization;
 using Jularr.Backend.Infrastructure.Sql;
 using Jularr.Backend.Logic.Localization;
 using Jularr.Backend.Logic.Media;
@@ -9,6 +10,46 @@ namespace Jularr.Backend.Logic.Instance
 {
     internal static class InstanceLogic
     {
+        public static Task<InstancePresentationSettingsData> ReadInitialInstanceSettingsAsync(this LogicContext ctx, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    settings."Name",
+                    settings."UiLocaleId",
+                    settings."PublicUrl"
+                FROM
+                    "InstanceSettings" AS settings
+                WHERE
+                    settings."Id" = 1
+                FOR UPDATE;
+                """;
+            return ctx.ReadRequiredAsync<InstancePresentationSettingsData>(sql, ct);
+        }
+
+        public static async Task SetInitialInstanceLocaleAsync(this LogicContext ctx, long uiLocaleId, CancellationToken ct)
+        {
+            await ctx.RequireEnabledUiLocaleAsync(uiLocaleId, nameof(uiLocaleId), ct);
+
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "InstanceSettings" AS settings
+                SET
+                    "UiLocaleId" = @UiLocaleId,
+                    "Version" = settings."Version" + 1
+                WHERE
+                    settings."Id" = 1;
+                """;
+            sql.Parameters.Add(new UiLocaleParameters(uiLocaleId));
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new InvalidOperationException("The instance settings were not found.");
+            }
+        }
+
         public static async Task<string[]> ReadTrustedProxiesAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();

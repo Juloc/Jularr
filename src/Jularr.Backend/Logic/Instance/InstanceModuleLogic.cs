@@ -6,6 +6,38 @@ namespace Jularr.Backend.Logic.Instance
 {
     internal static class InstanceModuleLogic
     {
+        public static async Task UpdateInstanceModulesAsync(this LogicContext ctx, IReadOnlyList<InstanceModuleUpdateData> modules, CancellationToken ct)
+        {
+            // Match every shown row by ID and version; one stale or missing row rolls the step back.
+            if (modules.Count is < 1 or > 64 || modules.Select(module => module.Id).Distinct().Count() != modules.Count)
+            {
+                throw new DataValidationException("Modules", "out_of_range");
+            }
+
+            var data = new InstanceModulesUpdateData([.. modules.Select(module => module.Id)], [.. modules.Select(module => module.Version)],
+                [.. modules.Where(module => module.IsEnabled).Select(module => module.Id)]);
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "InstanceModules" AS module
+                SET
+                    "IsEnabled" = module."Id" = ANY(@EnabledIds),
+                    "Version" = module."Version" + 1
+                FROM
+                    unnest(@Ids, @Versions) AS input("Id", "Version")
+                WHERE
+                    module."Id" = input."Id"
+                    AND module."Version" = input."Version"
+                    AND cardinality(@Ids) = (SELECT count(*) FROM "InstanceModules");
+                """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != modules.Count)
+            {
+                throw new DataValidationException("Modules", "outdated_version");
+            }
+        }
+
         public static async Task<IReadOnlyList<InstanceModuleData>> ReadInstanceModulesAsync(this LogicContext ctx, InstanceModuleParameters parameters, CancellationToken ct)
         {
             // Hold configuration through mutations.

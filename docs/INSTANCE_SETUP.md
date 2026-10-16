@@ -1,100 +1,68 @@
-# Instance setup: agreed flow
+# Instance setup: four steps
 
-Consolidated flow requested by the owner. The first Owner, resumable steps over the
-real Admin editors (Instance, Storage, Indexers, Download clients, Providers, Profiles, Existing media), the
-checks and the final completion are implemented. Restore is offered on the first editor
-(`/Setup/Backup`) while setup is unfinished: a backup of the same schema replaces the new
-instance through `pg_restore`, then Jularr restarts and its own accounts sign in. AI (page 7)
-follows as its own package; until then the wizard skips it.
-Current code owners: [CODEMAP](CODEMAP.md). Keep one Frontend host,
-versioned Backend Data/Services, canonical Logic writers and shared transactions.
+Owner decision of 16 October 2026 supersedes the older nine-page wizard and the
+separate acquisition-profile step. Setup uses the canonical configuration owners;
+it adds neither its own settings store nor database migrations.
 
-## Pages and canonical owners
+## Flow and owners
 
-Except for first-Owner services/state and instance name/language settings,
-new service names and tables below remain proposals, not existing contracts. Each
-Admin owner provides its ordinary read/update/test operations for both Setup and
-later Admin settings; do not create a separate configuration system per page.
+| Step | Page | Saved behavior |
+| --- | --- | --- |
+| 1. Owner and language | /Setup | Public ReadSetupLocalesV1 lists all installed languages, marking generated translations. CreateOwnerV1 atomically enables the selected language, applies it to the instance and the first profile, creates the Owner and signs in. Bootstrap remains exactly once. |
+| 2. Instance and modules | /Setup/Instance | ReadSetupModulesV1 supplies the existing switches and preset membership. SaveSetupModulesV1 saves the instance name, all shown module rows and progress in one transaction, with ID/version checks. |
+| 3. Libraries | /Setup/Storage | The shared Storage editor creates, checks and browses connections and library roots. Its bottom Continue invokes SaveSetupLibrariesV1, disables types/subtypes without a library and advances to Sources atomically. A parent needed by a subtype root stays enabled. |
+| 4. Sources and finish | /Setup/Sources | TMDB key with an account link, indexers, downloaders, quality profiles, takeover and provider connections. Those detailed editors are auxiliary pages of this step with a return link. SaveSetupSourcesV1 preserves an empty key, saves a supplied key and completes setup only after the canonical checks pass in the same transaction. |
 
-| Page | Content | Services / Logic | Persistence |
-| --- | --- | --- | --- |
-| 1. Start & system | First-Owner form is connected. Remaining database/system/storage readiness checks are pending. | Public `ReadSetupV1`, `CreateOwnerV1`; Account Logic owns exactly-once account/profile/password creation and the shared Session writer signs in. | Existing Accounts, AccountPasswords, Profiles, AccountProfiles, UiLocales; implemented InstanceSetupState. |
-| 2. Setup type | New instance; later supported backup restore or migration. A source cannot be both restored and migrated. | Setup orchestration delegates to canonical Backup or Migration operations. | InstanceSetupState references the operation; proposed Operations/OperationLogs. No duplicated backup or migration data. |
-| 3. Instance & modules | Owner name/language and Library module editor implemented; region/timezone and further preferences remain pending. | Admin settings/module reads and updates; Instance Logic owns revision checks, locale validation and mutation locks. User `ReadInstanceCapabilitiesV1` is separate from configuration; Public presentation supplies name/language only. | Implemented InstanceSettings, InstanceModules and existing UiLocales. MediaTypes and MediaSubtypes carry the media switches; profiles block or hide types through ProfileMediaRules. |
-| 4. Storage & roots | SMB/NFS configuration and explicit mount operations are connected at /Setup/Storage and Admin. Compose paths (`Storage:LocalPaths`) and logical LibraryRoots are configured in Admin Storage; Synology, probes and roles remain pending. | The same Owner Storage read/create/update/execute Services serve Setup and Admin; Storage Logic owns configuration, Integrations and the Linux helper own mount I/O. | Implemented StorageMounts, protocol/version catalogs and LibraryRoots; storage-role relations remain pending. |
-| 5. Downloader / Usenet | Optional native Usenet settings or external client; TLS, credentials, connections, workspace/categories and path mapping; connection test. | Admin Downloader read/update/test; Downloader Logic owns configuration; Integrations performs external protocol calls. | Proposed UsenetServers / DownloadClients and their workspace/root references. No fake media module or Arr-specific copy of the library model. |
-| 6. Providers | Identity/login, metadata, search/indexers, subtitles, translation/reading as needed; required versus optional status and bounded tests. TMDB is required for Movie/TV unless a supported substitute covers the same capability. | Admin Provider read/update/test; Provider Logic owns saved configuration and capability requirements. Reuse existing Public auth/Plex services. | Existing Providers; proposed ProviderConnections with protected credentials. Extend the canonical owner, not setup-only Plex/TMDB settings. |
-| 6b. Profiles | Owner's decision 15 Oct: the acquisition profile editor is its own step after Providers, the same `/Admin/Acquisition/Profiles` page at `/Setup/Profiles`. | Admin acquisition profile Services. | AcquisitionProfiles and their release rules. |
-| 7. AI | Optional endpoint, credentials, model discovery and Text/Vision/Image assignments. Arr-only setup needs no model download or runtime. | Admin AI read/update/test; AI Logic owns capability/model assignment; Integrations owns transport. | Proposed AiProviders, AiModels and AiModelAssignments, aligned with the agreed model registry before SQL implementation. |
-| 8. Existing media | No import, scan allowed roots, or explicitly take over Sonarr/Radarr/Prowlarr settings and monitoring once. Preview mappings/conflicts; never silently rename/move/delete files or write source monitoring. | Library Logic owns inventory/mapping; takeover delegates supported facts into the standalone Jularr pipeline. | Reuse LibraryRoots and canonical media/request/Wanted/operation data; no permanent external-manager dependency. |
-| 9. Review & finish | Optional branding near the end; summary/edit links, rerun required checks, warnings versus blockers, finish once checks pass. | Admin `UpdateSetupProgressV1` / `CompleteSetupV1`; Setup Logic owns progress/completion, Branding/Instance Logic owns branding changes. | InstanceSetupState, InstanceSettings; canonical managed assets for logos/icons, no arbitrary external logo URLs. |
+The three presets are Complete, Media server and Requests. Complete includes all
+implemented modules, including local Registration. Media server selects playback,
+reading, emulation and the associated personal/operational features; Requests
+selects Requests, Arr+, Notifications, Profiles, Devices, Diagnostics and Registration. The
+Owner may change the displayed switches before Continue; choosing a preset does
+not save anything. Preset membership is supplied by the Backend, not duplicated
+in browser code. Source-confirmation policy and advanced instance limits remain
+in Admin, outside setup.
 
-## Cross-page behavior
+Local account-registration requests remain available in all presets and still
+require Owner approval. Media requests remain available to authorized Jularr
+profiles independently of Plex. Plex sign-in and its registration policy are
+separate: automatic Plex registration uses the existing access check against the
+connected server. Both kinds of registration remain configurable.
 
-- The first-Owner slice requires the explicitly configured `JULARR_DB`; startup installs
-  the fresh baselines into an empty database and never migrates an existing one. Login
-  redirects fresh instances to `/Setup`. Owner creation commits account, profile,
-  password, session and permanent bootstrap closure together, then continues in the
-  wizard, which resumes at the furthest step reached.
-- `/Admin/Instance` edits the instance name and UiLocaleId through the same
-  services intended for Setup. Its fresh baseline follows Account.sql in a new
-  installation. Library disables the implemented
-  catalog/watchlist services and navigation without removing data. Public display
-  name/default language and User capabilities are connected to Razor; the wizard
-  further modules are not yet integrated; media types and subtypes switch on the Instance page.
-  No unsupported module toggle is presented; Learning remains deferred.
-- Resume on the server: current page, completed configuration and pending operation
-  references survive reloads. Recheck stale external health; it is not permanent truth.
-- Setup reads use static SELECTs; all mutations go through their canonical Logic.
-  Completion and its final database validation share one SqlContext transaction.
-  External checks run with finite timeouts outside long transactions; reject changed
-  configuration when committing completion.
-- The first Owner is entered directly in the startup wizard, without an
-  installation code or extra proof. Account Logic locks durable setup state and
-  creates the enabled Owner, owned Profile and password exactly once. Later public
-  requests cannot create Owners or reopen bootstrap when accounts are removed.
-- Credentials are masked/write-only and preserved on unrelated changes. Integrations
-  receives only required credentials; no application logs or responses expose them.
-- Optional modules disable dependent pages/navigation without deleting stored data.
-  Games is conditional on an implemented canonical capability; do not resurrect stale
-  module lists or disguise Generic Downloads as a media library. Learning remains deferred.
-- Branding supports optional name, safe logo variants/icons and independently optional
-  hue; custom branding retains secondary “by Jularr”, default branding does not repeat it.
-  All clients share its configuration; later Admin edits invalidate cached branding.
-- First-login personalization is separate, skippable profile onboarding: module-enabled
-  media order/presets, visibility, theme/accent/accessibility and reset to instance defaults.
-  Hiding is not authorization or disabling a module; new types append deterministically.
-- UI uses the shared PostgreSQL text catalog, English source and stable error/resource
-  keys. Breadcrumb is the page heading; no duplicate heading/description. No runtime
-  translation during page reads. Offline language packs remain a future requirement.
-- No active database changes, legacy migration, schema changes to an existing database, heavy
-  runtime deployment or unavailable placeholder wizard controls in the first clean-cut slice.
+## Connections, resume and validation
 
-## Decisions before implementing
+- New connections, library paths, tests and scans use their ordinary canonical
+  operations. Continue saves each main step; it is placed below the content.
+- Provider editors use native disclosure panels and retain the selected provider
+  after saving. A Plex token can be granted through plex.tv instead of copied by
+  hand. The existing challenge/flow tables hold an ExternalLink attempt bound to
+  the initiating account, browser nonce and inspected server address. It expires
+  after five minutes and is consumed with the server configuration, after external
+  I/O, in one authorized mutation batch. Login challenges cannot complete it.
+- Persisted progress resumes at Modules, Libraries or Sources; the earlier
+  indexer/downloader/profile/media progress values all resume at Sources. The
+  separate Finish page is removed. Configuration survives interruption; unsaved
+  edits remain ordinary form state.
+- Missing library roots do not require disabling each type by hand. Continuing
+  from Libraries disables unconfigured categories. A configured video type still
+  needs TMDB; missing optional indexers/downloaders and FFmpeg remain warnings.
+- Unknown, duplicate or stale module rows roll the entire step back. Completion
+  rechecks configuration in its transaction. Secrets remain write-only; a blank
+  setup TMDB key keeps the saved credential.
+- Restore remains available at /Setup/Backup for a compatible Jularr backup.
+  Legacy migration remains in stopped Phase B. AI setup is a separate package.
+- Only an Owner configures the instance. Permissions, validation, transactions,
+  safe paths and provider access remain Backend-owned. NAS outages leave catalog
+  and administration browsing usable. No active database is installed or changed.
 
-Owner administers configuration; MediaManager
-is limited to manual media management and Requests/Wanted. Storage includes configurable
-SMB/NFS/Synology and permitted Compose paths; exact runtime capabilities must be verified
-before activating connection/mount controls. Support existing general mounts,
-per-library Compose paths and NAS connections configured directly in the wizard;
-the latter does not require prebinding every library path in Compose. Prefer system mounts when necessary or
-better for throughput/reliability; configure options and privileges explicitly.
-NAS downtime must leave ordinary browsing available through retained DB covers.
-Store one standard cover on NAS and locale-specific variants in Jularr.
-Instance metadata uses a fixed locale or profile locale; localized artwork is an
-independent Owner setting. Timezone/region/default-preference contracts need their exact
-field/catalog definitions before adding SQL. First Owner uses the current required
-Email and DisplayName, not the obsolete UserName/optional-email form.
+## Verification
 
-## Sources and precedence
+SetupTests cover bootstrap concurrency/closure, generated-language selection,
+atomic module edits and rollback, progress, empty libraries and completion.
+AdminProviderTests cover Plex PIN completion, expiry, browser/account/purpose
+binding and replay. AuthenticationTests retain Plex registration access checks.
+SetupWizardTests drive all four steps at desktop and mobile sizes, including
+presets and resume. Existing film/series path tests use the provider disclosure.
 
-- [Original nine-page wizard](https://github.com/Juloc/Jularr/blob/dev/docs/mockups/setup-wizard/SPEC.md)
-- [Instance defaults and separate first-login onboarding](https://github.com/Juloc/Jularr/issues/877)
-- [TMDB capability and actionable provider errors](https://github.com/Juloc/Jularr/issues/872)
-- [Optional end-of-setup branding](https://github.com/Juloc/Jularr/issues/876)
-- [Non-destructive library reconciliation](https://github.com/Juloc/Jularr/issues/696)
-- [Optional managed AI runtimes: planning gate, not implementation](https://github.com/Juloc/Jularr/issues/881)
-
-Latest owner decisions and current [baseline](../database/README.md) override older
-module/identity assumptions. Older assistant chat messages were only available as
-content references; this consolidation does not claim to recover their missing text.
+The [original wizard specification](https://github.com/Juloc/Jularr/blob/dev/docs/mockups/setup-wizard/SPEC.md)
+remains a reference for unchanged behavior; the newer owner decisions above take
+precedence. See [CODEMAP](CODEMAP.md) and [Frontend CODEMAP](../src/Jularr.Frontend/CODEMAP.md).

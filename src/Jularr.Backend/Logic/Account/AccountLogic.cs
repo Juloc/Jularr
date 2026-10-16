@@ -6,6 +6,8 @@ using Jularr.Backend.Data.Logic.Profile;
 using Jularr.Backend.Data.Logic.Session;
 using Jularr.Backend.Data.Logic.Setup;
 using Jularr.Backend.Infrastructure.Sql;
+using Jularr.Backend.Logic.Instance;
+using Jularr.Backend.Logic.Localization;
 using Jularr.Backend.Logic.Profile;
 using Jularr.Backend.Logic.Session;
 using Microsoft.AspNetCore.Identity;
@@ -195,6 +197,8 @@ namespace Jularr.Backend.Logic.Account
             }
 
             // Reuse canonical account/profile writes.
+            await ctx.EnableInitialUiLocaleAsync(uiLocaleId, ct);
+            await ctx.SetInitialInstanceLocaleAsync(uiLocaleId, ct);
             var data = new AccountCreationData(email, displayName, true, null, AccountRoleType.Owner);
             var id = await ctx.CreateAccountAsync(data, uiLocaleId, ct)
                 ?? throw new SecurityException("Initial Owner creation is unavailable.");
