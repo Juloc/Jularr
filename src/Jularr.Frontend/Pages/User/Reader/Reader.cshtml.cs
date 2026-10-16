@@ -22,6 +22,9 @@ namespace Jularr.Frontend.Pages.User.Reader
     {
         // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
         private string[] _languages = [];
+
+        // A scan whose text is being recognized opens as a PDF meanwhile and says so.
+        private string? _status;
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
         private ReadingSourceV1? _source;
         private ReadingDocumentV1? _document;
@@ -192,6 +195,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                     new Div(new H1(new ValueText(source.Title)).Class("reader__title")).Class("reader__heading"),
                     new A(new Text("reader.openPdf")).Class("button").Attribute("href", file).Attribute("target", "_blank").Attribute("rel", "noopener")
                 ).Class("reader__top"),
+                _status is { } status ? new P(new Text(status)).Class("reader__note").Attribute("role", "status") : new Span(),
                 new Frame().Class("reader__pdf").Attribute("src", file).Attribute("title", source.Title)
             ).Class("reader reader--pdf");
         }
@@ -340,9 +344,11 @@ namespace Jularr.Frontend.Pages.User.Reader
             {
                 _document = await open.ExecuteAsync<ReadingDocumentV1>(new ReadingAssetParametersV1(Id), default, ct);
             }
-            catch (ServiceUnavailableException exception) when (_source.ReadingFormatTypeId == ReadingFormatType.Pdf && exception.Code is "reading_pdf_without_text" or "reading_invalid_file")
+            catch (ServiceUnavailableException exception) when (_source.ReadingFormatTypeId == ReadingFormatType.Pdf
+                && exception.Code is "reading_pdf_without_text" or "reading_invalid_file" or "reading_pdf_recognizing")
             {
-                // The browser may still show what Jularr cannot reflow.
+                // The browser may still show what Jularr cannot reflow, or not yet.
+                _status = exception.Code == "reading_pdf_recognizing" ? "errors." + exception.Code : null;
                 return;
             }
 

@@ -52,6 +52,7 @@ using Jularr.Integrations.Data.Database;
 using Jularr.Integrations.Logic.Database;
 using Jularr.Integrations.Logic.Subtitles;
 using Jularr.Integrations.Logic.Synology;
+using Jularr.Integrations.Logic.Ocr;
 using Jularr.Integrations.Logic.Translation;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -193,6 +194,7 @@ namespace Jularr.Backend.Service.Core
             services.TryAddSingleton<ISourceGateResolver, NoSourceGateResolver>();
             services.TryAddTransient<ReadingContent>();
             services.TryAddSingleton<TranslationFiles>();
+            services.TryAddSingleton<IPageRecognizer, OcrFiles>();
             services.AddMemoryCache(options => options.SizeLimit = 20_000);
             services.TryAddSingleton<UiLocalizationCache>();
             services.AddSingleton(new ServiceCatalog(serviceTypes));
@@ -271,6 +273,8 @@ namespace Jularr.Backend.Service.Core
             AddClient<PlexClient>(services, 10, 1);
             AddClient<GutenbergClient>(services, 60, null, agent: true);
             AddClient<MozillaTranslationsClient>(services, 600, null, agent: true);
+            AddClient<OcrModelClient>(services, 600, null, agent: true, baseAddress: providers.OcrModels,
+                handler: () => new HttpClientHandler { AllowAutoRedirect = true, MaxAutomaticRedirections = 3, UseCookies = false });
             AddClient<OpdsClient>(services, 60, null, agent: true);
             AddClient<AnnasArchiveClient>(services, 60, null, agent: true, handler: PublicNetwork.CreateHandler);
             AddClient<OpenLibraryClient>(services, 15, 4, agent: true, baseAddress: providers.OpenLibrary);

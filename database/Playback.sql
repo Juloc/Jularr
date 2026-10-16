@@ -158,3 +158,12 @@ CREATE TABLE "ReadingLanguages" (
     "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY ("ProfileId", "WorkId")
 );
+
+-- A scanned PDF waiting for text recognition; the worker reads its pages and prepares it like any book. A failed one waits for a changed file.
+CREATE TABLE "ReadingRecognitions" (
+    "StoredFileId" bigint NOT NULL PRIMARY KEY REFERENCES "StoredFiles" ("Id") ON DELETE CASCADE,
+    "SourceSizeBytes" bigint NOT NULL CHECK ("SourceSizeBytes" >= 0),
+    "SourceModifiedAt" timestamptz NOT NULL,
+    "RequestedAt" timestamptz NOT NULL DEFAULT now(),
+    "FailedAt" timestamptz
+);

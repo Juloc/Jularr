@@ -283,6 +283,68 @@ namespace Jularr.Backend.Data.Logic.Reading
         public byte[] Bytes { get; }
     }
 
+    // A scanned PDF to recognize, as long as its file stays the same.
+    internal sealed class ReadingRecognitionData : BaseData
+    {
+        public ReadingRecognitionData(long storedFileId, long sizeBytes, DateTime modifiedAt)
+        {
+            StoredFileId = storedFileId;
+            SizeBytes = sizeBytes;
+            ModifiedAt = modifiedAt;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.SizeBytes))]
+        public long SizeBytes { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ModifiedAt))]
+        public DateTime ModifiedAt { get; }
+    }
+
+    internal sealed class ReadingRecognitionStateData : BaseData
+    {
+        public ReadingRecognitionStateData(bool isPending)
+        {
+            IsPending = isPending;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsPending))]
+        public bool IsPending { get; }
+    }
+
+    // The next queued scan and the language its book was written in.
+    internal sealed class ReadingRecognitionQueueData : BaseData
+    {
+        public ReadingRecognitionQueueData(long storedFileId, string? language)
+        {
+            StoredFileId = storedFileId;
+            Language = language;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(WorkFields), nameof(WorkFields.OriginalLanguage))]
+        public string? Language { get; }
+    }
+
+    internal sealed class ReadingRecognitionResultData : BaseData
+    {
+        public ReadingRecognitionResultData(long storedFileId, bool isFailed)
+        {
+            StoredFileId = storedFileId;
+            IsFailed = isFailed;
+        }
+
+        [DataField(typeof(StoredFileFields), nameof(StoredFileFields.Id))]
+        public long StoredFileId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.IsMissing))]
+        public bool IsFailed { get; }
+    }
+
     // How many blocks a prepared section has.
     internal sealed class ReadingSectionBlocksData : BaseData
     {

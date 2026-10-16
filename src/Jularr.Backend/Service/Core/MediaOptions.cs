@@ -19,6 +19,9 @@ namespace Jularr.Backend.Service.Core
         // The Bergamot engine and language models are kept here once a reader needs them; without a folder books are not translated.
         public string? TranslationPath { get; set; }
 
+        // The OCR models are kept here once a scanned book needs them; without a folder scanned books stay PDFs.
+        public string? OcrPath { get; set; }
+
         // Optional hardware encoding; software stays the fallback.
         public string[] HardwareAccelerationArguments { get; set; } = [];
         public string[] VideoEncoderArguments { get; set; } = [];

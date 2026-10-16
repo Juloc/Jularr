@@ -1,11 +1,12 @@
 using System.Text.RegularExpressions;
+using Jularr.Integrations.Logic.Ocr;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Core;
 
 namespace Jularr.Backend.Logic.Reading
 {
     // A PDF with a text layer as a reflowable book: running headers and footers drop, lines join into paragraphs across pages,
-    // short numbered or titled lines on their own start chapters, pictures stay where they stood. Scanned pages without text are no book.
+    // short numbered or titled lines on their own start chapters, pictures stay where they stood. Scanned pages are read by a recognizer where one is given, else they are no book.
     internal static partial class PdfBook
     {
         // Raised when the converted output changes; old documents are prepared again.
@@ -16,6 +17,10 @@ namespace Jularr.Backend.Logic.Reading
         private const double MinimumImagePoints = 48;
         private const int MaximumImages = 500;
         private const int MaximumImageBytes = 10 * 1024 * 1024;
+
+        // A scanned page is one picture over most of the page; uncertain recognized lines are left out rather than read wrong.
+        private const double ScanCoverage = 0.5;
+        private const float MinimumConfidence = 0.5f;
 
         // A chapter without headings is split so no section grows unbounded.
         private const int MaximumParagraphs = 150;
@@ -29,7 +34,7 @@ namespace Jularr.Backend.Logic.Reading
         [GeneratedRegex(@"[.!?”""’)…:]$")]
         private static partial Regex SentenceEnd();
 
-        public static PdfBookContent Read(Stream stream)
+        public static PdfBookContent Read(Stream stream, Func<byte[], OcrPage>? recognize = null)
         {
             List<List<PdfLine>> pages;
             var images = new List<PdfImage>();
@@ -41,7 +46,7 @@ namespace Jularr.Backend.Logic.Reading
                     throw new InvalidDataException("The PDF has too many pages.");
                 }
 
-                pages = [.. pdf.GetPages().Select(page => Lines(page).Concat(Images(page, images)).OrderByDescending(line => line.Bottom).ToList())];
+                pages = [.. pdf.GetPages().Select(page => Page(page, images, recognize))];
             }
             catch (PdfDocumentFormatException exception)
             {
@@ -86,6 +91,50 @@ namespace Jularr.Backend.Logic.Reading
                 images.Add(new PdfImage(path, mediaType, bytes));
                 yield return new PdfLine(image.Bounds.Top, 0, page.Height) { Image = path };
             }
+        }
+
+        // A page's lines and pictures top to bottom; a page without text that is a scan, its recognized lines instead.
+        private static List<PdfLine> Page(UglyToad.PdfPig.Content.Page page, List<PdfImage> images, Func<byte[], OcrPage>? recognize)
+        {
+            var lines = Lines(page);
+            return [.. (recognize is not null && lines.Count == 0 && Recognized(page, recognize) is { } read ? read : lines.Concat(Images(page, images))).OrderByDescending(line => line.Bottom)];
+        }
+
+        // The scan's lines in page points, grouped by baseline like a text page's words.
+        private static List<PdfLine>? Recognized(UglyToad.PdfPig.Content.Page page, Func<byte[], OcrPage> recognize)
+        {
+            var scan = page.GetImages().Where(image => image.Bounds.Width * image.Bounds.Height >= page.Width * page.Height * ScanCoverage).MaxBy(image => image.Bounds.Width * image.Bounds.Height);
+            var bytes = scan is null ? null : scan.TryGetPng(out var png) ? png : scan.RawMemory.Span is [0xFF, 0xD8, ..] ? scan.RawMemory.ToArray() : null;
+            if (scan is null || bytes is null || bytes.Length > MaximumImageBytes * 4)
+            {
+                return null;
+            }
+
+            OcrPage read;
+            try
+            {
+                read = recognize(bytes);
+            }
+            catch (InvalidDataException)
+            {
+                return null;
+            }
+
+            var (scaleX, scaleY) = (scan.Bounds.Width / read.Width, scan.Bounds.Height / read.Height);
+            var lines = new List<PdfLine>();
+            foreach (var box in read.Lines.Where(line => line.Confidence >= MinimumConfidence).OrderByDescending(line => line.Bottom))
+            {
+                var (bottom, size) = (scan.Bounds.Top - box.Bottom * scaleY, (box.Bottom - box.Top) * scaleY * 0.7);
+                var line = lines.LastOrDefault(candidate => Math.Abs(candidate.Bottom - bottom) < Math.Max(size, 1) * 0.4);
+                if (line is null)
+                {
+                    lines.Add(line = new PdfLine(bottom, size, page.Height));
+                }
+
+                line.Words.Add((scan.Bounds.Left + box.Left * scaleX, scan.Bounds.Left + box.Right * scaleX, box.Text));
+            }
+
+            return lines;
         }
 
         private static List<PdfLine> Lines(UglyToad.PdfPig.Content.Page page)
