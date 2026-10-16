@@ -1,8 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using Jularr.Backend.Data.Admin.Provider.V1;
 using Jularr.Backend.Data.Public.Authentication.V1;
+using Jularr.Backend.Data.Common;
+using Jularr.Backend.Service.Core;
+using Jularr.Integrations.Logic.Plex;
+using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
 
 namespace Jularr.Backend.Tests
@@ -10,6 +15,67 @@ namespace Jularr.Backend.Tests
     [TestClass]
     public sealed class AdminProviderTests
     {
+        [TestMethod]
+        public async Task PlexServerPin_GrantedByItsBrowser_ConnectsOnceWithoutExposingTheToken()
+        {
+            await using var host = await Host.CreateAsync(media: true, services: services => services.AddHttpClient<PlexServerClient>().ConfigurePrimaryHttpMessageHandler(() => new PinServer()));
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/providers/plex/pin", new SavePlexServerDataV1("http://pin-server.example.test:32400", null));
+            Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            var attempt = (await started.Content.ReadFromJsonAsync<StartPlexResultV1>())!;
+            var route = "/api/v1/admin/providers/plex/pin/" + attempt.AuthChallengePublicId;
+            host.Plex.Pending = true;
+            using var pending = await host.SendAsync(HttpMethod.Post, route);
+            Assert.AreEqual(HttpStatusCode.OK, pending.StatusCode, await pending.Content.ReadAsStringAsync());
+            Assert.IsFalse((await pending.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
+            host.Plex.Pending = false;
+            using var completed = await host.SendAsync(HttpMethod.Post, route);
+            Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode, await completed.Content.ReadAsStringAsync());
+            Assert.IsTrue((await completed.Content.ReadFromJsonAsync<UpdateResult>())!.Success);
+            Assert.IsFalse((await completed.Content.ReadAsStringAsync()).Contains("verified-plex-token", StringComparison.Ordinal));
+            Assert.AreEqual("http://pin-server.example.test:32400/", await host.ScalarAsync("SELECT \"BaseUrl\" FROM \"Providers\" WHERE \"Key\" = 'plex'"));
+            Assert.AreEqual("pin-server", await host.ScalarAsync("SELECT \"ExternalId\" FROM \"Providers\" WHERE \"Key\" = 'plex'"));
+            Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"AccountAuthChallenges\" WHERE \"AuthChallengePurposeTypeId\" = 8 AND \"AccountId\" = 41 AND \"ConsumedAt\" IS NOT NULL AND \"ProtectedState\" IS NULL"));
+            using var replay = await host.SendAsync(HttpMethod.Post, route);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, replay.StatusCode);
+        }
+
+        [TestMethod]
+        [DataRow("browser")]
+        [DataRow("owner")]
+        [DataRow("expired")]
+        [DataRow("login")]
+        public async Task PlexServerPin_ForeignOrExpiredProof_CannotConnect(string reason)
+        {
+            await using var host = await Host.CreateAsync(plexEnabled: true, media: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var started = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/providers/plex/pin", new SavePlexServerDataV1("http://pin-server.example.test:32400", null));
+            Assert.AreEqual(HttpStatusCode.OK, started.StatusCode, await started.Content.ReadAsStringAsync());
+            var attempt = (await started.Content.ReadFromJsonAsync<StartPlexResultV1>())!;
+            if (reason == "browser") host.Cookies[ServiceApi.AuthenticationNonceCookieName] = new string('x', 43);
+            if (reason == "expired") await host.Fixture.RunSqlAsync("UPDATE \"AccountAuthChallenges\" SET \"CreatedAt\" = now() - interval '1 hour', \"ExpiresAt\" = now() - interval '1 minute'");
+            if (reason == "owner") await host.Fixture.RunSqlAsync("UPDATE \"AccountAuthChallenges\" SET \"AccountId\" = 42");
+            var route = reason == "login" ? "/api/v1/auth/plex/" : "/api/v1/admin/providers/plex/pin/";
+            using var denied = await host.SendAsync(HttpMethod.Post, route + attempt.AuthChallengePublicId);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, denied.StatusCode, await denied.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"Providers\" WHERE \"Key\" = 'plex' AND \"ProtectedSecret\" IS NOT NULL"));
+        }
+
+        private sealed class PinServer : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Assert.AreEqual("pin-server.example.test", request.RequestUri!.Host);
+                Assert.AreEqual("verified-plex-token", request.Headers.GetValues("X-Plex-Token").Single());
+                object data = request.RequestUri.AbsolutePath == "/identity"
+                    ? new { MediaContainer = (object)new { machineIdentifier = "pin-server", version = "1" } }
+                    : new { MediaContainer = (object)new { Directory = new[] { new { key = "7", type = "movie", title = "Movies" } } } };
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(data, options: new JsonSerializerOptions { PropertyNamingPolicy = null }) });
+            }
+        }
+
         [TestMethod]
         public async Task Provider_OwnerToggle_ChangesLoginAvailabilityAndRejectsStaleOrIncompleteInput()
         {

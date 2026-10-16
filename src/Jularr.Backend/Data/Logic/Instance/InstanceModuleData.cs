@@ -3,6 +3,23 @@ using Jularr.Backend.Data.Fields.Instance;
 
 namespace Jularr.Backend.Data.Logic.Instance
 {
+    internal sealed class InstanceModulesUpdateData : BaseData
+    {
+        public InstanceModulesUpdateData(long[] ids, long[] versions, long[] enabledIds)
+        {
+            Ids = ids;
+            Versions = versions;
+            EnabledIds = enabledIds;
+        }
+
+        [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.Ids))]
+        public long[] Ids { get; }
+        [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.Ids))]
+        public long[] Versions { get; }
+        [DataField(typeof(InstanceModuleFields), nameof(InstanceModuleFields.Ids))]
+        public long[] EnabledIds { get; }
+    }
+
     internal sealed class InstanceModuleParameters : BaseData
     {
         public InstanceModuleParameters(string[] moduleKeys)

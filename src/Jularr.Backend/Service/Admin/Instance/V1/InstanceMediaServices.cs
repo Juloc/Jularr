@@ -33,7 +33,7 @@ namespace Jularr.Backend.Service.Admin.Instance.V1
                             "LibraryRoots" AS root
                         WHERE
                             root."MediaSubtypeId" = category."MediaSubtypeId"
-                            OR root."MediaTypeId" = category."MediaTypeId" AND root."MediaSubtypeId" IS NULL
+                            OR root."MediaTypeId" = category."MediaTypeId"
                     ) AS "HasLibrary",
                     category."Version"
                 FROM

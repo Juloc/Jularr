@@ -13,4 +13,10 @@ namespace Jularr.Backend.Data.Fields.Localization
         public static readonly BoolField IsRightToLeft = new();
         public static readonly LongField CatalogVersion = new() { Minimum = 1 };
     }
+
+    // Derived status of the locale's translation catalog.
+    public static class UiLocaleTranslationFields
+    {
+        public static readonly BoolField IsMachineTranslated = new();
+    }
 }

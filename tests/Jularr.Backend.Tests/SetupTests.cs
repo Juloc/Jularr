@@ -1,8 +1,11 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security;
 using System.Text.RegularExpressions;
 using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Setup.V1;
+using Jularr.Backend.Data.Admin.Instance.V1;
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Service.Public.Setup.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Host = Jularr.Backend.Tests.AuthenticationTests.Host;
@@ -60,7 +63,8 @@ namespace Jularr.Backend.Tests
             using var instance = await host.SendAsync(HttpMethod.Get, "/Setup/Instance");
             var instanceHtml = await instance.Content.ReadAsStringAsync();
             Assert.AreEqual(HttpStatusCode.OK, instance.StatusCode, instanceHtml);
-            StringAssert.Contains(instanceHtml, "action=\"/Setup/Instance?handler=Media\"");
+            StringAssert.Contains(instanceHtml, "name=\"Modules[0].IsEnabled\"");
+            Assert.IsFalse(instanceHtml.Contains("UsersConfirmSources", StringComparison.Ordinal));
             using var next = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "2")));
             Assert.AreEqual("/Setup/Storage", next.Headers.Location!.OriginalString);
             using var back = await host.SendAsync(HttpMethod.Post, "/Setup/Progress", Token(instanceHtml, ("SetupStepTypeId", "1")));
@@ -78,16 +82,15 @@ namespace Jularr.Backend.Tests
             StringAssert.Contains(profilesHtml, "href=\"/Setup/Profiles/New?type=Movie\"");
 
             // Missing essentials block the end; once nothing blocks, the wizard closes.
-            using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Finish");
+            using var blocked = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
             var blockedHtml = await blocked.Content.ReadAsStringAsync();
             StringAssert.Contains(blockedHtml, "Movies and series need a TMDB key.");
-            Assert.IsFalse(blockedHtml.Contains("Finish setup", StringComparison.Ordinal));
             await host.Fixture.RunSqlAsync("UPDATE \"MediaTypes\" SET \"IsEnabled\" = FALSE; UPDATE \"MediaSubtypes\" SET \"IsEnabled\" = FALSE");
-            using var ready = await host.SendAsync(HttpMethod.Get, "/Setup/Finish");
+            using var ready = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
             var readyHtml = await ready.Content.ReadAsStringAsync();
             StringAssert.Contains(readyHtml, "has no indexer yet.");
             var version = Regex.Match(readyHtml, "name=\"Version\" value=\"(\\d+)\"").Groups[1].Value;
-            using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Finish", Token(readyHtml, ("Version", version)));
+            using var finished = await host.SendAsync(HttpMethod.Post, "/Setup/Sources", Token(readyHtml, ("Version", version)));
             Assert.AreEqual("/", finished.Headers.Location!.OriginalString);
             using var closed = await host.SendAsync(HttpMethod.Get, "/Setup/Progress");
             Assert.AreEqual("/", closed.Headers.Location!.OriginalString);
@@ -109,6 +112,136 @@ namespace Jularr.Backend.Tests
                 new CreateOwnerDataV1("second@example.test", "Second", "owner-password-123", "owner-password-123", 1));
             Assert.AreEqual(HttpStatusCode.Forbidden, replay.StatusCode);
             Assert.AreEqual(1L, await host.ScalarAsync("SELECT count(*) FROM \"Accounts\""));
+        }
+
+        [TestMethod]
+        public async Task Modules_StaleRow_RollsBackSettingsAndProgressThenSavesTogether()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await host.Fixture.RunSqlAsync("TRUNCATE \"Accounts\" RESTART IDENTITY CASCADE");
+            using var auth = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner@example.test", "Owner", "owner-password-123", "owner-password-123", 1));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            using var page = await host.SendAsync(HttpMethod.Get, "/Setup/Instance");
+            var html = await page.Content.ReadAsStringAsync();
+            using var read = await host.SendAsync(HttpMethod.Get, "/api/v1/admin/setup/modules");
+            var modules = (await read.Content.ReadFromJsonAsync<BaseDataList<SetupModuleV1>>())!;
+            var settingsVersion = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""))!;
+            var setupVersion = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
+            var form = Token(html, ("Name", "  My server  "), ("Version", settingsVersion.ToString()), ("SetupVersion", setupVersion.ToString()));
+            for (var index = 0; index < modules.Count; index++)
+            {
+                var module = modules[index];
+                form[$"Modules[{index}].Id"] = module.Id.ToString();
+                form[$"Modules[{index}].Version"] = module.Version.ToString();
+                form[$"Modules[{index}].IsEnabled"] = "True";
+            }
+
+            form[$"Modules[{modules.Count - 1}].Version"] = "99999";
+            using var stale = await host.SendAsync(HttpMethod.Post, "/Setup/Instance", form);
+            Assert.AreEqual(HttpStatusCode.BadRequest, stale.StatusCode, await stale.Content.ReadAsStringAsync());
+            Assert.AreEqual(settingsVersion, await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSettings\""));
+            Assert.AreEqual(setupVersion, await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Devices'"));
+
+            form[$"Modules[{modules.Count - 1}].Version"] = modules[^1].Version.ToString();
+            using var saved = await host.SendAsync(HttpMethod.Post, "/Setup/Instance", form);
+            Assert.AreEqual(HttpStatusCode.Redirect, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual("/Setup/Storage", saved.Headers.Location!.OriginalString);
+            Assert.AreEqual("My server", await host.ScalarAsync("SELECT \"Name\" FROM \"InstanceSettings\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Devices'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"InstanceModules\" WHERE \"Key\" = 'Registration'"));
+
+            using var nextPage = await host.SendAsync(HttpMethod.Get, "/Setup/Storage");
+            var nextHtml = await nextPage.Content.ReadAsStringAsync();
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
+            using var next = await host.SendAsync(HttpMethod.Post, "/Setup/Storage?handler=Next", Token(nextHtml, ("Version", version.ToString())));
+            Assert.AreEqual("/Setup/Sources", next.Headers.Location!.OriginalString, await next.Content.ReadAsStringAsync());
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaTypes\" WHERE \"IsEnabled\""));
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"MediaSubtypes\" WHERE \"IsEnabled\""));
+            using var sources = await host.SendAsync(HttpMethod.Get, "/Setup/Sources");
+            var sourcesHtml = await sources.Content.ReadAsStringAsync();
+            var current = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
+            using var finish = await host.SendAsync(HttpMethod.Post, "/Setup/Sources", Token(sourcesHtml, ("Version", current.ToString()), ("TmdbKey", "")));
+            Assert.AreEqual("/", finish.Headers.Location!.OriginalString, await finish.Content.ReadAsStringAsync());
+
+            // Local account requests remain available without a Plex connection and always await approval.
+            using var registered = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/register", new RegisterDataV1("applicant@example.test", "Applicant", "applicant-password-123", "applicant-password-123", 1));
+            Assert.AreEqual(HttpStatusCode.OK, registered.StatusCode, await registered.Content.ReadAsStringAsync());
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"Accounts\" WHERE \"Email\" = 'applicant@example.test'"));
+        }
+
+        [TestMethod]
+        public async Task FirstOwner_DisabledGeneratedLanguage_EnablesAndSharesItWithTheInstance()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            await host.Fixture.RunSqlAsync("TRUNCATE \"Accounts\" RESTART IDENTITY CASCADE");
+            await host.Fixture.RunSqlAsync("""
+                INSERT INTO "UiLocales" ("Locale", "Name", "IsEnabled") VALUES ('fr', 'French', FALSE);
+                INSERT INTO "UiTranslations" ("UiLocaleId", "UiTranslationMessageId", "Text", "UiTranslationStatusTypeId", "MessageVersion")
+                SELECT locale."Id", message."Id", 'Configuration', 2, message."Version"
+                FROM "UiLocales" AS locale CROSS JOIN "UiTranslationMessages" AS message
+                WHERE locale."Locale" = 'fr' AND message."Key" = 'setup.title';
+                """);
+            using var auth = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var locales = await host.SendAsync(HttpMethod.Get, "/api/v1/setup/locales");
+            var choices = (await locales.Content.ReadFromJsonAsync<BaseDataList<SetupLocaleV1>>())!;
+            var french = choices.Single(locale => locale.Locale == "fr");
+            Assert.IsTrue(french.IsMachineTranslated);
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"UiLocales\" WHERE \"Locale\" = 'fr'"));
+            using var created = await host.SendAsync(HttpMethod.Post, "/api/v1/setup/owner", new CreateOwnerDataV1("owner@example.test", "Owner", "owner-password-123", "owner-password-123", french.Id));
+            Assert.AreEqual(HttpStatusCode.OK, created.StatusCode, await created.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"UiLocales\" WHERE \"Locale\" = 'fr'"));
+            Assert.AreEqual(french.Id, await host.ScalarAsync("SELECT \"UiLocaleId\" FROM \"InstanceSettings\""));
+            Assert.AreEqual(french.Id, await host.ScalarAsync("SELECT \"UiLocaleId\" FROM \"Profiles\""));
+        }
+
+        [TestMethod]
+        public async Task Downloads_TooManyConnections_UsesCanonicalBoundsAndAnInlineError()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var state = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            using var page = await host.SendAsync(HttpMethod.Get, "/Setup/Downloads?type=Usenet");
+            var html = await page.Content.ReadAsStringAsync();
+            StringAssert.Contains(html, "name=\"MaxConnections\"");
+            Assert.IsTrue(Regex.IsMatch(html, "<input[^>]*name=\"MaxConnections\"[^>]*min=\"1\"[^>]*max=\"50\""), html);
+            using var invalid = await host.SendAsync(HttpMethod.Post, "/Setup/Downloads?type=Usenet", Token(html,
+                ("AcquisitionConnectionTypeId", "6"), ("Name", "News"), ("Host", "news.example.test"), ("IsEnabled", "true"), ("Priority", "1"), ("MaxConnections", "100")));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            var failed = await invalid.Content.ReadAsStringAsync();
+            StringAssert.Contains(failed, "aria-invalid=\"true\"");
+            StringAssert.Contains(failed, "The value is outside the allowed range.");
+            Assert.AreEqual(0L, await host.ScalarAsync("SELECT count(*) FROM \"AcquisitionConnections\""));
+        }
+
+        [TestMethod]
+        public async Task Libraries_OnlyAnimeRoot_RetainsItsParentAndCompletesWithTheNewKey()
+        {
+            await using var host = await Host.CreateAsync(razor: true);
+            using var auth = await host.SendAsync(HttpMethod.Get, "/api/v1/auth");
+            using var login = await host.SendAsync(HttpMethod.Post, "/api/v1/auth/login", new LoginDataV1("a@example.test", "test-password-123"));
+            await host.Fixture.RunSqlAsync("""
+                UPDATE "InstanceSetupState" SET "OwnerCreatedAt" = now();
+                INSERT INTO "StorageMounts" ("Name", "StorageProtocolTypeId", "SharePath", "IsReadOnly") VALUES ('Test', 3, '/fixture', FALSE);
+                INSERT INTO "LibraryRoots" ("Name", "MediaTypeId", "MediaSubtypeId", "StorageMountId", "RelativePath")
+                SELECT 'Anime', type."Id", subtype."Id", mount."Id", 'Anime'
+                FROM "MediaTypes" AS type CROSS JOIN "MediaSubtypes" AS subtype CROSS JOIN "StorageMounts" AS mount
+                WHERE type."Key" = 'Series' AND subtype."Key" = 'Anime';
+                """);
+            var version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
+            using var saved = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/libraries", new CompleteSetupDataV1(version));
+            Assert.AreEqual(HttpStatusCode.OK, saved.StatusCode, await saved.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaTypes\" WHERE \"Key\" = 'Series'"));
+            Assert.AreEqual(false, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaTypes\" WHERE \"Key\" = 'Movie'"));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"IsEnabled\" FROM \"MediaSubtypes\" WHERE \"Key\" = 'Anime'"));
+            version = (long)(await host.ScalarAsync("SELECT \"Version\" FROM \"InstanceSetupState\""))!;
+            using var completed = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/sources", new { version, tmdbKey = "test-tmdb-key" });
+            Assert.AreEqual(HttpStatusCode.OK, completed.StatusCode, await completed.Content.ReadAsStringAsync());
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"CompletedAt\" IS NOT NULL FROM \"InstanceSetupState\""));
+            Assert.AreEqual(true, await host.ScalarAsync("SELECT \"ProtectedSecret\" IS NOT NULL FROM \"Providers\" WHERE \"Key\" = 'tmdb'"));
+            using var replay = await host.SendAsync(HttpMethod.Put, "/api/v1/admin/setup/sources", new { version, tmdbKey = "replacement" });
+            Assert.AreEqual(HttpStatusCode.BadRequest, replay.StatusCode);
         }
 
         [TestMethod]

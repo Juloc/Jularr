@@ -48,7 +48,7 @@ Navigation only. Rules: [Frontend conventions](../../docs/FRONTEND_CONVENTIONS.m
 - [Settings](Pages/User/Settings/Settings.cshtml.cs): profile settings, home shelf order, appearance and granted administration links.
 - [Login](Pages/Account/Login/Login.cshtml.cs) (links to [Register](Pages/Account/Register/Register.cshtml.cs) while the Registration module is on; the new account waits until an administrator enables it), [Profiles](Pages/Account/Profiles/Profiles.cshtml.cs), [PIN](Pages/Account/ProfilePin/ProfilePin.cshtml.cs) (numeric input that confirms itself at the PIN's length), [New profile](Pages/Account/ProfileNew/ProfileNew.cshtml.cs), [Sessions](Pages/Account/Sessions/Sessions.cshtml.cs), [Logout](Pages/Account/Logout/Logout.cshtml.cs): canonical service-driven authentication flows.
 - [AccessDenied](Pages/Account/AccessDenied/AccessDenied.cshtml.cs): catalog-backed 403.
-- [Setup](Pages/Setup/Start/Start.cshtml.cs), [Setup Storage](Pages/Setup/Storage/Storage.cshtml.cs), [Progress](Pages/Setup/Progress/Progress.cshtml.cs), [Finish](Pages/Setup/Finish/Finish.cshtml.cs): first Owner, resumable steps and completion. The Admin Instance, Acquisition, Providers and Takeover editors also answer under `/Setup` ([PageConventions.cs](Framework/PageConventions.cs)) inside the [SetupWizard.cs](Framework/SetupWizard.cs) frame.
+- [Setup](Pages/Setup/Start/Start.cshtml.cs), [Modules](Pages/Setup/Instance/Instance.cshtml.cs), [Libraries](Pages/Setup/Storage/Storage.cshtml.cs), [Sources](Pages/Setup/Sources/Sources.cshtml.cs): four-step flow; [SetupWizard.cs](Framework/SetupWizard.cs) owns navigation and resume mapping. The existing Admin source/profile/takeover editors are auxiliary pages. [Setup contract](../../docs/INSTANCE_SETUP.md).
 
 ## Admin pages
 

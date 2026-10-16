@@ -21,8 +21,15 @@ namespace Jularr.Frontend.Framework
         private bool _isUpload;
         private int _visibleFields;
         private bool _hasWideField;
+        private readonly string _prefix;
+        private readonly string? _antiforgeryToken;
 
         public Form(Action<Form<TData>> define, string? action = null, string? antiforgeryToken = null, TData? data = null, ServiceError? error = null)
+            : this(define, action, antiforgeryToken, data, error, "", true)
+        {
+        }
+
+        private Form(Action<Form<TData>> define, string? action, string? antiforgeryToken, TData? data, ServiceError? error, string prefix, bool ownsToken)
         {
             // Bind only local POST actions.
             if (action is not null && (!action.StartsWith('/') || action.StartsWith("//") || action.Any(character => char.IsControl(character) || character == '\\')
@@ -35,12 +42,36 @@ namespace Jularr.Frontend.Framework
             _action = action;
             _data = data;
             _error = error;
-            if (action is not null)
+            _prefix = prefix;
+            _antiforgeryToken = antiforgeryToken;
+            if (action is not null && ownsToken)
             {
                 _content.Add(new Input().Attribute("type", "hidden").Attribute("name", "__RequestVerificationToken").Attribute("value", antiforgeryToken!));
             }
 
             define(this);
+        }
+
+        // Rows share the parent form and retain their IDs; ASP.NET binds their indexed names.
+        public Form<TData> Rows<TItem>(Expression<Func<TData, BaseDataList<TItem>>> selector, Action<Form<TItem>, TItem> define, Func<TItem, bool>? include = null) where TItem : BaseData
+        {
+            if (selector.Body is not MemberExpression { Member: System.Reflection.PropertyInfo property }) throw new ArgumentException("Rows must select a data list.", nameof(selector));
+            var rows = _data is null ? null : property.GetValue(_data) as BaseDataList<TItem>;
+            for (var index = 0; index < (rows?.Count ?? 0); index++)
+            {
+                var item = rows![index];
+                if (include is not null && !include(item)) continue;
+                var child = new Form<TItem>(form => define(form, item), _action, _antiforgeryToken, item, _error,
+                    _prefix + property.Name + "[" + index.ToString(CultureInfo.InvariantCulture) + "].", false);
+                if (child._actions.Count > 0) throw new InvalidOperationException("Row fields share the parent's submit action.");
+                if (child._visibleFields > 0) _target.Add(new Div([.. child._content]).Class("ui-form__row"));
+                else _target.AddRange(child._content);
+                _fields.UnionWith(child._fields);
+                _hiddenFields.UnionWith(child._hiddenFields);
+            }
+
+            _hasWideField = true;
+            return this;
         }
 
         // A form may name another example or explanation than the field's own where the field means something special there.
@@ -160,6 +191,13 @@ namespace Jularr.Frontend.Framework
             define(this);
             _target = outer;
             _target.Add(new HtmlFieldset([.. inner]).Class("ui-form__section"));
+            return this;
+        }
+
+        public Form<TData> Content(IUiComponent component)
+        {
+            _target.Add(component);
+            _hasWideField = true;
             return this;
         }
 
@@ -304,7 +342,7 @@ namespace Jularr.Frontend.Framework
         private BaseField Declare<TValue>(Expression<Func<TData, TValue>> selector, FieldControl control, string labelKey, FieldHelp? help = null)
         {
             var field = BaseField.From(selector, control, labelKey);
-            field = field with { PlaceholderKey = help?.Placeholder ?? field.PlaceholderKey, InfoKey = help?.Info ?? field.InfoKey };
+            field = field with { Name = _prefix + field.Name, PlaceholderKey = help?.Placeholder ?? field.PlaceholderKey, InfoKey = help?.Info ?? field.InfoKey };
             if (!_fields.Add(field.Name))
             {
                 throw new InvalidOperationException("A form field cannot be declared twice.");

@@ -7,6 +7,27 @@ namespace Jularr.Backend.Logic.Localization
 {
     internal static class UiLocalizationLogic
     {
+        public static async Task EnableInitialUiLocaleAsync(this LogicContext ctx, long uiLocaleId, CancellationToken ct)
+        {
+            // Bootstrap owns the selected language, including an unreviewed shipped catalog.
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                UPDATE
+                    "UiLocales" AS locale
+                SET
+                    "IsEnabled" = TRUE,
+                    "CatalogVersion" = locale."CatalogVersion" + CASE WHEN locale."IsEnabled" THEN 0 ELSE 1 END
+                WHERE
+                    locale."Id" = @UiLocaleId;
+                """;
+            sql.Parameters.Add(new UiLocaleParameters(uiLocaleId));
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) != 1)
+            {
+                throw new DataValidationException(nameof(uiLocaleId), "unknown_reference");
+            }
+        }
+
         public static async Task<UiLocaleData> CreateUiLocaleAsync(this LogicContext ctx, UiLocaleCreationData data, CancellationToken ct)
         {
             // Create supported language metadata.

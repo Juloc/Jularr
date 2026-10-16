@@ -20,7 +20,7 @@ namespace Jularr.Frontend.Pages.Admin.Takeover
         {
             page.Title("admin.takeover.title");
             page.Navigation("nav.admin");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Media, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Media));
 
             // The key is used for this read only; a preview changes nothing.
             // A preview's root folders are assigned to libraries before taking over; the suggestion is preselected.

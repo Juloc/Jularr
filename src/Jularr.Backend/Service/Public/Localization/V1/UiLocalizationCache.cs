@@ -48,6 +48,8 @@ namespace Jularr.Backend.Service.Public.Localization.V1
             }
         }
 
+        public void Clear() => _entries.Clear();
+
         public void Dispose()
         {
             _entries.Dispose();

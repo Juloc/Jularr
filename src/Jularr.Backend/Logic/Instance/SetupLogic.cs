@@ -6,6 +6,26 @@ namespace Jularr.Backend.Logic.Instance
 {
     internal static class SetupLogic
     {
+        public static async Task RequireSetupVersionAsync(this LogicContext ctx, SetupVersionData data, CancellationToken ct)
+        {
+            var sql = new SqlStatement();
+            sql.Statement =
+                """
+                SELECT
+                    setup."SetupStepTypeId",
+                    setup."CompletedAt" IS NOT NULL AS "IsCompleted",
+                    setup."Version"
+                FROM
+                    "InstanceSetupState" AS setup
+                WHERE
+                    setup."Id" = 1
+                    AND setup."OwnerCreatedAt" IS NOT NULL
+                FOR UPDATE;
+                """;
+            var state = await ctx.ReadRequiredAsync<SetupStateData>(sql, ct);
+            if (state.IsCompleted || state.Version != data.Version) throw new DataValidationException(nameof(data.Version), "outdated_version");
+        }
+
         public static Task<SetupStateData> ReadSetupStateAsync(this LogicContext ctx, CancellationToken ct)
         {
             var sql = new SqlStatement();
@@ -42,7 +62,7 @@ namespace Jularr.Backend.Logic.Instance
                         FROM
                             "LibraryRoots" AS root
                         WHERE
-                            root."MediaTypeId" = category."MediaTypeId" AND root."MediaSubtypeId" IS NULL
+                            root."MediaTypeId" = category."MediaTypeId"
                             OR root."MediaSubtypeId" = category."MediaSubtypeId"
                     )
                 UNION ALL

@@ -8,11 +8,18 @@ namespace Jularr.Backend.Data.Logic.Authentication
 {
     public sealed class PlexChallengeParameters : BaseData
     {
-        public PlexChallengeParameters(Guid authChallengePublicId, string browserNonce)
+        public PlexChallengeParameters(Guid authChallengePublicId, string browserNonce, long? accountId = null)
         {
             AuthChallengePublicId = authChallengePublicId;
             BrowserNonce = browserNonce;
+            AccountId = accountId;
         }
+
+        [DataField(typeof(AccountAuthChallengeFields), nameof(AccountAuthChallengeFields.AccountId))]
+        public long? AccountId { get; }
+
+        [DataField(typeof(AccountAuthChallengeFields), nameof(AccountAuthChallengeFields.AuthChallengePurposeTypeId))]
+        public AuthChallengePurposeType AuthChallengePurposeTypeId => AccountId is null ? AuthChallengePurposeType.ExternalLogin : AuthChallengePurposeType.ExternalLink;
 
         [DataField(typeof(AccountAuthChallengeFields), nameof(AccountAuthChallengeFields.PublicId))]
         public Guid AuthChallengePublicId { get; }
@@ -57,19 +64,23 @@ namespace Jularr.Backend.Data.Logic.Authentication
 
     public sealed class PlexChallengeCreationData : BaseData
     {
-        public PlexChallengeCreationData(Guid publicId, byte[] tokenHash, byte[] protectedState, DateTime expiresAt)
+        public PlexChallengeCreationData(Guid publicId, byte[] tokenHash, byte[] protectedState, DateTime expiresAt, long? accountId = null)
         {
             PublicId = publicId;
             TokenHash = tokenHash;
             ProtectedState = protectedState;
             ExpiresAt = expiresAt;
+            AccountId = accountId;
         }
+
+        [DataField(typeof(AccountAuthChallengeFields), nameof(AccountAuthChallengeFields.AccountId))]
+        public long? AccountId { get; }
 
         [DataField(typeof(AccountAuthChallengeFields), nameof(AccountAuthChallengeFields.PublicId))]
         public Guid PublicId { get; }
 
         [DataField(typeof(AccountAuthChallengeFields), nameof(AccountAuthChallengeFields.AuthChallengePurposeTypeId))]
-        public AuthChallengePurposeType AuthChallengePurposeTypeId => AuthChallengePurposeType.ExternalLogin;
+        public AuthChallengePurposeType AuthChallengePurposeTypeId => AccountId is null ? AuthChallengePurposeType.ExternalLogin : AuthChallengePurposeType.ExternalLink;
 
         [JsonIgnore]
         [DataField(typeof(AccountAuthChallengeFields), nameof(AccountAuthChallengeFields.TokenHash))]
@@ -85,19 +96,20 @@ namespace Jularr.Backend.Data.Logic.Authentication
 
     public sealed class PlexFlowCreationData : BaseData
     {
-        public PlexFlowCreationData(long accountAuthChallengeId, long providerId, long externalPinId, string clientIdentifier)
+        public PlexFlowCreationData(long accountAuthChallengeId, long providerId, long externalPinId, string clientIdentifier, AuthChallengePurposeType authChallengePurposeTypeId = AuthChallengePurposeType.ExternalLogin)
         {
             AccountAuthChallengeId = accountAuthChallengeId;
             ProviderId = providerId;
             ExternalPinId = externalPinId;
             ClientIdentifier = clientIdentifier;
+            AuthChallengePurposeTypeId = authChallengePurposeTypeId;
         }
 
         [DataField(typeof(AccountExternalAuthFlowFields), nameof(AccountExternalAuthFlowFields.AccountAuthChallengeId))]
         public long AccountAuthChallengeId { get; }
 
         [DataField(typeof(AccountExternalAuthFlowFields), nameof(AccountExternalAuthFlowFields.AuthChallengePurposeTypeId))]
-        public AuthChallengePurposeType AuthChallengePurposeTypeId => AuthChallengePurposeType.ExternalLogin;
+        public AuthChallengePurposeType AuthChallengePurposeTypeId { get; }
 
         [DataField(typeof(AccountExternalAuthFlowFields), nameof(AccountExternalAuthFlowFields.ProviderId))]
         public long ProviderId { get; }

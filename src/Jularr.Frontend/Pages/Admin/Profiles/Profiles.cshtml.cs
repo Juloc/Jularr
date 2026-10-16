@@ -5,13 +5,12 @@ using Jularr.Backend.Data.Enums.Instance;
 using Jularr.Backend.Data.Enums.Media;
 using Jularr.Backend.Service.Admin.Acquisition.V1;
 using Jularr.Frontend.Framework;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Jularr.Frontend.Pages.Admin.Profiles
 {
     // The quality profiles; each opens on its own page.
-    public sealed class ProfilesModel(ReadAcquisitionProfilesV1 profiles, IAntiforgery antiforgery) : JularrPage
+    public sealed class ProfilesModel(ReadAcquisitionProfilesV1 profiles) : JularrPage
     {
         // Media types with release qualities that get new profiles here.
         internal static readonly (MediaType Type, MediaSubtype? Subtype)[] Kinds = [(MediaType.Movie, null), (MediaType.Series, null), (MediaType.Book, null), (MediaType.Book, MediaSubtype.LightNovel)];
@@ -22,7 +21,7 @@ namespace Jularr.Frontend.Pages.Admin.Profiles
         {
             page.Title("admin.profiles.title");
             page.Navigation("nav.admin");
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles, antiforgery.GetAndStoreTokens(HttpContext).RequestToken));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
             var home = Home(Request);
 
             page.Content.Add(new Table<AcquisitionProfileDetailsV1>(_profiles)

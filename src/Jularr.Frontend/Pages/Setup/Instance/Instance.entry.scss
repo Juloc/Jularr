@@ -1,0 +1,15 @@
+.setup-modules {
+    &__presets {
+        &:not([hidden]) { display: flex; }
+        flex-wrap: wrap;
+        gap: .5rem;
+        margin-block: 1rem;
+    }
+
+    .ui-form__row {
+        padding: .75rem;
+        border: 1px solid var(--accent-line);
+        border-radius: 1rem;
+        background: var(--surface);
+    }
+}

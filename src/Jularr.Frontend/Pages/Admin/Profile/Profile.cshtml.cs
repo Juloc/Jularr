@@ -49,7 +49,7 @@ namespace Jularr.Frontend.Pages.Admin.Profile
             page.Title("admin.profiles.title", _profile?.Name);
             page.Navigation("nav.admin");
             var csrf = antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
-            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles, csrf));
+            if (SetupWizard.IsActive(Request)) page.Content.Add(SetupWizard.Frame(SetupStepType.Profiles));
             page.Content.Add(new Div(new A(new Text("common.back")).Class("button").Attribute("href", ProfilesModel.Home(Request))).Class("page-actions"));
             page.Content.Add(ProfileForm(csrf));
             if (FormError is not null && _input is null && _ruleInput is null) page.Content.Add(new P(ErrorText.Of(FormError)).Attribute("role", "alert"));

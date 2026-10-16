@@ -1,0 +1,21 @@
+.providers {
+    &__item {
+        border: 1px solid var(--accent-line);
+        border-radius: 1rem;
+        margin-block: .75rem;
+        background: var(--surface);
+
+        > summary {
+            padding: 1rem;
+            cursor: pointer;
+            color: var(--accent-text);
+            background: var(--accent-soft);
+            border-radius: inherit;
+            font-weight: 700;
+        }
+    }
+
+    &__body {
+        padding: 1rem;
+    }
+}

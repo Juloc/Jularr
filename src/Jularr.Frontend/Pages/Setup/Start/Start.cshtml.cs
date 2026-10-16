@@ -6,7 +6,6 @@ using Jularr.Backend.Data.Public.Authentication.V1;
 using Jularr.Backend.Data.Public.Localization.V1;
 using Jularr.Backend.Data.Public.Setup.V1;
 using Jularr.Backend.Service.Core;
-using Jularr.Backend.Service.Public.Localization.V1;
 using Jularr.Backend.Service.Public.Setup.V1;
 using Jularr.Frontend.Framework;
 using Microsoft.AspNetCore.Antiforgery;
@@ -18,11 +17,11 @@ namespace Jularr.Frontend.Pages.Setup.Start
 {
     [AllowAnonymous]
     [EnableRateLimiting("public")]
-    public sealed class StartModel(ReadSetupV1 setup, CreateOwnerV1 createOwner, ReadUiLocalesV1 readLocales, ReadInstancePresentationV1 readPresentation, IAntiforgery antiforgery)
+    public sealed class StartModel(ReadSetupV1 setup, CreateOwnerV1 createOwner, ReadSetupLocalesV1 readLocales, ReadInstancePresentationV1 readPresentation, IAntiforgery antiforgery, UiText texts)
         : JularrPage
     {
         private bool _requiresOwner;
-        private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
+        private IReadOnlyList<SetupLocaleV1> _locales = [];
         private CreateOwnerDataV1? _input;
 
         protected override void Define(Page page)
@@ -38,7 +37,8 @@ namespace Jularr.Frontend.Pages.Setup.Start
                 return;
             }
 
-            var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture), locale.Name));
+            var options = _locales.Select(locale => new SelectOption(locale.Id.ToString(CultureInfo.InvariantCulture),
+                locale.IsMachineTranslated ? string.Format(CultureInfo.CurrentCulture, texts["setup.locale.machine"], locale.Name) : locale.Name));
             page.Content.Add(new UiSection("setup.owner.title", [new Form<CreateOwnerDataV1>(form =>
             {
                 form.Text(item => item.Email, "account.field.email", "username");
@@ -56,7 +56,8 @@ namespace Jularr.Frontend.Pages.Setup.Start
             if (!_requiresOwner) return User.Identity?.IsAuthenticated is true ? LocalRedirect("/Setup/Progress") : RedirectToPage("/Account/Login/Login");
 
             var instance = (await readPresentation.ExecuteAsync<InstancePresentationDetailsV1>(cancellationToken: HttpContext.RequestAborted)).UiLocaleId;
-            _input = new CreateOwnerDataV1("", "", "", "", LocalePreference.Preferred(Request, _locales, instance));
+            _input = new CreateOwnerDataV1("", "", "", "", LocalePreference.Preferred(Request,
+                _locales.Select(locale => new UiLocaleDetailsV1(locale.Id, locale.Locale, locale.Name, false)).ToArray(), instance));
             PreparePage();
             return Page();
         }
@@ -78,7 +79,7 @@ namespace Jularr.Frontend.Pages.Setup.Start
             _requiresOwner = (await setup.ExecuteAsync<ReadSetupResultV1>(cancellationToken: token)).RequiresOwner;
             if (_requiresOwner)
             {
-                _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: token);
+                _locales = await readLocales.ExecuteAsync<BaseDataList<SetupLocaleV1>>(cancellationToken: token);
             }
         }
     }

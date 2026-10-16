@@ -31,13 +31,13 @@ namespace Jularr.Frontend.Pages.Setup.Progress
                 return LocalRedirect("/");
             }
 
-            return LocalRedirect(progress.IsCompleted ? "/" : SetupWizard.Paths[progress.SetupStepTypeId]);
+            return LocalRedirect(progress.IsCompleted ? "/" : SetupWizard.ResumePath(progress.SetupStepTypeId));
         }
 
         public async Task<IActionResult> OnPostAsync([BindRequired] SetupStepType setupStepTypeId)
         {
             await update.ExecuteAsync<UpdateResult>(new SetupProgressParametersV1(), new UpdateSetupProgressDataV1(setupStepTypeId), HttpContext.RequestAborted);
-            return LocalRedirect(SetupWizard.Paths[setupStepTypeId]);
+            return LocalRedirect(SetupWizard.ResumePath(setupStepTypeId));
         }
     }
 }
