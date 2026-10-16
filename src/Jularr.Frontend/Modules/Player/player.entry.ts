@@ -210,9 +210,16 @@ async function start(player: HTMLElement): Promise<void> {
     video.addEventListener("timeupdate", () => {
         timeline.value = String(Math.floor(video.currentTime));
         player.querySelector("[data-role=time]")!.textContent = clock(video.currentTime);
+        if (video.duration > 0) timeline.style.setProperty("--played", `${video.currentTime / video.duration * 100}%`);
+    });
+    video.addEventListener("progress", () => {
+        if (video.duration > 0 && video.buffered.length > 0) {
+            timeline.style.setProperty("--buffered", `${video.buffered.end(video.buffered.length - 1) / video.duration * 100}%`);
+        }
     });
     video.addEventListener("volumechange", () => {
         volume.value = String(video.muted ? 0 : video.volume);
+        volume.style.setProperty("--played", `${Number(volume.value) * 100}%`);
         mute.setAttribute("aria-pressed", String(video.muted));
         player.classList.toggle("player--muted", video.muted);
     });

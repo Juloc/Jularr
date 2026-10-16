@@ -46,8 +46,9 @@
 
     &__control > :is(input, select, textarea) {
         width: 100%;
-        min-height: 44px;
-        padding: 8px 6px;
+        min-height: 36px;
+        padding: 2px 6px 8px;
+        line-height: 24px;
         border: 0;
         border-radius: var(--radius-control);
         background: transparent;
@@ -57,12 +58,47 @@
         &:focus-visible { outline: none; }
     }
 
-    &__control > textarea { border-radius: 24px; resize: vertical; }
+    &__control > textarea { padding: 8px 6px; border-radius: 24px; resize: vertical; }
     &__control:has(textarea) { border-radius: 24px; }
     &__control:focus-within { border-color: var(--accent); }
     &__control:focus-within > legend { color: var(--accent-text); }
     &__control:has([aria-invalid="true"]) { border-color: var(--danger); }
     &__control:has([aria-invalid="true"]) > legend { color: var(--danger); }
+
+    @media (pointer: coarse) {
+        &__control > :is(input, select) { min-height: 44px; }
+    }
+}
+
+// Native selection, themed popup.
+@supports (appearance: base-select) {
+    .ui-field__control > select:not([multiple], [size]) {
+        &, &::picker(select) { appearance: base-select; }
+        align-items: center;
+
+        &::picker-icon {
+            content: "";
+            width: 20px;
+            height: 20px;
+            background: currentColor;
+            mask: url("../../Assets/Icons/chevron-down.svg") center / contain no-repeat;
+        }
+        &::picker(select) {
+            margin-block: 6px;
+            padding: 4px;
+            border: 1px solid var(--accent-line);
+            border-radius: 18px;
+            background: var(--surface);
+            color: var(--text);
+            box-shadow: var(--shadow);
+        }
+        option {
+            padding: 8px 12px;
+            border-radius: var(--radius-control);
+            &:checked { background: var(--accent-soft); color: var(--accent-text); }
+            &:hover, &:focus-visible { background: var(--surface-hover); outline: none; }
+        }
+    }
 }
 .ui-field__control--segmented { padding: 2px 4px 4px; }
 .ui-field__control--segmented > legend { margin-left: 10px; }
