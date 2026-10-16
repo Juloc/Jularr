@@ -77,8 +77,8 @@ namespace Jularr.Frontend.Pages.Admin.Activity
             }, Address(handler: "SourceLink") + "&operationId=" + item.Id.ToString(CultureInfo.InvariantCulture), csrf, new SaveActivitySourceLinkDataV1(""),
                 FormError?.Field == nameof(SaveActivitySourceLinkDataV1.SourceLinkUrl) ? FormError : null));
 
-        // Scans report service errors; downloads report acquisition outcomes.
-        private static string Reason(OperationType type, string key) => type == OperationType.LibraryScan ? "errors." + key : "acquisition.outcome." + key;
+        // Downloads report acquisition outcomes; scans and backups report service errors.
+        private static string Reason(OperationType type, string key) => type == OperationType.Download ? "acquisition.outcome." + key : "errors." + key;
 
         // "42 % · 3.1 of 7.4 GB"; sizes only where the client reports them.
         private static string Progress(ActivityItemV1 item)

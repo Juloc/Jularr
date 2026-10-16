@@ -220,6 +220,13 @@ namespace Jularr.Backend.Tests
                 new Dictionary<string, string> { ["__RequestVerificationToken"] = LibraryTests.Token(html) });
             Assert.AreEqual(HttpStatusCode.Redirect, retried.StatusCode, await retried.Content.ReadAsStringAsync());
             Assert.AreEqual(0, (await ReadActivityAsync(host, ActivityTabType.ToDo)).Count);
+
+            // A failed backup waits there too, with the tool's reason.
+            await host.Fixture.RunSqlAsync("INSERT INTO \"Operations\" (\"OperationTypeId\", \"OperationStatusTypeId\", \"ErrorKey\", \"FinishedAt\") VALUES (3, 4, 'backup_version_mismatch', now())");
+            using var backup = await host.SendAsync(HttpMethod.Get, "/Admin/Activity?Tab=ToDo");
+            var backupHtml = await backup.Content.ReadAsStringAsync();
+            Assert.AreEqual(HttpStatusCode.OK, backup.StatusCode, backupHtml);
+            StringAssert.Contains(backupHtml, "pg_dump or pg_restore is older than the PostgreSQL server.");
             Assert.AreEqual(failedId, (await ReadActivityAsync(host, ActivityTabType.History)).Single().Id);
             using var again = await host.SendAsync(HttpMethod.Post, "/api/v1/admin/activity/" + failedId + "/dismiss");
             Assert.AreEqual(HttpStatusCode.NotFound, again.StatusCode);
