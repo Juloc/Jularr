@@ -27,6 +27,10 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual(HttpStatusCode.OK, setup.StatusCode, html);
             StringAssert.Contains(html, "minlength=\"12\"");
             StringAssert.Contains(html, "name=\"PasswordConfirmation\"");
+
+            // The owner's language starts as the instance's, however the shipped languages sort.
+            var chosen = System.Text.RegularExpressions.Regex.Match(html, @"<option(?=[^>]*\bselected\b)[^>]*value=""(\d+)""").Groups[1].Value;
+            Assert.AreEqual(Convert.ToString(await host.ScalarAsync("SELECT \"UiLocaleId\" FROM \"InstanceSettings\""), System.Globalization.CultureInfo.InvariantCulture), chosen, html);
             using var missingToken = await host.SendAsync(HttpMethod.Post, "/Setup", new Dictionary<string, string>());
             Assert.AreEqual(HttpStatusCode.BadRequest, missingToken.StatusCode);
 

@@ -1,3 +1,5 @@
+using Jularr.Backend.Service.Public.Instance.V1;
+using Jularr.Backend.Data.Public.Instance.V1;
 using System.Globalization;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Public.Authentication.V1;
@@ -16,7 +18,8 @@ namespace Jularr.Frontend.Pages.Setup.Start
 {
     [AllowAnonymous]
     [EnableRateLimiting("public")]
-    public sealed class StartModel(ReadSetupV1 setup, CreateOwnerV1 createOwner, ReadUiLocalesV1 readLocales, IAntiforgery antiforgery) : JularrPage
+    public sealed class StartModel(ReadSetupV1 setup, CreateOwnerV1 createOwner, ReadUiLocalesV1 readLocales, ReadInstancePresentationV1 readPresentation, IAntiforgery antiforgery)
+        : JularrPage
     {
         private bool _requiresOwner;
         private IReadOnlyList<UiLocaleDetailsV1> _locales = [];
@@ -52,6 +55,8 @@ namespace Jularr.Frontend.Pages.Setup.Start
             await LoadDataAsync();
             if (!_requiresOwner) return User.Identity?.IsAuthenticated is true ? LocalRedirect("/Setup/Progress") : RedirectToPage("/Account/Login/Login");
 
+            var instance = (await readPresentation.ExecuteAsync<InstancePresentationDetailsV1>(cancellationToken: HttpContext.RequestAborted)).UiLocaleId;
+            _input = new CreateOwnerDataV1("", "", "", "", LocalePreference.Preferred(Request, _locales, instance));
             PreparePage();
             return Page();
         }

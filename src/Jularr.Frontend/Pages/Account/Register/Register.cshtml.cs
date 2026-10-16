@@ -79,7 +79,8 @@ namespace Jularr.Frontend.Pages.Account.Register
         protected override async Task LoadDataAsync()
         {
             _locales = await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(cancellationToken: HttpContext.RequestAborted);
-            _input ??= new RegisterDataV1("", "", "", "", _locales.FirstOrDefault()?.Id ?? 0);
+            var instance = (await presentation.ExecuteAsync<InstancePresentationDetailsV1>(new ReadInstancePresentationParametersV1(), HttpContext.RequestAborted)).UiLocaleId;
+            _input ??= new RegisterDataV1("", "", "", "", LocalePreference.Preferred(Request, _locales, instance));
         }
     }
 }
