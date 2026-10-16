@@ -20,6 +20,8 @@ stream/session. Its Audio/Subtitles/Playback/Info popover uses shared fields,
 toggles, buttons and navigation styles. Caption text, defaults and technical facts
 are explicit samples; none imply working persistence or processing.
 The settings capsule starts with its tabs and a matching-height Close button.
+Its size stays stable across tabs, bounded by the viewport; only the content scrolls.
+The four bottom-right controls use white circular surfaces.
 Select popups use the shared native `base-select` styling where supported;
 other browsers retain their native picker without a JavaScript replacement.
 

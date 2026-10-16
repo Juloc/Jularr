@@ -24,6 +24,15 @@ namespace Jularr.E2E.Tests
             await page.GetByRole(AriaRole.Button, new() { Name = "Player settings", Exact = true }).ClickAsync();
             var settings = page.Locator("#player-settings");
             await Assertions.Expect(settings).ToBeVisibleAsync();
+            var initialDialog = (await settings.BoundingBoxAsync())!;
+            await page.Mouse.MoveAsync(0, 0);
+            foreach (var button in await page.Locator(".player__options > button").AllAsync())
+            {
+                var bounds = (await button.BoundingBoxAsync())!;
+                Assert.AreEqual(bounds.Width, bounds.Height, 1);
+                await Assertions.Expect(button).ToHaveCSSAsync("border-radius", "50%");
+                await Assertions.Expect(button).ToHaveCSSAsync("background-color", "rgb(255, 255, 255)");
+            }
             await Assertions.Expect(settings.Locator("h2")).ToHaveCountAsync(0);
             var tabs = (await settings.Locator("header .navigation-tabs").BoundingBoxAsync())!;
             var close = (await settings.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).BoundingBoxAsync())!;
@@ -62,6 +71,9 @@ namespace Jularr.E2E.Tests
             await settings.GetByLabel("Next episode", new() { Exact = true }).SelectOptionAsync("instant");
             await settings.GetByRole(AriaRole.Link, new() { Name = "Info", Exact = true }).ClickAsync();
             await Assertions.Expect(settings.Locator("#settings-info")).ToBeVisibleAsync();
+            var infoDialog = (await settings.BoundingBoxAsync())!;
+            Assert.AreEqual(initialDialog.Width, infoDialog.Width, 1);
+            Assert.AreEqual(initialDialog.Height, infoDialog.Height, 1);
             await settings.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).ClickAsync();
             await page.GetByRole(AriaRole.Button, new() { Name = "Forward 30 seconds", Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator("[data-role=time]")).ToHaveTextAsync("13:04");

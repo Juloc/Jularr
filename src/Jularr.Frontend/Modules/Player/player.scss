@@ -244,7 +244,11 @@
     .player__bottom { gap: 0; padding-bottom: 12px; }
     .player__actions { min-height: 44px; }
     .player__options { gap: 4px; }
-    .player__options .player__button { width: 36px; min-width: 36px; }
+    .player__options .player__button {
+        background-color: #fff;
+        color: #202127;
+        &:hover:not(:disabled) { background-color: #f0f0f4; }
+    }
 }
 
 .player-active:not(.player-mini) .app-layout { display: none; }

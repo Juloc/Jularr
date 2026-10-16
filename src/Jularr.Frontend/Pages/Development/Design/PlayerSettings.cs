@@ -84,7 +84,7 @@ namespace Jularr.Frontend.Pages.Development.Design
                         new Button(new Text("design.player.saveDefaults")).Primary().Disabled().Attribute("data-action", "save-defaults"))
                         .Class("player-settings__footer"),
                     new P(new Text("design.player.localOnly")).Attribute("data-settings-feedback", "").Attribute("role", "status")
-                ).Class("player-settings").Attribute("id", "player-settings").Attribute("popover", "auto").Attribute("role", "dialog").Attribute("aria-label", texts["design.player.settings"]),
+                ).Class("player-settings player-settings--preferences").Attribute("id", "player-settings").Attribute("popover", "auto").Attribute("role", "dialog").Attribute("aria-label", texts["design.player.settings"]),
                 new Div(new H2(new Text("design.player.cast")), new P(new Text("design.player.castNotice")),
                     new Button(new Icon("devices", assets), new Text("design.player.thisDevice")).Attribute("data-action", "cast-preview"),
                     new Button(new Icon("devices", assets), new Text("design.player.sampleTv")).Attribute("data-action", "cast-preview"))

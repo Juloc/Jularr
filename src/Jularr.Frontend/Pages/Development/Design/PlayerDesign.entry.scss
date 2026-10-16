@@ -123,6 +123,7 @@
     overflow: auto;
 
     &:popover-open { display: grid; gap: 12px; }
+    &--preferences { height: 650px; grid-template-rows: auto minmax(0, 1fr) auto auto; }
     > header {
         display: flex;
         align-items: stretch;
@@ -131,7 +132,7 @@
         > .button { width: auto; aspect-ratio: 1; flex: none; }
     }
     p { margin: 0; color: var(--muted); font-size: .8rem; }
-    &__body { min-height: 160px; max-height: 42dvh; overflow: auto; padding: 2px; }
+    &__body { min-height: 0; overflow: auto; padding: 2px; }
     &__pane { display: grid; gap: 12px; }
     &__pane[hidden] { display: none; }
     &__details { display: grid; gap: 12px; > summary { cursor: pointer; font-weight: 650; color: var(--accent-text); margin-block: 6px; } }
