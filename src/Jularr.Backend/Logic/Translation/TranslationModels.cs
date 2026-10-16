@@ -1,5 +1,4 @@
 using System.Globalization;
-using Jularr.Backend.Data.Enums.Translation;
 using Jularr.Integrations.Data.Translation;
 
 namespace Jularr.Backend.Logic.Translation
@@ -11,24 +10,25 @@ namespace Jularr.Backend.Logic.Translation
         public const int EngineMajorVersion = 3;
         private static readonly string[] Vocabularies = ["vocab", "srcvocab", "trgvocab"];
 
-        public static string Code(TranslationLanguageType language) => language switch
-        {
-            TranslationLanguageType.English => "en",
-            TranslationLanguageType.German => "de",
-            TranslationLanguageType.Indonesian => "id",
-            TranslationLanguageType.Japanese => "ja",
-            _ => throw new ArgumentOutOfRangeException(nameof(language))
-        };
+        private const string Bridge = "en";
 
-        public static IReadOnlyList<(TranslationLanguageType From, TranslationLanguageType To)> Route(TranslationLanguageType source, TranslationLanguageType target) =>
+        // Into English and out of it; English itself needs one step.
+        public static IReadOnlyList<(string From, string To)> Route(string source, string target) =>
             source == target ? []
-            : source == TranslationLanguageType.English || target == TranslationLanguageType.English ? [(source, target)]
-            : [(source, TranslationLanguageType.English), (TranslationLanguageType.English, target)];
+            : source == Bridge || target == Bridge ? [(source, target)]
+            : [(source, Bridge), (Bridge, target)];
+
+        // Every language with released models into English (sources) and out of it (targets), English among both.
+        public static (string[] Sources, string[] Targets) Languages(IReadOnlyList<TranslationFile> files)
+        {
+            var languages = files.SelectMany(file => new[] { file.FromLanguage, file.ToLanguage }).OfType<string>().Where(code => code != Bridge).Distinct(StringComparer.Ordinal).ToArray();
+            return ([Bridge, .. languages.Where(code => Model(files, code, Bridge) is not null).Order(StringComparer.Ordinal)],
+                [Bridge, .. languages.Where(code => Model(files, Bridge, code) is not null).Order(StringComparer.Ordinal)]);
+        }
 
         // The newest released version with a model and its vocabulary for every build; files for single builds and parts the engine does not use stay out.
-        public static IReadOnlyList<TranslationFile>? Model(IEnumerable<TranslationFile> files, TranslationLanguageType from, TranslationLanguageType to)
+        public static IReadOnlyList<TranslationFile>? Model(IEnumerable<TranslationFile> files, string source, string target)
         {
-            var (source, target) = (Code(from), Code(to));
             return files.Where(file => file.FromLanguage == source && file.ToLanguage == target && !file.IsFiltered && Version(file.Version) is not null
                     && (file.FileType is "model" or "lex" || Vocabularies.Contains(file.FileType)))
                 .GroupBy(file => file.Version)

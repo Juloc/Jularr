@@ -12,7 +12,7 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.User.Reading.V1
 {
-    [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/translations/{languageTypeId}")]
+    [ServiceEndpoint("GET", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/translations/{language}")]
     public sealed class ReadReadingTranslationV1 : UserService<ReadingTranslationParametersV1>
     {
         protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<ReadingTranslationV1>()];
@@ -44,13 +44,13 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             document."Id" = resource."ReadingDocumentId"
                     );
                 """;
-            sql.Parameters.Add(new ReadingTranslationPathData(Parameters.DocumentId, ReadingTranslations.Path(Parameters.SectionIndex, Parameters.LanguageTypeId)));
+            sql.Parameters.Add(new ReadingTranslationPathData(Parameters.DocumentId, ReadingTranslations.Path(Parameters.SectionIndex, Parameters.Language)));
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingTranslationV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The section is not translated yet.");
         }
     }
 
-    [ServiceEndpoint("PUT", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/translations/{languageTypeId}")]
+    [ServiceEndpoint("PUT", "/api/v1/reading/documents/{documentId:long}/sections/{sectionIndex:int}/translations/{language}")]
     public sealed class SaveReadingTranslationV1 : UserService<ReadingTranslationParametersV1, SaveReadingTranslationDataV1>
     {
         protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
@@ -91,7 +91,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                 throw new DataValidationException(nameof(Data.Blocks), "translation_mismatch");
             }
 
-            await Context.SaveReadingResourceAsync(new ReadingResourceData(Parameters.DocumentId, ReadingTranslations.Path(Parameters.SectionIndex, Parameters.LanguageTypeId),
+            await Context.SaveReadingResourceAsync(new ReadingResourceData(Parameters.DocumentId, ReadingTranslations.Path(Parameters.SectionIndex, Parameters.Language),
                 "application/json", Encoding.UTF8.GetBytes(JsonSerializer.Serialize(blocks))), CancellationToken);
             return new UpdateResult(true);
         }

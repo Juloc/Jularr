@@ -26,7 +26,7 @@ namespace Jularr.Backend.Tests
             await using var host = await CreateHostAsync(storage.Path, models.Path, mozilla);
 
             // English to German: the engine of the supported major version, then the newest released en-de files.
-            using var direct = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/English/German");
+            using var direct = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/en/de");
             Assert.AreEqual(HttpStatusCode.OK, direct.StatusCode, await direct.Content.ReadAsStringAsync());
             var files = (await direct.Content.ReadFromJsonAsync<BaseDataList<TranslationFileV1>>())!;
             CollectionAssert.AreEqual(new[] { "0:engine", "1:model", "1:lex", "1:vocab" }, files.Select(file => file.Step + ":" + file.FileType).ToArray());
@@ -35,11 +35,16 @@ namespace Jularr.Backend.Tests
             Assert.AreEqual("int8shiftAlphaAll", files[1].Precision);
 
             // German to Japanese goes through English; Japanese files for Android only are left out.
-            using var pivot = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/German/Japanese");
+            using var pivot = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/routes/de/ja");
             var steps = (await pivot.Content.ReadFromJsonAsync<BaseDataList<TranslationFileV1>>())!;
             CollectionAssert.AreEqual(new[] { "0:engine", "1:model", "1:lex", "1:vocab", "2:model", "2:srcvocab", "2:trgvocab" },
                 steps.Select(file => file.Step + ":" + file.FileType).ToArray());
             StringAssert.Contains(steps[4].Url, FakeMozilla.Hash("enja-1.0-model"));
+
+            // Every language with released models into English can be read from, every one out of it read in.
+            using var languages = await host.SendAsync(HttpMethod.Get, "/api/v1/translation/languages");
+            var offered = (await languages.Content.ReadFromJsonAsync<TranslationLanguagesV1>())!;
+            Assert.AreEqual(("de en", "de en ja"), (string.Join(" ", offered.Sources.Order()), string.Join(" ", offered.Targets.Order())));
         }
 
         [TestMethod]
@@ -78,7 +83,7 @@ namespace Jularr.Backend.Tests
             var document = (await opened.Content.ReadFromJsonAsync<ReadingDocumentV1>())!;
             using var sectionResponse = await host.SendAsync(HttpMethod.Get, "/api/v1/reading/documents/" + document.DocumentId + "/sections/0");
             var blocks = (await sectionResponse.Content.ReadFromJsonAsync<ReadingSectionV1>())!.Blocks;
-            var route = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/German";
+            var route = "/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/de";
 
             using var missing = await host.SendAsync(HttpMethod.Get, route);
             Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
@@ -99,15 +104,34 @@ namespace Jularr.Backend.Tests
             var reader = await page.Content.ReadAsStringAsync();
             StringAssert.Contains(reader, "data-translation-url=\"/api/v1/reading/documents/" + document.DocumentId + "/sections/0/translations/\"");
 
-            // Unless the device chose otherwise, a book opens in the profile's language; the original stays one choice away.
-            var locale = (string)(await host.ScalarAsync("SELECT locale.\"Locale\" FROM \"Profiles\" AS profile JOIN \"UiLocales\" AS locale ON locale.\"Id\" = profile.\"UiLocaleId\" WHERE profile.\"Id\" = 101"))!;
-            StringAssert.Contains(reader, "data-profile-language=\"" + System.Globalization.CultureInfo.GetCultureInfo(locale).Parent.EnglishName + "\"");
-            StringAssert.Contains(reader, "data-setting=\"translate\" data-value=\"original\"");
+            // A book opens in the profile's language; its language button offers the original and the other allowed languages Mozilla reaches.
+            await host.Fixture.RunSqlAsync("UPDATE \"Profiles\" SET \"UiLocaleId\" = (SELECT \"Id\" FROM \"UiLocales\" WHERE \"Locale\" = 'de-DE') WHERE \"Id\" = 101");
+            Assert.AreEqual("de", await ReadingLanguageAsync(host, first));
+            using var options = await host.SendAsync(HttpMethod.Get, "/Read/" + first);
+            var offeredChoices = System.Text.RegularExpressions.Regex.Matches(await options.Content.ReadAsStringAsync(), "data-language-choice=\"([a-z]+)\"").Select(match => match.Groups[1].Value);
+            CollectionAssert.AreEqual(new[] { "original", "de", "en" }, offeredChoices.ToArray());
+
+            // The choice belongs to the book on every device of the profile; none follows the profile's language again.
+            var choice = "/api/v1/reading/assets/" + first + "/language";
+            using var original = await host.SendAsync(HttpMethod.Put, choice, new SaveReadingLanguageDataV1("original"));
+            Assert.AreEqual(HttpStatusCode.OK, original.StatusCode, await original.Content.ReadAsStringAsync());
+            Assert.AreEqual("original", await ReadingLanguageAsync(host, first));
+            using var invalid = await host.SendAsync(HttpMethod.Put, choice, new SaveReadingLanguageDataV1("Klingon!"));
+            Assert.AreEqual(HttpStatusCode.BadRequest, invalid.StatusCode);
+            using var reset = await host.SendAsync(HttpMethod.Put, choice, new SaveReadingLanguageDataV1(null));
+            Assert.AreEqual(HttpStatusCode.OK, reset.StatusCode, await reset.Content.ReadAsStringAsync());
+            Assert.AreEqual("de", await ReadingLanguageAsync(host, first));
             await host.Fixture.RunSqlAsync("UPDATE \"InstanceModules\" SET \"IsEnabled\" = FALSE WHERE \"Key\" = 'Translation'");
             using var off = await host.SendAsync(HttpMethod.Get, route);
             Assert.AreEqual(HttpStatusCode.Forbidden, off.StatusCode);
             using var capabilities = await host.SendAsync(HttpMethod.Get, "/api/v1/instance/capabilities");
             Assert.IsFalse((await capabilities.Content.ReadFromJsonAsync<InstanceCapabilitiesDetailsV1>())!.Modules.Contains("Translation"));
+        }
+
+        private static async Task<string> ReadingLanguageAsync(Host host, long asset)
+        {
+            using var page = await host.SendAsync(HttpMethod.Get, "/Read/" + asset);
+            return System.Text.RegularExpressions.Regex.Match(await page.Content.ReadAsStringAsync(), "data-reading-language=\"([a-z]+)\"").Groups[1].Value;
         }
 
         private static async Task<Host> CreateHostAsync(string storage, string models, FakeMozilla mozilla)

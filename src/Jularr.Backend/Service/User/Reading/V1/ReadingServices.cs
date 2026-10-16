@@ -113,7 +113,9 @@ namespace Jularr.Backend.Service.User.Reading.V1
                         progress."Locator",
                         progress."Progression",
                         coalesce(visible."MediaSubtypeId" = 2, FALSE) AS "IsRightToLeft",
-                        document."Language"
+                        document."Language",
+                        chosen."Language" AS "ReadingLanguage",
+                        work."OriginalLanguage"
                     FROM
                         "ReadingDocuments" AS document
                         JOIN "MediaAssets" AS asset ON asset."Id" = @MediaAssetId
@@ -123,6 +125,7 @@ namespace Jularr.Backend.Service.User.Reading.V1
                             AND progress."WorkId" = asset."WorkId"
                             AND progress."WorkUnitId" IS NOT DISTINCT FROM asset."WorkUnitId"
                             AND progress."ProgressPositionTypeId" = 2
+                        LEFT JOIN "ReadingLanguages" AS chosen ON chosen."ProfileId" = @ProfileId AND chosen."WorkId" = asset."WorkId"
                     WHERE
                         document."Id" = @DocumentId;
                     """;
@@ -431,6 +434,22 @@ namespace Jularr.Backend.Service.User.Reading.V1
             sql.Parameters.Add(Parameters);
             sql.Parameters.Add(new ProfileParameters(Auth.ProfileId!.Value));
             return await Context.ReadSql.ReadOptionalAsync<ReadingResourceV1>(sql, CancellationToken) ?? throw new KeyNotFoundException("The resource was not found.");
+        }
+    }
+
+    // A book's language for the profile on all its devices; empty follows the profile's language again.
+    [ServiceEndpoint("PUT", "/api/v1/reading/assets/{mediaAssetId:long}/language")]
+    public sealed class SaveReadingLanguageV1 : UserService<ReadingAssetParametersV1, SaveReadingLanguageDataV1>
+    {
+        protected override ServiceOperationType GetOperationType() => ServiceOperationType.Update;
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<UpdateResult>()];
+        protected override ModuleRequirement GetInstanceModules(ReadingAssetParametersV1 parameters) => ModuleRequirement.All("Library", "Reading");
+        protected override ServicePermission GetPermission(ReadingAssetParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnUpdate()
+        {
+            await Context.SaveReadingLanguageAsync(new ReadingLanguageData(Auth.ProfileId!.Value, Parameters.MediaAssetId, Data.ReadingLanguage), CancellationToken);
+            return new UpdateResult(true);
         }
     }
 

@@ -1,7 +1,5 @@
 using System.Globalization;
 using System.Text.Json;
-using Jularr.Backend.Data.Enums.Translation;
-using Jularr.Backend.Logic.Translation;
 
 namespace Jularr.Backend.Logic.Reading
 {
@@ -10,8 +8,8 @@ namespace Jularr.Backend.Logic.Reading
     {
         private const int MaximumBlockLength = 20_000;
 
-        public static string Path(int sectionIndex, TranslationLanguageType language) =>
-            ":translation/" + TranslationModels.Code(language) + "/" + sectionIndex.ToString("D5", CultureInfo.InvariantCulture);
+        public static string Path(int sectionIndex, string language) =>
+            ":translation/" + language + "/" + sectionIndex.ToString("D5", CultureInfo.InvariantCulture);
 
         // Only an array of bounded texts counts; anything else is refused.
         public static IReadOnlyList<string>? Parse(string json)

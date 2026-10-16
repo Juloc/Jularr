@@ -1,3 +1,4 @@
+using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Logic.Reading;
 using Jularr.Backend.Infrastructure.Sql;
 
@@ -158,6 +159,50 @@ namespace Jularr.Backend.Logic.Reading
                 """;
             sql.Parameters.Add(data);
             return (await ctx.ReadRequiredAsync<ReadingEvictionData>(sql, ct)).Count;
+        }
+
+        // The choice belongs to the book the asset is part of, if the profile may open it.
+        public static async Task SaveReadingLanguageAsync(this LogicContext ctx, ReadingLanguageData data, CancellationToken ct)
+        {
+            if (data.ReadingLanguage is { } language && language != "original" && !System.Text.RegularExpressions.Regex.IsMatch(language, "^[a-z]{2,3}$"))
+            {
+                throw new DataValidationException(nameof(data.ReadingLanguage), "invalid_value");
+            }
+
+            var sql = new SqlStatement();
+            sql.Statement = data.ReadingLanguage is null
+                ? """
+                  DELETE FROM
+                      "ReadingLanguages" AS chosen
+                  USING
+                      "MediaAssets" AS asset
+                  WHERE
+                      asset."Id" = @MediaAssetId
+                      AND chosen."ProfileId" = @ProfileId
+                      AND chosen."WorkId" = asset."WorkId";
+                  """
+                : """
+                  INSERT INTO
+                      "ReadingLanguages" ("ProfileId", "WorkId", "Language")
+                  SELECT
+                      @ProfileId,
+                      asset."WorkId",
+                      @ReadingLanguage
+                  FROM
+                      "MediaAssets" AS asset
+                      JOIN "ProfileWorks" AS visible ON visible."WorkId" = asset."WorkId" AND visible."ProfileId" = @ProfileId
+                  WHERE
+                      asset."Id" = @MediaAssetId
+                  ON CONFLICT ("ProfileId", "WorkId") DO UPDATE
+                  SET
+                      "Language" = EXCLUDED."Language",
+                      "UpdatedAt" = now();
+                  """;
+            sql.Parameters.Add(data);
+            if (await ctx.ExecuteAsyncForAffectedRows(sql, ct) == 0 && data.ReadingLanguage is not null)
+            {
+                throw new KeyNotFoundException("The book was not found.");
+            }
         }
 
         public static async Task SaveReadingProgressAsync(this LogicContext ctx, ReadingProgressData data, CancellationToken ct)

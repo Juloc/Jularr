@@ -1,10 +1,12 @@
-using Jularr.Backend.Data.Enums.Translation;
+using Jularr.Backend.Data.Enums.Field;
 
 namespace Jularr.Backend.Data.Fields.Translation
 {
     public static class TranslationFields
     {
-        public static readonly EnumField LanguageTypeId = new(typeof(TranslationLanguageType));
+        // A language as Mozilla's models name it: two or three letters, such as "de" or "ja".
+        public static readonly StringField Language = new() { MaximumLength = 3, MinimumLength = 2, AllowBlank = false, Format = StringFormat.Locale };
+        public static readonly StringArrayField Languages = new() { ItemMaximumLength = 3 };
         public static readonly IntField Step = new() { Minimum = 0, Maximum = 2 };
         public static readonly StringField FileType = new() { MaximumLength = 16, AllowBlank = false };
         public static readonly StringField Url = new() { MaximumLength = 200, AllowBlank = false };

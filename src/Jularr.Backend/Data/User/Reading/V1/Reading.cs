@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Translation;
 using Jularr.Backend.Data.Fields.Translation;
 using Jularr.Backend.Data.Enums.Reading;
 using Jularr.Backend.Data.Fields.Media;
@@ -48,11 +47,11 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
     public sealed class ReadingTranslationParametersV1 : BaseParameters
     {
-        public ReadingTranslationParametersV1(long documentId, int sectionIndex, TranslationLanguageType languageTypeId)
+        public ReadingTranslationParametersV1(long documentId, int sectionIndex, string language)
         {
             DocumentId = documentId;
             SectionIndex = sectionIndex;
-            LanguageTypeId = languageTypeId;
+            Language = language;
         }
 
         [DataField(typeof(ReadingFields), nameof(ReadingFields.DocumentId))]
@@ -61,8 +60,8 @@ namespace Jularr.Backend.Data.User.Reading.V1
         [DataField(typeof(ReadingFields), nameof(ReadingFields.SectionIndex))]
         public int SectionIndex { get; }
 
-        [DataField(typeof(TranslationFields), nameof(TranslationFields.LanguageTypeId))]
-        public TranslationLanguageType LanguageTypeId { get; }
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string Language { get; }
     }
 
     // A section's blocks in another language: a JSON array of plain texts in block order.
@@ -106,8 +105,10 @@ namespace Jularr.Backend.Data.User.Reading.V1
     public sealed class ReadingDocumentV1 : BaseResponse
     {
         public ReadingDocumentV1(long documentId, long workId, string title, ReadingFormatType readingFormatTypeId, int sectionCount, bool isCached, string? locator, decimal? progression,
-            bool isRightToLeft, string? language)
+            bool isRightToLeft, string? language, string? readingLanguage = null, string? originalLanguage = null)
         {
+            ReadingLanguage = readingLanguage;
+            OriginalLanguage = originalLanguage;
             Language = language;
             DocumentId = documentId;
             WorkId = workId;
@@ -152,6 +153,13 @@ namespace Jularr.Backend.Data.User.Reading.V1
         // The book's own language tag, where it names one.
         [DataField(typeof(ReadingFields), nameof(ReadingFields.Language))]
         public string? Language { get; }
+
+        // The profile's choice for this book, and the language the book was written in.
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingLanguage))]
+        public string? ReadingLanguage { get; }
+
+        [DataField(typeof(Fields.Media.WorkFields), nameof(Fields.Media.WorkFields.OriginalLanguage))]
+        public string? OriginalLanguage { get; }
     }
 
     public sealed class ReadingTocEntryV1 : BaseResponse
@@ -227,6 +235,17 @@ namespace Jularr.Backend.Data.User.Reading.V1
 
         [JsonIgnore]
         public string ContentType { get; }
+    }
+
+    public sealed class SaveReadingLanguageDataV1 : BaseData
+    {
+        public SaveReadingLanguageDataV1(string? readingLanguage)
+        {
+            ReadingLanguage = readingLanguage;
+        }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingLanguage))]
+        public string? ReadingLanguage { get; }
     }
 
     public sealed class SaveReadingProgressDataV1 : BaseData

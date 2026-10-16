@@ -455,4 +455,23 @@ namespace Jularr.Backend.Data.Logic.Reading
         [DataField(typeof(ReadingFields), nameof(ReadingFields.Html))]
         public string Html { get; }
     }
+
+    internal sealed class ReadingLanguageData : BaseData
+    {
+        public ReadingLanguageData(long profileId, long mediaAssetId, string? readingLanguage)
+        {
+            ProfileId = profileId;
+            MediaAssetId = mediaAssetId;
+            ReadingLanguage = readingLanguage;
+        }
+
+        [DataField(typeof(ProfileFields), nameof(ProfileFields.Id))]
+        public long ProfileId { get; }
+
+        [DataField(typeof(MediaAssetFields), nameof(MediaAssetFields.Id))]
+        public long MediaAssetId { get; }
+
+        [DataField(typeof(ReadingFields), nameof(ReadingFields.ReadingLanguage))]
+        public string? ReadingLanguage { get; }
+    }
 }

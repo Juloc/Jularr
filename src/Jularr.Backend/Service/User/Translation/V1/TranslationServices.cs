@@ -8,7 +8,33 @@ using Jularr.Backend.Service.Core;
 
 namespace Jularr.Backend.Service.User.Translation.V1
 {
-    [ServiceEndpoint("GET", "/api/v1/translation/routes/{sourceLanguageTypeId}/{targetLanguageTypeId}")]
+    [ServiceEndpoint("GET", "/api/v1/translation/languages")]
+    public sealed class ReadTranslationLanguagesV1 : UserService<TranslationLanguagesParametersV1>
+    {
+        private readonly TranslationFiles _files;
+
+        internal ReadTranslationLanguagesV1(TranslationFiles files)
+        {
+            _files = files;
+        }
+
+        protected override IReadOnlyList<ServiceResultType> GetResultTypes() => [ServiceResultType.Default<TranslationLanguagesV1>()];
+        protected override ModuleRequirement GetInstanceModules(TranslationLanguagesParametersV1 parameters) => ModuleRequirement.All("Library", "Reading", "Translation");
+        protected override ServicePermission GetPermission(TranslationLanguagesParametersV1 parameters, Type resultType) => new("profile.media.read");
+
+        protected override async Task<IServiceOutput> OnRead()
+        {
+            if (!_files.IsAvailable)
+            {
+                throw new ServiceUnavailableException("translation_unavailable");
+            }
+
+            var (sources, targets) = await _files.LanguagesAsync(CancellationToken);
+            return new TranslationLanguagesV1(sources, targets);
+        }
+    }
+
+    [ServiceEndpoint("GET", "/api/v1/translation/routes/{sourceLanguage}/{targetLanguage}")]
     public sealed class ReadTranslationRouteV1 : UserService<TranslationRouteParametersV1>
     {
         private readonly TranslationFiles _files;
@@ -30,7 +56,7 @@ namespace Jularr.Backend.Service.User.Translation.V1
                 throw new ServiceUnavailableException("translation_unavailable");
             }
 
-            var route = await _files.RouteAsync(Parameters.SourceLanguageTypeId, Parameters.TargetLanguageTypeId, CancellationToken);
+            var route = await _files.RouteAsync(Parameters.SourceLanguage, Parameters.TargetLanguage, CancellationToken);
             return new BaseDataList<TranslationFileV1>([.. route.Select(entry => new TranslationFileV1(entry.Step, entry.File.FileType ?? "engine",
                 "/api/v1/translation/files/" + TranslationModels.FileName(entry.File), entry.Precision))]);
         }

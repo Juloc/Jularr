@@ -1,9 +1,12 @@
+using Jularr.Backend.Service.User.Translation.V1;
+using Jularr.Backend.Service.Public.Localization.V1;
+using Jularr.Backend.Data.User.Translation.V1;
+using Jularr.Backend.Data.Public.Localization.V1;
 using System.Globalization;
 using System.Text.Json;
 using Jularr.Backend.Data;
 using Jularr.Backend.Data.Common;
 using Jularr.Backend.Data.Enums.Reading;
-using Jularr.Backend.Data.Enums.Translation;
 using Jularr.Backend.Data.User.Reading.V1;
 using Jularr.Backend.Service.User.Reading.V1;
 using Jularr.Frontend.Framework;
@@ -14,8 +17,11 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 namespace Jularr.Frontend.Pages.User.Reader
 {
     public sealed class ReaderModel(ReadReadingSourceV1 readSource, OpenReadingV1 open, ReadReadingTocV1 toc, ReadReadingSectionV1 section, ReadReadingSectionAnnotationsV1 readMarks, ReadReadingAnnotationsV1 readNotes,
-        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, IAntiforgery antiforgery, UiText texts) : JularrPage
+        DeleteReadingAnnotationV1 deleteNote, SearchReadingV1 search, ReadUiLocalesV1 readLocales, ReadTranslationLanguagesV1 readLanguages, IAntiforgery antiforgery, UiText texts)
+        : JularrPage
     {
+        // The languages this book can be read in: its original first, then the profile's and the other allowed ones Mozilla's models reach.
+        private string[] _languages = [];
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
         private ReadingSourceV1? _source;
         private ReadingDocumentV1? _document;
@@ -79,6 +85,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 new Button(new Text("reader.notes")).Class("button").Attribute("data-action", "notes").Attribute("aria-expanded", NotesPage > 1 ? "true" : "false"),
                 new Button(new Text("reader.search")).Class("button").Attribute("data-action", "search").Attribute("aria-expanded", _hits is null ? "false" : "true"),
                 new Button(new Text("reader.settings")).Class("button").Attribute("data-action", "settings").Attribute("aria-expanded", "false"),
+                _languages.Length > 0
+                    ? new Button(new ValueText(LanguageName(Chosen(document)))).Class("button").Attribute("data-action", "language").Attribute("aria-expanded", "false")
+                        .Attribute("aria-label", texts["reader.language"])
+                    : new Span(),
                 _source?.ReadingFormatTypeId == ReadingFormatType.Pdf
                     ? new A(new Text("reader.originalPdf")).Class("button").Attribute("href", "/api/v1/reading/assets/" + asset + "/file").Attribute("target", "_blank").Attribute("rel", "noopener")
                     : new Span()
@@ -94,11 +104,11 @@ namespace Jularr.Frontend.Pages.User.Reader
             var settings = new Div(
                 Setting("reader.fontSize", [("smaller", "reader.smaller"), ("larger", "reader.larger")], "size"),
                 Setting("reader.theme", [("light", "reader.theme.light"), ("sepia", "reader.theme.sepia"), ("dark", "reader.theme.dark")], "theme"),
-                Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode"),
-                texts.CanTranslate()
-                    ? Setting("reader.translate", [("original", "reader.translate.original"), .. Enum.GetValues<TranslationLanguageType>().Select(language => (language.ToString(), "reader.language." + language))], "translate")
-                    : new Span()
+                Setting("reader.mode", [("scroll", "reader.mode.scroll"), ("paged", "reader.mode.paged")], "mode")
             ).Class("reader__panel").Attribute("data-panel", "settings").Attribute("hidden", "hidden");
+            var languages = new Div([.. new[] { "original" }.Concat(_languages).Select(code => new Button(new ValueText(LanguageName(code))).Class("button")
+                .Attribute("data-language-choice", code).Attribute("aria-pressed", code == Chosen(document) ? "true" : "false"))]).Class("reader__panel reader__choices")
+                .Attribute("data-panel", "language").Attribute("hidden", "hidden").Attribute("aria-label", texts["reader.language"]);
 
             var navigation = new List<IUiComponent>();
             navigation.Add(index > 0
@@ -115,6 +125,7 @@ namespace Jularr.Frontend.Pages.User.Reader
                 notes,
                 searching,
                 settings,
+                languages,
                 new ReaderSection(current),
                 Toolbar(),
                 Popover(),
@@ -138,10 +149,10 @@ namespace Jularr.Frontend.Pages.User.Reader
             if (texts.CanTranslate())
             {
                 // The section's translations are shared; the files to translate it come with its route.
-                // A book in another language opens in the profile's, when the engine knows it.
-                var profileLanguage = Enum.TryParse<TranslationLanguageType>(CultureInfo.GetCultureInfo(texts.Locale).Parent.EnglishName, out var known) ? known.ToString() : "";
-                view.Attribute("data-language", document.Language ?? "")
-                    .Attribute("data-profile-language", profileLanguage)
+                // A book in another language opens in the profile's, unless the profile chose another for it.
+                view.Attribute("data-language", document.Language ?? document.OriginalLanguage ?? "")
+                    .Attribute("data-reading-language", Chosen(document))
+                    .Attribute("data-language-url", "/api/v1/reading/assets/" + asset + "/language")
                     .Attribute("data-translation-url", "/api/v1/reading/documents/" + document.DocumentId.ToString(CultureInfo.InvariantCulture) + "/sections/"
                         + index.ToString(CultureInfo.InvariantCulture) + "/translations/")
                     .Attribute("data-route-url", "/api/v1/translation/routes/")
@@ -290,6 +301,22 @@ namespace Jularr.Frontend.Pages.User.Reader
             return Page();
         }
 
+        // Mozilla's list may be out of reach; then the book reads in its own language.
+        private async Task<string[]> LanguagesAsync(CancellationToken ct)
+        {
+            try
+            {
+                var targets = (await readLanguages.ExecuteAsync<TranslationLanguagesV1>(new TranslationLanguagesParametersV1(), ct)).Targets;
+                var allowed = (await readLocales.ExecuteAsync<BaseDataList<UiLocaleDetailsV1>>(new ReadUiLocalesParametersV1(), ct))
+                    .Select(locale => CultureInfo.GetCultureInfo(locale.Locale).TwoLetterISOLanguageName);
+                return [.. new[] { ProfileLanguage }.Concat(allowed).Distinct(StringComparer.Ordinal).Where(targets.Contains)];
+            }
+            catch (ServiceUnavailableException)
+            {
+                return [];
+            }
+        }
+
         protected override async Task LoadDataAsync()
         {
             var ct = HttpContext.RequestAborted;
@@ -315,6 +342,10 @@ namespace Jularr.Frontend.Pages.User.Reader
                 : 0);
             index = Math.Clamp(index, 0, Math.Max(0, _document.SectionCount - 1));
             _section = await section.ExecuteAsync<ReadingSectionV1>(new ReadingSectionParametersV1(_document.DocumentId, index), ct);
+            if (texts.CanTranslate())
+            {
+                _languages = await LanguagesAsync(ct);
+            }
             _toc = await toc.ExecuteAsync<BaseDataList<ReadingTocEntryV1>>(new ReadingDocumentParametersV1(_document.DocumentId), ct);
             _marks = await readMarks.ExecuteAsync<BaseDataList<ReadingAnnotationV1>>(new ReadingSectionAnnotationsParametersV1(Id, index), ct);
             _notes = await readNotes.ExecuteAsync<PageResult<ReadingAnnotationV1>>(new ReadingAnnotationsParametersV1(Id, Math.Max(1, NotesPage)), ct);
@@ -323,6 +354,15 @@ namespace Jularr.Frontend.Pages.User.Reader
                 _hits = await search.ExecuteAsync<BaseDataList<ReadingSearchHitV1>>(new ReadingSearchParametersV1(_document.DocumentId, Query), ct);
             }
         }
+
+        private string ProfileLanguage => CultureInfo.GetCultureInfo(texts.Locale).TwoLetterISOLanguageName;
+
+        // The profile's choice for the book, else its language when Mozilla reaches it, else the original.
+        private string Chosen(ReadingDocumentV1 document) => document.ReadingLanguage is { } chosen && (chosen == "original" || _languages.Contains(chosen)) ? chosen
+            : _languages.Contains(ProfileLanguage) ? ProfileLanguage : "original";
+
+        private string LanguageName(string code) => code == "original" ? texts["reader.translate.original"]
+            : CultureInfo.GetCultureInfo(code) is { } culture ? culture.TextInfo.ToTitleCase(culture.NativeName) : code;
 
         private IUiComponent Setting(string labelKey, (string Value, string LabelKey)[] options, string name) =>
             new Div(new Span(new Text(labelKey)), new Div([.. options.Select(option => new Button(new Text(option.LabelKey)).Class("button")

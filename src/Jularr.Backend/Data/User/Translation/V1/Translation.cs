@@ -1,23 +1,42 @@
 using System.Text.Json.Serialization;
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Translation;
 using Jularr.Backend.Data.Fields.Translation;
 
 namespace Jularr.Backend.Data.User.Translation.V1
 {
     public sealed class TranslationRouteParametersV1 : BaseParameters
     {
-        public TranslationRouteParametersV1(TranslationLanguageType sourceLanguageTypeId, TranslationLanguageType targetLanguageTypeId)
+        public TranslationRouteParametersV1(string sourceLanguage, string targetLanguage)
         {
-            SourceLanguageTypeId = sourceLanguageTypeId;
-            TargetLanguageTypeId = targetLanguageTypeId;
+            SourceLanguage = sourceLanguage;
+            TargetLanguage = targetLanguage;
         }
 
-        [DataField(typeof(TranslationFields), nameof(TranslationFields.LanguageTypeId))]
-        public TranslationLanguageType SourceLanguageTypeId { get; }
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string SourceLanguage { get; }
 
-        [DataField(typeof(TranslationFields), nameof(TranslationFields.LanguageTypeId))]
-        public TranslationLanguageType TargetLanguageTypeId { get; }
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Language))]
+        public string TargetLanguage { get; }
+    }
+
+    public sealed class TranslationLanguagesParametersV1 : BaseParameters
+    {
+    }
+
+    // The languages a book can be translated from and into; English bridges any two.
+    public sealed class TranslationLanguagesV1 : BaseResponse
+    {
+        public TranslationLanguagesV1(string[] sources, string[] targets)
+        {
+            Sources = sources;
+            Targets = targets;
+        }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Languages))]
+        public string[] Sources { get; }
+
+        [DataField(typeof(TranslationFields), nameof(TranslationFields.Languages))]
+        public string[] Targets { get; }
     }
 
     // One file the browser loads: the engine at step 0, then each model step's parts with the multiplication its model needs.

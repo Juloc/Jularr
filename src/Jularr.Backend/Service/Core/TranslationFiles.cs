@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Jularr.Backend.Data.Common;
-using Jularr.Backend.Data.Enums.Translation;
 using Jularr.Backend.Logic.Translation;
 using Jularr.Integrations.Data.Translation;
 using Jularr.Integrations.Logic.Translation;
@@ -19,7 +18,7 @@ namespace Jularr.Backend.Service.Core
         public bool IsAvailable => options.Value.TranslationPath is not null;
 
         // The engine, then the parts of each model on the way from source to target.
-        public async Task<IReadOnlyList<(int Step, TranslationFile File, string? Precision)>> RouteAsync(TranslationLanguageType source, TranslationLanguageType target, CancellationToken ct)
+        public async Task<IReadOnlyList<(int Step, TranslationFile File, string? Precision)>> RouteAsync(string source, string target, CancellationToken ct)
         {
             var (engines, models) = await ListsAsync(ct);
             var engine = TranslationModels.Engine(engines) ?? throw new ServiceUnavailableException("translation_unavailable");
@@ -35,6 +34,8 @@ namespace Jularr.Backend.Service.Core
 
             return files;
         }
+
+        public async Task<(string[] Sources, string[] Targets)> LanguagesAsync(CancellationToken ct) => TranslationModels.Languages((await ListsAsync(ct)).Models);
 
         // Only files Mozilla lists are served; each is downloaded once and kept under its hash.
         public async Task<string> PathAsync(string name, CancellationToken ct)

@@ -1,29 +1,33 @@
 // Reader translation: a section's blocks in another language, from the shared cache or translated here and then shared.
-export type Language = "English" | "German" | "Indonesian" | "Japanese";
+// A language is its code as Mozilla's models name it, such as "de" or "ja".
+export type Language = string;
 
-const Codes: Record<Language, string> = { English: "en", German: "de", Indonesian: "id", Japanese: "ja" };
-const Stopwords: Record<Exclude<Language, "Japanese">, string[]> = {
-    English: ["the", "and", "of", "to", "was", "that", "he", "it", "with", "is"],
-    German: ["der", "die", "und", "das", "nicht", "ist", "ein", "sich", "mit", "zu"],
-    Indonesian: ["yang", "dan", "di", "itu", "dengan", "tidak", "ini", "ke", "dari", "untuk"]
+const Bridge = "en";
+const Stopwords: Record<string, string[]> = {
+    en: ["the", "and", "of", "to", "was", "that", "he", "it", "with", "is"],
+    de: ["der", "die", "und", "das", "nicht", "ist", "ein", "sich", "mit", "zu"],
+    fr: ["le", "la", "les", "et", "des", "est", "une", "que", "pas", "dans"],
+    es: ["el", "la", "que", "de", "los", "las", "una", "por", "con", "para"],
+    it: ["il", "che", "di", "la", "non", "una", "per", "sono", "gli", "del"],
+    nl: ["de", "het", "een", "en", "van", "niet", "dat", "zijn", "met", "voor"],
+    id: ["yang", "dan", "di", "itu", "dengan", "tidak", "ini", "ke", "dari", "untuk"]
 };
 const Batch = 24;
 
-// A book's language tag, else its text: kana and kanji, otherwise the most frequent common words.
+// A book's language tag, else the language it was written in, else its text: kana and kanji, otherwise the most frequent common words.
 export function languageOf(tag: string | undefined, text: string): Language | undefined {
     const code = tag?.toLowerCase().split(/[-_]/)[0];
-    const tagged = (Object.keys(Codes) as Language[]).find(language => Codes[language] === code || (language === "Indonesian" && code === "in"));
-    if (tagged) return tagged;
+    if (code && /^[a-z]{2,3}$/.test(code)) return code === "in" ? "id" : code;
 
     const letters = text.replace(/[\s\p{P}\d]/gu, "");
     if (letters.length === 0) return undefined;
     const japanese = (letters.match(/[぀-ヿ一-鿿]/g) ?? []).length;
-    if (japanese / letters.length > 0.2) return "Japanese";
+    if (japanese / letters.length > 0.2) return "ja";
 
     const words = text.toLowerCase().match(/\p{L}+/gu) ?? [];
     let best: Language | undefined;
     let most = 3;
-    for (const [language, list] of Object.entries(Stopwords) as [Language, string[]][]) {
+    for (const [language, list] of Object.entries(Stopwords)) {
         const count = words.filter(word => list.includes(word)).length;
         if (count > most) { best = language; most = count; }
     }
@@ -33,7 +37,7 @@ export function languageOf(tag: string | undefined, text: string): Language | un
 
 // The models of a route are its steps: one, or into English and out of it.
 export function steps(source: Language, target: Language): [string, string][] {
-    return source === "English" || target === "English" ? [[Codes[source], Codes[target]]] : [[Codes[source], "en"], ["en", Codes[target]]];
+    return source === Bridge || target === Bridge ? [[source, target]] : [[source, Bridge], [Bridge, target]];
 }
 
 interface RouteFile { step: number; fileType: string; url: string; precision: string | null }

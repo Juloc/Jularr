@@ -1,7 +1,7 @@
 import "./reader.scss";
 import { progressReporter } from "../Tracking/Progress";
 import { findings, highlights } from "./highlights";
-import { translator, type Language } from "./Translation/translation";
+import { translator } from "./Translation/translation";
 import { createTranslationWorker } from "./Translation/worker";
 
 // Reader client: settings, exact block position and progress reporting.
@@ -9,13 +9,11 @@ interface ReaderSettings {
     size: number;
     theme: "light" | "sepia" | "dark";
     mode: "scroll" | "paged";
-    // A language, the original, or unset: then the profile's language.
-    translate: Language | "original" | "";
 }
 
 const SettingsKey = "jularr.reader";
 const ReportDelay = 1500;
-const Defaults: ReaderSettings = { size: 1.1, theme: "light", mode: "scroll", translate: "" };
+const Defaults: ReaderSettings = { size: 1.1, theme: "light", mode: "scroll" };
 
 // The PDF view shares only the reader's look.
 const reader = document.querySelector<HTMLElement>(".reader");
@@ -41,11 +39,24 @@ if (reader?.querySelector("[data-role=content]")) {
     highlights(reader!, content, section);
     if (reader!.dataset.query) findings(content, reader!.dataset.query);
 
-    // Translation where the instance offers it, in the language chosen on this device.
+    // Translation where the instance offers it, in the language the profile chose for this book; the choice follows it to every device.
     const translate = reader.dataset.translationUrl
         ? translator(reader, content, createTranslationWorker)
         : undefined;
-    if (translate) void translate(target(settings.translate));
+    let reading = reader.dataset.readingLanguage ?? "original";
+    if (translate) void translate(reading === "original" ? "" : reading);
+    reader.querySelectorAll<HTMLButtonElement>("[data-language-choice]").forEach(button => button.addEventListener("click", () => {
+        reading = button.dataset.languageChoice!;
+        reader!.querySelectorAll<HTMLButtonElement>("[data-language-choice]").forEach(choice => choice.setAttribute("aria-pressed", String(choice === button)));
+        const opener = reader!.querySelector<HTMLButtonElement>("[data-action=language]");
+        if (opener) opener.textContent = button.textContent;
+        void fetch(reader!.dataset.languageUrl!, {
+            method: "PUT", credentials: "same-origin",
+            headers: { "Content-Type": "application/json", RequestVerificationToken: reader!.dataset.antiforgery! },
+            body: JSON.stringify({ readingLanguage: reading })
+        });
+        if (translate) void translate(reading === "original" ? "" : reading);
+    }));
 
     // Panels and settings.
     reader.querySelectorAll<HTMLButtonElement>("[data-action]").forEach(button => button.addEventListener("click", () => toggle(button)));
@@ -54,10 +65,6 @@ if (reader?.querySelector("[data-role=content]")) {
         if (button.dataset.setting === "size") settings.size = Math.min(2, Math.max(0.8, settings.size + (value === "larger" ? 0.1 : -0.1)));
         if (button.dataset.setting === "theme") settings.theme = value as ReaderSettings["theme"];
         if (button.dataset.setting === "mode") settings.mode = value as ReaderSettings["mode"];
-        if (button.dataset.setting === "translate" && translate) {
-            settings.translate = value as ReaderSettings["translate"];
-            void translate(target(settings.translate));
-        }
         apply();
         try { localStorage.setItem(SettingsKey, JSON.stringify(settings)); } catch { /* Optional device storage. */ }
     }));
@@ -77,21 +84,13 @@ if (reader?.querySelector("[data-role=content]")) {
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("pagehide", () => report(true));
 
-    // Unset follows the profile's language; the original stays untranslated.
-    function target(choice: ReaderSettings["translate"]): Language | "" {
-        if (choice === "original") return "";
-        return choice || (reader!.dataset.profileLanguage as Language | undefined) || "";
-    }
-
     function load(): ReaderSettings {
         try {
             const value = JSON.parse(localStorage.getItem(SettingsKey) ?? "{}") as Partial<ReaderSettings> | null;
             return {
                 size: typeof value?.size === 'number' && Number.isFinite(value.size) ? Math.min(2, Math.max(0.8, value.size)) : Defaults.size,
                 theme: value?.theme === 'sepia' || value?.theme === 'dark' ? value.theme : Defaults.theme,
-                mode: value?.mode === 'paged' ? value.mode : Defaults.mode,
-                translate: value?.translate === 'English' || value?.translate === 'German' || value?.translate === 'Indonesian' || value?.translate === 'Japanese'
-                    || value?.translate === 'original' ? value.translate : Defaults.translate
+                mode: value?.mode === 'paged' ? value.mode : Defaults.mode
             };
         } catch {
             return { ...Defaults };
@@ -103,8 +102,7 @@ if (reader?.querySelector("[data-role=content]")) {
         reader!.dataset.mode = settings.mode;
         reader!.style.setProperty("--reader-size", `${settings.size.toFixed(1)}rem`);
         reader!.querySelectorAll<HTMLButtonElement>("[data-setting]").forEach(button => {
-            const active = (button.dataset.setting === "theme" && button.dataset.value === settings.theme) || (button.dataset.setting === "mode" && button.dataset.value === settings.mode)
-                || (button.dataset.setting === "translate" && button.dataset.value === (target(settings.translate) || "original"));
+            const active = (button.dataset.setting === "theme" && button.dataset.value === settings.theme) || (button.dataset.setting === "mode" && button.dataset.value === settings.mode);
             button.setAttribute("aria-pressed", String(active));
         });
     }
